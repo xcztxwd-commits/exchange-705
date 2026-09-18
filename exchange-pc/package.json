@@ -1,0 +1,38 @@
+{
+  "name": "exchange-frontend",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --force",
+    "build": "vue-tsc -b && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@chenfengyuan/vue-qrcode": "^2.0.0",
+    "@heroicons/vue": "^2.2.0",
+    "axios": "^1.7.9",
+    "klinecharts": "^8.3.2",
+    "pinia": "^2.2.6",
+    "qrcode": "^1.5.4",
+    "vue": "^3.5.24",
+    "vue-i18n": "^9.14.0",
+    "vue-router": "^4.4.5"
+  },
+  "devDependencies": {
+    "@element-plus/icons-vue": "^2.3.2",
+    "@types/node": "^24.10.1",
+    "@types/qrcode": "^1.5.6",
+    "@vitejs/plugin-vue": "^4.4.0",
+    "@vue/tsconfig": "^0.8.1",
+    "autoprefixer": "^10.4.27",
+    "element-plus": "^2.13.6",
+    "esbuild": "^0.18.20",
+    "postcss": "^8.5.9",
+    "sass-embedded": "^1.97.2",
+    "tailwindcss": "^3.4.19",
+    "typescript": "~5.9.3",
+    "vite": "^4.5.0",
+    "vue-tsc": "^3.1.4"
+  }
+}

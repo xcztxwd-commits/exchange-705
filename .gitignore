@@ -1,0 +1,25 @@
+.env
+docker-*.log
+
+# Local secrets and runtime data
+.env.*
+!.env.example
+后台密码.txt
+*.sql
+uploads/
+rollback/
+reports/
+# Dependencies and generated files
+node_modules/
+dist/
+target/
+*.log
+*.tsbuildinfo
+.idea/
+.vscode/
+*.zip
+*.tar.gz
+*.jar
+*.class
+*.pem
+*.key

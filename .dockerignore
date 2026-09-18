@@ -1,0 +1,9 @@
+**/node_modules
+**/dist
+**/target
+**/.git
+**/uploads
+1090.sql
+后台密码.txt
+.env
+docker-*.log

@@ -1,0 +1,248 @@
+@import './variables.scss';
+
+:root {
+  font-family: 'PingFang SC', 'Microsoft YaHei', system-ui, -apple-system, sans-serif;
+  color: $text-color;
+  background-color: $bg-body;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background-color: $bg-body;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button {
+  font-family: inherit;
+}
+
+#app {
+  min-height: 100vh;
+}
+
+.page-shell {
+  display: flex;
+  justify-content: center;
+  padding: 32px 16px;
+}
+
+.auth-card {
+  width: min(520px, 100%);
+  background: $bg-card;
+  border-radius: $radius-lg;
+  padding: 20px 24px 32px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.05);
+}
+
+.top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.icon-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  border: 1px solid $border-color;
+  background: #f7f8fb;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all $transition-fast;
+}
+
+.icon-btn:hover {
+  border-color: $primary-color;
+}
+
+.auth-title {
+  margin: 12px 0 24px;
+  font-size: 22px;
+  font-weight: 700;
+  color: $text-color;
+}
+
+.form-group {
+  margin-bottom: 18px;
+}
+
+.form-label {
+  font-size: 15px;
+  font-weight: 700;
+  color: $primary-color;
+  margin-bottom: 10px;
+}
+
+.input-box {
+  width: 100%;
+  background: #f6f6f6;
+  border-radius: $radius-sm;
+  border: 1px solid transparent;
+  padding: 14px 16px;
+  font-size: 15px;
+  color: $text-color;
+  transition: border-color $transition-fast, box-shadow $transition-fast;
+}
+
+.input-box:focus {
+  outline: none;
+  border-color: $primary-color;
+  box-shadow: 0 0 0 3px rgba(133, 189, 0, 0.1);
+}
+
+.input-with-icon {
+  position: relative;
+}
+
+.input-icon-btn {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+}
+
+.primary-btn {
+  width: 100%;
+  border: none;
+  border-radius: $radius-sm;
+  background: $primary-color;
+  color: #fff;
+  font-weight: 700;
+  font-size: 16px;
+  padding: 14px 12px;
+  cursor: pointer;
+  transition: opacity $transition-fast, transform $transition-fast;
+}
+
+.primary-btn:active {
+  transform: scale(0.99);
+}
+
+.link-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 14px;
+  color: $subtext-color;
+  margin: 12px 0 18px;
+}
+
+.link-primary {
+  color: $primary-color;
+  font-weight: 700;
+}
+
+.muted {
+  color: $subtext-color;
+}
+
+.lang-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 0 24px;
+}
+
+.lang-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #f7f8fb;
+  border-radius: $radius-sm;
+  padding: 12px 14px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: border-color $transition-fast, box-shadow $transition-fast;
+}
+
+.lang-item:hover {
+  border-color: $primary-color;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.05);
+}
+
+.lang-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.flag {
+  width: 36px;
+  height: 24px;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.lang-name {
+  font-weight: 700;
+  color: $text-color;
+}
+
+.lang-desc {
+  color: $subtext-color;
+  font-size: 13px;
+}
+
+.section-tip {
+  margin-top: 20px;
+  text-align: center;
+  color: $primary-color;
+  font-weight: 700;
+}
+
+.flex-row {
+  display: flex;
+  gap: 12px;
+}
+
+.verify-btn {
+  min-width: 88px;
+  background: $primary-color;
+  border: none;
+  color: #fff;
+  border-radius: $radius-sm;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0 12px;
+  transition: opacity $transition-fast;
+}
+
+.verify-btn:disabled,
+.primary-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+@media (max-width: 520px) {
+  .auth-card {
+    padding: 16px;
+    border-radius: 16px;
+  }
+
+  .page-shell {
+    padding: 16px 12px;
+  }
+}
+
+
+
+
+
+
+

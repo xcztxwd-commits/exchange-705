@@ -1,0 +1,86 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: exchange-backend
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: 10MB
+      max-request-size: 10MB
+  datasource:
+    # MySQL 数据库配置
+    url: jdbc:mysql://127.0.0.1:3306/1090?useSSL=false&useUnicode=true&characterEncoding=utf8&serverTimezone=UTC
+    username: 1090
+    password: 1090
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    # 如需使用 H2 内存数据库（临时方案），使用以下配置：
+    # url: jdbc:h2:mem:exchange;MODE=MySQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    # username: sa
+    # password: 
+    # driver-class-name: org.h2.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate.format_sql: true
+      # hibernate.dialect: org.hibernate.dialect.H2Dialect
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+    time-zone: UTC
+
+  redis:
+    host: 127.0.0.1
+    port: 6379
+    password: 
+    database: 0
+    timeout: 3000
+    lettuce:
+      pool:
+        max-active: 8
+        max-idle: 8
+        min-idle: 0
+        max-wait: -1
+
+  mail:
+    host: smtp.example.com
+    port: 465
+    username: no-reply@example.com
+    password: your_smtp_password
+    protocol: smtps
+    properties:
+      mail.smtp.auth: true
+      mail.smtp.starttls.enable: true
+      mail.smtp.ssl.enable: true
+
+jwt:
+  secret: change_me_to_long_random_secret
+  expireSeconds: 604800 # 7 days
+
+logging:
+  level:
+    root: info
+
+forex:
+  api:
+    # Forex API 基础地址
+    base-url: https://apiforex.cn/api/v1
+    # 在这里配置你的 Forex API Key（正式环境建议用环境变量 FOREX_API_KEY 覆盖）
+    key: ${FOREX_API_KEY:}
+
+# 行情（K线/最新价）外部接口配置
+market:
+  quote:
+    base-url: https://api.bitget.com/api/v3
+    alltick-url: https://quote.alltick.co/quote-b-api
+    yahoo-url: https://query1.finance.yahoo.com/v8/finance
+    connect-timeout-ms: 2000
+    read-timeout-ms: 3000
+    batch-budget-ms: 5000
+    poll-ms: 3000
+    max-age-ms: 15000
+    # token 不再在这里固定配置，改由后台管理系统「系统设置-行情配置」中维护
+

@@ -1,0 +1,106 @@
+name: exchange-705
+
+services:
+  mysql:
+    image: mysql:5.7
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD in .env}
+      MYSQL_DATABASE: "1090"
+      MYSQL_USER: "1090"
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?Set MYSQL_PASSWORD in .env}
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./1090.sql:/docker-entrypoint-initdb.d/1090.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "MYSQL_PWD=$$MYSQL_PASSWORD mysql -h 127.0.0.1 -u1090 -D1090 -e 'SELECT 1 FROM admin_user LIMIT 1' >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: .
+      dockerfile: docker/backend.Dockerfile
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/1090?useSSL=false&useUnicode=true&characterEncoding=utf8&serverTimezone=UTC
+      SPRING_DATASOURCE_USERNAME: "1090"
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD}
+      SPRING_REDIS_HOST: redis
+      SPRING_JPA_SHOW_SQL: "false"
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env}
+    volumes:
+      - ./uploads:/app/uploads
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/api/uploads/images/test/ping >/dev/null"]
+      interval: 15s
+      timeout: 5s
+      start_period: 60s
+      retries: 10
+    restart: unless-stopped
+
+  admin:
+    build:
+      context: .
+      dockerfile: docker/frontend.Dockerfile
+      args:
+        APP: exchange-admin
+    ports:
+      - "127.0.0.1:17051:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+  mobile:
+    build:
+      context: .
+      dockerfile: docker/frontend.Dockerfile
+      args:
+        APP: exchange-frontend
+    ports:
+      - "127.0.0.1:17052:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+  pc:
+    build:
+      context: .
+      dockerfile: docker/frontend.Dockerfile
+      args:
+        APP: exchange-pc
+    ports:
+      - "127.0.0.1:17050:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  mysql-data:
+  redis-data:
+
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: 10.235.70.0/24

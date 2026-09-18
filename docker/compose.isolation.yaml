@@ -1,0 +1,45 @@
+name: exchange-705-isolation
+services:
+  mysql-test:
+    image: mysql:5.7
+    environment:
+      MYSQL_ROOT_PASSWORD: isolation-only
+      MYSQL_DATABASE: market_isolation
+    tmpfs:
+      - /var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-pisolation-only"]
+      interval: 3s
+      timeout: 2s
+      retries: 40
+  redis-test:
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+  tests:
+    image: exchange-705-test-build
+    working_dir: /build
+    entrypoint: ["sh", "-c", "cp -an /opt/maven-cache/. /root/.m2/; /opt/apache-maven-3.9.9/bin/mvn -B test; result=$$?; cp -a target/surefire-reports/. /reports/; exit $$result"]
+    environment:
+      MARKET_ISOLATION_TEST: "true"
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql-test:3306/market_isolation?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: isolation-only
+      SPRING_REDIS_HOST: redis-test
+      JWT_SECRET: isolation-test-secret-only-not-production
+    volumes:
+      - ../reports/isolation:/reports
+      - test-maven:/root/.m2
+    depends_on:
+      mysql-test:
+        condition: service_healthy
+      redis-test:
+        condition: service_started
+volumes:
+  test-maven:
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: 10.235.71.0/24
+
+

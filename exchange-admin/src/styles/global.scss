@@ -1,0 +1,65 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  font-family: 'Helvetica Neue', Helvetica, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  overflow-x: hidden;
+}
+
+/* Element Plus 主题色覆盖 */
+:root {
+  --el-color-primary: #85bd00;
+  --el-menu-active-color: #85bd00;
+}
+
+/* 滚动条样式 */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #ddd;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #bbb;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+/* 卡片阴影优化 */
+.el-card {
+  border-radius: 8px;
+}
+
+/* 表格样式优化 */
+.el-table {
+  font-size: 14px;
+}
+
+.el-table th.el-table__cell {
+  background: #f5f7fa;
+  color: #606266;
+  font-weight: 600;
+}
+
+/* 分页样式 */
+.el-pagination {
+  display: flex;
+  justify-content: flex-end;
+}

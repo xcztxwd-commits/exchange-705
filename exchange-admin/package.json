@@ -1,0 +1,30 @@
+{
+  "name": "exchange-admin",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc -b && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@element-plus/icons-vue": "^2.3.2",
+    "axios": "^1.7.9",
+    "echarts": "^6.0.0",
+    "element-plus": "^2.13.0",
+    "pinia": "^2.2.6",
+    "vue": "^3.5.24",
+    "vue-router": "^4.4.5"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "@vitejs/plugin-vue": "^4.4.0",
+    "@vue/tsconfig": "^0.8.1",
+    "sass-embedded": "^1.79.4",
+    "typescript": "~5.9.3",
+    "vite": "^4.5.0",
+    "esbuild": "^0.18.20",
+    "vue-tsc": "^3.1.4"
+  }
+}
