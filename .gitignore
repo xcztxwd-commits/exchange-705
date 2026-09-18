@@ -23,3 +23,10 @@ target/
 *.class
 *.pem
 *.key
+
+# Restore-2024 private evidence and credentials
+.restore-private/
+*.credentials.clixml
+*.har
+storageState*.json
+storage-state*.json
