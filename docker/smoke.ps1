@@ -5,7 +5,7 @@ foreach ($port in 17050, 17051, 17052) {
     if ($page.StatusCode -ne 200 -or $page.Content -notmatch 'id="app"') {
         throw "Frontend failed: $base"
     }
-    $null = Invoke-RestMethod "$base/api/uploads/images/test/ping" -TimeoutSec 20
+    $null = Invoke-RestMethod "$base/api/user/system/timezone" -TimeoutSec 20
     $socket = [System.Net.WebSockets.ClientWebSocket]::new()
     $timeout = [System.Threading.CancellationTokenSource]::new(10000)
     try {
