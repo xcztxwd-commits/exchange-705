@@ -17,6 +17,15 @@ public class ContractOrder {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Version
+    @Column(name = "row_version", nullable = false)
+    private long rowVersion;
+
+    // Existing pending orders stay excluded until their historical handling is explicitly decided.
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    @Column(name = "limit_match_enabled", nullable = false)
+    private boolean limitMatchEnabled;
+
     @Column(name = "user_id", nullable = false)
     private Long userId;
 

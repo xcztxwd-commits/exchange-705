@@ -17,6 +17,10 @@ public class LoanRecord {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Version
+    @Column(name = "row_version", nullable = false)
+    private long rowVersion;
+
     @Column(name = "user_id", nullable = false)
     private Long userId;
 

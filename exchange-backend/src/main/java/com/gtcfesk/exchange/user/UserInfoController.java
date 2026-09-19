@@ -25,7 +25,10 @@ public class UserInfoController {
     private final AssetAccountRepository assetAccountRepository;
 
     @GetMapping("/{userId}/info")
-    public ResponseEntity<?> getUserInfo(@PathVariable Long userId) {
+    public ResponseEntity<?> getUserInfo(@PathVariable Long userId, org.springframework.security.core.Authentication auth) {
+        if (!userId.toString().equals(auth.getName())) {
+            throw new org.springframework.security.access.AccessDeniedException("无权访问该用户信息");
+        }
         UserAccount user = userAccountRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("用户不存在"));
 
@@ -128,7 +131,7 @@ public class UserInfoController {
         } catch (Exception e) {
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", false);
-            resp.put("message", "获取资产信息失败: " + (e.getMessage() != null ? e.getMessage() : "未知错误"));
+            resp.put("message", "获取资产信息失败: " + (com.gtcfesk.exchange.common.SafeErrors.message(e) != null ? com.gtcfesk.exchange.common.SafeErrors.message(e) : "未知错误"));
             e.printStackTrace();
             return ResponseEntity.badRequest().body(resp);
         }

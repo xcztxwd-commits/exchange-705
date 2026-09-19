@@ -10,6 +10,13 @@ instance.interceptors.request.use((config) => {
   try {
     const auth = useAuthStore()
     if (!auth.token) auth.load()
+    if (config.url === '/transfer/submit' && config.data) {
+      const key = 'pending-transfer:' + JSON.stringify([auth.user?.id, config.data.fromAccount, config.data.toAccount, config.data.amount])
+      const requestId = sessionStorage.getItem(key) || Array.from(crypto.getRandomValues(new Uint8Array(16)), n => n.toString(16).padStart(2, '0')).join('')
+      sessionStorage.setItem(key, requestId)
+      config.data.requestId = requestId
+      ;(config as any).transferRetryKey = key
+    }
     if (auth.token) {
       config.headers = config.headers || {}
       config.headers.Authorization = `Bearer ${auth.token}`
@@ -21,8 +28,14 @@ instance.interceptors.request.use((config) => {
 })
 
 instance.interceptors.response.use(
-  (res) => res.data,
+  (res) => {
+    const key = (res.config as any).transferRetryKey
+    if (key) sessionStorage.removeItem(key)
+    return res.data
+  },
   (err) => {
+    const key = err.config?.transferRetryKey
+    if (key && err.response?.status >= 400 && err.response?.status < 500) sessionStorage.removeItem(key)
     // 检测token失效（单设备登录：其他设备登录导致当前设备token失效）
     if (err?.response?.status === 401 || 
         err?.response?.data?.code === 'TOKEN_INVALID' ||
@@ -41,7 +54,7 @@ instance.interceptors.response.use(
           window.location.hash = '/login'
         }, 100)
       }
-      return Promise.reject(new Error('账号已在其他设备登录，请重新登录'))
+      return Promise.reject(new Error(err?.response?.data?.message || '登录已失效，请重新登录'))
     }
     
     const msg =

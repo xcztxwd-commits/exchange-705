@@ -28,6 +28,9 @@ import java.util.UUID;
 @Service
 public class AuthService {
 
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.gtcfesk.exchange.common.JwtUtil jwtUtil;
+
     private final VerifyCodeRepository verifyCodeRepository;
     private final EmailService emailService;
     private final UserAccountRepository userAccountRepository;
@@ -46,6 +49,7 @@ public class AuthService {
         this.assetAccountRepository = assetAccountRepository;
     }
 
+    @org.springframework.transaction.annotation.Transactional
     public AuthResponse login(LoginRequest req) {
         UserAccount user = userAccountRepository.findByEmail(req.getAccount())
                 .orElseThrow(() -> new BusinessException("user not found"));
@@ -72,31 +76,6 @@ public class AuthService {
                 String domain = com.gtcfesk.exchange.utils.DomainUtils.getLoginDomain(request);
                 user.setLastLoginIp(ip);
                 
-                // 如果地区信息不够详细（只有"中国"、"中国大陆"、"海外"等），尝试重新查询
-                // 或者在异步线程中重新查询并更新
-                if (region != null && (region.equals("中国") || region.equals("中国大陆") || region.equals("海外"))) {
-                    // 地区信息不够详细，使用异步方式重新查询（避免阻塞登录）
-                    final String finalIp = ip;
-                    final UserAccount finalUser = user;
-                    new Thread(() -> {
-                        try {
-                            // 清空缓存，强制重新查询
-                            IpUtils.clearCache(finalIp);
-                            String detailedRegion = IpUtils.getRegionByIp(finalIp);
-                            if (detailedRegion != null && !detailedRegion.equals(region) && 
-                                !detailedRegion.equals("中国") && !detailedRegion.equals("中国大陆") && 
-                                !detailedRegion.equals("海外") && !detailedRegion.equals("未知地区")) {
-                                // 更新为更详细的地区信息
-                                finalUser.setLastLoginRegion(detailedRegion);
-                                userAccountRepository.save(finalUser);
-                                System.out.println("[AuthService] 更新用户 " + finalUser.getId() + " 的IP地区信息: " + region + " -> " + detailedRegion);
-                            }
-                        } catch (Exception e) {
-                            System.err.println("[AuthService] 异步更新IP地区信息失败: " + e.getMessage());
-                        }
-                    }).start();
-                }
-                
                 user.setLastLoginRegion(region);
                 user.setLastLoginDomain(domain);
                 user.setLastLoginAt(LocalDateTime.now());
@@ -107,8 +86,7 @@ public class AuthService {
             user.setLastActivityAt(LocalDateTime.now());
             userAccountRepository.save(user);
         } catch (Exception e) {
-            // 记录登录信息失败不影响登录
-            System.err.println("记录登录信息失败: " + e.getMessage());
+            throw new BusinessException("登录失败，请重试");
         }
 
         Map<String, Object> userMap = new HashMap<>();
@@ -116,9 +94,13 @@ public class AuthService {
         userMap.put("email", user.getEmail());
         userMap.put("nickname", user.getNickname());
         userMap.put("status", user.getStatus());
-        // 使用 mock token 格式: mock-{userId}-{tokenId}，这样 JwtFilter 可以验证token是否有效
-        String mockToken = "mock-" + user.getId() + "-" + tokenId;
-        return new AuthResponse(mockToken, System.currentTimeMillis() + 7 * 24 * 3600_000L, userMap);
+        // 签名会话绑定当前凭据和单设备会话标识
+        Map<String, Object> claims = new HashMap<>();
+        claims.put("userType", "user");
+        claims.put("sid", tokenId);
+        claims.put("credential", jwtUtil.credentialKey(user.getPasswordHash()));
+        String signedToken = jwtUtil.generateToken("user-" + user.getId(), claims);
+        return new AuthResponse(signedToken, System.currentTimeMillis() + jwtUtil.getExpireSeconds() * 1000, userMap);
     }
 
     /**
@@ -129,7 +111,11 @@ public class AuthService {
         return attributes != null ? attributes.getRequest() : null;
     }
 
+    @org.springframework.transaction.annotation.Transactional(noRollbackFor = BusinessException.class)
     public AuthResponse register(RegisterRequest req) {
+        if (!java.util.Objects.equals(req.getPassword(), req.getConfirmPassword())) {
+            throw new BusinessException("两次密码不一致");
+        }
         if (userAccountRepository.existsByEmail(req.getEmail())) {
             throw new BusinessException("email exists");
         }
@@ -138,13 +124,11 @@ public class AuthService {
                 .findTopByEmailAndSceneOrderByIdDesc(req.getEmail(), "register")
                 .orElseThrow(() -> new BusinessException("code not found"));
 
-        if (!latest.getCode().equals(req.getVerifyCode())) {
-            throw new BusinessException("code wrong");
-        }
-        if (latest.getExpireAt().isBefore(LocalDateTime.now())) {
-            throw new BusinessException("code expired");
-        }
+        validateCode(latest, req.getVerifyCode());
 
+        latest.setCode("");
+        latest.setExpireAt(LocalDateTime.now().minusSeconds(1));
+        verifyCodeRepository.save(latest);
         UserAccount user = new UserAccount();
         user.setEmail(req.getEmail());
         user.setPasswordHash(passwordEncoder.encode(req.getPassword()));
@@ -180,13 +164,20 @@ public class AuthService {
         userMap.put("id", user.getId());
         userMap.put("email", user.getEmail());
         userMap.put("nickname", user.getNickname());
-        // 使用 mock token 格式: mock-{userId}-{tokenId}，这样 JwtFilter 可以验证token是否有效
-        String mockToken = "mock-" + user.getId() + "-" + tokenId;
-        return new AuthResponse(mockToken, System.currentTimeMillis() + 7 * 24 * 3600_000L, userMap);
+        // 签名会话绑定当前凭据和单设备会话标识
+        Map<String, Object> claims = new HashMap<>();
+        claims.put("userType", "user");
+        claims.put("sid", tokenId);
+        claims.put("credential", jwtUtil.credentialKey(user.getPasswordHash()));
+        String signedToken = jwtUtil.generateToken("user-" + user.getId(), claims);
+        return new AuthResponse(signedToken, System.currentTimeMillis() + jwtUtil.getExpireSeconds() * 1000, userMap);
     }
 
     public void sendEmailCode(SendCodeRequest req) {
-        String code = String.valueOf((int) ((Math.random() * 9 + 1) * 100000)); // 六位
+        if (!java.util.Arrays.asList("register", "forget_password", "change_password").contains(req.getScene())) {
+            throw new BusinessException("验证码用途无效");
+        }
+        String code = String.valueOf(100000 + new java.security.SecureRandom().nextInt(900000)); // 六位
 
         VerifyCode vc = new VerifyCode();
         vc.setEmail(req.getEmail());
@@ -199,6 +190,7 @@ public class AuthService {
         emailService.sendVerificationCode(req.getEmail(), code);
     }
 
+    @org.springframework.transaction.annotation.Transactional(noRollbackFor = BusinessException.class)
     public void resetPassword(ResetPasswordRequest req) {
         if (!req.getPassword().equals(req.getConfirmPassword())) {
             throw new BusinessException("两次密码不一致");
@@ -207,21 +199,34 @@ public class AuthService {
         // 支持多种场景：forget_password 和 change_password
         String scene = req.getScene() != null ? req.getScene() : "forget_password";
         
+        if (!"forget_password".equals(scene) && !"change_password".equals(scene)) {
+            throw new BusinessException("验证码用途无效");
+        }
         VerifyCode latest = verifyCodeRepository
                 .findTopByEmailAndSceneOrderByIdDesc(req.getEmail(), scene)
                 .orElseThrow(() -> new BusinessException("验证码不存在，请重新发送"));
 
-        if (!latest.getCode().equals(req.getVerifyCode())) {
-            throw new BusinessException("验证码错误");
-        }
-        if (latest.getExpireAt().isBefore(LocalDateTime.now())) {
-            throw new BusinessException("验证码已过期");
-        }
+        validateCode(latest, req.getVerifyCode());
 
         UserAccount user = userAccountRepository.findByEmail(req.getEmail())
                 .orElseThrow(() -> new BusinessException("user not found"));
         user.setPasswordHash(passwordEncoder.encode(req.getPassword()));
+        user.setCurrentToken(null);
+        latest.setCode("");
+        latest.setExpireAt(LocalDateTime.now().minusSeconds(1));
+        verifyCodeRepository.save(latest);
         userAccountRepository.save(user);
+    }
+
+    private void validateCode(VerifyCode latest, String supplied) {
+        if (!latest.getExpireAt().isAfter(LocalDateTime.now()) || latest.getFailedAttempts() >= 5) {
+            throw new BusinessException("验证码已过期或尝试次数过多，请重新发送");
+        }
+        if (!latest.getCode().equals(supplied)) {
+            latest.setFailedAttempts(latest.getFailedAttempts() + 1);
+            verifyCodeRepository.save(latest);
+            throw new BusinessException("验证码错误");
+        }
     }
 
     private void createIfNotExists(Long userId, String coin) {

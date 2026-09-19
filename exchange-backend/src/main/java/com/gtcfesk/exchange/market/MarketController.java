@@ -138,7 +138,7 @@ public class MarketController {
             e.printStackTrace();
             Map<String, Object> result = new HashMap<>();
             result.put("list", new ArrayList<>());
-            result.put("error", e.getMessage());
+            result.put("error", com.gtcfesk.exchange.common.SafeErrors.message(e));
             return ResponseEntity.ok(result);
         }
     }

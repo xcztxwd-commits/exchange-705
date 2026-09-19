@@ -10,12 +10,16 @@ import java.time.LocalDateTime;
 @Getter
 @Setter
 @Entity
-@Table(name = "asset_account")
+@Table(name = "asset_account", uniqueConstraints = @UniqueConstraint(name = "uk_asset_user_coin", columnNames = {"user_id", "coin"}))
 public class AssetAccount {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    @Version
+    @Column(name = "row_version", nullable = false)
+    private long rowVersion;
 
     @Column(name = "user_id", nullable = false)
     private Long userId;

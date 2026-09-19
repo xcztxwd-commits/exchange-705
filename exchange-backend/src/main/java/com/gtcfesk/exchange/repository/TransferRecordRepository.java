@@ -10,6 +10,8 @@ import java.util.List;
 
 @Repository
 public interface TransferRecordRepository extends JpaRepository<TransferRecord, Long> {
+    java.util.Optional<TransferRecord> findByUserIdAndRequestId(Long userId, String requestId);
+
     List<TransferRecord> findByUserIdOrderByCreatedAtDesc(Long userId);
     
     Page<TransferRecord> findByUserIdOrderByCreatedAtDesc(Long userId, Pageable pageable);

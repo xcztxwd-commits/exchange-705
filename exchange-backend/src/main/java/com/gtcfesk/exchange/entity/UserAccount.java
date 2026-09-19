@@ -20,6 +20,10 @@ public class UserAccount {
     )
     private Long id;
 
+    @Version
+    @Column(name = "row_version", nullable = false)
+    private long rowVersion;
+
     @Column(unique = true, nullable = false, length = 128)
     private String email;
 
@@ -30,6 +34,7 @@ public class UserAccount {
     private String phone;
 
     @Column(nullable = false, length = 128)
+    @com.fasterxml.jackson.annotation.JsonIgnore
     private String passwordHash;
 
     @Column(length = 50)
@@ -78,6 +83,7 @@ public class UserAccount {
     private LocalDateTime lastActivityAt; // 最后活动时间（用于实时在线检测）
 
     @Column(name = "current_token", length = 128)
+    @com.fasterxml.jackson.annotation.JsonIgnore
     private String currentToken; // 当前有效的登录token标识（用于单设备登录）
 
     @Column(name = "remark", length = 500)

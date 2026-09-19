@@ -37,5 +37,15 @@ public class JwtUtil {
     public Claims parse(String token) {
         return Jwts.parser().setSigningKey(secret).parseClaimsJws(token).getBody();
     }
-}
 
+    // Bind signed sessions to current credentials without exposing password hashes.
+    public String credentialKey(String passwordHash) {
+        try {
+            javax.crypto.Mac mac = javax.crypto.Mac.getInstance("HmacSHA256");
+            mac.init(new javax.crypto.spec.SecretKeySpec(secret.getBytes(java.nio.charset.StandardCharsets.UTF_8), "HmacSHA256"));
+            return java.util.Base64.getEncoder().encodeToString(mac.doFinal(passwordHash.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+        } catch (java.security.GeneralSecurityException e) {
+            throw new IllegalStateException("Session signing unavailable", e);
+        }
+    }
+}

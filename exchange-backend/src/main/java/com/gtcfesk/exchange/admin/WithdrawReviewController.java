@@ -154,8 +154,11 @@ public class WithdrawReviewController {
             
             return ResponseEntity.ok(result);
         } catch (Exception e) {
+            if (org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive()) {
+                org.springframework.transaction.interceptor.TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
+            }
             Map<String, Object> resp = new HashMap<>();
-            resp.put("error", "获取列表失败: " + e.getMessage());
+            resp.put("error", "获取列表失败: " + com.gtcfesk.exchange.common.SafeErrors.message(e));
             return ResponseEntity.badRequest().body(resp);
         }
     }
@@ -239,9 +242,12 @@ public class WithdrawReviewController {
             resp.put("message", "审核通过");
             return ResponseEntity.ok(resp);
         } catch (Exception e) {
+            if (org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive()) {
+                org.springframework.transaction.interceptor.TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
+            }
             e.printStackTrace();
             Map<String, Object> resp = new HashMap<>();
-            resp.put("error", "审核失败: " + e.getMessage());
+            resp.put("error", "审核失败: " + com.gtcfesk.exchange.common.SafeErrors.message(e));
             return ResponseEntity.badRequest().body(resp);
         }
     }
@@ -304,9 +310,12 @@ public class WithdrawReviewController {
             resp.put("message", "已拒绝");
             return ResponseEntity.ok(resp);
         } catch (Exception e) {
+            if (org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive()) {
+                org.springframework.transaction.interceptor.TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
+            }
             e.printStackTrace();
             Map<String, Object> resp = new HashMap<>();
-            resp.put("error", "拒绝失败: " + e.getMessage());
+            resp.put("error", "拒绝失败: " + com.gtcfesk.exchange.common.SafeErrors.message(e));
             return ResponseEntity.badRequest().body(resp);
         }
     }
@@ -365,9 +374,12 @@ public class WithdrawReviewController {
             resp.put("message", "标记为已完成");
             return ResponseEntity.ok(resp);
         } catch (Exception e) {
+            if (org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive()) {
+                org.springframework.transaction.interceptor.TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
+            }
             e.printStackTrace();
             Map<String, Object> resp = new HashMap<>();
-            resp.put("error", "操作失败: " + e.getMessage());
+            resp.put("error", "操作失败: " + com.gtcfesk.exchange.common.SafeErrors.message(e));
             return ResponseEntity.badRequest().body(resp);
         }
     }
@@ -425,6 +437,9 @@ public class WithdrawReviewController {
                     }
                 }
             } catch (Exception e) {
+            if (org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive()) {
+                org.springframework.transaction.interceptor.TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
+            }
                 // JWT解析失败，尝试从subject中提取
                 try {
                     Claims claims = jwtUtil.parse(token);
@@ -437,6 +452,9 @@ public class WithdrawReviewController {
                 }
             }
         } catch (Exception e) {
+            if (org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive()) {
+                org.springframework.transaction.interceptor.TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
+            }
             // 解析失败，忽略
         }
         

@@ -23,3 +23,7 @@ target/
 *.class
 *.pem
 *.key
+
+# Reviewed manual migration; never run automatically.
+!exchange-backend/src/main/resources/db/manual/705-minimal-fix.sql
+!exchange-backend/src/main/resources/db/manual/705-limit-matching.sql

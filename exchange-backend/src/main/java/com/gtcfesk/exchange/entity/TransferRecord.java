@@ -10,11 +10,14 @@ import java.time.LocalDateTime;
 @Getter
 @Setter
 @Entity
-@Table(name = "transfer_record")
+@Table(name = "transfer_record", uniqueConstraints = @UniqueConstraint(name = "uk_transfer_request", columnNames = {"user_id", "request_id"}))
 public class TransferRecord {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    @Column(name = "request_id", length = 64)
+    private String requestId;
 
     @Column(name = "user_id", nullable = false)
     private Long userId;

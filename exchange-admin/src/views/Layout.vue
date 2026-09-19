@@ -111,7 +111,7 @@ const playSound = (soundUrl: string) => {
 // 加载提示音配置
 const loadSoundConfig = async () => {
   try {
-    const res: any = await request.get('/admin/config/list')
+    const res: any = await request.get('/admin/notification/sounds')
     if (Array.isArray(res)) {
       res.forEach((item: any) => {
         if (item.configKey === 'notification.sound.withdraw') {

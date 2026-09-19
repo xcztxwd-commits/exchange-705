@@ -113,6 +113,9 @@ public class MarketQuoteSource {
     }
 
     Map<String, Object> getKline(String code, String interval, Integer limit, String category) {
+        return getKline(code, interval, limit, category, null);
+    }
+    Map<String, Object> getKline(String code, String interval, Integer limit, String category, Long endTime) {
         int requiredLimit = (limit != null && limit > 0) ? limit : 100;
 
         try {
@@ -125,6 +128,7 @@ public class MarketQuoteSource {
 
                 // URL: /market/candles?category=SPOT&symbol={code}&interval={interval}&limit={limit}
                 String urlStr = baseUrl + "/market/candles?category=SPOT&symbol=" + urlEncode(code) + "&interval=" + urlEncode(intervalStr) + "&limit=" + queryNum;
+                if (endTime != null) urlStr = urlStr.replace("/market/candles?", "/market/history-candles?") + "&endTime=" + endTime;
                 URI uri = URI.create(urlStr);
 
                 HttpHeaders headers = new HttpHeaders();
@@ -147,6 +151,7 @@ public class MarketQuoteSource {
 
                 // Let's use v3 /market/candles?category=USDT-FUTURES
                 String urlStr = baseUrl + "/market/candles?category=USDT-FUTURES&symbol=" + urlEncode(bitgetSymbol) + "&interval=" + urlEncode(intervalStr) + "&limit=" + queryNum;
+                if (endTime != null) urlStr = urlStr.replace("/market/candles?", "/market/history-candles?") + "&endTime=" + endTime;
                 URI uri = URI.create(urlStr);
 
                 HttpHeaders headers = new HttpHeaders();
@@ -170,6 +175,14 @@ public class MarketQuoteSource {
 
                 // URL: https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?range={range}&interval={interval}
                 String urlStr = yahooUrl + "/chart/" + urlEncode(yahooSymbol) + "?range=" + yahooRange + "&interval=" + yahooInterval;
+                if (endTime != null) {
+                    long seconds = "1d".equals(interval) ? 86400 : "1h".equals(interval) ? 3600
+                            : Long.parseLong(interval.substring(0, interval.length() - 1)) * 60;
+                    long end = endTime / 1000;
+                    // Extra calendar time covers market closures; the client validates actual coverage.
+                    urlStr = yahooUrl + "/chart/" + urlEncode(yahooSymbol) + "?period1="
+                            + Math.max(0, end - seconds * requiredLimit * 3) + "&period2=" + end + "&interval=" + yahooInterval;
+                }
                 URI uri = URI.create(urlStr);
 
                 HttpHeaders headers = new HttpHeaders();
@@ -195,7 +208,7 @@ public class MarketQuoteSource {
                 Map<String, Object> data = new LinkedHashMap<>();
                 data.put("code", code);
                 data.put("kline_type", klineType);
-                data.put("kline_timestamp_end", 0);
+                data.put("kline_timestamp_end", endTime == null ? 0 : endTime / 1000);
                 data.put("query_kline_num", queryNum);
                 data.put("adjust_type", 0);
                 query.put("data", data);

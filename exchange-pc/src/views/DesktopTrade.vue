@@ -1,5 +1,6 @@
 <template>
-  <div class="h-screen w-screen flex flex-col bg-white dark:bg-[#131722] text-gray-800 dark:text-gray-100 text-sm overflow-hidden font-sans">
+  <div class="trade-page h-screen w-screen flex flex-col bg-white dark:bg-[#131722] text-gray-800 dark:text-gray-100 text-sm overflow-hidden font-sans">
+    <OrderShareModal v-if="shareOrder" :order-id="shareOrder.id" :kind="shareOrder.kind" brand="GTCFX" desktop @close="shareOrder = null" />
     <!-- Top Nav -->
     <header class="h-14 border-b border-gray-200 dark:border-[#2b3139] flex justify-between items-center shrink-0 shadow-sm bg-white dark:bg-[#131722] z-10 relative">
       <div class="flex items-center px-4 absolute left-0 h-full w-[300px]">
@@ -50,7 +51,7 @@
       </div>
     </header>
 
-    <div class="flex flex-1 overflow-hidden">
+    <div class="trade-layout flex flex-1 overflow-hidden">
       <!-- Left Sidebar -->
       <aside class="w-[300px] border-r border-gray-200 dark:border-[#2b3139] flex flex-col shrink-0 bg-white dark:bg-[#131722] z-10 shadow-[2px_0_8px_rgba(0,0,0,0.02)]">
         <div class="p-3 border-b border-gray-200 dark:border-[#2b3139] flex space-x-2">
@@ -86,7 +87,7 @@
       </aside>
 
       <!-- Center Chart -->
-      <div class="flex-1 flex flex-col min-w-0 bg-white dark:bg-[#131722]">
+      <div class="trade-chart-panel flex-1 flex flex-col min-w-0 bg-white dark:bg-[#131722]">
         <div class="px-6 py-2 border-b border-gray-200 dark:border-[#2b3139] shrink-0 flex justify-between items-center">
            <div>
              <div class="text-xl font-bold text-gray-800 dark:text-gray-100 tracking-tight">{{ currentSymbol }}</div>
@@ -99,7 +100,7 @@
              </div>
            </div>
         </div>
-        <div class="flex-1 relative bg-[#fafafa]">
+        <div class="trade-chart flex-1 relative bg-[#fafafa]">
            <KlineChart :symbol="currentSymbol" :category="currentCategory" :interval="currentInterval" class="w-full h-full absolute inset-0" />
         </div>
         
@@ -157,6 +158,7 @@
                     <td :class="['py-3 px-2 font-bold', order.profit >= 0 ? 'text-[#8cc63f]' : 'text-[#ff4d4f]']">{{ order.profit.toFixed(2) }}</td>
                     <td class="py-3 px-2 text-gray-400 dark:text-gray-500" v-html="order.openTime.replace(' ', '<br/>')"></td>
                     <td class="py-3 px-4 text-right space-x-2">
+                      <button v-if="order.status === 'CLOSED'" @click="shareOrder = { id: order.id, kind: 'contract' }" class="pnl-share-entry" :aria-label="shareLabel" :title="shareLabel"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 15V3m-4 4 4-4 4 4M6 10H4v11h16V10h-2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" /></svg></button>
                       <button v-if="orderSubTab === 'positions'" @click="openTpSlModal(order)" class="bg-[#8cc63f] text-white px-2 py-1 rounded text-[11px] font-medium hover:bg-[#7ab036] transition-colors">TP/SL</button>
                       <button v-if="orderSubTab === 'positions'" @click="closePosition(order)" class="bg-[#ff4d4f] text-white px-3 py-1 rounded text-[11px] font-medium hover:bg-[#e64042] transition-colors">{{ localeStore.t('closePosition') }}</button>
                       <button v-if="orderSubTab === 'pending'" @click="cancelOrder(order)" class="bg-gray-400 text-white px-3 py-1 rounded text-[11px] font-medium hover:bg-gray-500 transition-colors">{{ localeStore.t('cancelOrder') }}</button>
@@ -179,11 +181,12 @@
                    <th class="py-3 px-2 font-medium whitespace-nowrap">{{ localeStore.t('actualProfit') }}</th>
                    <th class="py-3 px-2 font-medium whitespace-nowrap">{{ localeStore.t('status') }}</th>
                    <th class="py-3 px-4 font-medium whitespace-nowrap text-right">{{ localeStore.t('timeLabel') }}</th>
+                   <th class="py-3 px-4 text-right">{{ localeStore.t('action') }}</th>
                  </tr>
                </thead>
                <tbody>
                  <tr v-if="currentOrderList.length === 0">
-                   <td colspan="10" class="text-center py-8 text-gray-400 dark:text-gray-500">{{ localeStore.t('noneText') }}{{ localeStore.t('recordText') }}</td>
+                   <td colspan="11" class="text-center py-8 text-gray-400 dark:text-gray-500">{{ localeStore.t('noneText') }}{{ localeStore.t('recordText') }}</td>
                  </tr>
                  <tr v-for="order in currentOrderList" :key="order.id" class="border-b border-gray-200 dark:border-[#2b3139] hover:bg-gray-50 dark:hover:bg-[#181c27] dark:bg-[#181c27] transition-colors">
                     <td class="py-3 px-4 font-bold text-gray-700 dark:text-gray-200">{{ order.symbol }}</td>
@@ -199,6 +202,7 @@
                       <span v-else class="text-gray-500 dark:text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-[#2b3139] px-2 py-1 rounded">{{ localeStore.t('settled') }}</span>
                     </td>
                     <td class="py-3 px-4 text-right text-gray-400 dark:text-gray-500" v-html="order.openTime.replace(' ', '<br/>')"></td>
+                    <td class="py-3 px-4 text-right"><button v-if="order.status === 'CLOSED'" @click="shareOrder = { id: order.id, kind: 'option' }" class="pnl-share-entry" :aria-label="shareLabel" :title="shareLabel"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 15V3m-4 4 4-4 4 4M6 10H4v11h16V10h-2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" /></svg></button></td>
                  </tr>
                </tbody>
              </table>
@@ -766,7 +770,7 @@
                   <div class="flex justify-between items-start mb-2">
                     <div class="font-bold text-gray-800 dark:text-gray-100 text-base">{{ localeStore.t('quantityText') }}: {{ Number(record.amount).toFixed(2) }} {{ record.type === 'digital' ? (record.network ? record.network.split('-')[0] : 'USDT') : 'CNY' }}</div>
                     <div class="text-xs px-2 py-1 rounded-full font-medium" :class="record.status === 'COMPLETED' ? 'bg-green-50 text-[#8cc63f]' : (record.status === 'REJECTED' ? 'bg-red-50 text-red-500' : 'bg-orange-50 text-orange-400')">
-                      {{ record.status === 'COMPLETED' ? 'completedText' : (record.status === 'REJECTED' ? localeStore.t('rejectedText') : localeStore.t('reviewingText')) }}
+                      {{ record.status === 'COMPLETED' ? localeStore.t('completedText') : (record.status === 'REJECTED' ? localeStore.t('rejectedText') : localeStore.t('reviewingText')) }}
                     </div>
                   </div>
                   <div class="text-sm text-gray-600 dark:text-gray-300 mb-1">
@@ -908,7 +912,7 @@
                   <div class="flex justify-between items-start mb-2">
                     <div class="font-bold text-gray-800 dark:text-gray-100 text-base">{{ localeStore.t('quantityText') }}: {{ Number(record.amount).toFixed(2) }}</div>
                     <div class="text-xs px-2 py-1 rounded-full font-medium" :class="record.status === 'COMPLETED' ? 'bg-green-50 text-[#8cc63f]' : (record.status === 'REJECTED' ? 'bg-red-50 text-red-500' : 'bg-orange-50 text-orange-400')">
-                      {{ record.status === 'COMPLETED' ? 'completedText' : (record.status === 'REJECTED' ? localeStore.t('rejectedText') : (record.status === 'APPROVED' ? localeStore.t('passed') : localeStore.t('reviewingText'))) }}
+                      {{ record.status === 'COMPLETED' ? localeStore.t('completedText') : (record.status === 'REJECTED' ? localeStore.t('rejectedText') : (record.status === 'APPROVED' ? localeStore.t('passed') : localeStore.t('reviewingText'))) }}
                     </div>
                   </div>
                   <div class="text-sm text-gray-600 dark:text-gray-300 mb-1">
@@ -1683,6 +1687,8 @@
 </template>
 
 <script setup lang="ts">
+import OrderShareModal from "@/components/OrderShareModal.vue";
+import { shareCopy, type ShareKind } from "@/utils/orderShare";
 import { ref, onMounted, computed, watch, onUnmounted, nextTick } from 'vue';
 import { useMarketStore } from '@/store/market';
 import { useAuthStore } from '@/store/auth';
@@ -1700,6 +1706,8 @@ import VueQrcode from '@chenfengyuan/vue-qrcode';
 const marketStore = useMarketStore();
 const auth = useAuthStore();
 const localeStore = useLocaleStore();
+const shareOrder = ref<{ id: string | number; kind: ShareKind } | null>(null);
+const shareLabel = computed(() => shareCopy(localeStore.locale).share);
 localeStore.loadLocale();
 const router = useRouter();
 
@@ -2775,6 +2783,7 @@ const loadContractBalance = async () => {
 };
 
 const calculateContractProfit = (order: any, currentPrice: number): number => {
+  if (order.status === 'CLOSED') return Number(order.profit || 0)
   if (!order.openPrice || order.openPrice <= 0 || !currentPrice || currentPrice <= 0) {
     return Number(order.profit || 0);
   }
@@ -3791,6 +3800,85 @@ watch(activeUserMenu, (val) => {
 </script>
 
 <style>
+.pnl-share-entry { display:inline-flex; align-items:center; justify-content:center; width:36px; height:36px; padding:0; border:1px solid #e6e8ed; border-radius:9px; background:transparent; color:#679700; cursor:pointer; }
+.pnl-share-entry:hover { background:#f2f8e7; border-color:#85bd00; }
+/* Fixed desktop columns cannot fit a phone; keep every panel reachable by scrolling. */
+@media (max-width: 1199px) {
+  .trade-page.trade-page {
+    height: auto;
+    min-height: 100dvh;
+    width: 100%;
+    overflow: visible;
+  }
+  .trade-page > header {
+    height: auto;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 12px;
+  }
+  .trade-page > header > div {
+    position: static;
+    width: 100%;
+    height: auto;
+    padding: 0;
+    border: 0;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .trade-page > header > div > * {
+    margin-left: 0;
+    white-space: nowrap;
+  }
+  .trade-page .trade-layout {
+    flex-direction: column;
+    overflow: visible;
+  }
+  .trade-layout > aside {
+    width: 100%;
+    min-width: 0;
+    border-left: 0;
+    border-right: 0;
+  }
+  .trade-layout > aside:first-child {
+    height: 280px;
+  }
+  .trade-layout .custom-search {
+    min-width: 0;
+    width: 0;
+  }
+  .trade-page .trade-chart-panel {
+    flex: none;
+    width: 100%;
+  }
+  .trade-chart-panel > :first-child {
+    overflow-x: auto;
+    padding-inline: 12px;
+  }
+  .trade-chart-panel > :first-child > div {
+    min-width: max-content;
+  }
+  .trade-page .trade-chart {
+    flex: none;
+    height: 360px;
+  }
+  .trade-chart-panel > :last-child > .flex {
+    overflow-x: auto;
+    flex-shrink: 0;
+  }
+  .trade-chart-panel > :last-child > .flex > * {
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+  .trade-page .custom-dialog {
+    max-width: calc(100vw - 24px);
+    margin-top: 24px;
+  }
+  .trade-page .custom-dialog .el-dialog__body {
+    padding: 16px;
+    overflow-x: auto;
+  }
+}
+
 /* 覆盖 Element Plus 样式以匹配 UI */
 .custom-dialog .el-dialog__header {
   border-bottom: 1px solid #f0f0f0;

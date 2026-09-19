@@ -33,7 +33,7 @@ public class FinancialController {
         } catch (Exception e) {
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", false);
-            resp.put("message", "获取失败: " + e.getMessage());
+            resp.put("message", "获取失败: " + com.gtcfesk.exchange.common.SafeErrors.message(e));
             return ResponseEntity.badRequest().body(resp);
         }
     }
@@ -52,7 +52,7 @@ public class FinancialController {
         } catch (Exception e) {
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", false);
-            resp.put("message", "获取失败: " + e.getMessage());
+            resp.put("message", "获取失败: " + com.gtcfesk.exchange.common.SafeErrors.message(e));
             return ResponseEntity.badRequest().body(resp);
         }
     }
@@ -83,7 +83,7 @@ public class FinancialController {
         } catch (Exception e) {
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", false);
-            resp.put("message", "申购失败: " + e.getMessage());
+            resp.put("message", "申购失败: " + com.gtcfesk.exchange.common.SafeErrors.message(e));
             return ResponseEntity.badRequest().body(resp);
         }
     }
@@ -111,7 +111,7 @@ public class FinancialController {
         } catch (Exception e) {
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", false);
-            resp.put("message", "赎回失败: " + e.getMessage());
+            resp.put("message", "赎回失败: " + com.gtcfesk.exchange.common.SafeErrors.message(e));
             return ResponseEntity.badRequest().body(resp);
         }
     }
@@ -128,7 +128,7 @@ public class FinancialController {
                 throw new RuntimeException("未登录");
             }
             
-            BigDecimal penalty = financialService.calculatePenalty(orderId);
+            BigDecimal penalty = financialService.calculatePenalty(Long.valueOf(auth.getName()), orderId);
             
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", true);
@@ -137,7 +137,7 @@ public class FinancialController {
         } catch (Exception e) {
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", false);
-            resp.put("message", "计算失败: " + e.getMessage());
+            resp.put("message", "计算失败: " + com.gtcfesk.exchange.common.SafeErrors.message(e));
             return ResponseEntity.badRequest().body(resp);
         }
     }
@@ -170,7 +170,7 @@ public class FinancialController {
         } catch (Exception e) {
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", false);
-            resp.put("message", "获取失败: " + e.getMessage());
+            resp.put("message", "获取失败: " + com.gtcfesk.exchange.common.SafeErrors.message(e));
             return ResponseEntity.badRequest().body(resp);
         }
     }

@@ -35,7 +35,7 @@ public class AdminFinancialController {
         } catch (Exception e) {
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", false);
-            resp.put("message", "获取失败: " + e.getMessage());
+            resp.put("message", "获取失败: " + com.gtcfesk.exchange.common.SafeErrors.message(e));
             return ResponseEntity.badRequest().body(resp);
         }
     }
@@ -54,7 +54,7 @@ public class AdminFinancialController {
         } catch (Exception e) {
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", false);
-            resp.put("message", "创建失败: " + e.getMessage());
+            resp.put("message", "创建失败: " + com.gtcfesk.exchange.common.SafeErrors.message(e));
             return ResponseEntity.badRequest().body(resp);
         }
     }
@@ -74,7 +74,7 @@ public class AdminFinancialController {
         } catch (Exception e) {
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", false);
-            resp.put("message", "更新失败: " + e.getMessage());
+            resp.put("message", "更新失败: " + com.gtcfesk.exchange.common.SafeErrors.message(e));
             return ResponseEntity.badRequest().body(resp);
         }
     }
@@ -92,7 +92,7 @@ public class AdminFinancialController {
         } catch (Exception e) {
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", false);
-            resp.put("message", "删除失败: " + e.getMessage());
+            resp.put("message", "删除失败: " + com.gtcfesk.exchange.common.SafeErrors.message(e));
             return ResponseEntity.badRequest().body(resp);
         }
     }
@@ -143,7 +143,7 @@ public class AdminFinancialController {
         } catch (Exception e) {
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", false);
-            resp.put("message", "获取失败: " + e.getMessage());
+            resp.put("message", "获取失败: " + com.gtcfesk.exchange.common.SafeErrors.message(e));
             return ResponseEntity.badRequest().body(resp);
         }
     }

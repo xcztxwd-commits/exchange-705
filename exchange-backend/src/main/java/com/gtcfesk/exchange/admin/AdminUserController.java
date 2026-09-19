@@ -25,6 +25,9 @@ public class AdminUserController {
     private AdminUserService adminUserService;
 
     @Autowired
+    private com.gtcfesk.exchange.config.BackendAccess backendAccess;
+
+    @Autowired
     private AgentActionService agentActionService;
 
     @Autowired
@@ -335,16 +338,21 @@ public class AdminUserController {
             result.put("success", true);
             result.put("message", "用户删除成功");
             return ResponseEntity.ok(result);
-        } catch (IllegalArgumentException e) {
+        } catch (com.gtcfesk.exchange.common.BusinessException e) {
             Map<String, Object> result = new HashMap<>();
             result.put("success", false);
             result.put("message", e.getMessage());
+            return ResponseEntity.badRequest().body(result);
+        } catch (IllegalArgumentException e) {
+            Map<String, Object> result = new HashMap<>();
+            result.put("success", false);
+            result.put("message", com.gtcfesk.exchange.common.SafeErrors.message(e));
             return ResponseEntity.badRequest().body(result);
         } catch (Exception e) {
             e.printStackTrace();
             Map<String, Object> result = new HashMap<>();
             result.put("success", false);
-            result.put("message", "删除用户失败: " + e.getMessage());
+            result.put("message", "删除用户失败: " + com.gtcfesk.exchange.common.SafeErrors.message(e));
             return ResponseEntity.status(500).body(result);
         }
     }
@@ -490,7 +498,7 @@ public class AdminUserController {
     ) {
         try {
             Long agentId = extractAgentId(authHeader);
-            int onlineCount = adminUserService.getOnlineUserCount(agentId);
+            int onlineCount = backendAccess.canReadMenu("users") ? adminUserService.getOnlineUserCount(agentId) : 0;
             
             Map<String, Object> result = new HashMap<>();
             result.put("success", true);
@@ -499,7 +507,7 @@ public class AdminUserController {
         } catch (Exception e) {
             Map<String, Object> result = new HashMap<>();
             result.put("success", false);
-            result.put("message", "获取失败: " + e.getMessage());
+            result.put("message", "获取失败: " + com.gtcfesk.exchange.common.SafeErrors.message(e));
             return ResponseEntity.badRequest().body(result);
         }
     }
@@ -542,7 +550,7 @@ public class AdminUserController {
         } catch (Exception e) {
             Map<String, Object> result = new HashMap<>();
             result.put("success", false);
-            result.put("message", "修改失败: " + e.getMessage());
+            result.put("message", "修改失败: " + com.gtcfesk.exchange.common.SafeErrors.message(e));
             return ResponseEntity.badRequest().body(result);
         }
     }
@@ -566,7 +574,7 @@ public class AdminUserController {
         } catch (Exception e) {
             Map<String, Object> result = new HashMap<>();
             result.put("success", false);
-            result.put("message", "更新失败: " + e.getMessage());
+            result.put("message", "更新失败: " + com.gtcfesk.exchange.common.SafeErrors.message(e));
             return ResponseEntity.badRequest().body(result);
         }
     }
@@ -587,7 +595,7 @@ public class AdminUserController {
         } catch (Exception e) {
             Map<String, Object> error = new HashMap<>();
             error.put("success", false);
-            error.put("error", "批量更新失败: " + e.getMessage());
+            error.put("error", "批量更新失败: " + com.gtcfesk.exchange.common.SafeErrors.message(e));
             e.printStackTrace();
             return ResponseEntity.status(500).body(error);
         }

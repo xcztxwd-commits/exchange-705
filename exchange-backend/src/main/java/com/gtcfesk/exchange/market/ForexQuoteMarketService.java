@@ -30,9 +30,14 @@ public class ForexQuoteMarketService {
     private static class KlineRequest {
         final String code, interval, key;
         final int limit;
+        final Long endTime;
         KlineRequest(String code, String interval, int limit) {
+            this(code, interval, limit, null);
+        }
+        KlineRequest(String code, String interval, int limit, Long endTime) {
             this.code = code; this.interval = interval; this.limit = limit;
-            this.key = code + ":" + interval + ":" + limit;
+            this.endTime = endTime;
+            this.key = code + ":" + interval + ":" + limit + (endTime == null ? "" : ":" + endTime);
         }
     }
     private static class Group {
@@ -138,7 +143,9 @@ public class ForexQuoteMarketService {
             }
             try {
                 http.begin();
-                Map<String, Object> result = source.getKline(request.code, request.interval, request.limit, group.category);
+                Map<String, Object> result = request.endTime == null
+                        ? source.getKline(request.code, request.interval, request.limit, group.category)
+                        : source.getKline(request.code, request.interval, request.limit, group.category, request.endTime);
                 validateKline(result);
                 result.put("fetchedAt", System.currentTimeMillis());
                 result.put("status", "available");
@@ -236,13 +243,17 @@ public class ForexQuoteMarketService {
     public Map<String, Object> getKline(String code, String interval, Integer limit) { return getKline(code, interval, limit, "Crypto"); }
     @SuppressWarnings("unchecked")
     public Map<String, Object> getKline(String code, String interval, Integer limit, String category) {
+        return getKline(code, interval, limit, category, null);
+    }
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> getKline(String code, String interval, Integer limit, String category, Long endTime) {
         Group group = group(category);
-        KlineRequest request = new KlineRequest(code, interval, Math.min(1000, Math.max(1, limit == null ? 100 : limit)));
+        KlineRequest request = new KlineRequest(code, interval, Math.min(1000, Math.max(1, limit == null ? 100 : limit)), endTime);
         Map<String, Object> saved;
         String status;
         synchronized (group) {
             saved = group.klines.get(request.key);
-            boolean fresh = saved != null && System.currentTimeMillis() - QuoteState.time(saved.get("fetchedAt")) < 15000;
+            boolean fresh = saved != null && System.currentTimeMillis() - QuoteState.time(saved.get("fetchedAt")) < (endTime == null ? 15000 : 300000);
             status = fresh ? "available" : saved == null ? "unavailable" : "stale";
             // Only configured products can create work; request traffic cannot grow the symbol registry.
             if (!fresh && group.codes.contains(code) && group.pending.size() < MAX_PENDING && !request.key.equals(group.activeKey))
@@ -279,6 +290,17 @@ public class ForexQuoteMarketService {
                 for (String key : Arrays.asList("open_price", "high_price", "low_price", "close_price"))
                     row.put(key, ((Number) row.get(key)).doubleValue() + offset);
         }
+        return result;
+    }
+    /** Historical source candles are not rewritten using today's configured price offset. */
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> historicalKline(String symbol, String interval, int limit, long endTime) {
+        TradingSymbol config = registry.get(symbol);
+        if (config == null) throw new IllegalArgumentException("Unknown symbol");
+        Map<String, Object> result = getKline(marketCode(config), interval, limit, config.getCategory(), endTime);
+        Map<String, Object> data = (Map<String, Object>) result.get("data");
+        data.put("symbol", symbol);
+        data.put("source", provider(config.getCategory()));
         return result;
     }
     public List<Map<String, Object>> sourceStatus() {

@@ -15,6 +15,14 @@ public class AdminUser {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Version
+    @Column(name = "row_version", nullable = false)
+    private long rowVersion;
+
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    @Column(name = "current_token", length = 128)
+    private String currentToken;
+
     @Column(nullable = false, unique = true, length = 64)
     private String account;
 
@@ -22,6 +30,7 @@ public class AdminUser {
     private String email;
 
     @Column(nullable = false, length = 128)
+    @com.fasterxml.jackson.annotation.JsonIgnore
     private String passwordHash;
 
     @Column(nullable = false, length = 32)

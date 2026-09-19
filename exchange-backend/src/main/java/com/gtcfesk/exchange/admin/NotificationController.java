@@ -34,6 +34,21 @@ public class NotificationController {
     private final OptionOrderRepository optionOrderRepository;
     private final UserAccountRepository userAccountRepository;
     private final JwtUtil jwtUtil;
+    private final com.gtcfesk.exchange.config.BackendAccess access;
+    private final SystemConfigService systemConfigService;
+
+    @GetMapping("/sounds")
+    public ResponseEntity<?> getNotificationSounds() {
+        List<Map<String, String>> result = new java.util.ArrayList<>();
+        for (String type : java.util.Arrays.asList("withdraw", "deposit", "kyc", "order")) {
+            String key = "notification.sound." + type;
+            Map<String, String> item = new HashMap<>();
+            item.put("configKey", key);
+            item.put("configValue", systemConfigService.getConfigValue(key));
+            result.add(item);
+        }
+        return ResponseEntity.ok(result);
+    }
     
     /**
      * 从JWT中提取代理ID
@@ -145,6 +160,10 @@ public class NotificationController {
                 counts.put("order", contractOrderCount + optionOrderCount);
             }
             
+            if (!access.canReadMenu("deposit_review")) counts.put("deposit", 0L);
+            if (!access.canReadMenu("withdraw_review")) counts.put("withdraw", 0L);
+            if (!access.canReadMenu("kyc_review")) counts.put("kyc", 0L);
+            if (!access.canReadMenu("orders")) counts.put("order", 0L);
             Map<String, Object> result = new HashMap<>();
             result.put("success", true);
             result.put("data", counts);
@@ -152,7 +171,7 @@ public class NotificationController {
         } catch (Exception e) {
             Map<String, Object> result = new HashMap<>();
             result.put("success", false);
-            result.put("message", "获取失败: " + e.getMessage());
+            result.put("message", "获取失败: " + com.gtcfesk.exchange.common.SafeErrors.message(e));
             return ResponseEntity.badRequest().body(result);
         }
     }

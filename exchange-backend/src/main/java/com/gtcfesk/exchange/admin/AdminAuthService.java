@@ -45,7 +45,12 @@ public class AdminAuthService {
             user.put("userType", "admin"); // 标识为管理员
             user.put("isSuperAdmin", "super_admin".equals(admin.getRole()));
             
-            String token = jwtUtil.generateToken(String.valueOf(admin.getId()), user);
+            admin.setCurrentToken(java.util.UUID.randomUUID().toString());
+            adminUserRepository.save(admin);
+            Map<String, Object> claims = new HashMap<>(user);
+            claims.put("sid", admin.getCurrentToken());
+            claims.put("credential", jwtUtil.credentialKey(admin.getPasswordHash()));
+            String token = jwtUtil.generateToken("admin-" + admin.getId(), claims);
             long expire = System.currentTimeMillis() + jwtUtil.getExpireSeconds() * 1000;
             
             return new AuthResponse(token, expire, user);
@@ -72,7 +77,12 @@ public class AdminAuthService {
             user.put("userType", "agent"); // 标识为代理
             user.put("isSuperAdmin", false);
             
-            String token = jwtUtil.generateToken("agent-" + agent.getId(), user);
+            agent.setCurrentToken(java.util.UUID.randomUUID().toString());
+            userAccountRepository.save(agent);
+            Map<String, Object> claims = new HashMap<>(user);
+            claims.put("sid", agent.getCurrentToken());
+            claims.put("credential", jwtUtil.credentialKey(agent.getPasswordHash()));
+            String token = jwtUtil.generateToken("agent-" + agent.getId(), claims);
             long expire = System.currentTimeMillis() + jwtUtil.getExpireSeconds() * 1000;
             
             return new AuthResponse(token, expire, user);
@@ -118,6 +128,7 @@ public class AdminAuthService {
         
         // 更新密码
         admin.setPasswordHash(passwordEncoder.encode(newPassword));
+        admin.setCurrentToken(null);
         adminUserRepository.save(admin);
     }
 
@@ -168,6 +179,7 @@ public class AdminAuthService {
         
         // 更新密码
         agent.setPasswordHash(passwordEncoder.encode(newPassword));
+        agent.setCurrentToken(null);
         userAccountRepository.save(agent);
     }
 }

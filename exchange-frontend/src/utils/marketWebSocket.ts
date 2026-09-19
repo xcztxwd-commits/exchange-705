@@ -18,6 +18,20 @@ export interface PriceUpdate {
   }
 }
 
+// Match the server's 15-second freshness window even for legacy payloads.
+export function normalizeQuote(quote: PriceUpdate[string], now = Date.now()) {
+  const milliseconds = (value: unknown) => { const n = Number(value); return n < 10_000_000_000 ? n * 1000 : n }
+  const timestamp = milliseconds(quote.timestamp)
+  if (!Number.isFinite(quote.price) || quote.price <= 0 || !Number.isFinite(timestamp) || timestamp <= 0 || timestamp > now + 5000) return null
+  const fetchedAt = quote.fetchedAt == null ? timestamp : milliseconds(quote.fetchedAt)
+  const expiresAt = Math.min(timestamp + 15_000, fetchedAt + 15_000, quote.expiresAt == null ? Infinity : milliseconds(quote.expiresAt))
+  if (!Number.isFinite(fetchedAt) || !Number.isFinite(expiresAt)) return null
+  const status = quote.status === 'unavailable' ? 'unavailable'
+    : quote.status === 'stale' || quote.stale || now >= expiresAt ? 'stale'
+    : quote.available === false || (quote.status != null && quote.status !== 'available') ? 'unavailable' : 'available'
+  return { ...quote, timestamp, fetchedAt, expiresAt, status }
+}
+
 class MarketWebSocket {
   private ws: WebSocket | null = null
   private subscribedSymbols = new Set<string>()
@@ -27,7 +41,10 @@ class MarketWebSocket {
   private maxReconnectAttempts = 10
   private reconnectDelay = 3000
   private isConnecting = false
-  private apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '/api'
+  private stopped = false
+  private pongTimer: number | null = null
+  private connectedCallbacks = new Set<() => void>()
+
   
   // 价格更新回调
   private priceUpdateCallbacks = new Map<string, (prices: PriceUpdate) => void>()
@@ -36,6 +53,8 @@ class MarketWebSocket {
    * 连接 WebSocket
    */
   connect(): Promise<void> {
+    this.stopped = false
+    this.stopReconnect()
     if (this.ws?.readyState === WebSocket.OPEN) {
       return Promise.resolve()
     }
@@ -48,30 +67,25 @@ class MarketWebSocket {
     
     return new Promise((resolve, reject) => {
       try {
-        // 构建 WebSocket URL
-        // Vite 代理不支持 WebSocket，所以需要直接连接到后端服务器
+        // 开发环境直连后端，生产环境使用站点反向代理。
         let wsUrl: string
-        if (this.apiBaseUrl.startsWith('/')) {
-          // 相对路径（开发环境），直接连接到后端服务器
-          // Vite 代理配置为 target: 'http://localhost:8080'，所以后端在 8080 端口
-          const isDev = import.meta.env.DEV
-          if (isDev) {
-            // 开发环境：直接连接后端服务器（8080端口）
-            wsUrl = `ws://localhost:8080${this.apiBaseUrl}/ws/market`
-          } else {
-            // 生产环境：使用当前协议和主机
-            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-            wsUrl = `${protocol}//${window.location.host}${this.apiBaseUrl}/ws/market`
-          }
+        const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '/api'
+
+        if (apiBaseUrl.startsWith('/')) {
+          const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+          const host = import.meta.env.DEV ? `${window.location.hostname}:8080` : window.location.host
+          wsUrl = `${protocol}//${host}${apiBaseUrl}/ws/market`
         } else {
-          // 绝对路径，替换协议
-          wsUrl = this.apiBaseUrl.replace(/^https?/, (match: string) => match === 'https' ? 'wss' : 'ws') + '/ws/market'
+          // 生产环境：使用配置的绝对路径
+          wsUrl = apiBaseUrl.replace(/^https?/, (match: string) => match === 'https' ? 'wss' : 'ws') + '/ws/market'
         }
         console.log('[Market WS] Connecting to:', wsUrl)
         
-        this.ws = new WebSocket(wsUrl)
+        const socket = new WebSocket(wsUrl)
+        this.ws = socket
         
         this.ws.onopen = () => {
+          if (this.ws !== socket || this.stopped) { socket.close(); return }
           console.log('[Market WS] ✅ Connected')
           this.isConnecting = false
           this.reconnectAttempts = 0
@@ -83,11 +97,13 @@ class MarketWebSocket {
           
           // 启动心跳
           this.startHeartbeat()
+          this.connectedCallbacks.forEach(callback => callback())
           
           resolve()
         }
         
         this.ws.onmessage = (event) => {
+          if (this.ws !== socket) return
           try {
             const data = JSON.parse(event.data)
             
@@ -97,8 +113,8 @@ class MarketWebSocket {
             } else if (data.type === 'subscribed') {
               console.log('[Market WS] ✅ Subscribed:', data.symbols)
             } else if (data.type === 'pong') {
-              // 心跳响应
-              // 忽略
+              if (this.pongTimer !== null) clearTimeout(this.pongTimer)
+              this.pongTimer = null
             }
           } catch (error) {
             console.error('[Market WS] Error parsing message:', error)
@@ -106,17 +122,22 @@ class MarketWebSocket {
         }
         
         this.ws.onerror = (error) => {
+          if (this.ws !== socket) return
           console.error('[Market WS] ❌ Error:', error)
           this.isConnecting = false
           reject(error)
         }
         
         this.ws.onclose = () => {
+          reject(new Error('Market WebSocket closed'))
+          if (this.ws !== socket) return
+          this.ws = null
           console.log('[Market WS] 🔌 Closed')
           this.isConnecting = false
           this.stopHeartbeat()
           
           // 自动重连
+          if (this.stopped) return
           if (this.reconnectAttempts < this.maxReconnectAttempts) {
             this.reconnectAttempts++
             const delay = Math.min(this.reconnectDelay * Math.pow(1.5, this.reconnectAttempts - 1), 30000)
@@ -142,6 +163,8 @@ class MarketWebSocket {
    * 断开连接
    */
   disconnect() {
+    this.stopped = true
+    this.isConnecting = false
     this.stopHeartbeat()
     this.stopReconnect()
     
@@ -216,6 +239,11 @@ class MarketWebSocket {
       this.priceUpdateCallbacks.delete(id)
     }
   }
+
+  onConnected(callback: () => void): () => void {
+    this.connectedCallbacks.add(callback)
+    return () => { this.connectedCallbacks.delete(callback) }
+  }
   
   /**
    * 处理价格更新
@@ -251,6 +279,7 @@ class MarketWebSocket {
     this.heartbeatTimer = window.setInterval(() => {
       if (this.ws && this.ws.readyState === WebSocket.OPEN) {
         this.send({ action: 'ping' })
+        this.pongTimer = window.setTimeout(() => { this.ws?.close() }, 10_000)
       }
     }, 30000) // 每30秒发送一次心跳
   }
@@ -259,6 +288,8 @@ class MarketWebSocket {
    * 停止心跳
    */
   private stopHeartbeat() {
+    if (this.pongTimer !== null) clearTimeout(this.pongTimer)
+    this.pongTimer = null
     if (this.heartbeatTimer) {
       clearInterval(this.heartbeatTimer)
       this.heartbeatTimer = null
@@ -284,5 +315,4 @@ class MarketWebSocket {
 }
 
 export default new MarketWebSocket()
-
 

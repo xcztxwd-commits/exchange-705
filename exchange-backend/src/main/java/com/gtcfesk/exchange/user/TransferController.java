@@ -25,6 +25,7 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class TransferController {
     
+    private final com.gtcfesk.exchange.repository.UserAccountRepository users;
     private final AssetAccountRepository assetAccountRepository;
     private final TransferRecordRepository transferRecordRepository;
     
@@ -50,7 +51,7 @@ public class TransferController {
         if (req.getToAccount() == null || req.getToAccount().isEmpty()) {
             throw new BusinessException("转入账户不能为空");
         }
-        if (req.getFromAccount().equals(req.getToAccount())) {
+        if (req.getFromAccount().trim().equalsIgnoreCase(req.getToAccount().trim())) {
             throw new BusinessException("转出账户和转入账户不能相同");
         }
         if (req.getAmount() == null || req.getAmount().compareTo(BigDecimal.ZERO) <= 0) {
@@ -58,12 +59,28 @@ public class TransferController {
         }
         
         // 验证账户类型
-        String fromAccount = req.getFromAccount().toUpperCase();
-        String toAccount = req.getToAccount().toUpperCase();
+        String fromAccount = req.getFromAccount().trim().toUpperCase(java.util.Locale.ROOT);
+        String toAccount = req.getToAccount().trim().toUpperCase(java.util.Locale.ROOT);
         if (!isValidAccountType(fromAccount) || !isValidAccountType(toAccount)) {
             throw new BusinessException("账户类型无效");
         }
         
+        com.gtcfesk.exchange.common.TradeValidation.positive(req.getAmount(), "划转金额");
+        if (req.getRequestId() != null && !req.getRequestId().matches("[A-Za-z0-9_-]{1,64}")) throw new BusinessException("请求编号无效");
+        // Serialize account creation and idempotency for this user; lock all accounts in fixed order.
+        users.lockById(userId).orElseThrow(() -> new BusinessException("用户不存在"));
+        assetAccountRepository.lockByUserId(userId);
+        if (req.getRequestId() != null) {
+            TransferRecord previous = transferRecordRepository.findByUserIdAndRequestId(userId, req.getRequestId()).orElse(null);
+            if (previous != null) {
+                if (!fromAccount.equals(previous.getFromAccount()) || !toAccount.equals(previous.getToAccount())
+                        || req.getAmount().compareTo(previous.getAmount()) != 0) throw new BusinessException("请求编号已用于不同划转");
+                Map<String, Object> result = new HashMap<>();
+                result.put("success", true);
+                result.put("message", "划转已完成");
+                return ResponseEntity.ok(result);
+            }
+        }
         // 获取转出账户
         AssetAccount fromAsset = assetAccountRepository
                 .findByUserIdAndCoin(userId, fromAccount)
@@ -105,6 +122,7 @@ public class TransferController {
         // 创建划转记录
         TransferRecord record = new TransferRecord();
         record.setUserId(userId);
+        record.setRequestId(req.getRequestId());
         record.setFromAccount(fromAccount);
         record.setToAccount(toAccount);
         record.setAmount(req.getAmount());
@@ -158,6 +176,7 @@ public class TransferController {
     public static class TransferRequest {
         private String fromAccount; // FUND, CONTRACT, OPTION
         private String toAccount; // FUND, CONTRACT, OPTION
+        private String requestId;
         private BigDecimal amount;
     }
 }

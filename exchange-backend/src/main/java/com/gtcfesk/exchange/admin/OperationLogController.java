@@ -55,7 +55,7 @@ public class OperationLogController {
         } catch (Exception e) {
             Map<String, Object> result = new HashMap<>();
             result.put("success", false);
-            result.put("message", "查询失败: " + e.getMessage());
+            result.put("message", "查询失败: " + com.gtcfesk.exchange.common.SafeErrors.message(e));
             return ResponseEntity.badRequest().body(result);
         }
     }

@@ -16,6 +16,7 @@ import java.nio.file.Paths;
 @RequiredArgsConstructor
 public class WebConfig implements WebMvcConfigurer {
 
+    private final BackendAccess backendAccess;
     private final OperationLogInterceptor operationLogInterceptor;
 
     @Override
@@ -75,6 +76,7 @@ public class WebConfig implements WebMvcConfigurer {
 
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
+        registry.addInterceptor(backendAccess).addPathPatterns("/api/admin/**");
         registry.addInterceptor(operationLogInterceptor)
                 .addPathPatterns("/api/admin/**")
                 .excludePathPatterns("/api/admin/operation-logs"); // 排除操作日志查询本身

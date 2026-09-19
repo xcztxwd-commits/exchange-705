@@ -44,7 +44,7 @@ public class DepositController {
         } catch (Exception e) {
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", false);
-            resp.put("message", "获取失败: " + e.getMessage());
+            resp.put("message", "获取失败: " + com.gtcfesk.exchange.common.SafeErrors.message(e));
             return ResponseEntity.badRequest().body(resp);
         }
     }
@@ -70,7 +70,7 @@ public class DepositController {
         } catch (Exception e) {
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", false);
-            resp.put("message", "获取失败: " + e.getMessage());
+            resp.put("message", "获取失败: " + com.gtcfesk.exchange.common.SafeErrors.message(e));
             return ResponseEntity.badRequest().body(resp);
         }
     }
@@ -103,7 +103,7 @@ public class DepositController {
         } catch (Exception e) {
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", false);
-            resp.put("message", "获取失败: " + e.getMessage());
+            resp.put("message", "获取失败: " + com.gtcfesk.exchange.common.SafeErrors.message(e));
             return ResponseEntity.badRequest().body(resp);
         }
     }
@@ -124,6 +124,7 @@ public class DepositController {
             String type = (String) req.get("type");
             String network = (String) req.get("network");
             BigDecimal amount = new BigDecimal(req.get("amount").toString());
+            com.gtcfesk.exchange.common.TradeValidation.positive(amount, "充值金额");
             String address = (String) req.get("address");
             String proofImage = (String) req.get("proofImage");
 
@@ -153,7 +154,7 @@ public class DepositController {
             e.printStackTrace();
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", false);
-            resp.put("message", "提交失败: " + e.getMessage());
+            resp.put("message", "提交失败: " + com.gtcfesk.exchange.common.SafeErrors.message(e));
             return ResponseEntity.badRequest().body(resp);
         }
     }
@@ -178,7 +179,7 @@ public class DepositController {
         } catch (Exception e) {
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", false);
-            resp.put("message", "获取失败: " + e.getMessage());
+            resp.put("message", "获取失败: " + com.gtcfesk.exchange.common.SafeErrors.message(e));
             return ResponseEntity.badRequest().body(resp);
         }
     }

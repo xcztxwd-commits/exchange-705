@@ -44,6 +44,7 @@ public class FinancialService {
      */
     @Transactional
     public FinancialOrder purchaseProduct(Long userId, Long productId, BigDecimal purchaseAmount) {
+        com.gtcfesk.exchange.common.TradeValidation.positive(purchaseAmount, "申购金额");
         // 获取产品
         FinancialProduct product = getProduct(productId);
         
@@ -171,10 +172,13 @@ public class FinancialService {
     /**
      * 计算违约赎回的违约金
      */
-    public BigDecimal calculatePenalty(Long orderId) {
+    public BigDecimal calculatePenalty(Long userId, Long orderId) {
         FinancialOrder order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new BusinessException("订单不存在"));
         
+        if (!order.getUserId().equals(userId)) {
+            throw new org.springframework.security.access.AccessDeniedException("无权访问该订单");
+        }
         return order.getPurchaseAmount()
                 .multiply(order.getPenaltyRate())
                 .divide(new BigDecimal("100"), 16, RoundingMode.HALF_UP);

@@ -12,7 +12,7 @@
     "@chenfengyuan/vue-qrcode": "^2.0.0",
     "@heroicons/vue": "^2.2.0",
     "axios": "^1.7.9",
-    "klinecharts": "^8.3.2",
+    "klinecharts": "10.0.0-beta3",
     "pinia": "^2.2.6",
     "qrcode": "^1.5.4",
     "vue": "^3.5.24",

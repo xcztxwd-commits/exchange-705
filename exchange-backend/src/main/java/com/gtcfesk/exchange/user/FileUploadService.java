@@ -98,7 +98,7 @@ public class FileUploadService {
             
             return uploadImage(multipartFile);
         } catch (Exception e) {
-            throw new BusinessException("上传签名图片失败: " + e.getMessage());
+            throw new BusinessException("签名图片内容无效或上传失败");
         }
     }
 
@@ -119,22 +119,13 @@ public class FileUploadService {
         }
         
         try {
-            // 生成唯一文件名
-            String originalFilename = file.getOriginalFilename();
-            String extension = "";
-            if (originalFilename != null && originalFilename.contains(".")) {
-                extension = originalFilename.substring(originalFilename.lastIndexOf("."));
-            }
-            String filename = UUID.randomUUID().toString() + extension;
-            
-            // 保存文件
-            Path filePath = IMAGE_DIR_PATH.resolve(filename);
-            Files.write(filePath, file.getBytes());
-            
+            Path filePath = com.gtcfesk.exchange.common.ImageFiles.save(file, IMAGE_DIR_PATH);
+            String filename = filePath.getFileName().toString();
+
             // 返回文件URL，使用 /api/uploads/images/ 确保通过后端Controller处理
             return "/api/uploads/images/" + filename;
         } catch (IOException e) {
-            throw new BusinessException("上传失败: " + e.getMessage());
+            throw new BusinessException("图片保存失败，请稍后重试");
         }
     }
 }

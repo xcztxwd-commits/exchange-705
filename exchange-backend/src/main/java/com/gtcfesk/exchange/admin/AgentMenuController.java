@@ -116,7 +116,7 @@ public class AgentMenuController {
             e.printStackTrace();
             Map<String, Object> result = new HashMap<>();
             result.put("success", false);
-            result.put("message", "获取菜单失败: " + e.getMessage());
+            result.put("message", "获取菜单失败: " + com.gtcfesk.exchange.common.SafeErrors.message(e));
             return ResponseEntity.ok(result);
         }
     }

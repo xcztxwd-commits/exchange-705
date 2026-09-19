@@ -35,17 +35,24 @@ public class WalletController {
         } catch (Exception e) {
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", false);
-            resp.put("message", "获取失败: " + e.getMessage());
+            resp.put("message", "获取失败: " + com.gtcfesk.exchange.common.SafeErrors.message(e));
             return ResponseEntity.badRequest().body(resp);
         }
     }
 
     // 添加银行卡
     @PostMapping("/bank-cards")
-    public ResponseEntity<?> addBankCard(Authentication auth, @RequestBody UserBankCard card) {
+    public ResponseEntity<?> addBankCard(Authentication auth, @RequestBody UserBankCardInput input) {
         try {
             Long userId = Long.parseLong(auth.getName());
+            UserBankCard card = new UserBankCard();
             card.setUserId(userId);
+            card.setCurrency(input.getCurrency());
+            card.setBankName(input.getBankName());
+            card.setBankAddress(input.getBankAddress());
+            card.setSwift(input.getSwift());
+            card.setRecipientName(input.getRecipientName());
+            card.setRecipientAccount(input.getRecipientAccount());
             
             UserBankCard saved = userBankCardRepository.save(card);
             
@@ -57,14 +64,14 @@ public class WalletController {
         } catch (Exception e) {
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", false);
-            resp.put("message", "添加失败: " + e.getMessage());
+            resp.put("message", "添加失败: " + com.gtcfesk.exchange.common.SafeErrors.message(e));
             return ResponseEntity.badRequest().body(resp);
         }
     }
 
     // 更新银行卡
     @PutMapping("/bank-cards/{id}")
-    public ResponseEntity<?> updateBankCard(Authentication auth, @PathVariable Long id, @RequestBody UserBankCard card) {
+    public ResponseEntity<?> updateBankCard(Authentication auth, @PathVariable Long id, @RequestBody UserBankCardInput input) {
         try {
             Long userId = Long.parseLong(auth.getName());
             UserBankCard existing = userBankCardRepository.findById(id)
@@ -74,8 +81,13 @@ public class WalletController {
                 throw new IllegalArgumentException("无权操作");
             }
             
-            card.setId(id);
-            card.setUserId(userId);
+            UserBankCard card = existing;
+            card.setCurrency(input.getCurrency());
+            card.setBankName(input.getBankName());
+            card.setBankAddress(input.getBankAddress());
+            card.setSwift(input.getSwift());
+            card.setRecipientName(input.getRecipientName());
+            card.setRecipientAccount(input.getRecipientAccount());
             UserBankCard saved = userBankCardRepository.save(card);
             
             Map<String, Object> resp = new HashMap<>();
@@ -86,7 +98,7 @@ public class WalletController {
         } catch (Exception e) {
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", false);
-            resp.put("message", "更新失败: " + e.getMessage());
+            resp.put("message", "更新失败: " + com.gtcfesk.exchange.common.SafeErrors.message(e));
             return ResponseEntity.badRequest().body(resp);
         }
     }
@@ -112,7 +124,7 @@ public class WalletController {
         } catch (Exception e) {
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", false);
-            resp.put("message", "删除失败: " + e.getMessage());
+            resp.put("message", "删除失败: " + com.gtcfesk.exchange.common.SafeErrors.message(e));
             return ResponseEntity.badRequest().body(resp);
         }
     }
@@ -131,17 +143,21 @@ public class WalletController {
         } catch (Exception e) {
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", false);
-            resp.put("message", "获取失败: " + e.getMessage());
+            resp.put("message", "获取失败: " + com.gtcfesk.exchange.common.SafeErrors.message(e));
             return ResponseEntity.badRequest().body(resp);
         }
     }
 
     // 添加数字货币地址
     @PostMapping("/digital-addresses")
-    public ResponseEntity<?> addDigitalAddress(Authentication auth, @RequestBody UserDigitalAddress address) {
+    public ResponseEntity<?> addDigitalAddress(Authentication auth, @RequestBody UserDigitalAddressInput input) {
         try {
             Long userId = Long.parseLong(auth.getName());
+            UserDigitalAddress address = new UserDigitalAddress();
             address.setUserId(userId);
+            address.setCurrency(input.getCurrency());
+            address.setNetwork(input.getNetwork());
+            address.setAddress(input.getAddress());
             
             UserDigitalAddress saved = userDigitalAddressRepository.save(address);
             
@@ -153,14 +169,14 @@ public class WalletController {
         } catch (Exception e) {
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", false);
-            resp.put("message", "添加失败: " + e.getMessage());
+            resp.put("message", "添加失败: " + com.gtcfesk.exchange.common.SafeErrors.message(e));
             return ResponseEntity.badRequest().body(resp);
         }
     }
 
     // 更新数字货币地址
     @PutMapping("/digital-addresses/{id}")
-    public ResponseEntity<?> updateDigitalAddress(Authentication auth, @PathVariable Long id, @RequestBody UserDigitalAddress address) {
+    public ResponseEntity<?> updateDigitalAddress(Authentication auth, @PathVariable Long id, @RequestBody UserDigitalAddressInput input) {
         try {
             Long userId = Long.parseLong(auth.getName());
             UserDigitalAddress existing = userDigitalAddressRepository.findById(id)
@@ -170,8 +186,10 @@ public class WalletController {
                 throw new IllegalArgumentException("无权操作");
             }
             
-            address.setId(id);
-            address.setUserId(userId);
+            UserDigitalAddress address = existing;
+            address.setCurrency(input.getCurrency());
+            address.setNetwork(input.getNetwork());
+            address.setAddress(input.getAddress());
             UserDigitalAddress saved = userDigitalAddressRepository.save(address);
             
             Map<String, Object> resp = new HashMap<>();
@@ -182,7 +200,7 @@ public class WalletController {
         } catch (Exception e) {
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", false);
-            resp.put("message", "更新失败: " + e.getMessage());
+            resp.put("message", "更新失败: " + com.gtcfesk.exchange.common.SafeErrors.message(e));
             return ResponseEntity.badRequest().body(resp);
         }
     }
@@ -208,11 +226,25 @@ public class WalletController {
         } catch (Exception e) {
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", false);
-            resp.put("message", "删除失败: " + e.getMessage());
+            resp.put("message", "删除失败: " + com.gtcfesk.exchange.common.SafeErrors.message(e));
             return ResponseEntity.badRequest().body(resp);
         }
     }
+
+    @lombok.Data
+    public static class UserBankCardInput {
+        private String currency;
+        private String bankName;
+        private String bankAddress;
+        private String swift;
+        private String recipientName;
+        private String recipientAccount;
+    }
+
+    @lombok.Data
+    public static class UserDigitalAddressInput {
+        private String currency;
+        private String network;
+        private String address;
+    }
 }
-
-
-

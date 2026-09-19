@@ -118,18 +118,9 @@ public class FileUploadController {
                 return ResponseEntity.badRequest().body(resp);
             }
 
-            // 生成唯一文件名
-            String originalFilename = file.getOriginalFilename();
-            String extension = "";
-            if (originalFilename != null && originalFilename.contains(".")) {
-                extension = originalFilename.substring(originalFilename.lastIndexOf("."));
-            }
-            String filename = UUID.randomUUID().toString() + extension;
+            Path filePath = com.gtcfesk.exchange.common.ImageFiles.save(file, IMAGE_DIR_PATH);
+            String filename = filePath.getFileName().toString();
 
-            // 保存文件（使用绝对路径）
-            Path filePath = IMAGE_DIR_PATH.resolve(filename);
-            Files.write(filePath, file.getBytes());
-            
             // 验证文件是否真的保存成功
             boolean fileExists = Files.exists(filePath);
             long fileSize = fileExists ? Files.size(filePath) : 0;
@@ -144,14 +135,14 @@ public class FileUploadController {
             resp.put("success", true);
             resp.put("url", fileUrl);
             resp.put("message", "上传成功");
-            resp.put("filePath", filePath.toString()); // 调试用
+
             return ResponseEntity.ok(resp);
 
         } catch (IOException e) {
             e.printStackTrace();
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", false);
-            resp.put("message", "上传失败: " + e.getMessage());
+            resp.put("message", "上传失败: " + com.gtcfesk.exchange.common.SafeErrors.message(e));
             return ResponseEntity.badRequest().body(resp);
         }
     }
@@ -223,7 +214,7 @@ public class FileUploadController {
             e.printStackTrace();
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", false);
-            resp.put("message", "上传失败: " + e.getMessage());
+            resp.put("message", "上传失败: " + com.gtcfesk.exchange.common.SafeErrors.message(e));
             return ResponseEntity.badRequest().body(resp);
         }
     }

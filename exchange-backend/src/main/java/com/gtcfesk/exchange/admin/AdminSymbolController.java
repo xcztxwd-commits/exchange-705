@@ -76,7 +76,10 @@ public class AdminSymbolController {
         java.math.BigDecimal leverage = new java.math.BigDecimal(request.get("leverage").toString());
         List<Long> symbolIds = null;
         if (request.get("symbolIds") != null) {
-            symbolIds = (List<Long>) request.get("symbolIds");
+            symbolIds = new java.util.ArrayList<>();
+            for (Object id : (List<?>) request.get("symbolIds")) {
+                symbolIds.add(new java.math.BigDecimal(id.toString()).longValueExact());
+            }
         }
         String category = (String) request.get("category");
         

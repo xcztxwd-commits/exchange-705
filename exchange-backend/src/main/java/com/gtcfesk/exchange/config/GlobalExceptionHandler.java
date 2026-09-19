@@ -18,8 +18,8 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Map<String, Object>> handleBusinessException(BusinessException e) {
         Map<String, Object> result = new HashMap<>();
         result.put("success", false);
-        result.put("error", e.getMessage());
-        result.put("message", e.getMessage());
+        result.put("error", com.gtcfesk.exchange.common.SafeErrors.message(e));
+        result.put("message", com.gtcfesk.exchange.common.SafeErrors.message(e));
         result.put("code", e.getCode());
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(result);
     }
@@ -40,12 +40,42 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(result);
     }
 
+    @ExceptionHandler({org.springframework.web.bind.MethodArgumentNotValidException.class,
+            org.springframework.validation.BindException.class, javax.validation.ConstraintViolationException.class,
+            org.springframework.http.converter.HttpMessageNotReadableException.class,
+            org.springframework.web.method.annotation.MethodArgumentTypeMismatchException.class,
+            org.springframework.web.bind.MissingServletRequestParameterException.class,
+            IllegalArgumentException.class})
+    public ResponseEntity<Map<String, Object>> handleInput(Exception e) {
+        Map<String, Object> result = new HashMap<>();
+        result.put("success", false);
+        result.put("message", "请求参数无效或不完整");
+        return ResponseEntity.badRequest().body(result);
+    }
+
+    @ExceptionHandler(org.springframework.security.access.AccessDeniedException.class)
+    public ResponseEntity<Map<String, Object>> handleDenied(Exception e) {
+        Map<String, Object> result = new HashMap<>();
+        result.put("success", false);
+        result.put("message", "无权执行此操作");
+        return ResponseEntity.status(403).body(result);
+    }
+
+    @ExceptionHandler({org.springframework.dao.OptimisticLockingFailureException.class,
+            org.springframework.dao.PessimisticLockingFailureException.class, javax.persistence.OptimisticLockException.class})
+    public ResponseEntity<Map<String, Object>> handleConflict(Exception e) {
+        Map<String, Object> result = new HashMap<>();
+        result.put("success", false);
+        result.put("message", "数据已变更，请刷新后重试");
+        return ResponseEntity.status(409).body(result);
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, Object>> handleException(Exception e) {
         Map<String, Object> result = new HashMap<>();
         result.put("success", false);
         result.put("error", "Internal Server Error");
-        result.put("message", e.getMessage());
+        result.put("message", com.gtcfesk.exchange.common.SafeErrors.message(e));
         System.err.println("未处理的异常: " + e.getMessage());
         e.printStackTrace();
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(result);

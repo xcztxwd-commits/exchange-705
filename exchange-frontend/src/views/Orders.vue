@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch, onUnmounted } from 'vue'
 import Tabbar from '@/components/Tabbar.vue'
+import OrderShareModal from '@/components/OrderShareModal.vue'
+import { shareCopy, type ShareKind } from '@/utils/orderShare'
 import request from '@/utils/request'
 import { useMarketStore } from '@/store/market'
 import { useLocaleStore } from '@/store/locale'
@@ -9,6 +11,8 @@ import { formatDateTime } from '@/utils/dateTime'
 const marketStore = useMarketStore()
 const localeStore = useLocaleStore()
 localeStore.loadLocale()
+const shareOrder = ref<{ id: string | number; kind: ShareKind } | null>(null)
+const shareLabel = computed(() => shareCopy(localeStore.locale).share)
 
 // 主标签：合約 / 期限
 const mainTab = ref<'contract' | 'term'>('contract')
@@ -73,6 +77,7 @@ function getCurrentPrice(symbol: string): number {
 
 // 计算合约订单盈亏（考虑杠杆倍数）
 function calculateContractProfit(order: any, currentPrice: number): number {
+  if (order.status === 'CLOSED') return Number(order.profit || 0)
   if (!order.openPrice || order.openPrice <= 0 || !currentPrice || currentPrice <= 0) {
     return Number(order.profit || 0)
   }
@@ -1118,6 +1123,7 @@ function formatPrice(v: number | string | undefined | null) {
           :key="order.id"
           class="order-card"
         >
+          <button type="button" class="order-share-entry" @click="shareOrder = { id: order.id, kind: 'contract' }" :aria-label="shareLabel" :title="shareLabel"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 15V3m-4 4 4-4 4 4M6 10H4v11h16V10h-2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" /></svg></button>
           <div class="order-header">
             <div class="order-symbol">{{ order.symbol }}</div>
             <div class="order-price">
@@ -1234,6 +1240,7 @@ function formatPrice(v: number | string | undefined | null) {
           :key="order.id"
           class="order-card"
         >
+          <button type="button" class="order-share-entry" @click="shareOrder = { id: order.id, kind: 'option' }" :aria-label="shareLabel" :title="shareLabel"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 15V3m-4 4 4-4 4 4M6 10H4v11h16V10h-2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" /></svg></button>
           <div class="order-header">
             <div class="order-symbol">{{ order.symbol }}</div>
             <div class="order-price">
@@ -1425,11 +1432,13 @@ function formatPrice(v: number | string | undefined | null) {
       </div>
     </div>
 
+    <OrderShareModal v-if="shareOrder" :order-id="shareOrder.id" :kind="shareOrder.kind" brand="DEMO" @close="shareOrder = null" />
     <Tabbar />
   </div>
 </template>
 
 <style scoped>
+.order-share-entry { display:flex; align-items:center; justify-content:center; margin:0 0 8px auto; width:36px; height:36px; padding:0; border:1px solid #e6e8ed; border-radius:9px; background:transparent; color:#679700; cursor:pointer; }
 .orders-page {
   min-height: 100vh;
   background: #f5f7fb;

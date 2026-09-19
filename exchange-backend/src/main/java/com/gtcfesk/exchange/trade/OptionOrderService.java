@@ -22,6 +22,7 @@ public class OptionOrderService {
 
     private final OptionOrderRepository optionOrderRepository;
     private final AssetAccountRepository assetAccountRepository;
+    private final com.gtcfesk.exchange.repository.TradingSymbolRepository tradingSymbolRepository;
     private final OptionDurationRepository optionDurationRepository;
     private final com.gtcfesk.exchange.market.ForexQuoteMarketService quotes;
 
@@ -31,6 +32,23 @@ public class OptionOrderService {
      */
     @Transactional
     public OptionOrder createOrder(Long userId, CreateOptionOrderRequest req) {
+        if (req == null || req.getSymbol() == null || !("UP".equals(req.getDirection()) || "DOWN".equals(req.getDirection()))
+                || req.getDuration() == null || req.getDuration() <= 0) throw new BusinessException("交易参数无效");
+        com.gtcfesk.exchange.common.TradeValidation.positive(req.getAmount(), "金额");
+        if (!tradingSymbolRepository.findBySymbol(req.getSymbol()).map(s -> Boolean.TRUE.equals(s.getIsEnabled())).orElse(false)) {
+            throw new BusinessException("交易品种不存在或已停用");
+        }
+        OptionDuration duration = optionDurationRepository.findByDuration(req.getDuration())
+                .filter(d -> Boolean.TRUE.equals(d.getEnabled())).orElseThrow(() -> new BusinessException("交易周期不存在或已停用"));
+        if ((duration.getMinAmount() != null && req.getAmount().compareTo(duration.getMinAmount()) < 0)
+                || (duration.getMaxAmount() != null && req.getAmount().compareTo(duration.getMaxAmount()) > 0)) {
+            throw new BusinessException("金额不在该周期允许范围内");
+        }
+        // 开仓使用服务端新鲜行情，保留后台价格偏移，忽略客户端 currentPrice。
+        BigDecimal openPrice = quotes.freshPrice(req.getSymbol());
+        if (openPrice == null || openPrice.signum() <= 0) {
+            throw new BusinessException("行情暂不可用或报价已过期，请稍后重试");
+        }
         // 获取期权资产账户
         AssetAccount optionAccount = assetAccountRepository
                 .findByUserIdAndCoin(userId, "OPTION")
@@ -54,7 +72,7 @@ public class OptionOrderService {
         order.setSymbol(req.getSymbol());
         order.setDirection(req.getDirection()); // UP or DOWN
         order.setAmount(req.getAmount());
-        order.setOpenPrice(req.getCurrentPrice());
+        order.setOpenPrice(openPrice);
         order.setStatus("TRADING");
         order.setDuration(req.getDuration());
         order.setProfit(BigDecimal.ZERO);

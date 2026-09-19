@@ -6,7 +6,11 @@ const instance = axios.create({
   timeout: 10000,
 })
 
-instance.interceptors.request.use((config) => {
+// Legacy callers need AxiosResponse; share authentication without changing their response shape.
+export const rawRequest = axios.create({ timeout: 10000 })
+
+for (const client of [instance, rawRequest]) {
+client.interceptors.request.use((config) => {
   try {
     const auth = useAuthStore()
     if (auth.token) {
@@ -19,9 +23,14 @@ instance.interceptors.request.use((config) => {
   return config
 })
 
-instance.interceptors.response.use(
-  (res) => res.data,
+client.interceptors.response.use(
+  (res) => client === instance ? res.data : res,
   (err) => {
+    if (err.response?.status === 401) {
+      useAuthStore().logout()
+      window.location.hash = '/login'
+      return Promise.reject(new Error(err.response?.data?.message || '登录已失效，请重新登录'))
+    }
     // 简单错误提示
     if (err.response?.data?.message) {
       return Promise.reject(new Error(err.response.data.message))
@@ -29,6 +38,7 @@ instance.interceptors.response.use(
     return Promise.reject(err)
   }
 )
+}
 
 export default instance
 

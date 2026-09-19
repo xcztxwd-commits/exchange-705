@@ -214,7 +214,7 @@ public class ImageController {
             return ResponseEntity.ok(result);
         } catch (Exception e) {
             Map<String, Object> error = new HashMap<>();
-            error.put("error", e.getMessage());
+            error.put("error", com.gtcfesk.exchange.common.SafeErrors.message(e));
             error.put("stackTrace", e.getStackTrace());
             return ResponseEntity.ok(error);
         }
@@ -257,7 +257,7 @@ public class ImageController {
             return ResponseEntity.ok(result);
         } catch (Exception e) {
             Map<String, Object> error = new HashMap<>();
-            error.put("error", e.getMessage());
+            error.put("error", com.gtcfesk.exchange.common.SafeErrors.message(e));
             return ResponseEntity.ok(error);
         }
     }

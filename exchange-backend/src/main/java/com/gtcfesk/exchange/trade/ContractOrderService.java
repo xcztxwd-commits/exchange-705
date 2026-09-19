@@ -32,10 +32,23 @@ public class ContractOrderService {
      */
     @Transactional
     public ContractOrder createOrder(Long userId, CreateContractOrderRequest req) {
+        if (req == null || req.getSymbol() == null || req.getSymbol().trim().isEmpty()
+                || !("BUY".equals(req.getSide()) || "SELL".equals(req.getSide()))
+                || !("MARKET".equals(req.getType()) || "LIMIT".equals(req.getType()))) {
+            throw new BusinessException("交易品种、方向或订单类型无效");
+        }
+        com.gtcfesk.exchange.common.TradeValidation.positive(req.getQuantity(), "数量");
+        if ("LIMIT".equals(req.getType())) com.gtcfesk.exchange.common.TradeValidation.positive(req.getPrice(), "限价");
+        com.gtcfesk.exchange.common.TradeValidation.optionalPositive(req.getStopLoss(), "止损价格");
+        com.gtcfesk.exchange.common.TradeValidation.optionalPositive(req.getTakeProfit(), "止盈价格");
         // 获取交易对信息
         TradingSymbol symbol = tradingSymbolRepository.findBySymbol(req.getSymbol())
                 .orElseThrow(() -> new BusinessException("交易对不存在"));
         
+        if (!Boolean.TRUE.equals(symbol.getIsEnabled())) throw new BusinessException("交易品种已停用");
+        // 成交价只取服务端行情（含后台偏移）；限价单可在缺少行情时等待撮合。
+        BigDecimal currentPrice = "MARKET".equals(req.getType())
+                ? requireFreshPrice(req.getSymbol()) : quotes.freshPrice(req.getSymbol());
         // 获取合约设置
         BigDecimal lotSize = symbol.getLotSize() != null ? symbol.getLotSize() : BigDecimal.valueOf(1000);
         BigDecimal feeMultiplier = symbol.getFeeMultiplier() != null ? symbol.getFeeMultiplier() : BigDecimal.valueOf(30);
@@ -83,8 +96,7 @@ public class ContractOrderService {
         order.setType(req.getType()); // MARKET or LIMIT
         order.setQuantity(req.getQuantity());
         order.setPrice(req.getPrice());
-        // 初始设置当前价，开仓价在下面根据类型设置
-        order.setCurrentPrice(req.getCurrentPrice());
+        order.setCurrentPrice(currentPrice);
         order.setStopLoss(req.getStopLoss());
         order.setTakeProfit(req.getTakeProfit());
         order.setMargin(requiredMargin);
@@ -96,14 +108,28 @@ public class ContractOrderService {
         if ("MARKET".equals(req.getType())) {
             order.setStatus("OPEN");
             order.setOpenTime(LocalDateTime.now());
-            order.setOpenPrice(req.getCurrentPrice());
+            order.setOpenPrice(currentPrice);
         } else {
             order.setStatus("PENDING");
-            // 限价单的开仓价应该是挂单价
+            order.setLimitMatchEnabled(true);
+            // 挂单阶段保留限价展示，成交时再写入服务端新鲜行情价。
             order.setOpenPrice(req.getPrice());
         }
 
         return contractOrderRepository.save(order);
+    }
+
+    /** Fill newly created limit orders at the fresh quote; funds were already frozen on submission. */
+    public int matchPendingLimitOrders() {
+        int filled = 0;
+        for (ContractOrder order : contractOrderRepository.findByStatusAndTypeAndLimitMatchEnabledTrue("PENDING", "LIMIT")) {
+            BigDecimal marketPrice = quotes.freshPrice(order.getSymbol());
+            if (marketPrice != null && marketPrice.signum() > 0) {
+                // Each conditional update commits independently. Version checks also fence off a competing cancellation.
+                filled += contractOrderRepository.openPendingLimitOrder(order.getId(), order.getRowVersion(), marketPrice, LocalDateTime.now());
+            }
+        }
+        return filled;
     }
 
     /**
@@ -151,6 +177,9 @@ public class ContractOrderService {
         if (!"OPEN".equals(order.getStatus())) {
             throw new BusinessException("只能平仓持仓中的订单");
         }
+
+        // 保留旧调用签名，但绝不采用调用方传入的成交价。
+        closePrice = requireFreshPrice(order.getSymbol());
 
         // 计算盈亏（考虑杠杆倍数）
         BigDecimal profit = BigDecimal.ZERO;
@@ -216,6 +245,8 @@ public class ContractOrderService {
         }
 
         Long userId = order.getUserId();
+
+        closePrice = requireFreshPrice(order.getSymbol());
 
         // 计算盈亏（考虑杠杆倍数）
         BigDecimal profit = BigDecimal.ZERO;
@@ -353,6 +384,8 @@ public class ContractOrderService {
      */
     @Transactional
     public ContractOrder updateStopLossTakeProfit(Long userId, Long orderId, BigDecimal stopLoss, BigDecimal takeProfit) {
+        com.gtcfesk.exchange.common.TradeValidation.optionalPositive(stopLoss, "止损价格");
+        com.gtcfesk.exchange.common.TradeValidation.optionalPositive(takeProfit, "止盈价格");
         ContractOrder order = contractOrderRepository.findById(orderId)
                 .orElseThrow(() -> new BusinessException("订单不存在"));
 
@@ -405,7 +438,6 @@ public class ContractOrderService {
                 
                 // 检查是否触发止盈或止损
                 boolean shouldClose = false;
-                BigDecimal closePrice = currentPrice;
                 
                 // 检查止损
                 if (order.getStopLoss() != null && order.getStopLoss().compareTo(BigDecimal.ZERO) > 0) {
@@ -413,13 +445,11 @@ public class ContractOrderService {
                         // 买入订单：当前价 <= 止损价，触发止损
                         if (currentPrice.compareTo(order.getStopLoss()) <= 0) {
                             shouldClose = true;
-                            closePrice = order.getStopLoss(); // 使用止损价平仓
                         }
                     } else {
                         // 卖出订单：当前价 >= 止损价，触发止损
                         if (currentPrice.compareTo(order.getStopLoss()) >= 0) {
                             shouldClose = true;
-                            closePrice = order.getStopLoss(); // 使用止损价平仓
                         }
                     }
                 }
@@ -430,20 +460,18 @@ public class ContractOrderService {
                         // 买入订单：当前价 >= 止盈价，触发止盈
                         if (currentPrice.compareTo(order.getTakeProfit()) >= 0) {
                             shouldClose = true;
-                            closePrice = order.getTakeProfit(); // 使用止盈价平仓
                         }
                     } else {
                         // 卖出订单：当前价 <= 止盈价，触发止盈
                         if (currentPrice.compareTo(order.getTakeProfit()) <= 0) {
                             shouldClose = true;
-                            closePrice = order.getTakeProfit(); // 使用止盈价平仓
                         }
                     }
                 }
                 
                 // 如果触发止盈或止损，自动平仓
                 if (shouldClose) {
-                    adminCloseOrder(order.getId(), closePrice);
+                    adminCloseOrder(order.getId(), null);
                 }
             } catch (Exception e) {
                 // 静默处理异常，避免日志输出
@@ -555,9 +583,16 @@ public class ContractOrderService {
         }
     }
     
-    /**
-     * 计算订单的实时盈亏
-     */
+    /** 获取允许成交的服务端行情，包含后台价格偏移。 */
+    private BigDecimal requireFreshPrice(String symbol) {
+        BigDecimal price = quotes.freshPrice(symbol);
+        if (price == null || price.signum() <= 0) {
+            throw new BusinessException("行情暂不可用或报价已过期，请稍后重试");
+        }
+        return price;
+    }
+
+    /** 计算订单的实时盈亏。 */
     private BigDecimal calculateProfit(ContractOrder order, BigDecimal currentPrice) {
         if (order.getOpenPrice() == null || currentPrice == null 
                 || order.getOpenPrice().compareTo(BigDecimal.ZERO) <= 0 

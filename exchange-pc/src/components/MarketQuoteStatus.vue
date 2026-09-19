@@ -22,4 +22,7 @@ const affected = computed(() => Object.keys(market.quoteStatusMap)
 <style scoped>
 .quote-status { position: fixed; top: 0; left: 50%; transform: translateX(-50%); z-index: 10000; max-width: 94vw; width: max-content; max-height: 28vh; overflow: auto; padding: 6px 12px; border: 1px solid #d69e2e; border-radius: 4px; background: #fff4cc; color: #613c00; font-size: 12px; }
 summary { cursor: pointer; }
+@media (max-width: 1199px) {
+  .quote-status { position: relative; top: auto; left: auto; transform: none; width: auto; max-width: none; margin: 8px 12px; z-index: auto; }
+}
 </style>

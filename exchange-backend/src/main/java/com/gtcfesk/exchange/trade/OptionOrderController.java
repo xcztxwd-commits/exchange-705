@@ -42,7 +42,7 @@ public class OptionOrderController {
         } catch (Exception e) {
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", false);
-            resp.put("message", "获取交易对失败: " + (e.getMessage() != null ? e.getMessage() : "未知错误"));
+            resp.put("message", "获取交易对失败: " + (com.gtcfesk.exchange.common.SafeErrors.message(e) != null ? com.gtcfesk.exchange.common.SafeErrors.message(e) : "未知错误"));
             return ResponseEntity.badRequest().body(resp);
         }
     }
@@ -81,12 +81,12 @@ public class OptionOrderController {
         } catch (BusinessException e) {
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", false);
-            resp.put("message", e.getMessage());
+            resp.put("message", com.gtcfesk.exchange.common.SafeErrors.message(e));
             return ResponseEntity.badRequest().body(resp);
         } catch (Exception e) {
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", false);
-            resp.put("message", "订单创建失败: " + (e.getMessage() != null ? e.getMessage() : "未知错误"));
+            resp.put("message", "订单创建失败: " + (com.gtcfesk.exchange.common.SafeErrors.message(e) != null ? com.gtcfesk.exchange.common.SafeErrors.message(e) : "未知错误"));
             return ResponseEntity.badRequest().body(resp);
         }
     }
@@ -122,7 +122,7 @@ public class OptionOrderController {
         } catch (Exception e) {
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", false);
-            resp.put("message", "获取订单失败: " + (e.getMessage() != null ? e.getMessage() : "未知错误"));
+            resp.put("message", "获取订单失败: " + (com.gtcfesk.exchange.common.SafeErrors.message(e) != null ? com.gtcfesk.exchange.common.SafeErrors.message(e) : "未知错误"));
             return ResponseEntity.badRequest().body(resp);
         }
     }
@@ -144,7 +144,7 @@ public class OptionOrderController {
         } catch (Exception e) {
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", false);
-            resp.put("message", "获取余额失败: " + e.getMessage());
+            resp.put("message", "获取余额失败: " + com.gtcfesk.exchange.common.SafeErrors.message(e));
             return ResponseEntity.badRequest().body(resp);
         }
     }
@@ -186,12 +186,12 @@ public class OptionOrderController {
         } catch (BusinessException e) {
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", false);
-            resp.put("message", e.getMessage());
+            resp.put("message", com.gtcfesk.exchange.common.SafeErrors.message(e));
             return ResponseEntity.badRequest().body(resp);
         } catch (Exception e) {
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", false);
-            resp.put("message", "平仓失败: " + (e.getMessage() != null ? e.getMessage() : "未知错误"));
+            resp.put("message", "平仓失败: " + (com.gtcfesk.exchange.common.SafeErrors.message(e) != null ? com.gtcfesk.exchange.common.SafeErrors.message(e) : "未知错误"));
             return ResponseEntity.badRequest().body(resp);
         }
     }

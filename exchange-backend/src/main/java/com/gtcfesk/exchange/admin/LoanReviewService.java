@@ -131,6 +131,10 @@ public class LoanReviewService {
         LoanRecord record = loanRecordRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("贷款记录不存在"));
 
+        if ("REJECTED".equals(record.getStatus())) return;
+        if (!"PENDING".equals(record.getStatus()) && !"SIGNED".equals(record.getStatus())) {
+            throw new com.gtcfesk.exchange.common.BusinessException("当前贷款状态不允许拒绝");
+        }
         record.setStatus("REJECTED");
         record.setRemark(remark);
         loanRecordRepository.save(record);

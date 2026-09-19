@@ -53,7 +53,7 @@ public class ChangePasswordController {
      * 修改密码
      */
     @PostMapping("/changePassword")
-    @Transactional
+    @Transactional(noRollbackFor = BusinessException.class)
     public ResponseEntity<?> changePassword(
             Authentication auth,
             @RequestBody ChangePasswordRequest req) {

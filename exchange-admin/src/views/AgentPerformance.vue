@@ -2,7 +2,7 @@
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import axios from 'axios'
+import { rawRequest as axios } from '@/utils/request'
 import { ArrowLeft, User, Coin, Money, TrendCharts } from '@element-plus/icons-vue'
 
 const route = useRoute()
@@ -268,4 +268,3 @@ onMounted(() => {
   color: #303133;
 }
 </style>
-

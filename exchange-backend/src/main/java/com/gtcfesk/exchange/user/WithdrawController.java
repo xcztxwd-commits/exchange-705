@@ -59,6 +59,9 @@ public class WithdrawController {
             
             Long userId = Long.parseLong(auth.getName());
             String type = (String) req.get("type"); // digital 或 bank
+            if (!"digital".equals(type) && !"bank".equals(type)) {
+                throw new com.gtcfesk.exchange.common.BusinessException("提现类型无效");
+            }
             String network = (String) req.get("network"); // 如 USDT-TRC20, USD
             BigDecimal amount = new BigDecimal(req.get("amount").toString());
             String address = (String) req.get("address");
@@ -151,10 +154,13 @@ public class WithdrawController {
             resp.put("message", "提现申请已提交，等待审核");
             return ResponseEntity.ok(resp);
         } catch (Exception e) {
+            if (org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive()) {
+                org.springframework.transaction.interceptor.TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
+            }
             e.printStackTrace();
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", false);
-            resp.put("message", "提交失败: " + e.getMessage());
+            resp.put("message", "提交失败: " + com.gtcfesk.exchange.common.SafeErrors.message(e));
             return ResponseEntity.badRequest().body(resp);
         }
     }
@@ -180,9 +186,12 @@ public class WithdrawController {
             resp.put("list", records);
             return ResponseEntity.ok(resp);
         } catch (Exception e) {
+            if (org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive()) {
+                org.springframework.transaction.interceptor.TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
+            }
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", false);
-            resp.put("message", "获取失败: " + e.getMessage());
+            resp.put("message", "获取失败: " + com.gtcfesk.exchange.common.SafeErrors.message(e));
             return ResponseEntity.badRequest().body(resp);
         }
     }
@@ -203,6 +212,9 @@ public class WithdrawController {
     public ResponseEntity<?> calculateAmount(@RequestBody Map<String, Object> req) {
         try {
             String type = (String) req.get("type");
+            if (!"digital".equals(type) && !"bank".equals(type)) {
+                throw new com.gtcfesk.exchange.common.BusinessException("提现类型无效");
+            }
             String network = (String) req.get("network");
             BigDecimal amount = new BigDecimal(req.get("amount").toString());
 
@@ -215,9 +227,12 @@ public class WithdrawController {
             resp.put("actualAmount", actualAmount);
             return ResponseEntity.ok(resp);
         } catch (Exception e) {
+            if (org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive()) {
+                org.springframework.transaction.interceptor.TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
+            }
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", false);
-            resp.put("message", "计算失败: " + e.getMessage());
+            resp.put("message", "计算失败: " + com.gtcfesk.exchange.common.SafeErrors.message(e));
             return ResponseEntity.badRequest().body(resp);
         }
     }
@@ -235,6 +250,9 @@ public class WithdrawController {
             BigDecimal rate = getForexRate("USD", network.trim());
             return amount.multiply(rate).setScale(2, RoundingMode.DOWN);
         } catch (Exception e) {
+            if (org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive()) {
+                org.springframework.transaction.interceptor.TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
+            }
             // 汇率获取失败时，回退为 1:1，避免影响提现流程
             e.printStackTrace();
             return amount;

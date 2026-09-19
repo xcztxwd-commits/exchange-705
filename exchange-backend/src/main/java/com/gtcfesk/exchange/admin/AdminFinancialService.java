@@ -85,6 +85,11 @@ public class AdminFinancialService {
             orders = orderRepository.findAllByOrderByPurchaseTimeDesc();
         }
         
+        Long agent = com.gtcfesk.exchange.config.BackendAccess.agentId();
+        if (agent != null) {
+            java.util.Set<Long> allowed = userAccountRepository.findByParentUserId(agent).stream().map(UserAccount::getId).collect(java.util.stream.Collectors.toSet());
+            orders = orders.stream().filter(o -> allowed.contains(o.getUserId())).collect(java.util.stream.Collectors.toList());
+        }
         // 按用户ID过滤
         if (userId != null) {
             orders = orders.stream()

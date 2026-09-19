@@ -16,6 +16,7 @@ public class MarketOrderProcessor {
     private final ScheduledExecutorService worker = Executors.newSingleThreadScheduledExecutor(r -> new Thread(r, "market-orders"));
     @PostConstruct public void start() {
         worker.scheduleWithFixedDelay(() -> {
+            try { contracts.matchPendingLimitOrders(); } catch (Exception ignored) { }
             try { contracts.checkAndAutoCloseSnapshotOrders(); } catch (Exception ignored) { }
             try { contracts.checkAndForceCloseOrders(quotes.freshPrices()); } catch (Exception ignored) { }
             try { options.settleExpiredOrders(quotes.freshPrices()); } catch (Exception ignored) { }

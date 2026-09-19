@@ -40,7 +40,7 @@ public class StatisticsController {
             
             // 获取充值和提现图表数据（根据日期范围计算）
             System.out.println("[StatisticsController] 开始获取图表数据");
-            Map<String, Object> chartData = dashboardService.getDepositWithdrawChartDataByDateRange(start, end, null);
+            Map<String, Object> chartData = dashboardService.getDepositWithdrawChartDataByDateRange(start, end, com.gtcfesk.exchange.config.BackendAccess.agentId());
             System.out.println("[StatisticsController] 图表数据获取完成，日期数量: " + (chartData.get("dates") != null ? ((java.util.List<?>) chartData.get("dates")).size() : 0));
             stats.put("chartData", chartData);
             
@@ -55,7 +55,7 @@ public class StatisticsController {
             System.err.println("[StatisticsController] 获取统计数据失败: " + e.getMessage());
             Map<String, Object> result = new HashMap<>();
             result.put("success", false);
-            result.put("message", "获取失败: " + e.getMessage());
+            result.put("message", "获取失败: " + com.gtcfesk.exchange.common.SafeErrors.message(e));
             return ResponseEntity.badRequest().body(result);
         }
     }

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import axios from 'axios'
+import { rawRequest as axios } from '@/utils/request'
 import request from '@/utils/request'
 
 // 开发环境使用空字符串，让Vite代理处理；生产环境使用生产API域名（不包含/api后缀）
@@ -795,4 +795,3 @@ onMounted(() => {
   font-weight: bold;
 }
 </style>
-

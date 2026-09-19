@@ -44,6 +44,7 @@ public class LoanService {
 
     @Transactional
     public LoanRecord createLoan(Long userId, BigDecimal amount, Long settingId, String realName, String idNumber, String phone, String address) {
+        com.gtcfesk.exchange.common.TradeValidation.positive(amount, "贷款金额");
         LoanSetting setting = loanSettingRepository.findById(settingId)
                 .orElseThrow(() -> new BusinessException("贷款设置不存在"));
 
@@ -122,10 +123,13 @@ public class LoanService {
     }
 
     @Transactional
-    public LoanRecord signContract(Long loanId, String signatureImage) {
+    public LoanRecord signContract(Long loanId, Long userId, String signatureImage) {
         LoanRecord record = loanRecordRepository.findById(loanId)
                 .orElseThrow(() -> new BusinessException("贷款记录不存在"));
 
+        if (!record.getUserId().equals(userId)) {
+            throw new org.springframework.security.access.AccessDeniedException("无权签署该贷款");
+        }
         if (!"PENDING".equals(record.getStatus())) {
             throw new BusinessException("该贷款记录状态不允许签署合同");
         }

@@ -87,6 +87,8 @@ public class AdminUserService {
     private EntityManager entityManager;
 
     public Page<UserAccount> queryUsers(UserQueryRequest req) {
+        Long callerAgent = com.gtcfesk.exchange.config.BackendAccess.agentId();
+        req.setAgentId(callerAgent != null ? callerAgent : req.getFilterAgentId());
         PageRequest pageRequest = PageRequest.of(
             req.getPage(), 
             req.getSize(),
@@ -123,7 +125,7 @@ public class AdminUserService {
             }
             
             // 手动分页
-            int start = req.getPage() * req.getSize();
+            int start = Math.min(req.getPage() * req.getSize(), subordinates.size());
             int end = Math.min(start + req.getSize(), subordinates.size());
             List<UserAccount> pageContent = subordinates.subList(start, end);
             pageContent.forEach(user -> {
@@ -170,7 +172,7 @@ public class AdminUserService {
             }
             
             // 手动分页
-            int start = req.getPage() * req.getSize();
+            int start = Math.min(req.getPage() * req.getSize(), subordinates.size());
             int end = Math.min(start + req.getSize(), subordinates.size());
             List<UserAccount> pageContent = start < subordinates.size() 
                     ? subordinates.subList(start, end) 
@@ -268,6 +270,7 @@ public class AdminUserService {
         UserAccount user = userAccountRepository.findById(req.getUserId())
             .orElseThrow(() -> new IllegalArgumentException("用户不存在"));
         user.setPasswordHash(passwordEncoder.encode(req.getNewPassword()));
+        user.setCurrentToken(null);
         user.setUpdatedAt(LocalDateTime.now());
         userAccountRepository.save(user);
         
@@ -283,6 +286,7 @@ public class AdminUserService {
         UserAccount user = userAccountRepository.findById(req.getUserId())
             .orElseThrow(() -> new IllegalArgumentException("用户不存在"));
         user.setStatus(req.getStatus());
+        user.setCurrentToken(null);
         user.setUpdatedAt(LocalDateTime.now());
         userAccountRepository.save(user);
     }
@@ -303,6 +307,7 @@ public class AdminUserService {
         return user;
     }
 
+    @Transactional
     public void updateBalance(UpdateUserBalanceRequest req) {
         Long userId = req.getUserId();
         if (userId == null) {
@@ -408,90 +413,28 @@ public class AdminUserService {
      */
     @Transactional
     public void deleteUser(Long userId) {
-        // 验证用户是否存在
-        userAccountRepository.findById(userId)
-            .orElseThrow(() -> new IllegalArgumentException("用户不存在"));
-
-        // 删除所有关联数据（使用原生SQL以避免外键约束问题）
-        try {
-            // 1. 删除代理的操作权限（user_action表）
-            entityManager.createNativeQuery("DELETE FROM user_action WHERE user_id = ?")
-                .setParameter(1, userId)
-                .executeUpdate();
-
-            // 2. 删除代理的菜单权限（user_menu表）
-            entityManager.createNativeQuery("DELETE FROM user_menu WHERE user_id = ?")
-                .setParameter(1, userId)
-                .executeUpdate();
-
-            // 3. 删除资产账户
-            entityManager.createNativeQuery("DELETE FROM asset_account WHERE user_id = ?")
-                .setParameter(1, userId)
-                .executeUpdate();
-
-            // 4. 删除充值记录
-            entityManager.createNativeQuery("DELETE FROM deposit_record WHERE user_id = ?")
-                .setParameter(1, userId)
-                .executeUpdate();
-
-            // 5. 删除提现记录
-            entityManager.createNativeQuery("DELETE FROM withdraw_record WHERE user_id = ?")
-                .setParameter(1, userId)
-                .executeUpdate();
-
-            // 6. 删除贷款记录
-            entityManager.createNativeQuery("DELETE FROM loan_record WHERE user_id = ?")
-                .setParameter(1, userId)
-                .executeUpdate();
-
-            // 7. 删除贷款个人信息
-            entityManager.createNativeQuery("DELETE FROM loan_personal_info WHERE user_id = ?")
-                .setParameter(1, userId)
-                .executeUpdate();
-
-            // 8. 删除理财订单
-            entityManager.createNativeQuery("DELETE FROM financial_order WHERE user_id = ?")
-                .setParameter(1, userId)
-                .executeUpdate();
-
-            // 9. 删除KYC信息
-            entityManager.createNativeQuery("DELETE FROM kyc WHERE user_id = ?")
-                .setParameter(1, userId)
-                .executeUpdate();
-
-            // 10. 删除银行卡信息
-            entityManager.createNativeQuery("DELETE FROM user_bank_card WHERE user_id = ?")
-                .setParameter(1, userId)
-                .executeUpdate();
-
-            // 11. 删除数字货币地址
-            entityManager.createNativeQuery("DELETE FROM user_digital_address WHERE user_id = ?")
-                .setParameter(1, userId)
-                .executeUpdate();
-
-            // 12. 删除操作日志（如果有）
-            try {
-                entityManager.createNativeQuery("DELETE FROM operation_log WHERE user_id = ?")
-                    .setParameter(1, userId)
-                    .executeUpdate();
-            } catch (Exception e) {
-                // 如果表不存在或字段不存在，忽略错误
-                System.out.println("[AdminUserService] 删除操作日志失败（可能表不存在）: " + e.getMessage());
-            }
-
-            // 13. 将下级用户的parent_user_id设为NULL
-            entityManager.createNativeQuery("UPDATE user_account SET parent_user_id = NULL WHERE parent_user_id = ?")
-                .setParameter(1, userId)
-                .executeUpdate();
-
-            // 14. 最后删除用户本身
-            userAccountRepository.deleteById(userId);
-
-            entityManager.flush();
-        } catch (Exception e) {
-            e.printStackTrace();
-            throw new RuntimeException("删除用户失败: " + e.getMessage(), e);
+        userAccountRepository.lockById(userId).orElseThrow(() -> new IllegalArgumentException("用户不存在"));
+        List<AssetAccount> assets = assetAccountRepository.lockByUserId(userId);
+        if (assets.stream().anyMatch(x -> (x.getAvailable() != null && x.getAvailable().signum() != 0)
+                || (x.getFrozen() != null && x.getFrozen().signum() != 0))) {
+            throw new com.gtcfesk.exchange.common.BusinessException("账户存在余额或冻结资金，不能删除，请使用禁用功能");
         }
+        String[] history = {"contract_order", "option_order", "deposit_record", "withdraw_record", "loan_record",
+                "financial_order", "financial_yield_record", "transfer_record", "kyc_record", "loan_personal_info"};
+        for (String table : history) {
+            Number count = (Number) entityManager.createNativeQuery("SELECT COUNT(*) FROM " + table + " WHERE user_id = ?")
+                    .setParameter(1, userId).getSingleResult();
+            if (count.longValue() != 0) throw new com.gtcfesk.exchange.common.BusinessException("账户存在业务历史，不能删除，请使用禁用功能");
+        }
+        if (!userAccountRepository.findByParentUserId(userId).isEmpty()) {
+            throw new com.gtcfesk.exchange.common.BusinessException("账户存在下级用户，不能删除");
+        }
+        for (String table : new String[]{"user_action", "user_menu", "user_bank_card", "user_digital_address"}) {
+            entityManager.createNativeQuery("DELETE FROM " + table + " WHERE user_id = ?").setParameter(1, userId).executeUpdate();
+        }
+        assetAccountRepository.deleteAll(assets);
+        userAccountRepository.deleteById(userId);
+        entityManager.flush();
     }
 
     /**
@@ -515,6 +458,7 @@ public class AdminUserService {
     public List<UserAccount> getAllAgents() {
         return userAccountRepository.findAll().stream()
                 .filter(user -> "agent".equals(user.getUserType()))
+                .filter(user -> com.gtcfesk.exchange.config.BackendAccess.agentId() == null || user.getId().equals(com.gtcfesk.exchange.config.BackendAccess.agentId()))
                 .filter(user -> "active".equals(user.getStatus()) || "normal".equals(user.getStatus()))
                 .collect(java.util.stream.Collectors.toList());
     }

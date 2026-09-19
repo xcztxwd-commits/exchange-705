@@ -175,6 +175,7 @@ public class AdminManagementController {
         admin.setEmail(req.getEmail().trim());
         admin.setPasswordHash(passwordEncoder.encode(req.getPassword()));
         admin.setRole(req.getRole());
+        admin.setCurrentToken(null);
         admin.setEnabled(req.getEnabled() != null ? req.getEnabled() : true);
         
         adminUserRepository.save(admin);
@@ -234,12 +235,14 @@ public class AdminManagementController {
         
         // 更新启用状态
         if (req.getEnabled() != null) {
-            admin.setEnabled(req.getEnabled());
+            admin.setCurrentToken(null);
+        admin.setEnabled(req.getEnabled());
         }
         
         // 更新密码（如果提供了新密码）
         if (req.getPassword() != null && !req.getPassword().trim().isEmpty()) {
             admin.setPasswordHash(passwordEncoder.encode(req.getPassword()));
+            admin.setCurrentToken(null);
         }
         
         adminUserRepository.save(admin);
@@ -310,7 +313,8 @@ public class AdminManagementController {
         
         Boolean enabled = request.get("enabled");
         if (enabled != null) {
-            admin.setEnabled(enabled);
+            admin.setCurrentToken(null);
+        admin.setEnabled(enabled);
             adminUserRepository.save(admin);
         }
         

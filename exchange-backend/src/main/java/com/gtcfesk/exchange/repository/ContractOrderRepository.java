@@ -33,8 +33,19 @@ public interface ContractOrderRepository extends JpaRepository<ContractOrder, Lo
     
     // 查找所有持仓中的订单
     List<ContractOrder> findByStatus(String status);
+
+    List<ContractOrder> findByStatusAndTypeAndLimitMatchEnabledTrue(String status, String type);
+
+    @org.springframework.transaction.annotation.Transactional
+    @org.springframework.data.jpa.repository.Modifying
+    @Query("UPDATE ContractOrder c SET c.status = 'OPEN', c.openPrice = :marketPrice, c.currentPrice = :marketPrice, " +
+            "c.openTime = :now, c.updatedAt = :now, c.rowVersion = c.rowVersion + 1 " +
+            "WHERE c.id = :id AND c.rowVersion = :version AND c.status = 'PENDING' AND c.type = 'LIMIT' " +
+            "AND c.limitMatchEnabled = true AND c.price > 0 AND " +
+            "((c.side = 'BUY' AND :marketPrice <= c.price) OR (c.side = 'SELL' AND :marketPrice >= c.price))")
+    int openPendingLimitOrder(@Param("id") Long id, @Param("version") long version,
+                              @Param("marketPrice") java.math.BigDecimal marketPrice, @Param("now") LocalDateTime now);
     
     // 根据交易对和状态查找订单
     List<ContractOrder> findBySymbolAndStatus(String symbol, String status);
 }
-

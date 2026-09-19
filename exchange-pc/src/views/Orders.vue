@@ -73,6 +73,7 @@ function getCurrentPrice(symbol: string): number {
 
 // 计算合约订单盈亏（考虑杠杆倍数）
 function calculateContractProfit(order: any, currentPrice: number): number {
+  if (order.status === 'CLOSED') return Number(order.profit || 0)
   if (!order.openPrice || order.openPrice <= 0 || !currentPrice || currentPrice <= 0) {
     return Number(order.profit || 0)
   }

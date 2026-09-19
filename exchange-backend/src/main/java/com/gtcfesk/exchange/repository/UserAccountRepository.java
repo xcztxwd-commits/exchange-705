@@ -11,6 +11,15 @@ import java.util.List;
 import java.util.Optional;
 
 public interface UserAccountRepository extends JpaRepository<UserAccount, Long> {
+    @org.springframework.transaction.annotation.Transactional
+    @org.springframework.data.jpa.repository.Modifying
+    @Query("UPDATE UserAccount u SET u.lastActivityAt = :now WHERE u.id = :id")
+    void touchActivity(@Param("id") Long id, @Param("now") java.time.LocalDateTime now);
+
+    @org.springframework.data.jpa.repository.Lock(javax.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT u FROM UserAccount u WHERE u.id = :id")
+    Optional<UserAccount> lockById(@Param("id") Long id);
+
     Optional<UserAccount> findByEmail(String email);
     Optional<UserAccount> findByPhone(String phone);
     Optional<UserAccount> findByMyInviteCode(String myInviteCode);

@@ -56,7 +56,7 @@ public class AdminRoleController {
         } catch (Exception e) {
             Map<String, Object> result = new HashMap<>();
             result.put("success", false);
-            result.put("message", e.getMessage());
+            result.put("message", com.gtcfesk.exchange.common.SafeErrors.message(e));
             return ResponseEntity.ok(result);
         }
     }
@@ -76,7 +76,7 @@ public class AdminRoleController {
         } catch (Exception e) {
             Map<String, Object> result = new HashMap<>();
             result.put("success", false);
-            result.put("message", e.getMessage());
+            result.put("message", com.gtcfesk.exchange.common.SafeErrors.message(e));
             return ResponseEntity.ok(result);
         }
     }
@@ -95,7 +95,7 @@ public class AdminRoleController {
         } catch (Exception e) {
             Map<String, Object> result = new HashMap<>();
             result.put("success", false);
-            result.put("message", e.getMessage());
+            result.put("message", com.gtcfesk.exchange.common.SafeErrors.message(e));
             return ResponseEntity.ok(result);
         }
     }
@@ -139,7 +139,7 @@ public class AdminRoleController {
         } catch (Exception e) {
             Map<String, Object> result = new HashMap<>();
             result.put("success", false);
-            result.put("message", e.getMessage());
+            result.put("message", com.gtcfesk.exchange.common.SafeErrors.message(e));
             return ResponseEntity.ok(result);
         }
     }

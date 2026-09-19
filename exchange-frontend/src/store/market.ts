@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import marketWebSocket, { type PriceUpdate } from '@/utils/marketWebSocket'
+import marketWebSocket, { normalizeQuote, type PriceUpdate } from '@/utils/marketWebSocket'
 import type { TickData, KlineData } from '@/utils/ws'
 import { convertIntervalToKlineType, getStockCompatibleInterval } from '@/utils/kline'
 
@@ -22,14 +22,16 @@ async function fetchMarketKline(url: string, options?: RequestInit): Promise<Res
 export const useMarketStore = defineStore('market', () => {
   // 当前选中的交易对
   const currentSymbol = ref<string>('')
-  const quoteStatusMap = ref<Record<string, { status: string, fetchedAt: number, expiresAt: number }>>({})
+  const quoteStatusMap = ref<Record<string, { status: string, fetchedAt: number, expiresAt: number, timestamp: number }>>({})
   const recordQuoteStatus = (symbol: string, quote: any): boolean => {
-    const fetchedAt = Number(quote.fetchedAt || 0)
-    if (fetchedAt < (quoteStatusMap.value[symbol]?.fetchedAt || 0)) return false
-    quoteStatusMap.value[symbol] = {
-      status: quote.status || 'unavailable', fetchedAt, expiresAt: Number(quote.expiresAt || 0)
-    }
-    return Number.isFinite(quote.price) && quote.price > 0
+    const valid = normalizeQuote(quote)
+    if (!valid) return false
+    const previous = quoteStatusMap.value[symbol]
+    if (previous && (valid.timestamp < previous.timestamp ||
+      (valid.timestamp === previous.timestamp && quote.fetchedAt != null && valid.fetchedAt < previous.fetchedAt))) return false
+    const { status, fetchedAt, expiresAt, timestamp } = valid
+    quoteStatusMap.value[symbol] = { status, fetchedAt, expiresAt, timestamp }
+    return true
   }
   const getQuoteStatus = (symbol: string, now = Date.now()): string => {
     const quote = quoteStatusMap.value[symbol]
@@ -343,7 +345,8 @@ export const useMarketStore = defineStore('market', () => {
         // 将Redis中的价格数据填充到priceMap
         for (const [alltickSymbol, priceData] of Object.entries(prices)) {
           if (priceData && typeof priceData === 'object') {
-            if (!recordQuoteStatus(symbolMapping.value[alltickSymbol] || alltickSymbol, priceData)) continue
+            const internalSymbol = symbolMap.get(alltickSymbol) || symbolMapping.value[alltickSymbol] || alltickSymbol
+            if (!recordQuoteStatus(internalSymbol, priceData)) continue
             const price = Number((priceData as any).price || 0)
             const change24h = Number((priceData as any).change24h || 0)
             const changePct24h = Number((priceData as any).changePct24h || 0)
@@ -361,9 +364,11 @@ export const useMarketStore = defineStore('market', () => {
               priceMap.value[alltickSymbol] = priceInfo
               
               // 如果有映射关系，也存储 internalSymbol 对应的价格
-              const internalSymbol = symbolMap.get(alltickSymbol)
               if (internalSymbol && internalSymbol !== alltickSymbol) {
                 priceMap.value[internalSymbol] = priceInfo
+              }
+              tickDataMap.value[internalSymbol] = {
+                symbol: internalSymbol, price, timestamp: quoteStatusMap.value[internalSymbol]!.timestamp
               }
               
               loadedCount++

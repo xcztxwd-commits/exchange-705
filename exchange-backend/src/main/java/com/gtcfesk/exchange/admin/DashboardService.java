@@ -197,7 +197,18 @@ public class DashboardService {
      */
     public Map<String, Object> getStatisticsData(LocalDate startDate, LocalDate endDate) {
         Map<String, Object> stats = new HashMap<>();
-        
+        Long agent = com.gtcfesk.exchange.config.BackendAccess.agentId();
+        if (agent != null) {
+            java.util.Set<Long> allowed = userAccountRepository.findByParentUserId(agent).stream().map(UserAccount::getId).collect(java.util.stream.Collectors.toSet());
+            java.util.function.Predicate<LocalDateTime> inRange = time -> time != null && !time.toLocalDate().isBefore(startDate) && !time.toLocalDate().isAfter(endDate);
+            stats.put("totalUsers", (long) allowed.size());
+            stats.put("totalDeposit", depositRecordRepository.findAll().stream().filter(d -> allowed.contains(d.getUserId()) && "COMPLETED".equals(d.getStatus()) && inRange.test(d.getCreatedAt())).map(d -> d.getAmount()).reduce(BigDecimal.ZERO, BigDecimal::add));
+            stats.put("totalWithdraw", withdrawRecordRepository.findAll().stream().filter(d -> allowed.contains(d.getUserId()) && ("APPROVED".equals(d.getStatus()) || "COMPLETED".equals(d.getStatus())) && inRange.test(d.getCreatedAt())).map(d -> d.getAmount()).reduce(BigDecimal.ZERO, BigDecimal::add));
+            BigDecimal contract = contractOrderRepository.findAll().stream().filter(d -> allowed.contains(d.getUserId()) && inRange.test(d.getCreatedAt())).map(d -> d.getMargin()).reduce(BigDecimal.ZERO, BigDecimal::add);
+            BigDecimal option = optionOrderRepository.findAll().stream().filter(d -> allowed.contains(d.getUserId()) && inRange.test(d.getCreatedAt())).map(d -> d.getAmount()).reduce(BigDecimal.ZERO, BigDecimal::add);
+            stats.put("totalTrade", contract.add(option));
+            return stats;
+        }
         LocalDateTime start = LocalDateTime.of(startDate, LocalTime.MIN);
         LocalDateTime end = LocalDateTime.of(endDate, LocalTime.MAX);
         

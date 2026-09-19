@@ -31,7 +31,7 @@ public class LoanController {
         } catch (Exception e) {
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", false);
-            resp.put("message", "获取失败: " + e.getMessage());
+            resp.put("message", "获取失败: " + com.gtcfesk.exchange.common.SafeErrors.message(e));
             return ResponseEntity.badRequest().body(resp);
         }
     }
@@ -64,7 +64,7 @@ public class LoanController {
         } catch (Exception e) {
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", false);
-            resp.put("message", "申请失败: " + e.getMessage());
+            resp.put("message", "申请失败: " + com.gtcfesk.exchange.common.SafeErrors.message(e));
             return ResponseEntity.badRequest().body(resp);
         }
     }
@@ -86,7 +86,7 @@ public class LoanController {
         } catch (Exception e) {
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", false);
-            resp.put("message", "获取失败: " + e.getMessage());
+            resp.put("message", "获取失败: " + com.gtcfesk.exchange.common.SafeErrors.message(e));
             return ResponseEntity.badRequest().body(resp);
         }
     }
@@ -101,6 +101,9 @@ public class LoanController {
             }
 
             Long loanId = Long.parseLong(request.get("loanId").toString());
+            if (!Long.valueOf(auth.getName()).equals(loanService.getLoanById(loanId).getUserId())) {
+                throw new org.springframework.security.access.AccessDeniedException("无权签署该贷款");
+            }
             String signatureImage = request.get("signatureImage").toString();
             
             // 如果签名图片是base64格式，尝试上传到服务器
@@ -110,16 +113,11 @@ public class LoanController {
                     // 将base64转换为MultipartFile并上传
                     finalSignatureImage = fileUploadService.uploadBase64Image(signatureImage);
                 } catch (Exception e) {
-                    // 如果上传失败，直接使用base64（但可能太长，建议使用TEXT类型）
-                    // 这里先尝试截断或使用原值
-                    if (signatureImage.length() > 2000) {
-                        throw new RuntimeException("签名图片过大，请重新签名");
-                    }
-                    finalSignatureImage = signatureImage;
+                    throw new com.gtcfesk.exchange.common.BusinessException("签名图片内容无效或上传失败");
                 }
             }
 
-            LoanRecord record = loanService.signContract(loanId, finalSignatureImage);
+            LoanRecord record = loanService.signContract(loanId, Long.valueOf(auth.getName()), finalSignatureImage);
 
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", true);
@@ -129,7 +127,7 @@ public class LoanController {
         } catch (Exception e) {
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", false);
-            resp.put("message", "签署失败: " + e.getMessage());
+            resp.put("message", "签署失败: " + com.gtcfesk.exchange.common.SafeErrors.message(e));
             return ResponseEntity.badRequest().body(resp);
         }
     }
@@ -151,7 +149,7 @@ public class LoanController {
         } catch (Exception e) {
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", false);
-            resp.put("message", "获取失败: " + e.getMessage());
+            resp.put("message", "获取失败: " + com.gtcfesk.exchange.common.SafeErrors.message(e));
             return ResponseEntity.badRequest().body(resp);
         }
     }
@@ -177,7 +175,7 @@ public class LoanController {
         } catch (Exception e) {
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", false);
-            resp.put("message", "获取失败: " + e.getMessage());
+            resp.put("message", "获取失败: " + com.gtcfesk.exchange.common.SafeErrors.message(e));
             return ResponseEntity.badRequest().body(resp);
         }
     }
@@ -199,7 +197,7 @@ public class LoanController {
         } catch (Exception e) {
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", false);
-            resp.put("message", "获取失败: " + e.getMessage());
+            resp.put("message", "获取失败: " + com.gtcfesk.exchange.common.SafeErrors.message(e));
             return ResponseEntity.badRequest().body(resp);
         }
     }
@@ -222,7 +220,7 @@ public class LoanController {
         } catch (Exception e) {
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", false);
-            resp.put("message", "还款失败: " + e.getMessage());
+            resp.put("message", "还款失败: " + com.gtcfesk.exchange.common.SafeErrors.message(e));
             return ResponseEntity.badRequest().body(resp);
         }
     }

@@ -257,9 +257,12 @@ public class AdminOrderController {
 
             return ResponseEntity.ok(resp);
         } catch (Exception e) {
+            if (org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive()) {
+                org.springframework.transaction.interceptor.TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
+            }
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", false);
-            resp.put("message", "查询失败: " + e.getMessage());
+            resp.put("message", "查询失败: " + com.gtcfesk.exchange.common.SafeErrors.message(e));
             return ResponseEntity.badRequest().body(resp);
         }
     }
@@ -461,9 +464,12 @@ public class AdminOrderController {
 
             return ResponseEntity.ok(resp);
         } catch (Exception e) {
+            if (org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive()) {
+                org.springframework.transaction.interceptor.TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
+            }
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", false);
-            resp.put("message", "查询失败: " + e.getMessage());
+            resp.put("message", "查询失败: " + com.gtcfesk.exchange.common.SafeErrors.message(e));
             return ResponseEntity.badRequest().body(resp);
         }
     }
@@ -571,20 +577,9 @@ public class AdminOrderController {
     @PostMapping("/contract/{orderId}/close")
     public ResponseEntity<?> adminCloseOrder(
             @PathVariable Long orderId,
-            @RequestBody Map<String, Object> req) {
+            @RequestBody(required = false) Map<String, Object> req) {
         try {
-            BigDecimal closePrice = req.get("closePrice") != null 
-                    ? new BigDecimal(req.get("closePrice").toString()) 
-                    : null;
-
-            if (closePrice == null) {
-                Map<String, Object> resp = new HashMap<>();
-                resp.put("success", false);
-                resp.put("message", "平仓价格不能为空");
-                return ResponseEntity.badRequest().body(resp);
-            }
-
-            ContractOrder order = contractOrderService.adminCloseOrder(orderId, closePrice);
+            ContractOrder order = contractOrderService.adminCloseOrder(orderId, null);
 
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", true);
@@ -595,12 +590,15 @@ public class AdminOrderController {
         } catch (BusinessException e) {
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", false);
-            resp.put("message", e.getMessage());
+            resp.put("message", com.gtcfesk.exchange.common.SafeErrors.message(e));
             return ResponseEntity.badRequest().body(resp);
         } catch (Exception e) {
+            if (org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive()) {
+                org.springframework.transaction.interceptor.TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
+            }
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", false);
-            resp.put("message", "平仓失败: " + (e.getMessage() != null ? e.getMessage() : "未知错误"));
+            resp.put("message", "平仓失败: " + (com.gtcfesk.exchange.common.SafeErrors.message(e) != null ? com.gtcfesk.exchange.common.SafeErrors.message(e) : "未知错误"));
             e.printStackTrace();
             return ResponseEntity.badRequest().body(resp);
         }
@@ -623,12 +621,15 @@ public class AdminOrderController {
         } catch (BusinessException e) {
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", false);
-            resp.put("message", e.getMessage());
+            resp.put("message", com.gtcfesk.exchange.common.SafeErrors.message(e));
             return ResponseEntity.badRequest().body(resp);
         } catch (Exception e) {
+            if (org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive()) {
+                org.springframework.transaction.interceptor.TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
+            }
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", false);
-            resp.put("message", "撤单失败: " + (e.getMessage() != null ? e.getMessage() : "未知错误"));
+            resp.put("message", "撤单失败: " + (com.gtcfesk.exchange.common.SafeErrors.message(e) != null ? com.gtcfesk.exchange.common.SafeErrors.message(e) : "未知错误"));
             e.printStackTrace();
             return ResponseEntity.badRequest().body(resp);
         }
@@ -673,12 +674,15 @@ public class AdminOrderController {
         } catch (BusinessException e) {
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", false);
-            resp.put("message", e.getMessage());
+            resp.put("message", com.gtcfesk.exchange.common.SafeErrors.message(e));
             return ResponseEntity.badRequest().body(resp);
         } catch (Exception e) {
+            if (org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive()) {
+                org.springframework.transaction.interceptor.TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
+            }
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", false);
-            resp.put("message", "设置失败: " + (e.getMessage() != null ? e.getMessage() : "未知错误"));
+            resp.put("message", "设置失败: " + (com.gtcfesk.exchange.common.SafeErrors.message(e) != null ? com.gtcfesk.exchange.common.SafeErrors.message(e) : "未知错误"));
             e.printStackTrace();
             return ResponseEntity.badRequest().body(resp);
         }
@@ -705,12 +709,15 @@ public class AdminOrderController {
         } catch (BusinessException e) {
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", false);
-            resp.put("message", e.getMessage());
+            resp.put("message", com.gtcfesk.exchange.common.SafeErrors.message(e));
             return ResponseEntity.badRequest().body(resp);
         } catch (Exception e) {
+            if (org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive()) {
+                org.springframework.transaction.interceptor.TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
+            }
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", false);
-            resp.put("message", "清除失败: " + (e.getMessage() != null ? e.getMessage() : "未知错误"));
+            resp.put("message", "清除失败: " + (com.gtcfesk.exchange.common.SafeErrors.message(e) != null ? com.gtcfesk.exchange.common.SafeErrors.message(e) : "未知错误"));
             e.printStackTrace();
             return ResponseEntity.badRequest().body(resp);
         }
@@ -720,6 +727,7 @@ public class AdminOrderController {
      * 异常处理 - 删除合约订单（同时删除用户订单记录）
      */
     @DeleteMapping("/contract/{orderId}/abnormal-delete")
+    @org.springframework.transaction.annotation.Transactional
     public ResponseEntity<?> abnormalDeleteContractOrder(@PathVariable Long orderId) {
         try {
             ContractOrder order = contractOrderRepository.findById(orderId)
@@ -758,6 +766,9 @@ public class AdminOrderController {
                         }
                     }
                 } catch (Exception e) {
+            if (org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive()) {
+                org.springframework.transaction.interceptor.TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
+            }
                     // 如果资产账户不存在或处理失败，记录日志但继续删除订单
                     System.out.println("[AdminOrderController] 处理资产账户失败: " + e.getMessage());
                 }
@@ -774,12 +785,15 @@ public class AdminOrderController {
         } catch (BusinessException e) {
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", false);
-            resp.put("message", e.getMessage());
+            resp.put("message", com.gtcfesk.exchange.common.SafeErrors.message(e));
             return ResponseEntity.badRequest().body(resp);
         } catch (Exception e) {
+            if (org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive()) {
+                org.springframework.transaction.interceptor.TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
+            }
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", false);
-            resp.put("message", "删除失败: " + (e.getMessage() != null ? e.getMessage() : "未知错误"));
+            resp.put("message", "删除失败: " + (com.gtcfesk.exchange.common.SafeErrors.message(e) != null ? com.gtcfesk.exchange.common.SafeErrors.message(e) : "未知错误"));
             e.printStackTrace();
             return ResponseEntity.badRequest().body(resp);
         }
@@ -789,6 +803,7 @@ public class AdminOrderController {
      * 异常处理 - 删除期货订单（同时删除用户订单记录）
      */
     @DeleteMapping("/option/{orderId}/abnormal-delete")
+    @org.springframework.transaction.annotation.Transactional
     public ResponseEntity<?> abnormalDeleteOptionOrder(@PathVariable Long orderId) {
         try {
             OptionOrder order = optionOrderRepository.findById(orderId)
@@ -843,6 +858,9 @@ public class AdminOrderController {
                         System.out.println("[AdminOrderController] ⚠️ 期权订单异常处理：用户 " + userId + " 的期权账户不存在，无法返还金额");
                     }
                 } catch (Exception e) {
+            if (org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive()) {
+                org.springframework.transaction.interceptor.TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
+            }
                     // 如果资产账户不存在或处理失败，记录日志但继续删除订单
                     System.err.println("[AdminOrderController] ⚠️ 期权订单异常处理：处理资产账户失败: " + e.getMessage());
                     e.printStackTrace();
@@ -860,12 +878,15 @@ public class AdminOrderController {
         } catch (BusinessException e) {
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", false);
-            resp.put("message", e.getMessage());
+            resp.put("message", com.gtcfesk.exchange.common.SafeErrors.message(e));
             return ResponseEntity.badRequest().body(resp);
         } catch (Exception e) {
+            if (org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive()) {
+                org.springframework.transaction.interceptor.TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
+            }
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", false);
-            resp.put("message", "删除失败: " + (e.getMessage() != null ? e.getMessage() : "未知错误"));
+            resp.put("message", "删除失败: " + (com.gtcfesk.exchange.common.SafeErrors.message(e) != null ? com.gtcfesk.exchange.common.SafeErrors.message(e) : "未知错误"));
             e.printStackTrace();
             return ResponseEntity.badRequest().body(resp);
         }

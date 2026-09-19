@@ -18,6 +18,20 @@ export interface PriceUpdate {
   }
 }
 
+// Match the server's 15-second freshness window even for legacy payloads.
+export function normalizeQuote(quote: PriceUpdate[string], now = Date.now()) {
+  const milliseconds = (value: unknown) => { const n = Number(value); return n < 10_000_000_000 ? n * 1000 : n }
+  const timestamp = milliseconds(quote.timestamp)
+  if (!Number.isFinite(quote.price) || quote.price <= 0 || !Number.isFinite(timestamp) || timestamp <= 0 || timestamp > now + 5000) return null
+  const fetchedAt = quote.fetchedAt == null ? timestamp : milliseconds(quote.fetchedAt)
+  const expiresAt = Math.min(timestamp + 15_000, fetchedAt + 15_000, quote.expiresAt == null ? Infinity : milliseconds(quote.expiresAt))
+  if (!Number.isFinite(fetchedAt) || !Number.isFinite(expiresAt)) return null
+  const status = quote.status === 'unavailable' ? 'unavailable'
+    : quote.status === 'stale' || quote.stale || now >= expiresAt ? 'stale'
+    : quote.available === false || (quote.status != null && quote.status !== 'available') ? 'unavailable' : 'available'
+  return { ...quote, timestamp, fetchedAt, expiresAt, status }
+}
+
 class MarketWebSocket {
   private ws: WebSocket | null = null
   private subscribedSymbols = new Set<string>()
@@ -27,6 +41,9 @@ class MarketWebSocket {
   private maxReconnectAttempts = 10
   private reconnectDelay = 3000
   private isConnecting = false
+  private stopped = false
+  private pongTimer: number | null = null
+  private connectedCallbacks = new Set<() => void>()
 
   
   // 价格更新回调
@@ -36,6 +53,8 @@ class MarketWebSocket {
    * 连接 WebSocket
    */
   connect(): Promise<void> {
+    this.stopped = false
+    this.stopReconnect()
     if (this.ws?.readyState === WebSocket.OPEN) {
       return Promise.resolve()
     }
@@ -62,9 +81,11 @@ class MarketWebSocket {
         }
         console.log('[Market WS] Connecting to:', wsUrl)
         
-        this.ws = new WebSocket(wsUrl)
+        const socket = new WebSocket(wsUrl)
+        this.ws = socket
         
         this.ws.onopen = () => {
+          if (this.ws !== socket || this.stopped) { socket.close(); return }
           console.log('[Market WS] ✅ Connected')
           this.isConnecting = false
           this.reconnectAttempts = 0
@@ -76,11 +97,13 @@ class MarketWebSocket {
           
           // 启动心跳
           this.startHeartbeat()
+          this.connectedCallbacks.forEach(callback => callback())
           
           resolve()
         }
         
         this.ws.onmessage = (event) => {
+          if (this.ws !== socket) return
           try {
             const data = JSON.parse(event.data)
             
@@ -90,8 +113,8 @@ class MarketWebSocket {
             } else if (data.type === 'subscribed') {
               console.log('[Market WS] ✅ Subscribed:', data.symbols)
             } else if (data.type === 'pong') {
-              // 心跳响应
-              // 忽略
+              if (this.pongTimer !== null) clearTimeout(this.pongTimer)
+              this.pongTimer = null
             }
           } catch (error) {
             console.error('[Market WS] Error parsing message:', error)
@@ -99,17 +122,22 @@ class MarketWebSocket {
         }
         
         this.ws.onerror = (error) => {
+          if (this.ws !== socket) return
           console.error('[Market WS] ❌ Error:', error)
           this.isConnecting = false
           reject(error)
         }
         
         this.ws.onclose = () => {
+          reject(new Error('Market WebSocket closed'))
+          if (this.ws !== socket) return
+          this.ws = null
           console.log('[Market WS] 🔌 Closed')
           this.isConnecting = false
           this.stopHeartbeat()
           
           // 自动重连
+          if (this.stopped) return
           if (this.reconnectAttempts < this.maxReconnectAttempts) {
             this.reconnectAttempts++
             const delay = Math.min(this.reconnectDelay * Math.pow(1.5, this.reconnectAttempts - 1), 30000)
@@ -135,6 +163,8 @@ class MarketWebSocket {
    * 断开连接
    */
   disconnect() {
+    this.stopped = true
+    this.isConnecting = false
     this.stopHeartbeat()
     this.stopReconnect()
     
@@ -209,6 +239,11 @@ class MarketWebSocket {
       this.priceUpdateCallbacks.delete(id)
     }
   }
+
+  onConnected(callback: () => void): () => void {
+    this.connectedCallbacks.add(callback)
+    return () => { this.connectedCallbacks.delete(callback) }
+  }
   
   /**
    * 处理价格更新
@@ -244,6 +279,7 @@ class MarketWebSocket {
     this.heartbeatTimer = window.setInterval(() => {
       if (this.ws && this.ws.readyState === WebSocket.OPEN) {
         this.send({ action: 'ping' })
+        this.pongTimer = window.setTimeout(() => { this.ws?.close() }, 10_000)
       }
     }, 30000) // 每30秒发送一次心跳
   }
@@ -252,6 +288,8 @@ class MarketWebSocket {
    * 停止心跳
    */
   private stopHeartbeat() {
+    if (this.pongTimer !== null) clearTimeout(this.pongTimer)
+    this.pongTimer = null
     if (this.heartbeatTimer) {
       clearInterval(this.heartbeatTimer)
       this.heartbeatTimer = null

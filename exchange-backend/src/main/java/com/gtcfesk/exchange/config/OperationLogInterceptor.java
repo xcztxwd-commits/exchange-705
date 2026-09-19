@@ -73,10 +73,7 @@ public class OperationLogInterceptor implements HandlerInterceptor {
                     byte[] content = wrappedRequest.getContentAsByteArray();
                     if (content.length > 0) {
                         String body = new String(content, wrappedRequest.getCharacterEncoding());
-                        // 限制参数长度，避免过长
-                        if (body.length() > 5000) {
-                            body = body.substring(0, 5000) + "...(truncated)";
-                        }
+                        body = com.gtcfesk.exchange.common.LogRedaction.sanitize(body);
                         log.setRequestParams(body);
                     }
                 } else {
@@ -91,9 +88,7 @@ public class OperationLogInterceptor implements HandlerInterceptor {
                             }
                         }
                         String paramsJson = objectMapper.writeValueAsString(params);
-                        if (paramsJson.length() > 5000) {
-                            paramsJson = paramsJson.substring(0, 5000) + "...(truncated)";
-                        }
+                        paramsJson = com.gtcfesk.exchange.common.LogRedaction.sanitize(paramsJson);
                         log.setRequestParams(paramsJson);
                     }
                 }
@@ -106,7 +101,7 @@ public class OperationLogInterceptor implements HandlerInterceptor {
             if (ex != null || response.getStatus() >= 400) {
                 log.setStatus("FAILED");
                 if (ex != null) {
-                    String errorMsg = ex.getMessage();
+                    String errorMsg = com.gtcfesk.exchange.common.SafeErrors.message(ex);
                     if (errorMsg != null && errorMsg.length() > 1000) {
                         errorMsg = errorMsg.substring(0, 1000) + "...(truncated)";
                     }
@@ -133,46 +128,9 @@ public class OperationLogInterceptor implements HandlerInterceptor {
      * 从请求中获取管理员ID
      */
     private Long getAdminIdFromRequest(HttpServletRequest request) {
-        try {
-            String authHeader = request.getHeader(HttpHeaders.AUTHORIZATION);
-            if (!StringUtils.hasText(authHeader) || !authHeader.startsWith("Bearer ")) {
-                return null;
-            }
-
-            String token = authHeader.substring(7);
-            
-            // 处理mock token
-            if (token.startsWith("mock-")) {
-                return null; // mock token通常是用户端，不是管理员
-            }
-
-            // 解析JWT token
-            Claims claims = jwtUtil.parse(token);
-            String subject = claims.getSubject();
-            
-            // 检查是否是管理员（不是agent-开头）
-            if (subject != null && !subject.startsWith("agent-")) {
-                try {
-                    return Long.parseLong(subject);
-                } catch (NumberFormatException e) {
-                    return null;
-                }
-            }
-            
-            // 也可以从claims中获取id
-            Object idObj = claims.get("id");
-            if (idObj != null) {
-                String userType = (String) claims.get("userType");
-                if ("admin".equals(userType)) {
-                    if (idObj instanceof Number) {
-                        return ((Number) idObj).longValue();
-                    } else {
-                        return Long.parseLong(idObj.toString());
-                    }
-                }
-            }
-        } catch (Exception e) {
-            // 解析失败，返回null
+        org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.getAuthorities().stream().anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN") || a.getAuthority().equals("ROLE_SUPER_ADMIN"))) {
+            return Long.valueOf(auth.getName());
         }
         return null;
     }

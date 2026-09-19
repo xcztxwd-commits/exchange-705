@@ -76,12 +76,12 @@ public class ContractOrderController {
         } catch (BusinessException e) {
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", false);
-            resp.put("message", e.getMessage());
+            resp.put("message", com.gtcfesk.exchange.common.SafeErrors.message(e));
             return ResponseEntity.badRequest().body(resp);
         } catch (Exception e) {
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", false);
-            resp.put("message", "订单创建失败: " + (e.getMessage() != null ? e.getMessage() : "未知错误"));
+            resp.put("message", "订单创建失败: " + (com.gtcfesk.exchange.common.SafeErrors.message(e) != null ? com.gtcfesk.exchange.common.SafeErrors.message(e) : "未知错误"));
             e.printStackTrace(); // 打印堆栈以便调试
             return ResponseEntity.badRequest().body(resp);
         }
@@ -106,7 +106,7 @@ public class ContractOrderController {
         } catch (Exception e) {
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", false);
-            resp.put("message", "获取订单失败: " + e.getMessage());
+            resp.put("message", "获取订单失败: " + com.gtcfesk.exchange.common.SafeErrors.message(e));
             return ResponseEntity.badRequest().body(resp);
         }
     }
@@ -150,7 +150,7 @@ public class ContractOrderController {
         } catch (Exception e) {
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", false);
-            resp.put("message", "获取余额失败: " + (e.getMessage() != null ? e.getMessage() : "未知错误"));
+            resp.put("message", "获取余额失败: " + (com.gtcfesk.exchange.common.SafeErrors.message(e) != null ? com.gtcfesk.exchange.common.SafeErrors.message(e) : "未知错误"));
             e.printStackTrace(); // 打印堆栈以便调试
             return ResponseEntity.badRequest().body(resp);
         }
@@ -163,7 +163,7 @@ public class ContractOrderController {
     public ResponseEntity<?> closeOrder(
             Authentication auth,
             @PathVariable Long orderId,
-            @RequestBody Map<String, Object> req) {
+            @RequestBody(required = false) Map<String, Object> req) {
         try {
             if (auth == null || auth.getName() == null || auth.getName().isEmpty()) {
                 Map<String, Object> resp = new HashMap<>();
@@ -173,18 +173,7 @@ public class ContractOrderController {
             }
 
             Long userId = Long.parseLong(auth.getName());
-            BigDecimal closePrice = req.get("closePrice") != null 
-                    ? new BigDecimal(req.get("closePrice").toString()) 
-                    : null;
-
-            if (closePrice == null) {
-                Map<String, Object> resp = new HashMap<>();
-                resp.put("success", false);
-                resp.put("message", "平仓价格不能为空");
-                return ResponseEntity.badRequest().body(resp);
-            }
-
-            ContractOrder order = contractOrderService.closeOrder(userId, orderId, closePrice);
+            ContractOrder order = contractOrderService.closeOrder(userId, orderId, null);
 
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", true);
@@ -195,12 +184,12 @@ public class ContractOrderController {
         } catch (BusinessException e) {
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", false);
-            resp.put("message", e.getMessage());
+            resp.put("message", com.gtcfesk.exchange.common.SafeErrors.message(e));
             return ResponseEntity.badRequest().body(resp);
         } catch (Exception e) {
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", false);
-            resp.put("message", "平仓失败: " + (e.getMessage() != null ? e.getMessage() : "未知错误"));
+            resp.put("message", "平仓失败: " + (com.gtcfesk.exchange.common.SafeErrors.message(e) != null ? com.gtcfesk.exchange.common.SafeErrors.message(e) : "未知错误"));
             e.printStackTrace();
             return ResponseEntity.badRequest().body(resp);
         }
@@ -233,12 +222,12 @@ public class ContractOrderController {
         } catch (BusinessException e) {
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", false);
-            resp.put("message", e.getMessage());
+            resp.put("message", com.gtcfesk.exchange.common.SafeErrors.message(e));
             return ResponseEntity.badRequest().body(resp);
         } catch (Exception e) {
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", false);
-            resp.put("message", "撤单失败: " + (e.getMessage() != null ? e.getMessage() : "未知错误"));
+            resp.put("message", "撤单失败: " + (com.gtcfesk.exchange.common.SafeErrors.message(e) != null ? com.gtcfesk.exchange.common.SafeErrors.message(e) : "未知错误"));
             e.printStackTrace();
             return ResponseEntity.badRequest().body(resp);
         }
@@ -279,12 +268,12 @@ public class ContractOrderController {
         } catch (BusinessException e) {
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", false);
-            resp.put("message", e.getMessage());
+            resp.put("message", com.gtcfesk.exchange.common.SafeErrors.message(e));
             return ResponseEntity.badRequest().body(resp);
         } catch (Exception e) {
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", false);
-            resp.put("message", "修改失败: " + (e.getMessage() != null ? e.getMessage() : "未知错误"));
+            resp.put("message", "修改失败: " + (com.gtcfesk.exchange.common.SafeErrors.message(e) != null ? com.gtcfesk.exchange.common.SafeErrors.message(e) : "未知错误"));
             e.printStackTrace();
             return ResponseEntity.badRequest().body(resp);
         }

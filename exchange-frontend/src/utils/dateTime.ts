@@ -17,7 +17,9 @@ async function initSystemTimezone() {
 }
 
 // 立即触发初始化
-initSystemTimezone()
+export const systemTimezoneReady = initSystemTimezone()
+
+export function getSystemTimezone() { return globalSystemTimezone }
 
 /**
  * 日期时间格式化工具

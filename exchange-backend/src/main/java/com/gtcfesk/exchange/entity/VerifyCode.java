@@ -15,6 +15,9 @@ public class VerifyCode {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Column(name = "failed_attempts", nullable = false)
+    private int failedAttempts;
+
     @Column(nullable = false, length = 128)
     private String email;
 

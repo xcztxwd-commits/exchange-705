@@ -19,6 +19,10 @@ public class FinancialYieldRecord {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Version
+    @Column(name = "row_version", nullable = false)
+    private long rowVersion;
+
     @Column(name = "order_id", nullable = false)
     private Long orderId;
 
