@@ -38,7 +38,7 @@ const formData = ref<any>({
   alltickSymbol: '',
   lotSize: 1000, // 每手数量
   feeMultiplier: 30, // 手续费倍数
-  leverage: 10, // 杠杆倍数
+  maxLeverage: 100, // 用户可选杠杆上限
 })
 
 const queryParams = ref({
@@ -90,7 +90,7 @@ const categoryList = ref<any[]>([])
 const leverageDialogVisible = ref(false)
 const leverageLoading = ref(false)
 const leverageForm = ref({
-  leverage: 10,
+  leverage: 100,
   applyTo: 'selected', // 'selected': 选中币种, 'category': 按分类, 'all': 全部
   category: '',
   symbolIds: [] as number[],
@@ -103,7 +103,7 @@ const openCategoryDialog = async () => {
 
 const openLeverageDialog = () => {
   leverageForm.value = {
-    leverage: 10,
+    leverage: 100,
     applyTo: 'selected',
     category: queryParams.value.category || '',
     symbolIds: [],
@@ -132,7 +132,7 @@ const saveLeverageSettings = async () => {
     }
     
     await request.post('/admin/symbols/batchSetLeverage', payload)
-    ElMessage.success('杠杆倍数设置成功')
+    ElMessage.success('杠杆上限设置成功')
     leverageDialogVisible.value = false
     loadSymbols() // 刷新列表
   } catch (e: any) {
@@ -235,14 +235,14 @@ const handleAdd = () => {
     alltickSymbol: '',
     lotSize: 1000, // 每手数量
     feeMultiplier: 30, // 手续费倍数
-    leverage: 10, // 杠杆倍数
+    maxLeverage: 100, // 用户可选杠杆上限
   }
   dialogVisible.value = true
 }
 
 const handleEdit = (row: any) => {
   dialogTitle.value = '编辑币种'
-  formData.value = { ...row }
+  formData.value = { ...row, maxLeverage: row.maxLeverage ?? 100 }
   dialogVisible.value = true
 }
 
@@ -368,7 +368,7 @@ onUnmounted(() => {
           <el-button :icon="Refresh" @click="handleReset">重置</el-button>
           <el-button type="success" :icon="Plus" @click="handleAdd">新增币种</el-button>
           <el-button type="warning" :icon="List" @click="openCategoryDialog">分类管理</el-button>
-          <el-button type="info" @click="openLeverageDialog">合约杠杆设置</el-button>
+          <el-button type="info" @click="openLeverageDialog">合约杠杆上限</el-button>
         </el-form-item>
       </el-form>
 
@@ -416,9 +416,9 @@ onUnmounted(() => {
           </template>
         </el-table-column>
         <el-table-column prop="sortOrder" label="排序" width="80" />
-        <el-table-column prop="leverage" label="杠杆倍数" width="100">
+        <el-table-column prop="maxLeverage" label="杠杆上限" width="100">
           <template #default="{ row }">
-            <el-tag type="info">{{ row.leverage || 10 }}x</el-tag>
+            <el-tag type="info">{{ row.maxLeverage ?? 100 }}x</el-tag>
           </template>
         </el-table-column>
         <el-table-column label="操作" width="200" fixed="right">
@@ -535,15 +535,15 @@ onUnmounted(() => {
         <el-divider>合约设置</el-divider>
         <el-form-item label="每手数量">
           <el-input-number v-model="formData.lotSize" :min="1" :precision="0" style="width: 100%" />
-          <div style="font-size: 12px; color: #999; margin-top: 4px">每手数量，用于计算预估保证金</div>
+          <div style="font-size: 12px; color: #999; margin-top: 4px">每手数量；保证金 = 手数 × 每手数量 × 价格 ÷ 杠杆</div>
         </el-form-item>
         <el-form-item label="手续费倍数">
           <el-input-number v-model="formData.feeMultiplier" :min="0" :precision="2" style="width: 100%" />
           <div style="font-size: 12px; color: #999; margin-top: 4px">手续费倍数，用于计算预估手续费（买入数量 × 手续费倍数）</div>
         </el-form-item>
-        <el-form-item label="杠杆倍数">
-          <el-input-number v-model="formData.leverage" :min="1" :max="100" :precision="0" style="width: 100%" />
-          <div style="font-size: 12px; color: #999; margin-top: 4px">合约杠杆倍数，用于计算保证金（1-100倍）</div>
+        <el-form-item label="杠杆上限">
+          <el-input-number v-model="formData.maxLeverage" :min="1" :max="100" :precision="0" style="width: 100%" />
+          <div style="font-size: 12px; color: #999; margin-top: 4px">用户下单可选1至该上限，默认100倍；降低上限后按上限默认，不影响已有订单</div>
         </el-form-item>
       </el-form>
       <template #footer>
@@ -554,9 +554,9 @@ onUnmounted(() => {
   </div>
 
   <!-- 杠杆设置对话框 -->
-  <el-dialog v-model="leverageDialogVisible" title="合约杠杆倍数设置" width="500px">
+  <el-dialog v-model="leverageDialogVisible" title="合约杠杆上限设置" width="500px">
     <el-form :model="leverageForm" label-width="120px">
-      <el-form-item label="杠杆倍数" required>
+      <el-form-item label="杠杆上限" required>
         <el-input-number 
           v-model="leverageForm.leverage" 
           :min="1" 
@@ -564,7 +564,7 @@ onUnmounted(() => {
           :precision="0" 
           style="width: 100%" 
         />
-        <div style="font-size: 12px; color: #999; margin-top: 4px">设置合约杠杆倍数（1-100倍）</div>
+        <div style="font-size: 12px; color: #999; margin-top: 4px">设置用户可选杠杆上限（1-100倍），仅影响新订单</div>
       </el-form-item>
       <el-form-item label="应用到" required>
         <el-radio-group v-model="leverageForm.applyTo">

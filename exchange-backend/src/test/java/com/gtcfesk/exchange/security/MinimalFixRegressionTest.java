@@ -264,7 +264,7 @@ class MinimalFixRegressionTest {
         adminUsers.deleteUser(b.getId());assertFalse(users.existsById(b.getId()));assertTrue(assets.findByUserId(b.getId()).isEmpty());
     }
     @Test void numericSymbolIdsAndMultipleAnnouncementsWork()throws Exception{
-        TradingSymbol s=symbol();assertEquals(200,status(request("POST","/api/admin/symbols/batchSetLeverage",superToken,map("leverage",20,"symbolIds",Arrays.asList(s.getId())))));same(new BigDecimal("20"),symbols.findById(s.getId()).get().getLeverage());
+        TradingSymbol s=symbol();assertEquals(200,status(request("POST","/api/admin/symbols/batchSetLeverage",superToken,map("leverage",20,"symbolIds",Arrays.asList(s.getId())))));same(new BigDecimal("20"),symbols.findById(s.getId()).get().getMaxLeverage());
         for(int i=0;i<2;i++){Announcement n=new Announcement();n.setTitle(prefix+i);n.setContent("test");n.setLanguage("en");n.setStatus("PUBLISHED");n.setPriority(i);announcements.saveAndFlush(n);}
         assertTrue(announcements.findLatestPublishedByLanguage("en").isPresent());assertEquals(200,status(request("GET","/api/user/announcements/latest?language=en",null,null)));
     }
@@ -339,7 +339,7 @@ class MinimalFixRegressionTest {
             same(new BigDecimal("105"),contracts.findById(id).get().getOpenPrice());
             assertEquals(400,status(request("POST","/api/trade/contract/order/"+id+"/close",tb,map("closePrice",999999))));
             quote(s,"106");assertEquals(200,status(request("POST","/api/trade/contract/order/"+id+"/close",ta,map("closePrice",999999))));
-            ContractOrder closed=contracts.findById(id).get();same(new BigDecimal("106"),closed.getClosePrice());same(new BigDecimal("BUY".equals(side)?"1":"-1"),closed.getProfit());
+            ContractOrder closed=contracts.findById(id).get();same(new BigDecimal("106"),closed.getClosePrice());same(new BigDecimal("BUY".equals(side)?"10":"-10"),closed.getProfit());
             BigDecimal after=balance(a,"CONTRACT");assertEquals(400,status(request("POST","/api/trade/contract/order/"+id+"/close",ta,null)));same(after,balance(a,"CONTRACT"));
         }
         for(Object payload:Arrays.asList(null,map(),map("closePrice","invalid"),map("closePrice",-1))) {
@@ -347,7 +347,7 @@ class MinimalFixRegressionTest {
             assertEquals(200,status(created));long id=body(created).path("orderId").asLong();
             assertEquals(200,status(request("POST","/api/trade/contract/order/"+id+"/close",ta,payload)));same(BigDecimal.ZERO,contracts.findById(id).get().getProfit());
         }
-        same(new BigDecimal("10000"),balance(a,"CONTRACT"));same(BigDecimal.ZERO,assets.findByUserIdAndCoin(a.getId(),"CONTRACT").get().getFrozen());
+        same(new BigDecimal("9998.2"),balance(a,"CONTRACT"));same(BigDecimal.ZERO,assets.findByUserIdAndCoin(a.getId(),"CONTRACT").get().getFrozen());
     }
     @Test void missingQuotesRejectContractExecutionWithoutChangingOrdersOrFunds() throws Exception {
         TradingSymbol s=symbol();Map<String,Object> input=map("symbol",s.getSymbol(),"side","BUY","type","MARKET","quantity","0.01","currentPrice",1);
@@ -374,7 +374,7 @@ class MinimalFixRegressionTest {
         MvcResult created=request("POST","/api/trade/contract/order",ta,map("symbol",s.getSymbol(),"side","BUY","type","MARKET","quantity","0.01"));
         assertEquals(200,status(created));long id=body(created).path("orderId").asLong();
         assertEquals(200,status(request("POST","/api/admin/orders/contract/"+id+"/close",superToken,map("closePrice",999999))));
-        same(new BigDecimal("105"),contracts.findById(id).get().getClosePrice());same(new BigDecimal("10000"),balance(a,"CONTRACT"));
+        same(new BigDecimal("105"),contracts.findById(id).get().getClosePrice());same(new BigDecimal("9999.1"),balance(a,"CONTRACT"));
     }
     @Test void optionOpeningIgnoresClientPricesAndRequiresFreshQuotes() throws Exception {
         TradingSymbol s=symbol();durations.findByDuration(60).orElseGet(()->{OptionDuration d=new OptionDuration();d.setDuration(60);d.setLabel("60s");d.setSortOrder(1);d.setEnabled(true);d.setProfitRate(new BigDecimal("0.8"));d.setLossRate(BigDecimal.ONE);d.setMinAmount(BigDecimal.ONE);d.setMaxAmount(new BigDecimal("100"));return durations.saveAndFlush(d);});
@@ -407,7 +407,7 @@ class MinimalFixRegressionTest {
         quote(s,"100");assertEquals(2,contractService.matchPendingLimitOrders());
         for(ContractOrder original:Arrays.asList(gapBuy,gapSell)) {
             ContractOrder current=contracts.findById(original.getId()).get();same(original.getPrice(),current.getPrice());same(new BigDecimal("100"),current.getOpenPrice());same(new BigDecimal("100"),current.getCurrentPrice());
-            same(original.getMargin(),current.getMargin());same(original.getFee(),current.getFee());same(original.getLeverage(),current.getLeverage());assertEquals(1,current.getRowVersion());
+            same(new BigDecimal("10"),current.getMargin());same(original.getFee(),current.getFee());same(original.getLeverage(),current.getLeverage());assertEquals(1,current.getRowVersion());
         }
     }
     @Test void limitOrdersWaitForFreshQuotesAndNeverBackfillHistoricalOrdersOrRepriceMarkets() {
@@ -422,6 +422,181 @@ class MinimalFixRegressionTest {
         CreateContractOrderRequest request=new CreateContractOrderRequest();request.setSymbol(s.getSymbol());request.setSide("BUY");request.setType("MARKET");request.setQuantity(new BigDecimal("0.01"));request.setCurrentPrice(new BigDecimal("37"));
         ContractOrder market=contractService.createOrder(a.getId(),request);assertEquals(0,contractService.matchPendingLimitOrders());same(new BigDecimal("100"),contracts.findById(market.getId()).get().getOpenPrice());
     }
+    @Test void selectedLeverageUsesPositionValueAndChargesFeeOnce() throws Exception {
+        TradingSymbol s = symbol();
+        for (Object leverage : Arrays.asList(null, 1, 20, 100)) {
+            for (String side : Arrays.asList("BUY", "SELL")) {
+                quote(s, "100");
+                BigDecimal before = balance(a, "CONTRACT");
+                Map<String, Object> input = map("symbol", s.getSymbol(), "type", "MARKET", "side", side,
+                        "quantity", "0.01", "leverage", leverage, "currentPrice", 1);
+                MvcResult result = request("POST", "/api/trade/contract/order", ta, input);
+                assertEquals(200, status(result));
+                ContractOrder order = contracts.findById(body(result).path("orderId").asLong()).get();
+                BigDecimal selected = new BigDecimal(leverage == null ? "100" : leverage.toString());
+                same(selected, order.getLeverage()); same(new BigDecimal("1000"), order.getLotSize());
+                BigDecimal margin = new BigDecimal("1000").divide(selected);
+                same(margin, order.getMargin()); same(new BigDecimal("0.3"), order.getFee());
+                same(before.subtract(margin).subtract(order.getFee()), balance(a, "CONTRACT"));
+                same(margin.add(order.getFee()), assets.findByUserIdAndCoin(a.getId(), "CONTRACT").get().getFrozen());
+                quote(s, "101");
+                ContractOrder closed = "BUY".equals(side) ? contractService.closeOrder(a.getId(), order.getId(), BigDecimal.ONE)
+                        : contractService.adminCloseOrder(order.getId(), BigDecimal.ONE);
+                BigDecimal profit = new BigDecimal("BUY".equals(side) ? "10" : "-10");
+                same(profit, closed.getProfit()); same(before.add(profit).subtract(order.getFee()), balance(a, "CONTRACT"));
+                same(BigDecimal.ZERO, assets.findByUserIdAndCoin(a.getId(), "CONTRACT").get().getFrozen());
+            }
+        }
+    }
+
+    @Test void invalidLeverageAndInsufficientMarginNeverMoveFunds() throws Exception {
+        TradingSymbol s = symbol(); quote(s, "100");
+        for (Object leverage : Arrays.asList(0, -1, "0.5", "2.5", 101, "1e100", "NaN")) {
+            assertEquals(400, status(request("POST", "/api/trade/contract/order", ta,
+                    map("symbol", s.getSymbol(), "type", "MARKET", "side", "BUY", "quantity", "0.01", "leverage", leverage))));
+        }
+        assertEquals(400, status(request("POST", "/api/trade/contract/order", ta,
+                map("symbol", s.getSymbol(), "type", "MARKET", "side", "BUY", "quantity", "100", "leverage", 1))));
+        s.setMaxLeverage(new BigDecimal("20")); symbols.saveAndFlush(s);
+        assertEquals(400, status(request("POST", "/api/trade/contract/order", ta,
+                map("symbol", s.getSymbol(), "type", "MARKET", "side", "BUY", "quantity", "0.01", "leverage", 100))));
+        assertTrue(contracts.findByUserIdOrderByCreatedAtDesc(a.getId()).isEmpty());
+        same(new BigDecimal("10000"), balance(a, "CONTRACT"));
+        same(BigDecimal.ZERO, assets.findByUserIdAndCoin(a.getId(), "CONTRACT").get().getFrozen());
+        ContractOrder pending = limit(s, "BUY", "100"); same(new BigDecimal("20"), pending.getLeverage());
+        same(new BigDecimal("50"), pending.getMargin());
+        contractService.cancelOrder(a.getId(), pending.getId()); same(new BigDecimal("10000"), balance(a, "CONTRACT"));
+    }
+
+    @Test void orderSnapshotsPreserveLegacySettlementAndNewPositionSize() {
+        TradingSymbol s = symbol(); quote(s, "100");
+        ContractOrder legacy = limit(s, "BUY", "100");
+        legacy.setLotSize(null); legacy.setLeverage(new BigDecimal("10"));
+        legacy.setStatus("OPEN"); legacy.setOpenPrice(new BigDecimal("100")); contracts.saveAndFlush(legacy);
+        ContractOrder current = limit(s, "BUY", "100");
+        s.setLotSize(new BigDecimal("2000")); s.setLeverage(new BigDecimal("50")); s.setMaxLeverage(BigDecimal.ONE); symbols.saveAndFlush(s);
+        assertEquals(1, contractService.matchPendingLimitOrders());
+        same(new BigDecimal("1000"), contracts.findById(current.getId()).get().getLotSize());
+        quote(s, "101");
+        same(new BigDecimal("0.1"), contractService.closeOrder(a.getId(), legacy.getId(), null).getProfit());
+        same(new BigDecimal("10"), contractService.closeOrder(a.getId(), current.getId(), null).getProfit());
+        same(new BigDecimal("10009.8"), balance(a, "CONTRACT"));
+        same(BigDecimal.ZERO, assets.findByUserIdAndCoin(a.getId(), "CONTRACT").get().getFrozen());
+    }
+
+    @Test void limitFillAdjustsMarginAndWaitsIfAdditionalFundsAreUnavailable() {
+        TradingSymbol s = symbol();
+        ContractOrder buy = limit(s, "BUY", "105");
+        AssetAccount before = assets.findByUserIdAndCoin(a.getId(), "CONTRACT").get();
+        quote(s, "100"); assertEquals(1, contractService.matchPendingLimitOrders());
+        same(new BigDecimal("10"), contracts.findById(buy.getId()).get().getMargin());
+        AssetAccount after = assets.findById(before.getId()).get();
+        same(before.getAvailable().add(new BigDecimal("0.5")), after.getAvailable());
+        same(before.getFrozen().subtract(new BigDecimal("0.5")), after.getFrozen());
+        ContractOrder sell = limit(s, "SELL", "95");
+        after = assets.findById(before.getId()).get(); after.setAvailable(BigDecimal.ZERO); assets.saveAndFlush(after);
+        BigDecimal frozen = after.getFrozen();
+        assertEquals(0, contractService.matchPendingLimitOrders());
+        assertEquals("PENDING", contracts.findById(sell.getId()).get().getStatus());
+        same(frozen, assets.findById(before.getId()).get().getFrozen());
+        after = assets.findById(before.getId()).get(); after.setAvailable(new BigDecimal("0.5")); assets.saveAndFlush(after);
+        assertEquals(1, contractService.matchPendingLimitOrders());
+        same(new BigDecimal("10"), contracts.findById(sell.getId()).get().getMargin());
+        same(BigDecimal.ZERO, balance(a, "CONTRACT"));
+        same(frozen.add(new BigDecimal("0.5")), assets.findById(before.getId()).get().getFrozen());
+    }
+
+    @Test void marginRoundsUpAndZeroFeeStaysZero() {
+        TradingSymbol s = symbol(); s.setLotSize(BigDecimal.ONE); s.setFeeMultiplier(BigDecimal.ZERO); symbols.saveAndFlush(s);
+        CreateContractOrderRequest request = new CreateContractOrderRequest(); request.setSymbol(s.getSymbol());
+        request.setType("LIMIT"); request.setSide("BUY"); request.setQuantity(new BigDecimal("0.01"));
+        request.setPrice(BigDecimal.ONE); request.setLeverage(new BigDecimal("3"));
+        ContractOrder order = contractService.createOrder(a.getId(), request);
+        same(new BigDecimal("0.0033333333333334"), order.getMargin()); same(BigDecimal.ZERO, order.getFee());
+        contractService.adminCancelOrder(order.getId()); same(new BigDecimal("10000"), balance(a, "CONTRACT"));
+    }
+
+    @Test void liquidationUsesPositionEquityAndPreservesPendingFrozenFunds() {
+        TradingSymbol s = symbol(); quote(s, "100");
+        AssetAccount account = assets.findByUserIdAndCoin(a.getId(), "CONTRACT").get();
+        account.setAvailable(new BigDecimal("20.6")); assets.saveAndFlush(account);
+        ContractOrder opened = limit(s, "BUY", "100"); assertEquals(1, contractService.matchPendingLimitOrders());
+        ContractOrder pending = limit(s, "BUY", "90");
+        same(BigDecimal.ONE, balance(a, "CONTRACT"));
+        quote(s, "98.9"); org.mockito.Mockito.when(quotes.freshPrices()).thenReturn(new HashMap<>());
+        contractService.checkAndForceCloseOrders(null);
+        assertEquals("CLOSED", contracts.findById(opened.getId()).get().getStatus());
+        assertEquals("PENDING", contracts.findById(pending.getId()).get().getStatus());
+        same(new BigDecimal("-11"), contracts.findById(opened.getId()).get().getProfit());
+        same(BigDecimal.ZERO, balance(a, "CONTRACT"));
+        same(new BigDecimal("9.3"), assets.findById(account.getId()).get().getFrozen());
+        contractService.cancelOrder(a.getId(), pending.getId()); same(new BigDecimal("9.3"), balance(a, "CONTRACT"));
+    }
+
+    @Test void timedControlRequiresItsMenuAndValidatesInputs() throws Exception {
+        String base = "/api/admin/ai-control/1";
+        Map<String, Object> valid = map("durationSeconds", 10, "targetPrice", 100, "intensity", 10, "randomOscillation", true);
+        assertEquals(401, status(request("POST", base + "/start", null, valid)));
+        assertEquals(403, status(request("POST", base + "/start", ta, valid)));
+        UserAccount agent = user("controlAgent", "agent", null); String token = agentLogin(agent);
+        assertEquals(403, status(request("GET", base, token, null)));
+        grant(agent, "ai_control");
+        org.mockito.Mockito.when(quotes.controlStatus(1L)).thenReturn(map("id", 1));
+        assertEquals(200, status(request("GET", base, token, null)));
+        assertEquals(200, status(request("POST", base + "/start", token, valid)));
+        org.mockito.Mockito.verify(quotes).startControl(1L, 10, new BigDecimal("100"), 10, true);
+        assertEquals(200, status(request("POST", base + "/start", token, map("durationSeconds", 10, "targetPrice", 100, "intensity", 10))));
+        org.mockito.Mockito.verify(quotes).startControl(1L, 10, new BigDecimal("100"), 10, false);
+        assertEquals(400, status(request("POST", base + "/start", token, map("durationSeconds", 10, "targetPrice", 100, "intensity", 1, "randomOscillation", null))));
+        assertEquals(400, status(request("POST", base + "/start", superToken, map("durationSeconds", 0, "targetPrice", 100, "intensity", 1))));
+        assertEquals(400, status(request("POST", base + "/start", superToken, map("durationSeconds", 10, "targetPrice", -1, "intensity", 1))));
+        assertEquals(400, status(request("POST", base + "/restore", token, map("durationSeconds", 10, "intensity", 11))));
+        assertEquals(400, status(request("POST", base + "/start", token, map("durationSeconds", 1.5, "targetPrice", 100, "intensity", 1))));
+        assertEquals(400, status(request("POST", base + "/restore", token, map("durationSeconds", 10, "intensity", 1.5))));
+        assertEquals(400, status(request("POST", base + "/manual", token, map("enabled", true))));
+        assertEquals(200, status(request("POST", base + "/restore", token, map("durationSeconds", 10, "intensity", 3))));
+        org.mockito.Mockito.verify(quotes).restoreControl(1L, 10, 3, false);
+        assertEquals(200, status(request("POST", base + "/restore", token, map("durationSeconds", 10, "intensity", 3, "randomOscillation", true))));
+        org.mockito.Mockito.verify(quotes).restoreControl(1L, 10, 3, true);
+        assertEquals(200, status(request("POST", base + "/manual", token, map("enabled", false, "offset", 0))));
+    }
+
+    @Test @SuppressWarnings("unchecked") void timedControlPersistsAndSymbolEditsCannotEraseIt() throws Exception {
+        TradingSymbol symbol = symbol(); symbol.setCategory("Metal"); symbol = symbols.saveAndFlush(symbol);
+        ForexQuoteMarketService real = new ForexQuoteMarketService();
+        try {
+            org.springframework.test.util.ReflectionTestUtils.setField(real, "symbols", symbols);
+            org.springframework.test.util.ReflectionTestUtils.setField(real, "redis", redis);
+            Map<String, Object> groups = (Map<String, Object>) org.springframework.test.util.ReflectionTestUtils.getField(real, "groups");
+            Map<String, Map<String, Object>> cache = (Map<String, Map<String, Object>>) org.springframework.test.util.ReflectionTestUtils.getField(groups.get("Metal"), "quotes");
+            cache.put(symbol.getSymbol(), map("price", 90d, "timestamp", System.currentTimeMillis(), "fetchedAt", System.currentTimeMillis(), "sourceAvailable", true));
+            real.startControl(symbol.getId(), 10, new BigDecimal("100"), 10, true);
+            TradingSymbol persisted = symbols.findById(symbol.getId()).get();
+            assertTrue(PriceControlPath.running(persisted)); same(new BigDecimal("100"), persisted.getControlTargetPrice());
+            assertEquals(10, persisted.getControlIntensity()); assertTrue(persisted.getRowVersion() > symbol.getRowVersion());
+            assertTrue(persisted.getControlRandomOscillation());
+            // The public symbol body omits task fields, and a stale manual offset cannot replace the task.
+            persisted.setControlEnabled(false); persisted.setControlPriceOffset(BigDecimal.ZERO);
+            assertEquals(200, status(request("POST", "/api/admin/symbols/update", superToken, persisted)));
+            TradingSymbol afterEdit = symbols.findById(symbol.getId()).get();
+            assertTrue(PriceControlPath.running(afterEdit)); assertEquals(persisted.getControlStartedAt(), afterEdit.getControlStartedAt());
+            assertFalse(json.valueToTree(afterEdit).has("controlTargetPrice"));
+            assertFalse(json.valueToTree(afterEdit).has("controlRandomOscillation"));
+            assertTrue(afterEdit.getControlRandomOscillation());
+            afterEdit.setControlStartedAt(System.currentTimeMillis() - 5000); afterEdit.setControlIntensity(1); symbols.saveAndFlush(afterEdit);
+            TradingSymbol stale = symbols.findById(symbol.getId()).get();
+            real.restoreControl(symbol.getId(), 10, 3, true);
+            TradingSymbol restoring = symbols.findById(symbol.getId()).get();
+            assertTrue(restoring.getControlRestoring()); assertTrue(PriceControlPath.running(restoring));
+            assertTrue(restoring.getControlRandomOscillation());
+            stale.setControlPriceOffset(BigDecimal.ONE);
+            assertThrows(org.springframework.dao.OptimisticLockingFailureException.class, () -> symbols.saveAndFlush(stale));
+            real.manualControl(symbol.getId(), false, BigDecimal.ZERO);
+            assertFalse(symbols.findById(symbol.getId()).get().getControlEnabled());
+            assertEquals(0, new BigDecimal("90").compareTo(real.freshPrice(symbol.getSymbol())));
+        } finally { real.stop(); }
+    }
+
     @Test void limitFillRacesWithCancellationAndOtherWorkersOnlyOnce() throws Exception {
         TradingSymbol s=symbol();quote(s,"100");
         for(int i=0;i<10;i++) {

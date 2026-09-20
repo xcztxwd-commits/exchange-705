@@ -103,6 +103,8 @@ public class AdminSymbolService {
     }
     
     public TradingSymbol createSymbol(TradingSymbol symbol) {
+        if (symbol.getMaxLeverage() == null) symbol.setMaxLeverage(BigDecimal.valueOf(100));
+        com.gtcfesk.exchange.common.TradeValidation.leverage(symbol.getMaxLeverage());
         if (symbolRepository.findBySymbol(symbol.getSymbol()).isPresent()) {
             throw new IllegalArgumentException("交易对已存在");
         }
@@ -127,6 +129,7 @@ public class AdminSymbolService {
     }
     
     public TradingSymbol updateSymbol(Long id, TradingSymbol symbol) {
+        if (symbol.getMaxLeverage() != null) com.gtcfesk.exchange.common.TradeValidation.leverage(symbol.getMaxLeverage());
         TradingSymbol existing = symbolRepository.findById(id)
             .orElseThrow(() -> new IllegalArgumentException("币种不存在"));
         
@@ -152,9 +155,7 @@ public class AdminSymbolService {
         existing.setVolumePrecision(symbol.getVolumePrecision());
         existing.setMinTradeAmount(symbol.getMinTradeAmount());
         existing.setAlltickSymbol(symbol.getAlltickSymbol());
-        // 更新控盘相关配置
-        existing.setControlEnabled(symbol.getControlEnabled() != null ? symbol.getControlEnabled() : false);
-        existing.setControlPriceOffset(symbol.getControlPriceOffset() != null ? symbol.getControlPriceOffset() : BigDecimal.ZERO);
+        // 控盘由专用接口修改，避免币种表单的旧值覆盖正在运行的任务。
         // 更新合约设置
         if (symbol.getLotSize() != null) {
             existing.setLotSize(symbol.getLotSize());
@@ -165,6 +166,7 @@ public class AdminSymbolService {
         if (symbol.getLeverage() != null) {
             existing.setLeverage(symbol.getLeverage());
         }
+        if (symbol.getMaxLeverage() != null) existing.setMaxLeverage(symbol.getMaxLeverage());
         
         return symbolRepository.save(existing);
     }
@@ -181,12 +183,13 @@ public class AdminSymbolService {
     }
     
     /**
-     * 批量设置合约杠杆倍数
-     * @param leverage 杠杆倍数
+     * 批量设置用户可选杠杆上限
+     * @param leverage 用户可选杠杆上限
      * @param symbolIds 币种ID列表（如果为空，则按分类设置）
      * @param category 分类（如果symbolIds为空，则按此分类设置）
      */
     public void batchSetLeverage(BigDecimal leverage, List<Long> symbolIds, String category) {
+        com.gtcfesk.exchange.common.TradeValidation.leverage(leverage);
         List<TradingSymbol> symbols;
         
         if (symbolIds != null && !symbolIds.isEmpty()) {
@@ -201,7 +204,7 @@ public class AdminSymbolService {
         }
         
         for (TradingSymbol symbol : symbols) {
-            symbol.setLeverage(leverage);
+            symbol.setMaxLeverage(leverage);
         }
         
         symbolRepository.saveAll(symbols);

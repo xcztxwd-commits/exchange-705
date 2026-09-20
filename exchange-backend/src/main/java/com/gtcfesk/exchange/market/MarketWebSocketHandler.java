@@ -25,7 +25,7 @@ public class MarketWebSocketHandler extends TextWebSocketHandler {
     private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(r -> new Thread(r, "market-push"));
     private final ThreadPoolExecutor senders = new ThreadPoolExecutor(4, 4, 0, TimeUnit.SECONDS,
         new ArrayBlockingQueue<>(128), r -> new Thread(r, "market-send"), new ThreadPoolExecutor.AbortPolicy());
-    @PostConstruct public void init() { scheduler.scheduleAtFixedRate(this::push, 0, 3, TimeUnit.SECONDS); }
+    @PostConstruct public void init() { scheduler.scheduleAtFixedRate(this::push, 0, 1, TimeUnit.SECONDS); }
     @PreDestroy public void destroy() { scheduler.shutdownNow(); senders.shutdownNow(); }
     @Override public void afterConnectionEstablished(WebSocketSession session) {
         if (session instanceof org.springframework.web.socket.adapter.standard.StandardWebSocketSession) {

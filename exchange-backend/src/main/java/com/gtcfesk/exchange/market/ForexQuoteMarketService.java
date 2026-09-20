@@ -1,6 +1,7 @@
 package com.gtcfesk.exchange.market;
 
 import com.gtcfesk.exchange.entity.TradingSymbol;
+import com.gtcfesk.exchange.common.BusinessException;
 import com.gtcfesk.exchange.repository.TradingSymbolRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -75,10 +76,11 @@ public class ForexQuoteMarketService {
     }
     @PostConstruct public void start() {
         metadata.scheduleWithFixedDelay(this::refreshSymbols, 0, 30, TimeUnit.SECONDS);
+        metadata.scheduleWithFixedDelay(this::completeControls, 1, 1, TimeUnit.SECONDS);
         for (Group group : groups.values())
             group.executor.scheduleWithFixedDelay(() -> tick(group), 0, 100, TimeUnit.MILLISECONDS);
     }
-    void refreshSymbols() {
+    synchronized void refreshSymbols() {
         try {
             Map<String, TradingSymbol> updated = new HashMap<>();
             Map<Group, Set<String>> codes = new HashMap<>();
@@ -222,8 +224,17 @@ public class ForexQuoteMarketService {
     public Map<String, Object> internalPrice(String code) {
         TradingSymbol config = registry.get(code);
         Map<String, Object> quote = config == null ? QuoteState.view(null, maxAgeMs) : getPrice(marketCode(config), config.getCategory());
-        if (config != null && Boolean.TRUE.equals(config.getControlEnabled()) && config.getControlPriceOffset() != null && quote.get("price") instanceof Number)
-            quote.put("price", ((Number) quote.get("price")).doubleValue() + config.getControlPriceOffset().doubleValue());
+        long now = System.currentTimeMillis();
+        if (config != null && quote.get("price") instanceof Number) {
+            quote.put("price", controlledPrice(config, quote, now).doubleValue());
+            // Keep sourceTimestamp/expiresAt intact: a control task cannot revive stale source data.
+            if (Boolean.TRUE.equals(quote.get("available")) && config.getUpdatedAt() != null)
+                quote.put("timestamp", Math.max(QuoteState.time(quote.get("timestamp")),
+                    config.getUpdatedAt().atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()));
+            if (PriceControlPath.running(config) && Boolean.TRUE.equals(quote.get("available")))
+                quote.put("timestamp", Math.max(QuoteState.time(quote.get("timestamp")),
+                    config.getControlStartedAt() + Math.max(0, (now - config.getControlStartedAt()) / 1000) * 1000));
+        }
         if (!QuoteState.valid(quote)) { quote.put("available", false); quote.put("status", "unavailable"); }
         quote.put("symbol", code);
         return quote;
@@ -285,7 +296,10 @@ public class ForexQuoteMarketService {
         Map<String, Object> data = (Map<String, Object>) result.get("data");
         data.put("symbol", symbol);
         if (config != null && Boolean.TRUE.equals(config.getControlEnabled()) && config.getControlPriceOffset() != null) {
-            double offset = config.getControlPriceOffset().doubleValue();
+            Map<String, Object> quote = getPrice(marketCode(config), config.getCategory());
+            double offset = quote.get("price") instanceof Number
+                ? controlledPrice(config, quote, System.currentTimeMillis()).doubleValue() - ((Number) quote.get("price")).doubleValue()
+                : config.getControlPriceOffset().doubleValue();
             for (Map<String, Object> row : (List<Map<String, Object>>) data.get("kline_list"))
                 for (String key : Arrays.asList("open_price", "high_price", "low_price", "close_price"))
                     row.put(key, ((Number) row.get(key)).doubleValue() + offset);
@@ -316,6 +330,165 @@ public class ForexQuoteMarketService {
             item.put("freshQuotes", fresh); result.add(item);
         }
         return result;
+    }
+
+    private static BigDecimal rawPrice(Map<String, Object> quote) {
+        return BigDecimal.valueOf(((Number) quote.get("price")).doubleValue());
+    }
+
+    static BigDecimal controlledPrice(TradingSymbol config, Map<String, Object> quote, long now) {
+        if (!Boolean.TRUE.equals(config.getControlEnabled())) return rawPrice(quote);
+        if (PriceControlPath.running(config)) {
+            if (Boolean.TRUE.equals(config.getControlRestoring()))
+                return rawPrice(quote).add(PriceControlPath.restoreOffset(config, now)).max(BigDecimal.ONE.movePointLeft(PriceControlPath.precision(config)));
+            return PriceControlPath.price(config, now);
+        }
+        return rawPrice(quote).add(config.getControlPriceOffset() == null ? BigDecimal.ZERO : config.getControlPriceOffset());
+    }
+
+    private TradingSymbol controlSymbol(Long id) {
+        return symbols.findById(id).orElseThrow(() -> new BusinessException("币种不存在"));
+    }
+
+    private Map<String, Object> requireControlQuote(TradingSymbol config) {
+        Map<String, Object> quote = getPrice(marketCode(config), config.getCategory());
+        if (!Boolean.TRUE.equals(quote.get("available"))) throw new BusinessException("行情暂不可用或已过期，请稍后重试");
+        return quote;
+    }
+
+    public List<Map<String, Object>> controlSymbols() {
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (TradingSymbol symbol : symbols.findAll()) {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("id", symbol.getId()); row.put("symbol", symbol.getSymbol()); row.put("name", symbol.getName());
+            row.put("isEnabled", symbol.getIsEnabled()); row.put("pricePrecision", PriceControlPath.precision(symbol));
+            row.put("quoteCurrency", symbol.getQuoteCurrency()); result.add(row);
+        }
+        result.sort(Comparator.comparing(row -> String.valueOf(row.get("symbol"))));
+        return result;
+    }
+
+    public synchronized Map<String, Object> controlStatus(Long id) {
+        return controlStatus(controlSymbol(id));
+    }
+
+    private Map<String, Object> controlStatus(TradingSymbol config) {
+        long now = System.currentTimeMillis();
+        Map<String, Object> quote = getPrice(marketCode(config), config.getCategory());
+        Map<String, Object> result = new LinkedHashMap<>();
+        boolean running = PriceControlPath.running(config);
+        BigDecimal price = quote.get("price") instanceof Number ? controlledPrice(config, quote, now) : null;
+        result.put("id", config.getId()); result.put("enabled", Boolean.TRUE.equals(config.getControlEnabled()));
+        result.put("running", running); result.put("available", Boolean.TRUE.equals(quote.get("available")) && price != null && price.signum() > 0);
+        result.put("rawPrice", quote.get("price")); result.put("currentPrice", price);
+        result.put("offset", price == null ? config.getControlPriceOffset() : price.subtract(rawPrice(quote)));
+        result.put("startPrice", config.getControlStartPrice()); result.put("targetPrice", config.getControlTargetPrice());
+        result.put("durationSeconds", config.getControlDurationSeconds()); result.put("intensity", config.getControlIntensity());
+        result.put("randomOscillation", Boolean.TRUE.equals(config.getControlRandomOscillation()));
+        result.put("startedAt", config.getControlStartedAt()); result.put("completedAt", config.getControlCompletedAt());
+        result.put("restoring", Boolean.TRUE.equals(config.getControlRestoring()));
+        result.put("remainingSeconds", running ? Math.max(0, (PriceControlPath.endsAt(config) - now + 999) / 1000) : 0);
+        return result;
+    }
+
+    public synchronized Map<String, Object> startControl(Long id, int duration, BigDecimal target, int intensity, boolean randomOscillation) {
+        if (duration < 1 || duration > 86400 || intensity < 1 || intensity > 10 || target == null
+                || target.signum() <= 0 || target.compareTo(new BigDecimal("10000000000000000")) >= 0)
+            throw new BusinessException("时长需为 1–86400 秒，波动强度需为 1–10，目标价格必须大于 0");
+        TradingSymbol config = controlSymbol(id);
+        if (!Boolean.TRUE.equals(config.getIsEnabled())) throw new BusinessException("请先启用该币种");
+        if (target.stripTrailingZeros().scale() > PriceControlPath.precision(config)) throw new BusinessException("目标价格超出币种价格精度");
+        if (PriceControlPath.running(config)) throw new BusinessException("自动控盘正在运行，请先停止任务");
+        Map<String, Object> quote = requireControlQuote(config);
+        long now = System.currentTimeMillis();
+        BigDecimal start = controlledPrice(config, quote, now);
+        if (start.signum() <= 0) throw new BusinessException("当前控盘价格无效，请先调整偏移");
+        config.setControlStartPrice(start); config.setControlTargetPrice(target);
+        config.setControlDurationSeconds(duration); config.setControlIntensity(intensity);
+        config.setControlRandomOscillation(randomOscillation);
+        config.setControlStartedAt(now); config.setControlCompletedAt(null); config.setControlEnabled(true);
+        config.setControlRestoring(false);
+        config.setControlPriceOffset(start.subtract(rawPrice(quote)));
+        return saveControl(config);
+    }
+
+    public synchronized Map<String, Object> restoreControl(Long id, int duration, int intensity, boolean randomOscillation) {
+        if (duration < 1 || duration > 86400 || intensity < 1 || intensity > 10)
+            throw new BusinessException("时长需为 1–86400 秒，波动强度需为 1–10");
+        TradingSymbol config = controlSymbol(id);
+        Map<String, Object> quote = requireControlQuote(config);
+        long now = System.currentTimeMillis();
+        BigDecimal start = controlledPrice(config, quote, now);
+        if (start.signum() <= 0) throw new BusinessException("当前控盘价格无效，请一键恢复原始行情");
+        BigDecimal offset = start.subtract(rawPrice(quote));
+        if (offset.signum() == 0) return manualControl(id, false, BigDecimal.ZERO);
+        config.setControlStartPrice(start); config.setControlTargetPrice(rawPrice(quote));
+        config.setControlPriceOffset(offset); config.setControlEnabled(true); config.setControlRestoring(true);
+        config.setControlDurationSeconds(duration); config.setControlIntensity(intensity);
+        config.setControlRandomOscillation(randomOscillation);
+        config.setControlStartedAt(now); config.setControlCompletedAt(null);
+        return saveControl(config);
+    }
+
+    public synchronized Map<String, Object> manualControl(Long id, boolean enabled, BigDecimal offset) {
+        if (offset == null || offset.abs().compareTo(new BigDecimal("10000000000000000")) >= 0 || offset.stripTrailingZeros().scale() > 16)
+            throw new BusinessException("偏移值无效");
+        TradingSymbol config = controlSymbol(id);
+        if (enabled && rawPrice(requireControlQuote(config)).add(offset).signum() <= 0)
+            throw new BusinessException("偏移后的价格必须大于 0");
+        clearControl(config);
+        config.setControlEnabled(enabled); config.setControlPriceOffset(enabled ? offset : BigDecimal.ZERO);
+        return saveControl(config);
+    }
+
+    public synchronized Map<String, Object> stopControl(Long id) {
+        TradingSymbol config = controlSymbol(id);
+        if (!PriceControlPath.running(config)) return controlStatus(config);
+        Map<String, Object> quote = requireControlQuote(config);
+        config.setControlPriceOffset(controlledPrice(config, quote, System.currentTimeMillis()).subtract(rawPrice(quote)));
+        clearControl(config);
+        return saveControl(config);
+    }
+
+    private static void clearControl(TradingSymbol config) {
+        config.setControlStartedAt(null); config.setControlCompletedAt(null);
+        config.setControlStartPrice(null); config.setControlTargetPrice(null);
+        config.setControlDurationSeconds(null); config.setControlIntensity(null);
+        config.setControlRandomOscillation(false);
+        config.setControlRestoring(false);
+    }
+
+    private Map<String, Object> saveControl(TradingSymbol config) {
+        TradingSymbol saved = symbols.saveAndFlush(config);
+        // ponytail: one backend owns these snapshots; add shared invalidation before deploying replicas.
+        Map<String, TradingSymbol> updated = new HashMap<>(registry);
+        updated.put(saved.getSymbol(), saved);
+        String alias = marketCode(saved);
+        if (!updated.containsKey(alias) || Objects.equals(updated.get(alias).getId(), saved.getId())) updated.put(alias, saved);
+        registry = Collections.unmodifiableMap(updated);
+        return controlStatus(saved);
+    }
+
+    synchronized void completeControls() {
+        long now = System.currentTimeMillis();
+        Set<Long> visited = new HashSet<>();
+        for (TradingSymbol snapshot : registry.values()) {
+            if (!PriceControlPath.running(snapshot) || now < PriceControlPath.endsAt(snapshot) || !visited.add(snapshot.getId())) continue;
+            try {
+                TradingSymbol config = controlSymbol(snapshot.getId());
+                if (!PriceControlPath.running(config) || now < PriceControlPath.endsAt(config)) continue;
+                Map<String, Object> quote = requireControlQuote(config);
+                boolean restoring = Boolean.TRUE.equals(config.getControlRestoring());
+                config.setControlPriceOffset(restoring ? BigDecimal.ZERO : config.getControlTargetPrice().subtract(rawPrice(quote)));
+                if (restoring) config.setControlEnabled(false);
+                config.setControlCompletedAt(now);
+                saveControl(config);
+            } catch (BusinessException unavailable) {
+                // Leave the task pending until the source is healthy; no stale-price execution.
+            } catch (Exception failure) {
+                log.warn("Price control completion failed for {} ({})", snapshot.getSymbol(), failure.getClass().getSimpleName());
+            }
+        }
     }
     @PreDestroy public void stop() { metadata.shutdownNow(); for (Group group : groups.values()) group.executor.shutdownNow(); }
 }

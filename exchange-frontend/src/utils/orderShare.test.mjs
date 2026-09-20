@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { settledShareOrder, shareReturn, shareNumber, historyWindow, coveredCandles, drawSharePoster, shareCopy, shareTemplates, shareNeedsChart, shareBackgrounds } from './orderShare.ts'
+import { settledShareOrder, shareReturn, shareNumber, historyWindow, coveredCandles, recentShareChart, drawSharePoster, shareCopy, shareTemplates, shareNeedsChart, shareBackgrounds } from './orderShare.ts'
 
 const raw = { id: 3391, symbol: 'USDJPY', status: 'CLOSED', side: 'SELL', profit: -50,
   openPrice: 161.24, closePrice: 161.305, margin: 1000, quantity: 78, fee: 3,
@@ -62,3 +62,27 @@ for (const template of shareTemplates) {
 assert.equal(coveredCandles([{ ...rows[0], volume: 0 }, ...rows.slice(1)], window)[0].volume, 0)
 assert.equal(readFileSync(new URL('./orderShare.ts', import.meta.url), 'utf8'), readFileSync(new URL('../../../exchange-pc/src/utils/orderShare.ts', import.meta.url), 'utf8'))
 console.log('Order share: settlement, returns, privacy, history coverage and renderer checks passed')
+
+// Old orders must still render against recent market candles, without historical coverage.
+const recentRows = Array.from({ length: 100 }, (_, i) => ({ ...rows[0], timestamp: 1800000000 + i * 60 }))
+const recent = recentShareChart([...recentRows.reverse(), recentRows[0], { timestamp: 'invalid' }], 'Test')
+assert.equal(recent.candles.length, 80)
+assert.equal(recent.candles[0].timestamp, 1800001200000)
+assert.equal(recent.candles.at(-1).timestamp, 1800005940000)
+assert.equal(recent.recent, true)
+assert.throws(() => recentShareChart([]))
+assert.throws(() => recentShareChart([{ ...rows[0], high_price: 1 }]))
+const points = []
+context.moveTo = (...args) => points.push(args)
+context.lineTo = (...args) => points.push(args)
+context.arc = (...args) => points.push(args)
+context.fillRect = (...args) => points.push(args)
+for (const template of shareTemplates.filter(shareNeedsChart)) {
+  points.length = 0
+  printed.length = 0
+  drawSharePoster(canvas, { ...order, openPrice: 1000000, closePrice: 2000000 }, { ...options, template }, shareCopy('en'), 'DEMO', 'UTC', undefined, recent, {})
+  assert.ok(points.flat().every(Number.isFinite), `${template} finite geometry`)
+  assert.ok(points.flat().every(value => Math.abs(value) < 10000), `${template} no out-of-range execution markers`)
+  if (template === 'journal' || template === 'chart') assert.ok(printed.some(value => value.includes('Recent market candles')))
+}
+console.log('Order share: recent candles and old-order background rendering passed')

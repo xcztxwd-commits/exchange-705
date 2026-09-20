@@ -23,6 +23,7 @@ type LocaleKey =
   | 'vi'
 
 export type MessageKeys =
+  | 'leverage'
   | 'lightningWithdraw'
   | 'videoIntro'
   | 'pleaseEnterNewPasswordAgain'
@@ -1116,6 +1117,7 @@ type Messages = Record<LocaleKey, Record<MessageKeys, string>>
 
 const messages: Messages = {
   'zh-TW': {
+    leverage: '槓桿倍數',
     validOrderPrice: '有效的委託價格',
     orderFailed: '下单失败',
     cannotBeLessThan: '不能少于',
@@ -2125,6 +2127,7 @@ const messages: Messages = {
     videoIntro: '視訊簡介',
 },
   'en': {
+    leverage: 'Leverage',
     validOrderPrice: 'Valid order price',
     orderFailed: 'Order failed',
     cannotBeLessThan: 'Cannot be less than ',
@@ -3134,6 +3137,7 @@ const messages: Messages = {
     videoIntro: 'Video Introduction',
 },
   'fr': {
+    leverage: 'Effet de levier',
     validOrderPrice: 'Prix de commande valide',
     orderFailed: 'La commande a échoué',
     cannotBeLessThan: 'ne peut être inférieur à',
@@ -4142,6 +4146,7 @@ const messages: Messages = {
     videoIntro: 'Vidéo d\'introduction',
 },
   'de': {
+    leverage: 'Hebel',
     validOrderPrice: 'Gültiger Bestellpreis',
     orderFailed: 'Bestellung fehlgeschlagen',
     cannotBeLessThan: 'kann nicht kleiner sein als',
@@ -5150,6 +5155,7 @@ const messages: Messages = {
     videoIntro: 'Video-Einführung',
 },
   'ru': {
+    leverage: 'Кредитное плечо',
     validOrderPrice: 'Действительная цена заказа',
     orderFailed: 'Заказ не выполнен',
     cannotBeLessThan: 'не может быть меньше',
@@ -6158,6 +6164,7 @@ const messages: Messages = {
     videoIntro: 'Видео-знакомство',
 },
   'es': {
+    leverage: 'Apalancamiento',
     validOrderPrice: 'Precio de pedido válido',
     orderFailed: 'Orden fallida',
     cannotBeLessThan: 'no puede ser menor que',
@@ -7166,6 +7173,7 @@ const messages: Messages = {
     videoIntro: 'Vídeo de introducción',
 },
   'pt': {
+    leverage: 'Alavancagem',
     validOrderPrice: 'Preço de pedido válido',
     orderFailed: 'Falha no pedido',
     cannotBeLessThan: 'não pode ser menor que',
@@ -8174,6 +8182,7 @@ const messages: Messages = {
     videoIntro: 'Introdução ao vídeo',
 },
   'it': {
+    leverage: 'Leva',
     validOrderPrice: 'Prezzo dell\'ordine valido',
     orderFailed: 'L\'ordine non è riuscito',
     cannotBeLessThan: 'non può essere inferiore a',
@@ -9182,6 +9191,7 @@ const messages: Messages = {
     videoIntro: 'Introduzione video',
 },
   'ar': {
+    leverage: 'الرافعة المالية',
     validOrderPrice: 'سعر الطلب صالح',
     orderFailed: 'فشل الطلب',
     cannotBeLessThan: 'لا يمكن أن يكون أقل من',
@@ -10190,6 +10200,7 @@ const messages: Messages = {
     videoIntro: 'مقدمة بالفيديو',
 },
   'tr': {
+    leverage: 'Kaldıraç',
     validOrderPrice: 'Geçerli sipariş fiyatı',
     orderFailed: 'Sipariş başarısız oldu',
     cannotBeLessThan: 'daha az olamaz',
@@ -11198,6 +11209,7 @@ const messages: Messages = {
     videoIntro: 'Video Tanıtımı',
 },
   'id': {
+    leverage: 'Leverage',
     validOrderPrice: 'Harga pesanan yang valid',
     orderFailed: 'Pesanan gagal',
     cannotBeLessThan: 'tidak boleh kurang dari',
@@ -12206,6 +12218,7 @@ const messages: Messages = {
     videoIntro: 'Video Pengenalan',
 },
   'my': {
+    leverage: 'Leverage',
     validOrderPrice: 'မှန်ကန်သော အော်ဒါစျေးနှုန်း',
     orderFailed: 'အော်ဒါ မအောင်မြင်ပါ။',
     cannotBeLessThan: 'ထက်မနည်းနိုင်ပါဘူး။',
@@ -13214,6 +13227,7 @@ const messages: Messages = {
     videoIntro: 'ဗီဒီယိုမိတ်ဆက်',
 },
   'hi': {
+    leverage: 'लीवरेज',
     validOrderPrice: 'वैध ऑर्डर मूल्य',
     orderFailed: 'आदेश विफल',
     cannotBeLessThan: 'से कम नहीं हो सकता',
@@ -14222,6 +14236,7 @@ const messages: Messages = {
     videoIntro: 'वीडियो परिचय',
 },
   'cs': {
+    leverage: 'Finanční páka',
     validOrderPrice: 'Platná cena objednávky',
     orderFailed: 'Objednávka se nezdařila',
     cannotBeLessThan: 'nemůže být menší než',
@@ -15230,6 +15245,7 @@ const messages: Messages = {
     videoIntro: 'Video Úvod',
 },
   'pl': {
+    leverage: 'Dźwignia',
     validOrderPrice: 'Aktualna cena zamówienia',
     orderFailed: 'Zamówienie nie powiodło się',
     cannotBeLessThan: 'nie może być mniejsza niż',
@@ -16238,6 +16254,7 @@ const messages: Messages = {
     videoIntro: 'Wprowadzenie wideo',
 },
   'ja': {
+    leverage: 'レバレッジ',
     validOrderPrice: '有効な注文価格',
     orderFailed: '注文に失敗しました',
     cannotBeLessThan: '以下にすることはできません',
@@ -17246,6 +17263,7 @@ const messages: Messages = {
     videoIntro: 'ビデオ紹介',
 },
   'ko': {
+    leverage: '레버리지',
     validOrderPrice: '유효한 주문 가격',
     orderFailed: '주문 실패',
     cannotBeLessThan: '다음보다 작을 수 없습니다.',
@@ -18253,6 +18271,7 @@ const messages: Messages = {
     videoIntro: '비디오 소개',
 },
   'th': {
+    leverage: 'เลเวอเรจ',
     validOrderPrice: 'ราคาสั่งซื้อที่ถูกต้อง',
     orderFailed: 'คำสั่งซื้อล้มเหลว',
     cannotBeLessThan: 'ต้องไม่ต่ำกว่า',
@@ -19262,6 +19281,7 @@ const messages: Messages = {
     videoIntro: 'วิดีโอแนะนำ',
 },
   'vi': {
+    leverage: 'Đòn bẩy',
     validOrderPrice: 'Giá đặt hàng hợp lệ',
     orderFailed: 'Đặt hàng không thành công',
     cannotBeLessThan: 'không thể ít hơn',

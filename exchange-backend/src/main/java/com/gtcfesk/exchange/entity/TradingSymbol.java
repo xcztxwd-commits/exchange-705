@@ -2,6 +2,7 @@ package com.gtcfesk.exchange.entity;
 
 import lombok.Getter;
 import lombok.Setter;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 
 import javax.persistence.*;
 import java.math.BigDecimal;
@@ -88,6 +89,43 @@ public class TradingSymbol {
     @Column(name = "control_price_offset", precision = 32, scale = 16)
     private BigDecimal controlPriceOffset = BigDecimal.ZERO;
 
+    @JsonIgnore
+    @Column(name = "control_start_price", precision = 32, scale = 16)
+    private BigDecimal controlStartPrice;
+
+    @JsonIgnore
+    @Column(name = "control_target_price", precision = 32, scale = 16)
+    private BigDecimal controlTargetPrice;
+
+    @JsonIgnore
+    @Column(name = "control_started_at")
+    private Long controlStartedAt;
+
+    @JsonIgnore
+    @Column(name = "control_duration_seconds")
+    private Integer controlDurationSeconds;
+
+    @JsonIgnore
+    @Column(name = "control_intensity")
+    private Integer controlIntensity;
+
+    @JsonIgnore
+    @Column(name = "control_random_oscillation")
+    private Boolean controlRandomOscillation;
+
+    @JsonIgnore
+    @Column(name = "control_completed_at")
+    private Long controlCompletedAt;
+
+    @JsonIgnore
+    @Column(name = "control_restoring")
+    private Boolean controlRestoring;
+
+    @JsonIgnore
+    @Version
+    @Column(name = "row_version", nullable = false, columnDefinition = "BIGINT NOT NULL DEFAULT 0")
+    private long rowVersion;
+
     // 合约交易设置
     @Column(name = "lot_size", precision = 32, scale = 16)
     private BigDecimal lotSize = BigDecimal.valueOf(1000); // 每手数量，默认1000
@@ -97,6 +135,9 @@ public class TradingSymbol {
 
     @Column(name = "leverage", precision = 10, scale = 2)
     private BigDecimal leverage = BigDecimal.valueOf(10); // 杠杆倍数，默认10倍
+
+    @Column(name = "max_leverage", precision = 10, scale = 2)
+    private BigDecimal maxLeverage; // 新订单可选杠杆上限；NULL 表示100倍，旧leverage字段保留兼容
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -116,4 +157,3 @@ public class TradingSymbol {
         updatedAt = LocalDateTime.now();
     }
 }
-

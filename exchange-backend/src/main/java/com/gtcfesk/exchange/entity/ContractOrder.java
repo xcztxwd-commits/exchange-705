@@ -71,6 +71,10 @@ public class ContractOrder {
     @Column(name = "leverage", precision = 10, scale = 2)
     private BigDecimal leverage; // 杠杆倍数
 
+    // 新订单保存每手数量快照；NULL 表示沿用历史保证金、盈亏和手续费规则。
+    @Column(name = "lot_size", precision = 32, scale = 16)
+    private BigDecimal lotSize;
+
     @Column(name = "open_time")
     private LocalDateTime openTime; // 开仓时间
 

@@ -4,7 +4,7 @@ import QRCode from 'qrcode'
 import request from '@/utils/request'
 import { useLocaleStore } from '@/store/locale'
 import { formatDateTime, getSystemTimezone, systemTimezoneReady } from '@/utils/dateTime'
-import { coveredCandles, drawSharePoster, historyWindow, settledShareOrder, shareCopy, shareReturn, shareTemplates, shareNeedsChart, shareBackgrounds,
+import { recentShareChart, drawSharePoster, settledShareOrder, shareCopy, shareReturn, shareTemplates, shareNeedsChart, shareBackgrounds,
   type ShareChart, type ShareKind, type ShareOptions, type ShareOrder, type ShareTemplate } from '@/utils/orderShare'
 
 const props = defineProps<{ orderId: string | number; kind: ShareKind; brand: string; desktop?: boolean }>()
@@ -81,15 +81,14 @@ async function loadOrder() {
   }
 }
 async function loadChart(value: ShareOrder, run: number) {
-  const window = historyWindow(value)
   for (let attempt = 0; attempt < 8; attempt++) {
     if (disposed || run !== generation) return undefined
-    const result = await request.get(`/market/kline/history/${encodeURIComponent(value.symbol)}`, {
-      params: { interval: window.interval, endTime: window.endTime, limit: window.limit },
+    const result = await request.get(`/market/kline/${encodeURIComponent(value.symbol)}`, {
+      params: { interval: '1m', limit: 80 },
     }) as unknown as { data?: { kline_list?: Record<string, unknown>[]; pending?: boolean; source?: string; symbol?: string }; ret?: number }
     if (result.data?.symbol !== value.symbol) throw new Error(copy.value.chartError)
     if (result.ret === 200 && result.data.kline_list?.length) {
-      return { ...window, candles: coveredCandles(result.data.kline_list, window), source: result.data.source || '' }
+      return recentShareChart(result.data.kline_list, result.data.source)
     }
     if (!result.data.pending) break
     await new Promise(resolve => setTimeout(resolve, 1500))

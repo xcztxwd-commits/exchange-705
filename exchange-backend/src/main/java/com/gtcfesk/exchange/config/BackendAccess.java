@@ -59,6 +59,7 @@ public class BackendAccess extends RequestBodyAdviceAdapter implements HandlerIn
             case "AdminUserController": case "AdminWalletController": return "users";
             case "AdminOrderController": return "orders";
             case "AdminSymbolController": return "symbols";
+            case "AdminAiControlController": return "ai_control";
             case "AdminDurationController": return "durations";
             case "DepositReviewController": return "deposit_review";
             case "WithdrawReviewController": return "withdraw_review";
@@ -145,6 +146,7 @@ public class BackendAccess extends RequestBodyAdviceAdapter implements HandlerIn
                 case "approveLoan": action = "approve_loan"; break;
                 case "rejectLoan": action = "reject_loan"; break;
                 case "setPresetProfitType": break;
+                case "startControl": case "manualControl": case "stopControl": case "restoreControl": break;
                 case "approvePersonalInfo": action = "approve_loan_personal_info"; break;
                 case "rejectPersonalInfo": action = "reject_loan_personal_info"; break;
                 case "approveKyc": action = "approve_kyc"; break;

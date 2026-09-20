@@ -2,6 +2,7 @@
 import { ref, computed, onMounted, watch, onUnmounted } from 'vue'
 import Tabbar from '@/components/Tabbar.vue'
 import request from '@/utils/request'
+import { calculateContractProfit, contractEquity } from '@/utils/contract'
 import { useMarketStore } from '@/store/market'
 import { useLocaleStore } from '@/store/locale'
 import { formatDateTime } from '@/utils/dateTime'
@@ -71,62 +72,13 @@ function getCurrentPrice(symbol: string): number {
   return marketStore.getPrice(symbol) || 0
 }
 
-// 计算合约订单盈亏（考虑杠杆倍数）
-function calculateContractProfit(order: any, currentPrice: number): number {
-  if (order.status === 'CLOSED') return Number(order.profit || 0)
-  if (!order.openPrice || order.openPrice <= 0 || !currentPrice || currentPrice <= 0) {
-    return Number(order.profit || 0)
-  }
-  
-  const quantity = Number(order.quantity || 0)
-  if (quantity <= 0) return 0
-  
-  // 获取杠杆倍数，优先从订单中获取，其次从交易对信息中查找
-  let leverage = order.leverage ? Number(order.leverage) : null
-  if (!leverage) {
-    const symbolInfo = allSymbols.value.find((s: any) => s.symbol === order.symbol)
-    leverage = symbolInfo && symbolInfo.leverage ? Number(symbolInfo.leverage) : 10 // 默认10倍
-  }
-  
-  // 计算价格差
-  let priceDiff = 0
-  if (order.side === 'BUY') {
-    // 买入：价格差 = 当前价 - 开仓价
-    priceDiff = currentPrice - order.openPrice
-  } else if (order.side === 'SELL') {
-    // 卖出：价格差 = 开仓价 - 当前价
-    priceDiff = order.openPrice - currentPrice
-  } else {
-    return Number(order.profit || 0)
-  }
-  
-  // 盈亏 = 价格差 × 数量 × 杠杆倍数
-  // 杠杆放大盈亏，杠杆越高，盈亏越大
-  const profit = priceDiff * quantity * leverage
-  
-  return profit
-}
-
 // 转换合约订单数据格式
 function transformContractOrder(order: any) {
   const currentPrice = getCurrentPrice(order.symbol)
   
-  // 确保杠杆倍数从订单中获取，如果没有则从交易对信息中查找
-  let leverage = order.leverage ? Number(order.leverage) : null
-  if (!leverage) {
-    // 如果订单中没有杠杆倍数，从交易对信息中查找
-    const symbolInfo = allSymbols.value.find((s: any) => s.symbol === order.symbol)
-    leverage = symbolInfo && symbolInfo.leverage ? Number(symbolInfo.leverage) : 10 // 默认10倍
-  }
-  
-  // 构建包含杠杆倍数的订单对象用于计算盈亏
-  const orderWithLeverage = {
-    ...order,
-    leverage: leverage,
-  }
-  
-  const calculatedProfit = calculateContractProfit(orderWithLeverage, currentPrice)
-  
+  const leverage = Number(order.leverage ?? 1)
+  const calculatedProfit = calculateContractProfit(order, currentPrice)
+
   // 对于挂单（PENDING），使用 createdAt 作为创建时间；对于持仓（OPEN），使用 openTime
   const displayTime = order.status === 'PENDING' 
     ? (order.createdAt || order.openTime) 
@@ -152,7 +104,8 @@ function transformContractOrder(order: any) {
     quantity: order.quantity, // 保留原始quantity用于计算
     stopLoss: order.stopLoss ? Number(order.stopLoss) : null, // 止损
     takeProfit: order.takeProfit ? Number(order.takeProfit) : null, // 止盈
-    leverage: leverage, // 杠杆倍数
+    leverage,
+    lotSize: order.lotSize,
   }
 }
 
@@ -426,10 +379,9 @@ async function loadContractBalance() {
 
 // 更新风险率
 function updateRiskRate() {
-  const totalProfitValue = totalProfit.value
   const totalMarginValue = totalMargin.value
   if (totalMarginValue > 0) {
-    riskRate.value = ((contractBalance.value + totalProfitValue) / totalMarginValue) * 100
+    riskRate.value = (contractEquity(contractBalance.value, positionsData.value) / totalMarginValue) * 100
   } else {
     riskRate.value = 0
   }
@@ -460,10 +412,9 @@ const positionsTotalMargin = computed(() => {
 
 // 计算持仓订单的风险率
 const positionsRiskRate = computed(() => {
-  const totalProfitValue = positionsTotalProfit.value
   const totalMarginValue = positionsTotalMargin.value
   if (totalMarginValue > 0) {
-    return ((contractBalance.value + totalProfitValue) / totalMarginValue) * 100
+    return (contractEquity(contractBalance.value, positionsData.value) / totalMarginValue) * 100
   } else {
     return 0
   }
@@ -700,21 +651,7 @@ function updateOrdersWithRealTimePrice() {
         const side = order.side || (order.type === 'buy' ? 'BUY' : 'SELL')
         const quantity = order.quantity || order.lots
         
-        // 确保杠杆倍数从订单中获取，如果没有则从交易对信息中查找
-        let leverage = order.leverage ? Number(order.leverage) : null
-        if (!leverage || leverage === 0) {
-          const symbolInfo = allSymbols.value.find((s: any) => s.symbol === order.symbol)
-          leverage = symbolInfo && symbolInfo.leverage ? Number(symbolInfo.leverage) : 10 // 默认10倍
-        }
-        
-        const calculatedProfit = calculateContractProfit({
-          side,
-          quantity,
-          openPrice: order.openPrice,
-          profit: order.profit,
-          leverage: leverage, // 传递杠杆倍数
-          symbol: order.symbol, // 传递交易对符号
-        }, currentPrice)
+        const calculatedProfit = calculateContractProfit({ ...order, side, quantity }, currentPrice)
         const updatedOrder = {
           ...order,
           currentPrice,
@@ -985,7 +922,7 @@ function formatPrice(v: number | string | undefined | null) {
           </div>
           <div class="order-body">
             <div class="order-type-badge" :class="order.type === 'buy' ? 'buy' : 'sell'">
-              {{ order.type === 'buy' ? localeStore.t('buy') : localeStore.t('sell') }} {{ order.lots }}{{ localeStore.t('lots') }}
+              {{ order.type === 'buy' ? localeStore.t('buy') : localeStore.t('sell') }} {{ order.lots }}{{ localeStore.t('lots') }} · {{ order.leverage }}×
             </div>
             <div class="order-details">
               <div class="detail-item">
@@ -1071,7 +1008,7 @@ function formatPrice(v: number | string | undefined | null) {
           </div>
           <div class="order-body">
             <div class="order-type-badge" :class="order.type === 'buy' ? 'buy' : 'sell'">
-              {{ order.type === 'buy' ? localeStore.t('buy') : localeStore.t('sell') }} {{ order.lots }}{{ localeStore.t('lots') }}
+              {{ order.type === 'buy' ? localeStore.t('buy') : localeStore.t('sell') }} {{ order.lots }}{{ localeStore.t('lots') }} · {{ order.leverage }}×
             </div>
             <div class="order-details">
               <div class="detail-item">
@@ -1129,7 +1066,7 @@ function formatPrice(v: number | string | undefined | null) {
           </div>
           <div class="order-body">
             <div class="order-type-badge" :class="order.type === 'buy' ? 'buy' : 'sell'">
-              {{ order.type === 'buy' ? '買入' : '賣出' }} {{ order.lots }} 手數
+              {{ order.type === 'buy' ? '買入' : '賣出' }} {{ order.lots }} 手數 · {{ order.leverage }}×
             </div>
             <div class="order-details">
               <div class="detail-item">

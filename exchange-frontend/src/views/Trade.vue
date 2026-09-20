@@ -8,6 +8,7 @@ import { useMarketStore } from '@/store/market'
 import { useAuthStore } from '@/store/auth'
 import { useLocaleStore } from '@/store/locale'
 import request from '@/utils/request'
+import { DEFAULT_LEVERAGE, leverageLimit, leverageChoices, contractMargin } from '@/utils/contract'
 // 市场休市时间判断已移除，改用阿里云市场API返回的数据来判断市场状态
 import { formatDateTime, formatTime } from '@/utils/dateTime'
 
@@ -39,6 +40,7 @@ const takeProfitValue = ref(0)
 
 // 买入数量
 const buyQuantity = ref(0.01)
+const selectedLeverage = ref(DEFAULT_LEVERAGE)
 
 // 挂单价格
 const limitPrice = ref(0)
@@ -491,6 +493,7 @@ function formatMoney(v: number | string | undefined | null) {
 async function selectSymbol(symbol: string, category: string) {
   currentSymbol.value = symbol
   currentCategory.value = category
+  currentSymbolInfo.value = allSymbols.value.find((item: any) => item.symbol === symbol) || null
   
   // 确保该分类的市场服务已初始化（HTTP轮询）
   await marketStore.initMarketService(category)
@@ -515,7 +518,7 @@ async function loadSymbolInfo(symbol: string) {
     })
     if (res && res.list) {
       const symbolInfo = res.list.find((s: any) => s.symbol === symbol)
-      if (symbolInfo) {
+      if (symbolInfo && currentSymbol.value === symbol) {
         currentSymbolInfo.value = symbolInfo
       }
     }
@@ -664,6 +667,7 @@ async function handleBuy() {
       side: 'BUY',
       type: orderType.value === 'limit' ? 'LIMIT' : 'MARKET',
       quantity: buyQuantity.value,
+      leverage: selectedLeverage.value,
       price: orderType.value === 'limit' ? limitPrice.value : null,
       currentPrice: currentPrice.value,
       stopLoss: stopLossEnabled.value ? stopLossValue.value : null,
@@ -720,6 +724,7 @@ async function handleSell() {
       side: 'SELL',
       type: orderType.value === 'limit' ? 'LIMIT' : 'MARKET',
       quantity: buyQuantity.value,
+      leverage: selectedLeverage.value,
       price: orderType.value === 'limit' ? limitPrice.value : null,
       currentPrice: currentPrice.value,
       stopLoss: stopLossEnabled.value ? stopLossValue.value : null,
@@ -1010,19 +1015,21 @@ const feeMultiplier = computed(() => {
   return 30
 })
 
-// 计算预估保证金 = 买入数量 × 每手数量
-const estimatedMargin = computed(() => {
-  const qty = Number(buyQuantity.value) || 0
-  if (qty <= 0) return 0
-  const lot = Number(lotSize.value) || 1000
-  return qty * lot
-})
+const maxLeverage = computed(() => leverageLimit(currentSymbolInfo.value?.maxLeverage))
+const leverageOptions = computed(() => leverageChoices(maxLeverage.value))
+watch(maxLeverage, max => { selectedLeverage.value = Math.min(selectedLeverage.value, max) })
+
+// 市价按当前行情预估，挂单按限价预留。
+const estimatedMargin = computed(() => contractMargin(
+  Number(buyQuantity.value), lotSize.value,
+  orderType.value === 'limit' ? Number(limitPrice.value) : currentPrice.value, selectedLeverage.value,
+))
 
 // 计算预估手续费 = 买入数量 × 手续费倍数
 const estimatedFee = computed(() => {
   const qty = Number(buyQuantity.value) || 0
   if (qty <= 0) return 0
-  const multiplier = Number(feeMultiplier.value) || 30
+  const multiplier = feeMultiplier.value
   return qty * multiplier
 })
 
@@ -1056,6 +1063,7 @@ async function loadAllSymbols() {
     
     // 存储所有币种
     allSymbols.value = symbolList
+    currentSymbolInfo.value = symbolList.find((item: any) => item.symbol === currentSymbol.value) || null
     
     // 建立 symbol 到 alltickSymbol 的映射
     symbolToAlltickMap.value.clear()
@@ -1445,7 +1453,7 @@ onUnmounted(() => {
           :symbol="currentSymbol"
           :category="currentCategory"
           :interval="currentInterval"
-          :height="300"
+          :height="420"
         />
       </div>
       
@@ -1557,6 +1565,19 @@ onUnmounted(() => {
         </div>
       </div>
 
+      <div class="order-item leverage-selector">
+        <div class="order-item-header">
+          <label class="order-label" for="contract-leverage">{{ localeStore.t('leverage') }}</label>
+          <output for="contract-leverage" class="leverage-value">{{ selectedLeverage }}×</output>
+        </div>
+        <input id="contract-leverage" v-model.number="selectedLeverage" type="range" min="1" :max="maxLeverage" step="1"
+          :aria-valuetext="`${selectedLeverage}×`" :disabled="!currentSymbolInfo || maxLeverage === 1" class="leverage-slider" />
+        <div class="leverage-presets">
+          <button v-for="value in leverageOptions" :key="value" type="button" :aria-pressed="selectedLeverage === value"
+            :disabled="!currentSymbolInfo" @click="selectedLeverage = value">{{ value }}×</button>
+        </div>
+      </div>
+
       <!-- 买入数量 -->
       <div class="order-item">
         <div class="order-label">{{ localeStore.t('buyQuantityLabel') }}</div>
@@ -1589,8 +1610,8 @@ onUnmounted(() => {
 
       <!-- 买入/卖出按钮 -->
       <div class="trade-buttons">
-        <button class="buy-btn" :disabled="isMarketClosed" @click="handleBuy">{{ localeStore.t('buy') }}</button>
-        <button class="sell-btn" :disabled="isMarketClosed" @click="handleSell">{{ localeStore.t('sell') }}</button>
+        <button class="buy-btn" :disabled="isMarketClosed || !currentSymbolInfo" @click="handleBuy">{{ localeStore.t('buy') }}</button>
+        <button class="sell-btn" :disabled="isMarketClosed || !currentSymbolInfo" @click="handleSell">{{ localeStore.t('sell') }}</button>
       </div>
     </div>
 
@@ -2204,7 +2225,7 @@ onUnmounted(() => {
 
 .chart-container {
   width: 100%;
-  height: 300px;
+  height: 420px;
   border: 1px solid #e0e0e0;
   border-radius: 8px;
   overflow: hidden;
@@ -3100,4 +3121,11 @@ onUnmounted(() => {
 .term-detail-value.negative {
   color: #ef5350;
 }
+
+.leverage-value { font-weight: 700; color: #78aa00; font-variant-numeric: tabular-nums; }
+.leverage-slider { display: block; width: 100%; height: 36px; margin: 4px 0; accent-color: #8cc63f; cursor: pointer; }
+.leverage-presets { display: flex; flex-wrap: wrap; gap: 6px; }
+.leverage-presets button { min-width: 44px; min-height: 44px; padding: 4px 8px; border: 1px solid #ddd; border-radius: 6px; background: #fff; color: #555; font-size: 12px; cursor: pointer; }
+.leverage-presets button[aria-pressed="true"] { border-color: #78aa00; background: #eff7df; color: #4b7100; font-weight: 700; }
+.leverage-selector :focus-visible { outline: 2px solid #78aa00; outline-offset: 3px; }
 </style>

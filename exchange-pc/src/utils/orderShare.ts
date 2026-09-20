@@ -43,7 +43,8 @@ const en = {
   contractRate: 'Return on margin', optionRate: 'Return on investment', qr: 'Invitation QR code',
   qrNote: 'Opens registration, never private order details.', qrError: 'Invitation code unavailable. Retry or turn off the QR code.',
   invite: 'Join us', preview: 'Trade sharing preview',
-  chart: 'Trade review', chartError: 'Historical candles do not cover this trade. Retry or choose a template without a chart.',
+  chart: 'Trade review', chartError: 'Recent candles unavailable. Please retry.',
+  recentCaption: 'Recent market candles',
   chartCaption: 'Source market candles · Execution prices marked separately',
 }
 export type ShareCopy = typeof en
@@ -73,7 +74,8 @@ export function shareCopy(locale: string): ShareCopy {
     contractRate: '保證金收益率', optionRate: '投入金額收益率', qr: '邀請二維碼',
     qrNote: '掃碼開啟註冊頁，不公開訂單詳情。', qrError: '無法取得邀請碼，請重試或關閉二維碼。',
     invite: '邀請加入', preview: '交易分享預覽',
-    chart: '行情復盤', chartError: '歷史行情未覆蓋這筆交易。請重試或選擇無圖模板。',
+    chart: '行情復盤', chartError: '暫時無法取得最近 K 線，請重試。',
+    recentCaption: '最近市場 K 線',
     chartCaption: '來源市場 K 線 · 獨立標註成交價',
   }
   if (locale === 'ja') return {
@@ -96,7 +98,8 @@ export function shareCopy(locale: string): ShareCopy {
     record: '取引記録', footer: '個別の取引記録 · 将来の収益を保証しません', basis: '決済記録に基づく',
     contractRate: '証拠金に対する収益率', optionRate: '投資額に対する収益率', qr: '招待QRコード', qrNote: '登録ページが開きます。注文の詳細は公開しません。',
     qrError: '招待コードを取得できません。再試行するかQRコードをオフにしてください。', invite: '参加する', preview: '取引シェアのプレビュー',
-    chart: '取引レビュー', chartError: '取引期間の履歴データがありません。再試行するか別のテンプレートを選択してください。',
+    chart: '取引レビュー', chartError: '最新のローソク足を取得できません。再試行してください。',
+    recentCaption: '最新のローソク足',
     chartCaption: '市場のローソク足 · 約定価格は別途表示',
   }
   return en
@@ -139,7 +142,7 @@ export function shareNumber(value: number, digits = 2, signed = false): string {
 }
 
 export interface ShareCandle { timestamp: number; open: number; high: number; low: number; close: number; volume?: number }
-export interface ShareChart { candles: ShareCandle[]; start: number; end: number; step: number; interval: string; source: string }
+export interface ShareChart { candles: ShareCandle[]; start: number; end: number; step: number; interval: string; source: string; recent?: boolean }
 export function orderTimestamp(value: string): number {
   const normalized = value.trim().replace(' ', 'T')
   return Date.parse(/[zZ]|[+-]\d{2}:?\d{2}$/.test(normalized) ? normalized : `${normalized}+08:00`)
@@ -152,7 +155,7 @@ export function historyWindow(order: ShareOrder, now = Date.now()) {
   const [interval, step] = intervals.find(([, duration]) => duration >= minimum && (end - start) / duration <= 90) || intervals[5]!
   return { start, end, step, interval, endTime: Math.min(now, (Math.floor(end / step) + 2) * step), limit: 160 }
 }
-export function coveredCandles(rows: Array<Record<string, unknown>>, window: ReturnType<typeof historyWindow>): ShareCandle[] {
+export function coveredCandles(rows: Array<Record<string, unknown>>, window?: ReturnType<typeof historyWindow>): ShareCandle[] {
   const unique = new Map<number, ShareCandle>()
   for (const row of rows) {
     let timestamp = Number(row.timestamp)
@@ -163,9 +166,17 @@ export function coveredCandles(rows: Array<Record<string, unknown>>, window: Ret
     unique.set(timestamp, { ...candle, ...(volume !== null && volume >= 0 ? { volume } : {}) })
   }
   const candles = [...unique.values()].sort((a, b) => a.timestamp - b.timestamp)
+  if (!window) return candles.slice(-80)
   const covers = (time: number) => candles.some(c => c.timestamp <= time && time < c.timestamp + window.step)
   if (!covers(window.start) || !covers(window.end)) throw new Error('Incomplete history coverage')
   return candles.filter(c => c.timestamp >= window.start - window.step * 5 && c.timestamp <= window.end + window.step)
+}
+
+export function recentShareChart(rows: Array<Record<string, unknown>>, source = ''): ShareChart {
+  const candles = coveredCandles(rows)
+  if (!candles.length) throw new Error('No recent candles')
+  return { candles, start: candles[0]!.timestamp, end: candles[candles.length - 1]!.timestamp,
+    step: 60000, interval: '1m', source, recent: true }
 }
 
 export function drawSharePoster(canvas: HTMLCanvasElement, order: ShareOrder, options: ShareOptions,
@@ -302,8 +313,8 @@ export function drawSharePoster(canvas: HTMLCanvasElement, order: ShareOrder, op
   }
   if (review && chart) {
     const { candles, start, end, step } = chart
-    const min = Math.min(order.openPrice, order.closePrice, ...candles.map(c => c.low))
-    const max = Math.max(order.openPrice, order.closePrice, ...candles.map(c => c.high))
+    const min = Math.min(...(chart.recent ? [] : [order.openPrice, order.closePrice]), ...candles.map(c => c.low))
+    const max = Math.max(...(chart.recent ? [] : [order.openPrice, order.closePrice]), ...candles.map(c => c.high))
     const spread = Math.max(max - min, max * 0.0001)
     const first = candles[0]!.timestamp, last = candles[candles.length - 1]!.timestamp + step
     const x = (t: number) => 112 + (t - first) / (last - first) * 840
@@ -321,8 +332,8 @@ export function drawSharePoster(canvas: HTMLCanvasElement, order: ShareOrder, op
       ctx.save(); ctx.textAlign = time > (first + last) / 2 ? 'right' : 'left'
       text(`${label} ${price}`, x(time), above ? y(price) - 15 : y(price) + 30, 19, ink, 600, 360); ctx.restore()
     }
-    mark(start, order.openPrice, copy.entry, true); mark(end, order.closePrice, copy.exit, false)
-    text(`${chart.source} · ${chart.interval} · ${copy.chartCaption}`, 72, 800, 18, muted)
+    if (!chart.recent) { mark(start, order.openPrice, copy.entry, true); mark(end, order.closePrice, copy.exit, false) }
+    text(`${chart.source} · ${chart.interval} · ${chart.recent ? copy.recentCaption : copy.chartCaption}`, 72, 800, 18, muted)
   }
   const priceTop = review ? 825 : 677
   box(72, priceTop, 936, review ? 120 : 169, panel)
@@ -362,7 +373,7 @@ export function drawSharePoster(canvas: HTMLCanvasElement, order: ShareOrder, op
 }
 
 // Reference layouts use their original portrait proportions and fixed Japanese/English typography.
-// Financial values and candles always come from the settled order and its historical market data.
+// Financial values come from the settled order; background candles come from market data.
 function drawReferencePoster(canvas: HTMLCanvasElement, order: ShareOrder, options: ShareOptions,
   copy: ShareCopy, brand: string, qr?: HTMLImageElement, chart?: ShareChart, background?: HTMLImageElement) {
   if (!chart?.candles.length) throw new Error(copy.chartError)
@@ -412,8 +423,8 @@ function drawReferencePoster(canvas: HTMLCanvasElement, order: ShareOrder, optio
   }
   const plot = (x: number, y: number, width: number, height: number, labels: boolean, volumes = false) => {
     const candles = chart.candles, first = candles[0]!.timestamp, last = candles[candles.length - 1]!.timestamp + chart.step
-    const low = Math.min(order.openPrice, order.closePrice, ...candles.map(c => c.low))
-    const high = Math.max(order.openPrice, order.closePrice, ...candles.map(c => c.high))
+    const low = Math.min(...(chart.recent ? [] : [order.openPrice, order.closePrice]), ...candles.map(c => c.low))
+    const high = Math.max(...(chart.recent ? [] : [order.openPrice, order.closePrice]), ...candles.map(c => c.high))
     const spread = Math.max(high - low, high * .00005), padding = spread * .13
     const volumeHeight = volumes && candles.some(c => c.volume !== undefined) ? 38 : 0
     const px = (stamp: number) => x + (stamp - first) / (last - first) * width
@@ -435,7 +446,7 @@ function drawReferencePoster(canvas: HTMLCanvasElement, order: ShareOrder, optio
         ctx.fillRect(cx - body / 2, y + height - c.volume / maximumVolume * 32, body, c.volume / maximumVolume * 32); ctx.restore()
       }
     })
-    if (labels) {
+    if (labels && !chart.recent) {
       const dot = (stamp: number, value: number, close: boolean) => {
         const cx = Math.max(x + 7, Math.min(x + width - 7, px(stamp))), cy = py(value)
         ctx.beginPath(); ctx.arc(cx, cy, terminal ? 1.7 : 4.5, 0, Math.PI * 2); ctx.fillStyle = close ? (gold ? '#ffe78c' : '#4c83f5') : '#f5f5f5'; ctx.fill()
@@ -707,7 +718,7 @@ function drawCollectionPoster(canvas: HTMLCanvasElement, order: ShareOrder, opti
     if (amountVisible && rateVisible) { text(copy.rate, 383, 316, 12, '#74806e', 400, 119); text(rate, 383, 365, 31, profitColor, 700, 119) }
     text(unit, 36, 387, 10, '#798374')
     const candles = chart.candles, left = candles[0]!.timestamp, right = candles[candles.length - 1]!.timestamp + chart.step
-    const low = Math.min(order.openPrice, order.closePrice, ...candles.map(c => c.low)), high = Math.max(order.openPrice, order.closePrice, ...candles.map(c => c.high))
+    const low = Math.min(...(chart.recent ? [] : [order.openPrice, order.closePrice]), ...candles.map(c => c.low)), high = Math.max(...(chart.recent ? [] : [order.openPrice, order.closePrice]), ...candles.map(c => c.high))
     const spread = Math.max(high - low, high * .0001)
     const px = (stamp: number) => 44 + (stamp - left) / (right - left) * 452
     const py = (value: number) => 532 - (value - low) / spread * 106
@@ -719,12 +730,12 @@ function drawCollectionPoster(canvas: HTMLCanvasElement, order: ShareOrder, opti
       line(x, py(candle.high), x, py(candle.low), color, .7)
       ctx.fillStyle = color; ctx.fillRect(x - body / 2, Math.min(py(candle.open), py(candle.close)), body, Math.max(1, Math.abs(py(candle.open) - py(candle.close))))
     }
-    for (const [stamp, value, label] of [[chart.start, order.openPrice, copy.entry], [chart.end, order.closePrice, copy.exit]] as const) {
+    if (!chart.recent) for (const [stamp, value, label] of [[chart.start, order.openPrice, copy.entry], [chart.end, order.closePrice, copy.exit]] as const) {
       const x = px(stamp), y = py(value)
       ctx.beginPath(); ctx.moveTo(x, y - 5); ctx.lineTo(x - 4, y - 12); ctx.lineTo(x + 4, y - 12); ctx.closePath(); ctx.fillStyle = '#495ba3'; ctx.fill()
       ctx.save(); ctx.textAlign = stamp === chart.end ? 'right' : 'left'; text(label, x, y - 17, 8, '#526394', 500, 100); ctx.restore()
     }
-    text(`${chart.source} · ${chart.interval} · ${copy.chartCaption}`, 36, 578, 8, '#7a8676', 400, 468)
+    text(`${chart.source} · ${chart.interval} · ${chart.recent ? copy.recentCaption : copy.chartCaption}`, 36, 578, 8, '#7a8676', 400, 468)
     pricePair(36, 603, 468)
     line(36, 652, 504, 652, '#d6ddcf')
     footer('#75806f', 671, 649, 59)

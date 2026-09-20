@@ -148,7 +148,7 @@
                     <td class="py-3 px-4 font-bold text-gray-700 dark:text-gray-200">{{ order.symbol }}</td>
                     <td class="py-3 px-2 text-gray-500 dark:text-gray-400 dark:text-gray-500">#{{ order.id }}</td>
                     <td class="py-3 px-2"><span :class="['text-white px-2 py-0.5 rounded text-[11px] font-bold', order.type === 'buy' ? 'bg-[#8cc63f]' : 'bg-[#ff4d4f]']">{{ order.type === 'buy' ? localeStore.t('buy') : localeStore.t('sell') }}</span></td>
-                    <td class="py-3 px-2">{{ order.lots }}</td>
+                    <td class="py-3 px-2">{{ order.lots }} <span class="text-gray-500 text-xs">{{ order.leverage }}×</span></td>
                     <td class="py-3 px-2 font-mono">{{ order.openPrice.toFixed(4) }}</td>
                     <td class="py-3 px-2 font-mono font-bold text-gray-700 dark:text-gray-200">{{ order.currentPrice.toFixed(4) }}</td>
                     <td class="py-3 px-2 text-gray-400 dark:text-gray-500">{{ order.takeProfit || 0 }}</td>
@@ -258,6 +258,21 @@
                </div>
                <el-input-number v-if="useTakeProfit" v-model="takeProfitPrice" class="w-full custom-input-number" :controls="true" />
                <div v-else class="w-full h-10 bg-gray-50 dark:bg-[#181c27] border border-gray-200 dark:border-[#2b3139] rounded flex items-center justify-center text-gray-300 font-mono">0</div>
+             </div>
+
+             <div class="leverage-selector">
+               <div class="flex items-center justify-between mb-2">
+                 <label for="contract-leverage" class="text-gray-600 dark:text-gray-300 font-medium text-sm">{{ localeStore.t('leverage') }}</label>
+                 <output for="contract-leverage" class="font-bold text-[#78aa00] dark:text-[#8cc63f] tabular-nums">{{ selectedLeverage }}×</output>
+               </div>
+               <input id="contract-leverage" v-model.number="selectedLeverage" type="range" min="1" :max="maxLeverage" step="1"
+                 :aria-valuetext="`${selectedLeverage}×`" :disabled="!currentSymbolInfo || maxLeverage === 1"
+                 class="block w-full h-9 my-1 accent-[#8cc63f] cursor-pointer focus-visible:outline-[#8cc63f]" />
+               <div class="flex flex-wrap gap-1.5">
+                 <button v-for="value in leverageOptions" :key="value" type="button" :aria-pressed="selectedLeverage === value"
+                   :disabled="!currentSymbolInfo" @click="selectedLeverage = value"
+                   :class="['min-w-[44px] min-h-[44px] px-2 rounded-md border text-xs focus-visible:outline-[#8cc63f]', selectedLeverage === value ? 'border-[#8cc63f] bg-[#8cc63f]/15 text-[#4b7100] dark:text-[#8cc63f] font-bold' : 'border-gray-200 dark:border-[#2b3139] bg-white dark:bg-[#131722] text-gray-600 dark:text-gray-300']">{{ value }}×</button>
+               </div>
              </div>
 
              <div class="pt-2">
@@ -1695,6 +1710,7 @@ import { useAuthStore } from '@/store/auth';
 import { useLocaleStore } from '@/store/locale';
 import { useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
+import { DEFAULT_LEVERAGE, leverageLimit, leverageChoices, contractMargin, calculateContractProfit, contractEquity } from '@/utils/contract';
 import request from '@/utils/request';
 import { formatDateTime } from '@/utils/dateTime';
 import { getImageUrl } from '@/utils/imageUrl';
@@ -2063,6 +2079,7 @@ const stopLossPrice = ref(0);
 const useTakeProfit = ref(false);
 const takeProfitPrice = ref(0);
 const quantity = ref(0.01);
+const selectedLeverage = ref(DEFAULT_LEVERAGE);
 
 const currentSymbolInfo = ref<any>(null);
 
@@ -2084,19 +2101,20 @@ const feeMultiplier = computed(() => {
   return 30;
 });
 
-// 计算预估保证金 = 买入数量 × 每手数量
-const estimatedMargin = computed(() => {
-  const qty = Number(quantity.value) || 0;
-  if (qty <= 0) return 0;
-  const lot = Number(lotSize.value) || 1000;
-  return qty * lot;
-});
+const maxLeverage = computed(() => leverageLimit(currentSymbolInfo.value?.maxLeverage));
+const leverageOptions = computed(() => leverageChoices(maxLeverage.value));
+watch(maxLeverage, max => { selectedLeverage.value = Math.min(selectedLeverage.value, max); });
+const estimatedMargin = computed(() => contractMargin(
+  Number(quantity.value), lotSize.value,
+  Number(orderType.value === 'limit' ? limitPrice.value : marketStore.priceMap[currentSymbol.value]?.price),
+  selectedLeverage.value,
+));
 
 // 计算预估手续费 = 买入数量 × 手续费倍数
 const estimatedFee = computed(() => {
   const qty = Number(quantity.value) || 0;
   if (qty <= 0) return 0;
-  const multiplier = Number(feeMultiplier.value) || 30;
+  const multiplier = feeMultiplier.value;
   return qty * multiplier;
 });
 
@@ -2782,30 +2800,10 @@ const loadContractBalance = async () => {
   // 我们已经通过 /user/assets 接口${localeStore.t('getText')}了所有资产信息，这里可以保留作为一个辅助方法或者空方法
 };
 
-const calculateContractProfit = (order: any, currentPrice: number): number => {
-  if (order.status === 'CLOSED') return Number(order.profit || 0)
-  if (!order.openPrice || order.openPrice <= 0 || !currentPrice || currentPrice <= 0) {
-    return Number(order.profit || 0);
-  }
-  const quantity = Number(order.quantity || 0);
-  if (quantity <= 0) return 0;
-  
-  let leverage = order.leverage ? Number(order.leverage) : 10;
-  let priceDiff = 0;
-  if (order.side === 'BUY') {
-    priceDiff = currentPrice - order.openPrice;
-  } else if (order.side === 'SELL') {
-    priceDiff = order.openPrice - currentPrice;
-  } else {
-    return Number(order.profit || 0);
-  }
-  return priceDiff * quantity * leverage;
-};
-
 const transformContractOrder = (order: any) => {
   const pInfo = marketStore.priceMap[order.symbol];
   const currentPrice = pInfo ? Number(pInfo.price) : 0;
-  let leverage = order.leverage ? Number(order.leverage) : 10;
+  const leverage = Number(order.leverage ?? 1);
   const calculatedProfit = calculateContractProfit({ ...order, leverage }, currentPrice);
   const displayTime = order.status === 'PENDING' ? (order.createdAt || order.openTime) : (order.openTime || order.createdAt);
   
@@ -2826,7 +2824,8 @@ const transformContractOrder = (order: any) => {
     status: order.status,
     side: order.side,
     quantity: order.quantity,
-    leverage
+    leverage,
+    lotSize: order.lotSize
   };
 };
 
@@ -2908,7 +2907,7 @@ const totalProfit = computed(() => {
 
 const riskRate = computed(() => {
   if (totalMargin.value > 0) {
-    return ((contractBalance.value + totalProfit.value) / totalMargin.value) * 100;
+    return (contractEquity(contractBalance.value, positionsData.value) / totalMargin.value) * 100;
   }
   return 0;
 });
@@ -2959,14 +2958,18 @@ const submitContractOrder = async (side: 'BUY' | 'SELL') => {
     return;
   }
 
+  if (estimatedMargin.value + estimatedFee.value > contractBalance.value) {
+    ElMessage.warning(localeStore.t('contractBalanceInsufficient'));
+    return;
+  }
+
   const params = {
     symbol: currentSymbol.value,
     side,
     type: orderType.value === 'market' ? 'MARKET' : 'LIMIT',
     quantity: quantity.value,
     price: orderType.value === 'limit' ? limitPrice.value : undefined,
-    currentPrice: currentPrice, // 添加当前价，后端以此作为市价单的开仓价
-    leverage: 10,
+    leverage: selectedLeverage.value,
     takeProfit: useTakeProfit.value ? takeProfitPrice.value : undefined,
     stopLoss: useStopLoss.value ? stopLossPrice.value : undefined
   };

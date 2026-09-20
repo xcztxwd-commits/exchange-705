@@ -1,6 +1,7 @@
 package com.gtcfesk.exchange.trade;
 
 import com.gtcfesk.exchange.common.BusinessException;
+import com.gtcfesk.exchange.common.TradeValidation;
 import com.gtcfesk.exchange.entity.AssetAccount;
 import com.gtcfesk.exchange.entity.ContractOrder;
 import com.gtcfesk.exchange.entity.TradingSymbol;
@@ -11,8 +12,12 @@ import com.gtcfesk.exchange.trade.dto.CreateContractOrderRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.dao.OptimisticLockingFailureException;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -25,6 +30,7 @@ public class ContractOrderService {
     private final AssetAccountRepository assetAccountRepository;
     private final TradingSymbolRepository tradingSymbolRepository;
     private final com.gtcfesk.exchange.market.ForexQuoteMarketService quotes;
+    private final PlatformTransactionManager transactionManager;
 
     /**
      * 创建合约订单
@@ -52,7 +58,13 @@ public class ContractOrderService {
         // 获取合约设置
         BigDecimal lotSize = symbol.getLotSize() != null ? symbol.getLotSize() : BigDecimal.valueOf(1000);
         BigDecimal feeMultiplier = symbol.getFeeMultiplier() != null ? symbol.getFeeMultiplier() : BigDecimal.valueOf(30);
-        BigDecimal leverage = symbol.getLeverage() != null ? symbol.getLeverage() : BigDecimal.valueOf(10);
+        BigDecimal maxLeverage = symbol.getMaxLeverage() != null ? symbol.getMaxLeverage() : BigDecimal.valueOf(100);
+        TradeValidation.leverage(maxLeverage);
+        BigDecimal leverage = req.getLeverage() != null ? req.getLeverage() : maxLeverage;
+        TradeValidation.leverage(leverage);
+        if (leverage.compareTo(maxLeverage) > 0) throw new BusinessException("杠杆倍数超过该品种上限: " + maxLeverage);
+        TradeValidation.positive(lotSize, "每手数量");
+        if (feeMultiplier.signum() < 0) throw new BusinessException("手续费设置无效");
         
         // 获取或创建合约资产账户
         AssetAccount contractAccount = assetAccountRepository
@@ -66,15 +78,15 @@ public class ContractOrderService {
                     return assetAccountRepository.save(newAccount);
                 });
 
-        // 计算预计保证金 = 买入数量 × 每手数量（不除以杠杆）
-        BigDecimal contractValue = req.getQuantity().multiply(lotSize);
-        BigDecimal requiredMargin = contractValue; // 预计保证金 = 数量 × 每手数量
+        // 挂单按限价预留，成交时按实际成交价补足或退还差额。
+        BigDecimal marginPrice = "LIMIT".equals(req.getType()) ? req.getPrice() : currentPrice;
+        BigDecimal requiredMargin = calculateMargin(req.getQuantity(), lotSize, marginPrice, leverage);
         
         // 计算预计手续费 = 买入数量 × 手续费倍数
-        BigDecimal fee = req.getQuantity().multiply(feeMultiplier);
+        BigDecimal fee = money(req.getQuantity().multiply(feeMultiplier), RoundingMode.HALF_UP);
         
         // 总费用 = 预计保证金 + 预计手续费
-        BigDecimal totalCost = requiredMargin.add(fee);
+        BigDecimal totalCost = money(requiredMargin.add(fee), RoundingMode.UNNECESSARY);
 
         // 检查余额是否足够
         BigDecimal available = contractAccount.getAvailable() != null ? contractAccount.getAvailable() : BigDecimal.ZERO;
@@ -102,6 +114,7 @@ public class ContractOrderService {
         order.setMargin(requiredMargin);
         order.setFee(fee); // 手续费
         order.setLeverage(leverage); // 杠杆倍数
+        order.setLotSize(lotSize);
         order.setProfit(BigDecimal.ZERO);
         
         // 如果是市价单，立即开仓；如果是限价单，状态为挂单
@@ -119,17 +132,49 @@ public class ContractOrderService {
         return contractOrderRepository.save(order);
     }
 
-    /** Fill newly created limit orders at the fresh quote; funds were already frozen on submission. */
+    /** Each fill and its margin adjustment commit together; an unfunded sell limit stays pending. */
     public int matchPendingLimitOrders() {
         int filled = 0;
+        TransactionTemplate transaction = new TransactionTemplate(transactionManager);
         for (ContractOrder order : contractOrderRepository.findByStatusAndTypeAndLimitMatchEnabledTrue("PENDING", "LIMIT")) {
-            BigDecimal marketPrice = quotes.freshPrice(order.getSymbol());
-            if (marketPrice != null && marketPrice.signum() > 0) {
-                // Each conditional update commits independently. Version checks also fence off a competing cancellation.
-                filled += contractOrderRepository.openPendingLimitOrder(order.getId(), order.getRowVersion(), marketPrice, LocalDateTime.now());
+            try {
+                if (order.getLotSize() != null) {
+                    filled += transaction.execute(status -> matchPendingLimitOrder(order.getId()));
+                } else {
+                    BigDecimal marketPrice = quotes.freshPrice(order.getSymbol());
+                    if (marketPrice != null && marketPrice.signum() > 0) {
+                        filled += contractOrderRepository.openPendingLimitOrder(order.getId(), order.getRowVersion(), marketPrice, LocalDateTime.now());
+                    }
+                }
+            } catch (OptimisticLockingFailureException ignored) {
+                // A competing fill, cancellation or balance update won; retry remaining orders next tick.
             }
         }
         return filled;
+    }
+
+    private int matchPendingLimitOrder(Long id) {
+        ContractOrder order = contractOrderRepository.findById(id).orElse(null);
+        if (order == null || !"PENDING".equals(order.getStatus()) || !order.isLimitMatchEnabled()) return 0;
+        BigDecimal price = quotes.freshPrice(order.getSymbol());
+        if (price == null || price.signum() <= 0
+                || ("BUY".equals(order.getSide()) && price.compareTo(order.getPrice()) > 0)
+                || ("SELL".equals(order.getSide()) && price.compareTo(order.getPrice()) < 0)) return 0;
+        BigDecimal margin = calculateMargin(order.getQuantity(), order.getLotSize(), price, order.getLeverage());
+        BigDecimal difference = margin.subtract(order.getMargin());
+        AssetAccount account = assetAccountRepository.findByUserIdAndCoin(order.getUserId(), "CONTRACT")
+                .orElseThrow(() -> new BusinessException("合约资产账户不存在"));
+        if (difference.signum() > 0 && account.getAvailable().compareTo(difference) < 0) return 0;
+        account.setAvailable(account.getAvailable().subtract(difference));
+        account.setFrozen(account.getFrozen().add(difference));
+        assetAccountRepository.save(account);
+        order.setMargin(margin);
+        order.setStatus("OPEN");
+        order.setOpenPrice(price);
+        order.setCurrentPrice(price);
+        order.setOpenTime(LocalDateTime.now());
+        contractOrderRepository.saveAndFlush(order);
+        return 1;
     }
 
     /**
@@ -160,141 +205,41 @@ public class ContractOrderService {
         return contractAccount.getAvailable() != null ? contractAccount.getAvailable() : BigDecimal.ZERO;
     }
 
-    /**
-     * 平仓订单
-     */
+    /** 平仓始终使用服务端新鲜行情。 */
     @Transactional
     public ContractOrder closeOrder(Long userId, Long orderId, BigDecimal closePrice) {
         ContractOrder order = contractOrderRepository.findById(orderId)
                 .orElseThrow(() -> new BusinessException("订单不存在"));
-
-        // 检查订单是否属于该用户
-        if (!order.getUserId().equals(userId)) {
-            throw new BusinessException("无权操作此订单");
-        }
-
-        // 检查订单状态
-        if (!"OPEN".equals(order.getStatus())) {
-            throw new BusinessException("只能平仓持仓中的订单");
-        }
-
-        // 保留旧调用签名，但绝不采用调用方传入的成交价。
-        closePrice = requireFreshPrice(order.getSymbol());
-
-        // 计算盈亏（考虑杠杆倍数）
-        BigDecimal profit = BigDecimal.ZERO;
-        if (order.getOpenPrice() != null && closePrice != null) {
-            // 获取杠杆倍数，如果没有则默认为1（无杠杆）
-            BigDecimal leverage = order.getLeverage() != null ? order.getLeverage() : BigDecimal.ONE;
-            
-            // 计算价格差
-            BigDecimal priceDiff;
-            if ("BUY".equals(order.getSide())) {
-                // 买入：价格差 = 平仓价 - 开仓价
-                priceDiff = closePrice.subtract(order.getOpenPrice());
-            } else {
-                // 卖出：价格差 = 开仓价 - 平仓价
-                priceDiff = order.getOpenPrice().subtract(closePrice);
-            }
-            
-            // 盈亏 = 价格差 × 数量 × 杠杆倍数
-            // 杠杆放大盈亏，杠杆越高，盈亏越大
-            profit = priceDiff.multiply(order.getQuantity())
-                    .multiply(leverage);
-        }
-
-        // 更新订单状态
-        order.setStatus("CLOSED");
-        order.setClosePrice(closePrice);
-        order.setCurrentPrice(closePrice);
-        order.setProfit(profit);
-        order.setCloseTime(LocalDateTime.now());
-
-        // 获取合约资产账户
-        AssetAccount contractAccount = assetAccountRepository
-                .findByUserIdAndCoin(userId, "CONTRACT")
-                .orElseThrow(() -> new BusinessException("合约资产账户不存在"));
-
-        // 解冻保证金和手续费
-        BigDecimal totalFrozen = order.getMargin().add(order.getFee());
-        BigDecimal frozen = contractAccount.getFrozen() != null ? contractAccount.getFrozen() : BigDecimal.ZERO;
-        if (frozen.compareTo(totalFrozen) < 0) {
-            throw new BusinessException("冻结金额不足");
-        }
-        contractAccount.setFrozen(frozen.subtract(totalFrozen));
-
-        // 返还保证金和手续费，加上盈亏
-        BigDecimal available = contractAccount.getAvailable() != null ? contractAccount.getAvailable() : BigDecimal.ZERO;
-        contractAccount.setAvailable(available.add(totalFrozen).add(profit));
-        assetAccountRepository.save(contractAccount);
-
-        return contractOrderRepository.save(order);
+        if (!order.getUserId().equals(userId)) throw new BusinessException("无权操作此订单");
+        return settleOrder(order);
     }
 
-    /**
-     * 管理员平仓订单
-     */
     @Transactional
     public ContractOrder adminCloseOrder(Long orderId, BigDecimal closePrice) {
-        ContractOrder order = contractOrderRepository.findById(orderId)
-                .orElseThrow(() -> new BusinessException("订单不存在"));
+        return settleOrder(contractOrderRepository.findById(orderId)
+                .orElseThrow(() -> new BusinessException("订单不存在")));
+    }
 
-        // 检查订单状态
-        if (!"OPEN".equals(order.getStatus())) {
-            throw new BusinessException("只能平仓持仓中的订单");
-        }
-
-        Long userId = order.getUserId();
-
-        closePrice = requireFreshPrice(order.getSymbol());
-
-        // 计算盈亏（考虑杠杆倍数）
-        BigDecimal profit = BigDecimal.ZERO;
-        if (order.getOpenPrice() != null && closePrice != null) {
-            // 获取杠杆倍数，如果没有则默认为1（无杠杆）
-            BigDecimal leverage = order.getLeverage() != null ? order.getLeverage() : BigDecimal.ONE;
-            
-            // 计算价格差
-            BigDecimal priceDiff;
-            if ("BUY".equals(order.getSide())) {
-                // 买入：价格差 = 平仓价 - 开仓价
-                priceDiff = closePrice.subtract(order.getOpenPrice());
-            } else {
-                // 卖出：价格差 = 开仓价 - 平仓价
-                priceDiff = order.getOpenPrice().subtract(closePrice);
-            }
-            
-            // 盈亏 = 价格差 × 数量 × 杠杆倍数
-            // 杠杆放大盈亏，杠杆越高，盈亏越大
-            profit = priceDiff.multiply(order.getQuantity())
-                    .multiply(leverage);
-        }
-
-        // 更新订单状态
+    private ContractOrder settleOrder(ContractOrder order) {
+        if (!"OPEN".equals(order.getStatus())) throw new BusinessException("只能平仓持仓中的订单");
+        BigDecimal closePrice = requireFreshPrice(order.getSymbol());
+        BigDecimal profit = calculateProfit(order, closePrice);
+        AssetAccount account = assetAccountRepository.findByUserIdAndCoin(order.getUserId(), "CONTRACT")
+                .orElseThrow(() -> new BusinessException("合约资产账户不存在"));
+        BigDecimal totalFrozen = order.getMargin().add(order.getFee());
+        BigDecimal frozen = account.getFrozen() != null ? account.getFrozen() : BigDecimal.ZERO;
+        if (frozen.compareTo(totalFrozen) < 0) throw new BusinessException("冻结金额不足");
+        account.setFrozen(frozen.subtract(totalFrozen));
+        // 新单收取已预留的手续费；历史订单保留原来的退款规则。
+        BigDecimal refund = order.getLotSize() == null ? totalFrozen : order.getMargin();
+        BigDecimal available = account.getAvailable() != null ? account.getAvailable() : BigDecimal.ZERO;
+        account.setAvailable(available.add(refund).add(profit));
+        assetAccountRepository.save(account);
         order.setStatus("CLOSED");
         order.setClosePrice(closePrice);
         order.setCurrentPrice(closePrice);
         order.setProfit(profit);
         order.setCloseTime(LocalDateTime.now());
-
-        // 获取合约资产账户
-        AssetAccount contractAccount = assetAccountRepository
-                .findByUserIdAndCoin(userId, "CONTRACT")
-                .orElseThrow(() -> new BusinessException("合约资产账户不存在"));
-
-        // 解冻保证金和手续费
-        BigDecimal totalFrozen = order.getMargin().add(order.getFee());
-        BigDecimal frozen = contractAccount.getFrozen() != null ? contractAccount.getFrozen() : BigDecimal.ZERO;
-        if (frozen.compareTo(totalFrozen) < 0) {
-            throw new BusinessException("冻结金额不足");
-        }
-        contractAccount.setFrozen(frozen.subtract(totalFrozen));
-
-        // 返还保证金和手续费，加上盈亏
-        BigDecimal available = contractAccount.getAvailable() != null ? contractAccount.getAvailable() : BigDecimal.ZERO;
-        contractAccount.setAvailable(available.add(totalFrozen).add(profit));
-        assetAccountRepository.save(contractAccount);
-
         return contractOrderRepository.save(order);
     }
 
@@ -538,7 +483,7 @@ public class ContractOrderService {
                     if (order.getMargin() != null) {
                         totalMargin = totalMargin.add(order.getMargin());
                     }
-                    if (order.getFee() != null) {
+                    if (order.getLotSize() == null && order.getFee() != null) {
                         totalFee = totalFee.add(order.getFee());
                     }
                     
@@ -547,34 +492,37 @@ public class ContractOrderService {
                     totalProfit = totalProfit.add(profit);
                 }
                 
-                // 总保证金 = 保证金 + 手续费
+                // 新单手续费不计入可抵亏权益，历史单保留可退手续费。
                 BigDecimal totalMarginAndFee = totalMargin.add(totalFee);
                 
-                // 检查强制平仓条件：总亏损 > (账户余额 + 保证金总和)
+                // 检查强制平仓条件：总亏损 >= (账户余额 + 保证金总和)
                 // 总亏损 = -totalProfit（如果totalProfit为负数）
                 if (totalProfit.compareTo(BigDecimal.ZERO) < 0) {
                     BigDecimal totalLoss = totalProfit.negate(); // 转换为正数（亏损金额）
                     BigDecimal availablePlusMargin = available.add(totalMarginAndFee);
                     
-                    // 如果总亏损 > (余额 + 保证金)，强制平仓所有订单
-                    if (totalLoss.compareTo(availablePlusMargin) > 0) {
+                    // 如果总亏损 >= (余额 + 保证金)，强制平仓所有订单
+                    if (totalLoss.compareTo(availablePlusMargin) >= 0) {
                         if (userOrders.stream().anyMatch(order -> quotes.freshPrice(order.getSymbol()) == null)) continue;
                         // 强制平仓该用户的所有订单
+                        boolean allClosed = true;
                         for (ContractOrder order : userOrders) {
                             try {
                                 BigDecimal closePrice = symbolPriceMap.get(order.getSymbol());
                                 if (closePrice != null && closePrice.compareTo(BigDecimal.ZERO) > 0) {
                                     adminCloseOrder(order.getId(), closePrice);
+                                } else {
+                                    allClosed = false;
                                 }
                             } catch (Exception e) {
-                                // 静默处理单个订单平仓失败
+                                allClosed = false;
                             }
                         }
-                        
-                        // 强制平仓后，将合约账户余额设为0
-                        contractAccount.setAvailable(BigDecimal.ZERO);
-                        contractAccount.setFrozen(BigDecimal.ZERO);
-                        assetAccountRepository.save(contractAccount);
+                        // 只在所有持仓结算成功后处理穿仓；挂单冻结资金保持不变。
+                        if (allClosed && contractAccount.getAvailable().signum() < 0) {
+                            contractAccount.setAvailable(BigDecimal.ZERO);
+                            assetAccountRepository.save(contractAccount);
+                        }
                     }
                 }
             } catch (Exception e) {
@@ -583,6 +531,16 @@ public class ContractOrderService {
         }
     }
     
+    private BigDecimal calculateMargin(BigDecimal quantity, BigDecimal lotSize, BigDecimal price, BigDecimal leverage) {
+        return money(quantity.multiply(lotSize).multiply(price).divide(leverage, 16, RoundingMode.CEILING), RoundingMode.UNNECESSARY);
+    }
+
+    private BigDecimal money(BigDecimal amount, RoundingMode rounding) {
+        BigDecimal rounded = amount.setScale(16, rounding);
+        if (rounded.precision() - rounded.scale() > 16) throw new BusinessException("交易金额超出支持范围");
+        return rounded;
+    }
+
     /** 获取允许成交的服务端行情，包含后台价格偏移。 */
     private BigDecimal requireFreshPrice(String symbol) {
         BigDecimal price = quotes.freshPrice(symbol);
@@ -600,8 +558,9 @@ public class ContractOrderService {
             return BigDecimal.ZERO;
         }
         
-        // 获取杠杆倍数
-        BigDecimal leverage = order.getLeverage() != null ? order.getLeverage() : BigDecimal.ONE;
+        // 新单按实际持仓数量计盈亏；NULL 快照的历史单继续使用原杠杆乘数。
+        BigDecimal multiplier = order.getLotSize() != null ? order.getLotSize()
+                : (order.getLeverage() != null ? order.getLeverage() : BigDecimal.ONE);
         
         // 计算价格差
         BigDecimal priceDiff;
@@ -613,8 +572,7 @@ public class ContractOrderService {
             priceDiff = order.getOpenPrice().subtract(currentPrice);
         }
         
-        // 盈亏 = 价格差 × 数量 × 杠杆倍数
-        return priceDiff.multiply(order.getQuantity()).multiply(leverage);
+        return money(priceDiff.multiply(order.getQuantity()).multiply(multiplier), RoundingMode.HALF_UP);
     }
 }
 

@@ -68,7 +68,7 @@ public class AdminSymbolController {
     }
     
     /**
-     * 批量设置合约杠杆倍数
+     * 批量设置用户可选杠杆上限
      */
     @PostMapping("/batchSetLeverage")
     @SuppressWarnings("unchecked")
@@ -85,7 +85,7 @@ public class AdminSymbolController {
         
         symbolService.batchSetLeverage(leverage, symbolIds, category);
         Map<String, String> result = new HashMap<>();
-        result.put("message", "杠杆倍数设置成功");
+        result.put("message", "杠杆上限设置成功");
         return ResponseEntity.ok(result);
     }
 }

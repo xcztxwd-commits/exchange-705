@@ -1,11 +1,9 @@
 <template>
   <router-view />
-  <MarketQuoteStatus />
 </template>
 
 <script setup lang="ts">
 import { onMounted, onUnmounted, watch } from 'vue'
-import MarketQuoteStatus from '@/components/MarketQuoteStatus.vue'
 import { useAuthStore } from '@/store/auth'
 import { useLocaleStore } from '@/store/locale'
 import request from '@/utils/request'
