@@ -31,6 +31,7 @@ public class ContractOrderService {
     private final TradingSymbolRepository tradingSymbolRepository;
     private final com.gtcfesk.exchange.market.ForexQuoteMarketService quotes;
     private final PlatformTransactionManager transactionManager;
+    private final com.gtcfesk.exchange.market.MarketCategoryService categories;
 
     /**
      * 创建合约订单
@@ -59,6 +60,7 @@ public class ContractOrderService {
         BigDecimal lotSize = symbol.getLotSize() != null ? symbol.getLotSize() : BigDecimal.valueOf(1000);
         BigDecimal feeMultiplier = symbol.getFeeMultiplier() != null ? symbol.getFeeMultiplier() : BigDecimal.valueOf(30);
         BigDecimal maxLeverage = symbol.getMaxLeverage() != null ? symbol.getMaxLeverage() : BigDecimal.valueOf(100);
+        if (!categories.leverageEnabled(symbol.getCategory())) maxLeverage = BigDecimal.ONE;
         TradeValidation.leverage(maxLeverage);
         BigDecimal leverage = req.getLeverage() != null ? req.getLeverage() : maxLeverage;
         TradeValidation.leverage(leverage);
@@ -80,7 +82,8 @@ public class ContractOrderService {
 
         // 挂单按限价预留，成交时按实际成交价补足或退还差额。
         BigDecimal marginPrice = "LIMIT".equals(req.getType()) ? req.getPrice() : currentPrice;
-        BigDecimal requiredMargin = calculateMargin(req.getQuantity(), lotSize, marginPrice, leverage);
+        BigDecimal conversionRate=conversionRate(symbol.getQuoteCurrency(),symbol.getMarketSource());
+        BigDecimal requiredMargin = calculateMargin(req.getQuantity(), lotSize, marginPrice, leverage, conversionRate);
         
         // 计算预计手续费 = 买入数量 × 手续费倍数
         BigDecimal fee = money(req.getQuantity().multiply(feeMultiplier), RoundingMode.HALF_UP);
@@ -115,6 +118,9 @@ public class ContractOrderService {
         order.setFee(fee); // 手续费
         order.setLeverage(leverage); // 杠杆倍数
         order.setLotSize(lotSize);
+        order.setQuoteCurrency(symbol.getQuoteCurrency());
+        order.setQuoteSource(symbol.getMarketSource());
+        order.setMarginConversionRate(conversionRate);
         order.setProfit(BigDecimal.ZERO);
         
         // 如果是市价单，立即开仓；如果是限价单，状态为挂单
@@ -146,7 +152,7 @@ public class ContractOrderService {
                         filled += contractOrderRepository.openPendingLimitOrder(order.getId(), order.getRowVersion(), marketPrice, LocalDateTime.now());
                     }
                 }
-            } catch (OptimisticLockingFailureException ignored) {
+            } catch (OptimisticLockingFailureException | BusinessException ignored) {
                 // A competing fill, cancellation or balance update won; retry remaining orders next tick.
             }
         }
@@ -156,11 +162,14 @@ public class ContractOrderService {
     private int matchPendingLimitOrder(Long id) {
         ContractOrder order = contractOrderRepository.findById(id).orElse(null);
         if (order == null || !"PENDING".equals(order.getStatus()) || !order.isLimitMatchEnabled()) return 0;
+        TradingSymbol symbol = tradingSymbolRepository.findBySymbol(order.getSymbol()).orElse(null);
+        if (symbol == null || (!categories.leverageEnabled(symbol.getCategory()) && order.getLeverage().compareTo(BigDecimal.ONE)>0)) return 0;
         BigDecimal price = quotes.freshPrice(order.getSymbol());
         if (price == null || price.signum() <= 0
                 || ("BUY".equals(order.getSide()) && price.compareTo(order.getPrice()) > 0)
                 || ("SELL".equals(order.getSide()) && price.compareTo(order.getPrice()) < 0)) return 0;
-        BigDecimal margin = calculateMargin(order.getQuantity(), order.getLotSize(), price, order.getLeverage());
+        BigDecimal conversionRate=conversionRate(order.getQuoteCurrency(),order.getQuoteSource());
+        BigDecimal margin = calculateMargin(order.getQuantity(), order.getLotSize(), price, order.getLeverage(),conversionRate);
         BigDecimal difference = margin.subtract(order.getMargin());
         AssetAccount account = assetAccountRepository.findByUserIdAndCoin(order.getUserId(), "CONTRACT")
                 .orElseThrow(() -> new BusinessException("合约资产账户不存在"));
@@ -169,6 +178,7 @@ public class ContractOrderService {
         account.setFrozen(account.getFrozen().add(difference));
         assetAccountRepository.save(account);
         order.setMargin(margin);
+        order.setMarginConversionRate(conversionRate);
         order.setStatus("OPEN");
         order.setOpenPrice(price);
         order.setCurrentPrice(price);
@@ -223,7 +233,8 @@ public class ContractOrderService {
     private ContractOrder settleOrder(ContractOrder order) {
         if (!"OPEN".equals(order.getStatus())) throw new BusinessException("只能平仓持仓中的订单");
         BigDecimal closePrice = requireFreshPrice(order.getSymbol());
-        BigDecimal profit = calculateProfit(order, closePrice);
+        BigDecimal settlementRate=conversionRate(order.getQuoteCurrency(),order.getQuoteSource());
+        BigDecimal profit = money(calculateQuoteProfit(order,closePrice).multiply(settlementRate),RoundingMode.HALF_UP);
         AssetAccount account = assetAccountRepository.findByUserIdAndCoin(order.getUserId(), "CONTRACT")
                 .orElseThrow(() -> new BusinessException("合约资产账户不存在"));
         BigDecimal totalFrozen = order.getMargin().add(order.getFee());
@@ -237,6 +248,7 @@ public class ContractOrderService {
         assetAccountRepository.save(account);
         order.setStatus("CLOSED");
         order.setClosePrice(closePrice);
+        order.setSettlementConversionRate(settlementRate);
         order.setCurrentPrice(closePrice);
         order.setProfit(profit);
         order.setCloseTime(LocalDateTime.now());
@@ -504,6 +516,7 @@ public class ContractOrderService {
                     // 如果总亏损 >= (余额 + 保证金)，强制平仓所有订单
                     if (totalLoss.compareTo(availablePlusMargin) >= 0) {
                         if (userOrders.stream().anyMatch(order -> quotes.freshPrice(order.getSymbol()) == null)) continue;
+                        for (ContractOrder order : userOrders) conversionRate(order.getQuoteCurrency(),order.getQuoteSource());
                         // 强制平仓该用户的所有订单
                         boolean allClosed = true;
                         for (ContractOrder order : userOrders) {
@@ -531,8 +544,8 @@ public class ContractOrderService {
         }
     }
     
-    private BigDecimal calculateMargin(BigDecimal quantity, BigDecimal lotSize, BigDecimal price, BigDecimal leverage) {
-        return money(quantity.multiply(lotSize).multiply(price).divide(leverage, 16, RoundingMode.CEILING), RoundingMode.UNNECESSARY);
+    private BigDecimal calculateMargin(BigDecimal quantity, BigDecimal lotSize, BigDecimal price, BigDecimal leverage, BigDecimal rate) {
+        return money(quantity.multiply(lotSize).multiply(price).multiply(rate).divide(leverage, 16, RoundingMode.CEILING), RoundingMode.UNNECESSARY);
     }
 
     private BigDecimal money(BigDecimal amount, RoundingMode rounding) {
@@ -551,7 +564,13 @@ public class ContractOrderService {
     }
 
     /** 计算订单的实时盈亏。 */
+    private BigDecimal conversionRate(String currency,String source) {
+        return com.gtcfesk.exchange.market.QuoteCurrencyConversion.fixed(currency)?BigDecimal.ONE:quotes.requireConversionRate(currency,source);
+    }
     private BigDecimal calculateProfit(ContractOrder order, BigDecimal currentPrice) {
+        return money(calculateQuoteProfit(order,currentPrice).multiply(conversionRate(order.getQuoteCurrency(),order.getQuoteSource())),RoundingMode.HALF_UP);
+    }
+    private BigDecimal calculateQuoteProfit(ContractOrder order, BigDecimal currentPrice) {
         if (order.getOpenPrice() == null || currentPrice == null 
                 || order.getOpenPrice().compareTo(BigDecimal.ZERO) <= 0 
                 || currentPrice.compareTo(BigDecimal.ZERO) <= 0) {
@@ -572,7 +591,7 @@ public class ContractOrderService {
             priceDiff = order.getOpenPrice().subtract(currentPrice);
         }
         
-        return money(priceDiff.multiply(order.getQuantity()).multiply(multiplier), RoundingMode.HALF_UP);
+        return priceDiff.multiply(order.getQuantity()).multiply(multiplier);
     }
 }
 

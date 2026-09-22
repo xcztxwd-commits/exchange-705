@@ -32,6 +32,7 @@ public class SystemConfigController {
         return ResponseEntity.ok(result);
     }
 
+    @org.springframework.transaction.annotation.Transactional
     @PostMapping("/saveBatch")
     public ResponseEntity<?> saveBatchConfig(@RequestBody List<Map<String, String>> configs) {
         for (Map<String, String> cfg : configs) {

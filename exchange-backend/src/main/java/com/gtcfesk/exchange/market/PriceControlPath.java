@@ -27,14 +27,21 @@ public final class PriceControlPath {
     }
 
     public static BigDecimal price(TradingSymbol symbol, long now) {
-        return interpolate(symbol, symbol.getControlStartPrice(), symbol.getControlTargetPrice(), now, true);
+        return price(symbol, now, 1);
+    }
+    public static BigDecimal price(TradingSymbol symbol, long now, int version) {
+        return interpolate(symbol, symbol.getControlStartPrice(), symbol.getControlTargetPrice(), now, true, version);
     }
 
     public static BigDecimal restoreOffset(TradingSymbol symbol, long now) {
-        return interpolate(symbol, symbol.getControlPriceOffset(), BigDecimal.ZERO, now, false);
+        return restoreOffset(symbol, now, 1);
+    }
+    public static BigDecimal restoreOffset(TradingSymbol symbol, long now, int version) {
+        return interpolate(symbol, symbol.getControlPriceOffset(), BigDecimal.ZERO, now, false, version);
     }
 
-    private static BigDecimal interpolate(TradingSymbol symbol, BigDecimal start, BigDecimal target, long now, boolean positive) {
+    private static BigDecimal interpolate(TradingSymbol symbol, BigDecimal start, BigDecimal target, long now, boolean positive, int version) {
+        if (version != 1 && version != 2) throw new IllegalArgumentException("Unsupported control algorithm " + version);
         long second = Math.max(0, (now - symbol.getControlStartedAt()) / 1000);
         int duration = symbol.getControlDurationSeconds();
         if (second >= duration) return target;
@@ -42,13 +49,18 @@ public final class PriceControlPath {
         BigDecimal delta = target.subtract(start);
         BigDecimal progress = BigDecimal.valueOf(second).divide(BigDecimal.valueOf(duration), MATH);
         BigDecimal price = start.add(delta.multiply(progress, MATH));
-        if (Boolean.TRUE.equals(symbol.getControlRandomOscillation())) {
+        if (version >= 2 || Boolean.TRUE.equals(symbol.getControlRandomOscillation())) {
             // Intensity scales noise in units of the average step; taper it to zero at both ends.
             BigDecimal step = delta.abs().divide(BigDecimal.valueOf(duration), MATH)
                 .max(symbol.getControlStartPrice().min(symbol.getControlTargetPrice()).multiply(new BigDecimal("0.0001")));
             long seed = symbol.getControlStartedAt() ^ symbol.getSymbol().hashCode() ^ (second * 0x9E3779B97F4A7C15L);
             double p = progress.doubleValue();
-            double noise = new SplittableRandom(seed).nextDouble(-1, 1) * 2 * symbol.getControlIntensity() * 4 * p * (1 - p);
+            // V1 remains byte-for-byte reproducible. V2 separates amplitude from wave shape:
+            // regular four-second waves when random is off, seeded random waves when on.
+            double wave = Boolean.TRUE.equals(symbol.getControlRandomOscillation())
+                ? new SplittableRandom(seed).nextDouble(-1, 1) * 2
+                : second % 4 == 1 ? 1 : second % 4 == 3 ? -1 : 0;
+            double noise = wave * symbol.getControlIntensity() * 4 * p * (1 - p);
             price = price.add(step.multiply(BigDecimal.valueOf(noise), MATH));
         }
         int precision = precision(symbol);

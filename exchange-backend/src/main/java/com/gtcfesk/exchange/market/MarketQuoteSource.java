@@ -30,8 +30,7 @@ import java.util.*;
 @Service
 public class MarketQuoteSource {
 
-    @Value("${market.quote.base-url:https://api.bitget.com/api/v3}")
-    private String baseUrl;
+    @Autowired private ExchangeQuoteSource exchange;
 
     @Value("${market.quote.alltick-url:https://quote.alltick.co/quote-b-api}")
     private String alltickUrl;
@@ -44,18 +43,11 @@ public class MarketQuoteSource {
     private final ObjectMapper objectMapper = new ObjectMapper();
 
 
-    private String mapMetalSymbolToBitget(String code) {
-        if (code == null) return code;
-        // XAUUSD -> XAUUSDT, XAGUSD -> XAGUSDT
-        if (code.toUpperCase().endsWith("USD")) {
-            return code.toUpperCase() + "T";
-        }
-        return code.toUpperCase();
-    }
-
-    private String mapSymbolToYahoo(String code, String category) {
+    static String mapSymbolToYahoo(String code, String category) {
         if (code == null) return code;
         String upperCode = code.toUpperCase();
+        // Explicit Yahoo identifiers must not be reinterpreted as legacy internal aliases (e.g. ^NDX).
+        if (upperCode.startsWith("^") || upperCode.endsWith("=X") || upperCode.endsWith("=F")) return upperCode;
         
         if ("Forex".equalsIgnoreCase(category)) {
             // Yahoo Finance 外汇交易对后缀为 =X，如 USDJPY -> USDJPY=X
@@ -121,51 +113,8 @@ public class MarketQuoteSource {
         try {
             Map<String, Object> normalized;
             
-            // 路由判断：如果是 Crypto 使用 Bitget，否则使用 Alltick
-            if ("Crypto".equalsIgnoreCase(category) || category == null) {
-                String intervalStr = convertIntervalToBitgetInterval(interval);
-                int queryNum = Math.min(requiredLimit, 1000); // Bitget max 1000
-
-                // URL: /market/candles?category=SPOT&symbol={code}&interval={interval}&limit={limit}
-                String urlStr = baseUrl + "/market/candles?category=SPOT&symbol=" + urlEncode(code) + "&interval=" + urlEncode(intervalStr) + "&limit=" + queryNum;
-                if (endTime != null) urlStr = urlStr.replace("/market/candles?", "/market/history-candles?") + "&endTime=" + endTime;
-                URI uri = URI.create(urlStr);
-
-                HttpHeaders headers = new HttpHeaders();
-                headers.add("User-Agent", "Mozilla/5.0");
-                headers.add("Accept", "application/json");
-                HttpEntity<String> entity = new HttpEntity<>(headers);
-
-                ResponseEntity<String> resp = http.get(uri);
-                if (!resp.getStatusCode().is2xxSuccessful() || resp.getBody() == null) {
-                    throw new RuntimeException("行情K线接口请求失败: " + resp.getStatusCode());
-                }
-
-                Map<String, Object> raw = objectMapper.readValue(resp.getBody(), new TypeReference<Map<String, Object>>() {});
-                normalized = normalizeSingleKlineResponse(raw, code, interval);
-            } else if ("Metal".equalsIgnoreCase(category)) {
-                // Metal: 使用 Bitget USDT-FUTURES (mix)
-                String bitgetSymbol = mapMetalSymbolToBitget(code);
-                String intervalStr = convertIntervalToBitgetInterval(interval);
-                int queryNum = Math.min(requiredLimit, 1000);
-
-                // Let's use v3 /market/candles?category=USDT-FUTURES
-                String urlStr = baseUrl + "/market/candles?category=USDT-FUTURES&symbol=" + urlEncode(bitgetSymbol) + "&interval=" + urlEncode(intervalStr) + "&limit=" + queryNum;
-                if (endTime != null) urlStr = urlStr.replace("/market/candles?", "/market/history-candles?") + "&endTime=" + endTime;
-                URI uri = URI.create(urlStr);
-
-                HttpHeaders headers = new HttpHeaders();
-                headers.add("User-Agent", "Mozilla/5.0");
-                headers.add("Accept", "application/json");
-                HttpEntity<String> entity = new HttpEntity<>(headers);
-
-                ResponseEntity<String> resp = http.get(uri);
-                if (!resp.getStatusCode().is2xxSuccessful() || resp.getBody() == null) {
-                    throw new RuntimeException("行情K线接口(Metal)请求失败: " + resp.getStatusCode());
-                }
-
-                Map<String, Object> raw = objectMapper.readValue(resp.getBody(), new TypeReference<Map<String, Object>>() {});
-                normalized = normalizeSingleKlineResponse(raw, code, interval);
+            if (ExchangeQuoteSource.supports(category)) {
+                return exchange.kline(code, interval, requiredLimit, category, endTime);
             } else if ("Forex".equalsIgnoreCase(category) || "US".equalsIgnoreCase(category) || "CFD".equalsIgnoreCase(category) || "Oil".equalsIgnoreCase(category)) {
                 // 使用 Yahoo Finance API
                 String yahooSymbol = mapSymbolToYahoo(code, category);
@@ -181,7 +130,7 @@ public class MarketQuoteSource {
                     long end = endTime / 1000;
                     // Extra calendar time covers market closures; the client validates actual coverage.
                     urlStr = yahooUrl + "/chart/" + urlEncode(yahooSymbol) + "?period1="
-                            + Math.max(0, end - seconds * requiredLimit * 3) + "&period2=" + end + "&interval=" + yahooInterval;
+                            + Math.max(0, end - Math.max(7 * 86400L, seconds * requiredLimit * 3)) + "&period2=" + end + "&interval=" + yahooInterval;
                 }
                 URI uri = URI.create(urlStr);
 
@@ -243,65 +192,8 @@ public class MarketQuoteSource {
             return new HashMap<>();
         }
         try {
-            if ("Crypto".equalsIgnoreCase(category) || category == null) {
-                // Since we have multiple codes, we fetch all SPOT tickers and filter
-                String urlStr = baseUrl + "/market/tickers?category=SPOT";
-                URI uri = URI.create(urlStr);
-
-                HttpHeaders headers = new HttpHeaders();
-                headers.add("User-Agent", "Mozilla/5.0");
-                headers.add("Accept", "application/json");
-                HttpEntity<String> entity = new HttpEntity<>(headers);
-
-                ResponseEntity<String> resp = http.get(uri);
-                if (!resp.getStatusCode().is2xxSuccessful() || resp.getBody() == null) {
-                    throw new RuntimeException("行情最新价接口请求失败: " + resp.getStatusCode());
-                }
-
-                Map<String, Object> raw = objectMapper.readValue(resp.getBody(), new TypeReference<Map<String, Object>>() {});
-                Map<String, Map<String, Object>> allPrices = normalizeTickResponseToPriceMap(raw);
-
-                Map<String, Map<String, Object>> prices = new HashMap<>();
-                for (String code : codes) {
-                    if (allPrices.containsKey(code)) {
-                        prices.put(code, allPrices.get(code));
-                    }
-                }
-
-
-
-                return prices;
-            } else if ("Metal".equalsIgnoreCase(category)) {
-                // Fetch all USDT-FUTURES tickers and filter
-                String urlStr = baseUrl + "/market/tickers?category=USDT-FUTURES";
-                URI uri = URI.create(urlStr);
-
-                HttpHeaders headers = new HttpHeaders();
-                headers.add("User-Agent", "Mozilla/5.0");
-                headers.add("Accept", "application/json");
-                HttpEntity<String> entity = new HttpEntity<>(headers);
-
-                ResponseEntity<String> resp = http.get(uri);
-                if (!resp.getStatusCode().is2xxSuccessful() || resp.getBody() == null) {
-                    throw new RuntimeException("行情最新价接口(Metal)请求失败: " + resp.getStatusCode());
-                }
-
-                Map<String, Object> raw = objectMapper.readValue(resp.getBody(), new TypeReference<Map<String, Object>>() {});
-                Map<String, Map<String, Object>> allPrices = normalizeTickResponseToPriceMap(raw);
-
-                Map<String, Map<String, Object>> prices = new HashMap<>();
-                for (String code : codes) {
-                    String bitgetSymbol = mapMetalSymbolToBitget(code);
-                    if (allPrices.containsKey(bitgetSymbol)) {
-                        Map<String, Object> found = allPrices.get(bitgetSymbol);
-                        found.put("symbol", code); // restore internal code
-                        prices.put(code, found);
-                    }
-                }
-
-
-
-                return prices;
+            if (ExchangeQuoteSource.supports(category)) {
+                return exchange.prices(codes, category);
             } else if ("Forex".equalsIgnoreCase(category) || "US".equalsIgnoreCase(category) || "CFD".equalsIgnoreCase(category) || "Oil".equalsIgnoreCase(category)) {
                 String yahooSymbols = codes.stream()
                         .map(c -> mapSymbolToYahoo(c, category))
@@ -449,8 +341,11 @@ public class MarketQuoteSource {
                     List<?> timestamps = (List<?>) dataMap.get("timestamp");
                     
                     if (closes != null && !closes.isEmpty() && timestamps != null && !timestamps.isEmpty()) {
-                        Double price = parseDouble(closes.get(closes.size() - 1));
-                        Long tickTime = parseLong(timestamps.get(timestamps.size() - 1)) * 1000; // 转为毫秒
+                        int index = Math.min(closes.size(), timestamps.size()) - 1;
+                        while (index >= 0 && (parseDouble(closes.get(index)) == null || parseLong(timestamps.get(index)) == null)) index--;
+                        if (index < 0) continue;
+                        Double price = parseDouble(closes.get(index));
+                        Long tickTime = parseLong(timestamps.get(index)) * 1000;
                         
                         Map<String, Object> priceData = new HashMap<>();
                         priceData.put("symbol", symbol);
@@ -471,6 +366,7 @@ public class MarketQuoteSource {
                         
                         // 即使 Yahoo 给了 previousClose，我们还是通过统一的 savePriceWith24h 处理，或者这里直接赋值
                         // 这里我们优先将解析出的数据存入，让 savePriceWith24h 来做兜底，为了避免 savePriceWith24h 覆盖，我们不覆盖它
+                        priceData.put("changeBasis", "previousClose");
                         priceData.put("change24h", change24h);
                         priceData.put("changePct24h", changePct24h);
                         
@@ -507,7 +403,8 @@ public class MarketQuoteSource {
                                         change24h = price - prevClose;
                                         changePct24h = (change24h / prevClose) * 100.0;
                                     }
-                                    priceData.put("change24h", change24h);
+                                    priceData.put("changeBasis", "previousClose");
+                        priceData.put("change24h", change24h);
                                     priceData.put("changePct24h", changePct24h);
                                     
                                     result.put(resSymbol, priceData);
@@ -599,82 +496,6 @@ public class MarketQuoteSource {
         return result;
     }
 
-    private Map<String, Object> normalizeSingleKlineResponse(Map<String, Object> raw, String code, String interval) {
-        // { ret:200, msg:"ok", data: { code, kline_list:[{timestamp, open_price, high_price, low_price, close_price, volume, turnover}] } }
-        Map<String, Object> result = new HashMap<>();
-        String bitgetCode = String.valueOf(raw.getOrDefault("code", "500"));
-        int ret = "00000".equals(bitgetCode) ? 200 : 500;
-        result.put("ret", ret);
-        result.put("msg", String.valueOf(raw.getOrDefault("msg", "ok")));
-
-        Map<String, Object> dataOut = new HashMap<>();
-        dataOut.put("code", code);
-
-        Object data = raw.get("data");
-        if (data instanceof List) {
-            @SuppressWarnings("unchecked")
-            List<List<String>> list = (List<List<String>>) data;
-            List<Map<String, Object>> normalizedList = new ArrayList<>();
-            for (List<String> item : list) {
-                if (item != null && item.size() >= 7) {
-                    normalizedList.add(normalizeKlineItem(item));
-                }
-            }
-            // 按 timestamp 升序排序，保证前端画图一致
-            normalizedList.sort(Comparator.comparingLong(m -> ((Number) m.getOrDefault("timestamp", 0L)).longValue()));
-            dataOut.put("kline_list", normalizedList);
-        } else {
-            dataOut.put("kline_list", Collections.emptyList());
-        }
-
-        result.put("data", dataOut);
-        return result;
-    }
-
-    private Map<String, Object> normalizeKlineItem(List<String> item) {
-        Map<String, Object> out = new HashMap<>();
-        // timestamp in Bitget is ms string, Alltick might have been seconds but we parse it.
-        // Assuming frontend expects seconds:
-        Long tsMs = parseLong(item.get(0));
-        out.put("timestamp", tsMs != null ? tsMs / 1000 : 0L); // Convert to seconds to match old format assumption
-        out.put("open_price", parseDouble(item.get(1)));
-        out.put("high_price", parseDouble(item.get(2)));
-        out.put("low_price", parseDouble(item.get(3)));
-        out.put("close_price", parseDouble(item.get(4)));
-        out.put("volume", parseDouble(item.get(5)));
-        out.put("turnover", parseDouble(item.get(6)));
-        return out;
-    }
-
-
-
-    private Map<String, Map<String, Object>> normalizeTickResponseToPriceMap(Map<String, Object> raw) {
-        if (!"00000".equals(String.valueOf(raw.get("code")))) throw new MarketHttp.Failure("invalid_response", 0);
-        Map<String, Map<String, Object>> result = new HashMap<>();
-        Object data = raw.get("data");
-        if (!(data instanceof List)) {
-            return result;
-        }
-
-        @SuppressWarnings("unchecked")
-        List<Map<String, Object>> tickList = (List<Map<String, Object>>) data;
-        for (Map<String, Object> t : tickList) {
-            String code = t.get("symbol") != null ? String.valueOf(t.get("symbol")) : null;
-            if (code == null || code.isEmpty()) continue;
-            Double price = parseDouble(t.get("lastPrice"));
-            Long tickTime = parseLong(t.get("ts")); // Source quote time, never substitute response/fetch time.
-            Map<String, Object> priceData = new HashMap<>();
-            priceData.put("symbol", code);
-            priceData.put("price", price != null ? price : 0.0);
-            priceData.put("timestamp", tickTime);
-            // change24h / changePct24h 由Redis保存时计算；这里先填0，WS/HTTP侧会覆写
-            priceData.put("change24h", 0.0);
-            priceData.put("changePct24h", 0.0);
-            result.put(code, priceData);
-        }
-        return result;
-    }
-
     private int convertIntervalToKlineType(String interval) {
         if (interval == null) return 1;
         String v = interval.trim().toLowerCase(Locale.ROOT);
@@ -706,32 +527,6 @@ public class MarketQuoteSource {
                 return 10;
             default:
                 return 1;
-        }
-    }
-
-    private String convertIntervalToBitgetInterval(String interval) {
-        if (interval == null) return "1m";
-        String v = interval.trim().toLowerCase(Locale.ROOT);
-        switch (v) {
-            case "1m": return "1m";
-            case "3m": return "3m";
-            case "5m": return "5m";
-            case "15m": return "15m";
-            case "30m": return "30m";
-            case "1h":
-            case "60m": return "1H";
-            case "2h": return "1H"; // fallback
-            case "4h": return "4H";
-            case "6h": return "6H";
-            case "12h": return "12H";
-            case "1d":
-            case "d": return "1D";
-            case "1w":
-            case "w": return "1W";
-            case "1mo":
-            case "m":
-            case "mo": return "1M";
-            default: return "1m";
         }
     }
 

@@ -22,6 +22,8 @@ public final class QuoteState {
             || now - time(result.get("fetchedAt")) > maxAgeMs;
         boolean available = !expired && !Boolean.FALSE.equals(result.get("sourceAvailable"));
         result.put("available", available);
+        result.put("tradeAvailable", available);
+        result.put("displayAvailable", valid(result));
         result.put("stale", expired);
         result.put("status", !valid(result) ? "unavailable" : expired ? "stale" : available ? "available" : "unavailable");
         result.put("sourceTimestamp", result.get("timestamp"));

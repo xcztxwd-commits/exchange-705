@@ -11,14 +11,14 @@ public class MarketPriceController {
     @Autowired private ForexQuoteMarketService marketService;
     @GetMapping("/{symbol}")
     public ResponseEntity<?> getPrice(@PathVariable String symbol) {
-        return ResponseEntity.ok(response(marketService.internalPrice(symbol)));
+        return ResponseEntity.ok(response(marketService.snapshotPrice(symbol)));
     }
     @PostMapping("/batch")
     public ResponseEntity<?> getBatchPrice(@RequestBody Map<String, Object> request) {
         List<String> symbols = requestedSymbols(request);
         if (symbols == null) return ResponseEntity.badRequest().body(Collections.singletonMap("error", "symbols must contain 1-512 strings"));
         Map<String, Object> data = new LinkedHashMap<>();
-        for (String symbol : symbols) data.put(symbol, marketService.internalPrice(symbol));
+        for (String symbol : symbols) data.put(symbol, marketService.snapshotPrice(symbol));
         return ResponseEntity.ok(response(data));
     }
     static Map<String, Object> response(Object data) {

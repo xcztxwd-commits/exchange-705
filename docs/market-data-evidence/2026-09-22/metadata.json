@@ -1,0 +1,176 @@
+[
+  {
+    "symbol": "^FTSE",
+    "at": 1790069263088,
+    "regularMarketTime": 1790068361,
+    "exchangeName": "FGI",
+    "fullExchangeName": "FTSE Index",
+    "currentTradingPeriod": {
+      "pre": {
+        "timezone": "BST",
+        "start": 1790057700,
+        "end": 1790060400,
+        "gmtoffset": 3600
+      },
+      "regular": {
+        "timezone": "BST",
+        "start": 1790060400,
+        "end": 1790091000,
+        "gmtoffset": 3600
+      },
+      "post": {
+        "timezone": "BST",
+        "start": 1790091000,
+        "end": 1790093700,
+        "gmtoffset": 3600
+      }
+    },
+    "exchangeTimezoneName": "Europe/London",
+    "dataGranularity": "1m"
+  },
+  {
+    "symbol": "^GDAXI",
+    "at": 1790069263156,
+    "regularMarketTime": 1790068362,
+    "exchangeName": "GER",
+    "fullExchangeName": "XETRA",
+    "currentTradingPeriod": {
+      "pre": {
+        "timezone": "CEST",
+        "start": 1790053200,
+        "end": 1790060400,
+        "gmtoffset": 7200
+      },
+      "regular": {
+        "timezone": "CEST",
+        "start": 1790060400,
+        "end": 1790091000,
+        "gmtoffset": 7200
+      },
+      "post": {
+        "timezone": "CEST",
+        "start": 1790091000,
+        "end": 1790101800,
+        "gmtoffset": 7200
+      }
+    },
+    "exchangeTimezoneName": "Europe/Berlin",
+    "dataGranularity": "1m"
+  },
+  {
+    "symbol": "^FCHI",
+    "at": 1790069263231,
+    "regularMarketTime": 1790068350,
+    "exchangeName": "PAR",
+    "fullExchangeName": "Paris",
+    "currentTradingPeriod": {
+      "pre": {
+        "timezone": "CEST",
+        "start": 1790060400,
+        "end": 1790060400,
+        "gmtoffset": 7200
+      },
+      "regular": {
+        "timezone": "CEST",
+        "start": 1790060400,
+        "end": 1790091000,
+        "gmtoffset": 7200
+      },
+      "post": {
+        "timezone": "CEST",
+        "start": 1790091000,
+        "end": 1790091000,
+        "gmtoffset": 7200
+      }
+    },
+    "exchangeTimezoneName": "Europe/Paris",
+    "dataGranularity": "1m"
+  },
+  {
+    "symbol": "^GSPC",
+    "at": 1790069263293,
+    "regularMarketTime": 1790023862,
+    "exchangeName": "SNP",
+    "fullExchangeName": "SNP",
+    "currentTradingPeriod": {
+      "pre": {
+        "timezone": "EDT",
+        "start": 1790064000,
+        "end": 1790083800,
+        "gmtoffset": -14400
+      },
+      "regular": {
+        "timezone": "EDT",
+        "start": 1790083800,
+        "end": 1790107200,
+        "gmtoffset": -14400
+      },
+      "post": {
+        "timezone": "EDT",
+        "start": 1790107200,
+        "end": 1790121600,
+        "gmtoffset": -14400
+      }
+    },
+    "exchangeTimezoneName": "America/New_York",
+    "dataGranularity": "1m"
+  },
+  {
+    "symbol": "^IXIC",
+    "at": 1790069263377,
+    "regularMarketTime": 1790025359,
+    "exchangeName": "NIM",
+    "fullExchangeName": "Nasdaq GIDS",
+    "currentTradingPeriod": {
+      "pre": {
+        "timezone": "EDT",
+        "start": 1790064000,
+        "end": 1790083800,
+        "gmtoffset": -14400
+      },
+      "regular": {
+        "timezone": "EDT",
+        "start": 1790083800,
+        "end": 1790107200,
+        "gmtoffset": -14400
+      },
+      "post": {
+        "timezone": "EDT",
+        "start": 1790107200,
+        "end": 1790121600,
+        "gmtoffset": -14400
+      }
+    },
+    "exchangeTimezoneName": "America/New_York",
+    "dataGranularity": "1m"
+  },
+  {
+    "symbol": "^DJI",
+    "at": 1790069263440,
+    "regularMarketTime": 1790023857,
+    "exchangeName": "DJI",
+    "fullExchangeName": "DJI",
+    "currentTradingPeriod": {
+      "pre": {
+        "timezone": "EDT",
+        "end": 1790083800,
+        "start": 1790064000,
+        "gmtoffset": -14400
+      },
+      "regular": {
+        "timezone": "EDT",
+        "end": 1790107200,
+        "start": 1790083800,
+        "gmtoffset": -14400
+      },
+      "post": {
+        "timezone": "EDT",
+        "end": 1790121600,
+        "start": 1790107200,
+        "gmtoffset": -14400
+      }
+    },
+    "exchangeTimezoneName": "America/New_York",
+    "dataGranularity": "1m"
+  }
+]

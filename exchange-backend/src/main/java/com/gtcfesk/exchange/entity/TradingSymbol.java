@@ -13,6 +13,9 @@ import java.time.LocalDateTime;
 @Entity
 @Table(name = "trading_symbol")
 public class TradingSymbol {
+    @Transient
+    private Boolean leverageEnabled = true;
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -61,6 +64,16 @@ public class TradingSymbol {
 
     @Column(name = "alltick_symbol", length = 64)
     private String alltickSymbol; // Alltick API中的symbol
+
+    @Column(name = "market_source", length = 16, nullable = false)
+    private String marketSource;
+
+    @Column(name = "source_category", length = 32, nullable = false)
+    private String sourceCategory;
+
+    @JsonIgnore
+    @Column(name = "market_instrument_key", length = 128, unique = true)
+    private String marketInstrumentKey;
 
     @Column(name = "current_price", precision = 32, scale = 16)
     private BigDecimal currentPrice = BigDecimal.ZERO;
@@ -120,6 +133,22 @@ public class TradingSymbol {
     @JsonIgnore
     @Column(name = "control_restoring")
     private Boolean controlRestoring;
+
+    @JsonIgnore
+    @Column(name = "random_market_enabled")
+    private Boolean randomMarketEnabled = false;
+
+    @JsonIgnore
+    @Column(name = "random_market_started_at")
+    private Long randomMarketStartedAt;
+
+    @JsonIgnore
+    @Column(name = "random_market_base_price", precision = 32, scale = 16)
+    private BigDecimal randomMarketBasePrice;
+
+    @JsonIgnore
+    @Column(name = "random_market_controls", columnDefinition = "LONGTEXT")
+    private String randomMarketControls;
 
     @JsonIgnore
     @Version

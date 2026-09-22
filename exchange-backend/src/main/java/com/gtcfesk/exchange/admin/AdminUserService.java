@@ -45,6 +45,8 @@ import java.util.HashMap;
 @Service
 public class AdminUserService {
     @Autowired
+    private com.gtcfesk.exchange.user.FiatCurrencyService fiatCurrencyService;
+    @Autowired
     private UserAccountRepository userAccountRepository;
 
     @Autowired
@@ -314,6 +316,23 @@ public class AdminUserService {
             throw new IllegalArgumentException("userId 不能为空");
         }
 
+        if (req.getAmount() != null) {
+            if (!java.util.Arrays.asList("FUND", "CONTRACT", "OPTION").contains(req.getAccount())) {
+                throw new IllegalArgumentException("无效账户");
+            }
+            if (!userAccountRepository.existsById(userId)) throw new IllegalArgumentException("用户不存在");
+            BigDecimal usd = fiatCurrencyService.toUsd(req.getAmount(), fiatCurrencyService.rate(req.getCurrency()));
+            AssetAccount account = assetAccountRepository.findByUserIdAndCoin(userId, req.getAccount())
+                    .orElseGet(() -> {
+                        AssetAccount created = new AssetAccount();
+                        created.setUserId(userId);
+                        created.setCoin(req.getAccount());
+                        return created;
+                    });
+            account.setAvailable((account.getAvailable() == null ? BigDecimal.ZERO : account.getAvailable()).add(usd));
+            assetAccountRepository.save(account);
+            return;
+        }
         updateSingleBalance(userId, "FUND", req.getFundBalance());
         updateSingleBalance(userId, "CONTRACT", req.getContractBalance());
         updateSingleBalance(userId, "OPTION", req.getOptionBalance());

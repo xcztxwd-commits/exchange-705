@@ -72,7 +72,7 @@ onMounted(() => {
       >
         <div class="record-row">
           <span class="record-label">{{ localeStore.t('depositAmountLabel') }}</span>
-          <span class="record-value">{{ formatMoney(record.amount) }}</span>
+          <span class="record-value">{{ formatMoney(record.originalAmount ?? record.amount) }} {{ record.currency || 'USD' }} · {{ formatMoney(record.amount) }} USD</span>
         </div>
         <div class="record-row">
           <span class="record-label">{{ localeStore.t('depositType') }}</span>

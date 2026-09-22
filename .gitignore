@@ -21,6 +21,8 @@ target/
 *.tar.gz
 *.jar
 *.class
+__pycache__/
+*.pyc
 *.pem
 *.key
 
@@ -29,3 +31,4 @@ target/
 !exchange-backend/src/main/resources/db/manual/705-limit-matching.sql
 !exchange-backend/src/main/resources/db/manual/705-user-leverage.sql
 !exchange-backend/src/main/resources/db/manual/705-price-control.sql
+!exchange-backend/src/main/resources/db/migration/create_control_history.sql

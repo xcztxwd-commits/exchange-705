@@ -9,11 +9,11 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class ExecutionQuoteTest {
     @Test @SuppressWarnings("unchecked")
-    void executableQuotesKeepAdminOffsetsButNeverReviveStaleOrInvalidPrices() {
+    void controlsKeepOffsetsExecutableDuringOutagesButPlainAndInvalidQuotesRemainBlocked() {
         ForexQuoteMarketService quotes = new ForexQuoteMarketService();
         try {
             TradingSymbol symbol = new TradingSymbol();
-            symbol.setSymbol("XAUUSD"); symbol.setCategory("Metal"); symbol.setAlltickSymbol("XAUUSD_SOURCE");
+            symbol.setSymbol("XAUUSD"); symbol.setCategory("Metal"); symbol.setSourceCategory("Metal"); symbol.setMarketSource(com.gtcfesk.exchange.market.MarketInstrumentCatalog.inferredSource("Metal")); symbol.setAlltickSymbol("XAUUSD_SOURCE");
             symbol.setControlEnabled(true); symbol.setControlPriceOffset(new BigDecimal("5"));
             ReflectionTestUtils.setField(quotes, "registry", Collections.singletonMap(symbol.getSymbol(), symbol));
             Map<String, Object> groups = (Map<String, Object>) ReflectionTestUtils.getField(quotes, "groups");
@@ -28,8 +28,16 @@ class ExecutionQuoteTest {
             symbol.setControlEnabled(true); symbol.setControlPriceOffset(new BigDecimal("-100"));
             assertNull(quotes.freshPrice("XAUUSD"));
             symbol.setControlPriceOffset(new BigDecimal("5"));
-            raw.put("timestamp", System.currentTimeMillis() - 60000); assertNull(quotes.freshPrice("XAUUSD"));
-            raw.put("timestamp", System.currentTimeMillis()); raw.put("sourceAvailable", false); assertNull(quotes.freshPrice("XAUUSD"));
+            raw.put("timestamp", System.currentTimeMillis() - 60000);
+            assertEquals(0, new BigDecimal("105").compareTo(quotes.freshPrice("XAUUSD")));
+            assertEquals(raw.get("timestamp"), quotes.internalPrice("XAUUSD").get("timestamp"));
+            assertEquals(raw.get("timestamp"), quotes.internalPrice("XAUUSD").get("sourceTimestamp"));
+            symbol.setControlEnabled(false); assertNull(quotes.freshPrice("XAUUSD"));
+            raw.put("timestamp", System.currentTimeMillis()); raw.put("sourceAvailable", false);
+            assertNull(quotes.freshPrice("XAUUSD"));
+            symbol.setControlEnabled(true);
+            assertEquals(0, new BigDecimal("105").compareTo(quotes.freshPrice("XAUUSD")));
+            raw.put("price", Double.NaN); assertNull(quotes.freshPrice("XAUUSD"));
             assertNull(quotes.freshPrice("UNKNOWN"));
         } finally { quotes.stop(); }
     }

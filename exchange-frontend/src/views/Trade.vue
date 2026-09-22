@@ -4,11 +4,16 @@ import { useRoute } from 'vue-router'
 import Tabbar from '@/components/Tabbar.vue'
 import KlineChart from '@/components/KlineChart.vue'
 import SuccessModal from '@/components/SuccessModal.vue'
+import LeverageControl from '@/components/LeverageControl.vue'
+import PositionSizing from '@/components/PositionSizing.vue'
+import { useOrderSizing } from '@/utils/useOrderSizing'
+import marketWebSocket from '@/utils/marketWebSocket';
 import { useMarketStore } from '@/store/market'
 import { useAuthStore } from '@/store/auth'
 import { useLocaleStore } from '@/store/locale'
 import request from '@/utils/request'
-import { DEFAULT_LEVERAGE, leverageLimit, leverageChoices, contractMargin } from '@/utils/contract'
+import { getImageUrl } from '@/utils/imageUrl'
+import { DEFAULT_LEVERAGE, leverageLimit, contractMargin } from '@/utils/contract'
 // 市场休市时间判断已移除，改用阿里云市场API返回的数据来判断市场状态
 import { formatDateTime, formatTime } from '@/utils/dateTime'
 
@@ -23,7 +28,7 @@ localeStore.loadLocale()
 const activeTab = ref<'contract' | 'term'>((route.query.tab as 'contract' | 'term') || 'term')
 
 // 当前选中的交易对（从路由参数获取，如果没有则使用默认值）
-const currentSymbol = ref((route.query.symbol as string) || 'BTCUSD')
+const currentSymbol = ref('')
 const currentCategory = ref((route.query.category as string) || 'Crypto')
 // 标记是否已经完成了首次初始化
 const isInitialized = ref(false)
@@ -483,7 +488,8 @@ function formatPrice(price: number | null | undefined, precision: number = 2) {
 }
 
 function formatMoney(v: number | string | undefined | null) {
-  const n = Number(v || 0)
+  const n = Number(v ?? 0)
+  if (!Number.isFinite(n)) return '--'
   return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
@@ -496,7 +502,7 @@ async function selectSymbol(symbol: string, category: string) {
   currentSymbolInfo.value = allSymbols.value.find((item: any) => item.symbol === symbol) || null
   
   // 确保该分类的市场服务已初始化（HTTP轮询）
-  await marketStore.initMarketService(category)
+  await marketStore.initMarketService(category, 'trade-category')
   
   // 订阅实时价格（HTTP轮询）
   console.log('[Trade] Selecting symbol:', symbol, 'category:', category)
@@ -579,7 +585,7 @@ function getKlineLow(): number {
 function adjustQuantity(delta: number) {
   const step = 0.01
   const newValue = buyQuantity.value + delta * step
-  buyQuantity.value = Math.max(step, Math.round(newValue / step) * step)
+  buyQuantity.value = Math.max(0, Math.round(newValue / step) * step)
 }
 
 // 调整止损（合约交易：按步长1调整）
@@ -650,7 +656,7 @@ async function handleBuy() {
     }
     
     // 验证数量
-    if (buyQuantity.value <= 0) {
+    if (!Number.isFinite(buyQuantity.value) || buyQuantity.value < 0.01) {
       showToast(localeStore.t('enterValidQuantity'), 'error')
       return
     }
@@ -661,6 +667,8 @@ async function handleBuy() {
       return
     }
     
+    if (!orderReady.value) return
+
     // 调用买入接口
     const orderData = {
       symbol: currentSymbol.value,
@@ -707,7 +715,7 @@ async function handleSell() {
     }
     
     // 验证数量
-    if (buyQuantity.value <= 0) {
+    if (!Number.isFinite(buyQuantity.value) || buyQuantity.value < 0.01) {
       showToast(localeStore.t('enterValidQuantity'), 'error')
       return
     }
@@ -719,6 +727,8 @@ async function handleSell() {
     }
     
     // 调用卖出接口
+    if (!orderReady.value) return
+
     const orderData = {
       symbol: currentSymbol.value,
       side: 'SELL',
@@ -1015,14 +1025,22 @@ const feeMultiplier = computed(() => {
   return 30
 })
 
-const maxLeverage = computed(() => leverageLimit(currentSymbolInfo.value?.maxLeverage))
-const leverageOptions = computed(() => leverageChoices(maxLeverage.value))
+const maxLeverage = computed(() => leverageLimit(currentSymbolInfo.value?.maxLeverage, currentSymbolInfo.value?.leverageEnabled !== false))
 watch(maxLeverage, max => { selectedLeverage.value = Math.min(selectedLeverage.value, max) })
+
+const { allocationPercent, setAllocation, canAllocate, orderReady, liquidation, refreshAccount } = useOrderSizing({
+  catalog: allSymbols,
+  quantity: buyQuantity, leverage: selectedLeverage, available: contractBalance,
+  active: computed(() => activeTab.value === 'contract'), symbol: currentSymbol,
+  price: computed(() => orderType.value === 'limit' ? Number(limitPrice.value) : currentPrice.value),
+  lotSize, feePerLot: feeMultiplier, currency: computed(() => currentSymbolInfo.value?.quoteCurrency || 'USD'),
+})
+watch(contractBalance, value => { if (activeTab.value === 'contract') balance.value = value })
 
 // 市价按当前行情预估，挂单按限价预留。
 const estimatedMargin = computed(() => contractMargin(
   Number(buyQuantity.value), lotSize.value,
-  orderType.value === 'limit' ? Number(limitPrice.value) : currentPrice.value, selectedLeverage.value,
+  orderType.value === 'limit' ? Number(limitPrice.value) : currentPrice.value, selectedLeverage.value, marketStore.getConversionRate(currentSymbol.value, currentSymbolInfo.value?.quoteCurrency),
 ))
 
 // 计算预估手续费 = 买入数量 × 手续费倍数
@@ -1035,7 +1053,7 @@ const estimatedFee = computed(() => {
 
 // 计算总费用（预估保证金 + 预估手续费）
 const totalCost = computed(() => {
-  const margin = Number(estimatedMargin.value) || 0
+  const margin = Number(estimatedMargin.value)
   const fee = Number(estimatedFee.value) || 0
   return margin + fee
 })
@@ -1096,7 +1114,7 @@ async function loadAllSymbols() {
     
     console.log('[Trade] Starting batch subscription for all symbols...')
     // 异步订阅，在后台执行（类似首页）
-    marketStore.subscribeSymbols(symbolListForSubscription).then(() => {
+    marketStore.subscribeSymbols(symbolListForSubscription, 'trade').then(() => {
       console.log('[Trade] ✅ Batch subscription completed for all symbols')
     }).catch((error) => {
       console.error('[Trade] Batch subscription failed:', error)
@@ -1176,36 +1194,8 @@ function getSymbolChange(symbol: string) {
 
 // 加载合约余额
 async function loadContractBalance() {
-  try {
-    const user = auth.user
-    if (!user?.id) {
-      console.warn('用户未登录，无法加载合约余额')
-      return
-    }
-    
-    const res: any = await request.get('/trade/contract/balance')
-    if (res && res.success !== false) {
-      contractBalance.value = Number(res.balance || res.available || 0)
-      if (activeTab.value === 'contract') {
-        balance.value = contractBalance.value // 合约交易使用合约余额
-      }
-    } else {
-      console.error('加载合约余额失败:', res?.message || '未知错误')
-      showToast(res?.message || localeStore.t('loadContractBalanceFailed'), 'error')
-      contractBalance.value = 0
-      if (activeTab.value === 'contract') {
-        balance.value = 0
-      }
-    }
-  } catch (e: any) {
-    console.error('加载合约余额失败:', e)
-    const errorMsg = e.response?.data?.message || e.message || localeStore.t('loadContractBalanceFailed')
-    showToast(errorMsg, 'error')
-    contractBalance.value = 0
-    if (activeTab.value === 'contract') {
-      balance.value = 0
-    }
-  }
+  await refreshAccount()
+  if (activeTab.value === 'contract') balance.value = contractBalance.value
 }
 
 // 加载期权余额
@@ -1332,10 +1322,13 @@ onMounted(async () => {
   // 先加载所有币种（建立映射关系，类似首页）
   console.log('[Trade] Loading all symbols first...')
   await loadAllSymbols()
+  const initialSymbol = allSymbols.value.find((s: any) => s.symbol === route.query.symbol) || allSymbols.value[0]
+  currentCategory.value = initialSymbol?.category || currentCategory.value
+
   
   // 初始化市场服务（HTTP轮询）
   console.log('[Trade] Initializing market service for category:', currentCategory.value)
-  await marketStore.initMarketService(currentCategory.value)
+  await marketStore.initMarketService(currentCategory.value, 'trade-category')
   
   // 等待服务初始化完成
   await new Promise(resolve => setTimeout(resolve, 1000))
@@ -1343,20 +1336,9 @@ onMounted(async () => {
   // 加载当前分类的交易对列表（从已加载的 allSymbols 中过滤）
   await loadSymbols()
   
-  // 如果路由中有币种参数，使用路由参数
-  if (route.query.symbol && route.query.category) {
-    const symbol = route.query.symbol as string
-    const category = route.query.category as string
-    // 获取对应的 alltickSymbol
-    const alltickSymbol = symbolToAlltickMap.value.get(symbol) || symbol
-    console.log('[Trade] Route params - symbol:', symbol, 'alltickSymbol:', alltickSymbol, 'category:', category)
-    await selectSymbol(symbol, category)
-  } else if (symbols.value.length > 0) {
-    // 【彻底修复跳变问题】：不管是否在列表中，如果是初次加载（且没有带路由参数），直接强制选中并订阅当前的默认值 currentSymbol.value（BTCUSD）。
-    console.log('[Trade] No route params, enforcing default symbol:', currentSymbol.value)
-    await selectSymbol(currentSymbol.value, currentCategory.value)
-  }
-  
+  if (initialSymbol) await selectSymbol(initialSymbol.symbol, initialSymbol.category)
+  else { currentSymbol.value = ''; currentSymbolInfo.value = null }
+
   // 添加点击外部关闭下拉菜单的事件监听
   document.addEventListener('click', handleClickOutside)
   
@@ -1373,6 +1355,9 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  marketWebSocket.release('trade')
+  marketWebSocket.release('trade-category')
+  marketWebSocket.release('active')
   // 移除事件监听
   document.removeEventListener('click', handleClickOutside)
   // 清理倒计时定时器
@@ -1489,7 +1474,7 @@ onUnmounted(() => {
           :class="{ active: symbol.symbol === currentSymbol }"
           @click="selectSymbolFromDropdown(symbol)"
         >
-          <span class="symbol-item-name">{{ symbol.symbol }}</span>
+          <span class="symbol-item-name" style="display:flex;align-items:center;gap:8px"><img v-if="symbol.iconUrl" :src="getImageUrl(symbol.iconUrl)" alt="" width="28" height="28" />{{ symbol.symbol }}</span>
           <span
             class="symbol-item-price"
             :style="{ color: (getSymbolChange(symbol.symbol)?.changePct || 0) >= 0 ? '#26a69a' : '#ef5350' }"
@@ -1503,6 +1488,7 @@ onUnmounted(() => {
     <!-- 合约订单区域 -->
     <div class="order-section" v-if="activeTab === 'contract'">
       <!-- 订单类型标签页 -->
+      <div class="order-toolbar">
       <div class="order-type-tabs">
         <button
           class="order-tab-btn"
@@ -1520,6 +1506,9 @@ onUnmounted(() => {
         </button>
       </div>
 
+      <LeverageControl v-model="selectedLeverage" :max="maxLeverage" :disabled="!currentSymbolInfo" :symbol="currentSymbol" />
+      </div>
+
       <!-- 挂单价格输入（仅在挂单模式下显示） -->
       <div class="order-item" v-if="orderType === 'limit'">
         <div class="order-label">{{ localeStore.t('price') }}</div>
@@ -1533,6 +1522,40 @@ onUnmounted(() => {
         />
       </div>
 
+      <!-- 买入数量 -->
+      <div class="order-item">
+        <div class="order-label">{{ localeStore.t('buyQuantityLabel') }}</div>
+        <div class="order-input-group">
+          <button class="input-btn" @click="adjustQuantity(-1)">-</button>
+          <input type="number" v-model.number="buyQuantity" step="0.01" min="0" class="order-input" />
+          <button class="input-btn" @click="adjustQuantity(1)">+</button>
+        </div>
+      </div>
+
+      <PositionSizing :percent="allocationPercent" :disabled="!canAllocate" :buy="liquidation.buy" :sell="liquidation.sell" :precision="currentSymbolInfo?.pricePrecision ?? 2" @change="setAllocation">
+      <!-- 交易详情 -->
+      <div class="trade-details">
+        <div class="detail-row">
+          <span class="detail-label">{{ localeStore.t('perLot') }}</span>
+          <span class="detail-value">1{{ localeStore.t('lots') }} = {{ Math.round(lotSize || 0) }} {{ currentSymbol }}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">{{ localeStore.t('estimatedFee') }}</span>
+          <span class="detail-value">{{ formatMoney(estimatedFee) }}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">{{ localeStore.t('estimatedMargin') }}</span>
+          <span class="detail-value">{{ formatMoney(estimatedMargin) }}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">{{ localeStore.t('balance') }}</span>
+          <span class="detail-value">{{ formatMoney(balance) }}</span>
+        </div>
+      </div>
+
+      </PositionSizing>
+
+      <div class="order-risk-controls">
       <!-- 止损 -->
       <div class="order-item">
         <div class="order-item-header">
@@ -1565,53 +1588,13 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <div class="order-item leverage-selector">
-        <div class="order-item-header">
-          <label class="order-label" for="contract-leverage">{{ localeStore.t('leverage') }}</label>
-          <output for="contract-leverage" class="leverage-value">{{ selectedLeverage }}×</output>
-        </div>
-        <input id="contract-leverage" v-model.number="selectedLeverage" type="range" min="1" :max="maxLeverage" step="1"
-          :aria-valuetext="`${selectedLeverage}×`" :disabled="!currentSymbolInfo || maxLeverage === 1" class="leverage-slider" />
-        <div class="leverage-presets">
-          <button v-for="value in leverageOptions" :key="value" type="button" :aria-pressed="selectedLeverage === value"
-            :disabled="!currentSymbolInfo" @click="selectedLeverage = value">{{ value }}×</button>
-        </div>
-      </div>
-
-      <!-- 买入数量 -->
-      <div class="order-item">
-        <div class="order-label">{{ localeStore.t('buyQuantityLabel') }}</div>
-        <div class="order-input-group">
-          <button class="input-btn" @click="adjustQuantity(-1)">-</button>
-          <input type="number" v-model.number="buyQuantity" step="0.01" min="0.01" class="order-input" />
-          <button class="input-btn" @click="adjustQuantity(1)">+</button>
-        </div>
-      </div>
-
-      <!-- 交易详情 -->
-      <div class="trade-details">
-        <div class="detail-row">
-          <span class="detail-label">{{ localeStore.t('perLot') }}</span>
-          <span class="detail-value">1{{ localeStore.t('lots') }} = {{ Math.round(lotSize || 0) }} {{ currentSymbol }}</span>
-        </div>
-        <div class="detail-row">
-          <span class="detail-label">{{ localeStore.t('estimatedFee') }}</span>
-          <span class="detail-value">{{ formatMoney(estimatedFee) }}</span>
-        </div>
-        <div class="detail-row">
-          <span class="detail-label">{{ localeStore.t('estimatedMargin') }}</span>
-          <span class="detail-value">{{ formatMoney(estimatedMargin) }}</span>
-        </div>
-        <div class="detail-row">
-          <span class="detail-label">{{ localeStore.t('balance') }}</span>
-          <span class="detail-value">{{ formatMoney(balance) }}</span>
-        </div>
       </div>
 
       <!-- 买入/卖出按钮 -->
+      <p v-if="currentSymbolInfo && !Number.isFinite(estimatedMargin)" role="status">{{ localeStore.locale === 'zh-TW' ? '結算匯率暫不可用' : 'Settlement rate unavailable' }}</p>
       <div class="trade-buttons">
-        <button class="buy-btn" :disabled="isMarketClosed || !currentSymbolInfo" @click="handleBuy">{{ localeStore.t('buy') }}</button>
-        <button class="sell-btn" :disabled="isMarketClosed || !currentSymbolInfo" @click="handleSell">{{ localeStore.t('sell') }}</button>
+        <button class="buy-btn" :disabled="isMarketClosed || !currentSymbolInfo || !orderReady" @click="handleBuy">{{ localeStore.t('buy') }}</button>
+        <button class="sell-btn" :disabled="isMarketClosed || !currentSymbolInfo || !orderReady" @click="handleSell">{{ localeStore.t('sell') }}</button>
       </div>
     </div>
 
@@ -1646,7 +1629,7 @@ onUnmounted(() => {
       <div class="term-action-buttons">
         <button 
           class="term-action-btn buy-action" 
-          :disabled="isMarketClosed"
+          :disabled="isMarketClosed || !currentSymbolInfo"
           @click="openTermOrderModal('UP')"
         >
           <div class="term-action-btn-content">
@@ -1658,7 +1641,7 @@ onUnmounted(() => {
         </button>
         <button 
           class="term-action-btn sell-action" 
-          :disabled="isMarketClosed"
+          :disabled="isMarketClosed || !currentSymbolInfo"
           @click="openTermOrderModal('DOWN')"
         >
           <div class="term-action-btn-content">
@@ -1762,7 +1745,7 @@ onUnmounted(() => {
           <button 
             v-if="termDirection === 'UP'"
             class="term-confirm-btn buy-direction" 
-            :disabled="isMarketClosed"
+            :disabled="isMarketClosed || !currentSymbolInfo"
             @click="handleTermBuy"
           >
             {{ localeStore.t('lookUp') }}:{{ currentSymbolInfo?.baseCurrency || '' }}
@@ -1770,7 +1753,7 @@ onUnmounted(() => {
           <button 
             v-else
             class="term-confirm-btn sell-direction" 
-            :disabled="isMarketClosed"
+            :disabled="isMarketClosed || !currentSymbolInfo"
             @click="handleTermSell"
           >
             {{ localeStore.t('lookUp') }}:{{ currentSymbolInfo?.quoteCurrency || '' }}
@@ -3122,10 +3105,14 @@ onUnmounted(() => {
   color: #ef5350;
 }
 
-.leverage-value { font-weight: 700; color: #78aa00; font-variant-numeric: tabular-nums; }
-.leverage-slider { display: block; width: 100%; height: 36px; margin: 4px 0; accent-color: #8cc63f; cursor: pointer; }
-.leverage-presets { display: flex; flex-wrap: wrap; gap: 6px; }
-.leverage-presets button { min-width: 44px; min-height: 44px; padding: 4px 8px; border: 1px solid #ddd; border-radius: 6px; background: #fff; color: #555; font-size: 12px; cursor: pointer; }
-.leverage-presets button[aria-pressed="true"] { border-color: #78aa00; background: #eff7df; color: #4b7100; font-weight: 700; }
-.leverage-selector :focus-visible { outline: 2px solid #78aa00; outline-offset: 3px; }
+</style>
+
+<style scoped>
+.order-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 20px; }
+.order-toolbar .order-type-tabs { flex: 1; min-width: 0; margin: 0; }
+.order-toolbar .order-tab-btn { padding-inline: 10px; }
+.order-risk-controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+.order-risk-controls .order-item { min-width: 0; }
+.order-risk-controls .order-input { min-width: 0; }
+.trade-buttons button:disabled { opacity: .45; cursor: not-allowed; }
 </style>

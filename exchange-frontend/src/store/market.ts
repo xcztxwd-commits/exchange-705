@@ -22,16 +22,50 @@ async function fetchMarketKline(url: string, options?: RequestInit): Promise<Res
 export const useMarketStore = defineStore('market', () => {
   // 当前选中的交易对
   const currentSymbol = ref<string>('')
-  const quoteStatusMap = ref<Record<string, { status: string, fetchedAt: number, expiresAt: number, timestamp: number }>>({})
+  const quoteStatusMap = ref<Record<string, { status: string, fetchedAt: number, expiresAt: number, timestamp: number, epoch?: string, quoteVersion?: number, simulated?: boolean, simulationSession?: number, marketRevision?: number, controlSourceResumed?: boolean, controlHistory?: boolean, controlState?: string, controlTaskId?: string, sourceAvailable?: boolean, quoteToUsdRate?: number | null, conversionAvailable?: boolean, conversionExpiresAt?: number }>>({})
+  let activeQuoteEpoch: string | undefined
+  const retiredQuoteEpochs = new Set<string>()
   const recordQuoteStatus = (symbol: string, quote: any): boolean => {
-    const valid = normalizeQuote(quote)
-    if (!valid) return false
+    if (quote.epoch && retiredQuoteEpochs.has(quote.epoch)) return false
+    if (quote.epoch && quote.epoch !== activeQuoteEpoch) {
+      if (activeQuoteEpoch) retiredQuoteEpochs.add(activeQuoteEpoch)
+      activeQuoteEpoch = quote.epoch
+    }
     const previous = quoteStatusMap.value[symbol]
-    if (previous && (valid.timestamp < previous.timestamp ||
+    if (previous?.epoch === quote.epoch && quote.quoteVersion != null && quote.quoteVersion < (previous?.quoteVersion ?? -1)) return false
+    if (previous && quote.marketRevision != null && quote.marketRevision < (previous.marketRevision ?? 0)) return false
+    // A source switch can legitimately return no external price. Clear simulation
+    // state without inventing a quote or leaving its last price executable.
+    if (previous?.simulationSession && !quote.simulated && quote.status === 'unavailable'
+      && Number.isFinite(quote.marketRevision) && quote.marketRevision > (previous.marketRevision ?? 0)) {
+      quoteStatusMap.value[symbol] = { status: 'unavailable', timestamp: 0, fetchedAt: 0, expiresAt: 0, marketRevision: quote.marketRevision }
+      return false
+    }
+    const valid = normalizeQuote(quote)
+    if (!valid) {
+      if (quote.status === 'unavailable' || quote.status === 'stale') quoteStatusMap.value[symbol] = {
+        ...(previous || { timestamp: 0, fetchedAt: 0, expiresAt: 0 }), status: quote.status,
+        epoch: quote.epoch, quoteVersion: quote.quoteVersion,
+      }
+      return false
+    }
+    if (previous && (valid.marketRevision ?? 0) < (previous.marketRevision ?? 0)) return false
+    const sameTask = previous?.controlTaskId && previous.controlTaskId === valid.controlTaskId
+      && previous.marketRevision === valid.marketRevision
+    if (sameTask && ((previous.controlSourceResumed && !valid.controlSourceResumed)
+      || (previous.controlState !== 'RUNNING' && valid.controlState === 'RUNNING'))) return false
+    const sameSource = previous?.simulationSession === valid.simulationSession && previous?.controlState === valid.controlState && previous?.controlTaskId === valid.controlTaskId && previous?.controlSourceResumed === valid.controlSourceResumed
+    if (previous && previous.epoch === quote.epoch && sameSource && (valid.timestamp < previous.timestamp ||
       (valid.timestamp === previous.timestamp && quote.fetchedAt != null && valid.fetchedAt < previous.fetchedAt))) return false
-    const { status, fetchedAt, expiresAt, timestamp } = valid
-    quoteStatusMap.value[symbol] = { status, fetchedAt, expiresAt, timestamp }
+    const { status, fetchedAt, expiresAt, timestamp, simulated, simulationSession, marketRevision, controlSourceResumed, controlHistory, controlState, controlTaskId, sourceAvailable } = valid
+    quoteStatusMap.value[symbol] = { quoteToUsdRate: valid.quoteToUsdRate, conversionAvailable: valid.conversionAvailable, conversionExpiresAt: valid.conversionExpiresAt, status, fetchedAt, expiresAt, timestamp, epoch: quote.epoch, quoteVersion: quote.quoteVersion, simulated, simulationSession, marketRevision, controlSourceResumed, controlHistory, controlState, controlTaskId, sourceAvailable }
     return true
+  }
+  const getConversionRate = (symbol: string, currency = 'USD'): number => {
+    if (currency === 'USD' || currency === 'USDT') return 1
+    const quote = quoteStatusMap.value[symbol]
+    const rate = Number(quote?.quoteToUsdRate)
+    return quote?.conversionAvailable && Number(quote.conversionExpiresAt) > Date.now() && Number.isFinite(rate) && rate > 0 ? rate : NaN
   }
   const getQuoteStatus = (symbol: string, now = Date.now()): string => {
     const quote = quoteStatusMap.value[symbol]
@@ -60,57 +94,43 @@ export const useMarketStore = defineStore('market', () => {
   
   // 符号到分类的映射 { symbol: category }
   const symbolCategoryMap = ref<Record<string, string>>({})
+  let stopPriceListener: (() => void) | undefined
+  const ensurePriceListener = () => {
+    if (stopPriceListener) return
+    stopPriceListener = marketWebSocket.onPriceUpdate((prices: PriceUpdate) => {
+      for (const [symbol, quote] of Object.entries(prices)) {
+        const internal = symbolCategoryMap.value[symbol] ? symbol : symbolMapping.value[symbol] || symbol
+        if (!recordQuoteStatus(internal, quote)) continue
+        const old = priceMap.value[internal]
+        tickDataMap.value[internal] = { symbol: internal, price: quote.price, timestamp: quote.timestamp || 0 }
+        priceMap.value[internal] = {
+          price: quote.price, change24h: quote.change24h ?? old?.change24h ?? 0,
+          changePct24h: quote.changePct24h ?? old?.changePct24h ?? 0,
+          price24hAgo: quote.price24hAgo ?? old?.price24hAgo ?? quote.price,
+          firstPriceTime: old?.firstPriceTime || Date.now(),
+        }
+      }
+    })
+  }
+
 
   /**
    * 初始化市场数据服务（WebSocket）
    */
-  const initMarketService = async (category: string = 'Crypto') => {
+  const initMarketService = async (category: string = 'Crypto', owner = `category:${category}`) => {
     try {
       console.log(`[Market Store] [${category}] 🔌 Initializing Market Service (WebSocket)...`)
       
       // 连接 WebSocket
       if (!marketWebSocket.isConnected) {
-        await marketWebSocket.connect()
+        ensurePriceListener()
+        void marketWebSocket.connect().catch(() => {})
       }
       
       // 注册价格更新回调（只注册一次）
-      marketWebSocket.onPriceUpdate((prices: PriceUpdate) => {
-        // 更新价格数据
-        for (const [symbol, priceData] of Object.entries(prices)) {
-          // 查找内部 symbol（如果 marketSymbol 与内部 symbol 不同）
-          const internalSymbol = symbolMapping.value[symbol] || symbol
-          if (!recordQuoteStatus(internalSymbol, priceData)) continue
-          
-          // 更新 Tick 数据
-          tickDataMap.value[internalSymbol] = {
-            symbol: internalSymbol,
-            price: priceData.price || 0,
-            timestamp: priceData.timestamp || 0
-          }
-          
-          // 更新价格映射
-          const now = Date.now()
-          if (!priceMap.value[internalSymbol]) {
-            priceMap.value[internalSymbol] = {
-              price: priceData.price || 0,
-              change24h: priceData.change24h || 0,
-              changePct24h: priceData.changePct24h || 0,
-              price24hAgo: priceData.price24hAgo || priceData.price || 0,
-              firstPriceTime: now,
-            }
-          } else {
-            priceMap.value[internalSymbol] = {
-              price: priceData.price || 0,
-              change24h: priceData.change24h || 0,
-              changePct24h: priceData.changePct24h || 0,
-              price24hAgo: priceData.price24hAgo || priceMap.value[internalSymbol].price24hAgo || priceData.price || 0,
-              firstPriceTime: priceMap.value[internalSymbol].firstPriceTime || now,
-            }
-          }
-        }
-      })
+      ensurePriceListener()
       
-      await loadAllSymbols(category)
+      await loadAllSymbols(category, owner)
       console.log(`[Market Store] [${category}] ✅ Market service initialized`)
     } catch (error) {
       console.error(`[Market Store] [${category}] ❌ Init market service failed:`, error)
@@ -120,7 +140,7 @@ export const useMarketStore = defineStore('market', () => {
   /**
    * 加载所有交易对并建立映射
    */
-  const loadAllSymbols = async (category: string = 'Crypto') => {
+  const loadAllSymbols = async (category: string = 'Crypto', owner = `category:${category}`) => {
     try {
       const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '/api'
       const res: any = await fetch(`${apiBaseUrl}/market/all`)
@@ -151,7 +171,7 @@ export const useMarketStore = defineStore('market', () => {
         if (categorySymbols.length > 0) {
           console.log(`[Market Store] [${category}] 📡 Subscribing ${categorySymbols.length} symbols via WebSocket...`)
           // 批量订阅实时价格（WebSocket）
-          await subscribeSymbolsBatch(categorySymbols, category)
+          await subscribeSymbolsBatch(categorySymbols, category, owner)
         }
       }
     } catch (error) {
@@ -170,12 +190,14 @@ export const useMarketStore = defineStore('market', () => {
     
     // 确保 WebSocket 已连接
     if (!marketWebSocket.isConnected) {
-      await marketWebSocket.connect()
+      ensurePriceListener()
+        void marketWebSocket.connect().catch(() => {})
     }
     
     // 使用 marketSymbol 订阅（后端需要 marketSymbol）
     const actualSymbol = marketSymbol || symbol
-    marketWebSocket.subscribe([actualSymbol])
+    ensurePriceListener()
+    marketWebSocket.setSubscriptions('active', [symbol])
     
     // 建立映射关系（marketSymbol -> internalSymbol）
     if (actualSymbol !== symbol) {
@@ -191,7 +213,7 @@ export const useMarketStore = defineStore('market', () => {
   /**
    * 批量订阅交易对行情（WebSocket）
    */
-  const subscribeSymbolsBatch = async (symbols: string[], category: string = 'Crypto') => {
+  const subscribeSymbolsBatch = async (symbols: string[], category: string = 'Crypto', owner = `category:${category}`) => {
     if (!symbols || symbols.length === 0) {
       console.warn(`[Market Store] [${category}] ⚠️ No symbols to subscribe`)
       return
@@ -203,11 +225,13 @@ export const useMarketStore = defineStore('market', () => {
     
     // 确保 WebSocket 已连接
     if (!marketWebSocket.isConnected) {
-      await marketWebSocket.connect()
+      ensurePriceListener()
+        void marketWebSocket.connect().catch(() => {})
     }
     
     // 批量订阅（WebSocket 支持批量订阅）
-    marketWebSocket.subscribe(symbols)
+    ensurePriceListener()
+    marketWebSocket.setSubscriptions(owner, symbols.map(code => symbolMapping.value[code] || code))
     
     // 建立映射关系和分类映射
     symbols.forEach(symbol => {
@@ -224,7 +248,7 @@ export const useMarketStore = defineStore('market', () => {
    */
   const unsubscribeSymbol = (symbol: string, _category: string = 'Crypto') => {
     // 取消 WebSocket 订阅
-    marketWebSocket.unsubscribe([symbol])
+    marketWebSocket.unsubscribe([symbol], 'active')
     
     // 清理数据
     delete tickDataMap.value[symbol]
@@ -248,9 +272,9 @@ export const useMarketStore = defineStore('market', () => {
   /**
    * 批量订阅交易对（WebSocket）
    */
-  const subscribeSymbols = async (symbols: Array<{ symbol: string; category: string; alltickSymbol?: string }>) => {
+  const subscribeSymbols = async (symbols: Array<{ symbol: string; category: string; alltickSymbol?: string }>, owner = 'list') => {
     if (!symbols || symbols.length === 0) {
-      console.warn('[Market Store] No symbols to subscribe')
+      marketWebSocket.release(owner)
       return
     }
     
@@ -283,11 +307,13 @@ export const useMarketStore = defineStore('market', () => {
       try {
         // 确保 WebSocket 已连接
         if (!marketWebSocket.isConnected) {
-          await marketWebSocket.connect()
+          ensurePriceListener()
+        void marketWebSocket.connect().catch(() => {})
         }
         
         // 批量订阅
-        marketWebSocket.subscribe(allMarketSymbols)
+        ensurePriceListener()
+        marketWebSocket.setSubscriptions(owner, symbols.map(s => s.symbol))
         
         console.log(`[Market Store] ✅ Subscribed ${allMarketSymbols.length} symbols via WebSocket`)
       } catch (error) {
@@ -319,15 +345,16 @@ export const useMarketStore = defineStore('market', () => {
       } else {
         // 如果是对象数组，提取 alltickSymbol 并建立映射
         const symbolArray = symbolsData as Array<{ symbol: string; alltickSymbol: string }>
-        alltickSymbols = symbolArray.map(s => s.alltickSymbol)
+        alltickSymbols = symbolArray.map(s => s.symbol)
         symbolArray.forEach(s => {
-          symbolMap.set(s.alltickSymbol, s.symbol)
+          symbolMap.set(s.symbol, s.symbol)
         })
       }
       
       const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '/api'
       console.log(`[Market Store] Fetching batch prices from Redis for ${alltickSymbols.length} symbols`)
       
+      const requestEpoch = activeQuoteEpoch
       const response = await fetch(`${apiBaseUrl}/market/redis/price/batch`, {
         method: 'POST',
         headers: {
@@ -337,6 +364,7 @@ export const useMarketStore = defineStore('market', () => {
       })
       
       const data = await response.json()
+      if (activeQuoteEpoch !== requestEpoch) return
       
       if (data.ret === 200 && data.data) {
         const prices = data.data
@@ -924,6 +952,7 @@ export const useMarketStore = defineStore('market', () => {
     // 取消所有订阅并断开 WebSocket
     marketWebSocket.unsubscribeAll()
     marketWebSocket.disconnect()
+    stopPriceListener?.(); stopPriceListener = undefined
     console.log(`[Market Store] [${category}] All subscriptions cancelled and WebSocket disconnected`)
   }
 
@@ -933,6 +962,7 @@ export const useMarketStore = defineStore('market', () => {
     klineDataMap,
     priceMap,
     quoteStatusMap,
+    getConversionRate,
     getQuoteStatus,
     initMarketService,
     subscribeSymbol,

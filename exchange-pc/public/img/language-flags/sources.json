@@ -1,0 +1,27 @@
+{
+  "source": "https://github.com/lipis/flag-icons",
+  "version": "7.3.2",
+  "download": "https://registry.npmjs.org/flag-icons/-/flag-icons-7.3.2.tgz",
+  "format": "4x3",
+  "countries": [
+    "us",
+    "fr",
+    "de",
+    "ru",
+    "es",
+    "pt",
+    "it",
+    "sa",
+    "tr",
+    "id",
+    "mm",
+    "in",
+    "cz",
+    "pl",
+    "jp",
+    "kr",
+    "tw",
+    "th",
+    "vn"
+  ]
+}

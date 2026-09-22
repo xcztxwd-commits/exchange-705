@@ -30,7 +30,10 @@ import static org.junit.jupiter.api.Assertions.*;
 /** Runs only in docker/compose.isolation.yaml, against its empty MySQL and Redis. */
 @EnabledIfEnvironmentVariable(named = "MARKET_ISOLATION_TEST", matches = "true")
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class MarketIsolationTest {
+    static volatile boolean catalogTesting;
+    @Autowired org.springframework.context.ApplicationContext context;
     static volatile String metalMode = "ok", allMode = "ok", klineMode = "ok";
     static final AtomicInteger metalCalls = new AtomicInteger();
     static final ObjectMapper json = new ObjectMapper();
@@ -46,34 +49,38 @@ class MarketIsolationTest {
     }
     static String base() { return "http://127.0.0.1:" + server.getAddress().getPort(); }
     @DynamicPropertySource static void properties(DynamicPropertyRegistry registry) {
-        registry.add("market.quote.base-url", MarketIsolationTest::base);
+        registry.add("market.exchange.spot-url", MarketIsolationTest::base);
+        registry.add("market.exchange.futures-url", MarketIsolationTest::base);
         registry.add("market.quote.yahoo-url", MarketIsolationTest::base);
         registry.add("market.quote.alltick-url", MarketIsolationTest::base);
+        registry.add("market.catalog.yahoo-url", MarketIsolationTest::base);
         registry.add("spring.jpa.show-sql", () -> "false");
         registry.add("spring.jpa.hibernate.ddl-auto", () -> "create-drop");
     }
     static void reply(HttpExchange exchange) {
+        if(catalogTesting) {CatalogTradingScenario.reply(exchange); return;}
         try {
             String uri = exchange.getRequestURI().toString();
-            boolean metal = uri.contains("USDT-FUTURES");
+            boolean metal = uri.contains("/fapi/");
             if (metal) metalCalls.incrementAndGet();
             String mode = "ok".equals(allMode) ? metal ? metalMode : "ok" : allMode;
-            if ("ok".equals(mode) && uri.contains("candles")) mode = klineMode;
+            if ("ok".equals(mode) && uri.contains("klines")) mode = klineMode;
             if ("block".equals(mode)) Thread.sleep(60000);
             int status = "429".equals(mode) ? 429 : "500".equals(mode) ? 500 : 200;
             if (status == 429) exchange.getResponseHeaders().set("Retry-After", "8");
             long now = System.currentTimeMillis();
             String body;
-            if ("invalid".equals(mode)) body = "{\"code\":\"00000\",\"data\":[{\"symbol\":\"XAUUSDT\",\"lastPrice\":\"NaN\",\"ts\":" + now + "}]}";
+            if ("invalid".equals(mode)) body = "{\"symbol\":\"XAUUSDT\",\"lastPrice\":\"NaN\",\"closeTime\":" + now + "}";
             else if (uri.contains("spark")) body = "{\"spark\":{\"result\":[{\"symbol\":\"EURUSD=X\",\"response\":[{\"meta\":{\"regularMarketPrice\":1.1,\"regularMarketTime\":" + now / 1000 + ",\"previousClose\":1}}]}]}}";
-            else if (uri.contains("candles")) body = "{\"code\":\"00000\",\"data\":[[\"" + now + "\",\"100\",\"101\",\"99\",\"100\",\"1\",\"100\"]]}";
-            else body = "{\"code\":\"00000\",\"requestTime\":" + now + ",\"data\":[{\"symbol\":\"" + (metal ? "XAUUSDT" : "BTCUSDT") + "\",\"lastPrice\":\"100\",\"ts\":" + now + "}]}";
+            else if (uri.contains("klines")) body = "[[\"" + (now / 60000 * 60000) + "\",\"100\",\"101\",\"99\",\"100\",\"1\",\"" + now + "\",\"100\"]]";
+            else body = "{\"symbol\":\"" + (metal ? "XAUUSDT" : "BTCUSDT") + "\",\"lastPrice\":\"100\",\"closeTime\":" + now + "}";
             byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
             exchange.sendResponseHeaders(status, bytes.length); exchange.getResponseBody().write(bytes);
         } catch (Exception ignored) { } finally { exchange.close(); }
     }
     @Autowired ForexQuoteMarketService quotes;
     @Autowired MarketQuoteSource source;
+    @Autowired ExchangeQuoteSource exchange;
     @Autowired TradingSymbolRepository symbols;
     @Autowired OptionOrderRepository options;
     @Autowired ContractOrderRepository contracts;
@@ -89,7 +96,7 @@ class MarketIsolationTest {
     }
     void symbol(String internal, String market, String category) {
         TradingSymbol symbol = new TradingSymbol(); symbol.setSymbol(internal); symbol.setAlltickSymbol(market);
-        symbol.setCategory(category); symbol.setName(internal); symbol.setBaseCurrency(internal);
+        symbol.setCategory(category); symbol.setSourceCategory(category); symbol.setMarketSource(com.gtcfesk.exchange.market.MarketInstrumentCatalog.inferredSource(category)); symbol.setName(internal); symbol.setBaseCurrency(internal);
         if ("Metal".equals(category)) { symbol.setControlEnabled(true); symbol.setControlPriceOffset(BigDecimal.TEN); }
         symbols.save(symbol);
     }
@@ -117,7 +124,7 @@ class MarketIsolationTest {
             assertTrue(((Number) state.get("pendingKlines")).intValue() <= 32);
         }
     }
-    @Test @SuppressWarnings("unchecked") void failureIsolationAndSettlement() throws Exception {
+    @Test @Order(1) @SuppressWarnings("unchecked") void failureIsolationAndSettlement() throws Exception {
         symbol("BTCUSD", "BTCUSDT", "Crypto"); symbol("XAUUSD", "XAUUSD", "Metal"); symbol("EURUSD", "EURUSD", "Forex");
         symbol("MISSINGFX", "MISSINGFX", "Forex"); // Provider omits this item; EURUSD must still update every cycle.
         quotes.refreshSymbols(); recovery();
@@ -173,11 +180,11 @@ class MarketIsolationTest {
                 }
                 System.out.println("PASS " + mode + " isolation: " + metalState()); recovery();
             }
-            ReflectionTestUtils.setField(source, "baseUrl", "http://127.0.0.1:1");
+            exchange.spotUrl = exchange.futuresUrl = "http://127.0.0.1:1";
             until(() -> quotes.freshPrice("XAUUSD") == null && quotes.freshPrice("BTCUSD") == null, 6000);
             assertNotNull(quotes.freshPrice("EURUSD"));
             System.out.println("PASS connection refused leaves Yahoo healthy");
-            ReflectionTestUtils.setField(source, "baseUrl", base()); recovery();
+            exchange.spotUrl = exchange.futuresUrl = base(); recovery();
             allMode = "500";
             until(() -> quotes.freshPrices().isEmpty(), 6000);
             long timestamp = QuoteState.time(quotes.internalPrice("XAUUSD").get("timestamp"));
@@ -215,6 +222,9 @@ class MarketIsolationTest {
             assertEquals(110d, ((Number) ((Map<?, ?>) ((List<?>) ((Map<?, ?>) next.get("data")).get("kline_list")).get(0)).get("close_price")).doubleValue());
             bounded(); System.out.println("PASS recovery and independent K-line copies");
         } finally { one.close(); two.close(); }
+    }
+    @Test @Order(2) void catalogTradingChain() throws Exception {
+        catalogTesting=true; new CatalogTradingScenario(this).run();
     }
     @AfterAll static void stopMock() { server.stop(0); mockWorkers.shutdownNow(); }
 }

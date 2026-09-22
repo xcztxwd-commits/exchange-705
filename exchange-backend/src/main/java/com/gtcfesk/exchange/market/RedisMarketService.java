@@ -8,6 +8,9 @@ import org.springframework.stereotype.Service;
 
 import java.util.*;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
+import javax.annotation.PostConstruct;
+import javax.annotation.PreDestroy;
 
 /**
  * Redis市场数据服务
@@ -21,6 +24,25 @@ public class RedisMarketService {
     
     @org.springframework.beans.factory.annotation.Value("${market.quote.max-age-ms:15000}") private long maxAgeMs = 15000;
     private final ObjectMapper objectMapper = new ObjectMapper();
+    private final ConcurrentMap<String, Map<String,Object>> pendingPrices = new ConcurrentHashMap<>();
+    private final ScheduledExecutorService priceWriter = Executors.newSingleThreadScheduledExecutor(r -> new Thread(r, "market-redis"));
+    private volatile long lastPriceWriteError;
+    @PostConstruct public void startPriceWriter() { priceWriter.scheduleWithFixedDelay(this::flushPrices, 250, 250, TimeUnit.MILLISECONDS); }
+    void flushPrices() {
+        pendingPrices.forEach((symbol, quote) -> {
+            if (!pendingPrices.remove(symbol, quote)) return;
+            try {
+                redisTemplate.opsForValue().set(PRICE_PREFIX + symbol, objectMapper.writeValueAsString(quote));
+            } catch (Exception failure) {
+                pendingPrices.putIfAbsent(symbol, quote);
+                if (System.currentTimeMillis() - lastPriceWriteError > 30000) {
+                    lastPriceWriteError = System.currentTimeMillis();
+                    org.slf4j.LoggerFactory.getLogger(RedisMarketService.class).warn("Market snapshot persistence unavailable; retaining latest pending values");
+                }
+            }
+        });
+    }
+    @PreDestroy public void stopPriceWriter() { priceWriter.shutdownNow(); flushPrices(); }
     
     // Redis键前缀
     private static final String KLINE_PREFIX = "market:kline:";
@@ -49,6 +71,14 @@ public class RedisMarketService {
         }
     }
     
+    public void saveSimulationHistory(String session, String interval, List<Map<String, Object>> rows) {
+        try {
+            redisTemplate.opsForValue().set(KLINE_PREFIX + session + ":" + interval, objectMapper.writeValueAsString(rows));
+        } catch (Exception failure) {
+            throw new IllegalStateException("无法保存随机行情的历史快照", failure);
+        }
+    }
+
     /**
      * 从Redis获取K线数据
      * @param symbol 交易对符号
@@ -95,12 +125,8 @@ public class RedisMarketService {
      */
     public void savePrice(String symbol, Map<String, Object> quote) {
         if (!QuoteState.valid(quote)) return;
-        try {
-            // Retain the last valid quote indefinitely. Freshness is evaluated separately.
-            redisTemplate.opsForValue().set(PRICE_PREFIX + symbol, objectMapper.writeValueAsString(quote));
-        } catch (Exception e) {
-            // In-memory snapshots remain available when Redis is down.
-        }
+        // Only persistence snapshots coalesce; authoritative source events are handled separately.
+        pendingPrices.put(symbol, new HashMap<>(quote));
     }
     /**
      * 从Redis获取价格数据
@@ -121,6 +147,42 @@ public class RedisMarketService {
         }
     }
     
+    @Autowired private com.gtcfesk.exchange.admin.SystemConfigService configs;
+    private static final org.springframework.data.redis.core.script.DefaultRedisScript<String> CONVERSION_SCRIPT =
+        new org.springframework.data.redis.core.script.DefaultRedisScript<>(
+            "local now=tonumber(ARGV[1]); local duration=tonumber(ARGV[2]); " +
+            "local old=redis.call('GET',KEYS[1]); " +
+            "if old then local rate=cjson.decode(old); local expires=tonumber(rate.timestamp)+duration; " +
+            "if expires>now then rate.expiresAt=expires; local value=cjson.encode(rate); " +
+            "redis.call('SET',KEYS[1],value,'PX',expires-now); return value; end; " +
+            "redis.call('DEL',KEYS[1]); end; " +
+            "if ARGV[3]~='' then local rate=cjson.decode(ARGV[3]); local expires=tonumber(rate.timestamp)+duration; " +
+            "if expires>now then rate.expiresAt=expires; local value=cjson.encode(rate); " +
+            "redis.call('SET',KEYS[1],value,'PX',expires-now); return value; end; end; return nil;", String.class);
+
+    /** Atomic, fixed settlement snapshot; duration changes apply to the original source timestamp. */
+    public Map<String,Object> conversionQuote(String source, String category, String code, Map<String,Object> raw) {
+        String key = "market:conversion:" + source + ":" + category + ":" + code;
+        try {
+            long now = System.currentTimeMillis();
+            String configured = configs.getConfigValue("market.conversion.cache-hours");
+            long duration = TimeUnit.HOURS.toMillis(com.gtcfesk.exchange.admin.SystemConfigService.conversionCacheHours(configured));
+            String candidate = "";
+            if (QuoteState.valid(raw) && Boolean.TRUE.equals(raw.get("sourceAvailable"))
+                    && now - QuoteState.time(raw.get("fetchedAt")) <= 60000) {
+                Map<String,Object> rate = new HashMap<>();
+                rate.put("price", raw.get("price")); rate.put("timestamp", Math.min(now, QuoteState.time(raw.get("timestamp"))));
+                rate.put("fetchedAt", now); candidate = objectMapper.writeValueAsString(rate);
+            }
+            String json = redisTemplate.execute(CONVERSION_SCRIPT, Collections.singletonList(key), Long.toString(now), Long.toString(duration), candidate);
+            if (json == null) return null;
+            Map<String,Object> cached = objectMapper.readValue(json, new TypeReference<Map<String,Object>>() {});
+            return QuoteState.valid(cached) && QuoteState.time(cached.get("expiresAt")) > System.currentTimeMillis() ? cached : null;
+        } catch (Exception failure) {
+            return null; // Never silently use a different settlement rate when Redis is unavailable.
+        }
+    }
+
     /**
      * 批量获取价格数据
      * @param symbols 交易对符号列表

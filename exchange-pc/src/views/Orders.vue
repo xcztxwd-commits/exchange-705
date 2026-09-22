@@ -77,7 +77,7 @@ function transformContractOrder(order: any) {
   const currentPrice = getCurrentPrice(order.symbol)
   
   const leverage = Number(order.leverage ?? 1)
-  const calculatedProfit = calculateContractProfit(order, currentPrice)
+  const calculatedProfit = calculateContractProfit(order, currentPrice, marketStore.getConversionRate(order.symbol, order.quoteCurrency))
 
   // 对于挂单（PENDING），使用 createdAt 作为创建时间；对于持仓（OPEN），使用 openTime
   const displayTime = order.status === 'PENDING' 
@@ -105,6 +105,7 @@ function transformContractOrder(order: any) {
     stopLoss: order.stopLoss ? Number(order.stopLoss) : null, // 止损
     takeProfit: order.takeProfit ? Number(order.takeProfit) : null, // 止盈
     leverage,
+    quoteCurrency: order.quoteCurrency,
     lotSize: order.lotSize,
   }
 }
@@ -113,7 +114,7 @@ function transformContractOrder(order: any) {
 function calculateOptionProfit(order: any, currentPrice: number): number {
   // 如果订单已平仓，使用已计算的盈亏
   if (order.status === 'CLOSED' && order.profit != null) {
-    return Number(order.profit || 0)
+    return Number(order.profit ?? 0)
   }
   
   // 如果订单交易中，根据当前价格计算盈亏
@@ -148,7 +149,7 @@ function calculateOptionProfit(order: any, currentPrice: number): number {
     }
   }
   
-  return Number(order.profit || 0)
+  return Number(order.profit ?? 0)
 }
 
 // 存储所有交易对信息
@@ -402,7 +403,7 @@ async function loadPositionsForSummary() {
 
 // 计算持仓订单的总盈亏
 const positionsTotalProfit = computed(() => {
-  return positionsData.value.reduce((sum, item) => sum + (item.profit || 0), 0)
+  return positionsData.value.reduce((sum, item) => sum + (item.profit ?? 0), 0)
 })
 
 // 计算持仓订单的总保证金
@@ -651,7 +652,7 @@ function updateOrdersWithRealTimePrice() {
         const side = order.side || (order.type === 'buy' ? 'BUY' : 'SELL')
         const quantity = order.quantity || order.lots
         
-        const calculatedProfit = calculateContractProfit({ ...order, side, quantity }, currentPrice)
+        const calculatedProfit = calculateContractProfit({ ...order, side, quantity }, currentPrice, marketStore.getConversionRate(order.symbol, order.quoteCurrency))
         const updatedOrder = {
           ...order,
           currentPrice,
@@ -738,15 +739,15 @@ function updateOrdersWithRealTimePrice() {
 const totalProfit = computed(() => {
   if (mainTab.value === 'contract') {
     if (subTab.value === 'positions') {
-      return positionsData.value.reduce((sum, item) => sum + (item.profit || 0), 0)
+      return positionsData.value.reduce((sum, item) => sum + (item.profit ?? 0), 0)
     } else if (subTab.value === 'history') {
-      return historyData.value.reduce((sum, item) => sum + (item.profit || 0), 0)
+      return historyData.value.reduce((sum, item) => sum + (item.profit ?? 0), 0)
     }
   } else {
     if (termSubTab.value === 'trading') {
-      return termTradingData.value.reduce((sum, item) => sum + (item.profit || 0), 0)
+      return termTradingData.value.reduce((sum, item) => sum + (item.profit ?? 0), 0)
     } else {
-      return termClosedData.value.reduce((sum, item) => sum + (item.profit || 0), 0)
+      return termClosedData.value.reduce((sum, item) => sum + (item.profit ?? 0), 0)
     }
   }
   return 0
@@ -799,13 +800,15 @@ onUnmounted(() => {
 
 // 格式化金额
 function formatMoney(v: number | string | undefined | null) {
-  const n = Number(v || 0)
+  const n = Number(v ?? 0)
+  if (!Number.isFinite(n)) return '--'
   return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
 // 格式化价格
 function formatPrice(v: number | string | undefined | null) {
-  const n = Number(v || 0)
+  const n = Number(v ?? 0)
+  if (!Number.isFinite(n)) return '--'
   return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 </script>
@@ -1295,7 +1298,7 @@ function formatPrice(v: number | string | undefined | null) {
                 negative: detailOrder?.profit < 0, 
                 positive: detailOrder?.profit > 0 
               }">
-                {{ formatMoney(detailOrder?.profit || 0) }}
+                {{ formatMoney(detailOrder?.profit ?? 0) }}
               </span>
             </div>
           </div>

@@ -111,6 +111,9 @@ public class WithdrawReviewController {
                 recordMap.put("type", record.getType());
                 recordMap.put("network", record.getNetwork());
                 recordMap.put("amount", record.getAmount());
+                recordMap.put("currency", record.getCurrency());
+                recordMap.put("originalAmount", record.getOriginalAmount());
+                recordMap.put("exchangeRate", record.getExchangeRate());
                 recordMap.put("actualAmount", record.getActualAmount());
                 recordMap.put("fee", record.getFee());
                 recordMap.put("address", record.getAddress());

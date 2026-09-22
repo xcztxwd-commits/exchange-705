@@ -1,0 +1,6 @@
+# Private virtual-funds environment only. The default compose file keeps this disabled.
+# docker compose -f compose.yaml -f compose.virtual.yaml up -d --build
+services:
+  backend:
+    environment:
+      MARKET_VIRTUAL_TRADING_ENABLED: "true"

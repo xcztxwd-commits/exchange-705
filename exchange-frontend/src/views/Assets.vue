@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import CurrencyPicker from '@/components/CurrencyPicker.vue'
+import { useFiatCurrency } from '@/utils/fiatCurrency'
+const { currency, rate, formatAsset } = useFiatCurrency()
 import { useRouter } from 'vue-router'
 import Tabbar from '@/components/Tabbar.vue'
 import request from '@/utils/request'
@@ -22,12 +25,6 @@ const optionBalance = ref(0)
 const optionFrozen = ref(0)
 const balanceVisible = ref(true)
 const loading = ref(false)
-
-// 格式化金额
-function formatMoney(v: number | string | undefined | null) {
-  const n = Number(v || 0)
-  return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-}
 
 // 切换余额显示/隐藏
 function toggleBalance() {
@@ -58,7 +55,7 @@ async function loadAssets() {
       optionFrozen.value = Number(res.optionFrozen || res.option?.frozen || 0)
       
       // 计算总资产
-      totalAssets.value = fundBalance.value + contractBalance.value + optionBalance.value
+      totalAssets.value = fundBalance.value + contractBalance.value + optionBalance.value + fundFrozen.value + contractFrozen.value + optionFrozen.value
     }
   } catch (e: any) {
     console.error(localeStore.t('loadAssetsFailed'), e)
@@ -87,6 +84,8 @@ onMounted(() => {
 
     <!-- 总资产卡片 -->
     <div class="total-assets-card">
+      <CurrencyPicker v-model="currency" />
+      <p v-if="rate === null" role="alert">汇率暂不可用，请稍后重试</p>
       <div class="total-assets-header">
         <div class="total-assets-label">{{ localeStore.t('totalAccountAssetsConverted') }}</div>
         <div 
@@ -105,7 +104,7 @@ onMounted(() => {
         </div>
       </div>
       <div class="total-assets-value">
-        <span v-if="balanceVisible">${{ formatMoney(totalAssets) }}</span>
+        <span v-if="balanceVisible">{{ formatAsset(totalAssets) }}</span>
         <span v-else class="hidden-balance">****</span>
       </div>
     </div>
@@ -127,14 +126,14 @@ onMounted(() => {
           <div class="account-detail-item">
             <span class="detail-label">{{ localeStore.t('balance') }}</span>
             <span class="detail-value">
-              <span v-if="balanceVisible">${{ formatMoney(fundBalance) }}</span>
+              <span v-if="balanceVisible">{{ formatAsset(fundBalance) }}</span>
               <span v-else class="hidden-balance">****</span>
             </span>
           </div>
           <div class="account-detail-item">
             <span class="detail-label">{{ localeStore.t('frozen') }}</span>
             <span class="detail-value">
-              <span v-if="balanceVisible">${{ formatMoney(fundFrozen) }}</span>
+              <span v-if="balanceVisible">{{ formatAsset(fundFrozen) }}</span>
               <span v-else class="hidden-balance">****</span>
             </span>
           </div>
@@ -151,14 +150,14 @@ onMounted(() => {
           <div class="account-detail-item">
             <span class="detail-label">{{ localeStore.t('balance') }}</span>
             <span class="detail-value">
-              <span v-if="balanceVisible">${{ formatMoney(optionBalance) }}</span>
+              <span v-if="balanceVisible">{{ formatAsset(optionBalance) }}</span>
               <span v-else class="hidden-balance">****</span>
             </span>
           </div>
           <div class="account-detail-item">
             <span class="detail-label">{{ localeStore.t('frozen') }}</span>
             <span class="detail-value">
-              <span v-if="balanceVisible">${{ formatMoney(optionFrozen) }}</span>
+              <span v-if="balanceVisible">{{ formatAsset(optionFrozen) }}</span>
               <span v-else class="hidden-balance">****</span>
             </span>
           </div>
@@ -175,14 +174,14 @@ onMounted(() => {
           <div class="account-detail-item">
             <span class="detail-label">{{ localeStore.t('balance') }}</span>
             <span class="detail-value">
-              <span v-if="balanceVisible">${{ formatMoney(contractBalance) }}</span>
+              <span v-if="balanceVisible">{{ formatAsset(contractBalance) }}</span>
               <span v-else class="hidden-balance">****</span>
             </span>
           </div>
           <div class="account-detail-item">
             <span class="detail-label">{{ localeStore.t('frozen') }}</span>
             <span class="detail-value">
-              <span v-if="balanceVisible">${{ formatMoney(contractFrozen) }}</span>
+              <span v-if="balanceVisible">{{ formatAsset(contractFrozen) }}</span>
               <span v-else class="hidden-balance">****</span>
             </span>
           </div>

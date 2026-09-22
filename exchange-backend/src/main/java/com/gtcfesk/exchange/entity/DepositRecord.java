@@ -31,7 +31,16 @@ public class DepositRecord {
     private String network; // 网络/币种
 
     @Column(nullable = false, precision = 32, scale = 16)
-    private BigDecimal amount; // 充值金额
+    private BigDecimal amount; // USD 入账金额；旧记录保持 USD 语义
+
+    @Column(length = 3)
+    private String currency;
+
+    @Column(name = "original_amount", precision = 32, scale = 16)
+    private BigDecimal originalAmount;
+
+    @Column(name = "exchange_rate", precision = 32, scale = 16)
+    private BigDecimal exchangeRate;
 
     @Column(nullable = false, length = 200)
     private String address; // 充值地址

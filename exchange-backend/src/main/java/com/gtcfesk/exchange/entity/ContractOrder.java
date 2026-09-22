@@ -75,6 +75,15 @@ public class ContractOrder {
     @Column(name = "lot_size", precision = 32, scale = 16)
     private BigDecimal lotSize;
 
+    @Column(name = "quote_currency", length = 16)
+    private String quoteCurrency = "USD";
+    @Column(name = "quote_source", length = 16)
+    private String quoteSource;
+    @Column(name = "margin_conversion_rate", precision = 32, scale = 16)
+    private BigDecimal marginConversionRate;
+    @Column(name = "settlement_conversion_rate", precision = 32, scale = 16)
+    private BigDecimal settlementConversionRate;
+
     @Column(name = "open_time")
     private LocalDateTime openTime; // 开仓时间
 

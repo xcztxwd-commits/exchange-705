@@ -1,0 +1,413 @@
+{
+  "at": "2026-09-22T09:40:13.676Z",
+  "crypto": {
+    "stream": {
+      "enabled": true,
+      "activeProvider": "Binance",
+      "automaticSecondary": false,
+      "connected": true,
+      "connectedAt": 1790069984149,
+      "retryAt": 0,
+      "error": null,
+      "subscriptions": {
+        "BTCUSDT": "BTCUSDT",
+        "ETHUSDT": "ETHUSDT"
+      },
+      "messages": 27,
+      "rejected": 0,
+      "gaps": 0,
+      "queueDepth": 0,
+      "reconnects": 1,
+      "lastFrame": 1790069998282
+    },
+    "provider": "Binance",
+    "category": "Crypto",
+    "symbols": 2,
+    "failures": 0,
+    "error": null,
+    "retryAt": 0,
+    "klineFailures": 0,
+    "klineError": null,
+    "klineRetryAt": 0,
+    "threads": 1,
+    "schedulerQueue": 1,
+    "pendingKlines": 0,
+    "freshQuotes": 2
+  },
+  "metal": {
+    "stream": {
+      "enabled": true,
+      "activeProvider": "Binance",
+      "automaticSecondary": false,
+      "connected": false,
+      "connectedAt": 0,
+      "retryAt": 1790069997242,
+      "error": "connection_failure",
+      "subscriptions": {
+        "XAGUSD": "XAGUSDT",
+        "XAUUSD": "XAUUSDT"
+      },
+      "messages": 0,
+      "rejected": 0,
+      "gaps": 0,
+      "queueDepth": 0,
+      "reconnects": 0,
+      "lastFrame": 0
+    },
+    "provider": "Binance",
+    "category": "Metal",
+    "symbols": 2,
+    "failures": 2,
+    "error": "timeout",
+    "retryAt": 1790069996267,
+    "klineFailures": 0,
+    "klineError": null,
+    "klineRetryAt": 0,
+    "threads": 1,
+    "schedulerQueue": 0,
+    "pendingKlines": 0,
+    "freshQuotes": 0
+  },
+  "prices": {
+    "BTCUSD": {
+      "symbol": "BTCUSD",
+      "retryAt": 0,
+      "changePct24h": 1.2502492078634364,
+      "available": true,
+      "change24h": 1061.699999999997,
+      "epoch": "cdc42563-2824-481f-9e21-0c635627b598",
+      "source": "Binance",
+      "marketType": "spot",
+      "stale": false,
+      "price": 85980.77,
+      "displayAvailable": true,
+      "timestamp": 1790069998012,
+      "eventId": "1af46e61-f48d-4161-9c81-30a355bd27a4",
+      "sourceTimestamp": 1790069998012,
+      "marketRevision": 0,
+      "fetchedAt": 1790069998282,
+      "transport": "ws",
+      "expiresAt": 1790070013012,
+      "tradeAvailable": true,
+      "changeBasis": "rolling24h",
+      "quoteCurrency": "USDT",
+      "sourceStatus": "available",
+      "quoteVersion": 1,
+      "sourceAvailable": true,
+      "status": "available"
+    },
+    "ETHUSD": {
+      "symbol": "ETHUSD",
+      "retryAt": 0,
+      "changePct24h": 0.024806111058412416,
+      "available": true,
+      "change24h": 0.6799999999998363,
+      "epoch": "cdc42563-2824-481f-9e21-0c635627b598",
+      "source": "Binance",
+      "marketType": "spot",
+      "stale": false,
+      "price": 2741.94,
+      "displayAvailable": true,
+      "timestamp": 1790069998013,
+      "eventId": "5c92f41c-7989-444a-b61d-e4231f52007b",
+      "sourceTimestamp": 1790069998013,
+      "marketRevision": 0,
+      "fetchedAt": 1790069998282,
+      "transport": "ws",
+      "expiresAt": 1790070013013,
+      "tradeAvailable": true,
+      "changeBasis": "rolling24h",
+      "quoteCurrency": "USDT",
+      "sourceStatus": "available",
+      "quoteVersion": 2,
+      "sourceAvailable": true,
+      "status": "available"
+    },
+    "XAUUSD": {
+      "symbol": "XAUUSD",
+      "retryAt": 1790069996267,
+      "changePct24h": 0,
+      "sourceTimestamp": 1789984049749,
+      "marketRevision": 0,
+      "available": false,
+      "change24h": 0,
+      "fetchedAt": 1789984051299,
+      "epoch": "cdc42563-2824-481f-9e21-0c635627b598",
+      "source": "Bitget",
+      "expiresAt": 1789984064749,
+      "tradeAvailable": false,
+      "sourceStatus": "stale",
+      "quoteVersion": 3,
+      "stale": true,
+      "controlHistory": true,
+      "price": 4452.01,
+      "displayAvailable": true,
+      "sourceAvailable": false,
+      "timestamp": 1789984049749,
+      "status": "stale"
+    },
+    "XAGUSD": {
+      "symbol": "XAGUSD",
+      "retryAt": 1790069996267,
+      "changePct24h": 0,
+      "sourceTimestamp": 1789984049747,
+      "marketRevision": 0,
+      "available": false,
+      "change24h": 0,
+      "fetchedAt": 1789984051300,
+      "epoch": "cdc42563-2824-481f-9e21-0c635627b598",
+      "source": "Bitget",
+      "expiresAt": 1789984064747,
+      "tradeAvailable": false,
+      "sourceStatus": "stale",
+      "quoteVersion": 4,
+      "stale": true,
+      "price": 66.29,
+      "displayAvailable": true,
+      "sourceAvailable": false,
+      "timestamp": 1789984049747,
+      "status": "stale"
+    }
+  },
+  "frames": 13,
+  "seen": {
+    "BTCUSD": [
+      {
+        "at": 1790069999323,
+        "version": 1,
+        "epoch": "cdc42563-2824-481f-9e21-0c635627b598",
+        "source": "Binance",
+        "transport": "ws",
+        "available": true,
+        "lagMs": 1311
+      },
+      {
+        "at": 1790070001284,
+        "version": 5,
+        "epoch": "cdc42563-2824-481f-9e21-0c635627b598",
+        "source": "Binance",
+        "transport": "ws",
+        "available": true,
+        "lagMs": 1277
+      },
+      {
+        "at": 1790070002358,
+        "version": 30,
+        "epoch": "cdc42563-2824-481f-9e21-0c635627b598",
+        "source": "Binance",
+        "transport": "ws",
+        "available": true,
+        "lagMs": 347
+      },
+      {
+        "at": 1790070003400,
+        "version": 32,
+        "epoch": "cdc42563-2824-481f-9e21-0c635627b598",
+        "source": "Binance",
+        "transport": "ws",
+        "available": true,
+        "lagMs": 393
+      },
+      {
+        "at": 1790070004443,
+        "version": 34,
+        "epoch": "cdc42563-2824-481f-9e21-0c635627b598",
+        "source": "Binance",
+        "transport": "ws",
+        "available": true,
+        "lagMs": 432
+      },
+      {
+        "at": 1790070005484,
+        "version": 46,
+        "epoch": "cdc42563-2824-481f-9e21-0c635627b598",
+        "source": "Binance",
+        "transport": "ws",
+        "available": true,
+        "lagMs": 474
+      },
+      {
+        "at": 1790070006528,
+        "version": 56,
+        "epoch": "cdc42563-2824-481f-9e21-0c635627b598",
+        "source": "Binance",
+        "transport": "ws",
+        "available": true,
+        "lagMs": 519
+      },
+      {
+        "at": 1790070007580,
+        "version": 63,
+        "epoch": "cdc42563-2824-481f-9e21-0c635627b598",
+        "source": "Binance",
+        "transport": "ws",
+        "available": true,
+        "lagMs": 569
+      },
+      {
+        "at": 1790070008623,
+        "version": 73,
+        "epoch": "cdc42563-2824-481f-9e21-0c635627b598",
+        "source": "Binance",
+        "transport": "ws",
+        "available": true,
+        "lagMs": 619
+      },
+      {
+        "at": 1790070009663,
+        "version": 75,
+        "epoch": "cdc42563-2824-481f-9e21-0c635627b598",
+        "source": "Binance",
+        "transport": "ws",
+        "available": true,
+        "lagMs": 652
+      },
+      {
+        "at": 1790070010704,
+        "version": 88,
+        "epoch": "cdc42563-2824-481f-9e21-0c635627b598",
+        "source": "Binance",
+        "transport": "ws",
+        "available": true,
+        "lagMs": 696
+      },
+      {
+        "at": 1790070011754,
+        "version": 92,
+        "epoch": "cdc42563-2824-481f-9e21-0c635627b598",
+        "source": "Binance",
+        "transport": "ws",
+        "available": true,
+        "lagMs": 742
+      },
+      {
+        "at": 1790070012826,
+        "version": 99,
+        "epoch": "cdc42563-2824-481f-9e21-0c635627b598",
+        "source": "Binance",
+        "transport": "ws",
+        "available": true,
+        "lagMs": 813
+      }
+    ],
+    "ETHUSD": [
+      {
+        "at": 1790069999323,
+        "version": 2,
+        "epoch": "cdc42563-2824-481f-9e21-0c635627b598",
+        "source": "Binance",
+        "transport": "ws",
+        "available": true,
+        "lagMs": 1310
+      },
+      {
+        "at": 1790070001284,
+        "version": 6,
+        "epoch": "cdc42563-2824-481f-9e21-0c635627b598",
+        "source": "Binance",
+        "transport": "ws",
+        "available": true,
+        "lagMs": 1275
+      },
+      {
+        "at": 1790070002358,
+        "version": 31,
+        "epoch": "cdc42563-2824-481f-9e21-0c635627b598",
+        "source": "Binance",
+        "transport": "ws",
+        "available": true,
+        "lagMs": 349
+      },
+      {
+        "at": 1790070003400,
+        "version": 33,
+        "epoch": "cdc42563-2824-481f-9e21-0c635627b598",
+        "source": "Binance",
+        "transport": "ws",
+        "available": true,
+        "lagMs": 390
+      },
+      {
+        "at": 1790070004443,
+        "version": 35,
+        "epoch": "cdc42563-2824-481f-9e21-0c635627b598",
+        "source": "Binance",
+        "transport": "ws",
+        "available": true,
+        "lagMs": 434
+      },
+      {
+        "at": 1790070005484,
+        "version": 47,
+        "epoch": "cdc42563-2824-481f-9e21-0c635627b598",
+        "source": "Binance",
+        "transport": "ws",
+        "available": true,
+        "lagMs": 473
+      },
+      {
+        "at": 1790070006528,
+        "version": 57,
+        "epoch": "cdc42563-2824-481f-9e21-0c635627b598",
+        "source": "Binance",
+        "transport": "ws",
+        "available": true,
+        "lagMs": 516
+      },
+      {
+        "at": 1790070007580,
+        "version": 64,
+        "epoch": "cdc42563-2824-481f-9e21-0c635627b598",
+        "source": "Binance",
+        "transport": "ws",
+        "available": true,
+        "lagMs": 571
+      },
+      {
+        "at": 1790070008623,
+        "version": 74,
+        "epoch": "cdc42563-2824-481f-9e21-0c635627b598",
+        "source": "Binance",
+        "transport": "ws",
+        "available": true,
+        "lagMs": 614
+      },
+      {
+        "at": 1790070009663,
+        "version": 76,
+        "epoch": "cdc42563-2824-481f-9e21-0c635627b598",
+        "source": "Binance",
+        "transport": "ws",
+        "available": true,
+        "lagMs": 649
+      },
+      {
+        "at": 1790070010704,
+        "version": 89,
+        "epoch": "cdc42563-2824-481f-9e21-0c635627b598",
+        "source": "Binance",
+        "transport": "ws",
+        "available": true,
+        "lagMs": 695
+      },
+      {
+        "at": 1790070011754,
+        "version": 93,
+        "epoch": "cdc42563-2824-481f-9e21-0c635627b598",
+        "source": "Binance",
+        "transport": "ws",
+        "available": true,
+        "lagMs": 745
+      },
+      {
+        "at": 1790070012826,
+        "version": 100,
+        "epoch": "cdc42563-2824-481f-9e21-0c635627b598",
+        "source": "Binance",
+        "transport": "ws",
+        "available": true,
+        "lagMs": 817
+      }
+    ]
+  }
+}

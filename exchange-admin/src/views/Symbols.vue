@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search, Refresh, Plus, Edit, Delete, Star, StarFilled, List } from '@element-plus/icons-vue'
 import request from '@/utils/request'
+import SymbolCatalogDialog from '@/components/SymbolCatalogDialog.vue'
 import { getImageUrl } from '@/utils/imageUrl'
 import { usePermissions } from '@/composables/usePermissions'
 
@@ -47,15 +48,10 @@ const queryParams = ref({
   size: 20,
 })
 
-const categories = [
-  { label: '全部', value: '' },
-  { label: 'US', value: 'US' },
-  { label: 'Crypto', value: 'Crypto' },
-  { label: 'Metal', value: 'Metal' },
-  { label: 'Forex', value: 'Forex' },
-  { label: 'CFD', value: 'CFD' },
-  { label: 'Oil', value: 'Oil' },
-]
+const categories = computed(() => [{ label: '全部', value: '' }, ...categoryList.value.map(c => ({label: c.label, value: c.key}))])
+const sourceOptions = ref<any[]>([])
+const sourceCategories = (source: string) => sourceOptions.value.find(s => s.value === source)?.categories || []
+const catalogVisible = ref(false)
 
 const loadSymbols = async () => {
   loading.value = true
@@ -85,6 +81,7 @@ const handleReset = () => {
 const categoryDialogVisible = ref(false)
 const categoryLoading = ref(false)
 const categoryList = ref<any[]>([])
+const categoryAllowsLeverage = (key: string) => categoryList.value.find(c => c.key === key)?.leverageEnabled !== false
 
 // ===== 杠杆设置相关 =====
 const leverageDialogVisible = ref(false)
@@ -145,36 +142,9 @@ const saveLeverageSettings = async () => {
 const loadCategoryConfig = async () => {
   categoryLoading.value = true
   try {
-    // 从后端获取当前分类配置
-    const res: any = await request.get('/market/categories')
-    const list = res.list || []
-    // 确保包含所有默认分类
-    const defaultKeys = ['US', 'Crypto', 'Metal', 'Forex', 'CFD', 'Oil']
-    const map = new Map<string, any>()
-    list.forEach((item: any) => {
-      if (item && item.key) {
-        map.set(item.key, {
-          key: item.key,
-          label: item.label || item.key,
-          sortOrder: item.sortOrder ?? 0,
-          enabled: item.enabled !== false,
-        })
-      }
-    })
-    defaultKeys.forEach((k, index) => {
-      if (!map.has(k)) {
-        map.set(k, {
-          key: k,
-          label: k,
-          sortOrder: index + 1,
-          enabled: true,
-        })
-      }
-    })
-    // 转为数组并按 sortOrder 排序
-    categoryList.value = Array.from(map.values()).sort(
-      (a: any, b: any) => Number(a.sortOrder || 0) - Number(b.sortOrder || 0)
-    )
+    const [rows, sources]: any = await Promise.all([request.get('/admin/symbols/categories'), request.get('/admin/symbols/catalog/sources')])
+    categoryList.value = rows.map((row: any) => ({ ...row, leverageEnabled: row.leverageEnabled !== false }))
+    sourceOptions.value = sources
   } catch (e: any) {
     ElMessage.error(e?.message || '加载分类配置失败')
   } finally {
@@ -185,22 +155,7 @@ const loadCategoryConfig = async () => {
 const saveCategoryConfig = async () => {
   try {
     categoryLoading.value = true
-    // 统一保存为一条配置：home.categories，值是整个分类数组
-    const payload = [
-      {
-        key: 'home.categories',
-        value: JSON.stringify(
-          categoryList.value.map((item, index) => ({
-            key: item.key,
-            label: item.label || item.key,
-            sortOrder: Number(item.sortOrder || index + 1),
-            enabled: item.enabled !== false,
-          }))
-        ),
-        description: '首页分类配置',
-      },
-    ]
-    await request.post('/admin/config/saveBatch', payload)
+    categoryList.value = await request.post('/admin/symbols/categories', categoryList.value) as any
     ElMessage.success('分类配置已保存')
     categoryDialogVisible.value = false
   } catch (e: any) {
@@ -215,29 +170,9 @@ const handlePageChange = (page: number) => {
   loadSymbols()
 }
 
-const handleAdd = () => {
-  dialogTitle.value = '新增币种'
-  formData.value = {
-    id: null,
-    symbol: '',
-    baseCurrency: '',
-    quoteCurrency: 'USD',
-    name: '',
-    nameEn: '',
-    category: 'US',
-    iconUrl: '',
-    isHot: false,
-    isEnabled: true,
-    sortOrder: 0,
-    pricePrecision: 2,
-    volumePrecision: 2,
-    minTradeAmount: 0,
-    alltickSymbol: '',
-    lotSize: 1000, // 每手数量
-    feeMultiplier: 30, // 手续费倍数
-    maxLeverage: 100, // 用户可选杠杆上限
-  }
-  dialogVisible.value = true
+const handleAdd = async () => {
+  await loadCategoryConfig()
+  catalogVisible.value = true
 }
 
 const handleEdit = (row: any) => {
@@ -248,13 +183,8 @@ const handleEdit = (row: any) => {
 
 const handleSave = async () => {
   try {
-    if (formData.value.id) {
-      await request.post('/admin/symbols/update', formData.value)
-      ElMessage.success('更新成功')
-    } else {
-      await request.post('/admin/symbols/create', formData.value)
-      ElMessage.success('创建成功')
-    }
+    await request.post('/admin/symbols/update', formData.value)
+    ElMessage.success('更新成功')
     dialogVisible.value = false
     loadSymbols()
   } catch (e: any) {
@@ -339,6 +269,7 @@ let refreshTimer: number | null = null
 onMounted(() => {
   loadSymbols()
   loadPermissions()
+  loadCategoryConfig()
   // 每30秒自动刷新价格数据
   refreshTimer = window.setInterval(() => {
     loadSymbols()
@@ -366,7 +297,7 @@ onUnmounted(() => {
         <el-form-item>
           <el-button type="primary" :icon="Search" @click="handleSearch">搜索</el-button>
           <el-button :icon="Refresh" @click="handleReset">重置</el-button>
-          <el-button type="success" :icon="Plus" @click="handleAdd">新增币种</el-button>
+          <el-button type="success" :icon="Plus" :disabled="!canEditSymbol" @click="handleAdd">新增币种</el-button>
           <el-button type="warning" :icon="List" @click="openCategoryDialog">分类管理</el-button>
           <el-button type="info" @click="openLeverageDialog">合约杠杆上限</el-button>
         </el-form-item>
@@ -381,9 +312,11 @@ onUnmounted(() => {
         style="margin-top: 16px"
       >
         <el-table-column prop="id" label="ID" width="80" />
-        <el-table-column prop="symbol" label="交易对" width="120" />
+        <el-table-column prop="symbol" label="交易对" min-width="170"><template #default="{ row }"><span style="display:flex;align-items:center;gap:8px"><img v-if="row.iconUrl" :src="getImageUrl(row.iconUrl)" alt="" width="28" height="28" />{{ row.symbol }}</span></template></el-table-column>
         <el-table-column prop="name" label="名称" min-width="150" />
-        <el-table-column prop="category" label="分类" width="100" />
+        <el-table-column prop="category" label="项目分类" width="100" />
+        <el-table-column prop="marketSource" label="行情源" width="100" />
+        <el-table-column prop="sourceCategory" label="源分类" width="100" />
         <el-table-column prop="currentPrice" label="当前价格" width="120">
           <template #default="{ row }">
             {{ row.currentPrice || '0.00' }}
@@ -418,7 +351,7 @@ onUnmounted(() => {
         <el-table-column prop="sortOrder" label="排序" width="80" />
         <el-table-column prop="maxLeverage" label="杠杆上限" width="100">
           <template #default="{ row }">
-            <el-tag type="info">{{ row.maxLeverage ?? 100 }}x</el-tag>
+            <el-tag type="info">{{ categoryAllowsLeverage(row.category) ? `${row.maxLeverage ?? 100}x` : '无杠杆（1x）' }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column label="操作" width="200" fixed="right">
@@ -463,13 +396,13 @@ onUnmounted(() => {
     <el-dialog v-model="dialogVisible" :title="dialogTitle" width="600px">
       <el-form :model="formData" label-width="120px">
         <el-form-item label="交易对符号" required>
-          <el-input v-model="formData.symbol" placeholder="如 BTCUSD" />
+          <el-input v-model="formData.symbol" disabled />
         </el-form-item>
         <el-form-item label="基础货币" required>
-          <el-input v-model="formData.baseCurrency" placeholder="如 BTC" />
+          <el-input v-model="formData.baseCurrency" disabled />
         </el-form-item>
         <el-form-item label="计价货币" required>
-          <el-input v-model="formData.quoteCurrency" placeholder="如 USD" />
+          <el-input v-model="formData.quoteCurrency" disabled />
         </el-form-item>
         <el-form-item label="显示名称" required>
           <el-input v-model="formData.name" placeholder="如 比特币/美元" />
@@ -479,12 +412,7 @@ onUnmounted(() => {
         </el-form-item>
         <el-form-item label="分类" required>
           <el-select v-model="formData.category" style="width: 100%">
-            <el-option label="US" value="US" />
-            <el-option label="Crypto" value="Crypto" />
-            <el-option label="Metal" value="Metal" />
-            <el-option label="Forex" value="Forex" />
-            <el-option label="CFD" value="CFD" />
-            <el-option label="Oil" value="Oil" />
+            <el-option v-for="cat in categoryList" :key="cat.key" :label="cat.label" :value="cat.key" />
           </el-select>
         </el-form-item>
         <el-form-item label="币种图标">
@@ -508,11 +436,8 @@ onUnmounted(() => {
             style="margin-top: 8px;"
           />
         </el-form-item>
-        <el-form-item label="市场产品代码">
-          <el-input v-model="formData.alltickSymbol" placeholder="阿里云市场API中的产品代码（如：XAUUSD）" />
-          <div style="font-size: 12px; color: #999; margin-top: 4px">
-            用于调用阿里云市场API的产品代码，可在 <a href="http://demo.konpn.com/symbols.shtml" target="_blank" style="color: #409EFF">http://demo.konpn.com/symbols.shtml</a> 查询
-          </div>
+        <el-form-item label="源绑定">
+          <span>{{ formData.marketSource }} / {{ formData.sourceCategory }} / {{ formData.alltickSymbol }}</span>
         </el-form-item>
         <el-form-item label="价格精度">
           <el-input-number v-model="formData.pricePrecision" :min="0" :max="8" />
@@ -542,7 +467,7 @@ onUnmounted(() => {
           <div style="font-size: 12px; color: #999; margin-top: 4px">手续费倍数，用于计算预估手续费（买入数量 × 手续费倍数）</div>
         </el-form-item>
         <el-form-item label="杠杆上限">
-          <el-input-number v-model="formData.maxLeverage" :min="1" :max="100" :precision="0" style="width: 100%" />
+          <el-input-number :disabled="!categoryAllowsLeverage(formData.category)" v-model="formData.maxLeverage" :min="1" :max="100" :precision="0" style="width: 100%" />
           <div style="font-size: 12px; color: #999; margin-top: 4px">用户下单可选1至该上限，默认100倍；降低上限后按上限默认，不影响已有订单</div>
         </el-form-item>
       </el-form>
@@ -585,7 +510,8 @@ onUnmounted(() => {
   </el-dialog>
 
   <!-- 分类管理对话框 -->
-  <el-dialog v-model="categoryDialogVisible" title="首页分类管理" width="520px">
+  <el-dialog v-model="categoryDialogVisible" title="项目分类与源分类绑定" width="min(1000px, 96vw)">
+    <el-alert title="绑定用于新增交易对时自动选择项目分类；手动选择可覆盖。修改绑定不迁移已添加交易对的行情源。关闭杠杆后新单固定1倍，已有持仓不变，高杠杆挂单暂停成交、仍可撤单。" type="info" :closable="false" style="margin-bottom: 16px" />
     <el-table :data="categoryList" v-loading="categoryLoading" border stripe>
       <el-table-column prop="key" label="分类Key" width="120" />
       <el-table-column prop="label" label="显示名称" min-width="140">
@@ -593,9 +519,28 @@ onUnmounted(() => {
           <el-input v-model="row.label" placeholder="显示名称" />
         </template>
       </el-table-column>
-      <el-table-column prop="sortOrder" label="排序" width="100">
+      <el-table-column label="行情源" width="150">
+        <template #default="{ row }">
+          <el-select v-model="row.marketSource" @change="row.sourceCategory = sourceCategories(row.marketSource)[0]?.value">
+            <el-option v-for="source in sourceOptions" :key="source.value" :value="source.value" :label="source.label" />
+          </el-select>
+        </template>
+      </el-table-column>
+      <el-table-column label="源分类" min-width="210">
+        <template #default="{ row }">
+          <el-select v-model="row.sourceCategory">
+            <el-option v-for="cat in sourceCategories(row.marketSource)" :key="cat.value" :value="cat.value" :label="cat.label" />
+          </el-select>
+        </template>
+      </el-table-column>
+      <el-table-column prop="sortOrder" label="排序" width="160">
         <template #default="{ row }">
           <el-input-number v-model="row.sortOrder" :min="0" :max="999" />
+        </template>
+      </el-table-column>
+      <el-table-column label="允许杠杆" width="110">
+        <template #default="{ row }">
+          <el-switch v-model="row.leverageEnabled" :aria-label="`${row.key}允许杠杆`" />
         </template>
       </el-table-column>
       <el-table-column prop="enabled" label="首页显示" width="100">
@@ -611,6 +556,7 @@ onUnmounted(() => {
       </span>
     </template>
   </el-dialog>
+  <SymbolCatalogDialog v-model="catalogVisible" :sources="sourceOptions" :categories="categoryList" @added="loadSymbols" />
 </template>
 
 <style scoped>

@@ -19,12 +19,25 @@ class ShareHistoryTest {
         MarketQuoteSource source = new MarketQuoteSource();
         MarketHttp http = mock(MarketHttp.class);
         ReflectionTestUtils.setField(source, "http", http);
-        ReflectionTestUtils.setField(source, "baseUrl", "https://example.invalid/api/v3");
+        ExchangeQuoteSource exchange = new ExchangeQuoteSource(); exchange.http = http; exchange.spotUrl = "https://example.invalid";
+        ReflectionTestUtils.setField(source, "exchange", exchange);
         ReflectionTestUtils.setField(source, "yahooUrl", "https://example.invalid/v8/finance");
-        when(http.get(any(URI.class))).thenReturn(ResponseEntity.ok("{\"code\":\"00000\",\"data\":[[\"1781841600000\",\"100\",\"101\",\"99\",\"100\",\"1\",\"100\"]]}"));
+        when(http.get(any(URI.class))).thenReturn(ResponseEntity.ok("[[\"1781841600000\",\"100\",\"101\",\"99\",\"100\",\"1\",\"1781841659999\",\"100\"]]"));
         source.getKline("BTCUSDT", "1m", 160, "Crypto", 1781845200000L);
-        verify(http).get(argThat(uri -> uri.toString().contains("/history-candles?") && uri.toString().contains("endTime=1781845200000")));
+        verify(http).get(argThat(uri -> uri.toString().contains("/klines?") && uri.toString().contains("endTime=1781845200000")));
         source.getKline("BTCUSDT", "1m", 160, "Crypto");
-        verify(http).get(argThat(uri -> uri.toString().contains("/market/candles?") && !uri.toString().contains("endTime")));
+        verify(http).get(argThat(uri -> uri.toString().contains("/klines?") && !uri.toString().contains("endTime")));
     }
+    @Test void minuteHistoryLookbackSpansWeekendInsteadOfOnlyHours() {
+        MarketQuoteSource source = new MarketQuoteSource();
+        MarketHttp http = mock(MarketHttp.class);
+        ReflectionTestUtils.setField(source, "http", http);
+        ReflectionTestUtils.setField(source, "yahooUrl", "https://example.invalid/v8/finance");
+        when(http.get(any(URI.class))).thenReturn(ResponseEntity.ok("{\"chart\":{\"result\":[]}}"));
+        long end = 1789911135L;
+        source.getKline("USDJPY", "1m", 200, "Forex", end * 1000);
+        verify(http).get(argThat(uri -> uri.toString().contains("period1=" + (end - 7 * 86400))
+            && uri.toString().contains("period2=" + end)));
+    }
+
 }

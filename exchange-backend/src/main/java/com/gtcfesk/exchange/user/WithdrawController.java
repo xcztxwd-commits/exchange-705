@@ -6,20 +6,13 @@ import com.gtcfesk.exchange.repository.AssetAccountRepository;
 import com.gtcfesk.exchange.repository.UserBankCardRepository;
 import com.gtcfesk.exchange.repository.UserDigitalAddressRepository;
 import com.gtcfesk.exchange.repository.WithdrawRecordRepository;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.client.RestTemplate;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -34,15 +27,8 @@ public class WithdrawController {
     private final UserDigitalAddressRepository userDigitalAddressRepository;
     private final UserBankCardRepository userBankCardRepository;
 
-    private final RestTemplate restTemplate = new RestTemplate();
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final FiatCurrencyService fiatCurrencyService;
 
-    @Value("${forex.api.base-url:https://apiforex.cn/api/v1}")
-    private String forexBaseUrl;
-
-    @Value("${forex.api.key:}")
-    private String forexApiKey;
-    
     /**
      * 提交提现申请
      */
@@ -63,7 +49,11 @@ public class WithdrawController {
                 throw new com.gtcfesk.exchange.common.BusinessException("提现类型无效");
             }
             String network = (String) req.get("network"); // 如 USDT-TRC20, USD
-            BigDecimal amount = new BigDecimal(req.get("amount").toString());
+            BigDecimal originalAmount = new BigDecimal(req.get("amount").toString());
+            com.gtcfesk.exchange.common.TradeValidation.positive(originalAmount, "提现金额");
+            String currency = "bank".equals(type) ? fiatCurrencyService.currency((String) req.get("currency")) : "USD";
+            BigDecimal rate = "bank".equals(type) ? fiatCurrencyService.rate(currency) : BigDecimal.ONE;
+            BigDecimal amount = fiatCurrencyService.toUsd(originalAmount, rate);
             String address = (String) req.get("address");
             String remark = (String) req.get("remark");
             
@@ -138,11 +128,12 @@ public class WithdrawController {
             record.setNetwork(network);
             record.setAmount(amount);
             record.setFee(fee);
-            // 实际到账金额：
-            // - 数字货币：等于提现金额
-            // - 银行卡：按 USD -> 目标货币汇率换算
-            BigDecimal actualAmount = calculateActualAmount(type, network, amount);
-            record.setActualAmount(actualAmount);
+            record.setActualAmount(amount); // 银行卡以 USD 结算
+            if ("bank".equals(type)) {
+                record.setCurrency(currency);
+                record.setOriginalAmount(originalAmount);
+                record.setExchangeRate(rate);
+            }
             record.setAddress(address);
             record.setRemark(remark);
             record.setStatus("PENDING");
@@ -206,7 +197,7 @@ public class WithdrawController {
     }
 
     /**
-     * 计算预计到账金额（考虑银行卡提现时的汇率转换）
+     * 计算 USD 结算金额和手续费
      */
     @PostMapping("/calculate")
     public ResponseEntity<?> calculateAmount(@RequestBody Map<String, Object> req) {
@@ -216,15 +207,22 @@ public class WithdrawController {
                 throw new com.gtcfesk.exchange.common.BusinessException("提现类型无效");
             }
             String network = (String) req.get("network");
-            BigDecimal amount = new BigDecimal(req.get("amount").toString());
+            BigDecimal originalAmount = new BigDecimal(req.get("amount").toString());
+            com.gtcfesk.exchange.common.TradeValidation.positive(originalAmount, "提现金额");
+            String currency = "bank".equals(type) ? fiatCurrencyService.currency((String) req.get("currency")) : "USD";
+            BigDecimal rate = "bank".equals(type) ? fiatCurrencyService.rate(currency) : BigDecimal.ONE;
+            BigDecimal amount = fiatCurrencyService.toUsd(originalAmount, rate);
 
             BigDecimal fee = calculateFee(type, network, amount);
-            BigDecimal actualAmount = calculateActualAmount(type, network, amount);
+            BigDecimal actualAmount = amount;
 
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", true);
             resp.put("fee", fee);
             resp.put("actualAmount", actualAmount);
+            resp.put("amount", amount);
+            resp.put("totalNeeded", amount.add(fee));
+            resp.put("settlementCurrency", "USD");
             return ResponseEntity.ok(resp);
         } catch (Exception e) {
             if (org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive()) {
@@ -237,62 +235,4 @@ public class WithdrawController {
         }
     }
 
-    /**
-     * 计算实际到账金额：
-     * - 数字货币：直接返回 amount
-     * - 银行卡：按 USD -> 目标货币（network，例如 EUR）汇率转换
-     */
-    private BigDecimal calculateActualAmount(String type, String network, BigDecimal amount) {
-        if (!"bank".equals(type) || network == null || network.trim().isEmpty()) {
-            return amount;
-        }
-        try {
-            BigDecimal rate = getForexRate("USD", network.trim());
-            return amount.multiply(rate).setScale(2, RoundingMode.DOWN);
-        } catch (Exception e) {
-            if (org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive()) {
-                org.springframework.transaction.interceptor.TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
-            }
-            // 汇率获取失败时，回退为 1:1，避免影响提现流程
-            e.printStackTrace();
-            return amount;
-        }
-    }
-
-    /**
-     * 从 Forex API 获取汇率
-     * base: 基础币种（本项目资金账户默认 USD）
-     * target: 目标币种（如 EUR）
-     */
-    private BigDecimal getForexRate(String base, String target) throws Exception {
-        // 如果没有配置 API Key，则使用 1:1 汇率，保证接口可用
-        if (forexApiKey == null || forexApiKey.isEmpty()) {
-            return BigDecimal.ONE;
-        }
-
-        String encodedBase = URLEncoder.encode(base, StandardCharsets.UTF_8.name());
-        String encodedTarget = URLEncoder.encode(target, StandardCharsets.UTF_8.name());
-
-        String url = forexBaseUrl + "/latest?base=" + encodedBase + "&symbols=" + encodedTarget
-                + "&apikey=" + URLEncoder.encode(forexApiKey, StandardCharsets.UTF_8.name());
-
-        String json = restTemplate.getForObject(url, String.class);
-        JsonNode root = objectMapper.readTree(json);
-
-        boolean success = root.path("success").asBoolean(false);
-        if (!success) {
-            throw new IllegalStateException("Forex API 调用失败: " + root.path("error").asText("unknown error"));
-        }
-
-        JsonNode ratesNode = root.path("data").path("rates");
-        if (!ratesNode.has(target)) {
-            throw new IllegalStateException("Forex API 响应中缺少汇率: " + target);
-        }
-
-        String rateStr = ratesNode.get(target).asText();
-        return new BigDecimal(rateStr);
-    }
 }
-
-
-

@@ -23,11 +23,14 @@
         <button @click="showWealth = true" class="hover:text-[#8cc63f] flex items-center transition-colors"><el-icon class="mr-1 text-lg"><Coin /></el-icon> {{ localeStore.t('financialManagement') }}</button>
         <el-dropdown trigger="click" @command="handleLangChange">
           <span class="el-dropdown-link cursor-pointer flex items-center hover:text-[#8cc63f] transition-colors">
-            {{ currentLangLabel }} <el-icon class="el-icon--right"><arrow-down /></el-icon>
+            <img class="language-flag" :src="currentLanguage.flag" alt="" />
+            {{ currentLanguage.label }} <el-icon class="el-icon--right"><arrow-down /></el-icon>
           </span>
           <template #dropdown>
             <el-dropdown-menu>
-              <el-dropdown-item v-for="lang in languages" :key="lang.locale" :command="lang.locale">{{ lang.label }}</el-dropdown-item>
+              <el-dropdown-item v-for="lang in languages" :key="lang.locale" :command="lang.locale">
+                <img class="language-flag" :src="lang.flag" alt="" />{{ lang.label }}
+              </el-dropdown-item>
             </el-dropdown-menu>
           </template>
         </el-dropdown>
@@ -115,9 +118,9 @@
               <button v-if="tradeMode === 'contract'" @click="orderSubTab = 'pending'" :class="['px-6 py-2 font-bold border-b border-gray-200 dark:border-[#2b3139]-2 transition-colors', orderSubTab === 'pending' ? 'text-[#8cc63f] border-[#8cc63f]' : 'hover:text-gray-800 dark:text-gray-100 border-transparent']">{{ localeStore.t('pendingOrders') }}</button>
               <button @click="orderSubTab = 'history'" :class="['px-6 py-2 font-bold border-b border-gray-200 dark:border-[#2b3139]-2 transition-colors', orderSubTab === 'history' ? 'text-[#8cc63f] border-[#8cc63f]' : 'hover:text-gray-800 dark:text-gray-100 border-transparent']">{{ localeStore.t('historyRecords') }}</button>
               <div v-if="tradeMode === 'contract'" class="flex-1 flex justify-end items-center px-6 space-x-6 text-xs">
-                 <span>{{ localeStore.t('profitAndLoss') }}: <span :class="['font-bold text-sm', totalProfit >= 0 ? 'text-[#8cc63f]' : 'text-[#ff4d4f]']">{{ totalProfit.toFixed(2) }}</span></span>
+                 <span>{{ localeStore.t('profitAndLoss') }}: <span :class="['font-bold text-sm', totalProfit >= 0 ? 'text-[#8cc63f]' : 'text-[#ff4d4f]']">{{ formatMoney(totalProfit) }}</span></span>
                  <span>{{ localeStore.t('margin') }}: <span class="font-medium text-gray-700 dark:text-gray-200">{{ totalMargin.toFixed(4) }}</span></span>
-                 <span>{{ localeStore.t('riskRate') }}: <span class="font-medium text-gray-700 dark:text-gray-200">{{ riskRate.toFixed(2) }}%</span></span>
+                 <span>{{ localeStore.t('riskRate') }}: <span class="font-medium text-gray-700 dark:text-gray-200">{{ formatMoney(riskRate) }}%</span></span>
               </div>
            </div>
            <div class="flex-1 overflow-y-auto custom-scrollbar">
@@ -155,7 +158,7 @@
                     <td class="py-3 px-2 text-gray-400 dark:text-gray-500">{{ order.stopLoss || 0 }}</td>
                     <td class="py-3 px-2">{{ order.fee.toFixed(2) }}</td>
                     <td class="py-3 px-2">{{ order.margin.toFixed(2) }}</td>
-                    <td :class="['py-3 px-2 font-bold', order.profit >= 0 ? 'text-[#8cc63f]' : 'text-[#ff4d4f]']">{{ order.profit.toFixed(2) }}</td>
+                    <td :class="['py-3 px-2 font-bold', order.profit >= 0 ? 'text-[#8cc63f]' : 'text-[#ff4d4f]']">{{ formatMoney(order.profit) }}</td>
                     <td class="py-3 px-2 text-gray-400 dark:text-gray-500" v-html="order.openTime.replace(' ', '<br/>')"></td>
                     <td class="py-3 px-4 text-right space-x-2">
                       <button v-if="order.status === 'CLOSED'" @click="shareOrder = { id: order.id, kind: 'contract' }" class="pnl-share-entry" :aria-label="shareLabel" :title="shareLabel"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 15V3m-4 4 4-4 4 4M6 10H4v11h16V10h-2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" /></svg></button>
@@ -196,7 +199,7 @@
                     <td class="py-3 px-2 font-mono">{{ order.closePrice && order.closePrice > 0 ? order.closePrice.toFixed(4) : '-' }}</td>
                     <td class="py-3 px-2">{{ order.period }}</td>
                     <td class="py-3 px-2 text-[#8cc63f]">{{ order.expectedProfit ? order.expectedProfit.toFixed(2) : '0.00' }}</td>
-                    <td :class="['py-3 px-2 font-bold', order.profit > 0 ? 'text-[#8cc63f]' : (order.profit < 0 ? 'text-[#ff4d4f]' : 'text-gray-500 dark:text-gray-400 dark:text-gray-500')]">{{ order.status === 'CLOSED' ? (order.profit ? order.profit.toFixed(2) : '0.00') : '-' }}</td>
+                    <td :class="['py-3 px-2 font-bold', order.profit > 0 ? 'text-[#8cc63f]' : (order.profit < 0 ? 'text-[#ff4d4f]' : 'text-gray-500 dark:text-gray-400 dark:text-gray-500')]">{{ order.status === 'CLOSED' ? (order.profit ? formatMoney(order.profit) : '0.00') : '-' }}</td>
                     <td class="py-3 px-2">
                       <span v-if="order.status === 'TRADING'" class="text-[#8cc63f] bg-green-50 px-2 py-1 rounded">{{ localeStore.t('tradingStatus') }}</span>
                       <span v-else class="text-gray-500 dark:text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-[#2b3139] px-2 py-1 rounded">{{ localeStore.t('settled') }}</span>
@@ -231,10 +234,13 @@
              <span :class="['text-xl font-bold font-mono tracking-tight', getPriceColor(currentSymbolObj)]">{{ getSymbolPrice(currentSymbol) }}</span>
            </div>
            
-           <el-select v-model="orderType" class="w-full mb-5 custom-select">
+           <div class="flex items-center gap-3 mb-5">
+           <el-select v-model="orderType" class="flex-1 min-w-0 custom-select">
              <el-option :label="localeStore.t('marketPrice')" value="market" />
              <el-option :label="localeStore.t('limitPrice')" value="limit" />
            </el-select>
+           <LeverageControl v-model="selectedLeverage" :max="maxLeverage" :disabled="!currentSymbolInfo" :symbol="currentSymbol" />
+           </div>
 
            <div v-if="orderType === 'limit'" class="mb-5">
              <div class="text-gray-600 dark:text-gray-300 mb-2 font-medium text-sm">{{ localeStore.t('orderPrice') }}</div>
@@ -242,13 +248,28 @@
            </div>
 
            <div class="space-y-5">
+             <div class="pt-2">
+               <div class="text-gray-600 dark:text-gray-300 mb-2 font-medium text-sm">{{ localeStore.t('tradingAmount') }}(Step:0.01)</div>
+               <el-input-number v-model="quantity" :min="0" :step="0.01" class="w-full custom-input-number" />
+             </div>
+
+             <PositionSizing :percent="allocationPercent" :disabled="!canAllocate" :buy="liquidation.buy" :sell="liquidation.sell" :precision="currentSymbolInfo?.pricePrecision ?? 2" @change="setAllocation">
+             <div class="bg-gray-50 dark:bg-[#181c27] p-4 rounded-lg text-xs text-gray-500 dark:text-gray-400 dark:text-gray-500 space-y-2 mt-4 border border-gray-100 dark:border-[#2b3139]">
+               <div class="flex justify-between items-center"><span class="font-medium text-gray-600 dark:text-gray-300">{{ localeStore.t('perLot') }}</span><span class="font-mono text-gray-800 dark:text-gray-100 font-medium">1 {{ localeStore.t('lot') }} = {{ lotSize }} {{ currentSymbol }}</span></div>
+               <div class="flex justify-between items-center"><span class="font-medium text-gray-600 dark:text-gray-300">{{ localeStore.t('estFee') }}</span><span class="font-mono text-gray-800 dark:text-gray-100 font-medium">{{ estimatedFee.toFixed(6) }}</span></div>
+               <div class="flex justify-between items-center"><span class="font-medium text-gray-600 dark:text-gray-300">{{ localeStore.t('estMargin') }}</span><span class="font-mono text-gray-800 dark:text-gray-100 font-medium">{{ Number.isFinite(estimatedMargin) ? estimatedMargin.toFixed(2) : '--' }}</span></div>
+               <div class="flex justify-between items-center"><span class="font-medium text-gray-600 dark:text-gray-300">{{ localeStore.t('balance') }}</span><span class="font-mono text-gray-800 dark:text-gray-100 font-medium">{{ formatMoney(contractBalance) }}</span></div>
+             </div>
+
+             </PositionSizing>
+
+             <div class="grid grid-cols-2 gap-3">
              <div>
                <div class="flex items-center justify-between mb-2">
                  <span class="text-gray-600 dark:text-gray-300 font-medium text-sm">{{ localeStore.t('stopLossPrice') }}</span>
                  <el-switch v-model="useStopLoss" style="--el-switch-on-color: #8cc63f;" />
                </div>
                <el-input-number v-if="useStopLoss" v-model="stopLossPrice" class="w-full custom-input-number" :controls="true" />
-               <div v-else class="w-full h-10 bg-gray-50 dark:bg-[#181c27] border border-gray-200 dark:border-[#2b3139] rounded flex items-center justify-center text-gray-300 font-mono">0</div>
              </div>
 
              <div>
@@ -257,39 +278,14 @@
                  <el-switch v-model="useTakeProfit" style="--el-switch-on-color: #8cc63f;" />
                </div>
                <el-input-number v-if="useTakeProfit" v-model="takeProfitPrice" class="w-full custom-input-number" :controls="true" />
-               <div v-else class="w-full h-10 bg-gray-50 dark:bg-[#181c27] border border-gray-200 dark:border-[#2b3139] rounded flex items-center justify-center text-gray-300 font-mono">0</div>
              </div>
 
-             <div class="leverage-selector">
-               <div class="flex items-center justify-between mb-2">
-                 <label for="contract-leverage" class="text-gray-600 dark:text-gray-300 font-medium text-sm">{{ localeStore.t('leverage') }}</label>
-                 <output for="contract-leverage" class="font-bold text-[#78aa00] dark:text-[#8cc63f] tabular-nums">{{ selectedLeverage }}×</output>
-               </div>
-               <input id="contract-leverage" v-model.number="selectedLeverage" type="range" min="1" :max="maxLeverage" step="1"
-                 :aria-valuetext="`${selectedLeverage}×`" :disabled="!currentSymbolInfo || maxLeverage === 1"
-                 class="block w-full h-9 my-1 accent-[#8cc63f] cursor-pointer focus-visible:outline-[#8cc63f]" />
-               <div class="flex flex-wrap gap-1.5">
-                 <button v-for="value in leverageOptions" :key="value" type="button" :aria-pressed="selectedLeverage === value"
-                   :disabled="!currentSymbolInfo" @click="selectedLeverage = value"
-                   :class="['min-w-[44px] min-h-[44px] px-2 rounded-md border text-xs focus-visible:outline-[#8cc63f]', selectedLeverage === value ? 'border-[#8cc63f] bg-[#8cc63f]/15 text-[#4b7100] dark:text-[#8cc63f] font-bold' : 'border-gray-200 dark:border-[#2b3139] bg-white dark:bg-[#131722] text-gray-600 dark:text-gray-300']">{{ value }}×</button>
-               </div>
              </div>
 
-             <div class="pt-2">
-               <div class="text-gray-600 dark:text-gray-300 mb-2 font-medium text-sm">{{ localeStore.t('tradingAmount') }}(Step:0.01)</div>
-               <el-input-number v-model="quantity" :min="0.01" :step="0.01" class="w-full custom-input-number" />
-             </div>
-
-             <div class="bg-gray-50 dark:bg-[#181c27] p-4 rounded-lg text-xs text-gray-500 dark:text-gray-400 dark:text-gray-500 space-y-2 mt-4 border border-gray-100 dark:border-[#2b3139]">
-               <div class="flex justify-between items-center"><span class="font-medium text-gray-600 dark:text-gray-300">{{ localeStore.t('perLot') }}</span><span class="font-mono text-gray-800 dark:text-gray-100 font-medium">1 {{ localeStore.t('lot') }} = {{ lotSize }} {{ currentSymbol }}</span></div>
-               <div class="flex justify-between items-center"><span class="font-medium text-gray-600 dark:text-gray-300">{{ localeStore.t('estFee') }}</span><span class="font-mono text-gray-800 dark:text-gray-100 font-medium">{{ estimatedFee.toFixed(6) }}</span></div>
-               <div class="flex justify-between items-center"><span class="font-medium text-gray-600 dark:text-gray-300">{{ localeStore.t('estMargin') }}</span><span class="font-mono text-gray-800 dark:text-gray-100 font-medium">{{ estimatedMargin.toFixed(2) }}</span></div>
-               <div class="flex justify-between items-center"><span class="font-medium text-gray-600 dark:text-gray-300">{{ localeStore.t('balance') }}</span><span class="font-mono text-gray-800 dark:text-gray-100 font-medium">{{ formatMoney(contractBalance) }}</span></div>
-             </div>
-
+             <p v-if="currentSymbolInfo && !Number.isFinite(estimatedMargin)" role="status" class="text-xs text-amber-600 mt-2">{{ localeStore.locale === 'zh-TW' ? '結算匯率暫不可用' : 'Settlement rate unavailable' }}</p>
              <div class="flex space-x-3 pt-4">
-               <button @click="submitContractOrder('BUY')" class="flex-1 bg-[#8cc63f] text-white py-3.5 rounded-lg font-bold text-base hover:bg-[#7ab036] transition-colors shadow-sm shadow-green-200">{{ localeStore.t('buy') }}</button>
-               <button @click="submitContractOrder('SELL')" class="flex-1 bg-[#ff4d4f] text-white py-3.5 rounded-lg font-bold text-base hover:bg-[#e64042] transition-colors shadow-sm shadow-red-200">{{ localeStore.t('sell') }}</button>
+               <button :disabled="!currentSymbolInfo || !orderReady" @click="submitContractOrder('BUY')" class="disabled:opacity-50 disabled:cursor-not-allowed flex-1 bg-[#8cc63f] text-white py-3.5 rounded-lg font-bold text-base hover:bg-[#7ab036] transition-colors shadow-sm shadow-green-200">{{ localeStore.t('buy') }}</button>
+               <button :disabled="!currentSymbolInfo || !orderReady" @click="submitContractOrder('SELL')" class="disabled:opacity-50 disabled:cursor-not-allowed flex-1 bg-[#ff4d4f] text-white py-3.5 rounded-lg font-bold text-base hover:bg-[#e64042] transition-colors shadow-sm shadow-red-200">{{ localeStore.t('sell') }}</button>
              </div>
            </div>
         </div>
@@ -328,8 +324,8 @@
            </div>
 
            <div class="flex space-x-3">
-             <button @click="submitOptionOrder('UP')" class="flex-1 bg-[#8cc63f] text-white py-3.5 rounded-lg font-bold text-base hover:bg-[#7ab036] transition-colors shadow-sm shadow-green-200">{{ localeStore.t('buyUp') }}</button>
-             <button @click="submitOptionOrder('DOWN')" class="flex-1 bg-[#ff4d4f] text-white py-3.5 rounded-lg font-bold text-base hover:bg-[#e64042] transition-colors shadow-sm shadow-red-200">{{ localeStore.t('buyDown') }}</button>
+             <button :disabled="!currentSymbolInfo" @click="submitOptionOrder('UP')" class="flex-1 bg-[#8cc63f] text-white py-3.5 rounded-lg font-bold text-base hover:bg-[#7ab036] transition-colors shadow-sm shadow-green-200">{{ localeStore.t('buyUp') }}</button>
+             <button :disabled="!currentSymbolInfo" @click="submitOptionOrder('DOWN')" class="flex-1 bg-[#ff4d4f] text-white py-3.5 rounded-lg font-bold text-base hover:bg-[#e64042] transition-colors shadow-sm shadow-red-200">{{ localeStore.t('buyDown') }}</button>
            </div>
         </div>
       </aside>
@@ -619,22 +615,24 @@
         </div>
         <div class="flex-1 p-8 overflow-y-auto bg-white dark:bg-[#131722] custom-scrollbar relative">
           <div v-if="activeUserMenu === 'assets'" class="max-w-2xl mx-auto">
+            <CurrencyPicker v-model="displayCurrency" />
+            <p v-if="displayRate === null" role="alert">汇率暂不可用，请稍后重试</p>
             <div class="text-center mb-10 bg-gray-50 dark:bg-[#181c27] p-8 rounded-2xl border border-gray-100 dark:border-[#2b3139] shadow-sm relative overflow-hidden">
               <div class="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-[#8cc63f] to-[#aae061]"></div>
               <div class="inline-block bg-white dark:bg-[#131722] px-4 py-1.5 rounded-full text-gray-500 dark:text-gray-400 dark:text-gray-500 text-sm font-medium mb-4 shadow-sm border border-gray-100 dark:border-[#2b3139]">UID:< {{ auth.user?.id || '8959285729' }}</div>
               <div class="text-gray-500 dark:text-gray-400 dark:text-gray-500 font-medium mb-2">{{ localeStore.t('totalAssetsEquivalent') }}</div>
-              <div class="text-4xl text-[#8cc63f] font-bold font-mono tracking-tight">${{ totalAsset.toFixed(2) }}</div>
+              <div class="text-4xl text-[#8cc63f] font-bold font-mono tracking-tight">{{ formatAsset(totalAsset) }}</div>
             </div>
             <div class="space-y-4">
               <div class="border border-gray-200 dark:border-[#2b3139] rounded-xl p-5 flex justify-between items-center cursor-pointer hover:border-[#8cc63f] hover:shadow-md transition-all group bg-white dark:bg-[#131722]">
                 <div>
                   <div class="font-bold text-gray-800 dark:text-gray-100 mb-1.5 text-base">{{ localeStore.t('fundAccount') }}</div>
-                  <div class="text-sm text-gray-500 dark:text-gray-400 dark:text-gray-500 font-medium">{{ localeStore.t('balance') }}<span class="font-mono text-gray-700 dark:text-gray-200 ml-1">{{ walletBalance.toFixed(2) }}</span></div>
+                  <div class="text-sm text-gray-500 dark:text-gray-400 dark:text-gray-500 font-medium">{{ localeStore.t('balance') }}<span class="font-mono text-gray-700 dark:text-gray-200 ml-1">{{ formatAsset(walletBalance) }}</span></div>
                 </div>
                 <div class="flex items-center space-x-6">
                   <div class="text-right">
                     <div class="text-xs text-gray-400 dark:text-gray-500 mb-1 font-medium">{{ localeStore.t('frozenAmount') }}</div>
-                    <div class="text-sm font-mono font-medium text-gray-700 dark:text-gray-200">{{ walletFrozen.toFixed(2) }}</div>
+                    <div class="text-sm font-mono font-medium text-gray-700 dark:text-gray-200">{{ formatAsset(walletFrozen) }}</div>
                   </div>
                   <div class="w-8 h-8 rounded-full bg-gray-50 dark:bg-[#181c27] flex items-center justify-center group-hover:bg-green-50 transition-colors">
                     <el-icon class="text-gray-400 dark:text-gray-500 group-hover:text-[#8cc63f] transition-colors"><ArrowRight /></el-icon>
@@ -644,12 +642,12 @@
               <div class="border border-gray-200 dark:border-[#2b3139] rounded-xl p-5 flex justify-between items-center cursor-pointer hover:border-[#8cc63f] hover:shadow-md transition-all group bg-white dark:bg-[#131722]">
                 <div>
                   <div class="font-bold text-gray-800 dark:text-gray-100 mb-1.5 text-base">{{ localeStore.t('optionsAccount') }}</div>
-                  <div class="text-sm text-gray-500 dark:text-gray-400 dark:text-gray-500 font-medium">{{ localeStore.t('balance') }}<span class="font-mono text-gray-700 dark:text-gray-200 ml-1">{{ optionBalance.toFixed(2) }}</span></div>
+                  <div class="text-sm text-gray-500 dark:text-gray-400 dark:text-gray-500 font-medium">{{ localeStore.t('balance') }}<span class="font-mono text-gray-700 dark:text-gray-200 ml-1">{{ formatAsset(optionBalance) }}</span></div>
                 </div>
                 <div class="flex items-center space-x-6">
                   <div class="text-right">
                     <div class="text-xs text-gray-400 dark:text-gray-500 mb-1 font-medium">{{ localeStore.t('frozenAmount') }}</div>
-                    <div class="text-sm font-mono font-medium text-gray-700 dark:text-gray-200">{{ optionFrozen.toFixed(2) }}</div>
+                    <div class="text-sm font-mono font-medium text-gray-700 dark:text-gray-200">{{ formatAsset(optionFrozen) }}</div>
                   </div>
                   <div class="w-8 h-8 rounded-full bg-gray-50 dark:bg-[#181c27] flex items-center justify-center group-hover:bg-green-50 transition-colors">
                     <el-icon class="text-gray-400 dark:text-gray-500 group-hover:text-[#8cc63f] transition-colors"><ArrowRight /></el-icon>
@@ -659,12 +657,12 @@
               <div class="border border-gray-200 dark:border-[#2b3139] rounded-xl p-5 flex justify-between items-center cursor-pointer hover:border-[#8cc63f] hover:shadow-md transition-all group bg-white dark:bg-[#131722]">
                 <div>
                   <div class="font-bold text-gray-800 dark:text-gray-100 mb-1.5 text-base">{{ localeStore.t('contractAccount') }}</div>
-                  <div class="text-sm text-gray-500 dark:text-gray-400 dark:text-gray-500 font-medium">{{ localeStore.t('balance') }}<span class="font-mono text-gray-700 dark:text-gray-200 ml-1">{{ contractBalance.toFixed(2) }}</span></div>
+                  <div class="text-sm text-gray-500 dark:text-gray-400 dark:text-gray-500 font-medium">{{ localeStore.t('balance') }}<span class="font-mono text-gray-700 dark:text-gray-200 ml-1">{{ formatAsset(contractBalance) }}</span></div>
                 </div>
                 <div class="flex items-center space-x-6">
                   <div class="text-right">
                     <div class="text-xs text-gray-400 dark:text-gray-500 mb-1 font-medium">{{ localeStore.t('frozenAmount') }}</div>
-                    <div class="text-sm font-mono font-medium text-gray-700 dark:text-gray-200">{{ contractFrozen.toFixed(2) }}</div>
+                    <div class="text-sm font-mono font-medium text-gray-700 dark:text-gray-200">{{ formatAsset(contractFrozen) }}</div>
                   </div>
                   <div class="w-8 h-8 rounded-full bg-gray-50 dark:bg-[#181c27] flex items-center justify-center group-hover:bg-green-50 transition-colors">
                     <el-icon class="text-gray-400 dark:text-gray-500 group-hover:text-[#8cc63f] transition-colors"><ArrowRight /></el-icon>
@@ -736,8 +734,10 @@
             <div v-if="(depositTab === 'digital' && selectedDepositSetting) || (depositTab === 'bank' && bankSetting)" class="space-y-4 mt-6">
               <div>
                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">{{ localeStore.t('depositAmount') }}</label>
+                <CurrencyPicker v-model="depositCurrency" />
+                <p aria-live="polite">{{ usdPreview(depositForm.amount) }}</p>
                 <el-input v-model="depositForm.amount" type="number" :placeholder="localeStore.t('enterDepositAmount')" class="custom-input">
-                  <template #append>{{ depositTab === 'digital' ? (selectedDepositSetting?.network ? selectedDepositSetting.network.split('-')[0] : 'USDT') : 'CNY' }}</template>
+                  <template #append>{{ depositCurrency }}</template>
                 </el-input>
               </div>
               
@@ -772,7 +772,7 @@
                 </div>
               </div>
               
-              <button @click="submitDeposit" class="w-full bg-[#8cc63f] text-white py-3 rounded-lg font-bold hover:bg-[#7ab036] transition-colors shadow-sm shadow-green-200 mt-4">{{ localeStore.t('submitDepositApplication') }}</button>
+              <button :disabled="depositRate === null || depositSubmitting" @click="submitDeposit" class="w-full bg-[#8cc63f] text-white py-3 rounded-lg font-bold hover:bg-[#7ab036] transition-colors shadow-sm shadow-green-200 mt-4">{{ localeStore.t('submitDepositApplication') }}</button>
             </div>
             
             <div class="mt-8 bg-white dark:bg-[#131722] p-6 rounded-xl border border-gray-100 dark:border-[#2b3139] shadow-sm">
@@ -783,7 +783,7 @@
               <div v-else class="space-y-4">
                 <div v-for="record in depositRecords" :key="record.id" class="border border-gray-200 dark:border-[#2b3139]-b border border-gray-200 dark:border-[#2b3139]-gray-50 pb-4 last:border border-gray-200 dark:border-[#2b3139]-0 last:pb-0">
                   <div class="flex justify-between items-start mb-2">
-                    <div class="font-bold text-gray-800 dark:text-gray-100 text-base">{{ localeStore.t('quantityText') }}: {{ Number(record.amount).toFixed(2) }} {{ record.type === 'digital' ? (record.network ? record.network.split('-')[0] : 'USDT') : 'CNY' }}</div>
+                    <div class="font-bold text-gray-800 dark:text-gray-100 text-base">{{ localeStore.t('quantityText') }}: {{ Number(record.originalAmount ?? record.amount).toFixed(2) }} {{ record.currency || 'USD' }} · {{ Number(record.amount).toFixed(2) }} USD</div>
                     <div class="text-xs px-2 py-1 rounded-full font-medium" :class="record.status === 'COMPLETED' ? 'bg-green-50 text-[#8cc63f]' : (record.status === 'REJECTED' ? 'bg-red-50 text-red-500' : 'bg-orange-50 text-orange-400')">
                       {{ record.status === 'COMPLETED' ? localeStore.t('completedText') : (record.status === 'REJECTED' ? localeStore.t('rejectedText') : localeStore.t('reviewingText')) }}
                     </div>
@@ -868,10 +868,7 @@
                 <div>
                   <div class="text-sm font-bold text-gray-700 dark:text-gray-200 mb-2">{{ localeStore.t('currency') }}</div>
                   <div class="relative">
-                    <select v-model="withdrawForm.currency" class="w-full bg-gray-50 dark:bg-[#181c27] border border-gray-200 dark:border-[#2b3139]-none rounded-lg px-4 py-3 outline-none focus:ring-1 focus:ring-[#8cc63f]/30 transition-all text-gray-700 dark:text-gray-200 appearance-none">
-                      <option value="" disabled selected hidden>{{ localeStore.t('pleaseText') }}选择{{ localeStore.t('currency') }}</option>
-                      <option v-for="c in availableCurrencies" :key="c" :value="c">{{ c }}</option>
-                    </select>
+                    <CurrencyPicker v-model="withdrawCurrency" />
                     <el-icon class="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500 pointer-events-none"><ArrowRight /></el-icon>
                   </div>
                 </div>
@@ -906,15 +903,15 @@
                 </div>
                 <div class="flex justify-between text-sm">
                   <span class="text-gray-500 dark:text-gray-400 dark:text-gray-500">{{ localeStore.t('expectedArrival') }}</span>
-                  <span class="text-gray-800 dark:text-gray-100 font-medium">{{ withdrawForm.amount || 0 }}</span>
+                  <span class="text-gray-800 dark:text-gray-100 font-medium">{{ withdrawUsdPreview(withdrawForm.amount) }}</span>
                 </div>
                 <div class="flex justify-between text-sm pt-2 border border-gray-200 dark:border-[#2b3139]-t border border-gray-200 dark:border-[#2b3139]-gray-50">
                   <span class="text-gray-500 dark:text-gray-400 dark:text-gray-500">{{ localeStore.t('balance') }}</span>
-                  <span class="text-gray-800 dark:text-gray-100 font-bold">{{ walletBalance.toFixed(2) }} {{ withdrawForm.currency || 'USD' }}</span>
+                  <span class="text-gray-800 dark:text-gray-100 font-bold">{{ walletBalance.toFixed(2) }} USD</span>
                 </div>
               </div>
               
-              <button @click="submitWithdraw" class="w-full bg-[#8cc63f] text-white py-3.5 rounded-lg font-bold hover:bg-[#7ab036] transition-colors shadow-sm shadow-green-200 text-lg">{{ localeStore.t('withdrawCoin') }}</button>
+              <button :disabled="withdrawRate === null || withdrawSubmitting" @click="submitWithdraw" class="w-full bg-[#8cc63f] text-white py-3.5 rounded-lg font-bold hover:bg-[#7ab036] transition-colors shadow-sm shadow-green-200 text-lg">{{ localeStore.t('withdrawCoin') }}</button>
             </div>
             
             <div class="mt-8 bg-white dark:bg-[#131722] p-6 rounded-xl border border-gray-100 dark:border-[#2b3139] shadow-sm">
@@ -925,13 +922,13 @@
               <div v-else class="space-y-4">
                 <div v-for="record in withdrawRecords" :key="record.id" class="border border-gray-200 dark:border-[#2b3139]-b border border-gray-200 dark:border-[#2b3139]-gray-50 pb-4 last:border border-gray-200 dark:border-[#2b3139]-0 last:pb-0">
                   <div class="flex justify-between items-start mb-2">
-                    <div class="font-bold text-gray-800 dark:text-gray-100 text-base">{{ localeStore.t('quantityText') }}: {{ Number(record.amount).toFixed(2) }}</div>
+                    <div class="font-bold text-gray-800 dark:text-gray-100 text-base">{{ localeStore.t('quantityText') }}: {{ Number(record.amount).toFixed(2) }} USD <small v-if="record.currency">({{ record.originalAmount }} {{ record.currency }})</small></div>
                     <div class="text-xs px-2 py-1 rounded-full font-medium" :class="record.status === 'COMPLETED' ? 'bg-green-50 text-[#8cc63f]' : (record.status === 'REJECTED' ? 'bg-red-50 text-red-500' : 'bg-orange-50 text-orange-400')">
                       {{ record.status === 'COMPLETED' ? localeStore.t('completedText') : (record.status === 'REJECTED' ? localeStore.t('rejectedText') : (record.status === 'APPROVED' ? localeStore.t('passed') : localeStore.t('reviewingText'))) }}
                     </div>
                   </div>
                   <div class="text-sm text-gray-600 dark:text-gray-300 mb-1">
-                    {{ record.type === 'digital' ? localeStore.t('cryptoWithdraw') : localeStore.t('bankCardWithdraw') }} - {{ localeStore.t('arrivalText') }}: {{ Number(record.actualAmount).toFixed(2) }}
+                    {{ record.type === 'digital' ? localeStore.t('cryptoWithdraw') : localeStore.t('bankCardWithdraw') }} - {{ localeStore.t('arrivalText') }}: {{ Number(record.actualAmount).toFixed(2) }} {{ record.currency ? 'USD' : record.network }}
                   </div>
                   <div v-if="record.status === 'REJECTED' && record.reviewRemark" class="text-xs text-red-500 bg-red-50 p-2 rounded mb-1">
                     {{ localeStore.t('rejectReasonText') }}: {{ record.reviewRemark }}
@@ -1024,6 +1021,7 @@
           </div>
           
           <div v-else-if="activeUserMenu === 'wallet'" class="max-w-2xl mx-auto pb-6">
+            <CurrencyPicker v-model="displayCurrency" />
             <div class="space-y-4">
               <!-- 总资产卡片 -->
               <div class="bg-white dark:bg-[#131722] p-6 rounded-xl border border-gray-100 dark:border-[#2b3139] shadow-sm relative overflow-hidden">
@@ -1033,7 +1031,7 @@
                 </div>
                 <div class="flex justify-between items-center relative z-10">
                   <div class="text-4xl text-[#8cc63f] font-bold font-mono tracking-tight">
-                    {{ showWalletAsset ? '$' + totalAsset.toFixed(2) : '****' }}
+                    {{ showWalletAsset ? formatAsset(totalAsset) : '****' }}
                   </div>
                   <el-icon @click="showWalletAsset = !showWalletAsset" class="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 dark:text-gray-300 cursor-pointer text-xl transition-colors">
                     <component :is="showWalletAsset ? 'Hide' : 'View'" />
@@ -1702,15 +1700,26 @@
 </template>
 
 <script setup lang="ts">
+import CurrencyPicker from '@/components/CurrencyPicker.vue'
+import { useFiatCurrency } from '@/utils/fiatCurrency'
+const { currency: displayCurrency, rate: displayRate, formatAsset } = useFiatCurrency()
+const { currency: depositCurrency, rate: depositRate, usdPreview } = useFiatCurrency()
+const { currency: withdrawCurrency, rate: withdrawRate, usdPreview: withdrawUsdPreview } = useFiatCurrency()
+
 import OrderShareModal from "@/components/OrderShareModal.vue";
 import { shareCopy, type ShareKind } from "@/utils/orderShare";
 import { ref, onMounted, computed, watch, onUnmounted, nextTick } from 'vue';
+import marketWebSocket from '@/utils/marketWebSocket';
 import { useMarketStore } from '@/store/market';
 import { useAuthStore } from '@/store/auth';
 import { useLocaleStore } from '@/store/locale';
+import { languages } from '@/utils/languages';
 import { useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { DEFAULT_LEVERAGE, leverageLimit, leverageChoices, contractMargin, calculateContractProfit, contractEquity } from '@/utils/contract';
+import LeverageControl from '@/components/LeverageControl.vue';
+import PositionSizing from '@/components/PositionSizing.vue';
+import { useOrderSizing } from '@/utils/useOrderSizing';
+import { DEFAULT_LEVERAGE, leverageLimit, contractMargin, calculateContractProfit, contractEquity } from '@/utils/contract';
 import request from '@/utils/request';
 import { formatDateTime } from '@/utils/dateTime';
 import { getImageUrl } from '@/utils/imageUrl';
@@ -1950,6 +1959,8 @@ watch(() => router.currentRoute.value.query, () => {
 });
 
 onUnmounted(() => {
+  marketWebSocket.release('desktop')
+  marketWebSocket.release('active')
   if (timeInterval) {
     clearInterval(timeInterval);
   }
@@ -1963,32 +1974,7 @@ onUnmounted(() => {
   }
 });
 
-const languages = [
-  { label: 'English', locale: 'en' },
-  { label: 'français', locale: 'fr' },
-  { label: 'Deutsche', locale: 'de' },
-  { label: 'Русский язык', locale: 'ru' },
-  { label: 'Español', locale: 'es' },
-  { label: 'Português', locale: 'pt' },
-  { label: 'Italiano', locale: 'it' },
-  { label: 'عربي', locale: 'ar' },
-  { label: 'Türkçe', locale: 'tr' },
-  { label: 'Indonesia', locale: 'id' },
-  { label: 'မြန်မာ', locale: 'my' },
-  { label: 'हिंदी', locale: 'hi' },
-  { label: 'čeština', locale: 'cs' },
-  { label: 'Polska', locale: 'pl' },
-  { label: '日本語', locale: 'ja' },
-  { label: '한국어', locale: 'ko' },
-  { label: 'ไทย', locale: 'th' },
-  { label: 'Tiếng Việt', locale: 'vi' },
-  { label: '繁体中文', locale: 'zh-TW' },
-];
-
-const currentLangLabel = computed(() => {
-  const lang = languages.find(l => l.locale === localeStore.getCurrentLocale());
-  return lang ? lang.label : 'English';
-});
+const currentLanguage = computed(() => languages.find(lang => lang.locale === localeStore.locale) || languages[0]!);
 
 const handleLangChange = (locale: string) => {
   localeStore.setLocale(locale as any);
@@ -2051,7 +2037,7 @@ onMounted(() => {
   }
 });
 
-const currentSymbol = ref('XAUUSD');
+const currentSymbol = ref('');
 const currentCategory = ref('');
 const currentInterval = ref('5m');
 
@@ -2101,13 +2087,12 @@ const feeMultiplier = computed(() => {
   return 30;
 });
 
-const maxLeverage = computed(() => leverageLimit(currentSymbolInfo.value?.maxLeverage));
-const leverageOptions = computed(() => leverageChoices(maxLeverage.value));
+const maxLeverage = computed(() => leverageLimit(currentSymbolInfo.value?.maxLeverage, currentSymbolInfo.value?.leverageEnabled !== false));
 watch(maxLeverage, max => { selectedLeverage.value = Math.min(selectedLeverage.value, max); });
 const estimatedMargin = computed(() => contractMargin(
   Number(quantity.value), lotSize.value,
   Number(orderType.value === 'limit' ? limitPrice.value : marketStore.priceMap[currentSymbol.value]?.price),
-  selectedLeverage.value,
+  selectedLeverage.value, marketStore.getConversionRate(currentSymbol.value, currentSymbolInfo.value?.quoteCurrency),
 ));
 
 // 计算预估手续费 = 买入数量 × 手续费倍数
@@ -2470,7 +2455,8 @@ const submitPersonalInfoFromKyc = async () => {
 };
 
 const formatMoney = (v: number | string | undefined | null) => {
-  const n = Number(v || 0);
+  const n = Number(v ?? 0)
+  if (!Number.isFinite(n)) return '--';
   return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 };
 
@@ -2778,6 +2764,13 @@ const contractFrozen = ref(0);
 const optionBalance = ref(0);
 const optionFrozen = ref(0);
 const totalAsset = computed(() => walletBalance.value + contractBalance.value + optionBalance.value + walletFrozen.value + contractFrozen.value + optionFrozen.value);
+const { allocationPercent, setAllocation, canAllocate, orderReady, liquidation, refreshAccount } = useOrderSizing({
+  catalog: computed(() => marketStore.symbols),
+  quantity, leverage: selectedLeverage, available: contractBalance,
+  active: computed(() => tradeMode.value === 'contract'), symbol: currentSymbol,
+  price: computed(() => Number(orderType.value === 'limit' ? limitPrice.value : marketStore.priceMap[currentSymbol.value]?.price)),
+  lotSize, feePerLot: feeMultiplier, currency: computed(() => currentSymbolInfo.value?.quoteCurrency || 'USD'),
+});
 
 const loadWalletBalances = async () => {
   if (!auth.token) return;
@@ -2790,21 +2783,20 @@ const loadWalletBalances = async () => {
       contractFrozen.value = Number(res.contractFrozen || 0);
       optionBalance.value = Number(res.optionBalance || 0);
       optionFrozen.value = Number(res.optionFrozen || 0);
+      await refreshAccount();
     }
   } catch (e) {
     console.error(localeStore.t('loadAccountAssetsFailed'), e);
   }
 };
 
-const loadContractBalance = async () => {
-  // 我们已经通过 /user/assets 接口${localeStore.t('getText')}了所有资产信息，这里可以保留作为一个辅助方法或者空方法
-};
+const loadContractBalance = async () => { await refreshAccount(); };
 
 const transformContractOrder = (order: any) => {
   const pInfo = marketStore.priceMap[order.symbol];
   const currentPrice = pInfo ? Number(pInfo.price) : 0;
   const leverage = Number(order.leverage ?? 1);
-  const calculatedProfit = calculateContractProfit({ ...order, leverage }, currentPrice);
+  const calculatedProfit = calculateContractProfit({ ...order, leverage }, currentPrice, marketStore.getConversionRate(order.symbol, order.quoteCurrency));
   const displayTime = order.status === 'PENDING' ? (order.createdAt || order.openTime) : (order.openTime || order.createdAt);
   
   return {
@@ -2825,6 +2817,7 @@ const transformContractOrder = (order: any) => {
     side: order.side,
     quantity: order.quantity,
     leverage,
+    quoteCurrency: order.quoteCurrency,
     lotSize: order.lotSize
   };
 };
@@ -2860,7 +2853,7 @@ const loadOptionOrders = async () => {
         currentPrice: currentPrice > 0 ? currentPrice : Number(order.currentPrice || order.openPrice || 0),
         period: order.period || order.duration || 60, // 兼容 optionOrder 的 duration 字段
         expectedProfit,
-        profit: Number(order.profit || 0),
+        profit: Number(order.profit ?? 0),
         openTime: formatDateTime(order.createdAt || order.openTime),
         status: order.status,
         side: order.side || order.direction
@@ -2902,7 +2895,7 @@ const loadContractOrders = async () => {
 };
 
 const totalProfit = computed(() => {
-  return positionsData.value.reduce((sum, item) => sum + (item.profit || 0), 0);
+  return positionsData.value.reduce((sum, item) => sum + (item.profit ?? 0), 0);
 });
 
 const riskRate = computed(() => {
@@ -2924,7 +2917,7 @@ const updateOrdersRealTime = () => {
       const pInfo = marketStore.priceMap[order.symbol];
       const currentPrice = pInfo ? Number(pInfo.price) : 0;
       if (currentPrice > 0) {
-        const profit = calculateContractProfit(order, currentPrice);
+        const profit = calculateContractProfit(order, currentPrice, marketStore.getConversionRate(order.symbol, order.quoteCurrency));
         return { ...order, currentPrice, profit };
       }
       return order;
@@ -2941,7 +2934,7 @@ const submitContractOrder = async (side: 'BUY' | 'SELL') => {
     showLoginModal.value = true;
     return;
   }
-  if (!quantity.value || quantity.value <= 0) {
+  if (!Number.isFinite(quantity.value) || quantity.value < 0.01) {
     ElMessage.warning(`${localeStore.t('pleaseEnterText')}${localeStore.t('validText')}${localeStore.t('buyIn')}${localeStore.t('quantityText')}`);
     return;
   }
@@ -2962,6 +2955,8 @@ const submitContractOrder = async (side: 'BUY' | 'SELL') => {
     ElMessage.warning(localeStore.t('contractBalanceInsufficient'));
     return;
   }
+
+  if (!orderReady.value) return;
 
   const params = {
     symbol: currentSymbol.value,
@@ -3105,6 +3100,7 @@ const cancelOrder = async (order: any) => {
     if (res && res.success !== false) {
       ElMessage.success(localeStore.t('cancelOrderSuccess'));
       loadContractOrders();
+      loadContractBalance();
     } else {
       ElMessage.error(res?.message || localeStore.t('cancelOrderFailed'));
     }
@@ -3154,11 +3150,11 @@ onMounted(async () => {
   await marketStore.fetchSymbols();
   // 当加载完所有 symbols 之后，批量订阅所有的市场${localeStore.t('tradeText')}对，以${localeStore.t('getText')}整个左侧列表的实时价格
   if (marketStore.symbols && marketStore.symbols.length > 0) {
-    marketStore.subscribeSymbols(marketStore.symbols);
+
     // 初始化 currentSymbolInfo
-    const initialSymbol = marketStore.symbols.find((s: any) => s.symbol === currentSymbol.value);
+    const initialSymbol = marketStore.symbols.find((s: any) => s.symbol === currentSymbol.value) || marketStore.symbols[0];
     if (initialSymbol) {
-      currentSymbolInfo.value = initialSymbol;
+      selectSymbol(initialSymbol);
     }
   }
   
@@ -3218,6 +3214,14 @@ const filteredSymbols = computed(() => {
   }
   return result;
 });
+
+watch(() => [filteredSymbols.value, currentSymbol.value, positionsData.value, pendingOrdersData.value], () => {
+  const visible = new Set(filteredSymbols.value.map((symbol: any) => symbol.symbol));
+  visible.add(currentSymbol.value);
+  marketWebSocket.setSubscriptions('active', [currentSymbol.value]);
+  for (const order of [...positionsData.value, ...pendingOrdersData.value]) if (order.symbol) visible.add(order.symbol);
+  void marketStore.subscribeSymbols(marketStore.symbols.filter((symbol: any) => visible.has(symbol.symbol)), 'desktop');
+}, { immediate: true });
 
 const currentSymbolObj = computed(() => {
   return marketStore.priceMap[currentSymbol.value] || null;
@@ -3311,7 +3315,10 @@ const loadDepositSettings = async () => {
 
 
 
+const depositSubmitting = ref(false)
 const submitDeposit = async () => {
+  if (depositSubmitting.value) return
+  if (depositRate.value === null) { ElMessage.error('汇率暂不可用，请稍后重试'); return }
   let type = depositTab.value;
   let network = '';
   let address = '';
@@ -3341,12 +3348,14 @@ const submitDeposit = async () => {
     return;
   }
   
+  depositSubmitting.value = true
   try {
     const res: any = await request.post('/deposit/submit', {
       type: type,
       network: network,
       address: address,
-      amount: Number(depositForm.value.amount),
+      amount: depositForm.value.amount,
+      currency: depositCurrency.value,
       proofImage: depositForm.value.proofImage
     });
     
@@ -3361,6 +3370,8 @@ const submitDeposit = async () => {
     }
   } catch (e: any) {
     ElMessage.error(e.response?.data?.message || localeStore.t('submitFailed'));
+  } finally {
+    depositSubmitting.value = false
   }
 };
 
@@ -3408,8 +3419,11 @@ const loadUserWithdrawAccounts = async () => {
   }
 };
 
+const withdrawSubmitting = ref(false)
 const submitWithdraw = async () => {
-  if (!withdrawForm.value.currency) {
+  if (withdrawSubmitting.value) return
+  if (withdrawTab.value === 'bank' && withdrawRate.value === null) { ElMessage.error('汇率暂不可用，请稍后重试'); return }
+  if (withdrawTab.value === 'digital' && !withdrawForm.value.currency) {
     ElMessage.warning(localeStore.t('pleaseSelectCurrency'));
     return;
   }
@@ -3422,7 +3436,7 @@ const submitWithdraw = async () => {
     return;
   }
   
-  if (Number(withdrawForm.value.amount) > walletBalance.value) {
+  if (withdrawTab.value === 'digital' && Number(withdrawForm.value.amount) > walletBalance.value) {
     ElMessage.warning(localeStore.t('balanceInsufficient'));
     return;
   }
@@ -3433,12 +3447,14 @@ const submitWithdraw = async () => {
     network = matchedAddr ? matchedAddr.network : 'ERC20'; // fallback
   } else {
     const matchedBank = userBankCards.value.find(b => b.recipientAccount === withdrawForm.value.address);
-    network = matchedBank ? matchedBank.bankName : 'BANK'; // fallback
+    network = matchedBank?.currency || 'USD';
   }
 
+  withdrawSubmitting.value = true
   try {
     const res: any = await request.post('/withdraw/submit', {
       type: withdrawTab.value,
+      currency: withdrawTab.value === 'bank' ? withdrawCurrency.value : undefined,
       network: network,
       address: withdrawForm.value.address,
       amount: Number(withdrawForm.value.amount),
@@ -3457,6 +3473,8 @@ const submitWithdraw = async () => {
     }
   } catch (e: any) {
     ElMessage.error(e.response?.data?.message || localeStore.t('submitFailed'));
+  } finally {
+    withdrawSubmitting.value = false
   }
 };
 
@@ -3803,6 +3821,15 @@ watch(activeUserMenu, (val) => {
 </script>
 
 <style>
+.language-flag {
+  width: 24px;
+  height: 18px;
+  object-fit: contain;
+  border-radius: 2px;
+  margin-right: 8px;
+  flex-shrink: 0;
+}
+
 .pnl-share-entry { display:inline-flex; align-items:center; justify-content:center; width:36px; height:36px; padding:0; border:1px solid #e6e8ed; border-radius:9px; background:transparent; color:#679700; cursor:pointer; }
 .pnl-share-entry:hover { background:#f2f8e7; border-color:#85bd00; }
 /* Fixed desktop columns cannot fit a phone; keep every panel reachable by scrolling. */

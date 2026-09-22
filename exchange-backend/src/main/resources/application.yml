@@ -73,8 +73,24 @@ forex:
 
 # 行情（K线/最新价）外部接口配置
 market:
+  exchange:
+    provider: ${EXCHANGE_MARKET_PROVIDER:binance}
+    stream-enabled: ${EXCHANGE_STREAM_ENABLED:true}
+    spot-url: https://data-api.binance.vision
+    futures-url: https://fapi.binance.com
+    okx-url: https://www.okx.com
+    spot-ws: wss://data-stream.binance.vision/ws
+    futures-ws: wss://fstream.binance.com/market/ws
+    okx-ws: wss://ws.okx.com:8443/ws/v5/public
+  yahoo:
+    mode: ${YAHOO_STREAM_MODE:shadow}
+    enabled-symbols: ${YAHOO_STREAM_SYMBOLS:}
+    stable-ms: 30000
+    silence-ms: 10000
+  push:
+    interval-ms: ${MARKET_PUSH_INTERVAL_MS:1000}
+    delta: ${MARKET_PUSH_DELTA:false}
   quote:
-    base-url: https://api.bitget.com/api/v3
     alltick-url: https://quote.alltick.co/quote-b-api
     yahoo-url: https://query1.finance.yahoo.com/v8/finance
     connect-timeout-ms: 2000

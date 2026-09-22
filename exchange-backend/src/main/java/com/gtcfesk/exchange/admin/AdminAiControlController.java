@@ -1,6 +1,7 @@
 package com.gtcfesk.exchange.admin;
 
 import com.gtcfesk.exchange.market.ForexQuoteMarketService;
+import com.gtcfesk.exchange.market.PersistentPriceControl;
 import lombok.Getter;
 import lombok.Setter;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -14,6 +15,7 @@ import java.util.*;
 @RequestMapping("/api/admin/ai-control")
 public class AdminAiControlController {
     @Autowired private ForexQuoteMarketService market;
+    @Autowired private PersistentPriceControl controls;
 
     @Getter @Setter
     public static class StartRequest {
@@ -21,6 +23,7 @@ public class AdminAiControlController {
         @NotNull @DecimalMin(value = "0", inclusive = false) @Digits(integer = 16, fraction = 8) private BigDecimal targetPrice;
         @NotNull @Min(1) @Max(10) @Digits(integer = 2, fraction = 0) private BigDecimal intensity;
         @NotNull private Boolean randomOscillation = false;
+        @Size(max = 64) private String requestKey;
     }
 
     @Getter @Setter
@@ -31,9 +34,21 @@ public class AdminAiControlController {
 
     @Getter @Setter
     public static class RestoreRequest {
+        @Size(max = 64) private String requestKey;
         @NotNull @Min(1) @Max(86400) @Digits(integer = 5, fraction = 0) private BigDecimal durationSeconds;
         @NotNull @Min(1) @Max(10) @Digits(integer = 2, fraction = 0) private BigDecimal intensity;
         @NotNull private Boolean randomOscillation = false;
+    }
+
+    @Getter @Setter
+    public static class RandomMarketRequest {
+        @NotNull private Boolean enabled;
+        @DecimalMin(value = "0", inclusive = false) @Digits(integer = 16, fraction = 8) private BigDecimal basePrice;
+    }
+
+    @PostMapping("/{id}/random-market")
+    public Map<String, Object> randomMarket(@PathVariable Long id, @Valid @RequestBody RandomMarketRequest request) {
+        return market.randomMarket(id, request.getEnabled(), request.getBasePrice());
     }
 
     @GetMapping("/symbols")
@@ -42,9 +57,22 @@ public class AdminAiControlController {
     @GetMapping("/{id}")
     public Map<String, Object> getControl(@PathVariable Long id) { return market.controlStatus(id); }
 
+    @GetMapping("/{id}/history")
+    public List<PersistentPriceControl.Task> history(@PathVariable Long id, @RequestParam(required = false) Long before) {
+        return controls.history(id, before);
+    }
+
     @PostMapping("/{id}/start")
     public Map<String, Object> startControl(@PathVariable Long id, @Valid @RequestBody StartRequest request) {
-        return market.startControl(id, request.getDurationSeconds().intValueExact(), request.getTargetPrice(), request.getIntensity().intValueExact(), request.getRandomOscillation());
+        if (request.getRequestKey() == null)
+            return market.startControl(id, request.getDurationSeconds().intValueExact(), request.getTargetPrice(), request.getIntensity().intValueExact(), request.getRandomOscillation());
+        return market.startControl(id, request.getDurationSeconds().intValueExact(), request.getTargetPrice(), request.getIntensity().intValueExact(), request.getRandomOscillation(), request.getRequestKey());
+    }
+
+    @PostMapping("/{id}/history/{taskId}/replace")
+    public PersistentPriceControl.Task replaceHistory(@PathVariable Long id, @PathVariable String taskId) {
+        market.controlStatus(id); // Use the same symbol validation as other control actions.
+        return controls.replaceHistory(id, taskId);
     }
 
     @PostMapping("/{id}/manual")
@@ -57,6 +85,8 @@ public class AdminAiControlController {
 
     @PostMapping("/{id}/restore")
     public Map<String, Object> restoreControl(@PathVariable Long id, @Valid @RequestBody RestoreRequest request) {
+        if (request.getRequestKey() != null)
+            return market.restoreControl(id, request.getDurationSeconds().intValueExact(), request.getIntensity().intValueExact(), request.getRandomOscillation(), request.getRequestKey());
         return market.restoreControl(id, request.getDurationSeconds().intValueExact(), request.getIntensity().intValueExact(), request.getRandomOscillation());
     }
 }

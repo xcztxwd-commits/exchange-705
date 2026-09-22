@@ -18,6 +18,29 @@ public class AdminSymbolController {
     @Autowired
     private AdminSymbolService symbolService;
     
+    @Autowired private com.gtcfesk.exchange.market.MarketInstrumentCatalog catalog;
+    @Autowired private com.gtcfesk.exchange.market.MarketCategoryService categories;
+
+    @GetMapping("/catalog/sources")
+    public Object sources() {return catalog.sources();}
+    @GetMapping("/catalog")
+    public Object catalog(@RequestParam String source,@RequestParam String sourceCategory,
+                          @RequestParam(defaultValue="") String query,@RequestParam(defaultValue="0") int page) {
+        return catalog.list(source,sourceCategory,query,page);
+    }
+    @GetMapping("/categories")
+    public Object categories() {return categories.all();}
+    @PostMapping("/categories")
+    public Object saveCategories(@RequestBody List<Map<String,Object>> rows) {return categories.save(rows);}
+    public static class AddRequest {
+        public String source,sourceCategory,projectCategory;
+        public List<String> symbols;
+    }
+    @PostMapping("/catalog/add")
+    public Object add(@RequestBody AddRequest body) {
+        return symbolService.addFromCatalog(body.source,body.sourceCategory,body.projectCategory,body.symbols);
+    }
+
     @PostMapping("/query")
     public ResponseEntity<?> querySymbols(@RequestBody SymbolQueryRequest req) {
         Page<TradingSymbol> page = symbolService.querySymbols(req);
@@ -33,14 +56,6 @@ public class AdminSymbolController {
     public ResponseEntity<?> getSymbolDetail(@PathVariable Long id) {
         TradingSymbol symbol = symbolService.getSymbolDetail(id);
         return ResponseEntity.ok(symbol);
-    }
-    
-    @PostMapping("/create")
-    public ResponseEntity<?> createSymbol(@RequestBody TradingSymbol symbol) {
-        TradingSymbol created = symbolService.createSymbol(symbol);
-        Map<String, String> result = new HashMap<>();
-        result.put("message", "币种创建成功");
-        return ResponseEntity.ok(created);
     }
     
     @PostMapping("/update")

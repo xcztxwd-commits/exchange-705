@@ -21,7 +21,7 @@ class PriceControlTest {
 
     TradingSymbol copy(TradingSymbol value) { TradingSymbol copy = new TradingSymbol(); BeanUtils.copyProperties(value, copy); return copy; }
     @BeforeEach @SuppressWarnings("unchecked") void setup() {
-        TradingSymbol symbol = new TradingSymbol(); symbol.setId(1L); symbol.setSymbol("TEST"); symbol.setCategory("Metal");
+        TradingSymbol symbol = new TradingSymbol(); symbol.setId(1L); symbol.setSymbol("TEST"); symbol.setCategory("Metal"); symbol.setSourceCategory("Metal"); symbol.setMarketSource(com.gtcfesk.exchange.market.MarketInstrumentCatalog.inferredSource("Metal"));
         symbol.setName("Test"); symbol.setBaseCurrency("TEST"); symbol.setAlltickSymbol("SOURCE"); saved.set(symbol);
         when(repository.findAll()).thenAnswer(call -> Collections.singletonList(copy(saved.get())));
         when(repository.findById(1L)).thenAnswer(call -> Optional.of(copy(saved.get())));
@@ -39,6 +39,112 @@ class PriceControlTest {
     }
     void elapsed(int seconds) { saved.get().setControlStartedAt(System.currentTimeMillis() - seconds * 1000L); market.refreshSymbols(); }
     void price(String expected) { assertEquals(0, new BigDecimal(expected).compareTo(market.freshPrice("TEST"))); }
+
+    @Test void randomMarketRequiresVirtualEnvironmentAndCanRunDuringSourceOutage() {
+        assertThrows(BusinessException.class, () -> market.randomMarket(1L, true, new BigDecimal("100")));
+        ReflectionTestUtils.setField(market, "virtualTrading", true);
+        source.clear();
+        assertThrows(BusinessException.class, () -> market.randomMarket(1L, true, null));
+        assertThrows(BusinessException.class, () -> market.randomMarket(1L, true, BigDecimal.ZERO));
+        raw(100);
+        source.get("SOURCE").put("sourceAvailable", false);
+        Map<String, Object> status = market.randomMarket(1L, true, new BigDecimal("999"));
+        assertEquals(0, new BigDecimal("100").compareTo(saved.get().getRandomMarketBasePrice()));
+        assertEquals(true, status.get("randomMarketEnabled"));
+        assertEquals("Simulation", market.internalPrice("TEST").get("source"));
+        assertNotNull(market.freshPrice("TEST"));
+        Long start = saved.get().getRandomMarketStartedAt();
+        market.randomMarket(1L, true, new BigDecimal("200"));
+        assertEquals(start, saved.get().getRandomMarketStartedAt(), "Repeated enable must not restart the path");
+        assertDoesNotThrow(() -> market.startControl(1L, 10, new BigDecimal("110"), 1, false));
+        ReflectionTestUtils.setField(market, "virtualTrading", false);
+        assertNull(market.freshPrice("TEST"), "A non-virtual environment cannot execute simulated quotes");
+        ReflectionTestUtils.setField(market, "virtualTrading", true);
+        market.manualControl(1L, false, BigDecimal.ZERO);
+        assertTrue(saved.get().getRandomMarketEnabled(), "Cancelling a specified rule keeps random generation enabled");
+        market.randomMarket(1L, false, null);
+        assertFalse(saved.get().getRandomMarketEnabled());
+        assertNull(market.freshPrice("TEST"), "Stopping simulation must not revive the unavailable external quote");
+        raw(90);
+        price("90");
+    }
+
+    @Test @SuppressWarnings("unchecked") void simulationHistorySurvivesCacheReloadAndUsesHistoryCursor() {
+        ReflectionTestUtils.setField(market, "virtualTrading", true);
+        RedisMarketService historyRedis = mock(RedisMarketService.class);
+        Map<String, List<Map<String, Object>>> snapshots = new HashMap<>();
+        doAnswer(call -> { snapshots.put(call.getArgument(0) + ":" + call.getArgument(1), call.getArgument(2)); return null; })
+            .when(historyRedis).saveSimulationHistory(anyString(), anyString(), anyList());
+        when(historyRedis.getKlines(anyString(), anyString())).thenAnswer(call -> snapshots.get(call.getArgument(0) + ":" + call.getArgument(1)));
+        ReflectionTestUtils.setField(market, "redis", historyRedis);
+        Map<String, Object> groups = (Map<String, Object>) ReflectionTestUtils.getField(market, "groups");
+        Map<String, Map<String, Object>> cache = (Map<String, Map<String, Object>>) ReflectionTestUtils.getField(groups.get("Metal"), "klines");
+        long oldTime = System.currentTimeMillis() / 60000 * 60000 - 2 * 86400000L;
+        Map<String, Object> bar = new HashMap<>();
+        bar.put("timestamp", oldTime / 1000); bar.put("open_price", 89d); bar.put("high_price", 91d);
+        bar.put("low_price", 88d); bar.put("close_price", 90d); bar.put("volume", 10);
+        Map<String, Object> cached = new HashMap<>(); cached.put("data", Collections.singletonMap("kline_list", Collections.singletonList(bar)));
+        cached.put("fetchedAt", System.currentTimeMillis()); cache.put("SOURCE:1m:200", cached);
+        market.randomMarket(1L, true, new BigDecimal("999"));
+        assertFalse(snapshots.isEmpty()); assertEquals(0, new BigDecimal("90").compareTo(saved.get().getRandomMarketBasePrice()));
+        cache.clear(); market.refreshSymbols();
+        Map<String, Object> data = (Map<String, Object>) market.internalKline("TEST", "1m", 200).get("data");
+        List<Map<String, Object>> rows = (List<Map<String, Object>>) data.get("kline_list");
+        assertEquals(oldTime, rows.get(0).get("timestamp")); assertEquals(90d, rows.get(0).get("close_price"));
+        assertEquals(2, rows.size(), "No simulated candles in the two-day market closure");
+        Map<String, Object> older = (Map<String, Object>) market.historicalKline("TEST", "1m", 200,
+            saved.get().getRandomMarketStartedAt() / 60000 * 60000 - 1).get("data");
+        assertEquals(1, ((List<?>) older.get("kline_list")).size());
+    }
+
+    @Test void specifiedRulesAndRandomSourceCanBeEnabledInEitherOrder() {
+        ReflectionTestUtils.setField(market, "virtualTrading", true);
+        market.startControl(1L, 30, new BigDecimal("100"), 5, true);
+        Long originalStart = saved.get().getControlStartedAt();
+        market.randomMarket(1L, true, null);
+        assertTrue(saved.get().getRandomMarketEnabled());
+        assertEquals(originalStart, saved.get().getControlStartedAt());
+        assertTrue(PriceControlPath.running(saved.get()));
+        market.stopControl(1L);
+        assertTrue(saved.get().getRandomMarketEnabled());
+        assertFalse(PriceControlPath.running(saved.get()));
+        market.startControl(1L, 30, new BigDecimal("105"), 3, false);
+        assertTrue(PriceControlPath.running(saved.get()));
+        market.manualControl(1L, false, BigDecimal.ZERO);
+        assertTrue(saved.get().getRandomMarketEnabled());
+        assertFalse(PriceControlPath.running(saved.get()));
+        assertNotNull(market.freshPrice("TEST"));
+        market.manualControl(1L, true, BigDecimal.ONE);
+        assertTrue(saved.get().getControlEnabled());
+        market.restoreControl(1L, 30, 2, true);
+        assertTrue(saved.get().getControlRestoring());
+        assertTrue(saved.get().getRandomMarketEnabled());
+        assertTrue(SimulationControlPath.events(saved.get()).size() >= 6);
+    }
+
+    @Test void virtualOrderSettlementUsesTheSameServerQuoteAndAccountLedger() {
+        ReflectionTestUtils.setField(market, "virtualTrading", true);
+        market.randomMarket(1L, true, new BigDecimal("100"));
+        com.gtcfesk.exchange.repository.OptionOrderRepository orders = mock(com.gtcfesk.exchange.repository.OptionOrderRepository.class);
+        com.gtcfesk.exchange.repository.AssetAccountRepository accounts = mock(com.gtcfesk.exchange.repository.AssetAccountRepository.class);
+        com.gtcfesk.exchange.repository.OptionDurationRepository durations = mock(com.gtcfesk.exchange.repository.OptionDurationRepository.class);
+        com.gtcfesk.exchange.entity.OptionOrder order = new com.gtcfesk.exchange.entity.OptionOrder();
+        order.setId(1L); order.setUserId(2L); order.setSymbol("TEST"); order.setStatus("TRADING");
+        order.setDirection("UP"); order.setOpenPrice(BigDecimal.ONE); order.setAmount(BigDecimal.TEN);
+        com.gtcfesk.exchange.entity.AssetAccount account = new com.gtcfesk.exchange.entity.AssetAccount();
+        account.setAvailable(BigDecimal.ZERO); account.setFrozen(BigDecimal.TEN);
+        when(orders.findById(1L)).thenReturn(Optional.of(order));
+        when(orders.save(any())).thenAnswer(call -> call.getArgument(0));
+        when(accounts.findByUserIdAndCoin(2L, "OPTION")).thenReturn(Optional.of(account));
+        com.gtcfesk.exchange.trade.OptionOrderService service = new com.gtcfesk.exchange.trade.OptionOrderService(orders, accounts, repository, durations, market);
+        BigDecimal before = market.freshPrice("TEST");
+        service.closeOrder(2L, 1L, new BigDecimal("999999"));
+        BigDecimal after = market.freshPrice("TEST");
+        assertTrue(order.getClosePrice().compareTo(before) == 0 || order.getClosePrice().compareTo(after) == 0);
+        assertEquals("CLOSED", order.getStatus());
+        assertEquals(0, new BigDecimal("18").compareTo(account.getAvailable()));
+        assertEquals(0, account.getFrozen().signum());
+    }
 
     @Test void schedulerCompletesTargetAndRestoreWithoutManualCompletionCalls() throws Exception {
         MarketQuoteSource provider = mock(MarketQuoteSource.class);
@@ -170,11 +276,11 @@ class PriceControlTest {
         assertFalse(PriceControlPath.running(saved.get())); raw(91); price("93.5");
     }
 
-    @Test void expiredSourceCannotExecuteOrCompleteAndImmediateRestoreStillWorks() {
+    @Test void expiredSourceCanExecuteControlButImmediateRestoreRequiresLiveSourceAgain() {
         market.startControl(1L, 10, new BigDecimal("100"), 10, true); elapsed(10);
         Map<String, Object> quote = source.get("SOURCE"); quote.put("timestamp", System.currentTimeMillis() - 60000);
         long timestamp = QuoteState.time(quote.get("timestamp"));
-        assertNull(market.freshPrice("TEST")); market.completeControls(); assertTrue(PriceControlPath.running(saved.get()));
+        assertNotNull(market.freshPrice("TEST")); market.completeControls(); assertTrue(PriceControlPath.running(saved.get()));
         assertEquals(timestamp, QuoteState.time(market.internalPrice("TEST").get("timestamp")));
         assertThrows(BusinessException.class, () -> market.restoreControl(1L, 10, 1, true));
         market.manualControl(1L, false, BigDecimal.ZERO);

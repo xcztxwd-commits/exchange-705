@@ -3,7 +3,7 @@
     <details>
       <summary>部分行情暂不可用或报价已过期（{{ affected.length }}）</summary>
       <div v-for="item in affected" :key="item.symbol">
-        {{ item.symbol }}：{{ item.status === 'stale' ? '报价已过期' : '行情暂不可用' }}
+        {{ item.symbol }}：{{ item.controlState === 'HOLDING' ? '保持控盘偏移；源异常，交易不可用' : item.controlState === 'WAITING_SOURCE' ? '静态价格，等待源恢复；交易不可用' : item.controlState === 'RUNNING' ? '控盘运行中；源异常，交易不可用' : item.status === 'stale' ? '报价已过期' : '行情暂不可用' }}
       </div>
     </details>
   </aside>
@@ -16,7 +16,7 @@ const now = ref(Date.now())
 const timer = window.setInterval(() => { now.value = Date.now() }, 1000)
 onUnmounted(() => window.clearInterval(timer))
 const affected = computed(() => Object.keys(market.quoteStatusMap)
-  .map(symbol => ({ symbol, status: market.getQuoteStatus(symbol, now.value) }))
+  .map(symbol => ({ symbol, status: market.getQuoteStatus(symbol, now.value), controlState: market.quoteStatusMap[symbol]?.controlState }))
   .filter(item => item.status !== 'available'))
 </script>
 <style scoped>

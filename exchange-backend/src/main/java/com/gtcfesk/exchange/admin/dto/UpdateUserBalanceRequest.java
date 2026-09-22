@@ -7,6 +7,9 @@ import java.math.BigDecimal;
 @Data
 public class UpdateUserBalanceRequest {
     private Long userId;
+    private String currency;
+    private String account;
+    private BigDecimal amount;
 
     /** 资金账户余额 */
     private BigDecimal fundBalance;

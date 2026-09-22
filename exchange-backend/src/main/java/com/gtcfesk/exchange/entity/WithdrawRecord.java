@@ -31,7 +31,16 @@ public class WithdrawRecord {
     private String network; // 网络/币种 (如 USDT-TRC20, USD)
 
     @Column(nullable = false, precision = 32, scale = 16)
-    private BigDecimal amount; // 提现金额
+    private BigDecimal amount; // USD 账本金额
+
+    @Column(length = 3)
+    private String currency; // 输入币种；历史记录为空
+
+    @Column(name = "original_amount", precision = 32, scale = 16)
+    private BigDecimal originalAmount;
+
+    @Column(name = "exchange_rate", precision = 32, scale = 16)
+    private BigDecimal exchangeRate;
 
     @Column(name = "actual_amount", precision = 32, scale = 16)
     private BigDecimal actualAmount; // 实际到账金额（扣除手续费后）

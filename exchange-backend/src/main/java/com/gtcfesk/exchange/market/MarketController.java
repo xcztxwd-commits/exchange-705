@@ -36,6 +36,7 @@ public class MarketController {
     public ResponseEntity<?> getHotSymbols() {
         List<TradingSymbol> symbols = symbolRepository.findByIsHotTrueAndIsEnabledTrueOrderBySortOrderDesc();
         Map<String, Object> result = new HashMap<>();
+        applyCategoryLeverage(symbols);
         result.put("list", symbols);
         return ResponseEntity.ok(result);
     }
@@ -52,6 +53,7 @@ public class MarketController {
             symbols = symbolRepository.findByIsEnabledTrueOrderBySortOrderDesc();
         }
         Map<String, Object> result = new HashMap<>();
+        applyCategoryLeverage(symbols);
         result.put("list", symbols);
         return ResponseEntity.ok(result);
     }
@@ -63,6 +65,7 @@ public class MarketController {
     public ResponseEntity<?> getAllSymbols() {
         List<TradingSymbol> symbols = symbolRepository.findByIsEnabledTrueOrderBySortOrderDesc();
         Map<String, Object> result = new HashMap<>();
+        applyCategoryLeverage(symbols);
         result.put("list", symbols);
         return ResponseEntity.ok(result);
     }
@@ -80,6 +83,7 @@ public class MarketController {
         
         List<TradingSymbol> symbols = symbolRepository.searchSymbolsByKeyword(keyword.trim());
         Map<String, Object> result = new HashMap<>();
+        applyCategoryLeverage(symbols);
         result.put("list", symbols);
         return ResponseEntity.ok(result);
     }
@@ -89,59 +93,18 @@ public class MarketController {
      * 优先读取 system_config 表中的 home.categories 配置（JSON数组），
      * 如果没有配置，则返回默认分类及默认顺序。
      */
+    @Autowired private MarketCategoryService categoryService;
     @GetMapping("/categories")
     public ResponseEntity<?> getHomeCategories() {
-        try {
-            String json = systemConfigService.getConfigValue("home.categories");
-            List<Map<String, Object>> categories = new ArrayList<>();
-            
-            // 从 system_config 中读取配置（每个分类一条记录，config_value 为单个分类JSON）
-            if (json != null && !json.trim().isEmpty()) {
-                // 兼容旧格式：如果保存的是整个数组
-                if (json.trim().startsWith("[")) {
-                    categories = objectMapper.readValue(json, new TypeReference<List<Map<String, Object>>>() {});
-                } else {
-                    // 新格式：单条记录，存的也是数组
-                    categories = objectMapper.readValue(json, new TypeReference<List<Map<String, Object>>>() {});
-                }
-            } else {
-                // 兼容 Settings.vue 里批量保存的多条 config 的情况
-                // 尝试按前缀 home.category.XXX 读取所有分类
-                // 这里简单使用默认分类，避免引入新的Repository
-            }
-            
-            if (categories == null || categories.isEmpty()) {
-                // 默认分类及顺序
-                String[] defaultKeys = new String[] {"US", "Crypto", "Metal", "Forex", "CFD", "Oil"};
-                for (int i = 0; i < defaultKeys.length; i++) {
-                    Map<String, Object> cat = new HashMap<>();
-                    cat.put("key", defaultKeys[i]);
-                    cat.put("label", defaultKeys[i]);
-                    cat.put("sortOrder", i + 1);
-                    cat.put("enabled", true);
-                    categories.add(cat);
-                }
-            }
-            
-            // 按 sortOrder 排序，并过滤掉未启用的分类
-            categories.removeIf(c -> Boolean.FALSE.equals(c.getOrDefault("enabled", true)));
-            categories.sort((a, b) -> {
-                Integer sa = (Integer) a.getOrDefault("sortOrder", 0);
-                Integer sb = (Integer) b.getOrDefault("sortOrder", 0);
-                return sa.compareTo(sb);
-            });
-            
-            Map<String, Object> result = new HashMap<>();
-            result.put("list", categories);
-            return ResponseEntity.ok(result);
-        } catch (Exception e) {
-            e.printStackTrace();
-            Map<String, Object> result = new HashMap<>();
-            result.put("list", new ArrayList<>());
-            result.put("error", com.gtcfesk.exchange.common.SafeErrors.message(e));
-            return ResponseEntity.ok(result);
-        }
+        List<Map<String,Object>> rows = categoryService.all();
+        rows.removeIf(row -> Boolean.FALSE.equals(row.get("enabled")));
+        Map<String,Object> result = new HashMap<>(); result.put("list",rows);
+        return ResponseEntity.ok(result);
     }
+    private void applyCategoryLeverage(List<TradingSymbol> symbols) {
+        java.util.Set<String> disabled = new java.util.HashSet<>();
+        for(Map<String,Object> row:categoryService.all()) if(Boolean.FALSE.equals(row.get("leverageEnabled"))) disabled.add((String)row.get("key"));
+        for(TradingSymbol symbol:symbols) symbol.setLeverageEnabled(!disabled.contains(symbol.getCategory()));
+    }
+
 }
-
-

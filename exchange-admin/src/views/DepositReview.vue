@@ -66,9 +66,10 @@
           </template>
         </el-table-column>
         <el-table-column prop="network" label="网络/币种" width="150" />
-        <el-table-column prop="amount" label="充值金额" width="120">
+        <el-table-column prop="amount" label="入账金额（USD）" width="170">
           <template #default="{ row }">
-            {{ formatMoney(row.amount) }}
+            {{ formatMoney(row.amount) }} USD<br />
+            <small>{{ row.originalAmount ?? row.amount }} {{ row.currency || 'USD' }}</small>
           </template>
         </el-table-column>
         <el-table-column prop="address" label="充值地址" min-width="200" show-overflow-tooltip />
@@ -176,7 +177,7 @@
         <el-descriptions-item label="网络/币种">{{ detailRecord.network }}</el-descriptions-item>
         <el-descriptions-item label="充值金额">
           <span style="font-size: 16px; font-weight: bold; color: #409eff;">
-            {{ formatMoney(detailRecord.amount) }}
+            {{ formatMoney(detailRecord.amount) }} USD（{{ detailRecord.originalAmount ?? detailRecord.amount }} {{ detailRecord.currency || 'USD' }}）
           </span>
         </el-descriptions-item>
         <el-descriptions-item label="状态">
@@ -459,7 +460,7 @@ const handleReset = () => {
 async function handleApprove(row: any) {
   try {
     await ElMessageBox.confirm(
-      `确定要通过该充值申请吗？\n用户ID: ${row.userId}\n充值金额: ${formatMoney(row.amount)}\n\n审核通过后，金额将直接充值到用户的资金账户。`,
+      `确定要通过该充值申请吗？\n用户ID: ${row.userId}\n充值金额: ${formatMoney(row.amount)} USD\n\n审核通过后，金额将直接充值到用户的资金账户。`,
       '确认审核通过',
       {
         type: 'warning',

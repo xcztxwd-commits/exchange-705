@@ -3,6 +3,13 @@ import { ref, onMounted, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search, Refresh, Lock, Edit, Wallet, User, Delete, Document, ArrowDown } from '@element-plus/icons-vue'
 import request from '@/utils/request'
+import CurrencyPicker from '@/components/CurrencyPicker.vue'
+import { useFiatCurrency } from '@/utils/fiatCurrency'
+const { currency: balanceCurrency, rate: balanceRate, usdPreview, refreshRates } = useFiatCurrency()
+const balanceMode = ref('deposit')
+const rechargeAccount = ref('FUND')
+const rechargeAmount = ref<number | undefined>(undefined)
+const balanceSaving = ref(false)
 import { useAuthStore } from '@/store/auth'
 
 const auth = useAuthStore()
@@ -304,6 +311,11 @@ const handleSaveRemark = async () => {
 }
 
 const openBalanceDialog = (row: any) => {
+  balanceMode.value = 'deposit'
+  balanceCurrency.value = 'USD'
+  rechargeAccount.value = 'FUND'
+  rechargeAmount.value = undefined
+  void refreshRates()
   balanceForm.value = {
     userId: row.id,
     email: row.email,
@@ -315,8 +327,19 @@ const openBalanceDialog = (row: any) => {
 }
 
 const submitBalance = async () => {
+  if (balanceSaving.value) return
+  if (balanceMode.value === 'deposit' && (balanceRate.value === null || !rechargeAmount.value || rechargeAmount.value <= 0)) {
+    ElMessage.error(balanceRate.value === null ? '汇率暂不可用，请稍后重试' : '请输入有效充值金额')
+    return
+  }
+  balanceSaving.value = true
   try {
-    await request.post('/admin/users/updateBalance', {
+    await request.post('/admin/users/updateBalance', balanceMode.value === 'deposit' ? {
+      userId: balanceForm.value.userId,
+      currency: balanceCurrency.value,
+      account: rechargeAccount.value,
+      amount: rechargeAmount.value,
+    } : {
       userId: balanceForm.value.userId,
       fundBalance: balanceForm.value.fundBalance,
       contractBalance: balanceForm.value.contractBalance,
@@ -327,6 +350,8 @@ const submitBalance = async () => {
     loadUsers()
   } catch (e: any) {
     ElMessage.error(e?.message || '更新失败')
+  } finally {
+    balanceSaving.value = false
   }
 }
 
@@ -1267,11 +1292,33 @@ onMounted(() => {
 
       <el-empty v-if="!loading && users.length === 0" description="暂无数据" />
 
-      <el-dialog v-model="balanceDialogVisible" title="修改用户余额" width="420px">
+      <el-dialog v-model="balanceDialogVisible" title="用户充值 / 修改余额" width="460px">
         <el-form label-width="100px">
           <el-form-item label="用户邮箱">
             <span>{{ balanceForm.email }}</span>
           </el-form-item>
+          <el-form-item label="操作方式">
+            <el-radio-group v-model="balanceMode">
+              <el-radio-button label="deposit">充值</el-radio-button>
+              <el-radio-button label="balance">设置余额（USD）</el-radio-button>
+            </el-radio-group>
+          </el-form-item>
+          <template v-if="balanceMode === 'deposit'">
+            <el-form-item label="充值账户">
+              <el-select v-model="rechargeAccount" aria-label="充值账户">
+                <el-option label="资金账户" value="FUND" />
+                <el-option label="合约资产" value="CONTRACT" />
+                <el-option label="期权账户" value="OPTION" />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="充值币种"><CurrencyPicker v-model="balanceCurrency" /></el-form-item>
+            <el-form-item label="充值金额">
+              <el-input-number v-model="rechargeAmount" :min="0" :step="1" aria-label="充值金额" style="width: 260px" />
+              <div aria-live="polite">{{ usdPreview(rechargeAmount ?? null) }}</div>
+            </el-form-item>
+            <el-alert title="充值折合 USD 后增加到账户余额。" type="info" :closable="false" />
+          </template>
+          <template v-else>
           <el-form-item label="资金账户">
             <el-input-number
               v-model="balanceForm.fundBalance"
@@ -1296,11 +1343,12 @@ onMounted(() => {
               style="width: 260px"
             />
           </el-form-item>
+          </template>
         </el-form>
         <template #footer>
           <span class="dialog-footer">
             <el-button @click="balanceDialogVisible = false">取消</el-button>
-            <el-button type="primary" @click="submitBalance">保存</el-button>
+            <el-button type="primary" :loading="balanceSaving" :disabled="balanceMode === 'deposit' && balanceRate === null" @click="submitBalance">保存</el-button>
           </span>
         </template>
       </el-dialog>

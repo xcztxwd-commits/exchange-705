@@ -1,0 +1,35 @@
+{
+  "start": "2026-09-22T09:16:27.875Z",
+  "end": "2026-09-22T09:31:25.221Z",
+  "polls": 180,
+  "indices": {
+    "^FCHI": {
+      "uniqueSampledEvents": 59,
+      "minMs": 901153,
+      "p50Ms": 901394,
+      "p95Ms": 902378,
+      "maxMs": 907337
+    },
+    "^FTSE": {
+      "uniqueSampledEvents": 175,
+      "minMs": 901040,
+      "p50Ms": 901522,
+      "p95Ms": 902544,
+      "maxMs": 915519
+    },
+    "^GDAXI": {
+      "uniqueSampledEvents": 176,
+      "minMs": 901036,
+      "p50Ms": 901216,
+      "p95Ms": 901545,
+      "maxMs": 913519
+    },
+    "^IXIC": {
+      "uniqueSampledEvents": 5,
+      "minMs": 43227085,
+      "p50Ms": 43685208,
+      "p95Ms": 44107500,
+      "maxMs": 44107500
+    }
+  }
+}

@@ -21,6 +21,7 @@ public class DepositController {
 
     private final DepositSettingRepository depositSettingRepository;
     private final DepositRecordRepository depositRecordRepository;
+    private final FiatCurrencyService fiatCurrencyService;
 
     @GetMapping("/settings/list")
     public ResponseEntity<?> getSettingsList(@RequestParam(required = false) String type) {
@@ -139,7 +140,12 @@ public class DepositController {
             record.setUserId(userId);
             record.setType(type);
             record.setNetwork(network);
-            record.setAmount(amount);
+            String currency = fiatCurrencyService.currency((String) req.get("currency"));
+            BigDecimal rate = fiatCurrencyService.rate(currency);
+            record.setCurrency(currency);
+            record.setOriginalAmount(amount);
+            record.setExchangeRate(rate);
+            record.setAmount(fiatCurrencyService.toUsd(amount, rate));
             record.setAddress(address);
             record.setProofImage(proofImage);
             record.setStatus("PENDING");

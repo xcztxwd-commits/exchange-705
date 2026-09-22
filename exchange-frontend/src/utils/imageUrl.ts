@@ -57,6 +57,6 @@ export function getImageUrl(url: string | null | undefined): string {
   }
   
   // 如果没有 API 基础 URL，返回相对路径（开发环境）
-  return imagePath
+  return imagePath.startsWith('/market/icons/') ? `/api${imagePath}` : imagePath
 }
 

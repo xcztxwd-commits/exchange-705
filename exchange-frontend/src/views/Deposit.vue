@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import CurrencyPicker from '@/components/CurrencyPicker.vue'
+import { useFiatCurrency } from '@/utils/fiatCurrency'
+const { currency, rate, usdPreview } = useFiatCurrency()
 import { useRouter } from 'vue-router'
 import Tabbar from '@/components/Tabbar.vue'
 import request from '@/utils/request'
@@ -228,6 +231,7 @@ function removeProof() {
 
 // 提交充值
 async function submitDeposit() {
+  if (rate.value === null) { showToast('汇率暂不可用，请稍后重试', 'error'); return }
   if (!depositAmount.value || depositAmount.value <= 0) {
     showToast(localeStore.t('pleaseEnterValidDepositAmount'), 'error')
     return
@@ -261,6 +265,7 @@ async function submitDeposit() {
     const depositData: any = {
       type: depositType.value,
       amount: depositAmount.value,
+      currency: currency.value,
       proofImage: imageUrl,
     }
     
@@ -421,6 +426,8 @@ onMounted(() => {
       <!-- 充值金额 -->
       <div class="form-section">
         <div class="form-label">{{ localeStore.t('depositAmount') }}</div>
+        <CurrencyPicker v-model="currency" />
+        <p aria-live="polite">{{ usdPreview(depositAmount) }}</p>
         <input 
           type="number" 
           v-model.number="depositAmount" 
@@ -465,7 +472,7 @@ onMounted(() => {
       <button 
         class="submit-button" 
         @click="submitDeposit"
-        :disabled="uploading || !depositAmount || !proofFile"
+        :disabled="uploading || rate === null || !depositAmount || !proofFile"
       >
         {{ uploading ? localeStore.t('submitting') : localeStore.t('submit') }}
       </button>
@@ -500,6 +507,8 @@ onMounted(() => {
         <!-- 充值金额 -->
         <div class="form-section">
           <div class="form-label">{{ localeStore.t('depositAmountLabel') }}</div>
+        <CurrencyPicker v-model="currency" />
+        <p aria-live="polite">{{ usdPreview(depositAmount) }}</p>
           <input 
             type="number" 
             v-model.number="depositAmount" 
@@ -544,7 +553,7 @@ onMounted(() => {
         <button 
           class="submit-button" 
           @click="submitDeposit"
-          :disabled="uploading || !depositAmount || !proofFile"
+          :disabled="uploading || rate === null || !depositAmount || !proofFile"
         >
           {{ uploading ? localeStore.t('submitting') : localeStore.t('submit') }}
         </button>
@@ -580,7 +589,7 @@ onMounted(() => {
         >
           <div class="record-row">
             <div class="record-label">{{ localeStore.t('depositAmountLabel') }}</div>
-            <div class="record-value">{{ formatMoney(record.amount) }}</div>
+            <div class="record-value">{{ formatMoney(record.originalAmount ?? record.amount) }} {{ record.currency || 'USD' }} · {{ formatMoney(record.amount) }} USD</div>
           </div>
           <div class="record-row">
             <div class="record-label">{{ localeStore.t('status') }}</div>

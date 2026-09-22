@@ -34,6 +34,18 @@ const marketConfig = ref<ConfigItem[]>([
   // API基础地址：由后端使用 Forex 行情接口统一配置
 ])
 
+const conversionHours = ref(8)
+const defaultConversionCurrencies = ['USD', 'EUR', 'JPY', 'GBP', 'CNY', 'CHF', 'AUD', 'CAD', 'HKD', 'SGD']
+const conversionCurrencies = ref([...defaultConversionCurrencies])
+const currencyOptions = [
+  ['USD', '美元'], ['EUR', '欧元'], ['JPY', '日元'], ['GBP', '英镑'], ['CNY', '人民币'],
+  ['CHF', '瑞士法郎'], ['AUD', '澳元'], ['CAD', '加元'], ['HKD', '港元'], ['SGD', '新加坡元'],
+  ['NZD', '新西兰元'], ['SEK', '瑞典克朗'], ['NOK', '挪威克朗'], ['DKK', '丹麦克朗'],
+  ['KRW', '韩元'], ['INR', '印度卢比'], ['MYR', '马来西亚林吉特'], ['THB', '泰铢'],
+  ['IDR', '印尼盾'], ['TWD', '新台币'], ['AED', '阿联酋迪拉姆'], ['SAR', '沙特里亚尔'],
+  ['MXN', '墨西哥比索'], ['BRL', '巴西雷亚尔'], ['ZAR', '南非兰特']
+]
+
 const serviceConfig = ref<ConfigItem[]>([
   { key: 'customer.service.link', value: '', description: '客服链接（在线客服URL）' },
   { key: 'complaint.email', value: '', description: '投诉邮箱' },
@@ -67,6 +79,8 @@ const loadConfigs = async () => {
     const res: any = await request.get('/admin/config/list')
     if (Array.isArray(res)) {
       res.forEach((item: any) => {
+        if (item.configKey === 'market.conversion.currencies') conversionCurrencies.value = [...new Set(['USD', ...String(item.configValue || '').split(',').filter(Boolean)])]
+        if (item.configKey === 'market.conversion.cache-hours') conversionHours.value = Number(item.configValue) || 8
         const mailItem = mailConfig.value.find((c) => c.key === item.configKey)
         if (mailItem) {
           mailItem.value = item.configValue || ''
@@ -181,10 +195,21 @@ const clearSound = (configKey: string) => {
 }
 
 const saveConfigs = async () => {
+  conversionCurrencies.value = [...new Set(['USD', ...conversionCurrencies.value.map(code => code.trim().toUpperCase())])]
+  if (conversionCurrencies.value.length > 30 || conversionCurrencies.value.some(code => !/^[A-Z]{3}$/.test(code))) {
+    ElMessage.error('最多选择 30 种货币，请使用三位货币代码')
+    return
+  }
+  if (!Number.isInteger(conversionHours.value) || conversionHours.value < 1 || conversionHours.value > 168) {
+    ElMessage.error('汇率更新间隔请输入 1–168 的整数小时')
+    return
+  }
   loading.value = true
   try {
     // 过滤掉ws_url配置（前端会自动根据分类选择WebSocket地址）
     const allConfigs = [
+      { key: 'market.conversion.currencies', value: conversionCurrencies.value.join(','), description: '预缓存币种（兑美元）' },
+      { key: 'market.conversion.cache-hours', value: String(conversionHours.value), description: '结算汇率更新间隔（小时）' },
       ...mailConfig.value, 
       ...riskConfig.value, 
       ...marketConfig.value, 
@@ -233,6 +258,22 @@ onMounted(() => {
                 show-password
               />
             </el-form-item>
+          </el-form>
+        </el-tab-pane>
+
+        <el-tab-pane label="结算汇率" name="conversion">
+          <el-form label-width="180px">
+            <el-form-item label="缓存币种（兑美元）">
+              <el-select v-model="conversionCurrencies" multiple filterable allow-create :multiple-limit="30" aria-label="缓存币种（兑美元）" style="width: min(720px, 100%)">
+                <el-option v-for="[code, name] in currencyOptions" :key="code" :label="`${code} · ${name}`" :value="code" :disabled="code === 'USD'" />
+              </el-select>
+              <el-button link @click="conversionCurrencies = [...defaultConversionCurrencies]">恢复默认币种</el-button>
+            </el-form-item>
+            <p>美元为基准：1 单位所选币种 = 对应美元金额，USD 固定为 1。默认包含人民币和新加坡元，可搜索选择或输入三位货币代码。现有交易及充值所需汇率仍自动缓存；未被业务使用的取消币种停止预热，旧缓存到期失效。</p>
+            <el-form-item label="汇率更新间隔（小时）">
+              <el-input-number v-model="conversionHours" :min="1" :max="168" :step="1" :precision="0" aria-label="汇率更新间隔（小时）" />
+            </el-form-item>
+            <el-alert type="info" :closable="false" title="默认 8 小时，范围 1–168 小时。期间固定使用缓存汇率计算保证金和盈亏；到期后更新，更新失败时暂停相关结算。保存后按新时长判断是否到期。交易品种的实时价格仍单独校验。" />
           </el-form>
         </el-tab-pane>
 

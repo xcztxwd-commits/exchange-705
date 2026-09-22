@@ -74,12 +74,12 @@
         <el-table-column prop="network" label="网络/币种" width="150" />
         <el-table-column prop="amount" label="提现金额" width="120">
           <template #default="{ row }">
-            {{ formatMoney(row.amount) }}
+            {{ formatMoney(row.amount) }} USD <small v-if="row.currency">({{ row.originalAmount }} {{ row.currency }})</small>
           </template>
         </el-table-column>
         <el-table-column prop="actualAmount" label="到账金额" width="120">
           <template #default="{ row }">
-            {{ formatMoney(row.actualAmount || row.amount) }}
+            {{ formatMoney(row.actualAmount || row.amount) }} {{ row.currency ? 'USD' : row.network }}
           </template>
         </el-table-column>
         <el-table-column prop="fee" label="手续费" width="100">
@@ -196,9 +196,9 @@
     >
       <div class="approve-content">
         <p><strong>用户ID:</strong> {{ currentRecord?.userId }}</p>
-        <p><strong>提现金额:</strong> {{ formatMoney(currentRecord?.amount) }} {{ currentRecord?.network }}</p>
-        <p><strong>手续费:</strong> {{ formatMoney(currentRecord?.fee || 0) }} {{ currentRecord?.network }}</p>
-        <p><strong>预计到账:</strong> {{ formatMoney(currentRecord?.actualAmount || currentRecord?.amount) }} {{ currentRecord?.network }}</p>
+        <p><strong>提现金额:</strong> {{ formatMoney(currentRecord?.amount) }} {{ currentRecord?.currency ? 'USD' : currentRecord?.network }}</p>
+        <p><strong>手续费:</strong> {{ formatMoney(currentRecord?.fee || 0) }} {{ currentRecord?.currency ? 'USD' : currentRecord?.network }}</p>
+        <p><strong>预计到账:</strong> {{ formatMoney(currentRecord?.actualAmount || currentRecord?.amount) }} {{ currentRecord?.currency ? 'USD' : currentRecord?.network }}</p>
         <el-form :model="approveForm" label-width="80px" style="margin-top: 20px">
           <el-form-item label="审核备注">
             <el-input
@@ -225,7 +225,7 @@
       <div class="complete-content">
         <p>确认该提现申请已实际完成转账？</p>
         <p><strong>用户ID:</strong> {{ currentRecord?.userId }}</p>
-        <p><strong>提现金额:</strong> {{ formatMoney(currentRecord?.amount) }} {{ currentRecord?.network }}</p>
+        <p><strong>提现金额:</strong> {{ formatMoney(currentRecord?.amount) }} {{ currentRecord?.currency ? 'USD' : currentRecord?.network }}</p>
       </div>
       <template #footer>
         <el-button @click="completeDialogVisible = false">取消</el-button>
@@ -251,12 +251,12 @@
         <el-descriptions-item label="网络/币种">{{ detailRecord.network }}</el-descriptions-item>
         <el-descriptions-item label="提现金额">
           <span style="font-size: 16px; font-weight: bold; color: #409eff;">
-            {{ formatMoney(detailRecord.amount) }}
+            {{ formatMoney(detailRecord.amount) }} USD <small v-if="detailRecord.currency">({{ detailRecord.originalAmount }} {{ detailRecord.currency }})</small>
           </span>
         </el-descriptions-item>
         <el-descriptions-item label="到账金额">
           <span style="font-size: 16px; font-weight: bold; color: #67c23a;">
-            {{ formatMoney(detailRecord.actualAmount || detailRecord.amount) }}
+            {{ formatMoney(detailRecord.actualAmount || detailRecord.amount) }} {{ detailRecord.currency ? 'USD' : detailRecord.network }}
           </span>
         </el-descriptions-item>
         <el-descriptions-item label="手续费">
@@ -396,6 +396,9 @@ interface WithdrawRecord {
   type: string
   network: string
   amount: number
+  currency?: string
+  originalAmount?: number
+  exchangeRate?: number
   actualAmount?: number
   fee?: number
   address: string
@@ -639,8 +642,8 @@ const copyBankInfo = async (record: WithdrawRecord) => {
   }
   
   const bankInfo = record.bankInfo
-  const amount = formatMoney(record.amount)
-  const text = `姓名：${bankInfo.recipientName}\n归属行：${bankInfo.bankName}\n卡号：${bankInfo.recipientAccount}\n金额：${amount} ${record.network}`
+  const amount = formatMoney(record.actualAmount ?? record.amount)
+  const text = `姓名：${bankInfo.recipientName}\n归属行：${bankInfo.bankName}\n卡号：${bankInfo.recipientAccount}\n金额：${amount} ${record.currency ? 'USD' : record.network}`
   
   try {
     await navigator.clipboard.writeText(text)

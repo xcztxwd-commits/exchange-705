@@ -77,7 +77,7 @@ let realtime: ((bar: KLineData) => void) | null = null
 let resizeObserver: ResizeObserver | undefined
 let themeObserver: MutationObserver | undefined
 let lastQuoteTime = 0
-let replaceBars: DataLoaderGetBarsParams['callback'] | null = null
+let manuallyScrolled = false
 let syncing = false
 let lastSyncAttempt = 0
 let syncTimer: ReturnType<typeof setInterval> | undefined
@@ -257,7 +257,7 @@ function removeDrawing(all = false) {
   persistDrawings()
 }
 function toggleHidden() { hidden.value = !hidden.value; chart?.overrideOverlay({ groupId, visible: !hidden.value }) }
-function scrollLatest() { chart?.scrollToRealTime(150) }
+function scrollLatest() { chart?.scrollToRealTime(0); manuallyScrolled = false }
 function retryLoad() { retry?.() }
 function toggleLock() { locked.value = !locked.value; chart?.overrideOverlay({ groupId, lock: locked.value }); persistDrawings() }
 function changeColor() {
@@ -299,7 +299,7 @@ async function fetchBars(before: number, signal: AbortSignal, limit = 200) {
   if (validated.length && !aligned.length) throw new Error('No aligned candles')
   const candles = aligned.filter(bar => bar.timestamp < before)
   if (history && aligned.length && !candles.length) throw new Error('History cursor was not honored')
-  return { candles, damaged: aligned.length < validated.length || rows.some(row => normalizeCandles([row]).length === 0),
+  return { candles, damaged: !!response.data?.missingData || rows.some(row => row.partial === true) || aligned.length < validated.length || rows.some(row => normalizeCandles([row]).length === 0),
     stale: response.data?.status === 'stale' || !!response.data?.pending }
 }
 
@@ -349,7 +349,6 @@ async function loadBars(params: DataLoaderGetBarsParams, version: number, signal
     if (version !== revision || signal.aborted) return
     dataWarning.value ||= result.damaged
     staleCandles.value ||= result.stale
-    if (!history) replaceBars = params.callback
     historyLimited.value = result.limited
     params.callback(candles, { forward: candles.length > 0 && !result.limited, backward: false })
     cacheBars()
@@ -381,8 +380,9 @@ async function loadBars(params: DataLoaderGetBarsParams, version: number, signal
 }
 
 async function syncLatest() {
-  if (!chart || !replaceBars || loading.value || historyLoading.value || syncing) return
+  if (!chart || !realtime || loading.value || historyLoading.value || syncing) return
   const version = revision, signal = controller.signal
+  const session = market.quoteStatusMap[props.symbol]?.simulationSession
   syncing = true
   lastSyncAttempt = Date.now()
   try {
@@ -398,18 +398,39 @@ async function syncLatest() {
       if (!older.candles.length) throw new Error('Candle gap unavailable')
       candles = [...older.candles, ...candles]
     }
-    if (signal.aborted || version !== revision || !chart || historyLoading.value) return
+    if (signal.aborted || version !== revision || !chart || historyLoading.value || session !== market.quoteStatusMap[props.symbol]?.simulationSession) return
     if (!candles.length) throw new Error('No latest candles')
     const current = chart.getDataList()
     const range = chart.getVisibleRange()
     const anchor = current[range.from]?.timestamp
     const x = anchor ? (chart.convertToPixel({ timestamp: anchor }) as Partial<Coordinate>).x : undefined
-    const atLatest = range.to >= current.length
-    const merged = normalizeCandles([...current, ...candles])
-    replaceBars?.(merged, { forward: !exhausted.value && !historyLimited.value && !error.value, backward: false })
-    if (!atLatest && anchor && x !== undefined) {
+    // The subscription callback updates the last candle or appends a new one
+    // without clearing history, drawings, or the current viewport.
+    let last = current[current.length - 1]
+    // A delayed source minute can complete a previously partial aggregate. Update the
+    // retained objects before triggering recalculation; history and drawings stay in place.
+    if (market.quoteStatusMap[props.symbol]?.controlHistory) {
+      const incoming = new Map(candles.map(bar => [bar.timestamp, bar]))
+      let corrected = false
+      for (const previous of current) {
+        const next = incoming.get(previous.timestamp)
+        if (next && (next.open !== previous.open || next.high !== previous.high || next.low !== previous.low || next.close !== previous.close || next.volume !== previous.volume)) {
+          Object.assign(previous, next); corrected = true
+        }
+      }
+      if (corrected && last) realtime?.(last)
+    }
+    for (const bar of candles) {
+      if (last && bar.timestamp < last.timestamp) continue
+      if (!last || bar.timestamp > last.timestamp ||
+        bar.open !== last.open || bar.high !== last.high || bar.low !== last.low ||
+        bar.close !== last.close || bar.volume !== last.volume) realtime?.(bar)
+      last = bar
+    }
+    empty.value = chart.getDataList().length === 0
+    if (manuallyScrolled && anchor && x !== undefined) {
       const nextX = (chart.convertToPixel({ timestamp: anchor }) as Partial<Coordinate>).x
-      if (nextX !== undefined) chart.scrollByDistance(x - nextX, 0)
+      if (nextX !== undefined && nextX !== x) chart.scrollByDistance(x - nextX, 0)
     }
     dataWarning.value ||= result.damaged
     staleCandles.value = result.stale
@@ -418,7 +439,12 @@ async function syncLatest() {
     replayQuote()
   } catch {
     if (!signal.aborted && version === revision) syncError.value = true
-  } finally { if (version === revision) syncing = false }
+  } finally {
+    if (version === revision) {
+      syncing = false
+      if (session !== market.quoteStatusMap[props.symbol]?.simulationSession) void syncLatest()
+    }
+  }
 }
 
 function resetMarket() {
@@ -434,7 +460,7 @@ function resetMarket() {
   selected.value = ''
   count.value = 0
   lastQuoteTime = 0
-  replaceBars = null
+  manuallyScrolled = false
   syncing = false
   lastSyncAttempt = 0
   historyWindow = 200
@@ -466,6 +492,11 @@ function resetMarket() {
 
 watch(() => [props.symbol, props.category, interval.value], resetMarket)
 function replayQuote() {
+  // Persisted mixed candles are authoritative; never rebuild their OHLC from client ticks.
+  if (market.quoteStatusMap[props.symbol]?.controlHistory) {
+    if (Date.now() - lastSyncAttempt >= 900) void syncLatest()
+    return
+  }
   if (!chart || !realtime || !count.value || market.getQuoteStatus(props.symbol) !== 'available') return
   const time = market.quoteStatusMap[props.symbol]?.timestamp || 0
   const milliseconds = time < 10_000_000_000 ? time * 1000 : time
@@ -474,13 +505,18 @@ function replayQuote() {
   const bar = candleFromQuote(bars[bars.length - 1], market.getPrice(props.symbol), milliseconds, interval.value)
   if (!bar && milliseconds > (bars[bars.length - 1]?.timestamp || Infinity)) {
     syncError.value = true
-    if (Date.now() - lastSyncAttempt >= 15_000) void syncLatest()
+    if (Date.now() - lastSyncAttempt >= (market.quoteStatusMap[props.symbol]?.simulated ? 1000 : 15_000)) void syncLatest()
   }
   if (bar) {
     lastQuoteTime = milliseconds; realtime(bar); count.value = chart.getDataList().length
     cacheBars()
   }
 }
+watch(() => market.quoteStatusMap[props.symbol]?.simulationSession, (value, previous) => {
+  if (value === previous) return
+  if (value && count.value) { lastSyncAttempt = 0; void syncLatest() }
+  else resetMarket()
+})
 watch(() => market.quoteStatusMap[props.symbol], replayQuote)
 watch(() => [preferences.value.indicators, preferences.value.parameters], applyIndicators, { deep: true })
 watch(preferences, () => {
@@ -504,9 +540,12 @@ onMounted(() => {
   applyTheme()
   applyIndicators()
   resetMarket()
-  chart.subscribeAction('onScroll', retryHistoryOnScroll)
+  chart.subscribeAction('onScroll', () => { manuallyScrolled = true; retryHistoryOnScroll() })
   stopConnected = marketWebSocket.onConnected(() => { void syncLatest() })
-  syncTimer = setInterval(() => { void syncLatest() }, 15_000)
+  syncTimer = setInterval(() => {
+    if (document.visibilityState === 'hidden') return
+    if (Date.now() - lastSyncAttempt >= (market.quoteStatusMap[props.symbol]?.controlHistory ? 900 : 14_000)) void syncLatest()
+  }, 1000)
   resizeObserver = new ResizeObserver(() => { chart?.resize(); applyTheme() })
   resizeObserver.observe(container.value)
   themeObserver = new MutationObserver(applyTheme)
@@ -571,12 +610,16 @@ onUnmounted(() => {
       </div>
     </div>
     <div class="chart-footer" role="status" aria-live="polite">
+      <span v-if="market.quoteStatusMap[props.symbol]?.controlState === 'WAITING_SOURCE'">{{ text('靜態價格 · 等待原始行情恢復', 'Static price · Waiting for source') }}</span>
+      <span v-else-if="market.quoteStatusMap[props.symbol]?.controlState === 'HOLDING'">{{ text('保持控盤偏移 · 等待手動恢復', 'Holding offset · Manual restore required') }}{{ market.quoteStatusMap[props.symbol]?.sourceAvailable ? '' : text(' · 源異常，靜態等待', ' · Source unavailable, static price') }}</span>
+      <span v-else-if="market.quoteStatusMap[props.symbol]?.controlState === 'RUNNING'">{{ text('目標控盤運行中', 'Target control running') }}{{ market.quoteStatusMap[props.symbol]?.sourceAvailable ? '' : text(' · 原始行情異常，按控盤價交易', ' · Source unavailable, trading at controlled price') }}</span>
+      <span v-else-if="market.quoteStatusMap[props.symbol]?.simulated">{{ text('虛擬行情', 'Simulated market') }}</span>
       <span v-if="historyLoading">{{ text('正在載入更早行情…', 'Loading older candles…') }}</span>
       <button v-else-if="error" class="retry-history" @click="retryLoad">{{ count ? text('歷史載入失敗 · 點擊重試', 'History failed · Retry') : text('行情載入失敗 · 重試', 'Candles unavailable · Retry') }}</button>
       <span v-else-if="historyLimited">{{ text('已到目前接口可回溯範圍', 'History limit reached for the current data source') }}</span>
       <span v-else-if="snapshotError">{{ text('快照失敗，請重新嘗試', 'Snapshot failed; please retry') }}</span>
       <button v-else-if="syncError" class="retry-history" @click="syncLatest">{{ text('最新 K 線未完整同步 · 重試', 'Latest candles incomplete · Retry') }}</button>
-      <span v-else-if="dataWarning">{{ text('非週期或異常數據已略過；K 線有缺損', 'Irregular source candles omitted; data incomplete') }}</span>
+      <span v-else-if="dataWarning">{{ text('K 線含缺失或部分源數據，未補造走勢', 'Partial or missing source data; no fabricated history') }}</span>
       <span v-else-if="staleCandles">{{ text('顯示快取 K 線，等待更新', 'Cached candles; awaiting refresh') }}</span>
       <span v-else-if="!saved">{{ text('繪圖無法儲存至此瀏覽器', 'Drawing storage unavailable') }}</span>
       <span v-else>{{ exhausted ? text('已到最早可用行情', 'Earliest available candles') : text('向右拖動查看更早行情', 'Drag right for older candles') }}</span>

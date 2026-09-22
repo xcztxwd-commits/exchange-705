@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import marketWebSocket from '@/utils/marketWebSocket'
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import Tabbar from '@/components/Tabbar.vue'
@@ -24,7 +25,7 @@ const hasShownAnnouncement = ref(false)
 const latestAnnouncement = ref<{ title?: string; content?: string } | null>(null) // 最新公告（根据当前语言）
 
 // 价格轮询定时器
-const pricePollingTimer = ref<number | null>(null)
+
 // K线轮询定时器
 const klinePollingTimer = ref<number | null>(null)
 
@@ -349,7 +350,7 @@ async function loadAllSymbols(forceRefresh = false) {
     
     // 订阅所有币种的行情（按分类分组）
     // 确保所有币种都被正确映射，包括所有分类（Forex、CFD、Metal等）
-    const symbolList = symbols.map((s: any) => {
+    const symbolList = [...hotSymbols.value, ...categorySymbols.value].map((s: any) => {
       const category = s.category || 'Crypto'
       const alltickSymbol = s.alltickSymbol || s.symbol
       return {
@@ -408,14 +409,14 @@ async function loadAllSymbols(forceRefresh = false) {
     if (symbolList.length > 0) {
       console.log('[Home] Starting batch subscription for all symbols...')
       // 异步订阅，在后台执行
-      marketStore.subscribeSymbols(symbolList).then(() => {
+      marketStore.subscribeSymbols(symbolList, 'home').then(() => {
         console.log('[Home] ✅ Batch subscription completed for all symbols')
       }).catch((error) => {
         console.error('[Home] Batch subscription failed:', error)
       })
       
       // 启动批量价格轮询（每3秒更新一次，与WebSocket保持一致）
-      startPricePolling(symbolList)
+
       // 启动K线轮询（每3秒更新一次，与WebSocket保持一致）
       startKlinePolling()
     }
@@ -442,6 +443,7 @@ function updateCategorySymbols() {
   categorySymbols.value = allSymbols.value.filter((s: any) => {
     return s.category === activeCategory.value && (s.isEnabled !== false) // 过滤掉未启用的币种
   })
+  void marketStore.subscribeSymbols([...hotSymbols.value, ...categorySymbols.value], 'home')
   console.log(`[Home] Filtered ${categorySymbols.value.length} symbols for category ${activeCategory.value}`)
 }
 
@@ -461,11 +463,6 @@ const availableCategories = computed(() => {
 // 选择分类（只在前端过滤，不调用接口）
 function selectCategory(cat: string) {
   activeCategory.value = cat
-  
-  // 确保该分类的WebSocket已初始化
-        marketStore.initMarketService(cat).catch((e) => {
-    console.error(`[Home] Failed to init WebSocket for ${cat}:`, e)
-  })
   
   // 只在前端过滤，不调用接口
   updateCategorySymbols()
@@ -657,60 +654,6 @@ onMounted(async () => {
 })
 
 // 启动批量价格轮询（每3秒更新一次，与WebSocket保持一致）
-function startPricePolling(_symbolList: Array<{ symbol: string; category: string; alltickSymbol?: string }>) {
-  // 清除之前的定时器
-  if (pricePollingTimer.value) {
-    clearInterval(pricePollingTimer.value)
-  }
-  
-  // 使用 allSymbols.value 的最新数据，确保始终使用最新的币种列表
-  const updatePrices = () => {
-    const currentSymbols = allSymbols.value.map((s: any) => ({
-      symbol: s.symbol,
-      category: s.category || 'Crypto',
-      alltickSymbol: s.alltickSymbol || s.symbol
-    }))
-    updateBatchPrices(currentSymbols)
-  }
-  
-  // 立即执行一次
-  updatePrices()
-  
-  // 每3秒轮询一次（与WebSocket保持一致）
-  pricePollingTimer.value = window.setInterval(() => {
-    updatePrices()
-  }, 3000) // 3秒 = 3000毫秒
-  
-  console.log('[Home] ✅ Started price polling (every 3 seconds)')
-}
-
-// 批量更新价格
-async function updateBatchPrices(symbolList: Array<{ symbol: string; category: string; alltickSymbol?: string }>) {
-  try {
-    if (symbolList.length === 0) return
-    
-    console.log(`[Home] 🔄 Polling prices for ${symbolList.length} symbols...`)
-    // 转换格式以匹配 fetchBatchPricesFromRedis 的参数类型
-    const priceRequestData = symbolList.map(s => ({
-      symbol: s.symbol,
-      alltickSymbol: s.alltickSymbol || s.symbol
-    }))
-    await marketStore.fetchBatchPricesFromRedis(priceRequestData)
-    console.log('[Home] ✅ Price polling completed')
-  } catch (error) {
-    console.error('[Home] ❌ Price polling failed:', error)
-  }
-}
-
-// 停止价格轮询
-function stopPricePolling() {
-  if (pricePollingTimer.value) {
-    clearInterval(pricePollingTimer.value)
-    pricePollingTimer.value = null
-    console.log('[Home] ✅ Stopped price polling')
-  }
-}
-
 // 启动K线轮询（每3秒更新一次，与WebSocket保持一致）
 function startKlinePolling() {
   // 清除之前的定时器
@@ -720,11 +663,11 @@ function startKlinePolling() {
   
   // 使用 allSymbols.value 的最新数据，按分类分组更新K线
   const updateKlines = () => {
-    if (allSymbols.value.length === 0) return
+    if (document.visibilityState === 'hidden' || allSymbols.value.length === 0) return
     
     // 按分类分组
     const grouped = new Map<string, string[]>()
-    allSymbols.value.forEach((s: any) => {
+    ;[...hotSymbols.value, ...categorySymbols.value].forEach((s: any) => {
       const category = s.category || 'Crypto'
       const alltickSymbol = s.alltickSymbol || s.symbol
       if (!grouped.has(category)) {
@@ -747,9 +690,9 @@ function startKlinePolling() {
   // 每3秒轮询一次（与WebSocket保持一致）
   klinePollingTimer.value = window.setInterval(() => {
     updateKlines()
-  }, 3000) // 3秒 = 3000毫秒
+  }, 30000) // Visible homepage charts only need periodic calibration.
   
-  console.log('[Home] ✅ Started K-line polling (every 3 seconds)')
+  console.log('[Home] ✅ Started K-line calibration (every 30 seconds)')
 }
 
 // 停止K线轮询
@@ -766,7 +709,7 @@ onUnmounted(() => {
   if (countdownTimer.value) {
     clearInterval(countdownTimer.value)
   }
-  stopPricePolling()
+  marketWebSocket.release('home')
   stopKlinePolling()
 })
 

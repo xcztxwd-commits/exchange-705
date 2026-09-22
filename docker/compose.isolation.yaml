@@ -22,6 +22,8 @@ services:
     entrypoint: ["sh", "-c", "cp -an /opt/maven-cache/. /root/.m2/; /opt/apache-maven-3.9.9/bin/mvn -B test; result=$$?; cp -a target/surefire-reports/. /reports/; exit $$result"]
     environment:
       MARKET_ISOLATION_TEST: "true"
+      YAHOO_STREAM_MODE: http_only
+      EXCHANGE_STREAM_ENABLED: "false"
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql-test:3306/market_isolation?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
       SPRING_DATASOURCE_USERNAME: root
       SPRING_DATASOURCE_PASSWORD: isolation-only

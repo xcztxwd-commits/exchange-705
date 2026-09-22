@@ -108,14 +108,7 @@
         <!-- 货币选择 -->
         <div class="form-group">
           <div class="form-label">{{ localeStore.t('currency') }}</div>
-          <div class="select-input" @click="showCurrencyModal = true">
-            <span :class="{ placeholder: !selectedCurrency }">
-              {{ selectedCurrency || localeStore.t('pleaseSelectCurrency') }}
-            </span>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M9 18L15 12L9 6" stroke="#999" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-          </div>
+          <CurrencyPicker v-model="bankCurrency" />
         </div>
 
         <!-- 收款人账户 -->
@@ -159,11 +152,11 @@
         <div class="summary-section">
           <div class="summary-item">
             <span>{{ localeStore.t('fee') }}</span>
-            <span>{{ fee }} {{ selectedCurrency || '' }}</span>
+            <span>0 USD</span>
           </div>
           <div class="summary-item">
             <span>{{ localeStore.t('expectedArrivalAmount') }}</span>
-            <span>{{ actualAmount }} {{ selectedCurrency || '' }}</span>
+            <span style="max-width: 62%; text-align: right">{{ usdPreview(amount) }}</span>
           </div>
           <div class="summary-item">
             <span>{{ localeStore.t('balance') }}</span>
@@ -172,7 +165,7 @@
         </div>
 
         <!-- 提币按钮 -->
-        <button class="withdraw-button" @click="submitWithdraw" :disabled="submitting">
+        <button class="withdraw-button" @click="submitWithdraw" :disabled="submitting || bankRate === null">
           {{ submitting ? localeStore.t('submitting') : localeStore.t('withdrawButton') }}
         </button>
       </div>
@@ -187,13 +180,13 @@
             <div class="record-row">
               <div class="record-label">{{ localeStore.t('quantity') }}</div>
               <div class="record-value">
-                {{ record.amount }}
+                {{ record.amount }}<small v-if="record.currency">（{{ record.originalAmount }} {{ record.currency }}）</small>
                 {{ record.type === 'bank' ? 'USD' : record.network }}
               </div>
             </div>
             <div class="record-row">
               <div class="record-label">{{ localeStore.t('arrivalAmount') }}</div>
-              <div class="record-value">{{ record.actualAmount || record.amount }} {{ record.network }}</div>
+              <div class="record-value">{{ record.actualAmount ?? record.amount }} {{ record.currency ? 'USD' : record.network }}</div>
             </div>
             <div class="record-row">
               <div class="record-label">{{ localeStore.t('unit') }}</div>
@@ -314,6 +307,9 @@ import { ref, onMounted, watch, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import Tabbar from '@/components/Tabbar.vue'
 import request from '@/utils/request'
+import CurrencyPicker from '@/components/CurrencyPicker.vue'
+import { useFiatCurrency } from '@/utils/fiatCurrency'
+const { currency: bankCurrency, rate: bankRate, usdPreview } = useFiatCurrency()
 import { useLocaleStore } from '@/store/locale'
 import { formatDateTime } from '@/utils/dateTime'
 
@@ -380,6 +376,7 @@ function showToast(message: string, type: 'success' | 'error' = 'error') {
 function switchWithdrawType(type: 'digital' | 'bank') {
   withdrawType.value = type
   selectedCurrency.value = ''
+  bankCurrency.value = 'USD'
   selectedAddress.value = ''
   selectedAddressNetwork.value = ''
   selectedAccount.value = ''
@@ -411,17 +408,7 @@ function loadCurrencies() {
       value: n
     }))
   } else {
-    // 银行卡货币列表（从绑定的银行卡中获取）
-    const bankCurrencies = new Set<string>()
-    bankAccounts.value.forEach(acc => {
-      if (acc.currency) {
-        bankCurrencies.add(acc.currency)
-      }
-    })
-    currencies.value = Array.from(bankCurrencies).map(c => ({
-      label: c,
-      value: c
-    }))
+    currencies.value = [] // 银行卡输入币种由 CurrencyPicker 独立选择
   }
 }
 
@@ -446,6 +433,10 @@ async function loadBankAccounts() {
     const res: any = await request.get('/wallet/bank-cards')
     if (res && res.success !== false && res.list) {
       bankAccounts.value = res.list
+      if (!selectedAccount.value && res.list.length) {
+        selectedAccount.value = res.list[0].recipientAccount
+        selectedAccountCurrency.value = res.list[0].currency
+      }
       if (withdrawType.value === 'bank') {
         loadCurrencies()
       }
@@ -501,6 +492,7 @@ function confirmAccount() {
 
 // 计算手续费和预计到账金额
 async function calculateAmount() {
+  if (withdrawType.value === 'bank') return // 银行卡预估使用与充值一致的 Redis 汇率快照
   if (!amount.value || amount.value <= 0) {
     fee.value = '0'
     actualAmount.value = '0'
@@ -514,14 +506,8 @@ async function calculateAmount() {
     return
   }
   
-  if (withdrawType.value === 'bank' && !selectedCurrency.value) {
-    fee.value = '0'
-    actualAmount.value = '0'
-    return
-  }
-  
   try {
-    const network = withdrawType.value === 'digital' ? selectedAddressNetwork.value : selectedCurrency.value
+    const network = selectedAddressNetwork.value
     const res: any = await request.post('/withdraw/calculate', {
       type: withdrawType.value,
       network: network,
@@ -548,13 +534,8 @@ const filteredDigitalAddresses = computed(() => {
   return digitalAddresses.value.filter(addr => addr.network === selectedCurrency.value)
 })
 
-// 过滤后的银行卡账户（根据选择的货币）
-const filteredBankAccounts = computed(() => {
-  if (!selectedCurrency.value) {
-    return bankAccounts.value
-  }
-  return bankAccounts.value.filter(acc => acc.currency === selectedCurrency.value)
-})
+// 输入币种与收款账户独立选择
+const filteredBankAccounts = computed(() => bankAccounts.value)
 
 // 监听金额变化
 watch(amount, () => {
@@ -588,6 +569,7 @@ watch(selectedCurrency, () => {
 // 提交提现申请
 async function submitWithdraw() {
   if (submitting.value) return
+  if (withdrawType.value === 'bank' && bankRate.value === null) { showToast('汇率暂不可用，请稍后重试'); return }
   
   // 验证
   if (withdrawType.value === 'digital') {
@@ -596,7 +578,7 @@ async function submitWithdraw() {
       return
     }
   } else {
-    if (!selectedCurrency.value || !selectedAccount.value) {
+    if (!selectedAccount.value) {
       showToast(localeStore.t('pleaseSelectCurrencyAndRecipientAccount'), 'error')
       return
     }
@@ -612,7 +594,7 @@ async function submitWithdraw() {
   try {
     // 对于数字货币，network是地址的网络（如USDT-TRC20）
     // 对于银行卡，network是货币（如USD）
-    const network = withdrawType.value === 'digital' ? selectedAddressNetwork.value : selectedCurrency.value
+    const network = withdrawType.value === 'digital' ? selectedAddressNetwork.value : (selectedAccountCurrency.value || 'USD')
     
     if (!network) {
       showToast(localeStore.t('pleaseSelectCurrency'), 'error')
@@ -622,6 +604,7 @@ async function submitWithdraw() {
     
     const res: any = await request.post('/withdraw/submit', {
       type: withdrawType.value,
+      currency: withdrawType.value === 'bank' ? bankCurrency.value : undefined,
       network: network,
       amount: amount.value,
       address: withdrawType.value === 'digital' ? selectedAddress.value : selectedAccount.value,

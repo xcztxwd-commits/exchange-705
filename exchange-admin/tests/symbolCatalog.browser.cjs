@@ -1,0 +1,93 @@
+// Browser plugin not available. Uses the installed Playwright and Chrome; API responses are isolated fixtures.
+const { chromium } = require(process.env.PLAYWRIGHT_PATH)
+const assert = require('node:assert/strict'), fs = require('node:fs'), path = require('node:path'), os = require('node:os')
+const evidence = path.join(os.tmpdir(), '705-catalog-qa')
+;(async () => {
+ const browser = await chromium.launch({headless:true,executablePath:'C:/Program Files/Google/Chrome/Application/chrome.exe'})
+ try {
+  const page=await browser.newPage({viewport:{width:1360,height:1000}}), errors=[], added=[], requests=[]
+  page.on('pageerror',e=>errors.push(e.message))
+  let fail=false, categories=['US','Crypto','Metal','Forex','CFD','Oil'].map((key,index)=>({key,label:key,sortOrder:index,enabled:key!=='Oil',marketSource:['Crypto','Metal'].includes(key)?'binance':'yahoo',sourceCategory:key}))
+  const sources=[{value:'binance',label:'Binance',categories:[{value:'Crypto',label:'加密货币（现货）'},{value:'Metal',label:'贵金属（永续合约）'}]},{value:'yahoo',label:'Yahoo',categories:[{value:'US',label:'股票'},{value:'Forex',label:'外汇'},{value:'CFD',label:'指数'},{value:'Oil',label:'能源期货'}]}]
+  await page.addInitScript(()=>{localStorage.setItem('admin_token','catalog-test');localStorage.setItem('admin_user',JSON.stringify({id:1,role:'super_admin',isSuperAdmin:true}))})
+  await page.route('**/api/**',async route=>{
+   const r=route.request(),url=new URL(r.url());let body={list:[],total:0}
+   if(url.pathname.endsWith('/catalog/sources'))body=sources
+   else if(url.pathname.endsWith('/symbols/categories')){if(r.method()==='POST')categories=r.postDataJSON();body=categories}
+   else if(url.pathname.endsWith('/catalog/add')){const data=r.postDataJSON();requests.push(data);added.push(...data.symbols);body={added:data.symbols,existing:[]}}
+   else if(url.pathname.endsWith('/catalog')){
+    if(fail){fail=false;return route.fulfill({status:503,json:{message:'目录测试故障'}})}
+    if(url.searchParams.get('query')==='slow') await new Promise(resolve=>setTimeout(resolve,500))
+    const binance=url.searchParams.get('source')==='binance', second=url.searchParams.get('page')==='1'
+    const codes=binance?(second?['SOLUSDT','XRPUSDT']:['BTCUSDT','ETHBTC']):['AAPL','MSFT']
+    body={list:codes.map(symbol=>({symbol,name:symbol,exchange:'测试市场',added:symbol==='BTCUSDT'||added.includes(symbol)})),total:binance?4:2,page:second?1:0,hasMore:binance&&!second}
+   }
+   await route.fulfill({json:body})
+  })
+  await page.goto('http://127.0.0.1:5191/#/symbols')
+  await page.getByRole('button',{name:'新增币种',exact:true}).click()
+  const dialog=page.getByRole('dialog',{name:'从行情源添加交易对'})
+  await dialog.getByRole('checkbox',{name:'BTCUSDT',exact:true}).waitFor({state:'attached'})
+  assert.equal(await dialog.getByRole('checkbox',{name:'BTCUSDT',exact:true}).isDisabled(),true)
+  assert.equal(await dialog.getByRole('checkbox',{name:'BTCUSDT',exact:true}).isChecked(),true)
+  await dialog.getByText('分类绑定默认匹配：Crypto',{exact:true}).waitFor({state:'attached'})
+  await dialog.getByRole('checkbox',{name:'ETHBTC',exact:true}).locator('..').click()
+  await dialog.getByRole('combobox',{name:'项目分类',exact:true}).locator('xpath=ancestor::div[contains(@class,"el-select__wrapper")]').click()
+  await page.getByRole('option',{name:'CFD',exact:true}).click()
+  await dialog.getByRole('button',{name:'添加选中（1）',exact:true}).click()
+  await page.getByText('已添加 1 个，已存在 0 个',{exact:true}).waitFor({state:'attached'})
+  await dialog.getByRole('checkbox',{name:'ETHBTC',exact:true}).evaluate(el => { if (!el.disabled) throw new Error('added pair must be disabled') })
+  assert.deepEqual(requests[0],{source:'binance',sourceCategory:'Crypto',projectCategory:'CFD',symbols:['ETHBTC']})
+  await dialog.getByRole('button',{name:'下一页',exact:true}).click()
+  await dialog.getByRole('checkbox',{name:'SOLUSDT',exact:true}).waitFor({state:'attached'})
+  await dialog.getByRole('checkbox',{name:'SOLUSDT',exact:true}).locator('..').click()
+  await dialog.getByRole('button',{name:'上一页',exact:true}).click()
+  await dialog.getByRole('checkbox',{name:'ETHBTC',exact:true}).waitFor({state:'attached'})
+  await dialog.getByText('已选：SOLUSDT',{exact:false}).waitFor()
+  await dialog.getByRole('textbox',{name:'搜索交易对',exact:true}).fill('slow')
+  await dialog.getByRole('button',{name:'查询',exact:true}).click()
+  await dialog.getByRole('combobox',{name:'行情源',exact:true}).locator('xpath=ancestor::div[contains(@class,"el-select__wrapper")]').click()
+  await page.getByRole('option',{name:'Yahoo',exact:true}).click()
+  await dialog.getByRole('checkbox',{name:'AAPL',exact:true}).waitFor({state:'attached'})
+  await dialog.getByText('分类绑定默认匹配：US',{exact:true}).waitFor({state:'attached'})
+  await page.waitForResponse(r=>r.url().includes('query=slow'))
+  assert.equal(await dialog.getByRole('checkbox',{name:'BTCUSDT',exact:true}).count(),0)
+  await dialog.getByRole('checkbox',{name:'AAPL',exact:true}).locator('..').click()
+  await dialog.getByRole('button',{name:'添加选中（1）',exact:true}).click()
+  await page.waitForResponse(r=>new URL(r.url()).pathname.endsWith('/catalog'))
+  assert.equal(await dialog.getByRole('checkbox',{name:'AAPL',exact:true}).isDisabled(),true)
+  fail=true;await dialog.getByRole('button',{name:'查询',exact:true}).click()
+  await dialog.getByRole('button',{name:'重试加载',exact:true}).waitFor({state:'attached'})
+  await dialog.getByRole('button',{name:'重试加载',exact:true}).click()
+  await dialog.getByRole('checkbox',{name:'AAPL',exact:true}).waitFor({state:'attached'})
+  fs.mkdirSync(evidence,{recursive:true})
+  await page.screenshot({path:path.join(evidence,'catalog-desktop.png')})
+  await page.setViewportSize({width:390,height:844})
+  await dialog.getByRole('button',{name:'添加选中（0）',exact:true}).scrollIntoViewIfNeeded()
+  await page.screenshot({path:path.join(evidence,'catalog-mobile.png')})
+  await page.setViewportSize({width:1360,height:1000})
+  await dialog.getByRole('button',{name:'关闭',exact:true}).click()
+  await page.getByRole('button',{name:'分类管理',exact:true}).click()
+  const manage=page.getByRole('dialog',{name:'项目分类与源分类绑定'})
+  await manage.getByText('Oil',{exact:true}).waitFor({state:'attached'})
+  const oil=manage.getByRole('row').filter({has:page.getByText('Oil',{exact:true})})
+  assert.equal(await oil.getByRole('switch').last().isChecked(),false)
+  const row=manage.getByRole('row').filter({has:page.getByText('Crypto',{exact:true})})
+  await row.getByRole('switch',{name:'Crypto允许杠杆'}).locator('..').click()
+  await row.getByRole('combobox').first().locator('xpath=ancestor::div[contains(@class,"el-select__wrapper")]').click()
+  await page.getByRole('option',{name:'Yahoo',exact:true}).click()
+  await manage.getByRole('button',{name:'保 存',exact:true}).click()
+  await page.getByText('分类配置已保存',{exact:true}).waitFor({state:'attached'})
+  assert.equal(categories.find(c=>c.key==='Crypto').leverageEnabled,false)
+  assert.equal(categories.find(c=>c.key==='Crypto').marketSource,'yahoo')
+  assert.equal(categories.find(c=>c.key==='Crypto').sourceCategory,'US')
+  assert.equal(categories.find(c=>c.key==='Oil').enabled,false)
+  await page.getByRole('button',{name:'分类管理',exact:true}).click()
+  await manage.getByRole('switch',{name:'Crypto允许杠杆'}).waitFor({state:'attached'})
+  assert.equal(await manage.getByRole('switch',{name:'Crypto允许杠杆'}).isChecked(),false)
+  await manage.getByText('允许杠杆',{exact:true}).click()
+  await page.screenshot({path:path.join(evidence,'category-leverage.png'),animations:'disabled'})
+  assert.deepEqual(errors,[])
+  console.log(JSON.stringify({passed:true,checks:['existing checked and disabled','cross-quote pair add','manual project category','Yahoo add','retry','category bindings','disabled category preservation','desktop/mobile screenshots','pagination selection','stale response ignored','no page errors'],requests},null,2))
+ }finally{await browser.close()}
+})().catch(e=>{console.error(e);process.exit(1)})

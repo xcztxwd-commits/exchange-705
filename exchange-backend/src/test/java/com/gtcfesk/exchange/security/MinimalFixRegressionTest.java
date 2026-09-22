@@ -47,6 +47,7 @@ class MinimalFixRegressionTest {
             r.add("spring.datasource.password", () -> System.getenv("QA_DB_PASSWORD"));
         } }
     @MockBean ForexQuoteMarketService quotes;
+    @MockBean MarketInstrumentCatalog catalog;
     @MockBean MarketOrderProcessor processor;
     @MockBean RedisMarketService redis;
     @MockBean EmailService email;
@@ -234,12 +235,13 @@ class MinimalFixRegressionTest {
         same(new BigDecimal("10001"),balance(a,"FUND"));assertEquals(before,transfers.count());
     }
     @Test void invalidAmountsAndWithdrawalTypesDoNotWriteFundsOrRecords()throws Exception{
+        org.mockito.Mockito.when(quotes.requireConversionRate("USD","yahoo")).thenReturn(BigDecimal.ONE);
         long count=deposits.count();BigDecimal before=balance(a,"FUND");
         for(int amount:new int[]{0,-1})assertEquals(400,status(request("POST","/api/deposit/submit",ta,map("type","digital","network","USDT-TRC20","address","test","amount",amount,"proofImage","test"))));
         assertEquals(count,deposits.count());assertEquals(400,status(request("POST","/api/withdraw/submit",ta,map("type","unknown","network","USD","address","test","amount",1))));same(before,balance(a,"FUND"));
         assertEquals(200,status(request("POST","/api/deposit/submit",ta,map("type","digital","network","USDT-TRC20","address","test","amount",1,"proofImage","test"))));assertEquals(count+1,deposits.count());
     }
-    TradingSymbol symbol(){TradingSymbol s=new TradingSymbol();s.setSymbol(prefix);s.setBaseCurrency("TEST");s.setName("QA");return symbols.saveAndFlush(s);}
+    TradingSymbol symbol(){TradingSymbol s=new TradingSymbol();s.setSymbol(prefix);s.setBaseCurrency("TEST");s.setName("QA");s.setSourceCategory("US");s.setMarketSource("yahoo");return symbols.saveAndFlush(s);}
     @Test void invalidTradeParametersLeaveBalancesAndOrdersUntouched()throws Exception{
         TradingSymbol symbol=symbol();OptionDuration d=durations.findByDuration(60).orElseGet(()->{OptionDuration x=new OptionDuration();x.setDuration(60);x.setLabel("60s");x.setSortOrder(1);x.setEnabled(true);x.setProfitRate(new BigDecimal("0.8"));x.setLossRate(BigDecimal.ONE);x.setMinAmount(BigDecimal.ONE);x.setMaxAmount(new BigDecimal("100"));return durations.saveAndFlush(x);});
         Map<String,Object> req=map("symbol",symbol.getSymbol(),"side","BUY","type","MARKET","quantity",1,"currentPrice",100);
@@ -562,7 +564,7 @@ class MinimalFixRegressionTest {
     }
 
     @Test @SuppressWarnings("unchecked") void timedControlPersistsAndSymbolEditsCannotEraseIt() throws Exception {
-        TradingSymbol symbol = symbol(); symbol.setCategory("Metal"); symbol = symbols.saveAndFlush(symbol);
+        TradingSymbol symbol = symbol(); symbol.setCategory("Metal"); symbol.setSourceCategory("Metal"); symbol.setMarketSource(com.gtcfesk.exchange.market.MarketInstrumentCatalog.inferredSource("Metal")); symbol = symbols.saveAndFlush(symbol);
         ForexQuoteMarketService real = new ForexQuoteMarketService();
         try {
             org.springframework.test.util.ReflectionTestUtils.setField(real, "symbols", symbols);
@@ -612,6 +614,27 @@ class MinimalFixRegressionTest {
         List<Boolean> duplicateResults=race(()->contractService.matchPendingLimitOrders()==1,()->contractService.matchPendingLimitOrders()==1);
         assertEquals(1,duplicateResults.stream().filter(Boolean.TRUE::equals).count());assertEquals(1,contracts.findById(duplicate.getId()).get().getRowVersion());
         AssetAccount after=assets.findById(before.getId()).get();same(before.getAvailable(),after.getAvailable());same(before.getFrozen(),after.getFrozen());
+    }
+
+    @Test void catalogAddIsAtomicDeduplicatedAndPreservesSourceOnManualCategory() throws Exception {
+        String first="CAT"+prefix.replace("_", "").toUpperCase(), second=first+"B";
+        org.mockito.Mockito.when(catalog.resolve(org.mockito.ArgumentMatchers.eq("binance"),org.mockito.ArgumentMatchers.eq("Crypto"),org.mockito.ArgumentMatchers.anyString())).thenAnswer(call -> {
+            String code=call.getArgument(2);TradingSymbol row=new TradingSymbol();row.setSymbol(code);row.setAlltickSymbol(code);
+            row.setBaseCurrency("ETH");row.setQuoteCurrency("BTC");row.setName(code);row.setMarketSource("binance");row.setSourceCategory("Crypto");row.setMarketInstrumentKey("binance:Crypto:"+code);return row;
+        });
+        String endpoint="/api/admin/symbols/catalog/add";
+        Map<String,Object> input=map("source","binance","sourceCategory","Crypto","projectCategory","CFD","symbols",Arrays.asList(first));
+        assertEquals(403,status(request("POST",endpoint,ta,input)));
+        MvcResult added=request("POST",endpoint,superToken,input);assertEquals(200,status(added));assertEquals(1,body(added).path("added").size());
+        TradingSymbol saved=symbols.findBySymbol(first).get();assertEquals("CFD",saved.getCategory());assertEquals("Crypto",saved.getSourceCategory());assertEquals("binance",saved.getMarketSource());
+        assertEquals(1,body(request("POST",endpoint,superToken,input)).path("existing").size());
+        saved.setCategory("US");assertEquals(200,status(request("POST","/api/admin/symbols/update",superToken,saved)));
+        assertEquals("Crypto",symbols.findById(saved.getId()).get().getSourceCategory());
+        saved.setSourceCategory("US");assertEquals(400,status(request("POST","/api/admin/symbols/update",superToken,saved)));
+        input.put("symbols",Arrays.asList(second,first));
+        org.mockito.Mockito.when(catalog.resolve("binance","Crypto",first)).thenThrow(new BusinessException("目录不再提供此交易对"));
+        assertEquals(400,status(request("POST",endpoint,superToken,input)));assertFalse(symbols.findBySymbol(second).isPresent());
+        assertTrue(status(request("POST","/api/admin/symbols/create",superToken,map("symbol","FAKE")))>=400);
     }
 
 }
