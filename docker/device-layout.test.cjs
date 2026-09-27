@@ -18,14 +18,14 @@ const { chromium } = require(process.env.PLAYWRIGHT_PATH || 'playwright');
     await page.evaluate(() => localStorage.setItem('layout-test', 'preserved'));
     for (const width of [400, 769, 768, 1280]) {
       await page.setViewportSize({ width, height: 900 });
-      await check(width <= 768 ? '/mobile/' : '/', width <= 768 ? 'mobile' : 'pc');
+      await check(width <= 768 ? '/mobile/home' : '/', width <= 768 ? 'mobile' : 'pc');
       assert.equal(await page.evaluate(() => localStorage.getItem('layout-test')), 'preserved');
     }
     await page.setViewportSize({ width: 400, height: 811 });
-    await check('/mobile/', 'mobile');
-    await page.goto(`${origin}/#/?register=1`);
-    await check('/mobile/', 'mobile');
-    assert.equal(new URL(page.url()).hash, '#/register');
+    await check('/mobile/home', 'mobile');
+    await page.goto(`${origin}/?register=1`);
+    await check('/mobile/register', 'mobile');
+    assert.equal(new URL(page.url()).hash, '');
     await page.setViewportSize({ width: 1280, height: 900 });
     await check('/', 'pc');
     const phone = await browser.newPage({ viewport: { width: 400, height: 811 }, isMobile: true, hasTouch: true });
@@ -35,7 +35,7 @@ const { chromium } = require(process.env.PLAYWRIGHT_PATH || 'playwright');
     assert.equal(await phone.locator('script[data-layout]').getAttribute('data-layout'), 'mobile');
     await phone.reload();
     await phone.waitForFunction(() => document.querySelector('#app')?.children.length > 0);
-    assert.equal(new URL(phone.url()).pathname, '/mobile/');
+    assert.equal(new URL(phone.url()).pathname, '/mobile/home');
     console.log('PASS: initial phone load, reload, resize both ways, 768/769 boundary, same-origin storage, registration route');
   } finally {
     await browser.close();

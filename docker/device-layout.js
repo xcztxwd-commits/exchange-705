@@ -7,17 +7,18 @@
   function switchLayout() {
     if (narrow.matches === (layout === 'mobile')) return;
     const target = new URL(location.href);
-    const route = new URL(location.hash.slice(1) || '/', location.origin);
+    const route = layout === 'mobile' ? location.pathname.slice('/mobile'.length) || '/' : location.pathname;
     if (narrow.matches) {
-      target.pathname = '/mobile/';
-      const form = ['login', 'register', 'forgot'].find(key => route.searchParams.get(key) === '1');
-      target.hash = form ? `/${form === 'forgot' ? 'forgot-password' : form}`
-        : route.pathname === '/language' ? '/language' : '/home';
+      const form = ['login', 'register', 'forgot'].find(key => target.searchParams.get(key) === '1');
+      target.pathname = form ? `/mobile/${form === 'forgot' ? 'forgot-password' : form}`
+        : route === '/language' ? '/mobile/language' : '/mobile/home';
+      if (form) target.searchParams.delete(form);
     } else {
-      target.pathname = '/';
-      const form = { '/login': 'login', '/register': 'register', '/forgot-password': 'forgot' }[route.pathname];
-      target.hash = form ? `/?${form}=1` : route.pathname === '/language' ? '/language' : '/';
+      const form = { '/login': 'login', '/register': 'register', '/forgot-password': 'forgot' }[route];
+      target.pathname = route === '/language' ? '/language' : '/';
+      if (form) target.searchParams.set(form, '1');
     }
+    target.hash = '';
     location.replace(target.href);
   }
   narrow.addEventListener('change', switchLayout);

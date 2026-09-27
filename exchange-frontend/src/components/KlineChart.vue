@@ -2,14 +2,15 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { dispose, init, type CandleType, type Chart, type Coordinate, type DataLoaderGetBarsParams, type KLineData, type OverlayCreate } from 'klinecharts'
 import { useMarketStore } from '@/store/market'
-import marketWebSocket from '@/utils/marketWebSocket'
+import marketWebSocket, { showSourceConnectionWarning } from '@/utils/marketWebSocket'
 import { useLocaleStore } from '@/store/locale'
 import request from '@/utils/request'
 import { candleFromQuote, chartPeriod, normalizeCandles } from '@/utils/chartData'
 import { registerTradingDrawingOverlays } from '@/utils/chartOverlays'
 import { indicatorCatalog, normalizePreferences, validParameters, validTimezone } from '@/utils/chartPreferences'
+import { displaySymbol } from '@/utils/displaySymbol'
 
-const props = defineProps<{ symbol: string; category?: string; interval?: string; height?: number }>()
+const props = defineProps<{ symbol: string; category?: string; interval?: string; height?: number; compact?: boolean; pricePrecision?: number }>()
 const emit = defineEmits<{ (e: 'ready'): void }>()
 const market = useMarketStore()
 const locale = useLocaleStore()
@@ -24,9 +25,7 @@ const historyLoading = ref(false)
 const error = ref(false)
 const empty = ref(false)
 const exhausted = ref(false)
-const dataWarning = ref(false)
 const syncError = ref(false)
-const staleCandles = ref(false)
 const saved = ref(true)
 const preferenceKey = 'exchange:chart-preferences:v1'
 let initialPreferences = normalizePreferences(null)
@@ -52,6 +51,8 @@ const snapshotError = ref(false)
 const preferenceSaved = ref(true)
 const parameterError = ref('')
 const selectedStudies = computed(() => indicatorCatalog.filter(item => preferences.value.indicators.includes(item.name)))
+// Mobile preview keeps the price pane readable; full screen retains every saved study.
+const displayedStudies = computed(() => selectedStudies.value.filter(item => !props.compact || fullscreen.value || item.main))
 const visibleStudies = computed(() => indicatorCatalog.filter(item => `${item.name} ${item.zh} ${item.en}`.toLowerCase().includes(search.value.toLowerCase())))
 const zones = (() => {
   const api = Intl as typeof Intl & { supportedValuesOf?: (key: string) => string[] }
@@ -59,7 +60,7 @@ const zones = (() => {
 })()
 const visibleZones = computed(() => [...new Set([timezone.value, ...zones])].filter(zone => zone.toLowerCase().includes(search.value.toLowerCase())))
 const stageHeight = computed(() => {
-  const panes = selectedStudies.value.filter(item => !item.main).length
+  const panes = displayedStudies.value.filter(item => !item.main).length
   return panes > 1 ? `${260 + panes * 100}px` : '0px'
 })
 const historyLimited = ref(false)
@@ -125,9 +126,9 @@ function applyTheme() {
 function applyIndicators() {
   if (!chart) return
   for (const existing of chart.getIndicators()) {
-    if (!preferences.value.indicators.includes(existing.name)) chart.removeIndicator({ name: existing.name, paneId: existing.paneId })
+    if (!displayedStudies.value.some(item => item.name === existing.name)) chart.removeIndicator({ name: existing.name, paneId: existing.paneId })
   }
-  for (const item of selectedStudies.value) {
+  for (const item of displayedStudies.value) {
     const value = { name: item.name, calcParams: preferences.value.parameters[item.name] || item.params }
     if (chart.getIndicators({ name: item.name }).length) chart.overrideIndicator(value)
     else chart.createIndicator(value, { isStack: true, pane: item.main ? { id: 'candle_pane' } : { id: 'study_' + item.name, height: 95, minHeight: 65, dragEnabled: true } })
@@ -135,6 +136,7 @@ function applyIndicators() {
 }
 
 async function openPanel(name: typeof panel.value) {
+  if (props.compact && name === 'indicators') fullscreen.value = true
   panel.value = name; search.value = ''; parameterError.value = ''
   await nextTick()
   if (!dialog.value?.open) dialog.value?.showModal()
@@ -180,12 +182,12 @@ async function takeSnapshot() {
     const context = canvas.getContext('2d')!
     context.fillStyle = dark.value ? '#131722' : '#ffffff'; context.fillRect(0, 0, canvas.width, canvas.height)
     context.fillStyle = dark.value ? '#e2e8f0' : '#243247'; context.font = 'bold 18px sans-serif'
-    context.fillText(`${symbol} · ${period}`, 16, 26)
+    context.fillText(`${displaySymbol(symbol)} · ${period}`, 16, 26)
     context.font = '12px sans-serif'
     context.fillText(`${zone} · ${new Intl.DateTimeFormat('sv-SE', { timeZone: zone, dateStyle: 'short', timeStyle: 'medium' }).format(new Date())}`, 16, 48)
     context.drawImage(source, 0, 64)
     snapshot.value = canvas.toDataURL('image/png')
-    snapshotName.value = `${symbol.replace(/[^a-z0-9_-]/gi, '_')}-${period}-${Date.now()}.png`
+    snapshotName.value = `${displaySymbol(symbol).replace(/[^a-z0-9_-]/gi, '_')}-${period}-${Date.now()}.png`
     await openPanel('snapshot')
   } catch { snapshotError.value = true }
 }
@@ -270,6 +272,26 @@ function keydown(event: KeyboardEvent) {
   if (event.key === 'Delete' && selected.value) { event.preventDefault(); removeDrawing() }
 }
 
+const sourceMissing = ref(false)
+
+function roundedRequestSize(missing: number): number {
+  return Math.ceil((Math.max(0, Math.ceil(missing)) + 100) / 100) * 100
+}
+
+function requestedBarCount(history: boolean): number {
+  if (!chart) return 200
+  const barSpace = chart.getBarSpace().bar
+  if (!Number.isFinite(barSpace) || barSpace <= 0) return 200
+  if (!history) {
+    const width = chart.getSize('candle_pane', 'main')?.width || container.value?.clientWidth || 0
+    return Math.max(200, roundedRequestSize(width / barSpace))
+  }
+  const oldest = chart.getDataList()[0]
+  if (!oldest) return 200
+  const x = (chart.convertToPixel({ timestamp: oldest.timestamp }) as Partial<Coordinate>).x
+  return roundedRequestSize(typeof x === 'number' && Number.isFinite(x) ? x / barSpace : -chart.getVisibleRange().realFrom)
+}
+
 async function fetchBars(before: number, signal: AbortSignal, limit = 200) {
   const history = Number.isFinite(before)
   const url = '/market/kline/' + (history ? 'history/' : '') + encodeURIComponent(props.symbol)
@@ -279,7 +301,7 @@ async function fetchBars(before: number, signal: AbortSignal, limit = 200) {
     try {
       response = await request.get(url, { params: query, signal })
     } catch (failure) {
-      if (history || signal.aborted) throw failure
+      if (history || signal.aborted || market.quoteStatusMap[props.symbol]?.controlHistory) throw failure
       response = await request.get('/market/redis/kline/' + encodeURIComponent(props.symbol), { params: query, signal })
     }
     if (signal.aborted) throw new Error('Aborted')
@@ -291,6 +313,7 @@ async function fetchBars(before: number, signal: AbortSignal, limit = 200) {
     })
   }
   if (response?.data?.status === 'unavailable' || response?.ret !== 200) throw new Error('Chart data unavailable')
+  sourceMissing.value = !!response.data?.missingData
   const rows = response.data?.kline_list ?? response.data
   if (!Array.isArray(rows)) throw new Error('Invalid candle response')
   const validated = normalizeCandles(rows)
@@ -299,25 +322,45 @@ async function fetchBars(before: number, signal: AbortSignal, limit = 200) {
   if (validated.length && !aligned.length) throw new Error('No aligned candles')
   const candles = aligned.filter(bar => bar.timestamp < before)
   if (history && aligned.length && !candles.length) throw new Error('History cursor was not honored')
-  return { candles, damaged: !!response.data?.missingData || rows.some(row => row.partial === true) || aligned.length < validated.length || rows.some(row => normalizeCandles([row]).length === 0),
-    stale: response.data?.status === 'stale' || !!response.data?.pending }
+  return { candles }
 }
 
-async function fetchHistory(before: number, signal: AbortSignal) {
-  try { return { ...await fetchBars(before, signal), limited: false } } catch (failure) {
+async function fetchHistory(before: number, signal: AbortSignal, requestedLimit = 200) {
+  try {
+    const result = await fetchBars(before, signal, requestedLimit)
+    return { ...result, candles: result.candles.slice(-requestedLimit), limited: false }
+  } catch (failure) {
     if (signal.aborted) throw failure
     // The existing latest endpoint accepts up to 1000 bars. Use that window when
     // the cursor endpoint is missing or temporarily unavailable; never fabricate history.
     while (true) {
-      const limit = Math.min(1000, Math.max(historyWindow + 200, (chart?.getDataList().length || 0) + 200))
+      const limit = Math.min(1000, Math.max(historyWindow + requestedLimit, (chart?.getDataList().length || 0) + requestedLimit))
       const result = await fetchBars(Infinity, signal, limit)
       if (signal.aborted) throw new Error('Aborted')
       historyWindow = limit
-      const candles = result.candles.filter(bar => bar.timestamp < before)
+      const candles = result.candles.filter(bar => bar.timestamp < before).slice(-requestedLimit)
       if (candles.length) return { ...result, candles, limited: false }
       if (limit === 1000) return { ...result, candles, limited: true }
     }
   }
+}
+
+async function fetchWindow(before: number, signal: AbortSignal, wanted: number) {
+  const history = Number.isFinite(before)
+  const first = history
+    ? await fetchHistory(before, signal, Math.min(200, wanted))
+    : { ...await fetchBars(Infinity, signal, Math.min(1000, wanted)), limited: false }
+  let candles = first.candles.slice(-wanted)
+  let limited = first.limited
+  let exhausted = history && !candles.length && !limited
+  while (candles.length && candles.length < wanted && !limited) {
+    const older = await fetchHistory(candles[0]!.timestamp, signal, Math.min(200, wanted - candles.length))
+    if (signal.aborted) throw new Error('Aborted')
+    if (!older.candles.length) { exhausted = !older.limited; limited = older.limited; break }
+    candles = [...older.candles, ...candles]
+    limited = older.limited
+  }
+  return { candles, limited, exhausted }
 }
 
 function retryHistoryOnScroll() {
@@ -344,15 +387,13 @@ async function loadBars(params: DataLoaderGetBarsParams, version: number, signal
   error.value = false
   const before = history && params.timestamp !== null ? params.timestamp : Infinity
   try {
-    const result = history ? await fetchHistory(before, signal) : { ...await fetchBars(before, signal), limited: false }
+    const result = await fetchWindow(before, signal, requestedBarCount(history))
     const { candles } = result
     if (version !== revision || signal.aborted) return
-    dataWarning.value ||= result.damaged
-    staleCandles.value ||= result.stale
     historyLimited.value = result.limited
-    params.callback(candles, { forward: candles.length > 0 && !result.limited, backward: false })
+    params.callback(candles, { forward: candles.length > 0 && !result.limited && !result.exhausted, backward: false })
     cacheBars()
-    exhausted.value = history && candles.length === 0 && !result.limited
+    exhausted.value = result.exhausted
     if (!history) {
       empty.value = candles.length === 0; restoreDrawings(); emit('ready')
     }
@@ -394,7 +435,6 @@ async function syncLatest() {
     while (previousLast && candles[0] && candles[0].timestamp > previousLast) {
       const older = await fetchBars(candles[0].timestamp, signal)
       if (signal.aborted || version !== revision) return
-      result.damaged ||= older.damaged
       if (!older.candles.length) throw new Error('Candle gap unavailable')
       candles = [...older.candles, ...candles]
     }
@@ -432,8 +472,6 @@ async function syncLatest() {
       const nextX = (chart.convertToPixel({ timestamp: anchor }) as Partial<Coordinate>).x
       if (nextX !== undefined && nextX !== x) chart.scrollByDistance(x - nextX, 0)
     }
-    dataWarning.value ||= result.damaged
-    staleCandles.value = result.stale
     syncError.value = false
     cacheBars()
     replayQuote()
@@ -467,9 +505,7 @@ function resetMarket() {
   historyFailures = 0
   historyLimited.value = false
   clearTimeout(historyRetryTimer)
-  dataWarning.value = false
   syncError.value = false
-  staleCandles.value = false
   error.value = false
   empty.value = false
   exhausted.value = false
@@ -479,8 +515,8 @@ function resetMarket() {
   chart.setDataLoader({ getBars: () => {} })
   const instruments = 'symbols' in market && Array.isArray(market.symbols) ? market.symbols : []
   const instrument = instruments.find(item => item.symbol === props.symbol)
-  const precision = instrument?.pricePrecision
-  chart.setSymbol({ ticker: props.symbol, pricePrecision: Number.isInteger(precision) && precision >= 0 && precision <= 12 ? precision : /JPY/.test(props.symbol) ? 3 : /^(BTC|ETH|XAU|XAG)/.test(props.symbol) ? 2 : 5, volumePrecision: 2 })
+  const precision = props.pricePrecision ?? instrument?.pricePrecision
+  chart.setSymbol({ ticker: displaySymbol(instrument || props.symbol), pricePrecision: Number.isInteger(precision) && precision >= 0 && precision <= 12 ? precision : /JPY/.test(props.symbol) ? 3 : /^(BTC|ETH|XAU|XAG)/.test(props.symbol) ? 2 : 5, volumePrecision: 2 })
   chart.setPeriod(chartPeriod(interval.value))
   const signal = controller.signal
   chart.setDataLoader({
@@ -491,6 +527,8 @@ function resetMarket() {
 }
 
 watch(() => [props.symbol, props.category, interval.value], resetMarket)
+watch(() => props.pricePrecision, resetMarket)
+watch(displayedStudies, applyIndicators)
 function replayQuote() {
   // Persisted mixed candles are authoritative; never rebuild their OHLC from client ticks.
   if (market.quoteStatusMap[props.symbol]?.controlHistory) {
@@ -516,6 +554,12 @@ watch(() => market.quoteStatusMap[props.symbol]?.simulationSession, (value, prev
   if (value === previous) return
   if (value && count.value) { lastSyncAttempt = 0; void syncLatest() }
   else resetMarket()
+})
+watch(() => market.quoteStatusMap[props.symbol]?.controlHistoryRevision, (value, previous) => {
+  if (value === previous || !previous) return
+  // Publication/source transitions invalidate every period, including previously loaded older bars.
+  for (const key of Object.keys(market.klineDataMap)) if (key.startsWith(props.symbol + '_')) delete market.klineDataMap[key]
+  resetMarket()
 })
 watch(() => market.quoteStatusMap[props.symbol], replayQuote)
 watch(() => [preferences.value.indicators, preferences.value.parameters], applyIndicators, { deep: true })
@@ -609,18 +653,14 @@ onUnmounted(() => {
         <div v-if="activeTool" class="drawing-hint">{{ activeTool === 'brush' ? text('按住拖動繪製 · Esc 取消', 'Drag to draw · Esc to cancel') : text('點擊圖表設定錨點 · Esc 取消', 'Click to place points · Esc to cancel') }}</div>
       </div>
     </div>
-    <div class="chart-footer" role="status" aria-live="polite">
-      <span v-if="market.quoteStatusMap[props.symbol]?.controlState === 'WAITING_SOURCE'">{{ text('靜態價格 · 等待原始行情恢復', 'Static price · Waiting for source') }}</span>
-      <span v-else-if="market.quoteStatusMap[props.symbol]?.controlState === 'HOLDING'">{{ text('保持控盤偏移 · 等待手動恢復', 'Holding offset · Manual restore required') }}{{ market.quoteStatusMap[props.symbol]?.sourceAvailable ? '' : text(' · 源異常，靜態等待', ' · Source unavailable, static price') }}</span>
-      <span v-else-if="market.quoteStatusMap[props.symbol]?.controlState === 'RUNNING'">{{ text('目標控盤運行中', 'Target control running') }}{{ market.quoteStatusMap[props.symbol]?.sourceAvailable ? '' : text(' · 原始行情異常，按控盤價交易', ' · Source unavailable, trading at controlled price') }}</span>
-      <span v-else-if="market.quoteStatusMap[props.symbol]?.simulated">{{ text('虛擬行情', 'Simulated market') }}</span>
+    <div class="chart-footer" :class="{ 'chart-warning': error || syncError || snapshotError || !saved || showSourceConnectionWarning(market.quoteStatusMap[props.symbol]) }" role="status" aria-live="polite">
+      <span v-if="showSourceConnectionWarning(market.quoteStatusMap[props.symbol])">{{ text('數據源連接失敗，正在重試', 'Data source connection failed; retrying') }}</span>
+      <span v-if="sourceMissing">{{ text('原始行情缺失，未补造数据', 'Original source data missing; no fabricated candles') }}</span>
       <span v-if="historyLoading">{{ text('正在載入更早行情…', 'Loading older candles…') }}</span>
       <button v-else-if="error" class="retry-history" @click="retryLoad">{{ count ? text('歷史載入失敗 · 點擊重試', 'History failed · Retry') : text('行情載入失敗 · 重試', 'Candles unavailable · Retry') }}</button>
       <span v-else-if="historyLimited">{{ text('已到目前接口可回溯範圍', 'History limit reached for the current data source') }}</span>
       <span v-else-if="snapshotError">{{ text('快照失敗，請重新嘗試', 'Snapshot failed; please retry') }}</span>
       <button v-else-if="syncError" class="retry-history" @click="syncLatest">{{ text('最新 K 線未完整同步 · 重試', 'Latest candles incomplete · Retry') }}</button>
-      <span v-else-if="dataWarning">{{ text('K 線含缺失或部分源數據，未補造走勢', 'Partial or missing source data; no fabricated history') }}</span>
-      <span v-else-if="staleCandles">{{ text('顯示快取 K 線，等待更新', 'Cached candles; awaiting refresh') }}</span>
       <span v-else-if="!saved">{{ text('繪圖無法儲存至此瀏覽器', 'Drawing storage unavailable') }}</span>
       <span v-else>{{ exhausted ? text('已到最早可用行情', 'Earliest available candles') : text('向右拖動查看更早行情', 'Drag right for older candles') }}</span>
       <button class="footer-meta" :title="timezone" :aria-label="text('時區設定', 'Timezone settings')" @click="openPanel('timezone')">{{ count }} {{ text('根', 'bars') }} · {{ timezone }}</button>
@@ -628,15 +668,12 @@ onUnmounted(() => {
     </div>
     <dialog ref="dialog" class="chart-dialog" :class="{ 'snapshot-dialog': panel === 'snapshot' }" aria-labelledby="chart-panel-title" @click="($event.target === dialog) && dialog?.close()">
       <header class="panel-header">
-        <div><span class="panel-eyebrow">{{ props.symbol }} · {{ interval }}</span><h2 id="chart-panel-title">{{ panel === 'indicators' ? text('技術指標', 'Technical indicators') : panel === 'timezone' ? text('圖表時區', 'Chart timezone') : panel === 'settings' ? text('圖表設定', 'Chart settings') : text('圖表快照', 'Chart snapshot') }}</h2></div>
+        <div><span class="panel-eyebrow">{{ displaySymbol(props.symbol) }} · {{ interval }}</span><h2 id="chart-panel-title">{{ panel === 'indicators' ? text('技術指標', 'Technical indicators') : panel === 'timezone' ? text('圖表時區', 'Chart timezone') : panel === 'settings' ? text('圖表設定', 'Chart settings') : text('圖表快照', 'Chart snapshot') }}</h2></div>
         <button autofocus :aria-label="text('關閉', 'Close')" @click="dialog?.close()"><svg viewBox="0 0 24 24"><path d="m6 6 12 12M6 18 18 6" /></svg></button>
       </header>
       <div class="panel-content">
         <template v-if="panel === 'indicators'">
           <div class="panel-summary"><span>{{ indicatorCatalog.length }} {{ text('種指標 · 支援多選疊加', 'studies · select multiple') }}</span><button @click="preferences.indicators = []">{{ text('清空', 'Clear all') }}</button></div>
-          <input v-model="search" class="panel-search" type="search" :placeholder="text('搜尋名稱，例如 MACD、布林', 'Search indicators, e.g. MACD, Bollinger')" :aria-label="text('搜尋指標', 'Search indicators')">
-          <p class="panel-note">{{ text('主圖指標疊加顯示，副圖指標各自獨立。多個副圖可上下捲動查看。', 'Overlay studies share the price chart. Oscillators use separate panes; scroll vertically to view them.') }}</p>
-          <p class="panel-note">{{ text('成交量類指標依賴數據源提供的成交量；外匯等品種可能不提供。', 'Volume studies depend on source volume data, which may be unavailable for forex and some other instruments.') }}</p>
           <p v-if="parameterError" class="panel-error" role="alert">{{ parameterError }}</p>
           <section v-for="main in [true, false]" :key="String(main)" class="indicator-group">
             <h3>{{ main ? text('主圖疊加', 'Price overlays') : text('副圖分析', 'Oscillators & volume') }}</h3>

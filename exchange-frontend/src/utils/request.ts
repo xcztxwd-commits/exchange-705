@@ -46,12 +46,11 @@ instance.interceptors.response.use(
       // 自动退出登录
       const auth = useAuthStore()
       auth.logout()
-      // 跳转到登录页（使用hash路由）
-      const currentPath = window.location.hash.replace('#', '')
+      const currentPath = window.location.pathname.replace(/^\/mobile(?=\/|$)/, '') || '/'
       if (currentPath !== '/login' && currentPath !== '/register' && currentPath !== '/forgot-password') {
         // 使用setTimeout确保在下一个事件循环中执行，避免在请求拦截器中直接跳转
         setTimeout(() => {
-          window.location.hash = '/login'
+          window.location.replace(`${import.meta.env.BASE_URL}login`)
         }, 100)
       }
       return Promise.reject(new Error(err?.response?.data?.message || '登录已失效，请重新登录'))

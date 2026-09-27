@@ -43,7 +43,7 @@
             @click="goToTrade(item)"
           >
             <div class="result-left">
-              <div class="result-symbol">{{ item.symbol }}</div>
+              <div class="result-symbol">{{ displaySymbol(item) }}</div>
               <div class="result-price">{{ formatPrice(getPrice(item)) }}</div>
             </div>
             <div class="result-arrow">
@@ -69,6 +69,7 @@ import { useRouter } from 'vue-router'
 import Tabbar from '@/components/Tabbar.vue'
 import request from '@/utils/request'
 import { useMarketStore } from '@/store/market'
+import { displaySymbol } from '@/utils/displaySymbol'
 
 const router = useRouter()
 const marketStore = useMarketStore()
@@ -348,4 +349,3 @@ onMounted(() => {
   flex-shrink: 0;
 }
 </style>
-

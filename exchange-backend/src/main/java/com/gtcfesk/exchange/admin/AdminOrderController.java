@@ -482,6 +482,7 @@ public class AdminOrderController {
         map.put("id", order.getId());
         map.put("userId", order.getUserId());
         map.put("symbol", order.getSymbol());
+        map.put("displayName", order.getDisplayName());
         map.put("side", order.getSide());
         map.put("type", order.getType());
         map.put("quantity", order.getQuantity());
@@ -506,6 +507,7 @@ public class AdminOrderController {
         map.put("id", order.getId());
         map.put("userId", order.getUserId());
         map.put("symbol", order.getSymbol());
+        map.put("displayName", order.getDisplayName());
         map.put("direction", order.getDirection());
         map.put("amount", order.getAmount());
         map.put("openPrice", order.getOpenPrice());

@@ -41,6 +41,15 @@ class MarketInstrumentCatalogTest {
         assertNull(catalog.list("yahoo","CFD","^",0).get("total"));
         assertTrue(((List<?>)catalog.list("yahoo","US","",0).get("list")).isEmpty());
     }
+    @Test void yahooForexCatalogAndSavedMetadataUseThePairName(){
+        when(catalog.http.get(any(URI.class),anyInt())).thenAnswer(call->{String uri=call.getArgument(0).toString();
+            return ResponseEntity.ok(uri.contains("/lookup?")?"{\"finance\":{\"result\":[{\"documents\":[{\"symbol\":\"JPY=X\",\"shortName\":\"JPY=X\",\"quoteType\":\"CURRENCY\"}],\"lookupTotals\":{\"currency\":1}}]}}":"{\"chart\":{\"result\":[{\"meta\":{\"symbol\":\"JPY=X\",\"currency\":\"JPY\",\"priceHint\":3}}]}}");});
+        Map<?,?> row=(Map<?,?>)((List<?>)catalog.list("yahoo","Forex","JPY",0).get("list")).get(0);
+        assertEquals("JPY=X",row.get("symbol"));assertEquals("USD/JPY",row.get("displayName"));
+        TradingSymbol symbol=catalog.resolve("yahoo","Forex","JPY=X");
+        assertEquals("JPY=X",symbol.getSymbol());assertEquals("USD/JPY",symbol.getName());
+        assertEquals("USD",symbol.getBaseCurrency());assertEquals("JPY",symbol.getQuoteCurrency());
+    }
     @Test void providerFailureDoesNotProduceFallbackCatalog(){
         when(catalog.http.get(any(URI.class),anyInt())).thenThrow(new MarketHttp.Failure("http_429",2000));
         assertThrows(BusinessException.class,()->catalog.list("binance","Crypto","",0));

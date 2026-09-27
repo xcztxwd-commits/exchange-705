@@ -13,7 +13,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 
 @RestController
 @RequestMapping("/api/market")
@@ -81,7 +83,15 @@ public class MarketController {
             return ResponseEntity.ok(result);
         }
         
-        List<TradingSymbol> symbols = symbolRepository.searchSymbolsByKeyword(keyword.trim());
+        String query = keyword.trim();
+        List<TradingSymbol> symbols = new ArrayList<>(symbolRepository.searchSymbolsByKeyword(query));
+        String pair = query.toUpperCase(Locale.ROOT).replaceAll("\\s*/\\s*", "/");
+        if (pair.matches("[A-Z]{3}/[A-Z]{3}")) {
+            String code = pair.startsWith("USD/") ? pair.substring(4) + "=X" : pair.replace("/", "") + "=X";
+            for (TradingSymbol match : symbolRepository.searchSymbolsByKeyword(code)) {
+                if (pair.equals(match.getDisplayName()) && symbols.stream().noneMatch(existing -> Objects.equals(existing.getId(), match.getId()))) symbols.add(match);
+            }
+        }
         Map<String, Object> result = new HashMap<>();
         applyCategoryLeverage(symbols);
         result.put("list", symbols);

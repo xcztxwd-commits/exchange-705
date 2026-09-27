@@ -60,7 +60,7 @@ public class AdminSymbolService {
             for(TradingSymbol symbol:resolved) {
                 if(keys.contains(symbol.getMarketInstrumentKey())) {existing.add(symbol.getSymbol());continue;}
                 if(symbolRepository.findBySymbol(symbol.getSymbol()).isPresent())
-                    throw new BusinessException("交易对代码已被其他源使用："+symbol.getSymbol());
+                    throw new BusinessException("交易对已被其他源使用："+symbol.getDisplayName());
                 createSymbol(symbol); keys.add(symbol.getMarketInstrumentKey()); added.add(symbol.getSymbol());
             }
             Map<String,Object> response=new LinkedHashMap<>();response.put("added",added);response.put("existing",existing);return response;

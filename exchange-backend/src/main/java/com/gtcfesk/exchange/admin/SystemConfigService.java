@@ -52,7 +52,24 @@ public class SystemConfigService {
         throw new com.gtcfesk.exchange.common.BusinessException("汇率更新间隔请输入 1–168 的整数小时");
     }
 
+    public static final String SHARE_TEMPLATES_KEY = "share.templates";
+    public static final List<String> SHARE_TEMPLATES = java.util.Arrays.asList("light", "dark", "chart", "gold", "globe", "architecture", "city", "referenceGold", "referenceWhite", "referenceTerminal", "launch", "aurora", "racing", "receipt", "journal", "voyage");
+
+    // The first enabled template is the default; one value keeps ordering and availability atomic.
+    public static List<String> shareTemplates(String value) {
+        if (value == null) return SHARE_TEMPLATES;
+        List<String> selected = java.util.Arrays.asList(value.split(",", -1));
+        if (selected.isEmpty() || !SHARE_TEMPLATES.containsAll(selected)
+                || new java.util.HashSet<>(selected).size() != selected.size())
+            throw new com.gtcfesk.exchange.common.BusinessException("至少启用一款分享模板，模板不能重复或使用未知编号");
+        return selected;
+    }
+
     public void saveConfig(String key, String value, String description) {
+        if (SHARE_TEMPLATES_KEY.equals(key)) {
+            if (value == null) throw new com.gtcfesk.exchange.common.BusinessException("请选择分享模板");
+            shareTemplates(value);
+        }
         if ("market.conversion.cache-hours".equals(key)) {
             if (value == null || value.trim().isEmpty()) throw new com.gtcfesk.exchange.common.BusinessException("汇率更新间隔请输入 1–168 的整数小时");
             conversionCacheHours(value);

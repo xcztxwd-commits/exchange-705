@@ -91,6 +91,8 @@ footer button { flex: 1; min-height: 48px; border: 0; border-radius: 10px; font:
 :global(.dark .leverage-number label) { border-color: #3a4250; }
 :global(.dark .leverage-presets button[aria-pressed="true"]) { color: #bce582; border-color: #8cc63f; background: #2d3e22; }
 @media (max-width: 640px) {
+  .close-button, .leverage-presets button, .leverage-trigger { min-height: 44px; min-width: 44px; }
+  footer button { min-height: 52px; }
   .leverage-dialog { inset: auto 0 0; width: 100%; max-width: 100%; max-height: 90dvh; margin: 0; border-radius: 20px 20px 0 0; }
   .leverage-content { padding: 12px 20px max(24px, env(safe-area-inset-bottom)); }
   .sheet-handle { display: block; width: 44px; height: 5px; background: #c8cdd4; border-radius: 3px; margin: 0 auto 14px; }

@@ -28,7 +28,7 @@ client.interceptors.response.use(
   (err) => {
     if (err.response?.status === 401) {
       useAuthStore().logout()
-      window.location.hash = '/login'
+      window.location.replace('/login')
       return Promise.reject(new Error(err.response?.data?.message || '登录已失效，请重新登录'))
     }
     // 简单错误提示

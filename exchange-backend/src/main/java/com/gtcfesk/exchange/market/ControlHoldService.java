@@ -16,7 +16,7 @@ final class ControlHoldService {
     }
     void prepare(PersistentPriceControl.Task task, Map<String,Object> raw) {
         Map<String,Object> reference = store.lastQuote(task.symbolId);
-        if (QuoteState.valid(raw) && QuoteState.time(raw.get("timestamp")) >= QuoteState.time(reference.get("timestamp"))) reference = raw;
+        if (QuoteState.valid(raw) && (Boolean.TRUE.equals(raw.get("simulated")) || QuoteState.time(raw.get("timestamp")) >= QuoteState.time(reference.get("timestamp")))) reference = raw;
         // With candles only, their recorded start basis is the explicit reference, never an invented quote.
         Object price = reference.getOrDefault("price", task.startPrice);
         long time = QuoteState.time(reference.getOrDefault("timestamp", task.sourceTime));

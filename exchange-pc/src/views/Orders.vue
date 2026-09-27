@@ -6,6 +6,7 @@ import { calculateContractProfit, contractEquity } from '@/utils/contract'
 import { useMarketStore } from '@/store/market'
 import { useLocaleStore } from '@/store/locale'
 import { formatDateTime } from '@/utils/dateTime'
+import { displaySymbol } from '@/utils/displaySymbol'
 
 const marketStore = useMarketStore()
 const localeStore = useLocaleStore()
@@ -87,6 +88,7 @@ function transformContractOrder(order: any) {
   return {
     id: order.id,
     symbol: order.symbol,
+    displayName: order.displayName,
     type: order.side?.toLowerCase() || 'buy', // BUY -> buy, SELL -> sell
     lots: Number(order.quantity || 0),
     openPrice: Number(order.openPrice || 0),
@@ -175,6 +177,10 @@ function parseSymbol(symbol: string): { baseCurrency: string; quoteCurrency: str
   
   // 从已加载的交易对列表中查找
   const symbolInfo = allSymbols.value.find((s: any) => s.symbol === symbol)
+  if (symbolInfo?.category === 'Forex' || /=X$/i.test(symbol)) {
+    const [baseCurrency, quoteCurrency] = displaySymbol(symbolInfo || symbol).split('/')
+    if (baseCurrency && quoteCurrency) return { baseCurrency, quoteCurrency }
+  }
   if (symbolInfo) {
     return {
       baseCurrency: symbolInfo.baseCurrency || '',
@@ -207,6 +213,7 @@ function transformOptionOrder(order: any) {
   return {
     id: order.id,
     symbol: order.symbol,
+    displayName: order.displayName,
     type: order.direction === 'UP' ? 'buy' : 'sell', // UP -> buy (绿色), DOWN -> sell (红色)
     openPrice: Number(order.openPrice || 0),
     currentPrice: currentPrice > 0 ? currentPrice : Number(order.closePrice || order.openPrice || 0),
@@ -911,7 +918,7 @@ function formatPrice(v: number | string | undefined | null) {
           @click="openOrderDetailModal(order)"
         >
           <div class="order-header">
-            <div class="order-symbol">{{ order.symbol }}</div>
+            <div class="order-symbol">{{ displaySymbol(order) }}</div>
             <div class="order-price">
               <span>{{ formatPrice(order.openPrice) }}</span>
               <span class="arrow">→</span>
@@ -997,7 +1004,7 @@ function formatPrice(v: number | string | undefined | null) {
           @click="openOrderDetailModal(order)"
         >
           <div class="order-header">
-            <div class="order-symbol">{{ order.symbol }}</div>
+            <div class="order-symbol">{{ displaySymbol(order) }}</div>
             <div class="order-price">
               <span>{{ formatPrice(order.price || order.openPrice) }}</span>
               <span class="arrow">→</span>
@@ -1060,7 +1067,7 @@ function formatPrice(v: number | string | undefined | null) {
           class="order-card"
         >
           <div class="order-header">
-            <div class="order-symbol">{{ order.symbol }}</div>
+            <div class="order-symbol">{{ displaySymbol(order) }}</div>
             <div class="order-price">
               <span>{{ formatPrice(order.openPrice) }}</span>
               <span class="arrow">→</span>
@@ -1110,7 +1117,7 @@ function formatPrice(v: number | string | undefined | null) {
           class="order-card"
         >
           <div class="order-header">
-            <div class="order-symbol">{{ order.symbol }}</div>
+            <div class="order-symbol">{{ displaySymbol(order) }}</div>
             <div class="order-price">
               <span>{{ formatPrice(order.openPrice) }}</span>
               <span class="arrow">→</span>
@@ -1176,7 +1183,7 @@ function formatPrice(v: number | string | undefined | null) {
           class="order-card"
         >
           <div class="order-header">
-            <div class="order-symbol">{{ order.symbol }}</div>
+            <div class="order-symbol">{{ displaySymbol(order) }}</div>
             <div class="order-price">
               <span>{{ formatPrice(order.openPrice) }}</span>
               <span class="arrow">→</span>
@@ -1228,7 +1235,7 @@ function formatPrice(v: number | string | undefined | null) {
         <div class="order-detail-content">
           <!-- 订单基本信息 -->
           <div class="order-detail-basic">
-            <div class="order-detail-symbol">{{ detailOrder?.symbol }}</div>
+            <div class="order-detail-symbol">{{ displaySymbol(detailOrder) }}</div>
             <div class="order-detail-id-time">
               <span>訂單 ID #{{ detailOrder?.id }}</span>
               <span>{{ detailOrder?.openTime }}</span>

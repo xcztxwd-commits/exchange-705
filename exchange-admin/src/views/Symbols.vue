@@ -5,6 +5,7 @@ import { Search, Refresh, Plus, Edit, Delete, Star, StarFilled, List } from '@el
 import request from '@/utils/request'
 import SymbolCatalogDialog from '@/components/SymbolCatalogDialog.vue'
 import { getImageUrl } from '@/utils/imageUrl'
+import { displaySymbol } from '@/utils/displaySymbol'
 import { usePermissions } from '@/composables/usePermissions'
 
 const { hasPermission } = usePermissions()
@@ -177,13 +178,16 @@ const handleAdd = async () => {
 
 const handleEdit = (row: any) => {
   dialogTitle.value = '编辑币种'
-  formData.value = { ...row, maxLeverage: row.maxLeverage ?? 100 }
+  const name = row.category === 'Forex' || row.sourceCategory === 'Forex' ? displaySymbol(row) : row.name
+  const nameEn = row.category === 'Forex' || row.sourceCategory === 'Forex' ? displaySymbol(row) : row.nameEn
+  formData.value = { ...row, name, nameEn, maxLeverage: row.maxLeverage ?? 100 }
   dialogVisible.value = true
 }
 
 const handleSave = async () => {
   try {
-    await request.post('/admin/symbols/update', formData.value)
+    const { displayName: _displayName, ...payload } = formData.value
+    await request.post('/admin/symbols/update', payload)
     ElMessage.success('更新成功')
     dialogVisible.value = false
     loadSymbols()
@@ -194,7 +198,7 @@ const handleSave = async () => {
 
 const handleDelete = async (row: any) => {
   try {
-    await ElMessageBox.confirm(`确定删除币种 "${row.name}" 吗？`, '提示', {
+    await ElMessageBox.confirm(`确定删除币种 "${row.category === 'Forex' || row.sourceCategory === 'Forex' ? displaySymbol(row) : row.name}" 吗？`, '提示', {
       type: 'warning',
     })
     await request.post(`/admin/symbols/delete/${row.id}`)
@@ -312,8 +316,8 @@ onUnmounted(() => {
         style="margin-top: 16px"
       >
         <el-table-column prop="id" label="ID" width="80" />
-        <el-table-column prop="symbol" label="交易对" min-width="170"><template #default="{ row }"><span style="display:flex;align-items:center;gap:8px"><img v-if="row.iconUrl" :src="getImageUrl(row.iconUrl)" alt="" width="28" height="28" />{{ row.symbol }}</span></template></el-table-column>
-        <el-table-column prop="name" label="名称" min-width="150" />
+        <el-table-column prop="symbol" label="交易对" min-width="170"><template #default="{ row }"><span style="display:flex;align-items:center;gap:8px"><img v-if="row.iconUrl" :src="getImageUrl(row.iconUrl)" alt="" width="28" height="28" />{{ displaySymbol(row) }}</span></template></el-table-column>
+        <el-table-column prop="name" label="名称" min-width="150"><template #default="{ row }">{{ row.category === 'Forex' || row.sourceCategory === 'Forex' ? displaySymbol(row) : row.name }}</template></el-table-column>
         <el-table-column prop="category" label="项目分类" width="100" />
         <el-table-column prop="marketSource" label="行情源" width="100" />
         <el-table-column prop="sourceCategory" label="源分类" width="100" />
@@ -396,7 +400,7 @@ onUnmounted(() => {
     <el-dialog v-model="dialogVisible" :title="dialogTitle" width="600px">
       <el-form :model="formData" label-width="120px">
         <el-form-item label="交易对符号" required>
-          <el-input v-model="formData.symbol" disabled />
+          <el-input :model-value="displaySymbol(formData)" disabled />
         </el-form-item>
         <el-form-item label="基础货币" required>
           <el-input v-model="formData.baseCurrency" disabled />
@@ -437,7 +441,7 @@ onUnmounted(() => {
           />
         </el-form-item>
         <el-form-item label="源绑定">
-          <span>{{ formData.marketSource }} / {{ formData.sourceCategory }} / {{ formData.alltickSymbol }}</span>
+          <span>{{ formData.marketSource }} / {{ formData.sourceCategory }} / {{ formData.category === 'Forex' || formData.sourceCategory === 'Forex' ? displaySymbol(formData) : formData.alltickSymbol }}</span>
         </el-form-item>
         <el-form-item label="价格精度">
           <el-input-number v-model="formData.pricePrecision" :min="0" :max="8" />

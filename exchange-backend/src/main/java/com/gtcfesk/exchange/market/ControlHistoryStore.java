@@ -120,6 +120,47 @@ public class ControlHistoryStore {
         return db.query("SELECT body FROM market_mixed_minute WHERE symbol_id=? AND minute_at>=? AND minute_at<=? ORDER BY minute_at",
             (rs, n) -> decode(rs.getString(1)), symbol, from, to);
     }
+    void captureLegacyMinute(long symbol, long now) {
+        long minute = now/60000*60000;
+        Integer modern = db.queryForObject("SELECT COUNT(*) FROM market_control_sample s JOIN market_control_task t ON t.id=s.task_id JOIN market_control_flow f ON f.task_id=t.id WHERE t.symbol_id=? AND s.generated_at>=? AND s.generated_at<?", Integer.class, symbol, minute, minute+60000);
+        if (modern == 0) db.update("INSERT INTO market_legacy_minute_snapshot(symbol_id,minute_at,body,last_event) SELECT symbol_id,minute_at,body,last_event FROM market_mixed_minute WHERE symbol_id=? AND minute_at=? ON DUPLICATE KEY UPDATE body=VALUES(body),last_event=VALUES(last_event)", symbol, minute);
+    }
+    /** Event-level visibility; batch reads avoid one database query per chart minute. */
+    List<Map<String,Object>> visibleMixed(long symbol, long from, long to) {
+        List<Map<String,Object>> original = mixed(symbol, from, to);
+        if (original.isEmpty()) return original;
+        long first = time(original.get(0)), end = time(original.get(original.size()-1)) + 60000;
+        Set<Long> modern = new HashSet<>(db.queryForList("SELECT DISTINCT FLOOR(s.generated_at/60000)*60000 FROM market_control_sample s JOIN market_control_task t ON t.id=s.task_id JOIN market_control_flow f ON f.task_id=t.id WHERE t.symbol_id=? AND s.generated_at>=? AND s.generated_at<?", Long.class, symbol, first, end));
+        if (modern.isEmpty()) return original;
+        Map<Long,List<Map<String,Object>>> events = new HashMap<>();
+        Map<Long,Map<String,Object>> prefixes = new HashMap<>();
+        for (Map<String,Object> prefix : db.queryForList("SELECT minute_at,body,last_event FROM market_legacy_minute_snapshot WHERE symbol_id=? AND minute_at>=? AND minute_at<?", symbol, first, end)) {
+            long at = ((Number)prefix.get("minute_at")).longValue(); prefixes.put(at,prefix); events.put(at,new ArrayList<>());
+        }
+        List<Map<String,Object>> samples = db.queryForList("SELECT s.generated_at,s.price FROM market_control_sample s JOIN market_control_task t ON t.id=s.task_id LEFT JOIN market_control_flow f ON f.task_id=t.id LEFT JOIN market_control_publication p ON p.task_id=t.id WHERE t.symbol_id=? AND s.generated_at>=? AND s.generated_at<? AND (f.task_id IS NULL OR f.state<>'SOURCE' OR (s.generated_at>=p.from_at AND s.generated_at<=p.to_at)) ORDER BY s.generated_at,t.id", symbol, first, end);
+        for (Map<String,Object> sample : samples) events.computeIfAbsent(((Number)sample.get("generated_at")).longValue()/60000*60000, ignored -> new ArrayList<>()).add(sample);
+        List<Map<String,Object>> ticks = db.queryForList("SELECT e.received_at AS generated_at,e.price,e.event_sequence FROM (" + sourceEvents() + ") e WHERE e.symbol_id=? AND e.received_at>=? AND e.received_at<? AND NOT EXISTS (SELECT 1 FROM market_control_task t LEFT JOIN market_control_flow f ON f.task_id=t.id LEFT JOIN market_control_publication p ON p.task_id=t.id WHERE t.symbol_id=e.symbol_id AND e.received_at>=t.started_at AND e.received_at<=COALESCE(f.finished_at, CASE WHEN f.task_id IS NOT NULL THEN ? ELSE t.ended_at END) AND (f.task_id IS NULL OR f.state<>'SOURCE' OR (e.received_at>=p.from_at AND e.received_at<=p.to_at))) ORDER BY e.received_at,e.event_sequence", symbol, first, end, Long.MAX_VALUE);
+        for (Map<String,Object> tick : ticks) {
+            List<Map<String,Object>> minute = events.get(((Number)tick.get("generated_at")).longValue()/60000*60000);
+            if (minute != null) minute.add(0, tick);
+        }
+        List<Map<String,Object>> result = new ArrayList<>();
+        for (Map<String,Object> minute : original) {
+            long at = time(minute);
+            if (!modern.contains(at)) { result.add(minute); continue; }
+            List<Map<String,Object>> points = events.get(at);
+            if (points == null) continue; // Preserve original candles in the caller's source map.
+            points.sort(Comparator.<Map<String,Object>>comparingLong(row -> ((Number)row.get("generated_at")).longValue())
+                .thenComparingLong(row -> row.get("event_sequence") instanceof Number ? ((Number)row.get("event_sequence")).longValue() : Long.MAX_VALUE));
+            Map<String,Object> prefix = prefixes.get(at);
+            Map<String,Object> bar = prefix == null ? new LinkedHashMap<>() : decode((String)prefix.get("body"));
+            long prefixEnd = prefix == null ? Long.MIN_VALUE : ((Number)prefix.get("last_event")).longValue();
+            for (Map<String,Object> point : points) if (((Number)point.get("generated_at")).longValue() > prefixEnd) addPrice(bar, at, number(point.get("price")));
+            bar.put("sourceCoverage", "observed_events_only"); bar.put("partial", true);
+            result.add(bar);
+        }
+        return result;
+    }
     /** Freeze only information actually known at activation, never a subsequently downloaded OHLC. */
     void freeze(long symbol, long now) {
         long minute = now / 60000 * 60000;

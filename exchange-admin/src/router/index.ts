@@ -1,4 +1,4 @@
-import { createRouter, createWebHashHistory } from 'vue-router'
+import { createRouter, createWebHistory } from 'vue-router'
 import Layout from '@/views/Layout.vue'
 import Dashboard from '@/views/Dashboard.vue'
 import Users from '@/views/Users.vue'
@@ -25,8 +25,14 @@ import AiControl from '@/views/AiControl.vue'
 import Login from '@/views/Login.vue'
 import { useAuthStore } from '@/store/auth'
 
+const legacyRoute = location.hash.startsWith('#/') ? new URL(location.hash.slice(1), location.origin) : null
+if (location.hash) {
+  const base = import.meta.env.BASE_URL.replace(/\/$/, '')
+  history.replaceState(history.state, '', legacyRoute ? `${base}${legacyRoute.pathname}${legacyRoute.search}` : `${location.pathname}${location.search}`)
+}
+
 const router = createRouter({
-  history: createWebHashHistory(),
+  history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
     { path: '/login', component: Login },
     {
@@ -77,4 +83,3 @@ router.beforeEach((to, _from, next) => {
 })
 
 export default router
-

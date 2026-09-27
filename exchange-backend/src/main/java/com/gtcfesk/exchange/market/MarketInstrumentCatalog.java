@@ -2,6 +2,7 @@ package com.gtcfesk.exchange.market;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.gtcfesk.exchange.common.BusinessException;
+import com.gtcfesk.exchange.common.ForexDisplayName;
 import com.gtcfesk.exchange.entity.TradingSymbol;
 import com.gtcfesk.exchange.repository.TradingSymbolRepository;
 import org.springframework.beans.factory.annotation.*;
@@ -121,8 +122,9 @@ public class MarketInstrumentCatalog {
         Set<String> existing=new HashSet<>(),names=new HashSet<>();
         for(TradingSymbol symbol:symbols.findAll()){names.add(symbol.getSymbol());try{existing.add(identity(symbol));}catch(RuntimeException ignored){}}
         for(Map<String,Object> row:rows){String code=(String)row.get("symbol");row.put("added",existing.contains(source+":"+category+":"+code));
+            row.put("displayName",ForexDisplayName.of(code,category,(String)row.get("baseCurrency"),(String)row.get("quoteCurrency"),(String)row.get("name")));
             TradingSymbol preview=new TradingSymbol();preview.setSymbol(code);preview.setSourceCategory(category);preview.setBaseCurrency(Objects.toString(row.get("baseCurrency"),code));preview.setQuoteCurrency(Objects.toString(row.get("quoteCurrency"),"USD"));
-            if("Forex".equals(category)){String[] pair=Objects.toString(row.get("name"),"").split("/");if(pair.length==2){preview.setBaseCurrency(pair[0].trim());preview.setQuoteCurrency(pair[1].trim());}}
+            if("Forex".equals(category)){String[] pair=Objects.toString(row.get("displayName"),"").split("/");if(pair.length==2){preview.setBaseCurrency(pair[0].trim());preview.setQuoteCurrency(pair[1].trim());}}
             row.put("iconUrl",MarketIconController.url(preview));
             if(!Boolean.TRUE.equals(row.get("added"))&&names.contains(internalCode(category,code)))row.put("unavailableReason","内部交易对代码已被其他品种使用");}
         Map<String,Object> response=new LinkedHashMap<>();response.put("list",rows);response.put("page",page);response.put("pageSize",PAGE_SIZE);response.put("hasMore",more);response.put("total",total);
@@ -136,7 +138,7 @@ public class MarketInstrumentCatalog {
         Map<String,Object> found=candidates.stream().filter(row->external.equals(row.get("symbol"))).findFirst().orElseThrow(()->new BusinessException("该交易对不在源目录中，请刷新后重试"));
         if(found.containsKey("unavailableReason"))throw new BusinessException((String)found.get("unavailableReason"));
         TradingSymbol symbol=new TradingSymbol();symbol.setSymbol(internalCode(category,external));symbol.setAlltickSymbol(external);symbol.setCategory(category);symbol.setSourceCategory(category);symbol.setMarketSource(source);
-        symbol.setName(truncate(String.valueOf(found.get("name"))+("CryptoPerpetual".equals(category)?" 永续":""),64));symbol.setNameEn(symbol.getName());
+        symbol.setName(truncate(String.valueOf("Forex".equals(category)?ForexDisplayName.of(external,category,null,null,(String)found.get("name")):found.get("name"))+("CryptoPerpetual".equals(category)?" 永续":""),64));symbol.setNameEn(symbol.getName());
         if("binance".equals(source)){
             if(!"binance".equals(exchange.provider))throw new BusinessException("当前运行行情源未启用 Binance，暂不能添加 Binance 品种");
             symbol.setBaseCurrency((String)found.get("baseCurrency"));symbol.setQuoteCurrency((String)found.get("quoteCurrency"));
@@ -146,7 +148,7 @@ public class MarketInstrumentCatalog {
             String currency=meta.path("currency").asText();
             if(!external.equals(meta.path("symbol").asText())||currency.isEmpty()||currency.length()>16)throw new BusinessException("无法确认交易对的计价货币，请稍后重试");
             String base=external.replace("=X","").replace("=F","").replace("^","");
-            if("Forex".equals(category)){String[] pair=String.valueOf(found.get("name")).split("/");if(pair.length==2)base=pair[0];}
+            if("Forex".equals(category)){String[] pair=symbol.getDisplayName().split("/");if(pair.length==2)base=pair[0];}
             symbol.setBaseCurrency(truncate(base,16));symbol.setQuoteCurrency(currency);symbol.setPricePrecision("Forex".equals(category)?5:meta.path("priceHint").asInt(2));
         }
         symbol.setIconUrl(MarketIconController.url(symbol));

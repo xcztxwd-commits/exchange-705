@@ -1,0 +1,26 @@
+# Use with: docker compose -f compose.yaml -f compose.production.yaml up -d --build
+# Only the edge publishes web ports. Application, database and Redis stay internal.
+services:
+  admin:
+    ports: !reset []
+  mobile:
+    ports: !reset []
+  pc:
+    ports: !reset []
+  edge:
+    image: caddy:2-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./docker/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - pc
+      - admin
+    restart: unless-stopped
+
+volumes:
+  caddy-data:
+  caddy-config:

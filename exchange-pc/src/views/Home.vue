@@ -2,12 +2,14 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import Tabbar from '@/components/Tabbar.vue'
+import LogoGlint from '@/components/LogoGlint.vue'
 import Sparkline from '@/components/Sparkline.vue'
 import request from '@/utils/request'
 import { useAuthStore } from '@/store/auth'
 import { useMarketStore } from '@/store/market'
 import { useLocaleStore } from '@/store/locale'
 import { getImageUrl } from '@/utils/imageUrl'
+import { displaySymbol } from '@/utils/displaySymbol'
 // 市场休市时间判断已移除，改用阿里云市场API返回的数据来判断市场状态
 
 const router = useRouter()
@@ -813,6 +815,7 @@ watch(
   },
   { deep: true }
 )
+const logoUrl = `${import.meta.env.BASE_URL}img/logo.svg`
 </script>
 
 <template>
@@ -820,7 +823,7 @@ watch(
     <div class="card">
       <div class="card-header">
         <div class="logo-wrap">
-          <span class="logo">GTCFX</span>
+          <LogoGlint class="logo" :src="logoUrl" />
         </div>
         <div class="header-right">
           <button class="icon-btn" @click="router.push('/customer-service')">
@@ -869,11 +872,11 @@ watch(
                 v-if="s.iconUrl" 
                 class="symbol-icon" 
                 :src="getIconUrl(s.iconUrl)" 
-                :alt="s.symbol"
+                :alt="displaySymbol(s)"
                 @error="handleImageError"
               />
             </div>
-            <span class="name">{{ s.symbol }}</span>
+            <span class="name">{{ displaySymbol(s) }}</span>
           </div>
           <div class="market-sparkline">
             <div v-if="!hasSparklineData(s)" class="sparkline-loading">
@@ -935,11 +938,11 @@ watch(
               v-if="s.iconUrl" 
               class="symbol-icon" 
               :src="getIconUrl(s.iconUrl)" 
-              :alt="s.symbol"
+              :alt="displaySymbol(s)"
               @error="handleImageError"
             />
           </div>
-          <div class="symbol-ticker">{{ s.symbol }}</div>
+          <div class="symbol-ticker">{{ displaySymbol(s) }}</div>
           <div class="symbol-sparkline">
             <div v-if="!hasSparklineData(s)" class="sparkline-loading">
               <div class="spinner"></div>
@@ -1017,10 +1020,10 @@ watch(
   padding-bottom: 4px;
 }
 .logo {
-  font-size: 22px;
-  font-weight: 800;
-  letter-spacing: 2px;
-  color: #333;
+  display: block;
+  width: 150px;
+  max-width: 100%;
+  height: auto;
 }
 .header-right {
   position: absolute;
@@ -1437,4 +1440,3 @@ watch(
 }
 
 </style>
-

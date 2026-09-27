@@ -1,0 +1,72 @@
+(no_index) {
+	header X-Robots-Tag "noindex, nofollow, noarchive, nosnippet"
+	handle /robots.txt {
+		header Content-Type "text/plain; charset=utf-8"
+		respond <<ROBOTS
+			User-agent: *
+			Disallow: /
+
+			ROBOTS 200
+	}
+}
+
+(block_crawlers) {
+	# Explicit search, SEO and link-preview clients only; no security-scanner rules.
+	# ponytail: user agents are self-reported; unidentified crawlers cannot be reliably distinguished from visitors.
+	@crawler header_regexp User-Agent "(?i)(Googlebot|Google-InspectionTool|bingbot|BingPreview|DuckDuckBot|Baiduspider|YandexBot|YandexImages|YandexVideo|Sogou[ _-](web|inst|pic|news|video)[ _-]spider|Sosospider|360Spider|Bytespider|PetalBot|Applebot|Yahoo![ ]Slurp|ia_archiver|AhrefsBot|SemrushBot|MJ12bot|DotBot|CCBot|Amazonbot|GPTBot|OAI-SearchBot|ClaudeBot|anthropic-ai|PerplexityBot|facebookexternalhit|Facebot|Twitterbot|LinkedInBot|Slackbot-LinkExpanding|Discordbot|TelegramBot|WhatsApp|SkypeUriPreview|Pinterestbot|Viber|vkShare|redditbot|Embedly|Quora[ ]Link[ ]Preview|Iframely|Mastodon)"
+	handle @crawler {
+		respond "Crawling and link previews are disabled." 403
+	}
+}
+
+trade.forex-exchange.cc {
+	import no_index
+	handle {
+		header /entry.html Cache-Control "no-store"
+		reverse_proxy pc:80
+	}
+}
+
+admin-panel.forex-exchange.cc {
+	import no_index
+	handle {
+		reverse_proxy admin:80
+	}
+}
+
+fx.forex-exchange.cc {
+	import no_index
+	@document header Accept *text/html*
+	handle @document {
+		header Cache-Control "no-store"
+		redir https://trade.forex-exchange.cc/domain-transition.html?next={uri} 302
+	}
+	handle {
+		header Cache-Control "no-store"
+		redir https://trade.forex-exchange.cc{uri} 302
+	}
+}
+
+# Both protocols apply the crawler rule before any redirect.
+http://forex-exchange.net, https://forex-exchange.net, http://www.forex-exchange.net, https://www.forex-exchange.net {
+	import no_index
+	import block_crawlers
+	handle {
+		header Cache-Control "no-store"
+		redir https://trade.forex-exchange.cc/entry.html 302
+	}
+}
+
+trade.forex-exchange.net {
+	import no_index
+	import block_crawlers
+	@document header Accept *text/html*
+	handle @document {
+		header Cache-Control "no-store"
+		redir https://trade.forex-exchange.cc/domain-transition.html?next={uri} 302
+	}
+	handle {
+		header Cache-Control "no-store"
+		redir https://trade.forex-exchange.cc{uri} 302
+	}
+}

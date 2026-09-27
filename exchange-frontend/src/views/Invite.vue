@@ -21,9 +21,7 @@ const loading = ref(false)
 
 // 生成邀请链接
 function generateInviteLink() {
-  const baseUrl = window.location.origin
-  const hash = window.location.hash.split('/')[0] || '#'
-  return `${baseUrl}${hash}/register?invite=${inviteCode.value}`
+  return new URL(router.resolve({ path: '/register', query: { invite: inviteCode.value } }).href, window.location.origin).href
 }
 
 // 复制邀请链接
@@ -267,6 +265,5 @@ onMounted(() => {
   line-height: 1.6;
 }
 </style>
-
 
 

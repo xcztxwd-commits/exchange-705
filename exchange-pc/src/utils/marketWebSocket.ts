@@ -18,9 +18,12 @@ export interface PriceUpdate {
     changePct24h: number
     controlSourceResumed?: boolean
     controlHistory?: boolean
+    controlHistoryRevision?: string
     controlState?: string
     sourceTimestamp?: number
     sourceAvailable?: boolean
+    sourceConnectionFailed?: boolean
+    controlActive?: boolean
     displayAvailable?: boolean
     controlTaskId?: string
     simulated?: boolean
@@ -36,6 +39,11 @@ export interface PriceUpdate {
     executionExpiresAt?: number
     timestamp?: number
   }
+}
+
+export function showSourceConnectionWarning(quote?: { sourceConnectionFailed?: boolean; controlActive?: boolean; controlState?: string; simulated?: boolean }) {
+  return quote?.sourceConnectionFailed === true && !quote.controlActive && !quote.simulated
+    && quote.controlState !== 'RUNNING' && quote.controlState !== 'HOLDING'
 }
 
 // Match the server's 15-second freshness window even for legacy payloads.

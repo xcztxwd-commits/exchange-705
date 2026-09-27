@@ -3,12 +3,14 @@ import marketWebSocket from '@/utils/marketWebSocket'
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import Tabbar from '@/components/Tabbar.vue'
+import LogoGlint from '@/components/LogoGlint.vue'
 import Sparkline from '@/components/Sparkline.vue'
 import request from '@/utils/request'
 import { useAuthStore } from '@/store/auth'
 import { useMarketStore } from '@/store/market'
 import { useLocaleStore } from '@/store/locale'
 import { getImageUrl } from '@/utils/imageUrl'
+import { displaySymbol } from '@/utils/displaySymbol'
 // 市场休市时间判断已移除，改用阿里云市场API返回的数据来判断市场状态
 
 const router = useRouter()
@@ -54,10 +56,10 @@ const activeCategory = ref('US')
 
 // 使用 computed 确保响应式更新
  const quickList = computed(() => [
-   { id: 'credit', icon: '/img/loana.png', label: localeStore.t('creditLoan') },
-   { id: 'bank', icon: '/img/banke.png', label: localeStore.t('bankCardBuy') },
-   { id: 'video', icon: '/img/video.png', label: localeStore.t('videoIntro') },
-   { id: 'financial', icon: '/img/licai.png', label: localeStore.t('financialManagement') },
+   { id: 'credit', icon: `${import.meta.env.BASE_URL}img/loana.png`, label: localeStore.t('creditLoan') },
+   { id: 'bank', icon: `${import.meta.env.BASE_URL}img/banke.png`, label: localeStore.t('bankCardBuy') },
+   { id: 'video', icon: `${import.meta.env.BASE_URL}img/video.png`, label: localeStore.t('videoIntro') },
+   { id: 'financial', icon: `${import.meta.env.BASE_URL}img/licai.png`, label: localeStore.t('financialManagement') },
  ])
 
 // 监听语言变化，确保页面更新
@@ -759,13 +761,14 @@ watch(
   },
   { deep: true }
 )
+const logoUrl = '/img/logo.svg'
 </script>
 
 <template>
   <div class="home">
     <div class="card">
       <div class="card-header-top">
-        <span class="logo">DEMO</span>
+        <LogoGlint class="logo" :src="logoUrl" />
       </div>
       <div class="card-header">
         <div class="user-info">
@@ -836,11 +839,11 @@ watch(
                 v-if="s.iconUrl" 
                 class="symbol-icon" 
                 :src="getIconUrl(s.iconUrl)" 
-                :alt="s.symbol"
+                :alt="displaySymbol(s)"
                 @error="handleImageError"
               />
             </div>
-            <span class="name">{{ s.symbol }}</span>
+            <span class="name">{{ displaySymbol(s) }}</span>
           </div>
           <div class="market-sparkline">
             <div v-if="!hasSparklineData(s)" class="sparkline-loading">
@@ -902,11 +905,11 @@ watch(
               v-if="s.iconUrl" 
               class="symbol-icon" 
               :src="getIconUrl(s.iconUrl)" 
-              :alt="s.symbol"
+              :alt="displaySymbol(s)"
               @error="handleImageError"
             />
           </div>
-          <div class="symbol-ticker">{{ s.symbol }}</div>
+          <div class="symbol-ticker">{{ displaySymbol(s) }}</div>
           <div class="symbol-sparkline">
             <div v-if="!hasSparklineData(s)" class="sparkline-loading">
               <div class="spinner"></div>
@@ -982,10 +985,10 @@ watch(
   margin-bottom: 12px;
 }
 .logo {
-  font-size: 16px;
-  font-weight: 800;
-  letter-spacing: 1px;
-  color: #333;
+  display: block;
+  width: 150px;
+  max-width: 100%;
+  height: auto;
 }
 .card-header {
   position: relative;
@@ -1474,4 +1477,3 @@ watch(
 }
 
 </style>
-

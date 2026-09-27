@@ -9,6 +9,7 @@ import { useAuthStore } from '@/store/auth'
 import { useLocaleStore } from '@/store/locale'
 import request from '@/utils/request'
 import { getImageUrl } from '@/utils/imageUrl'
+import { displaySymbol } from '@/utils/displaySymbol'
 import { DEFAULT_LEVERAGE, leverageLimit, leverageChoices, contractMargin } from '@/utils/contract'
 // 市场休市时间判断已移除，改用阿里云市场API返回的数据来判断市场状态
 import { formatDateTime, formatTime } from '@/utils/dateTime'
@@ -430,6 +431,14 @@ const allSymbols = ref<any[]>([])
 const showSymbolDropdown = ref(false)
 // 当前交易对的合约设置
 const currentSymbolInfo = ref<any>(null)
+const currentDisplayInfo = computed(() => currentSymbolInfo.value?.symbol === currentSymbol.value ? currentSymbolInfo.value : null)
+const currentDisplaySymbol = computed(() => displaySymbol(currentDisplayInfo.value || currentSymbol.value))
+const currentForexPair = computed(() => currentDisplayInfo.value?.sourceCategory === 'Forex' || currentDisplayInfo.value?.category === 'Forex' || /=X$/i.test(currentSymbol.value) ? currentDisplaySymbol.value.split('/') : [])
+const currentBaseCurrency = computed(() => currentForexPair.value[0] || currentDisplayInfo.value?.baseCurrency || '')
+const currentQuoteCurrency = computed(() => currentForexPair.value[1] || currentDisplayInfo.value?.quoteCurrency || '')
+const termDetailCurrencies = computed(() => displaySymbol(termOrderDetail.value).split('/'))
+const termDetailBaseCurrency = computed(() => termDetailCurrencies.value[1] ? termDetailCurrencies.value[0] : termOrderDetail.value?.baseCurrency || currentBaseCurrency.value)
+const termDetailQuoteCurrency = computed(() => termDetailCurrencies.value[1] || termOrderDetail.value?.quoteCurrency || currentQuoteCurrency.value)
 // Symbol 到 alltickSymbol 的映射（刷新页面后需要重新建立）
 const symbolToAlltickMap = ref<Map<string, string>>(new Map())
 
@@ -830,6 +839,7 @@ async function handleTermBuy() {
       termOrderDetail.value = {
         id: orderId,
         symbol: responseOrder.symbol || currentSymbol.value,
+        displayName: responseOrder.displayName || currentDisplaySymbol.value,
         direction: responseOrder.direction || 'UP',
         amount: savedAmount,
         openPrice: savedOpenPrice,
@@ -949,6 +959,7 @@ async function handleTermSell() {
       termOrderDetail.value = {
         id: orderId,
         symbol: responseOrder.symbol || currentSymbol.value,
+        displayName: responseOrder.displayName || currentDisplaySymbol.value,
         direction: responseOrder.direction || 'DOWN',
         amount: savedAmount,
         openPrice: savedOpenPrice,
@@ -1390,7 +1401,7 @@ onUnmounted(() => {
     <!-- 交易对和价格 -->
     <div class="symbol-header">
       <div class="symbol-selector-dropdown" @click.stop="toggleSymbolDropdown">
-        <span class="symbol-name">{{ currentSymbol }}</span>
+        <span class="symbol-name">{{ currentDisplaySymbol }}</span>
         <span class="dropdown-icon" :class="{ active: showSymbolDropdown }">▼</span>
       </div>
       <div class="price-display">
@@ -1474,7 +1485,7 @@ onUnmounted(() => {
           :class="{ active: symbol.symbol === currentSymbol }"
           @click="selectSymbolFromDropdown(symbol)"
         >
-          <span class="symbol-item-name" style="display:flex;align-items:center;gap:8px"><img v-if="symbol.iconUrl" :src="getImageUrl(symbol.iconUrl)" alt="" width="28" height="28" />{{ symbol.symbol }}</span>
+          <span class="symbol-item-name" style="display:flex;align-items:center;gap:8px"><img v-if="symbol.iconUrl" :src="getImageUrl(symbol.iconUrl)" alt="" width="28" height="28" />{{ displaySymbol(symbol) }}</span>
           <span
             class="symbol-item-price"
             :style="{ color: (getSymbolChange(symbol.symbol)?.changePct || 0) >= 0 ? '#26a69a' : '#ef5350' }"
@@ -1578,7 +1589,7 @@ onUnmounted(() => {
       <div class="trade-details">
         <div class="detail-row">
           <span class="detail-label">{{ localeStore.t('perLot') }}</span>
-          <span class="detail-value">1{{ localeStore.t('lots') }} = {{ Math.round(lotSize || 0) }} {{ currentSymbol }}</span>
+          <span class="detail-value">1{{ localeStore.t('lots') }} = {{ Math.round(lotSize || 0) }} {{ currentDisplaySymbol }}</span>
         </div>
         <div class="detail-row">
           <span class="detail-label">{{ localeStore.t('estimatedFee') }}</span>
@@ -1637,7 +1648,7 @@ onUnmounted(() => {
           @click="openTermOrderModal('UP')"
         >
           <div class="term-action-btn-content">
-            <div class="term-action-btn-text">{{ localeStore.t('lookUp') }}:{{ currentSymbolInfo?.baseCurrency || '' }}</div>
+            <div class="term-action-btn-text">{{ localeStore.t('lookUp') }}:{{ currentBaseCurrency }}</div>
             <div class="term-action-btn-multiplier" v-if="currentDurationConfig && currentDurationConfig.profitRate">
               {{ Number(currentDurationConfig.profitRate).toFixed(1) }}{{ localeStore.t('multiplier') }}
             </div>
@@ -1649,7 +1660,7 @@ onUnmounted(() => {
           @click="openTermOrderModal('DOWN')"
         >
           <div class="term-action-btn-content">
-            <div class="term-action-btn-text">{{ localeStore.t('lookUp') }}:{{ currentSymbolInfo?.quoteCurrency || '' }}</div>
+            <div class="term-action-btn-text">{{ localeStore.t('lookUp') }}:{{ currentQuoteCurrency }}</div>
             <div class="term-action-btn-multiplier" v-if="currentDurationConfig && currentDurationConfig.profitRate">
               {{ Number(currentDurationConfig.profitRate).toFixed(1) }}{{ localeStore.t('multiplier') }}
             </div>
@@ -1677,21 +1688,21 @@ onUnmounted(() => {
               :class="{ active: termDirection === 'UP' }"
               @click="termDirection = 'UP'"
             >
-              {{ localeStore.t('lookUp') }}:{{ currentSymbolInfo?.baseCurrency || '' }}
+              {{ localeStore.t('lookUp') }}:{{ currentBaseCurrency }}
             </button>
             <button 
               class="direction-btn sell-direction" 
               :class="{ active: termDirection === 'DOWN' }"
               @click="termDirection = 'DOWN'"
             >
-              {{ localeStore.t('lookUp') }}:{{ currentSymbolInfo?.quoteCurrency || '' }}
+              {{ localeStore.t('lookUp') }}:{{ currentQuoteCurrency }}
             </button>
           </div>
         </div>
 
         <!-- 交易对和价格（移动到方向选择下方） -->
         <div class="term-modal-header">
-          <span class="term-modal-symbol">{{ currentSymbol }}</span>
+          <span class="term-modal-symbol">{{ currentDisplaySymbol }}</span>
           <span class="term-modal-price" :style="{ color: (change24h?.changePct || 0) >= 0 ? '#85bd00' : '#ef5350' }">
             {{ formatPrice(currentPrice) }}
           </span>
@@ -1752,7 +1763,7 @@ onUnmounted(() => {
             :disabled="isMarketClosed || !currentSymbolInfo"
             @click="handleTermBuy"
           >
-            {{ localeStore.t('lookUp') }}:{{ currentSymbolInfo?.baseCurrency || '' }}
+            {{ localeStore.t('lookUp') }}:{{ currentBaseCurrency }}
           </button>
           <button 
             v-else
@@ -1760,7 +1771,7 @@ onUnmounted(() => {
             :disabled="isMarketClosed || !currentSymbolInfo"
             @click="handleTermSell"
           >
-            {{ localeStore.t('lookUp') }}:{{ currentSymbolInfo?.quoteCurrency || '' }}
+            {{ localeStore.t('lookUp') }}:{{ currentQuoteCurrency }}
           </button>
         </div>
 
@@ -1784,7 +1795,7 @@ onUnmounted(() => {
         
         <!-- 交易对和价格 -->
         <div class="term-detail-header">
-          <div class="term-detail-symbol">{{ termOrderDetail.symbol }}</div>
+          <div class="term-detail-symbol">{{ displaySymbol(termOrderDetail) }}</div>
           <div class="term-detail-price">
             <span>{{ formatPrice(termOrderDetail?.openPrice || 0) }}</span>
             <span class="arrow">→</span>
@@ -1877,7 +1888,7 @@ onUnmounted(() => {
           <div class="term-detail-row">
             <span class="term-detail-label">{{ localeStore.t('direction') }}</span>
             <span class="term-detail-value" :class="termOrderDetail?.direction === 'UP' ? 'positive' : 'negative'">
-              {{ localeStore.t('lookUp') }}{{ termOrderDetail?.direction === 'UP' ? (termOrderDetail?.baseCurrency || currentSymbolInfo?.baseCurrency || '') : (termOrderDetail?.quoteCurrency || currentSymbolInfo?.quoteCurrency || '') }}
+              {{ localeStore.t('lookUp') }}{{ termOrderDetail?.direction === 'UP' ? termDetailBaseCurrency : termDetailQuoteCurrency }}
             </span>
           </div>
           <div class="term-detail-row">

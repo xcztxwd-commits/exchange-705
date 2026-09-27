@@ -3,9 +3,17 @@ import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import request from '@/utils/request'
 import { createRequestKey } from '@/utils/requestKey'
+import { displaySymbol } from '@/utils/displaySymbol'
 
-type SymbolItem = { id: number; symbol: string; name?: string; quoteCurrency?: string; pricePrecision: number; isEnabled: boolean }
-type ControlStatus = {
+type SymbolItem = { id: number; symbol: string; name?: string; displayName?: string; category?: string; sourceCategory?: string; quoteCurrency?: string; pricePrecision: number; isEnabled: boolean }
+const symbolLabel = (item: SymbolItem) => {
+  const label = displaySymbol(item)
+  return /=X$/i.test(item.symbol) || item.category === 'Forex' || item.sourceCategory === 'Forex' ? label : item.name && item.name !== label ? `${label} (${item.name})` : label
+}
+type RecoveryOptions = { autoRestore: boolean; restoreMode: 'GRADUAL' | 'QUICK'; restoreDurationSeconds: number; restoreIntensity: number; restoreRandomOscillation: boolean; autoReplaceHistory: boolean }
+const defaultRecovery = (): RecoveryOptions => ({ autoRestore: true, restoreMode: 'GRADUAL', restoreDurationSeconds: 10, restoreIntensity: 5, restoreRandomOscillation: true, autoReplaceHistory: true })
+const recovery = ref<RecoveryOptions>(defaultRecovery())
+type ControlStatus = Partial<RecoveryOptions> & {
   canStart?: boolean; sourceAvailable?: boolean; controlState?: string; startSource?: string; sourceTime?: number; holding?: boolean
   startBasis?: { source: string; timestamp: number; price: number }
   virtualTrading: boolean; randomMarketEnabled: boolean; randomMarketBasePrice: number | null
@@ -32,6 +40,7 @@ const busy = computed(() => loading.value || saving.value || !status.value || !!
 const statusText = computed(() => {
   const state = status.value
   if (!state) return '等待行情'
+  if (state.controlState === 'WAITING_SOURCE' && state.autoRestore) return '等待基础行情 · 恢复尚未开始计时'
   if (state.holding) return state.sourceAvailable ? '已到目标 · 保持偏移，等待手动恢复' : '保持偏移 · 源异常，静态等待恢复'
   if (state.running) return `${state.restoring ? '正在恢复原始行情' : '正在前往目标价'} · 剩余 ${state.remainingSeconds} 秒`
   if (state.randomMarketEnabled) return state.enabled ? '随机行情 + 指定偏移 · 虚拟资金结算' : '随机行情已开启 · 每秒更新 · 虚拟资金结算'
@@ -53,12 +62,13 @@ function applyStatus(value: ControlStatus, reset = false) {
   statusError.value = ''
   if (reset) {
     manual.value = { enabled: value.enabled, offset: Number(value.offset || 0) }
+    recovery.value = Object.fromEntries(Object.entries(defaultRecovery()).map(([key, fallback]) => [key, value[key as keyof RecoveryOptions] ?? fallback])) as RecoveryOptions
     const savedTiming = { durationSeconds: value.durationSeconds ?? 10, intensity: value.intensity ?? 1, randomOscillation: value.randomOscillation ?? false }
     const defaultTiming = { durationSeconds: 10, intensity: 1, randomOscillation: false }
-    target.value = { ...(value.restoring ? defaultTiming : savedTiming),
-      targetPrice: (!value.restoring ? value.targetPrice : null) ?? value.currentPrice ?? undefined }
-    restore.value = { ...(value.restoring ? savedTiming : defaultTiming) }
-    if (value.running) mode.value = value.restoring ? 'restore' : 'target'
+    target.value = { ...(value.restoring && value.autoRestore === undefined ? defaultTiming : savedTiming),
+      targetPrice: (!value.restoring || value.autoRestore !== undefined ? value.targetPrice : null) ?? value.currentPrice ?? undefined }
+    restore.value = { ...(value.restoring && value.autoRestore === undefined ? savedTiming : defaultTiming) }
+    if (value.running) mode.value = value.restoring && value.autoRestore === undefined ? 'restore' : 'target'
   }
 }
 
@@ -96,7 +106,7 @@ async function olderTasks() {
 
 async function replaceHistory(task: ControlTask) {
   const id = selectedId.value
-  if (id == null || saving.value || !task.endedAt || task.historyReplacedAt) return
+  if (id == null || saving.value || !task.endedAt) return
   saving.value = true
   try {
     const saved = await request.post(`/admin/ai-control/${id}/history/${task.id}/replace`) as unknown as ControlTask
@@ -149,7 +159,7 @@ function runTimed() {
   if (mode.value === 'restore') void submit('restore', { durationSeconds, intensity, randomOscillation })
   else {
     if (!Number.isFinite(target.value.targetPrice) || target.value.targetPrice! <= 0) { ElMessage.warning('请输入大于 0 的目标价格'); return }
-    void submit('start', { durationSeconds, intensity, randomOscillation, targetPrice: target.value.targetPrice })
+    void submit('start', { durationSeconds, intensity, randomOscillation, targetPrice: target.value.targetPrice, ...recovery.value })
   }
 }
 
@@ -177,7 +187,7 @@ onUnmounted(() => { disposed = true; ++requestVersion; clearTimeout(timer) })
       <el-form label-width="120px" class="control-form">
         <el-form-item label="选择币种">
           <el-select v-model="selectedId" filterable placeholder="请选择币种" :disabled="loading || saving" style="width: 100%" @change="selectSymbol">
-            <el-option v-for="item in symbols" :key="item.id" :label="`${item.symbol} (${item.name || ''})`" :value="item.id" />
+            <el-option v-for="item in symbols" :key="item.id" :label="symbolLabel(item)" :value="item.id" />
           </el-select>
         </el-form-item>
         <el-form-item label="随机行情">
@@ -203,6 +213,18 @@ onUnmounted(() => { disposed = true; ++requestVersion; clearTimeout(timer) })
           <el-button type="danger" plain :disabled="busy || !status?.enabled" :loading="saving" @click="submit('manual', { enabled: false, offset: 0 })">{{ status?.randomMarketEnabled ? '取消指定并继续随机' : '一键恢复原始行情' }}</el-button>
         </div>
         <el-divider />
+        <template v-if="mode === 'target'">
+          <el-form-item label="自动恢复"><el-checkbox v-model="recovery.autoRestore" aria-label="自动恢复">启用</el-checkbox></el-form-item>
+          <el-form-item v-if="recovery.autoRestore" label="恢复方式">
+            <el-radio-group v-model="recovery.restoreMode"><el-radio value="GRADUAL" label="GRADUAL">渐进恢复</el-radio><el-radio value="QUICK" label="QUICK">快速恢复</el-radio></el-radio-group>
+          </el-form-item>
+          <template v-if="recovery.autoRestore && recovery.restoreMode === 'GRADUAL'">
+            <el-form-item label="恢复时长（秒）"><el-input-number v-model="recovery.restoreDurationSeconds" :min="1" :max="86400" :precision="0" aria-label="恢复时长" /></el-form-item>
+            <el-form-item label="恢复波动强度"><el-input-number v-model="recovery.restoreIntensity" :min="1" :max="10" :precision="0" aria-label="恢复波动强度" /></el-form-item>
+            <el-form-item label="恢复随机震荡"><el-checkbox v-model="recovery.restoreRandomOscillation" aria-label="恢复随机震荡">启用</el-checkbox></el-form-item>
+          </template>
+          <el-form-item label="自动替代历史行情"><el-checkbox v-model="recovery.autoReplaceHistory" aria-label="自动替代历史行情">启用</el-checkbox></el-form-item>
+        </template>
         <el-form-item label="控盘方式">
           <el-radio-group v-model="mode">
             <el-radio-button value="target">目标价格</el-radio-button>
@@ -225,7 +247,7 @@ onUnmounted(() => { disposed = true; ++requestVersion; clearTimeout(timer) })
             <el-input-number id="control-intensity" :key="String(busy)" v-model="timing.intensity" :min="1" :max="10" :precision="0" :disabled="busy" />
           </el-form-item>
           <p class="hint">波动强度独立生效：普通控盘按规则上下波动，开启随机震荡后改为随机涨跌。强度 1–10，越高每次波动越大；两种模式均按时到达目标。</p>
-          <p v-if="mode === 'target'" class="hint">到达目标后继续保持固定偏移，跟随原始行情变化，直到手动恢复或开始新的控盘。断源时静态保留最后控盘价，不生成额外横盘。</p>
+          <p v-if="mode === 'target'" class="hint">到达目标后按独立恢复配置执行；关闭自动恢复则保持固定偏移。断源时保持最后控盘价，等待有效基础行情。</p>
           <p v-else class="hint">从当前展示价启动独立恢复段，目标固定为启动时的原始报价；结束后接回原始行情。随机开关保持不变。</p>
           <el-form-item>
             <el-button type="primary" :loading="saving" :disabled="busy || (mode === 'target' ? !(status?.canStart ?? status?.available) || status?.running || !currentSymbol?.isEnabled : !status?.available)" @click="runTimed">
@@ -252,7 +274,7 @@ onUnmounted(() => { disposed = true; ++requestVersion; clearTimeout(timer) })
         <el-table-column label="状态" min-width="120"><template #default="{ row }">{{ row.holding ? '保持偏移' : row.status }}</template></el-table-column>
         <el-table-column label="轨迹结束时间" min-width="180"><template #default="{ row }">{{ timeText(row.endedAt) }}</template></el-table-column>
         <el-table-column label="历史行情" min-width="155" fixed="right"><template #default="{ row }">
-          <el-button size="small" :disabled="saving || !row.endedAt || !!row.historyReplacedAt" @click="replaceHistory(row)">{{ row.historyReplacedAt ? '已替代历史行情' : '替代历史行情' }}</el-button>
+          <el-button size="small" :disabled="saving || !row.endedAt" @click="replaceHistory(row)">{{ row.historyReplacedAt ? '更新已发布区间' : '替代历史行情' }}</el-button>
           <div v-if="row.historyReplacedAt" class="hint">{{ timeText(row.historyReplacedAt) }}</div>
         </template></el-table-column>
       </el-table>

@@ -18,7 +18,7 @@ public class AdminAiControlController {
     @Autowired private PersistentPriceControl controls;
 
     @Getter @Setter
-    public static class StartRequest {
+    public static class StartRequest extends com.gtcfesk.exchange.market.RecoveryOptions {
         @NotNull @Min(1) @Max(86400) @Digits(integer = 5, fraction = 0) private BigDecimal durationSeconds;
         @NotNull @DecimalMin(value = "0", inclusive = false) @Digits(integer = 16, fraction = 8) private BigDecimal targetPrice;
         @NotNull @Min(1) @Max(10) @Digits(integer = 2, fraction = 0) private BigDecimal intensity;
@@ -64,9 +64,7 @@ public class AdminAiControlController {
 
     @PostMapping("/{id}/start")
     public Map<String, Object> startControl(@PathVariable Long id, @Valid @RequestBody StartRequest request) {
-        if (request.getRequestKey() == null)
-            return market.startControl(id, request.getDurationSeconds().intValueExact(), request.getTargetPrice(), request.getIntensity().intValueExact(), request.getRandomOscillation());
-        return market.startControl(id, request.getDurationSeconds().intValueExact(), request.getTargetPrice(), request.getIntensity().intValueExact(), request.getRandomOscillation(), request.getRequestKey());
+        return market.startControl(id, request.getDurationSeconds().intValueExact(), request.getTargetPrice(), request.getIntensity().intValueExact(), request.getRandomOscillation(), request.getRequestKey(), request);
     }
 
     @PostMapping("/{id}/history/{taskId}/replace")

@@ -53,3 +53,23 @@ CREATE TABLE IF NOT EXISTS market_control_publication (
  task_id VARCHAR(36) PRIMARY KEY, published_at BIGINT NOT NULL,
  from_at BIGINT NOT NULL, to_at BIGINT NOT NULL
 );
+
+-- Absence of a flow row means legacy semantics, including always-visible history.
+CREATE TABLE IF NOT EXISTS market_control_flow (
+ task_id VARCHAR(36) PRIMARY KEY, options_json TEXT NOT NULL,
+ state VARCHAR(24) NOT NULL, recovery_started_at BIGINT NULL, remaining_millis BIGINT NULL,
+ recovery_offset DECIMAL(32,16) NULL, last_price DECIMAL(32,16) NOT NULL,
+ last_at BIGINT NOT NULL, finished_at BIGINT NULL
+);
+
+CREATE TABLE IF NOT EXISTS market_simulation_source_candle (
+ symbol_id BIGINT NOT NULL, session_at BIGINT NOT NULL, period VARCHAR(8) NOT NULL,
+ candle_at BIGINT NOT NULL, body TEXT NOT NULL,
+ PRIMARY KEY (symbol_id, session_at, period, candle_at)
+);
+
+-- Preserve pre-upgrade mixed minute prefixes when modern tasks share their minute.
+CREATE TABLE IF NOT EXISTS market_legacy_minute_snapshot (
+ symbol_id BIGINT NOT NULL, minute_at BIGINT NOT NULL, body TEXT NOT NULL,
+ last_event BIGINT NOT NULL, PRIMARY KEY(symbol_id,minute_at)
+);

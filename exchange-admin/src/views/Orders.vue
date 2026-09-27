@@ -5,6 +5,7 @@ import { Search, Refresh } from '@element-plus/icons-vue'
 import request from '@/utils/request'
 import { useAuthStore } from '@/store/auth'
 import { usePermissions } from '@/composables/usePermissions'
+import { displaySymbol } from '@/utils/displaySymbol'
 
 const auth = useAuthStore()
 const { isAgent, hasPermission } = usePermissions()
@@ -138,6 +139,10 @@ const handleReset = () => {
 function parseSymbol(symbol: string): { baseCurrency: string; quoteCurrency: string } {
   if (!symbol) {
     return { baseCurrency: '', quoteCurrency: '' }
+  }
+  if (/=X$/i.test(symbol)) {
+    const [baseCurrency, quoteCurrency] = displaySymbol(symbol).split('/')
+    if (baseCurrency && quoteCurrency) return { baseCurrency, quoteCurrency }
   }
   
   // 常见的计价货币列表（通常是3-4个字符）
@@ -389,7 +394,7 @@ onMounted(() => {
               {{ row.userRemark || row.remark || '-' }}
             </template>
           </el-table-column>
-          <el-table-column prop="symbol" label="交易对" width="120" />
+          <el-table-column prop="symbol" label="交易对" width="120"><template #default="{ row }">{{ displaySymbol(row) }}</template></el-table-column>
           <el-table-column prop="side" label="方向" width="80">
             <template #default="{ row }">
               <el-tag :type="row.side === 'BUY' ? 'success' : 'danger'">
@@ -555,7 +560,7 @@ onMounted(() => {
               {{ row.userRemark || row.remark || '-' }}
             </template>
           </el-table-column>
-          <el-table-column prop="symbol" label="交易对" width="120" />
+          <el-table-column prop="symbol" label="交易对" width="120"><template #default="{ row }">{{ displaySymbol(row) }}</template></el-table-column>
           <el-table-column prop="direction" label="方向" width="120">
             <template #default="{ row }">
               <el-tag :type="row.direction === 'UP' ? 'success' : 'danger'">
@@ -687,4 +692,3 @@ h2 {
   justify-content: flex-end;
 }
 </style>
-

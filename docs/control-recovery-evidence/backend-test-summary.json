@@ -1,0 +1,218 @@
+[
+  {
+    "name": "com.gtcfesk.exchange.market.CatalogLiveTest",
+    "tests": "1",
+    "failures": "0",
+    "errors": "0",
+    "skipped": "1",
+    "time": "0.005"
+  },
+  {
+    "name": "com.gtcfesk.exchange.market.ControlFlowMarketIntegrationTest",
+    "tests": "2",
+    "failures": "0",
+    "errors": "0",
+    "skipped": "0",
+    "time": "3.594"
+  },
+  {
+    "name": "com.gtcfesk.exchange.market.ControlRecoveryFlowTest",
+    "tests": "38",
+    "failures": "0",
+    "errors": "0",
+    "skipped": "0",
+    "time": "2.084"
+  },
+  {
+    "name": "com.gtcfesk.exchange.market.CryptoPerpetualTest",
+    "tests": "3",
+    "failures": "0",
+    "errors": "0",
+    "skipped": "0",
+    "time": "0.25"
+  },
+  {
+    "name": "com.gtcfesk.exchange.market.ExchangeConnectionTest",
+    "tests": "3",
+    "failures": "0",
+    "errors": "0",
+    "skipped": "0",
+    "time": "26.15"
+  },
+  {
+    "name": "com.gtcfesk.exchange.market.ExchangeFallbackTest",
+    "tests": "2",
+    "failures": "0",
+    "errors": "0",
+    "skipped": "0",
+    "time": "0.064"
+  },
+  {
+    "name": "com.gtcfesk.exchange.market.ExchangeLiveTest",
+    "tests": "1",
+    "failures": "0",
+    "errors": "0",
+    "skipped": "1",
+    "time": "0.0"
+  },
+  {
+    "name": "com.gtcfesk.exchange.market.ExchangeQuoteTest",
+    "tests": "5",
+    "failures": "0",
+    "errors": "0",
+    "skipped": "0",
+    "time": "0.01"
+  },
+  {
+    "name": "com.gtcfesk.exchange.market.ExecutionQuoteTest",
+    "tests": "2",
+    "failures": "0",
+    "errors": "0",
+    "skipped": "0",
+    "time": "0.002"
+  },
+  {
+    "name": "com.gtcfesk.exchange.market.MarketIconTest",
+    "tests": "1",
+    "failures": "0",
+    "errors": "0",
+    "skipped": "0",
+    "time": "0.044"
+  },
+  {
+    "name": "com.gtcfesk.exchange.market.MarketInstrumentCatalogTest",
+    "tests": "4",
+    "failures": "0",
+    "errors": "0",
+    "skipped": "0",
+    "time": "0.017"
+  },
+  {
+    "name": "com.gtcfesk.exchange.market.MarketIsolationTest",
+    "tests": "2",
+    "failures": "0",
+    "errors": "0",
+    "skipped": "2",
+    "time": "0.0"
+  },
+  {
+    "name": "com.gtcfesk.exchange.market.MarketPushTest",
+    "tests": "1",
+    "failures": "0",
+    "errors": "0",
+    "skipped": "0",
+    "time": "0.17"
+  },
+  {
+    "name": "com.gtcfesk.exchange.market.PersistentPriceControlTest",
+    "tests": "25",
+    "failures": "0",
+    "errors": "0",
+    "skipped": "0",
+    "time": "0.869"
+  },
+  {
+    "name": "com.gtcfesk.exchange.market.PriceControlTest",
+    "tests": "14",
+    "failures": "0",
+    "errors": "0",
+    "skipped": "0",
+    "time": "6.466"
+  },
+  {
+    "name": "com.gtcfesk.exchange.market.PriceControlV2Test",
+    "tests": "2",
+    "failures": "0",
+    "errors": "0",
+    "skipped": "0",
+    "time": "0.003"
+  },
+  {
+    "name": "com.gtcfesk.exchange.market.QuoteCurrencyConversionTest",
+    "tests": "4",
+    "failures": "0",
+    "errors": "0",
+    "skipped": "0",
+    "time": "0.005"
+  },
+  {
+    "name": "com.gtcfesk.exchange.market.QuoteStateTest",
+    "tests": "3",
+    "failures": "0",
+    "errors": "0",
+    "skipped": "0",
+    "time": "0.668"
+  },
+  {
+    "name": "com.gtcfesk.exchange.market.RandomMarketPathTest",
+    "tests": "4",
+    "failures": "0",
+    "errors": "0",
+    "skipped": "0",
+    "time": "0.008"
+  },
+  {
+    "name": "com.gtcfesk.exchange.market.ShareHistoryTest",
+    "tests": "3",
+    "failures": "0",
+    "errors": "0",
+    "skipped": "0",
+    "time": "0.009"
+  },
+  {
+    "name": "com.gtcfesk.exchange.market.ShareTemplateConfigTest",
+    "tests": "2",
+    "failures": "0",
+    "errors": "0",
+    "skipped": "0",
+    "time": "0.004"
+  },
+  {
+    "name": "com.gtcfesk.exchange.market.SimulationControlPathTest",
+    "tests": "4",
+    "failures": "0",
+    "errors": "0",
+    "skipped": "0",
+    "time": "0.003"
+  },
+  {
+    "name": "com.gtcfesk.exchange.market.YahooConnectionTest",
+    "tests": "1",
+    "failures": "0",
+    "errors": "0",
+    "skipped": "0",
+    "time": "2.061"
+  },
+  {
+    "name": "com.gtcfesk.exchange.market.YahooQuoteStreamTest",
+    "tests": "5",
+    "failures": "0",
+    "errors": "0",
+    "skipped": "0",
+    "time": "0.039"
+  },
+  {
+    "name": "com.gtcfesk.exchange.security.MinimalFixRegressionTest",
+    "tests": "38",
+    "failures": "0",
+    "errors": "0",
+    "skipped": "0",
+    "time": "24.054"
+  },
+  {
+    "name": "com.gtcfesk.exchange.user.FiatDepositTest",
+    "tests": "2",
+    "failures": "0",
+    "errors": "0",
+    "skipped": "0",
+    "time": "0.063"
+  },
+  {
+    "name": "com.gtcfesk.exchange.user.FiatWithdrawTest",
+    "tests": "2",
+    "failures": "0",
+    "errors": "0",
+    "skipped": "0",
+    "time": "0.065"
+  }
+]

@@ -311,6 +311,11 @@ public class ForexQuoteMarketService {
         if ("ws".equals(quote.get("transport")) && !streamConnected(group.category)) {
             quote.put("sourceAvailable", false); quote.put("available", false); quote.put("tradeAvailable", false); quote.put("status", "unavailable");
         }
+        // Connection health is independent of quote freshness and missing source values.
+        String error = group.error;
+        quote.put("sourceConnectionFailed", error != null && ("timeout".equals(error)
+                || "connection_failure".equals(error) || "rate_limited".equals(error) || error.startsWith("http_"))
+                && !streamHealthy(category, code));
         quote.put("retryAt", group.nextAllowed);
         return quote;
     }
@@ -324,6 +329,7 @@ public class ForexQuoteMarketService {
         TradingSymbol config = registry.get(code);
         if (RandomMarketPath.enabled(config)) {
             Map<String, Object> simulated = RandomMarketPath.quote(config, System.currentTimeMillis());
+            if (durableFlow(config)) simulated = controls.display(config, simulationBaseQuote(config, System.currentTimeMillis()), System.currentTimeMillis());
             simulated.put("symbol", code); simulated.put("marketRevision", config.getRowVersion());
             if (!virtualTrading) { simulated.put("available", false); simulated.put("status", "unavailable"); }
             return simulated;
@@ -343,7 +349,9 @@ public class ForexQuoteMarketService {
         // Active controls and held offsets remain executable during a provider outage.
         // Renew only the execution lease; source/sample timestamps and historical candles stay unchanged.
         boolean controlled = config != null && (Boolean.TRUE.equals(config.getControlEnabled())
-                || "RUNNING".equals(quote.get("controlState")) || "HOLDING".equals(quote.get("controlState")));
+                || "RUNNING".equals(quote.get("controlState")) || "HOLDING".equals(quote.get("controlState"))
+                || "RECOVERING".equals(quote.get("controlState")) || "WAITING_SOURCE".equals(quote.get("controlState")) && Boolean.TRUE.equals(quote.get("controlRunning")));
+        quote.put("controlActive", controlled);
         if (controlled && QuoteState.valid(quote)) {
             quote.put("available", true); quote.put("tradeAvailable", true);
             quote.put("stale", false); quote.put("status", "available");
@@ -446,7 +454,7 @@ public class ForexQuoteMarketService {
     public Map<String, Object> internalKline(String symbol, String interval, Integer limit) {
         TradingSymbol config = registry.get(symbol);
         if (virtualTrading && RandomMarketPath.enabled(config))
-            return simulationKline(config, interval, limit, null);
+            return durableSimulationKline(config, interval, limit, null);
         Map<String, Object> result = getKline(config == null ? symbol : marketCode(config), interval, limit, config == null ? "Crypto" : sourceCategory(config));
         return mergeControlKline(config, symbol, interval, limit, null, result);
     }
@@ -456,7 +464,7 @@ public class ForexQuoteMarketService {
         TradingSymbol config = registry.get(symbol);
         if (config == null) throw new IllegalArgumentException("Unknown symbol");
         if (virtualTrading && RandomMarketPath.enabled(config))
-            return simulationKline(config, interval, limit, endTime);
+            return durableSimulationKline(config, interval, limit, endTime);
         Map<String, Object> result = getKline(marketCode(config), interval, limit, sourceCategory(config), endTime);
         Map<String, Object> data = (Map<String, Object>) result.get("data");
         data.put("symbol", symbol);
@@ -471,6 +479,13 @@ public class ForexQuoteMarketService {
                 ExchangeQuoteSource.supports(sourceCategory(config)));
         ((Map<String, Object>) result.get("data")).put("symbol", symbol);
         return result;
+    }
+    private Map<String,Object> durableSimulationKline(TradingSymbol config, String interval, Integer limit, Long endTime) {
+        Map<String,Object> result = simulationKline(config, interval, limit, endTime);
+        if (!durableFlow(config) || klineMerger == null) return result;
+        return klineMerger.merge(config.getId(), interval, limit == null ? 100 : limit, endTime, result, null, true,
+            (from, to) -> controlHistory.db.query("SELECT body FROM market_simulation_source_candle WHERE symbol_id=? AND session_at=? AND period='1m' AND candle_at>=? AND candle_at<=? ORDER BY candle_at",
+                (r,n) -> controlHistory.decode(r.getString(1)), config.getId(), config.getRandomMarketStartedAt(), from, to));
     }
     private String simulationHistoryKey(TradingSymbol config) {
         return "simulation-history:" + config.getId() + ":" + config.getRandomMarketStartedAt();
@@ -574,6 +589,9 @@ public class ForexQuoteMarketService {
         return quote;
     }
 
+    private boolean durableFlow(TradingSymbol config) {
+        return controls != null && controls.hasFlow(config.getId());
+    }
     private Map<String, Object> simulationBaseQuote(TradingSymbol config, long now) {
         Map<String, Object> quote = RandomMarketPath.quote(config, now);
         quote.put("price", RandomMarketPath.basePrice(config, now / 1000 * 1000));
@@ -594,6 +612,7 @@ public class ForexQuoteMarketService {
         for (TradingSymbol symbol : symbols.findAll()) {
             Map<String, Object> row = new LinkedHashMap<>();
             row.put("id", symbol.getId()); row.put("symbol", symbol.getSymbol()); row.put("name", symbol.getName());
+            row.put("displayName", symbol.getDisplayName());
             row.put("isEnabled", symbol.getIsEnabled()); row.put("pricePrecision", PriceControlPath.precision(symbol));
             row.put("quoteCurrency", symbol.getQuoteCurrency()); result.add(row);
         }
@@ -632,7 +651,7 @@ public class ForexQuoteMarketService {
             result.put("source", "Simulation"); result.put("simulated", true);
         }
         result.put("remainingSeconds", running ? Math.max(0, (PriceControlPath.endsAt(config) - now + 999) / 1000) : 0);
-        if (!random && controls != null) controls.status(config, result, quote, now);
+        if (controls != null && (!random || durableFlow(config))) controls.status(config, result, quote, now);
         return result;
     }
 
@@ -716,6 +735,27 @@ public class ForexQuoteMarketService {
     }
 
     @Transactional
+    public synchronized Map<String, Object> startControl(Long id, int duration, BigDecimal target, int intensity,
+            boolean randomOscillation, String requestKey, RecoveryOptions options) {
+        if (duration < 1 || duration > 86400 || intensity < 1 || intensity > 10 || target == null
+                || target.signum() <= 0 || target.compareTo(new BigDecimal("10000000000000000")) >= 0)
+            throw new BusinessException("控盘参数无效");
+        TradingSymbol config = controlSymbol(id);
+        if (!Boolean.TRUE.equals(config.getIsEnabled())) throw new BusinessException("请先启用该币种");
+        if (target.stripTrailingZeros().scale() > PriceControlPath.precision(config)) throw new BusinessException("目标价格超出币种价格精度");
+        if (RandomMarketPath.enabled(config) && !virtualTrading) throw new BusinessException("随机行情仅可在虚拟交易环境使用");
+        long now = System.currentTimeMillis();
+        Map<String,Object> raw = RandomMarketPath.enabled(config) ? simulationBaseQuote(config, now) : getPrice(marketCode(config), sourceCategory(config));
+        Map<String,Object> view = controls.display(config, raw, now);
+        BigDecimal displayed = view.get("price") instanceof Number ? ControlHistoryStore.number(view.get("price")) : null;
+        PersistentPriceControl.Task created = controls.start(config, raw, displayed, duration, target, intensity, randomOscillation, false, requestKey, options);
+        clearControl(config); config.setControlEnabled(false); config.setControlPriceOffset(BigDecimal.ZERO);
+        if (RandomMarketPath.enabled(config) && SimulationControlPath.events(config).stream().noneMatch(e -> e.at == created.startedAt / 1000 * 1000))
+            recordSimulationControl(config, created.startedAt);
+        return saveControl(config);
+    }
+
+    @Transactional
     public synchronized Map<String, Object> restoreControl(Long id, int duration, int intensity, boolean randomOscillation) {
         return restoreControl(id, duration, intensity, randomOscillation, null);
     }
@@ -725,8 +765,8 @@ public class ForexQuoteMarketService {
             throw new BusinessException("时长需为 1–86400 秒，波动强度需为 1–10");
         TradingSymbol config = controlSymbol(id);
         Map<String, Object> quote = requireControlQuote(config);
-        if (!RandomMarketPath.enabled(config) && controls != null) {
-            controls.start(config, quote, controlledPrice(config, quote, System.currentTimeMillis()), duration, rawPrice(quote), intensity, randomOscillation, true, requestKey);
+        if (controls != null) {
+            controls.startRealtimeRestore(config, quote, controlledPrice(config, quote, System.currentTimeMillis()), duration, intensity, randomOscillation, requestKey);
             clearControl(config); config.setControlEnabled(false); config.setControlPriceOffset(BigDecimal.ZERO);
             return saveControl(config);
         }
@@ -751,7 +791,7 @@ public class ForexQuoteMarketService {
         TradingSymbol config = controlSymbol(id);
         if (enabled && rawPrice(requireControlQuote(config)).add(offset).signum() <= 0)
             throw new BusinessException("偏移后的价格必须大于 0");
-        if (!RandomMarketPath.enabled(config) && controls != null) controls.stop(id, System.currentTimeMillis());
+        if (controls != null && (!RandomMarketPath.enabled(config) || durableFlow(config))) controls.stop(id, System.currentTimeMillis());
         long now = controlTime(config);
         BigDecimal continuation = RandomMarketPath.enabled(config)
             ? RandomMarketPath.price(config, now).subtract(RandomMarketPath.basePrice(config, now)) : BigDecimal.ZERO;
@@ -764,7 +804,7 @@ public class ForexQuoteMarketService {
     @Transactional
     public synchronized Map<String, Object> stopControl(Long id) {
         TradingSymbol config = controlSymbol(id);
-        if (!RandomMarketPath.enabled(config) && controls != null) {
+        if (controls != null && (!RandomMarketPath.enabled(config) || durableFlow(config))) {
             controls.stopAndHold(id, System.currentTimeMillis());
             return controlStatus(config);
         }
@@ -818,7 +858,15 @@ public class ForexQuoteMarketService {
                     try {
                         controls.advance(id, now);
                         TradingSymbol config = controlSymbol(id);
-                        controls.display(config, getPrice(marketCode(config), sourceCategory(config)), now);
+                        Map<String,Object> base = RandomMarketPath.enabled(config) ? simulationBaseQuote(config, now) : getPrice(marketCode(config), sourceCategory(config));
+                        if (RandomMarketPath.enabled(config)) {
+                            base.put("eventId", "simulation-" + config.getRandomMarketStartedAt() + "-" + now / 1000);
+                            controls.sourceQuote(config, base, now);
+                            for (Map<String,Object> bar : ControlHistoryStore.rows(RandomMarketPath.klines(config, "1m", 2, null, now)))
+                                controlHistory.db.update("INSERT INTO market_simulation_source_candle(symbol_id,session_at,period,candle_at,body) VALUES(?,?,'1m',?,?) ON DUPLICATE KEY UPDATE body=VALUES(body)",
+                                    id, config.getRandomMarketStartedAt(), ControlHistoryStore.time(bar), controlHistory.encode(bar));
+                        }
+                        controls.display(config, base, now);
                     }
                     catch (Exception failure) { log.error("Persistent control sampling failed for {}", id, failure); }
                 }

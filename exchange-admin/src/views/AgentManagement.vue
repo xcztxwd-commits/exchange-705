@@ -165,7 +165,7 @@ const loadSubordinates = async () => {
 
 // 查看业绩
 const handleViewPerformance = (row: any) => {
-  window.open(`#/agents/${row.id}/performance`, '_blank')
+  window.open(`/agents/${row.id}/performance`, '_blank')
 }
 
 // 分配菜单权限

@@ -546,9 +546,9 @@ class MinimalFixRegressionTest {
         org.mockito.Mockito.when(quotes.controlStatus(1L)).thenReturn(map("id", 1));
         assertEquals(200, status(request("GET", base, token, null)));
         assertEquals(200, status(request("POST", base + "/start", token, valid)));
-        org.mockito.Mockito.verify(quotes).startControl(1L, 10, new BigDecimal("100"), 10, true);
+        org.mockito.Mockito.verify(quotes).startControl(org.mockito.ArgumentMatchers.eq(1L), org.mockito.ArgumentMatchers.eq(10), org.mockito.ArgumentMatchers.eq(new BigDecimal("100")), org.mockito.ArgumentMatchers.eq(10), org.mockito.ArgumentMatchers.eq(true), org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.argThat(o -> Boolean.TRUE.equals(o.getAutoRestore()) && "GRADUAL".equals(o.getRestoreMode()) && o.getRestoreDurationSeconds() == 10 && o.getRestoreIntensity() == 5 && o.getRestoreRandomOscillation() && o.getAutoReplaceHistory()));
         assertEquals(200, status(request("POST", base + "/start", token, map("durationSeconds", 10, "targetPrice", 100, "intensity", 10))));
-        org.mockito.Mockito.verify(quotes).startControl(1L, 10, new BigDecimal("100"), 10, false);
+        org.mockito.Mockito.verify(quotes).startControl(org.mockito.ArgumentMatchers.eq(1L), org.mockito.ArgumentMatchers.eq(10), org.mockito.ArgumentMatchers.eq(new BigDecimal("100")), org.mockito.ArgumentMatchers.eq(10), org.mockito.ArgumentMatchers.eq(false), org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.argThat(o -> Boolean.TRUE.equals(o.getAutoRestore()) && "GRADUAL".equals(o.getRestoreMode()) && o.getRestoreDurationSeconds() == 10 && o.getRestoreIntensity() == 5 && o.getRestoreRandomOscillation() && o.getAutoReplaceHistory()));
         assertEquals(400, status(request("POST", base + "/start", token, map("durationSeconds", 10, "targetPrice", 100, "intensity", 1, "randomOscillation", null))));
         assertEquals(400, status(request("POST", base + "/start", superToken, map("durationSeconds", 0, "targetPrice", 100, "intensity", 1))));
         assertEquals(400, status(request("POST", base + "/start", superToken, map("durationSeconds", 10, "targetPrice", -1, "intensity", 1))));

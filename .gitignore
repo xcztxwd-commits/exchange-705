@@ -18,6 +18,8 @@ target/
 .idea/
 .vscode/
 *.zip
+!exchange-backend/src/main/resources/market-icons.zip
+!exchange-backend/src/main/resources/binance-market-icons.zip
 *.tar.gz
 *.jar
 *.class

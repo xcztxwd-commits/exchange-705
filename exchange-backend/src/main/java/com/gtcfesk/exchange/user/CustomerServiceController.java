@@ -44,6 +44,12 @@ public class CustomerServiceController {
     /**
      * 获取系统时区配置
      */
+    @GetMapping("/share-templates")
+    public ResponseEntity<?> getShareTemplates() {
+        return ResponseEntity.ok(SystemConfigService.shareTemplates(
+                systemConfigService.getConfigValue(SystemConfigService.SHARE_TEMPLATES_KEY)));
+    }
+
     @GetMapping("/system/timezone")
     public ResponseEntity<?> getSystemTimezone() {
         String timezone = systemConfigService.getConfigValue("system.timezone");

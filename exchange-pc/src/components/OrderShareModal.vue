@@ -4,6 +4,7 @@ import QRCode from 'qrcode'
 import request from '@/utils/request'
 import { useLocaleStore } from '@/store/locale'
 import { formatDateTime, getSystemTimezone, systemTimezoneReady } from '@/utils/dateTime'
+import { displaySymbol } from '@/utils/displaySymbol'
 import { recentShareChart, drawSharePoster, settledShareOrder, shareCopy, shareReturn, shareTemplates, shareNeedsChart, shareBackgrounds,
   type ShareChart, type ShareKind, type ShareOptions, type ShareOrder, type ShareTemplate } from '@/utils/orderShare'
 
@@ -31,12 +32,13 @@ function loadBackground(template: ShareTemplate) {
   return backgrounds.get(template)
 }
 const options = reactive<ShareOptions>({ template: 'light', mode: 'amount', quantity: false, capital: false, fee: false, leverage: false, orderId: false, openTime: false })
-const templates = shareTemplates
+const templates = ref<ShareTemplate[]>([])
 const templateList = ref<HTMLElement>()
-const templateIndex = computed(() => templates.indexOf(options.template))
+const templateIndex = computed(() => templates.value.indexOf(options.template))
 let touch: { x: number; y: number; time: number } | null = null
 function changeTemplate(offset: number) {
-  options.template = templates[(templateIndex.value + offset + templates.length) % templates.length]!
+  if (busy.value || !templates.value.length) return
+  options.template = templates.value[(templateIndex.value + offset + templates.value.length) % templates.value.length]!
 }
 function startSwipe(event: TouchEvent) {
   const point = event.touches[0]
@@ -65,10 +67,22 @@ async function loadOrder() {
   busy.value = true; error.value = ''; order.value = null; chart = undefined
   const run = ++generation
   try {
-    const [result] = await Promise.all([
+    const [result, , configured] = await Promise.all([
       request.get(`/trade/${props.kind}/orders`, { params: { status: 'CLOSED' } }), systemTimezoneReady,
+      request.get('/user/share-templates'),
     ])
     if (disposed || run !== generation) return
+    const enabled = configured as unknown
+    if (!Array.isArray(enabled)) throw new Error('Templates unavailable')
+    templates.value = [...new Set(enabled.filter((id): id is ShareTemplate => shareTemplates.includes(id)))]
+    if (!templates.value.length) throw new Error('Templates unavailable')
+    let selected = templates.value[0]!
+    try {
+      const saved = localStorage.getItem('order-share-template') as ShareTemplate
+      if (templates.value.includes(saved)) selected = saved
+    } catch { /* Storage is optional. */ }
+    options.template = selected
+    await nextTick()
     const response = result as unknown as { list?: Record<string, unknown>[] }
     const rows = Array.isArray(result) ? result : response.list || []
     const raw = rows.find((item: Record<string, unknown>) => String(item.id) === String(props.orderId))
@@ -127,7 +141,7 @@ async function render() {
       } catch { throw new Error(copy.value.chartError) }
     }
     if (disposed || run !== generation) return
-    const display = { ...value, openTime: formatDateTime(value.openTime), closeTime: formatDateTime(value.closeTime) }
+    const display = { ...value, symbol: displaySymbol(value), openTime: formatDateTime(value.openTime), closeTime: formatDateTime(value.closeTime) }
     const canvas = document.createElement('canvas')
     drawSharePoster(canvas, display, settings, copy.value, props.brand, timezone, showQr.value ? qrImage : undefined, chart, background)
     const result = await new Promise<Blob>((resolve, reject) => canvas.toBlob(data => data ? resolve(data) : reject(new Error(copy.value.error)), 'image/png'))
@@ -141,7 +155,7 @@ async function render() {
     if (!disposed && run === generation) busy.value = false
   }
 }
-function filename() { return `trade-${props.kind}-${(order.value?.symbol || '').replace(/[^a-z0-9_-]/gi, '')}-${options.template}.png` }
+function filename() { return `trade-${props.kind}-${displaySymbol(order.value).replace(/\//g, '-').replace(/[^a-z0-9_-]/gi, '')}-${options.template}.png` }
 function save() {
   if (!blob || busy.value) return
   try {
@@ -174,10 +188,6 @@ onMounted(async () => {
   previousFocus = document.activeElement as HTMLElement
   previousBodyOverflow = document.body.style.overflow
   document.body.style.overflow = 'hidden'
-  try {
-    const saved = localStorage.getItem('order-share-template') as ShareTemplate
-    if (templates.includes(saved)) options.template = saved
-  } catch { /* Private browsing may disable storage. */ }
   await nextTick(); dialog.value?.showModal(); void loadOrder()
 })
 onBeforeUnmount(() => {
@@ -202,7 +212,7 @@ onBeforeUnmount(() => {
           @touchstart.passive="startSwipe" @touchend.passive="endSwipe" @touchcancel="touch = null"
           @touchmove.passive="event => { if (event.touches.length > 1) touch = null }"
           @keydown.left.prevent="changeTemplate(-1)" @keydown.right.prevent="changeTemplate(1)">
-          <img v-if="preview" :src="preview" :alt="`${order?.symbol} · ${copy[options.template]}`" class="poster-preview" :style="{ aspectRatio: previewRatio }" draggable="false" />
+          <img v-if="preview" :src="preview" :alt="`${displaySymbol(order)} · ${copy[options.template]}`" class="poster-preview" :style="{ aspectRatio: previewRatio }" draggable="false" />
           <div v-else class="pnl-placeholder" role="status">
             <span v-if="busy" class="pnl-spinner"></span>
             <p>{{ busy ? copy.loading : error }}</p>

@@ -3,6 +3,7 @@ import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import request from '@/utils/request'
 import { getAudioUrl } from '@/utils/audioUrl'
+import ShareTemplateSettings from '@/components/ShareTemplateSettings.vue'
 
 interface ConfigItem {
   key: string
@@ -243,6 +244,7 @@ onMounted(() => {
   <div class="settings-page">
     <el-card shadow="never">
       <el-tabs v-model="activeTab">
+        <el-tab-pane label="持仓分享模板" name="share"><ShareTemplateSettings /></el-tab-pane>
         <el-tab-pane label="邮件配置" name="mail">
           <el-form label-width="150px">
             <el-form-item

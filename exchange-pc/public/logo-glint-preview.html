@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FOREX EXCHANGE · Logo 流光预览</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; padding: 32px 20px; background: #e9edf3; color: #222b3a; font: 16px/1.5 system-ui, sans-serif; }
+    main { max-width: 860px; margin: auto; }
+    h1 { margin: 0 0 4px; font-size: 24px; }
+    p { margin: 0 0 24px; color: #657084; }
+    .cards { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); }
+    .card { min-height: 205px; padding: 22px; border-radius: 16px; box-shadow: 0 8px 28px #13213b16; }
+    .card h2 { margin: 0 0 26px; font-size: 15px; font-weight: 600; }
+    .light { background: #fff; --halo: #b79ae9; --flash: #fff; }
+    .dark { background: #131722; color: #f9fafb; --halo: #9982ee; --flash: #f3eaff; }
+    .logo-shine { position: relative; display: block; width: min(320px, 100%); aspect-ratio: 515 / 168; padding: 0; border: 0; background: transparent; cursor: pointer; }
+    .logo-shine:focus-visible { outline: 2px solid #8e66d1; outline-offset: 3px; }
+    .logo-shine img { display: block; width: 100%; height: 100%; }
+    .logo-shine::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      -webkit-mask: url('/img/logo.svg') center / contain no-repeat;
+      mask: url('/img/logo.svg') center / contain no-repeat;
+      background: linear-gradient(108deg, transparent 46%, var(--halo) 48%, var(--flash) 50%, var(--halo) 52%, transparent 54%);
+      background-size: 250% 100%;
+      background-position: 100% 0;
+      animation: logo-glint 8s linear infinite;
+    }
+    .logo-shine.replay::after { animation: logo-glint-replay .75s linear 1; }
+    @keyframes logo-glint {
+      0% { opacity: 0; background-position: 100% 0; }
+      1% { opacity: 1; }
+      10% { opacity: 1; background-position: 0% 0; }
+      11%, 100% { opacity: 0; background-position: 0% 0; }
+    }
+    @keyframes logo-glint-replay {
+      0% { opacity: 0; background-position: 100% 0; }
+      10% { opacity: 1; }
+      90% { opacity: 1; background-position: 0% 0; }
+      100% { opacity: 0; background-position: 0% 0; }
+    }
+    @media (prefers-reduced-motion: reduce) { .logo-shine::after { animation: none; opacity: 0; } }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Logo 流光效果</h1>
+    <p>SVG + CSS：每 8 秒自动扫过；鼠标经过或点击，立即快速重播。</p>
+    <section class="cards" aria-label="两种 Logo 预览">
+      <article class="card light">
+        <h2>浅色背景 · 深色 Logo</h2>
+        <button class="logo-shine" type="button" aria-label="重播浅色版 Logo 流光"><img src="/img/logo.svg" width="515" height="168" alt="FOREX EXCHANGE 浅色版 Logo"></button>
+      </article>
+      <article class="card dark">
+        <h2>深色背景 · 亮色 Logo</h2>
+        <button class="logo-shine" type="button" aria-label="重播深色版 Logo 流光"><img src="/img/logo-dark.svg" width="515" height="168" alt="FOREX EXCHANGE 深色版 Logo"></button>
+      </article>
+    </section>
+  </main>
+  <script>
+    for (const logo of document.querySelectorAll('.logo-shine')) {
+      const replay = () => {
+        if (matchMedia('(prefers-reduced-motion: reduce)').matches) return
+        logo.classList.remove('replay')
+        void logo.offsetWidth
+        logo.classList.add('replay')
+      }
+      logo.addEventListener('mouseenter', replay)
+      logo.addEventListener('click', replay)
+      logo.addEventListener('animationend', event => {
+        if (event.pseudoElement === '::after') logo.classList.remove('replay')
+      })
+    }
+  </script>
+</body>
+</html>

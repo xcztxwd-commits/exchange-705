@@ -5,7 +5,7 @@
     <header class="h-14 border-b border-gray-200 dark:border-[#2b3139] flex justify-between items-center shrink-0 shadow-sm bg-white dark:bg-[#131722] z-10 relative">
       <div class="flex items-center px-4 absolute left-0 h-full w-[300px]">
         <div class="flex-1 flex justify-center">
-          <div class="font-bold text-lg truncate">GTCFX</div>
+          <LogoGlint class="brand-logo" :src="isDarkMode ? darkLogoUrl : logoUrl" :dark="isDarkMode" />
         </div>
         <button class="bg-[#8cc63f] text-white px-4 py-1.5 rounded text-sm font-medium shadow-sm shrink-0">{{ localeStore.t('productList') }}</button>
       </div>
@@ -74,8 +74,8 @@
                :class="['flex justify-between items-center p-3 cursor-pointer border-b border-gray-200 dark:border-[#2b3139] transition-colors', currentSymbol === symbol.symbol ? 'bg-gray-50 dark:bg-[#181c27] border-l border-gray-200 dark:border-[#363c4e]-4 border-l border-gray-200 dark:border-[#363c4e]-[#8cc63f]' : 'bg-white dark:bg-[#131722] hover:bg-gray-50 dark:hover:bg-[#181c27] dark:bg-[#181c27] border-l border-gray-200 dark:border-[#363c4e]-4 border-l border-gray-200 dark:border-[#363c4e]-transparent']">
             <div class="flex items-center space-x-3 w-[45%]">
               <img v-if="symbol.iconUrl" :src="getImageUrl(symbol.iconUrl)" class="w-8 h-8 rounded-full object-contain shrink-0" />
-              <div class="w-8 h-8 rounded-full bg-gray-100 dark:bg-[#2b3139] flex items-center justify-center text-sm text-gray-500 dark:text-gray-400 dark:text-gray-500 font-bold border border-gray-200 dark:border-[#2b3139] shadow-inner shrink-0" v-else>{{ symbol.symbol.substring(0,1) }}</div>
-              <span class="font-bold text-gray-700 dark:text-gray-200 truncate">{{ symbol.symbol }}</span>
+              <div class="w-8 h-8 rounded-full bg-gray-100 dark:bg-[#2b3139] flex items-center justify-center text-sm text-gray-500 dark:text-gray-400 dark:text-gray-500 font-bold border border-gray-200 dark:border-[#2b3139] shadow-inner shrink-0" v-else>{{ displaySymbol(symbol).substring(0,1) }}</div>
+              <span class="font-bold text-gray-700 dark:text-gray-200 truncate">{{ displaySymbol(symbol) }}</span>
             </div>
             <div class="flex-1 text-center">
               <span :class="['font-bold font-mono', parseFloat(getSymbolChange(symbol.symbol)) >= 0 ? 'text-[#8cc63f]' : 'text-[#ff4d4f]']">{{ getSymbolPrice(symbol.symbol) }}</span>
@@ -93,7 +93,7 @@
       <div class="trade-chart-panel flex-1 flex flex-col min-w-0 bg-white dark:bg-[#131722]">
         <div class="px-6 py-2 border-b border-gray-200 dark:border-[#2b3139] shrink-0 flex justify-between items-center">
            <div>
-             <div class="text-xl font-bold text-gray-800 dark:text-gray-100 tracking-tight">{{ currentSymbol }}</div>
+             <div class="text-xl font-bold text-gray-800 dark:text-gray-100 tracking-tight">{{ currentDisplaySymbol }}</div>
              <div class="text-gray-400 dark:text-gray-500 text-xs flex space-x-4 mt-0.5 font-mono">
                <span>time {{ currentTime }}</span>
                <span>open <span class="text-gray-600 dark:text-gray-300">{{ currentKline.open }}</span></span>
@@ -148,7 +148,7 @@
                    <td colspan="13" class="text-center py-8 text-gray-400 dark:text-gray-500">{{ localeStore.t('noData') }}</td>
                  </tr>
                  <tr v-for="order in currentOrderList" :key="order.id" class="border-b border-gray-200 dark:border-[#2b3139] hover:bg-gray-50 dark:hover:bg-[#181c27] dark:bg-[#181c27] transition-colors group">
-                    <td class="py-3 px-4 font-bold text-gray-700 dark:text-gray-200">{{ order.symbol }}</td>
+                    <td class="py-3 px-4 font-bold text-gray-700 dark:text-gray-200">{{ displaySymbol(order) }}</td>
                     <td class="py-3 px-2 text-gray-500 dark:text-gray-400 dark:text-gray-500">#{{ order.id }}</td>
                     <td class="py-3 px-2"><span :class="['text-white px-2 py-0.5 rounded text-[11px] font-bold', order.type === 'buy' ? 'bg-[#8cc63f]' : 'bg-[#ff4d4f]']">{{ order.type === 'buy' ? localeStore.t('buy') : localeStore.t('sell') }}</span></td>
                     <td class="py-3 px-2">{{ order.lots }} <span class="text-gray-500 text-xs">{{ order.leverage }}×</span></td>
@@ -192,7 +192,7 @@
                    <td colspan="11" class="text-center py-8 text-gray-400 dark:text-gray-500">{{ localeStore.t('noneText') }}{{ localeStore.t('recordText') }}</td>
                  </tr>
                  <tr v-for="order in currentOrderList" :key="order.id" class="border-b border-gray-200 dark:border-[#2b3139] hover:bg-gray-50 dark:hover:bg-[#181c27] dark:bg-[#181c27] transition-colors">
-                    <td class="py-3 px-4 font-bold text-gray-700 dark:text-gray-200">{{ order.symbol }}</td>
+                    <td class="py-3 px-4 font-bold text-gray-700 dark:text-gray-200">{{ displaySymbol(order) }}</td>
                     <td class="py-3 px-2"><span :class="['text-white px-2 py-0.5 rounded text-[11px] font-bold', order.type === 'buy' || order.type === 'up' ? 'bg-[#8cc63f]' : 'bg-[#ff4d4f]']">{{ order.type === 'buy' || order.type === 'up' ? localeStore.t('buyUpText') : localeStore.t('buyDownText') }}</span></td>
                     <td class="py-3 px-2 font-mono">{{ order.amount ? order.amount.toFixed(2) : '0.00' }}</td>
                     <td class="py-3 px-2 font-mono">{{ order.openPrice ? order.openPrice.toFixed(4) : '0.0000' }}</td>
@@ -230,7 +230,7 @@
         <!-- Contract Form -->
         <div v-if="tradeMode === 'contract'" class="p-4 flex-1 overflow-y-auto custom-scrollbar">
            <div class="flex justify-between items-center mb-6 border-b border-gray-200 dark:border-[#2b3139] pb-4">
-             <span class="font-bold text-lg text-gray-800 dark:text-gray-100">{{ currentSymbol }}</span>
+             <span class="font-bold text-lg text-gray-800 dark:text-gray-100">{{ currentDisplaySymbol }}</span>
              <span :class="['text-xl font-bold font-mono tracking-tight', getPriceColor(currentSymbolObj)]">{{ getSymbolPrice(currentSymbol) }}</span>
            </div>
            
@@ -239,7 +239,7 @@
              <el-option :label="localeStore.t('marketPrice')" value="market" />
              <el-option :label="localeStore.t('limitPrice')" value="limit" />
            </el-select>
-           <LeverageControl v-model="selectedLeverage" :max="maxLeverage" :disabled="!currentSymbolInfo" :symbol="currentSymbol" />
+           <LeverageControl v-model="selectedLeverage" :max="maxLeverage" :disabled="!currentSymbolInfo" :symbol="currentDisplaySymbol" />
            </div>
 
            <div v-if="orderType === 'limit'" class="mb-5">
@@ -255,7 +255,7 @@
 
              <PositionSizing :percent="allocationPercent" :disabled="!canAllocate" :buy="liquidation.buy" :sell="liquidation.sell" :precision="currentSymbolInfo?.pricePrecision ?? 2" @change="setAllocation">
              <div class="bg-gray-50 dark:bg-[#181c27] p-4 rounded-lg text-xs text-gray-500 dark:text-gray-400 dark:text-gray-500 space-y-2 mt-4 border border-gray-100 dark:border-[#2b3139]">
-               <div class="flex justify-between items-center"><span class="font-medium text-gray-600 dark:text-gray-300">{{ localeStore.t('perLot') }}</span><span class="font-mono text-gray-800 dark:text-gray-100 font-medium">1 {{ localeStore.t('lot') }} = {{ lotSize }} {{ currentSymbol }}</span></div>
+               <div class="flex justify-between items-center"><span class="font-medium text-gray-600 dark:text-gray-300">{{ localeStore.t('perLot') }}</span><span class="font-mono text-gray-800 dark:text-gray-100 font-medium">1 {{ localeStore.t('lot') }} = {{ lotSize }} {{ currentDisplaySymbol }}</span></div>
                <div class="flex justify-between items-center"><span class="font-medium text-gray-600 dark:text-gray-300">{{ localeStore.t('estFee') }}</span><span class="font-mono text-gray-800 dark:text-gray-100 font-medium">{{ estimatedFee.toFixed(6) }}</span></div>
                <div class="flex justify-between items-center"><span class="font-medium text-gray-600 dark:text-gray-300">{{ localeStore.t('estMargin') }}</span><span class="font-mono text-gray-800 dark:text-gray-100 font-medium">{{ Number.isFinite(estimatedMargin) ? estimatedMargin.toFixed(2) : '--' }}</span></div>
                <div class="flex justify-between items-center"><span class="font-medium text-gray-600 dark:text-gray-300">{{ localeStore.t('balance') }}</span><span class="font-mono text-gray-800 dark:text-gray-100 font-medium">{{ formatMoney(contractBalance) }}</span></div>
@@ -293,7 +293,7 @@
         <!-- Options Form -->
         <div v-else class="p-4 flex-1 overflow-y-auto custom-scrollbar">
            <div class="flex justify-between items-center mb-6 border-b border-gray-200 dark:border-[#2b3139] pb-4">
-             <span class="font-bold text-lg text-gray-800 dark:text-gray-100">{{ currentSymbol }}</span>
+             <span class="font-bold text-lg text-gray-800 dark:text-gray-100">{{ currentDisplaySymbol }}</span>
              <span :class="['text-xl font-bold font-mono tracking-tight', getPriceColor(currentSymbolObj)]">{{ getSymbolPrice(currentSymbol) }}</span>
            </div>
 
@@ -1362,7 +1362,7 @@
     <el-dialog v-model="showTpSlModal" :title="localeStore.t('setTpSl')" width="400px" class="custom-dialog rounded-xl overflow-hidden">
       <div v-if="activeOrder" class="space-y-4 px-2 py-4">
         <div class="flex justify-between items-center mb-2">
-          <span class="text-gray-600 dark:text-gray-300 font-bold">{{ activeOrder.symbol }}</span>
+          <span class="text-gray-600 dark:text-gray-300 font-bold">{{ displaySymbol(activeOrder) }}</span>
           <span :class="activeOrder.type === 'buy' ? 'text-[#8cc63f]' : 'text-[#ff4d4f]'">{{ activeOrder.type === 'buy' ? localeStore.t('buyIn') : localeStore.t('sellText') }} {{ activeOrder.lots }}{{ localeStore.t('lot') }}</span>
         </div>
         
@@ -1701,6 +1701,7 @@
 
 <script setup lang="ts">
 import CurrencyPicker from '@/components/CurrencyPicker.vue'
+import LogoGlint from '@/components/LogoGlint.vue'
 import { useFiatCurrency } from '@/utils/fiatCurrency'
 const { currency: displayCurrency, rate: displayRate, formatAsset } = useFiatCurrency()
 const { currency: depositCurrency, rate: depositRate, usdPreview } = useFiatCurrency()
@@ -1723,6 +1724,7 @@ import { DEFAULT_LEVERAGE, leverageLimit, contractMargin, calculateContractProfi
 import request from '@/utils/request';
 import { formatDateTime } from '@/utils/dateTime';
 import { getImageUrl } from '@/utils/imageUrl';
+import { displaySymbol } from '@/utils/displaySymbol';
 import KlineChart from '@/components/KlineChart.vue';
 import { Money, Coin, ArrowDown, Check, ArrowRight, Search, Box, Plus, Camera, UploadFilled, SuccessFilled, WarningFilled, Promotion, Lock, Service, DocumentCopy, Message, Bell, Edit, Moon, Sunny } from '@element-plus/icons-vue';
 import VueQrcode from '@chenfengyuan/vue-qrcode';
@@ -2068,6 +2070,7 @@ const quantity = ref(0.01);
 const selectedLeverage = ref(DEFAULT_LEVERAGE);
 
 const currentSymbolInfo = ref<any>(null);
+const currentDisplaySymbol = computed(() => displaySymbol(currentSymbolInfo.value?.symbol === currentSymbol.value ? currentSymbolInfo.value : currentSymbol.value));
 
 // 获取每手数量
 const lotSize = computed(() => {
@@ -2802,6 +2805,7 @@ const transformContractOrder = (order: any) => {
   return {
     id: order.id,
     symbol: order.symbol,
+    displayName: order.displayName,
     type: order.side?.toLowerCase() || 'buy',
     lots: Number(order.quantity || 0),
     openPrice: Number(order.openPrice || 0),
@@ -2846,6 +2850,7 @@ const loadOptionOrders = async () => {
       return {
         id: order.id,
         symbol: order.symbol,
+        displayName: order.displayName,
         type: order.side?.toLowerCase() || order.direction?.toLowerCase() || 'buy', // 兼容 optionOrder 的 direction 字段
         amount,
         openPrice: Number(order.openPrice || 0),
@@ -3060,7 +3065,7 @@ const submitTpSl = async () => {
 
 const closePosition = async (order: any) => {
   try {
-    await ElMessageBox.confirm(`${localeStore.t('confirmCloseOrder')} ${order.symbol} ${localeStore.t('orderQuestion')}`, localeStore.t('closeConfirm'), {
+    await ElMessageBox.confirm(`${localeStore.t('confirmCloseOrder')} ${displaySymbol(order)} ${localeStore.t('orderQuestion')}`, localeStore.t('closeConfirm'), {
       confirmButtonText: localeStore.t('confirmBtnText'),
       cancelButtonText: localeStore.t('cancelText'),
       type: 'warning',
@@ -3090,7 +3095,7 @@ const closePosition = async (order: any) => {
 
 const cancelOrder = async (order: any) => {
   try {
-    await ElMessageBox.confirm(`${localeStore.t('confirmCancelOrder')} ${order.symbol} ${localeStore.t('pendingOrderQuestion')}`, localeStore.t('cancelOrderConfirm'), {
+    await ElMessageBox.confirm(`${localeStore.t('confirmCancelOrder')} ${displaySymbol(order)} ${localeStore.t('pendingOrderQuestion')}`, localeStore.t('cancelOrderConfirm'), {
       confirmButtonText: localeStore.t('confirmBtnText'),
       cancelButtonText: localeStore.t('cancelText'),
       type: 'warning',
@@ -3210,7 +3215,7 @@ const filteredSymbols = computed(() => {
   }
   if (searchQuery.value) {
     const q = searchQuery.value.toLowerCase();
-    result = result.filter((s: any) => s.symbol.toLowerCase().includes(q));
+    result = result.filter((s: any) => s.symbol.toLowerCase().includes(q) || displaySymbol(s).toLowerCase().includes(q));
   }
   return result;
 });
@@ -3749,7 +3754,7 @@ const loadAnnouncements = async () => {
 const inviteLink = computed(() => {
   const origin = window.location.origin;
   const uid = auth.user?.id || '8959285729';
-  return `${origin}/#/register?inviteCode=${uid}`;
+  return `${origin}/?register=1&invite=${encodeURIComponent(uid)}`;
 });
 
 const copyToClipboard = async (text: string) => {
@@ -3818,9 +3823,19 @@ watch(activeUserMenu, (val) => {
     loadCustomerServiceLink();
   }
 });
+const logoUrl = `${import.meta.env.BASE_URL}img/logo.svg`
+const darkLogoUrl = `${import.meta.env.BASE_URL}img/logo-dark.svg`
 </script>
 
 <style>
+.brand-logo {
+  display: block;
+  width: 140px;
+  height: auto;
+  padding: 0;
+  background: transparent;
+}
+
 .language-flag {
   width: 24px;
   height: 18px;

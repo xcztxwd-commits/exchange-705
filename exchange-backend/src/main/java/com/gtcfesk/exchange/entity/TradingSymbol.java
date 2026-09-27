@@ -3,6 +3,8 @@ package com.gtcfesk.exchange.entity;
 import lombok.Getter;
 import lombok.Setter;
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.gtcfesk.exchange.common.ForexDisplayName;
 
 import javax.persistence.*;
 import java.math.BigDecimal;
@@ -173,6 +175,13 @@ public class TradingSymbol {
 
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
+
+    @Transient
+    @JsonProperty(access = JsonProperty.Access.READ_ONLY)
+    public String getDisplayName() {
+        String kind = "Forex".equalsIgnoreCase(sourceCategory) ? sourceCategory : category;
+        return ForexDisplayName.of(symbol, kind, baseCurrency, quoteCurrency, name);
+    }
 
     @PrePersist
     public void prePersist() {

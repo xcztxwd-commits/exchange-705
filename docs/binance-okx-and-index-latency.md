@@ -56,7 +56,9 @@ node docker/market-index-audit.cjs 900
 
 ## 真实网络限制
 
-当前网络将 `fapi.binance.com`、`fstream.binance.com` 解析到运营商 `mcmc-redirect.maxis.com.my` / `rpz.blacklist.maxis.com.my`，地址为 `175.139.142.25`。主机与 Docker 的 Binance 合约 HTTP 请求超时，合约 WS 无法连接；未更改 DNS、代理或绕过该限制。
+首次验收时，默认 DNS 将 `fapi.binance.com`、`fstream.binance.com` 解析到运营商 `mcmc-redirect.maxis.com.my` / `rpz.blacklist.maxis.com.my`，地址为 `175.139.142.25`。当时主机与 Docker 的 Binance 合约 HTTP 请求超时，合约 WS 无法连接。
+
+2026-09-22 目录故障修复：复测默认解析的合约目录请求 25 秒连接超时；公共 DNS 返回 CloudFront 地址，同一 HTTPS 接口成功。`compose.yaml` 仅为 backend 配置 `1.1.1.1`、`8.8.8.8`，重建后端容器后，直接请求目录 HTTP 200（1,124,272 字节，1.81 秒）。通过运行中的管理 API 验证：CryptoPerpetual 共 569 个，首页 50 个，868 ms；Crypto 共 1,370 个，首页 50 个，1,524 ms。Metal 查询成功但当前筛选结果为 0；本次目录修复不代表贵金属报价验收通过。未修改系统 DNS、固定上游 IP 或更换行情供应商。
 
 因此 Binance 贵金属线上可用性尚未通过，不能宣称黄金、白银已恢复实时行情。OKX 两个贵金属的公共 HTTP 和 WS 在隔离实测中均可用，但按要求仍不在运行服务中启用。后续需要在合规可达的部署网络重测 Binance 合约；或另行明确启用 OKX。禁用次源意味着主源不可达时仍返回不可用，这是当前预期行为。
 

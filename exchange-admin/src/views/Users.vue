@@ -5,6 +5,7 @@ import { Search, Refresh, Lock, Edit, Wallet, User, Delete, Document, ArrowDown 
 import request from '@/utils/request'
 import CurrencyPicker from '@/components/CurrencyPicker.vue'
 import { useFiatCurrency } from '@/utils/fiatCurrency'
+import { displaySymbol } from '@/utils/displaySymbol'
 const { currency: balanceCurrency, rate: balanceRate, usdPreview, refreshRates } = useFiatCurrency()
 const balanceMode = ref('deposit')
 const rechargeAccount = ref('FUND')
@@ -1573,10 +1574,10 @@ onMounted(() => {
               <el-table-column label="详情" min-width="200">
                 <template #default="{ row }">
                   <div v-if="row.type === 'contract'">
-                    交易对: {{ row.symbol }} | 方向: {{ row.side === 'BUY' ? '买入' : '卖出' }} | 数量: {{ row.quantity }}
+                    交易对: {{ displaySymbol(row) }} | 方向: {{ row.side === 'BUY' ? '买入' : '卖出' }} | 数量: {{ row.quantity }}
                   </div>
                   <div v-else-if="row.type === 'option'">
-                    交易对: {{ row.symbol }} | 方向: {{ row.direction === 'UP' ? '買漲' : '買跌' }} | 时长: {{ row.duration }}s
+                    交易对: {{ displaySymbol(row) }} | 方向: {{ row.direction === 'UP' ? '買漲' : '買跌' }} | 时长: {{ row.duration }}s
                   </div>
                   <div v-else-if="row.type === 'deposit' || row.type === 'withdraw'">
                     {{ row.typeDetail === 'digital' ? '数字货币' : '银行卡' }} | {{ row.network }}
@@ -1607,7 +1608,7 @@ onMounted(() => {
               <el-tab-pane label="合约订单">
                 <el-table :data="fundDetailsData?.contractOrders || []" border stripe max-height="500">
                   <el-table-column prop="id" label="订单ID" width="100" />
-                  <el-table-column prop="symbol" label="交易对" width="120" />
+                  <el-table-column prop="symbol" label="交易对" width="120"><template #default="{ row }">{{ displaySymbol(row) }}</template></el-table-column>
                   <el-table-column prop="side" label="方向" width="80">
                     <template #default="{ row }">
                       {{ row.side === 'BUY' ? '买入' : '卖出' }}
@@ -1645,7 +1646,7 @@ onMounted(() => {
               <el-tab-pane label="期权订单">
                 <el-table :data="fundDetailsData?.optionOrders || []" border stripe max-height="500">
                   <el-table-column prop="id" label="订单ID" width="100" />
-                  <el-table-column prop="symbol" label="交易对" width="120" />
+                  <el-table-column prop="symbol" label="交易对" width="120"><template #default="{ row }">{{ displaySymbol(row) }}</template></el-table-column>
                   <el-table-column prop="direction" label="方向" width="80">
                     <template #default="{ row }">
                       {{ row.direction === 'UP' ? '買漲' : '買跌' }}

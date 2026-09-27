@@ -2,6 +2,7 @@ package com.gtcfesk.exchange.entity;
 
 import lombok.Getter;
 import lombok.Setter;
+import com.gtcfesk.exchange.common.ForexDisplayName;
 
 import javax.persistence.*;
 import java.math.BigDecimal;
@@ -102,6 +103,11 @@ public class ContractOrder {
     // ==== 仅用于接口展示的临时字段（不入库） ====
     @Transient
     private String agentInfo; // 代理信息，格式：所属代理:用户名
+
+    @Transient
+    public String getDisplayName() {
+        return ForexDisplayName.of(symbol);
+    }
 
     @PrePersist
     public void prePersist() {

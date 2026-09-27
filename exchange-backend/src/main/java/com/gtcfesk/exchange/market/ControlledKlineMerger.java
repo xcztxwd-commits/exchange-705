@@ -18,12 +18,18 @@ public class ControlledKlineMerger {
     @SuppressWarnings("unchecked")
     public Map<String, Object> merge(long symbol, String interval, int limit, Long cursor,
             Map<String, Object> external, LongConsumer requestMinutes, boolean utcAnchors) {
+        return merge(symbol, interval, limit, cursor, external, requestMinutes, utcAnchors, null);
+    }
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> merge(long symbol, String interval, int limit, Long cursor,
+            Map<String, Object> external, LongConsumer requestMinutes, boolean utcAnchors,
+            java.util.function.BiFunction<Long,Long,List<Map<String,Object>>> baseMinutes) {
         long width = RandomMarketPath.duration(interval);
         long end = cursor == null ? System.currentTimeMillis() : cursor;
         TreeMap<Long, Map<String, Object>> bars = new TreeMap<>();
         List<Map<String, Object>> source = store.db.query("SELECT body FROM market_source_candle WHERE symbol_id=? AND period=? AND candle_at<=? ORDER BY candle_at DESC LIMIT ?",
             (rs, n) -> store.decode(rs.getString(1)), symbol, interval, end, limit);
-        for (Map<String, Object> row : source)
+        for (Map<String, Object> row : baseMinutes == null ? source : Collections.<Map<String,Object>>emptyList())
             if (ControlHistoryStore.periodCandle(row, interval)) bars.put(ControlHistoryStore.time(row), row);
         for (Map<String, Object> row : ControlHistoryStore.rows(external))
             if (ControlHistoryStore.time(row) <= end && ControlHistoryStore.periodCandle(row, interval))
@@ -38,7 +44,7 @@ public class ControlledKlineMerger {
         // A short provider page must not hide older controls that still fit in the requested page.
         long from = recentBuckets.isEmpty() ? 0
             : Math.floorDiv(recentBuckets.get(recentBuckets.size() - 1), width) * width - width;
-        List<Map<String, Object>> mixed = store.mixed(symbol, from, end + width - 1);
+        List<Map<String, Object>> mixed = store.visibleMixed(symbol, from, end + width - 1);
         boolean noAnchors = width >= 3600000 && !utcAnchors && anchors.isEmpty();
         boolean missingAnchor = noAnchors && !mixed.isEmpty();
         TreeMap<Long, List<Map<String, Object>>> affected = new TreeMap<>();
@@ -63,7 +69,7 @@ public class ControlledKlineMerger {
             if (width >= 86400000 && next != null && Math.abs(next - bucketEnd) <= 3600000) bucketEnd = next;
             long stop = Math.min(bucketEnd - 1, System.currentTimeMillis());
             TreeMap<Long, Map<String, Object>> minutes = new TreeMap<>();
-            for (Map<String, Object> row : store.candles(symbol, "1m", start, stop)) minutes.put(ControlHistoryStore.time(row), row);
+            for (Map<String, Object> row : baseMinutes == null ? store.candles(symbol, "1m", start, stop) : baseMinutes.apply(start, stop)) minutes.put(ControlHistoryStore.time(row), row);
             for (Map<String, Object> row : entry.getValue()) minutes.put(ControlHistoryStore.time(row), row);
             if (width > 60000 && requestMinutes != null) {
                 // Provider page size is bounded. Each page uses a stable cursor and the existing source queue.
@@ -82,6 +88,8 @@ public class ControlledKlineMerger {
         Map<String, Object> data = new HashMap<>((Map<String, Object>) external.get("data"));
         data.put("kline_list", new ArrayList<>(bars.values())); data.put("merged", true);
         if (missingAnchor) data.put("missingData", "source_period_anchor");
+        Integer missingSource = store.db.queryForObject("SELECT COUNT(*) FROM market_control_sample s JOIN market_control_task t ON t.id=s.task_id JOIN market_control_flow f ON f.task_id=t.id LEFT JOIN market_control_publication p ON p.task_id=t.id WHERE t.symbol_id=? AND f.state='SOURCE' AND s.generated_at>=? AND s.generated_at<=? AND (p.task_id IS NULL OR s.generated_at>p.to_at) AND NOT EXISTS (SELECT 1 FROM market_source_candle c WHERE c.symbol_id=t.symbol_id AND c.period='1m' AND c.candle_at=FLOOR(s.generated_at/60000)*60000)", Integer.class, symbol, from, end + width - 1);
+        if (missingSource > 0 && baseMinutes == null) data.put("missingData", "original_source_candles");
         if (!bars.isEmpty()) { result.put("ret", 200); data.put("status", "available"); }
         result.put("data", data); return result;
     }

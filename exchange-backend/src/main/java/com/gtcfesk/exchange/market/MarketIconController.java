@@ -21,7 +21,8 @@ public class MarketIconController {
     }
     private static Map<String,byte[]> load() {
         Map<String,byte[]> result=new HashMap<>();
-        try(ZipInputStream zip=new ZipInputStream(MarketIconController.class.getResourceAsStream("/market-icons.zip"))) {
+        for(String archive:Arrays.asList("/market-icons.zip","/binance-market-icons.zip"))
+        try(ZipInputStream zip=new ZipInputStream(MarketIconController.class.getResourceAsStream(archive))) {
             ZipEntry entry;byte[] buffer=new byte[8192];
             while((entry=zip.getNextEntry())!=null) {
                 ByteArrayOutputStream data=new ByteArrayOutputStream();int size;
@@ -41,7 +42,7 @@ public class MarketIconController {
         else if("CFD".equals(category))kind="index";
         code=Objects.toString(code,"?").toUpperCase(Locale.ROOT).replaceAll("[^A-Z0-9._-]","");
         if(code.isEmpty())code="UNKNOWN";
-        return "/market/icons/"+kind+"/"+code+".svg?v=1";
+        return "/market/icons/"+kind+"/"+code+".svg?v="+("crypto".equals(kind)?"2":"1");
     }
     @GetMapping(value="/api/market/icons/{kind}/{code}.svg",produces="image/svg+xml")
     public ResponseEntity<byte[]> icon(@PathVariable String kind,@PathVariable String code) {
@@ -58,7 +59,7 @@ public class MarketIconController {
         }
         byte[] body=("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><title>"+code+"</title>"+content+"</svg>").getBytes(StandardCharsets.UTF_8);
         return ResponseEntity.ok().contentType(MediaType.valueOf("image/svg+xml")).cacheControl(CacheControl.maxAge(7,TimeUnit.DAYS).cachePublic())
-            .header("X-Content-Type-Options","nosniff").header("Content-Security-Policy","default-src 'none'; style-src 'unsafe-inline'").body(body);
+            .header("X-Content-Type-Options","nosniff").header("Content-Security-Policy","default-src 'none'; img-src data:; style-src 'unsafe-inline'").body(body);
     }
     private static String flag(String currency,int x,int y,int size) {
         byte[] bytes=ICONS.get("flags/"+FLAGS.get(currency)+".svg");
