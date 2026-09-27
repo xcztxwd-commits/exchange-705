@@ -170,6 +170,12 @@ class MarketIsolationTest {
             assertEquals("unavailable", quotes.internalPrice("MISSINGFX").get("status"));
             assertTrue(metalCalls.get() - initialCalls <= 7, "backoff bounds request count");
             System.out.println("PASS blocked source 60s: healthy updates=" + updates + ", max new push gap=" + maxGap + "ms; threads/queues bounded");
+            // A configured control has an execution lease during outages. Test raw-source
+            // fail-closed settlement separately, without changing that production contract.
+            assertFalse(Boolean.TRUE.equals(quotes.getPrice("XAUUSD", "Metal").get("available")));
+            assertNotNull(quotes.freshPrice("XAUUSD"), "active control retains its execution lease");
+            TradingSymbol metal = symbols.findBySymbol("XAUUSD").get();
+            metal.setControlEnabled(false); symbols.save(metal); quotes.refreshSymbols();
             recovery();
             for (String mode : Arrays.asList("500", "invalid", "429")) {
                 int previous = metalCalls.get(); metalMode = mode;
@@ -215,11 +221,15 @@ class MarketIsolationTest {
             System.out.println("PASS incomplete account skipped despite stored currentPrice and losing healthy position");
             // Remove only synthetic fixtures before normal recovery resumes automatic settlement.
             contracts.deleteAll(); options.deleteAll(); recovery();
+            metal = symbols.findBySymbol("XAUUSD").get();
+            metal.setControlEnabled(true); symbols.save(metal); quotes.refreshSymbols();
             until(() -> "available".equals(quotes.getKline("XAUUSD", "1m", 1, "Metal").get("status")), 15000);
             Map<String, Object> kline = quotes.internalKline("XAUUSD", "1m", 1);
             ((Map<String, Object>) ((List<?>) ((Map<?, ?>) kline.get("data")).get("kline_list")).get(0)).put("close_price", 999d);
             Map<?, ?> next = quotes.internalKline("XAUUSD", "1m", 1);
-            assertEquals(110d, ((Number) ((Map<?, ?>) ((List<?>) ((Map<?, ?>) next.get("data")).get("kline_list")).get(0)).get("close_price")).doubleValue());
+            assertEquals(100d, ((Number) ((Map<?, ?>) ((List<?>) ((Map<?, ?>) next.get("data")).get("kline_list")).get(0)).get("close_price")).doubleValue(),
+                    "today's offset must not rewrite source history without recorded control points");
+            assertEquals(110d, quotes.freshPrice("XAUUSD").doubleValue(), "current controlled execution price is independent of source history");
             bounded(); System.out.println("PASS recovery and independent K-line copies");
         } finally { one.close(); two.close(); }
     }
