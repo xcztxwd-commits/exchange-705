@@ -1,0 +1,6 @@
+# Explicit local-only activation. Use together with the existing compose.yaml after migration and all gates.
+services:
+  backend:
+    environment:
+      ASSET_HISTORY_EQUITY_READ_ENABLED: "true"
+      ASSET_HISTORY_EQUITY_COLLECT_ENABLED: "true"

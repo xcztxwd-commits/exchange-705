@@ -1,0 +1,632 @@
+[
+  {
+    "app": "pc",
+    "pages": [
+      {
+        "name": "chart-indicators",
+        "url": "http://127.0.0.1:5217/",
+        "characters": 1400,
+        "leaks": [],
+        "horizontalOverflow": false
+      },
+      {
+        "name": "chart-settings",
+        "url": "http://127.0.0.1:5217/",
+        "characters": 955,
+        "leaks": [],
+        "horizontalOverflow": false
+      },
+      {
+        "name": "chart-timezone",
+        "url": "http://127.0.0.1:5217/",
+        "characters": 7776,
+        "leaks": [],
+        "horizontalOverflow": false
+      },
+      {
+        "name": "trade",
+        "url": "http://127.0.0.1:5217/",
+        "characters": 846,
+        "leaks": [],
+        "horizontalOverflow": false
+      },
+      {
+        "name": "showFinancialPurchase",
+        "url": "http://127.0.0.1:5217/",
+        "characters": 939,
+        "leaks": [],
+        "horizontalOverflow": false
+      },
+      {
+        "name": "showLoanContract",
+        "url": "http://127.0.0.1:5217/",
+        "characters": 1155,
+        "leaks": [],
+        "horizontalOverflow": false
+      },
+      {
+        "name": "showLoanSign",
+        "url": "http://127.0.0.1:5217/",
+        "characters": 869,
+        "leaks": [],
+        "horizontalOverflow": false
+      },
+      {
+        "name": "showCreditLoan",
+        "url": "http://127.0.0.1:5217/",
+        "characters": 949,
+        "leaks": [],
+        "horizontalOverflow": false
+      },
+      {
+        "name": "showLoanRecordsModal",
+        "url": "http://127.0.0.1:5217/",
+        "characters": 951,
+        "leaks": [],
+        "horizontalOverflow": false
+      },
+      {
+        "name": "showWealth",
+        "url": "http://127.0.0.1:5217/",
+        "characters": 905,
+        "leaks": [],
+        "horizontalOverflow": false
+      },
+      {
+        "name": "wealth-purchased",
+        "url": "http://127.0.0.1:5217/",
+        "characters": 968,
+        "leaks": [],
+        "horizontalOverflow": false
+      },
+      {
+        "name": "showYieldList",
+        "url": "http://127.0.0.1:5217/",
+        "characters": 863,
+        "leaks": [],
+        "horizontalOverflow": false
+      },
+      {
+        "name": "showUserCenter",
+        "url": "http://127.0.0.1:5217/",
+        "characters": 1075,
+        "leaks": [],
+        "horizontalOverflow": false
+      },
+      {
+        "name": "user-assets",
+        "url": "http://127.0.0.1:5217/",
+        "characters": 1075,
+        "leaks": [],
+        "horizontalOverflow": false
+      },
+      {
+        "name": "user-deposit",
+        "url": "http://127.0.0.1:5217/",
+        "characters": 1163,
+        "leaks": [],
+        "horizontalOverflow": false
+      },
+      {
+        "name": "user-deposit-bank",
+        "url": "http://127.0.0.1:5217/",
+        "characters": 1007,
+        "leaks": [],
+        "horizontalOverflow": false
+      },
+      {
+        "name": "user-withdraw",
+        "url": "http://127.0.0.1:5217/",
+        "characters": 1078,
+        "leaks": [],
+        "horizontalOverflow": false
+      },
+      {
+        "name": "user-withdraw-bank",
+        "url": "http://127.0.0.1:5217/",
+        "characters": 1105,
+        "leaks": [],
+        "horizontalOverflow": false
+      },
+      {
+        "name": "user-transfer",
+        "url": "http://127.0.0.1:5217/",
+        "characters": 1007,
+        "leaks": [],
+        "horizontalOverflow": false
+      },
+      {
+        "name": "user-wallet",
+        "url": "http://127.0.0.1:5217/",
+        "characters": 999,
+        "leaks": [],
+        "horizontalOverflow": false
+      },
+      {
+        "name": "user-kyc",
+        "url": "http://127.0.0.1:5217/",
+        "characters": 1124,
+        "leaks": [],
+        "horizontalOverflow": false
+      },
+      {
+        "name": "user-kyc-PENDING",
+        "url": "http://127.0.0.1:5217/",
+        "characters": 988,
+        "leaks": [],
+        "horizontalOverflow": false
+      },
+      {
+        "name": "user-kyc-VERIFIED",
+        "url": "http://127.0.0.1:5217/",
+        "characters": 1124,
+        "leaks": [],
+        "horizontalOverflow": false
+      },
+      {
+        "name": "user-announcement",
+        "url": "http://127.0.0.1:5217/",
+        "characters": 944,
+        "leaks": [],
+        "horizontalOverflow": false
+      },
+      {
+        "name": "user-invite",
+        "url": "http://127.0.0.1:5217/",
+        "characters": 1042,
+        "leaks": [],
+        "horizontalOverflow": false
+      },
+      {
+        "name": "user-password",
+        "url": "http://127.0.0.1:5217/",
+        "characters": 973,
+        "leaks": [],
+        "horizontalOverflow": false
+      },
+      {
+        "name": "user-support",
+        "url": "http://127.0.0.1:5217/",
+        "characters": 965,
+        "leaks": [],
+        "horizontalOverflow": false
+      },
+      {
+        "name": "showTpSlModal",
+        "url": "http://127.0.0.1:5217/",
+        "characters": 891,
+        "leaks": [],
+        "horizontalOverflow": false
+      },
+      {
+        "name": "showPersonalInfoModal",
+        "url": "http://127.0.0.1:5217/",
+        "characters": 970,
+        "leaks": [],
+        "horizontalOverflow": false
+      },
+      {
+        "name": "showBindBankModal",
+        "url": "http://127.0.0.1:5217/",
+        "characters": 913,
+        "leaks": [],
+        "horizontalOverflow": false
+      },
+      {
+        "name": "showBindDigitalModal",
+        "url": "http://127.0.0.1:5217/",
+        "characters": 916,
+        "leaks": [],
+        "horizontalOverflow": false
+      },
+      {
+        "name": "showLoginModal",
+        "url": "http://127.0.0.1:5217/",
+        "characters": 915,
+        "leaks": [],
+        "horizontalOverflow": false
+      },
+      {
+        "name": "showRegisterModal",
+        "url": "http://127.0.0.1:5217/",
+        "characters": 919,
+        "leaks": [],
+        "horizontalOverflow": false
+      },
+      {
+        "name": "showForgotModal",
+        "url": "http://127.0.0.1:5217/",
+        "characters": 918,
+        "leaks": [],
+        "horizontalOverflow": false
+      },
+      {
+        "name": "term-trade",
+        "url": "http://127.0.0.1:5217/",
+        "characters": 517,
+        "leaks": [],
+        "horizontalOverflow": false
+      },
+      {
+        "name": "share-poster",
+        "url": "http://127.0.0.1:5217/",
+        "characters": 579,
+        "leaks": [],
+        "horizontalOverflow": false
+      },
+      {
+        "name": "language",
+        "url": "http://127.0.0.1:5217/language",
+        "characters": 157,
+        "leaks": [],
+        "horizontalOverflow": false
+      }
+    ],
+    "runtimeErrors": [],
+    "businessWrites": []
+  },
+  {
+    "app": "mobile",
+    "pages": [
+      {
+        "name": "chart-indicators",
+        "url": "http://127.0.0.1:5218/trade?symbol=XAUUSD&category=Metal&tab=contract",
+        "characters": 986,
+        "leaks": [],
+        "horizontalOverflow": false
+      },
+      {
+        "name": "chart-settings",
+        "url": "http://127.0.0.1:5218/trade?symbol=XAUUSD&category=Metal&tab=contract",
+        "characters": 541,
+        "leaks": [],
+        "horizontalOverflow": false
+      },
+      {
+        "name": "chart-timezone",
+        "url": "http://127.0.0.1:5218/trade?symbol=XAUUSD&category=Metal&tab=contract",
+        "characters": 7362,
+        "leaks": [],
+        "horizontalOverflow": false
+      },
+      {
+        "name": "/home",
+        "url": "http://127.0.0.1:5218/home",
+        "characters": 117,
+        "leaks": [],
+        "horizontalOverflow": false
+      },
+      {
+        "name": "/trade",
+        "url": "http://127.0.0.1:5218/trade",
+        "characters": 229,
+        "leaks": [],
+        "horizontalOverflow": false
+      },
+      {
+        "name": "term-confirm",
+        "url": "http://127.0.0.1:5218/trade",
+        "characters": 566,
+        "leaks": [],
+        "horizontalOverflow": false
+      },
+      {
+        "name": "contract-trade",
+        "url": "http://127.0.0.1:5218/trade",
+        "characters": 371,
+        "leaks": [],
+        "horizontalOverflow": false
+      },
+      {
+        "name": "contract-confirm",
+        "url": "http://127.0.0.1:5218/trade",
+        "characters": 672,
+        "leaks": [],
+        "horizontalOverflow": false
+      },
+      {
+        "name": "trade-showSymbols",
+        "url": "http://127.0.0.1:5218/trade",
+        "characters": 400,
+        "leaks": [],
+        "horizontalOverflow": false
+      },
+      {
+        "name": "trade-showRules",
+        "url": "http://127.0.0.1:5218/trade",
+        "characters": 504,
+        "leaks": [],
+        "horizontalOverflow": false
+      },
+      {
+        "name": "trade-showRisk",
+        "url": "http://127.0.0.1:5218/trade",
+        "characters": 477,
+        "leaks": [],
+        "horizontalOverflow": false
+      },
+      {
+        "name": "trade-showEstimates",
+        "url": "http://127.0.0.1:5218/trade",
+        "characters": 510,
+        "leaks": [],
+        "horizontalOverflow": false
+      },
+      {
+        "name": "/orders",
+        "url": "http://127.0.0.1:5218/orders",
+        "characters": 179,
+        "leaks": [],
+        "horizontalOverflow": false
+      },
+      {
+        "name": "orders-pending",
+        "url": "http://127.0.0.1:5218/orders",
+        "characters": 169,
+        "leaks": [],
+        "horizontalOverflow": false
+      },
+      {
+        "name": "orders-history",
+        "url": "http://127.0.0.1:5218/orders",
+        "characters": 152,
+        "leaks": [],
+        "horizontalOverflow": false
+      },
+      {
+        "name": "orders-term",
+        "url": "http://127.0.0.1:5218/orders",
+        "characters": 126,
+        "leaks": [],
+        "horizontalOverflow": false
+      },
+      {
+        "name": "/profile",
+        "url": "http://127.0.0.1:5218/profile",
+        "characters": 275,
+        "leaks": [],
+        "horizontalOverflow": false
+      },
+      {
+        "name": "/assets",
+        "url": "http://127.0.0.1:5218/assets",
+        "characters": 174,
+        "leaks": [],
+        "horizontalOverflow": false
+      },
+      {
+        "name": "/deposit",
+        "url": "http://127.0.0.1:5218/deposit",
+        "characters": 154,
+        "leaks": [],
+        "horizontalOverflow": false
+      },
+      {
+        "name": "/deposit/records",
+        "url": "http://127.0.0.1:5218/deposit/records",
+        "characters": 31,
+        "leaks": [],
+        "horizontalOverflow": false
+      },
+      {
+        "name": "/wallet",
+        "url": "http://127.0.0.1:5218/wallet",
+        "characters": 75,
+        "leaks": [],
+        "horizontalOverflow": false
+      },
+      {
+        "name": "/wallet/bind-bank-card",
+        "url": "http://127.0.0.1:5218/wallet/bind-bank-card",
+        "characters": 50,
+        "leaks": [],
+        "horizontalOverflow": false
+      },
+      {
+        "name": "/wallet/bind-digital-currency",
+        "url": "http://127.0.0.1:5218/wallet/bind-digital-currency",
+        "characters": 58,
+        "leaks": [],
+        "horizontalOverflow": false
+      },
+      {
+        "name": "/verification",
+        "url": "http://127.0.0.1:5218/verification",
+        "characters": 117,
+        "leaks": [],
+        "horizontalOverflow": false
+      },
+      {
+        "name": "verification-PENDING",
+        "url": "http://127.0.0.1:5218/verification",
+        "characters": 144,
+        "leaks": [],
+        "horizontalOverflow": false
+      },
+      {
+        "name": "verification-REJECTED",
+        "url": "http://127.0.0.1:5218/verification",
+        "characters": 156,
+        "leaks": [],
+        "horizontalOverflow": false
+      },
+      {
+        "name": "verification-VERIFIED",
+        "url": "http://127.0.0.1:5218/verification",
+        "characters": 63,
+        "leaks": [],
+        "horizontalOverflow": false
+      },
+      {
+        "name": "/transfer",
+        "url": "http://127.0.0.1:5218/transfer",
+        "characters": 92,
+        "leaks": [],
+        "horizontalOverflow": false
+      },
+      {
+        "name": "/change-password",
+        "url": "http://127.0.0.1:5218/change-password",
+        "characters": 54,
+        "leaks": [],
+        "horizontalOverflow": false
+      },
+      {
+        "name": "/customer-service",
+        "url": "http://127.0.0.1:5218/customer-service",
+        "characters": 82,
+        "leaks": [],
+        "horizontalOverflow": false
+      },
+      {
+        "name": "/complaint",
+        "url": "http://127.0.0.1:5218/complaint",
+        "characters": 85,
+        "leaks": [],
+        "horizontalOverflow": false
+      },
+      {
+        "name": "/announcements",
+        "url": "http://127.0.0.1:5218/announcements",
+        "characters": 46,
+        "leaks": [],
+        "horizontalOverflow": false
+      },
+      {
+        "name": "/withdraw",
+        "url": "http://127.0.0.1:5218/withdraw",
+        "characters": 127,
+        "leaks": [],
+        "horizontalOverflow": false
+      },
+      {
+        "name": "/credit-loan",
+        "url": "http://127.0.0.1:5218/credit-loan",
+        "characters": 126,
+        "leaks": [],
+        "horizontalOverflow": false
+      },
+      {
+        "name": "/loan/personal-info",
+        "url": "http://127.0.0.1:5218/loan/personal-info",
+        "characters": 194,
+        "leaks": [],
+        "horizontalOverflow": false
+      },
+      {
+        "name": "/loan/apply-info",
+        "url": "http://127.0.0.1:5218/loan/apply-info",
+        "characters": 39,
+        "leaks": [],
+        "horizontalOverflow": false
+      },
+      {
+        "name": "/loan/contract",
+        "url": "http://127.0.0.1:5218/loan/contract?id=1",
+        "characters": 978,
+        "leaks": [],
+        "horizontalOverflow": false
+      },
+      {
+        "name": "/loan/sign",
+        "url": "http://127.0.0.1:5218/loan/sign?id=1",
+        "characters": 23,
+        "leaks": [],
+        "horizontalOverflow": false
+      },
+      {
+        "name": "/loan/records",
+        "url": "http://127.0.0.1:5218/loan/records",
+        "characters": 135,
+        "leaks": [],
+        "horizontalOverflow": false
+      },
+      {
+        "name": "/financial-management",
+        "url": "http://127.0.0.1:5218/financial-management",
+        "characters": 68,
+        "leaks": [],
+        "horizontalOverflow": false
+      },
+      {
+        "name": "/financial/purchase",
+        "url": "http://127.0.0.1:5218/financial/purchase?id=1",
+        "characters": 110,
+        "leaks": [],
+        "horizontalOverflow": false
+      },
+      {
+        "name": "financial-confirm",
+        "url": "http://127.0.0.1:5218/financial/purchase?id=1",
+        "characters": 186,
+        "leaks": [],
+        "horizontalOverflow": false
+      },
+      {
+        "name": "/financial/orders",
+        "url": "http://127.0.0.1:5218/financial/orders",
+        "characters": 110,
+        "leaks": [],
+        "horizontalOverflow": false
+      },
+      {
+        "name": "financial-redeem",
+        "url": "http://127.0.0.1:5218/financial/orders",
+        "characters": 148,
+        "leaks": [],
+        "horizontalOverflow": false
+      },
+      {
+        "name": "/financial/yield-list",
+        "url": "http://127.0.0.1:5218/financial/yield-list?orderId=1",
+        "characters": 115,
+        "leaks": [],
+        "horizontalOverflow": false
+      },
+      {
+        "name": "/search",
+        "url": "http://127.0.0.1:5218/search",
+        "characters": 34,
+        "leaks": [],
+        "horizontalOverflow": false
+      },
+      {
+        "name": "/invite",
+        "url": "http://127.0.0.1:5218/invite",
+        "characters": 129,
+        "leaks": [],
+        "horizontalOverflow": false
+      },
+      {
+        "name": "/login",
+        "url": "http://127.0.0.1:5218/login",
+        "characters": 64,
+        "leaks": [],
+        "horizontalOverflow": false
+      },
+      {
+        "name": "/register",
+        "url": "http://127.0.0.1:5218/register",
+        "characters": 66,
+        "leaks": [],
+        "horizontalOverflow": false
+      },
+      {
+        "name": "/forgot-password",
+        "url": "http://127.0.0.1:5218/forgot-password",
+        "characters": 55,
+        "leaks": [],
+        "horizontalOverflow": false
+      },
+      {
+        "name": "/language",
+        "url": "http://127.0.0.1:5218/language",
+        "characters": 157,
+        "leaks": [],
+        "horizontalOverflow": false
+      }
+    ],
+    "runtimeErrors": [],
+    "businessWrites": []
+  }
+]

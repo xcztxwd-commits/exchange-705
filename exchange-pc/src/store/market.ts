@@ -841,8 +841,6 @@ export const useMarketStore = defineStore('market', () => {
     }
     currentSymbol.value = symbol
     subscribeSymbol(symbol, category)
-    // 同时获取K线数据
-    fetchKlines(symbol, category, '1m', 100)
   }
 
   /**
@@ -881,8 +879,8 @@ export const useMarketStore = defineStore('market', () => {
   /**
    * 获取交易对的K线数据
    */
-  const getKlines = (symbol: string, limit = 100): KlineData[] => {
-    const klines = klineDataMap.value[symbol] || []
+  const getKlines = (symbol: string, limit = 100, interval?: string): KlineData[] => {
+    const klines = interval ? klineDataMap.value[`${symbol}_${interval}`] || [] : klineDataMap.value[symbol] || []
     return klines.slice(-limit)
   }
 

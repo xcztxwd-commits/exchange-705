@@ -5,6 +5,7 @@ import Tabbar from '@/components/Tabbar.vue'
 import request from '@/utils/request'
 import { useAuthStore } from '@/store/auth'
 import { useLocaleStore } from '@/store/locale'
+import AppSelect from '@/components/AppSelect.vue'
 
 const router = useRouter()
 const auth = useAuthStore()
@@ -24,7 +25,11 @@ const selectedSetting = ref<any>(null)
 
 // 表单数据
 const amount = ref<string>('')
-const showTermSelector = ref(false) // 显示期限选择器
+const termOptions = computed(() => loanSettings.value.map(setting => ({
+  value: setting.id,
+  label: `${setting.days} ${localeStore.t('days')}`,
+  description: `${localeStore.t('dailyRate')} ${setting.dailyRate}% · ${localeStore.t('freeDays')} ${setting.freeDays} ${localeStore.t('days')} · ${localeStore.t('amount')}: ${formatMoney(setting.minAmount || 0)} - ${formatMoney(setting.maxAmount || 0)}`,
+})))
 
 // Toast提示
 const toastMessage = ref('')
@@ -79,9 +84,10 @@ function setMaxAmount() {
 }
 
 // 选择期限
-function selectTerm(setting: any) {
+function selectTerm(id: string | number) {
+  const setting = loanSettings.value.find(item => item.id === id)
+  if (!setting) return
   selectedSetting.value = setting
-  showTermSelector.value = false
   // 清空金额，让用户重新输入
   amount.value = ''
 }
@@ -106,12 +112,12 @@ async function submitLoan() {
 
   // 验证金额范围
   if (selectedSetting.value.minAmount && amountNum < selectedSetting.value.minAmount) {
-    showToast(`${localeStore.t('amountCannotBeLessThan')}${formatMoney(selectedSetting.value.minAmount)}`, 'error')
+    showToast(localeStore.text('', 'The loan amount must be at least {amount}.', { amount: formatMoney(selectedSetting.value.minAmount) }), 'error')
     return
   }
 
   if (selectedSetting.value.maxAmount && amountNum > selectedSetting.value.maxAmount) {
-    showToast(`${localeStore.t('amountCannotBeGreaterThan')}${formatMoney(selectedSetting.value.maxAmount)}`, 'error')
+    showToast(localeStore.text('', 'The loan amount must not exceed {amount}.', { amount: formatMoney(selectedSetting.value.maxAmount) }), 'error')
     return
   }
 
@@ -260,34 +266,7 @@ onMounted(() => {
       <!-- 贷款期限 -->
       <div class="form-section">
         <div class="form-label">{{ localeStore.t('loanTerm') }}</div>
-        <div class="term-select-wrapper">
-          <div class="term-select" @click="showTermSelector = !showTermSelector">
-            <span>{{ selectedSetting ? `${selectedSetting.days} ${localeStore.t('days')}` : localeStore.t('pleaseSelect') }}</span>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" :class="{ rotated: showTermSelector }">
-              <path d="M9 18L15 12L9 6" stroke="#333" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-          </div>
-          
-          <!-- 期限选择下拉菜单 -->
-          <div v-if="showTermSelector" class="term-dropdown">
-            <div
-              v-for="setting in loanSettings"
-              :key="setting.id"
-              class="term-option"
-              :class="{ active: selectedSetting && selectedSetting.id === setting.id }"
-              @click="selectTerm(setting)"
-            >
-              <div class="term-option-main">
-                <span class="term-days">{{ setting.days }} {{ localeStore.t('days') }}</span>
-                <span class="term-rate">{{ localeStore.t('dailyRate') }} {{ setting.dailyRate }}%</span>
-              </div>
-              <div class="term-option-detail">
-                <span>{{ localeStore.t('freeDays') }}: {{ setting.freeDays }} {{ localeStore.t('days') }}</span>
-                <span>{{ localeStore.t('amount') }}: {{ formatMoney(setting.minAmount || 0) }} - {{ formatMoney(setting.maxAmount || 0) }}</span>
-              </div>
-            </div>
-          </div>
-        </div>
+        <AppSelect :model-value="selectedSetting?.id ?? ''" :options="termOptions" :label="localeStore.t('loanTerm')" :placeholder="localeStore.t('pleaseSelect')" @update:model-value="selectTerm" />
       </div>
 
       <!-- 利率信息 -->
@@ -309,9 +288,6 @@ onMounted(() => {
       <!-- 现在借款按钮 -->
       <button class="submit-btn" @click="submitLoan">{{ localeStore.t('borrowNow') }}</button>
     </div>
-
-    <!-- 点击外部关闭选择器 -->
-    <div v-if="showTermSelector" class="dropdown-overlay" @click="showTermSelector = false"></div>
 
     <Tabbar />
 
@@ -472,102 +448,6 @@ onMounted(() => {
   color: #999;
 }
 
-.term-select-wrapper {
-  position: relative;
-}
-
-.term-select {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 12px 16px;
-  border: 1px solid #e0e0e0;
-  border-radius: 8px;
-  background: #fff;
-  cursor: pointer;
-}
-
-.term-select svg {
-  transition: transform 0.3s ease;
-}
-
-.term-select svg.rotated {
-  transform: rotate(90deg);
-}
-
-.term-dropdown {
-  position: absolute;
-  top: calc(100% + 8px);
-  left: 0;
-  right: 0;
-  background: #fff;
-  border: 1px solid #e0e0e0;
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  z-index: 100;
-  max-height: 300px;
-  overflow-y: auto;
-}
-
-.term-option {
-  padding: 16px;
-  border-bottom: 1px solid #f0f0f0;
-  cursor: pointer;
-  transition: background 0.2s;
-}
-
-.term-option:last-child {
-  border-bottom: none;
-}
-
-.term-option:hover {
-  background: #f5f5f5;
-}
-
-.term-option.active {
-  background: #e8f5e9;
-}
-
-.term-option.active .term-days {
-  color: #2abf4b;
-  font-weight: 600;
-}
-
-.term-option-main {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 8px;
-}
-
-.term-days {
-  font-size: 16px;
-  font-weight: 500;
-  color: #333;
-}
-
-.term-rate {
-  font-size: 14px;
-  color: #666;
-}
-
-.term-option-detail {
-  display: flex;
-  justify-content: space-between;
-  font-size: 12px;
-  color: #999;
-}
-
-.dropdown-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 99;
-  background: transparent;
-}
-
 .interest-section {
   background: #fff;
   border-radius: 8px;
@@ -649,13 +529,4 @@ onMounted(() => {
   }
 }
 
-.dropdown-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 99;
-  background: transparent;
-}
 </style>

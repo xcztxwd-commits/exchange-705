@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>个人中心 · 像素粒子资金曲线</title>
+  <style>
+    :root { font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif; color: #111511; background: #e9ece7; font-synthesis: none; }
+    * { box-sizing: border-box; }
+    body { margin: 0; }
+    button { font: inherit; cursor: pointer; }
+    button:focus-visible, canvas:focus-visible { outline: 2px solid #74b630; outline-offset: 2px; }
+    .stage { min-height: 100vh; display: flex; align-items: center; justify-content: center; gap: clamp(30px, 6vw, 85px); padding: 28px; }
+    .notes { width: 320px; }
+    .notes .kicker { color: #679841; font-size: 11px; font-weight: 800; letter-spacing: .18em; }
+    .notes h1 { margin: 14px 0 17px; font-size: 43px; line-height: 1.16; letter-spacing: -.06em; }
+    .notes p { color: #677467; font-size: 14px; line-height: 1.85; }
+    .notes ul { margin: 30px 0 25px; padding: 0; list-style: none; display: grid; gap: 12px; }
+    .notes li { padding-left: 15px; border-left: 2px solid #87ba60; color: #5a685a; font-size: 13px; line-height: 1.5; }
+    .notes button { padding: 11px 17px; border: 0; border-radius: 10px; background: #324b2d; color: #fff; font-size: 12px; font-weight: 700; }
+    .notes small { display: block; margin-top: 20px; color: #9da99b; font-size: 11px; }
+    .phone { position: relative; width: 390px; height: min(785px, calc(100vh - 56px)); min-height: 640px; flex: none; overflow: hidden; border: 7px solid #273027; border-radius: 36px; background: #fff; box-shadow: 0 25px 60px #27422726; }
+    .screen { height: 100%; overflow-y: auto; scrollbar-width: none; padding-bottom: 65px; }
+    .screen::-webkit-scrollbar { display: none; }
+    .header { display: flex; justify-content: space-between; min-height: 91px; padding: 21px 17px 0; }
+    .header .name { font-size: 14px; line-height: 1.3; }.header .uid { margin-top: 5px; font-size: 14px; }
+    .header-icons { display: flex; gap: 9px; }.header-icons button { width: 34px; height: 34px; display: grid; place-items: center; border: 0; border-radius: 9px; background: #f7f7f7; color: #343a33; }
+    .icon { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+    .assets { position: relative; margin: 0 15px 17px; padding: 23px 20px 16px; overflow: hidden; border-radius: 19px; background: linear-gradient(180deg, #f7f8f6 0%, #f5f8f3 64%, #f7f8f6 100%); }
+    .assets::before { content: ''; position: absolute; inset: 42% 0 10%; pointer-events: none; background-image: radial-gradient(#78b43b19 1px, transparent 1px); background-size: 11px 11px; mask-image: linear-gradient(to bottom, transparent, #000 58%, transparent); }
+    @media (prefers-reduced-motion: no-preference) { .assets { animation: enter .48s ease-out both; } @keyframes enter { from { opacity: 0; transform: translateY(9px); } to { opacity: 1; transform: translateY(0); } } }
+    .assets-top { position: relative; display: flex; justify-content: space-between; align-items: center; }
+    .assets-top strong { font-size: 18px; letter-spacing: -.025em; }.assets-top span { color: #979d96; font-size: 11px; }
+    .value-row { position: relative; display: flex; justify-content: space-between; align-items: center; margin-top: 16px; }
+    .value { font-size: clamp(32px, 8vw, 40px); line-height: 1.08; font-weight: 760; letter-spacing: -.055em; white-space: nowrap; font-variant-numeric: tabular-nums; }
+    .eye { width: 37px; height: 37px; display: grid; place-items: center; flex: none; border: 0; background: none; color: #626b60; }
+    .delta { position: relative; display: flex; align-items: center; gap: 8px; margin-top: 8px; color: #8d988b; font-size: 11px; }
+    .delta b { color: #5c9936; font-variant-numeric: tabular-nums; font-weight: 650; }
+    .chart-head { position: relative; display: flex; align-items: center; justify-content: space-between; margin-top: 22px; }
+    .chart-head strong { font-size: 12px; }.chart-head-right { display: flex; align-items: center; gap: 5px; color: #7da467; font-size: 9px; font-weight: 700; letter-spacing: .08em; }
+    .chart-head-right button { width: 31px; height: 31px; display: grid; place-items: center; border: 0; border-radius: 8px; background: #eaf1e6; color: #6e9e54; }
+    .chart-head-right .icon { width: 15px; height: 15px; }
+    .chart-wrap { position: relative; height: 163px; margin: 1px -20px 0; }
+    .chart-wrap canvas { display: block; width: 100%; height: 100%; touch-action: pan-y; }
+    .tooltip { position: absolute; z-index: 2; width: max-content; min-width: 105px; padding: 6px 9px; transform: translateX(-50%); border: 1px solid #dce8d5; border-radius: 8px; background: #fff; box-shadow: 0 6px 16px #27402124; text-align: center; pointer-events: none; }
+    .tooltip small { display: block; color: #80917c; font-size: 10px; }.tooltip b { display: block; margin-top: 2px; font-size: 11px; font-variant-numeric: tabular-nums; }
+    .chart-private { position: absolute; inset: 0; display: none; place-items: center; background: #f6f8f4; color: #899687; font-size: 12px; }
+    .phone.hidden-values .chart-private { display: grid; }.phone.hidden-values canvas { visibility: hidden; }
+    .axis { position: relative; display: flex; justify-content: space-between; margin: 0 1px; color: #98a497; font-size: 10px; }
+    .periods { position: relative; display: grid; grid-template-columns: repeat(4, 1fr); gap: 3px; margin-top: 15px; }
+    .periods button { min-height: 36px; border: 0; border-radius: 9px; background: transparent; color: #7d8a7a; font-size: 11px; }
+    .periods button[aria-selected="true"] { background: #e6f0de; color: #4f852d; font-weight: 700; }
+    .actions { display: grid; grid-template-columns: repeat(2, 1fr); gap: 11px; margin: 0 15px 17px; }
+    .actions button { height: 88px; display: flex; align-items: center; gap: 12px; padding: 12px 13px; border: 0; border-radius: 16px; background: #f7f7f7; text-align: left; }
+    .action-icon { width: 44px; height: 44px; display: grid; place-items: center; flex: none; border-radius: 11px; background: linear-gradient(145deg, #a0e569, #51ac58); color: #fff; }.action-icon .icon { width: 24px; height: 24px; stroke-width: 2.7; }
+    .action-copy { flex: 1; min-width: 0; }.action-copy strong { display: block; font-size: 15px; }.action-copy small { display: block; margin-top: 4px; color: #a0a0a0; font-size: 11px; white-space: nowrap; }.actions .arrow { color: #999; font-size: 20px; }
+    .menu { display: grid; gap: 10px; margin: 0 15px; }.menu button { height: 59px; display: flex; align-items: center; gap: 12px; padding: 0 18px; border: 0; border-radius: 15px; background: #efefef; text-align: left; }.menu button::before { content: ''; width: 4px; height: 18px; border-radius: 3px; background: #73b100; }.menu button span { flex: 1; font-size: 15px; }.menu button em { color: #999; font-size: 19px; font-style: normal; }
+    .tabbar { position: absolute; right: 0; bottom: 0; left: 0; height: 60px; display: grid; grid-template-columns: repeat(4, 1fr); border-top: 1px solid #e9e9e9; background: #fff; }.tabbar button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; border: 0; background: none; color: #9b9b9b; font-size: 10px; }.tabbar button.active { color: #74aa39; font-weight: 700; }.tabbar .icon { width: 19px; height: 19px; }
+    .toast { position: absolute; z-index: 5; left: 50%; bottom: 70px; width: max-content; max-width: 80%; padding: 8px 11px; transform: translateX(-50%); border-radius: 9px; background: #254025; color: #fff; font-size: 11px; box-shadow: 0 7px 18px #2b442a3a; }
+    [hidden] { display: none !important; }
+    @media (max-width: 800px) { .stage { display: block; padding: 0; }.notes { display: none; }.phone { width: 100%; height: 100dvh; min-height: 0; border: 0; border-radius: 0; box-shadow: none; } }
+  </style>
+</head>
+<body>
+  <div class="stage">
+    <aside class="notes"><div class="kicker">PIXEL / FLOW</div><h1>让资金曲线<br>由像素生长。</h1><p>页面仍是原来的白底、灰卡与品牌绿。仅让资产区域内的微小方块，自左向右或从触点向两侧聚合。</p><ul><li>进入或刷新：曲线从左向右渐次显现。</li><li>点击 / 轻触图表：方块从触点向两侧重组，并显示该时点金额。</li><li>切换周期：重新播放，不改变资金口径。</li></ul><button id="replayOutside" type="button">重播动画</button><small>概念原型 · 金额及曲线均为演示数据</small></aside>
+    <div class="phone" id="phone"><div class="screen">
+      <header class="header"><div><div class="name">user</div><div class="uid">UID: 7000017</div></div><div class="header-icons"><button aria-label="语言" data-demo="語言"><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 4 6 4 9s-1 6-4 9M12 3c-3 3-4 6-4 9s1 6 4 9"/></svg></button><button aria-label="退出" data-demo="退出"><svg class="icon" viewBox="0 0 24 24"><path d="M9 4H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4M13 8l4 4-4 4m4-4H8"/></svg></button></div></header>
+      <main><section class="assets"><div class="assets-top"><strong>我的資產</strong><span>總帳戶資產折合</span></div><div class="value-row"><span class="value" id="balance">$243,541.37</span><button class="eye" id="eye" aria-label="隱藏資產" aria-pressed="false"><svg class="icon" viewBox="0 0 24 24"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"/><circle cx="12" cy="12" r="2.5"/></svg></button></div><div class="delta"><span id="deltaLabel"></span><b id="deltaValue"></b></div>
+        <div class="chart-head"><strong>資產走勢</strong><div class="chart-head-right">PIXEL FLOW <button id="replay" aria-label="重播曲線動畫" title="重播"><svg class="icon" viewBox="0 0 24 24"><path d="M20 8V3l-4 4h3a8 8 0 1 1-7-3"/></svg></button></div></div>
+        <div class="chart-wrap" id="chartWrap"><canvas id="chart" role="img" aria-label="資產走勢，點按可查看時點並重播動畫" tabindex="0"></canvas><div class="tooltip" id="tooltip" hidden><small id="tipTime"></small><b id="tipValue"></b></div><div class="chart-private">資產走勢已隱藏</div></div><div class="axis"><span id="startLabel"></span><span id="middleLabel"></span><span>現在</span></div><div class="periods" role="tablist" aria-label="資產走勢週期"><button data-range="1D" role="tab">1日</button><button data-range="1W" role="tab">1週</button><button data-range="1M" role="tab">1月</button><button data-range="1Y" role="tab">1年</button></div>
+      </section><div class="actions"><button data-demo="入金"><span class="action-icon"><svg class="icon" viewBox="0 0 24 24"><path d="M12 3v15m-5-5 5 5 5-5"/></svg></span><span class="action-copy"><strong>入金</strong><small>帳單詳情</small></span><span class="arrow">›</span></button><button data-demo="出金"><span class="action-icon"><svg class="icon" viewBox="0 0 24 24"><path d="M12 21V6m-5 5 5-5 5 5"/></svg></span><span class="action-copy"><strong>出金</strong><small>帳單詳情</small></span><span class="arrow">›</span></button></div><div class="menu"><button data-demo="錢包"><span>錢包</span><em>›</em></button><button data-demo="劃轉"><span>劃轉</span><em>›</em></button><button data-demo="實名認證"><span>實名認證</span><em>›</em></button><button data-demo="邀請好友"><span>邀請好友</span><em>›</em></button></div></main>
+    </div><nav class="tabbar" aria-label="底部導航"><button data-demo="市場"><svg class="icon" viewBox="0 0 24 24"><path d="M3 11 12 4l9 7v9H3zM9 20v-6h6v6"/></svg>市場</button><button data-demo="交易"><svg class="icon" viewBox="0 0 24 24"><path d="M4 7h16m-4-4 4 4-4 4M20 17H4m4-4-4 4 4 4"/></svg>交易</button><button data-demo="訂單"><svg class="icon" viewBox="0 0 24 24"><path d="M6 3h12v18H6zM9 8h6m-6 4h6m-6 4h4"/></svg>訂單</button><button class="active" aria-current="page"><svg class="icon" viewBox="0 0 24 24"><path d="M3 6h18v15H3zM3 6V4h15m3 7h-7v5h7"/></svg>個人中心</button></nav><div class="toast" id="toast" role="status" hidden></div></div>
+  </div>
+  <script>
+    const TOTAL = 243541.37;
+    const RANGES = {
+      '1D': { start: 241060.05, days: 1, amp: 410, cycles: 4.3, label: '近 1 日資產變動' },
+      '1W': { start: 238796.22, days: 7, amp: 850, cycles: 3.7, label: '近 1 週資產變動' },
+      '1M': { start: 231282.40, days: 30, amp: 1800, cycles: 4.4, label: '近 1 月資產變動' },
+      '1Y': { start: 196810.85, days: 365, amp: 6100, cycles: 5.1, label: '近 1 年資產變動' }
+    };
+    const COUNT = 68;
+    const money = n => '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const sample = cfg => Array.from({ length: COUNT }, (_, i) => {
+      const t = i / (COUNT - 1);
+      const wave = Math.sin(Math.PI * t) * (Math.sin(t * Math.PI * 2 * cfg.cycles) * .72 + Math.sin(t * 41) * .28) * cfg.amp;
+      return i === COUNT - 1 ? TOTAL : cfg.start + (TOTAL - cfg.start) * t + wave;
+    });
+    if (Object.values(RANGES).some(cfg => sample(cfg)[0] !== cfg.start || sample(cfg).at(-1) !== TOTAL)) throw new Error('演示曲线端点不一致');
+    const $ = id => document.getElementById(id);
+    const canvas = $('chart'), ctx = canvas.getContext('2d');
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+    let range = '1M', values = [], ys = [], width = 0, height = 0, animation = 0, selected = -1, privateMode = false, toastTimer, sized = false;
+    function resize() {
+      const rect = canvas.getBoundingClientRect();
+      width = rect.width; height = rect.height;
+      const scale = Math.min(window.devicePixelRatio || 1, 2);
+      canvas.width = Math.round(width * scale); canvas.height = Math.round(height * scale);
+      ctx.setTransform(scale, 0, 0, scale, 0, 0);
+      mapY();
+      if (!sized) { sized = true; replay(); }
+      else draw(1, 'left', 0);
+    }
+    function mapY() {
+      const min = Math.min(...values), max = Math.max(...values), pad = Math.max((max - min) * .18, 100);
+      ys = values.map(value => 125 - (value - min + pad) / (max - min + pad * 2) * 107);
+    }
+    const ease = t => 1 - Math.pow(1 - Math.max(0, Math.min(1, t)), 3);
+    function draw(progress, mode, origin) {
+      if (!width || privateMode) return;
+      ctx.clearRect(0, 0, width, height);
+      const step = (width - 20) / (COUNT - 1), cell = Math.min(3.4, step * .68), base = height - 14;
+      // 静态底纹和标尺：不参与动效，曲线不会随动画改变真实数据。
+      ctx.fillStyle = 'rgba(113, 156, 94, .085)';
+      for (let x = 10; x < width - 7; x += 12) for (let y = 30; y < base; y += 12) ctx.fillRect(x, y, 1.1, 1.1);
+      for (let i = 0; i < COUNT; i++) {
+        const distance = mode === 'ripple' ? Math.abs(i - origin) / Math.max(origin, COUNT - 1 - origin, 1) : i / (COUNT - 1);
+        const appear = ease((progress - distance * .61) / .39);
+        if (appear <= 0) continue;
+        const x = 10 + i * step, tip = Math.round((ys[i] + (1 - appear) * 13) / 5.1) * 5.1;
+        for (let y = tip; y < base; y += 5.1) {
+          const depth = (y - tip) / Math.max(base - tip, 1);
+          const alpha = (.53 * Math.pow(1 - depth, 1.65) + .015) * appear;
+          ctx.fillStyle = `rgba(93, 171, 48, ${alpha.toFixed(3)})`;
+          ctx.fillRect(x, y, cell, cell);
+        }
+        ctx.fillStyle = `rgba(96, 177, 43, ${(.82 * appear).toFixed(3)})`;
+        ctx.shadowColor = 'rgba(122, 195, 73, .36)'; ctx.shadowBlur = 6 * appear;
+        ctx.fillRect(x, tip, cell + .5, cell + .5);
+        ctx.shadowBlur = 0;
+        if (i % 8 === 0) { ctx.fillStyle = `rgba(117, 185, 78, ${(.18 * appear).toFixed(3)})`; ctx.fillRect(x + 1, tip - 10 - i % 3 * 3, 2, 2); }
+      }
+      if (progress >= 1) {
+        const x = 10 + (COUNT - 1) * step, y = Math.round(ys.at(-1) / 5.1) * 5.1;
+        ctx.strokeStyle = 'rgba(87, 157, 48, .85)'; ctx.lineWidth = 1.3; ctx.strokeRect(x - 3, y - 3, cell + 6, cell + 6);
+      }
+      if (selected >= 0 && progress >= .65) {
+        const x = 10 + selected * step;
+        ctx.strokeStyle = 'rgba(96, 155, 75, .44)'; ctx.setLineDash([3, 4]); ctx.beginPath(); ctx.moveTo(x, 9); ctx.lineTo(x, base); ctx.stroke(); ctx.setLineDash([]);
+      }
+    }
+    function replay(mode = 'left', origin = 0) {
+      cancelAnimationFrame(animation);
+      if (privateMode) return;
+      if (reduceMotion.matches) { draw(1, mode, origin); return; }
+      const started = performance.now(), duration = mode === 'ripple' ? 850 : 1050;
+      const frame = now => {
+        const progress = Math.min(1, (now - started) / duration);
+        draw(progress, mode, origin);
+        if (progress < 1) animation = requestAnimationFrame(frame);
+      };
+      draw(0, mode, origin); animation = requestAnimationFrame(frame);
+    }
+    function setRange(next) {
+      range = next; values = sample(RANGES[range]); mapY(); selected = -1; $('tooltip').hidden = true;
+      const cfg = RANGES[range], diff = TOTAL - cfg.start;
+      $('deltaLabel').textContent = cfg.label;
+      $('deltaValue').textContent = `+${money(diff)}  (+${(diff / cfg.start * 100).toFixed(2)}%)`;
+      const date = new Intl.DateTimeFormat('zh-TW', { month: 'numeric', day: 'numeric' });
+      $('startLabel').textContent = range === '1D' ? '00:00' : date.format(new Date(Date.now() - cfg.days * 86400000));
+      $('middleLabel').textContent = range === '1D' ? '12:00' : date.format(new Date(Date.now() - cfg.days * 43200000));
+      document.querySelectorAll('[data-range]').forEach(button => button.setAttribute('aria-selected', String(button.dataset.range === range)));
+      canvas.setAttribute('aria-label', `${range}資產走勢，期初${money(cfg.start)}，目前${money(TOTAL)}。點按可查看時點並重播動畫`);
+      if (width) replay();
+    }
+    function showPoint(index) {
+      if (privateMode) return;
+      selected = Math.max(0, Math.min(COUNT - 1, index));
+      const tip = $('tooltip'); tip.hidden = false;
+      tip.style.left = `${Math.max(17, Math.min(83, (10 + selected * (width - 20) / (COUNT - 1)) / width * 100))}%`;
+      tip.style.top = `${Math.max(3, ys[selected] - 38)}px`;
+      const at = new Date(Date.now() - (1 - selected / (COUNT - 1)) * RANGES[range].days * 86400000);
+      $('tipTime').textContent = range === '1D' ? new Intl.DateTimeFormat('zh-TW', { hour: '2-digit', minute: '2-digit' }).format(at) : new Intl.DateTimeFormat('zh-TW', { month: 'numeric', day: 'numeric' }).format(at);
+      $('tipValue').textContent = money(values[selected]);
+      replay('ripple', selected);
+    }
+    document.querySelector('.periods').addEventListener('click', event => { const button = event.target.closest('[data-range]'); if (button) setRange(button.dataset.range); });
+    $('replay').addEventListener('click', () => { selected = -1; $('tooltip').hidden = true; replay(); });
+    $('replayOutside').addEventListener('click', () => { selected = -1; $('tooltip').hidden = true; replay(); });
+    $('eye').addEventListener('click', () => {
+      privateMode = !privateMode; $('phone').classList.toggle('hidden-values', privateMode);
+      $('balance').textContent = privateMode ? '••••••••' : money(TOTAL);
+      $('deltaLabel').textContent = privateMode ? '資產金額已隱藏' : RANGES[range].label;
+      $('deltaValue').hidden = privateMode;
+      $('eye').setAttribute('aria-label', privateMode ? '顯示資產' : '隱藏資產'); $('eye').setAttribute('aria-pressed', String(privateMode));
+      canvas.setAttribute('aria-label', privateMode ? '資產走勢已隱藏' : `${range}資產走勢，點按可查看時點並重播動畫`);
+      $('tooltip').hidden = true; selected = -1;
+      if (privateMode) cancelAnimationFrame(animation); else replay();
+    });
+    let down = null;
+    canvas.addEventListener('pointerdown', event => down = { x: event.clientX, y: event.clientY });
+    canvas.addEventListener('pointerup', event => {
+      if (!down || Math.hypot(event.clientX - down.x, event.clientY - down.y) > 12) { down = null; return; }
+      const rect = canvas.getBoundingClientRect();
+      showPoint(Math.round(Math.max(0, Math.min(1, (event.clientX - rect.left - 10) / (rect.width - 20))) * (COUNT - 1)));
+      down = null;
+    });
+    canvas.addEventListener('pointercancel', () => down = null);
+    canvas.addEventListener('keydown', event => {
+      if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); showPoint(selected < 0 ? Math.floor(COUNT / 2) : selected); }
+      if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') { event.preventDefault(); showPoint((selected < 0 ? Math.floor(COUNT / 2) : selected) + (event.key === 'ArrowRight' ? 1 : -1)); }
+    });
+    document.querySelectorAll('[data-demo]').forEach(button => button.addEventListener('click', () => { $('toast').textContent = `原型演示 · ${button.dataset.demo}`; $('toast').hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => $('toast').hidden = true, 1400); }));
+    setRange('1M');
+    new ResizeObserver(() => resize()).observe(canvas);
+    window.addEventListener('pageshow', event => { if (event.persisted) replay(); });
+  </script>
+</body>
+</html>

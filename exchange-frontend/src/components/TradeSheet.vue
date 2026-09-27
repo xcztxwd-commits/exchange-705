@@ -1,5 +1,7 @@
 <script setup lang="ts">
+import { useLocaleStore } from '@/store/locale'
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+const locale = useLocaleStore()
 const props = defineProps<{ open: boolean; title: string; busy?: boolean }>()
 const emit = defineEmits<{ close: [] }>()
 const dialog = ref<HTMLDialogElement>()
@@ -46,7 +48,7 @@ onBeforeUnmount(() => {
   <Teleport to="body">
     <dialog ref="dialog" class="trade-sheet" :aria-label="title" :style="{ '--viewport-height': viewportHeight + 'px', '--viewport-top': viewportTop + 'px' }" @cancel.prevent="!busy && emit('close')" @click="event => event.target === dialog && !busy && emit('close')">
       <div class="sheet-handle"></div>
-      <header><h2>{{ title }}</h2><button type="button" aria-label="Close / 關閉" :disabled="busy" @click="emit('close')">×</button></header>
+      <header><h2>{{ title }}</h2><button type="button" :aria-label="locale.text('關閉', 'Close')" :disabled="busy" @click="emit('close')">×</button></header>
       <div class="sheet-body" :inert="busy || undefined"><slot /></div>
       <footer v-if="$slots.footer"><slot name="footer" /></footer>
     </dialog>

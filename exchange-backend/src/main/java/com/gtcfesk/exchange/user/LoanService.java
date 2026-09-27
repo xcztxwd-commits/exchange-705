@@ -198,12 +198,8 @@ public class LoanService {
         }
 
         // 计算实际利息（考虑免息天数）
-        int chargeableDays = Math.max(0, (int)actualDays - record.getFreeDays());
-        BigDecimal dailyRateDecimal = record.getDailyRate().divide(new BigDecimal("100"), 8, RoundingMode.HALF_UP);
-        BigDecimal actualInterest = record.getAmount()
-                .multiply(dailyRateDecimal)
-                .multiply(new BigDecimal(chargeableDays))
-                .setScale(16, RoundingMode.HALF_UP);
+        BigDecimal actualInterest = LoanInterest.accrued(record.getAmount(), record.getDailyRate(),
+                record.getFreeDays(), actualDays);
 
         // 计算实际还款金额（本金 + 实际利息）
         BigDecimal actualRepaymentAmount = record.getAmount().add(actualInterest);

@@ -27,7 +27,13 @@
   const overlay = document.createElement('div')
   overlay.className = 'forex-transition'
   overlay.setAttribute('role', 'status')
-  overlay.setAttribute('aria-label', 'FOREX EXCHANGE 正在加载')
+  const loadingLabels = {"zh-TW":"加载中...","en":"Loading...","fr":"Chargement...","de":"Laden...","ru":"Загрузка...","es":"Cargando...","pt":"Carregando...","it":"Caricamento...","ar":"جار التحميل...","tr":"Yükleniyor...","id":"Memuat...","my":"ဖွင့်နေသည်...","hi":"लोड हो रहा है...","cs":"Načítání...","pl":"Ładowanie...","ja":"読み込み中...","ko":"로드 중...","th":"กำลังโหลด...","vi":"Đang tải..."}
+  const updateLoadingLabel = () => {
+    let language = 'en'
+    try { language = localStorage.getItem('locale') || 'en' } catch { /* Storage can be disabled. */ }
+    overlay.setAttribute('aria-label', 'FOREX EXCHANGE ' + (loadingLabels[language] || loadingLabels.en))
+  }
+  updateLoadingLabel()
   overlay.innerHTML = `
     <div class="forex-transition__composition">
       <div class="forex-transition__logo">
@@ -57,6 +63,7 @@
   let animations = []
 
   async function playForexTransition() {
+    updateLoadingLabel()
     const token = ++generation
     animations.forEach(animation => animation.cancel())
     animations = []

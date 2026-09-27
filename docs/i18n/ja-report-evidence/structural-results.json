@@ -1,0 +1,15 @@
+{
+  "passed": true,
+  "exchange-frontend": {
+    "locales": 19,
+    "dictionaryLookups": 18905,
+    "messagesPerLocale": 995,
+    "japaneseUiEntries": 333
+  },
+  "exchange-pc": {
+    "locales": 19,
+    "dictionaryLookups": 18924,
+    "messagesPerLocale": 996,
+    "japaneseUiEntries": 333
+  }
+}

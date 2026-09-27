@@ -8,7 +8,7 @@ import java.util.*;
 /** Immutable JSON snapshot is stored at task creation; setters are for request binding only. */
 @Getter @Setter
 public class RecoveryOptions {
-    @NotNull private Boolean autoRestore = true;
+    @NotNull private Boolean autoRestore = false;
     @NotNull @Pattern(regexp = "GRADUAL|QUICK") private String restoreMode = "GRADUAL";
     @NotNull @Min(1) @Max(86400) private Integer restoreDurationSeconds = 10;
     @NotNull @Min(1) @Max(10) private Integer restoreIntensity = 5;

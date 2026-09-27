@@ -16,7 +16,7 @@ const server = http.createServer(async (request, response) => {
       return;
     }
     const mobile = pathname.startsWith('/mobile/');
-    const root = path.join(repo, mobile ? 'exchange-frontend' : 'exchange-pc', 'dist');
+    const root = path.resolve(mobile ? (process.env.DEMO_MOBILE_DIST || path.join(repo, 'exchange-frontend/dist')) : (process.env.DEMO_PC_DIST || path.join(repo, 'exchange-pc/dist')));
     let file = pathname === '/device-layout.js' ? path.join(__dirname, 'device-layout.js')
       : path.resolve(root, '.' + (mobile ? pathname.slice(7) : pathname) + (pathname.endsWith('/') ? 'index.html' : ''));
     if (file !== path.join(__dirname, 'device-layout.js') && !file.startsWith(root + path.sep)) {

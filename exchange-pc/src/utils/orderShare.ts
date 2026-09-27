@@ -1,10 +1,12 @@
+import { posterLocales, shareLanguage } from './orderShareLocales.ts'
+export { shareLanguage } from './orderShareLocales.ts'
 // Kept identical in the two independently built frontends.
 export type ShareKind = 'contract' | 'option'
 export const shareTemplates = ['light', 'dark', 'chart', 'gold', 'globe', 'architecture', 'city', 'referenceGold', 'referenceWhite', 'referenceTerminal', 'launch', 'aurora', 'racing', 'receipt', 'journal', 'voyage'] as const
 export type ShareTemplate = typeof shareTemplates[number]
 export const shareNeedsChart = (template: ShareTemplate) => template === 'chart' || template === 'journal' || template.startsWith('reference')
 export const shareBackgrounds: Partial<Record<ShareTemplate, string>> = {
-  referenceGold: 'reference-gold.png', referenceWhite: 'reference-white.png', referenceTerminal: 'reference-terminal.png',
+  referenceGold: 'reference-gold.png', referenceWhite: 'reference-white-neutral.png', referenceTerminal: 'reference-terminal.png',
   launch: 'launch.png', aurora: 'aurora.png', racing: 'racing.png', voyage: 'voyage.png',
 }
 export type ShareMode = 'amount' | 'rate' | 'both' | 'none'
@@ -47,8 +49,16 @@ const en = {
   recentCaption: 'Recent market candles',
   chartCaption: 'Source market candles · Execution prices marked separately',
 }
-export type ShareCopy = typeof en
+export type ShareCopy = typeof en & {
+  tradeHeadline: string; worldHeadline: string; focusHeadline: string; executionHeadline: string
+  reviewHeadline: string; lots: string; orderDetails: string; orderNumber: string
+}
 export function shareCopy(locale: string): ShareCopy {
+  const language = shareLanguage(locale)
+  return { ...baseShareCopy(language), orderDetails: language === 'zh-TW' ? '訂單詳情' : language === 'ja' ? '注文の詳細' : 'Order details',
+    ...posterLocales[language], orderNumber: language === 'zh-TW' ? '訂單編號' : language === 'ja' ? '注文番号' : posterLocales[language]?.orderId || 'Order ID' } as ShareCopy
+}
+function baseShareCopy(locale: string): typeof en {
   if (locale.startsWith('zh')) return {
     launch: '曜石啟航', aurora: '極光流動', racing: '藍色競速', receipt: '外匯交易票', journal: '專業復盤', voyage: '京都暮色',
     referenceGold: '黑金原版', referenceWhite: '白色原版', referenceTerminal: '行情原版', backgroundError: '背景載入失敗，請重試或選擇其他模板。',
@@ -93,7 +103,7 @@ export function shareCopy(locale: string): ShareCopy {
     saved: 'ダウンロードを開始しました。画像の長押しでも保存できます。', tip: '1080 × 1440 PNG · 長押しで画像を保存',
     privacy: '個人情報や口座残高は含まれません。', accounting: '記録された決済損益を使用。手数料は再控除しません。通貨不明時は口座単位で表示。',
     rateNote: '収益率＝決済損益 ÷ 証拠金または投資額。手数料は再控除しません。', ratePrivacy: '収益率のみの場合、数量・証拠金・投資額・手数料を非表示。',
-    closed: '決済済み', contract: '契約', option: '期限取引', buy: '買い / ロング', sell: '売り / ショート', up: '買い', down: '売り',
+    closed: '決済済み', contract: '証拠金取引', option: '期限取引', buy: '買い / ロング', sell: '売り / ショート', up: '上昇を予想', down: '下落を予想',
     pnl: '実現損益', entry: 'エントリー価格', exit: '決済価格', units: '口座単位', margin: '証拠金', investment: '投資額',
     record: '取引記録', footer: '個別の取引記録 · 将来の収益を保証しません', basis: '決済記録に基づく',
     contractRate: '証拠金に対する収益率', optionRate: '投資額に対する収益率', qr: '招待QRコード', qrNote: '登録ページが開きます。注文の詳細は公開しません。',
@@ -208,7 +218,7 @@ export function drawSharePoster(canvas: HTMLCanvasElement, order: ShareOrder, op
       if (ctx.measureText(value).width <= width || fontSize <= 12) break
       fontSize -= 1
     } while (true)
-    ctx.fillText(value, x, y)
+    ctx.save(); ctx.direction = /[\u0600-\u06ff]/.test(value) ? 'rtl' : 'ltr'; if (ctx.textAlign === 'start') ctx.textAlign = 'left'; ctx.fillText(value, x, y); ctx.restore()
   }
   const box = (x: number, y: number, w: number, h: number, fill: string, radius = 24) => {
     ctx.beginPath(); ctx.moveTo(x + radius, y)
@@ -392,11 +402,11 @@ function drawReferencePoster(canvas: HTMLCanvasElement, order: ShareOrder, optio
   const returnValue = shareReturn(order)
   const amount = terminal ? shareNumber(order.profit, 2, true) : shareNumber(order.profit).replace(/,/g, '')
   const rate = returnValue === null ? '—' : `${shareNumber(returnValue, 2, true)}%`
-  const visibleMain = amountVisible ? amount : rateVisible ? rate : '取引記録'
-  const side = order.buy ? '買い' : '売り', sideColor = order.buy ? gain : loss
+  const visibleMain = amountVisible ? amount : rateVisible ? rate : copy.record
+  const side = order.kind === 'contract' ? (order.buy ? copy.buy : copy.sell) : (order.buy ? copy.up : copy.down), sideColor = order.buy ? gain : loss
   const num = (value: number | null, digits = 2) => value === null ? '—' : value.toFixed(digits)
   const money = (value: number | null) => amountVisible ? num(value) : '—'
-  const quantity = amountVisible ? `${num(order.quantity)}${terminal ? ' ロット' : 'ロット'}` : '—'
+  const quantity = amountVisible ? `${num(order.quantity)} ${copy.lots}` : '—'
   const capital = order.kind === 'contract' ? order.margin : order.amount
   const currency = order.currency || copy.units
   const price = (value: number, exit = false) => new Intl.NumberFormat('en-US', {
@@ -409,7 +419,7 @@ function drawReferencePoster(canvas: HTMLCanvasElement, order: ShareOrder, optio
       if (ctx.measureText(value).width <= max || fontSize <= 5) break
       fontSize -= .5
     } while (true)
-    ctx.fillStyle = color; ctx.fillText(value, x, y)
+    ctx.fillStyle = color; ctx.save(); ctx.direction = /[\u0600-\u06ff]/.test(value) ? 'rtl' : 'ltr'; if (ctx.textAlign === 'start') ctx.textAlign = 'left'; ctx.fillText(value, x, y); ctx.restore()
   }
   const rect = (x: number, y: number, width: number, height: number, fill: string | CanvasGradient, radius = 16, stroke?: string) => {
     ctx.beginPath(); ctx.roundRect(x, y, width, height, radius); ctx.fillStyle = fill; ctx.fill()
@@ -465,20 +475,20 @@ function drawReferencePoster(canvas: HTMLCanvasElement, order: ShareOrder, optio
 
   if (gold) {
     t(brand, 32, 67, 36, '#f7ca20', 750, 400)
-    t('TRADE SMARTER', 490, 49, 13, muted, 400, 140); t('TRADE FREER', 490, 69, 13, muted, 400, 140)
+    t(copy.focusHeadline, 490, 49, 13, muted, 400, 140); t(copy.executionHeadline, 490, 69, 13, muted, 400, 140)
     line(30, 101, 624, 101, '#8a8980'); line(30, 101, 118, 101, '#ffe255', 2)
-    t('ご注文の詳細', 32, 171, 42, ink, 750); t('ORDER DETAILS', 32, 202, 18, '#d8d8d8')
+    t(copy.orderDetails, 32, 171, 42, ink, 750); t(copy.record, 32, 202, 18, '#d8d8d8')
     t(order.symbol, 32, 270, 44, ink, 750, 340)
-    rect(400, 216, 120, 51, '#090d0bbb', 12, '#edcf21'); t(side, 432, 253, 28, '#f2cf2d', 700, 84)
+    rect(400, 216, 120, 51, '#090d0bbb', 12, '#edcf21'); t(side, 410, 249, 22, '#f2cf2d', 700, 101)
     if (order.symbol.endsWith('JPY')) { rect(33, 287, 40, 30, '#fff', 3); ctx.fillStyle = '#e2002d'; ctx.beginPath(); ctx.arc(53, 302, 10, 0, Math.PI * 2); ctx.fill() }
     t(order.symbol.replace(/^([A-Z]{3})([A-Z]{3})$/, '$1/$2'), order.symbol.endsWith('JPY') ? 86 : 32, 310, 22, ink)
     plot(32, 338, 520, 235, true, true)
     t(`${chart.source} · ${chart.interval}`, 33, 585, 9, muted, 400, 560)
     rect(30, 592, 596, 94, gradient(30, 592, 626, 686, '#1b2023ed', '#101518ed'), 13, '#657075')
-    t('エントリー価格', 60, 627, 20, muted, 400, 230); t('決済価格', 398, 627, 20, muted)
+    t(copy.entry, 60, 627, 20, muted, 400, 230); t(copy.exit, 398, 627, 20, muted)
     t(price(order.openPrice), 60, 665, 29, ink, 500, 225); t('→', 288, 651, 40, ink, 400, 60); t(price(order.closePrice, true), 398, 665, 29, ink, 500, 202)
     rect(30, 701, 596, 345, gradient(30, 701, 626, 1046, '#12191cef', '#0c1114e8'), 12, '#606c72')
-    t(amountVisible ? `実現損益 (${currency})` : rateVisible ? '収益率' : '取引記録', 56, 746, 25, ink, 500, 400)
+    t(amountVisible ? `${copy.pnl} (${currency})` : rateVisible ? copy.rate : copy.record, 56, 746, 25, ink, 500, 400)
     t(visibleMain, 54, 824, 78, profitColor, 750, 430)
     const barsVisible = amountVisible || rateVisible
     if (barsVisible) {
@@ -491,25 +501,30 @@ function drawReferencePoster(canvas: HTMLCanvasElement, order: ShareOrder, optio
     if (amountVisible && rateVisible) t(rate, 501, 830, 28, profitColor, 700, 110)
     line(31, 855, 625, 855, '#384249')
     for (const x of [236, 468]) line(x, 876, x, 935, '#384249')
-    t('取引数量', 55, 894, 18, muted); t(order.kind === 'contract' ? 'セキュリティーデポジット' : '投資額', 258, 894, 16, muted, 400, 200); t('手数料', 493, 894, 18, muted)
+    t(copy.quantity, 55, 894, 18, muted); t(order.kind === 'contract' ? copy.margin : copy.investment, 258, 894, 16, muted, 400, 200); t(copy.fee, 493, 894, 18, muted)
     t(quantity, 55, 929, 24, ink, 500, 167); t(money(capital), 258, 929, 24, ink, 500, 198); t(money(order.fee), 493, 929, 24, ink, 500, 112)
     line(31, 952, 625, 952, '#384249'); line(236, 968, 236, 1024, '#384249')
-    t('注文 ID #', 55, 986, 19, muted); t(order.id, 55, 1019, 25, ink, 400, 166)
-    t('注文日時', 258, 986, 19, muted); t(order.openTime || order.closeTime, 258, 1019, 25, muted, 400, 345)
-    t('B U I L D  Y O U R  F R E E D O M', 31, 1116, 13, '#a8aaab', 400, 400)
-    t(`W I T H  ${brand}`, 31, 1140, 14, '#a8aaab', 400, 400); line(31, 1156, 72, 1156, '#f4d023', 5)
+    t(copy.orderNumber, 55, 986, 19, muted); t(order.id, 55, 1019, 25, ink, 400, 166)
+    t(copy.openTime, 258, 986, 19, muted); t(order.openTime || order.closeTime, 258, 1019, 25, muted, 400, 345)
+    t(copy.subtitle, 31, 1116, 13, '#a8aaab', 400, 400)
+    t(brand, 31, 1140, 14, '#a8aaab', 400, 400); line(31, 1156, 72, 1156, '#f4d023', 5)
     if (qr) { rect(513, 1082, 101, 101, '#fff', 5); ctx.drawImage(qr, 518, 1087, 91, 91) }
-    else { t('TRADE RECORD', 460, 1150, 11, muted, 400, 170); t('RECORDED SETTLEMENT', 460, 1169, 10, muted, 400, 170) }
+    else { t(copy.record, 460, 1150, 11, muted, 400, 170); t(copy.basis, 460, 1169, 10, muted, 400, 170) }
   } else if (!terminal) {
-    t(brand, 46, 88, 62, '#050505', 900, 300); t('T R A D I N G  F O R  A  B R I G H T E R  T O M O R R O W', 46, 122, 10, '#303030', 400, 510)
-    t('世界とつながる', 469, 56, 17, '#333', 400, 160); t('次のチャンスを、あなたに', 397, 79, 17, '#333', 400, 230); line(570, 103, 601, 103, '#555')
+    ctx.save(); ctx.translate(386, 209); ctx.transform(1, -.29, 0, 1, 0, 0)
+    t(copy.tradeHeadline, 0, 0, 19, '#999', 500, 135)
+    t(copy.focusHeadline, 0, 26, 19, '#999', 500, 135)
+    t(copy.worldHeadline, 0, 52, 19, '#999', 500, 135)
+    ctx.restore()
+    t(brand, 46, 88, 62, '#050505', 900, 300); t(copy.subtitle, 46, 122, 10, '#303030', 400, 510)
+    t(copy.worldHeadline, 469, 56, 17, '#333', 400, 160); t(copy.tradeHeadline, 397, 79, 17, '#333', 400, 230); line(570, 103, 601, 103, '#555')
     t(order.symbol, 44, 231, 53, '#000', 750, 365)
-    t(order.symbol === 'USDJPY' ? '米ドル / 日本円' : order.symbol.replace(/^([A-Z]{3})([A-Z]{3})$/, '$1 / $2'), 44, 269, 25, '#333', 400, 370)
-    rect(46, 283, 180, 54, '#efffe2c9', 28, '#a0ed3d'); t(`${side}  ${order.buy ? 'Buy' : 'Sell'}`, 73, 321, 29, sideColor, 500, 145)
+    t(order.symbol.replace(/^([A-Z]{3})([A-Z]{3})$/, '$1 / $2'), 44, 269, 25, '#333', 400, 370)
+    rect(46, 283, 180, 54, '#efffe2c9', 28, '#a0ed3d'); t(side, 73, 321, 29, sideColor, 500, 145)
     rect(20, 360, 610, 146, '#ffffffec', 20, '#e3e3e3')
-    t('エントリー価格', 50, 402, 21, '#080808', 600, 255); t('Entry Price', 50, 429, 20, '#777')
+    t(copy.entry, 50, 402, 21, '#080808', 600, 255)
     t(price(order.openPrice), 50, 477, 40, '#050505', 650, 240)
-    t('決済価格', 368, 402, 21, '#080808', 600, 238); t('Exit Price', 368, 429, 20, '#777')
+    t(copy.exit, 368, 402, 21, '#080808', 600, 238)
     t(price(order.closePrice, true), 368, 477, 40, '#050505', 650, 235); t('→', 286, 455, 48, '#888', 400, 66)
     rect(20, 512, 610, 150, '#ffffffed', 20, '#e3e3e3')
     if (amountVisible || rateVisible) {
@@ -520,26 +535,25 @@ function drawReferencePoster(canvas: HTMLCanvasElement, order: ShareOrder, optio
       line(554, endY + (order.profit < 0 ? -5 : 9), 584, endY, order.profit < 0 ? '#f4b8b8' : '#c9f79d', 8)
       line(584, endY, 580, endY + (order.profit < 0 ? -33 : 33), order.profit < 0 ? '#f4b8b8' : '#c9f79d', 8)
     }
-    t(amountVisible ? '実現損益' : rateVisible ? '収益率' : '取引記録', 51, 557, 23, '#080808', 600, 220)
-    t(amountVisible ? 'Realized PnL' : rateVisible ? 'Return' : 'Trade Record', 170, 557, 20, '#777', 400, 320)
+    t(amountVisible ? copy.pnl : rateVisible ? copy.rate : copy.record, 51, 557, 23, '#080808', 600, 220)
     t(visibleMain, 50, 631, 75, profitColor, 750, 465)
     if (amountVisible && rateVisible) t(rate, 475, 641, 25, profitColor, 650, 130)
     t(currency, 52, 655, 11, muted, 400, 360)
     rect(20, 666, 610, 240, '#ffffffca', 19, '#e3e3e3')
-    t('取引数量', 51, 703, 18, '#555', 400, 150); t('Lots', 51, 727, 19, '#777'); t(quantity, 51, 764, 25, '#050505', 500, 154)
-    t(order.kind === 'contract' ? 'セキュリティーデポジット' : '投資額', 232, 703, 17, '#555', 400, 218); t(order.kind === 'contract' ? 'Security Deposit' : 'Investment', 232, 727, 19, '#777', 400, 215); t(money(capital), 232, 764, 25, '#050505', 500, 216)
-    t('手数料', 498, 703, 18, '#555'); t('Fee', 498, 727, 19, '#777'); t(money(order.fee), 498, 764, 25, '#050505', 500, 110)
+    t(copy.quantity, 51, 703, 18, '#555', 400, 150); t(quantity, 51, 764, 25, '#050505', 500, 154)
+    t(order.kind === 'contract' ? copy.margin : copy.investment, 232, 703, 17, '#555', 400, 218); t(money(capital), 232, 764, 25, '#050505', 500, 216)
+    t(copy.fee, 498, 703, 18, '#555'); t(money(order.fee), 498, 764, 25, '#050505', 500, 110)
     line(211, 686, 211, 765, '#e6e6e6'); line(475, 686, 475, 765, '#e6e6e6'); line(52, 790, 600, 790, '#e6e6e6'); line(270, 808, 270, 883, '#e6e6e6')
-    t('注文 ID', 51, 825, 19, '#444'); t('Order ID', 51, 849, 18, '#777'); t(`# ${order.id}`, 51, 882, 26, '#050505', 500, 204)
-    t('注文日時', 300, 825, 19, '#444'); t('Open Time', 300, 849, 18, '#777'); t(order.openTime || order.closeTime, 300, 882, 24, '#050505', 500, 305)
+    t(copy.orderNumber, 51, 825, 19, '#444'); t(`# ${order.id}`, 51, 882, 26, '#050505', 500, 204)
+    t(copy.openTime, 300, 825, 19, '#444'); t(order.openTime || order.closeTime, 300, 882, 24, '#050505', 500, 305)
     plot(38, 936, 419, 129, false)
     line(470, 940, 470, 1049, '#ddd')
-    for (const [i, word] of ['SMALL', 'TRADES', 'BIG', 'POSSIBILITIES'].entries()) t(word, 502, 954 + i * 24, 16, '#b4b4b4', 400, 134)
+    for (const [i, word] of [copy.focusHeadline, copy.tradeHeadline, copy.reviewHeadline].entries()) t(word, 502, 954 + i * 24, 16, '#b4b4b4', 400, 134)
     t(`${chart.source} · ${chart.interval}`, 39, 1081, 9, '#999', 400, 410)
-    t('Trade the World', 44, 1118, 26, '#050505', 650, 365); t('取引で、より良い自分へ', 44, 1142, 15, '#666', 400, 365)
+    t(`${copy.tradeHeadline} · ${copy.worldHeadline}`, 44, 1118, 26, '#050505', 650, 365); t(copy.subtitle, 44, 1142, 15, '#666', 400, 365)
     if (qr) { rect(542, 1070, 78, 78, '#fff', 2); ctx.drawImage(qr, 545, 1073, 72, 72) }
     t(brand, qr ? 412 : 493, 1125, 25, '#080808', 850, qr ? 119 : 130)
-    t('※ 単一取引の記録です。将来の収益を保証するものではありません。', 87, 1175, 12, '#888', 400, 535)
+    t(copy.footer, 87, 1175, 12, '#888', 400, 535)
   } else {
     t(brand, 20, 43, 23, '#f4f5f6', 750, 220)
     t(order.symbol, 20, 96, 22, '#f4f5f6', 650, 245)
@@ -550,7 +564,7 @@ function drawReferencePoster(canvas: HTMLCanvasElement, order: ShareOrder, optio
     t(visibleMain, 20, 167, 39, profitColor, 750, 225)
     if (amountVisible && rateVisible) t(rate, 20, 197, 18, profitColor, 700, 188)
     t(`${side} · ${quantity}`, 20, 315, 15, '#ddf0ed', 500, 250)
-    const labels = [order.kind === 'contract' ? '証拠金' : '投資額', '手数料', '注文ID'], values = [money(capital), money(order.fee), `#${order.id}`]
+    const labels = [order.kind === 'contract' ? copy.margin : copy.investment, copy.fee, copy.orderNumber], values = [money(capital), money(order.fee), `#${order.id}`]
     for (let i = 0; i < 3; i++) {
       const x = [20, 119, 210][i]!, width = [94, 85, 62][i]!
       rect(x, 328, width, 54, '#09131e', 7)
@@ -558,7 +572,7 @@ function drawReferencePoster(canvas: HTMLCanvasElement, order: ShareOrder, optio
     }
     t(order.openTime || order.closeTime, 20, 406, 14, '#bac2ce', 400, 250)
     line(20, 418, 269, 418, '#142331', .6)
-    t('Trade the World', 20, 452, 21, '#d8dde5', 400, qr ? 180 : 190, '"Segoe Script", cursive')
+    t(`${copy.tradeHeadline} · ${copy.worldHeadline}`, 20, 452, 21, '#d8dde5', 400, qr ? 180 : 190, '"Segoe Script", cursive')
     t(`${chart.source} · ${chart.interval}`, 20, 473, 7, '#768490', 400, 193)
     if (qr) { rect(220, 420, 53, 53, '#fff', 4); ctx.drawImage(qr, 223, 423, 47, 47) }
   }
@@ -584,8 +598,6 @@ function drawCollectionPoster(canvas: HTMLCanvasElement, order: ShareOrder, opti
   const mainLabel = amountVisible ? copy.pnl : rateVisible ? copy.rate : copy.record
   const unit = amountVisible ? order.currency || copy.units : copy.basis
   const side = order.kind === 'contract' ? (order.buy ? copy.buy : copy.sell) : order.buy ? copy.up : copy.down
-  const chinese = copy.record === '交易記錄', japanese = copy.record === '取引記録'
-  const slogan = (zh: string, en: string, ja: string) => chinese ? zh : japanese ? ja : en
   const text = (value: string, x: number, y: number, size: number, color = ink, weight = 400, width = 468, family = 'Arial, "Microsoft YaHei", sans-serif') => {
     let fontSize = size
     do {
@@ -593,7 +605,7 @@ function drawCollectionPoster(canvas: HTMLCanvasElement, order: ShareOrder, opti
       if (ctx.measureText(value).width <= width || fontSize <= 6) break
       fontSize -= .5
     } while (true)
-    ctx.fillStyle = color; ctx.fillText(value, x, y)
+    ctx.fillStyle = color; ctx.save(); ctx.direction = /[\u0600-\u06ff]/.test(value) ? 'rtl' : 'ltr'; if (ctx.textAlign === 'start') ctx.textAlign = 'left'; ctx.fillText(value, x, y); ctx.restore()
   }
   const box = (x: number, y: number, w: number, h: number, fill: string | CanvasGradient, radius = 16, stroke?: string) => {
     ctx.beginPath(); ctx.roundRect(x, y, w, h, radius); ctx.fillStyle = fill; ctx.fill()
@@ -638,9 +650,9 @@ function drawCollectionPoster(canvas: HTMLCanvasElement, order: ShareOrder, opti
 
   if (theme === 'launch') {
     brandLine()
-    text('OWN YOUR', 35, 132, 51, ink, 800)
-    text('EXECUTION.', 35, 187, 51, ink, 800)
-    text(slogan('讓每一次執行，留下記錄。', 'Every execution deserves a record.', '一つひとつの取引を、記録に。'), 36, 217, 15, '#b7aa91')
+    text(copy.focusHeadline, 35, 132, 51, ink, 800)
+    text(copy.executionHeadline, 35, 187, 51, ink, 800)
+    text(copy.subtitle, 36, 217, 15, '#b7aa91')
     text(order.symbol, 35, 290, 43, ink, 750, 450); direction(36, 318, 400)
     metric(36, 359, 466, 70)
     box(26, 516, 281, 108, '#11171bd9', 16, '#ffffff18')
@@ -650,20 +662,20 @@ function drawCollectionPoster(canvas: HTMLCanvasElement, order: ShareOrder, opti
     footer('#c0c7c7')
   } else if (theme === 'aurora') {
     brandLine()
-    text('LIQUID', 35, 137, 57, '#e2fffb', 750, 268)
-    text('FOCUS.', 35, 194, 57, '#e2fffb', 750, 268)
-    text(slogan('市場在流動，記錄有自己的節奏。', 'A record of your rhythm in the market.', '動く市場、自分のリズム。'), 36, 224, 13, '#b6d7d3', 400, 284)
+    text(copy.tradeHeadline, 35, 137, 57, '#e2fffb', 750, 268)
+    text(copy.focusHeadline, 35, 194, 57, '#e2fffb', 750, 268)
+    text(copy.subtitle, 36, 224, 13, '#b6d7d3', 400, 284)
     text(order.symbol, 36, 284, 39, ink, 700, 454); direction(37, 312, 435)
     box(26, 335, 488, 275, '#06292ce6', 24, '#68e0da66')
     metric(48, 370, 443, 69)
     line(48, 521, 491, 521, '#7cddd433')
     pricePair(48, 551, 443)
-    text('PRECISION IN EVERY DETAIL', 36, 645, 12, accent, 600, qr ? 370 : 468)
+    text(copy.subtitle, 36, 645, 12, accent, 600, qr ? 370 : 468)
     footer('#b3c6c5', 666)
   } else if (theme === 'racing') {
     brandLine()
-    text('IN THE ZONE.', 35, 137, 53, '#f1f6ff', 850, 475)
-    text(slogan('保持專注，記下這一刻。', 'Stay focused. Keep the moment.', '集中を、その一瞬の記録に。'), 36, 169, 16, '#b6c7e8')
+    text(copy.focusHeadline, 35, 137, 53, '#f1f6ff', 850, 475)
+    text(copy.subtitle, 36, 169, 16, '#b6c7e8')
     text(order.symbol, 36, 233, 45, '#fff', 750); direction(37, 264, 450)
     box(26, 286, 488, 190, '#123a87e8', 5, '#78a2ed66')
     box(26, 286, 6, 190, '#bdf267', 0)
@@ -671,14 +683,14 @@ function drawCollectionPoster(canvas: HTMLCanvasElement, order: ShareOrder, opti
     box(27, 497, 486, 91, '#091831d9', 6, '#90b5ed30')
     pricePair(47, 524, 444, '#f0f7ff')
     ctx.fillStyle = grad(613, 720, '#06122c00', '#06122cf5'); ctx.fillRect(0, 613, 540, 107)
-    text('FOCUS. EXECUTE. REVIEW.', 36, 643, 16, '#d7edac', 750, qr ? 380 : 470)
+    text(`${copy.focusHeadline} · ${copy.executionHeadline} · ${copy.reviewHeadline}`, 36, 643, 16, '#d7edac', 750, qr ? 380 : 470)
     footer('#b8c9df', 665)
   } else if (theme === 'receipt') {
     ctx.fillStyle = '#e6e8de'; ctx.fillRect(0, 0, 540, 720)
     box(25, 22, 490, 679, '#fcfcf7', 4)
     const mono = 'Consolas, "Microsoft YaHei", monospace'
     text(brand, 48, 61, 24, '#222d26', 750, 240, mono)
-    text('TRADE TICKET', 327, 57, 12, '#768271', 400, 165, mono)
+    text(copy.receipt, 327, 57, 12, '#768271', 400, 165, mono)
     line(48, 83, 492, 83, '#d5d9cf')
     text(order.symbol, 46, 150, 58, '#263d2b', 500, 448, 'Georgia, "Microsoft YaHei", serif')
     direction(49, 182, 350)
@@ -697,7 +709,7 @@ function drawCollectionPoster(canvas: HTMLCanvasElement, order: ShareOrder, opti
     receiptRow(copy.openTime, order.openTime || '—', 528)
     receiptRow(copy.closeTime, order.closeTime, 563)
     ctx.setLineDash([3, 5]); line(47, 583, 493, 583, '#b5bfaa'); ctx.setLineDash([])
-    text(slogan('每筆交易，都值得被記錄。', 'Every trade has a story.', 'すべての取引に、記録を。'), 48, 615, 15, '#65764d', 500, qr ? 345 : 440)
+    text(copy.subtitle, 48, 615, 15, '#65764d', 500, qr ? 345 : 440)
     text(timezone, 48, 640, 11, '#7b8372', 400, 350, mono)
     text(copy.basis, 48, 663, 10, '#7b8372', 400, qr ? 345 : 440)
     text(copy.footer, 48, 682, 9, '#7b8372', 400, qr ? 345 : 440)
@@ -707,9 +719,9 @@ function drawCollectionPoster(canvas: HTMLCanvasElement, order: ShareOrder, opti
   } else if (theme === 'journal' && chart) {
     ctx.fillStyle = '#edf57d'; ctx.fillRect(0, 0, 540, 13)
     brandLine()
-    text('TRADE', 34, 133, 55, '#172a2b', 800)
-    text('JOURNAL', 34, 188, 55, '#172a2b', 800)
-    text(slogan('讀懂過程，記錄結果。', 'Understand the process. Record the result.', '過程を読み、結果を残す。'), 36, 216, 15, '#778278')
+    text(copy.tradeHeadline, 34, 133, 55, '#172a2b', 800)
+    text(copy.reviewHeadline, 34, 188, 55, '#172a2b', 800)
+    text(copy.subtitle, 36, 216, 15, '#778278')
     text(order.symbol, 36, 269, 32, '#173932', 750, 320)
     ctx.save(); ctx.textAlign = 'right'; text(side, 502, 266, 14, order.buy ? '#398551' : '#c24047', 600, 175); ctx.restore()
     line(36, 286, 503, 286, '#d6ddcf')
@@ -742,9 +754,9 @@ function drawCollectionPoster(canvas: HTMLCanvasElement, order: ShareOrder, opti
   } else if (theme === 'voyage') {
     ctx.fillStyle = grad(0, 565, '#edf3f9aa', '#fff5e900'); ctx.fillRect(0, 0, 540, 565)
     brandLine()
-    text('TRADE THE', 34, 135, 51, '#183247', 700, 469, 'Georgia, serif')
-    text('WORLD.', 34, 192, 55, '#183247', 700, 469, 'Georgia, serif')
-    text(slogan('每一程，都有自己的交易故事。', 'Your journey. Your trading story.', '旅の途中に、自分だけの取引記録。'), 36, 223, 14, '#465c6e', 400, 425)
+    text(copy.tradeHeadline, 34, 135, 51, '#183247', 700, 469, 'Georgia, serif')
+    text(copy.worldHeadline, 34, 192, 55, '#183247', 700, 469, 'Georgia, serif')
+    text(copy.subtitle, 36, 223, 14, '#465c6e', 400, 425)
     text(order.symbol, 35, 283, 39, '#183247', 750, 455)
     direction(36, 311, 412)
     box(25, 331, 374, 179, '#fffcf3df', 18)

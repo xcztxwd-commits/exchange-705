@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import Tabbar from '@/components/Tabbar.vue'
 import request from '@/utils/request'
@@ -14,21 +14,11 @@ const localeStore = useLocaleStore()
 localeStore.loadLocale()
 
 // 货币列表
-const currencies = [
-  { code: 'USD', name: '美元' },
-  { code: 'EUR', name: '欧元' },
-  { code: 'GBP', name: '英镑' },
-  { code: 'JPY', name: '日元' },
-  { code: 'CNY', name: '人民币' },
-  { code: 'KRW', name: '韩元' },
-  { code: 'SGD', name: '新加坡元' },
-  { code: 'AUD', name: '澳元' },
-  { code: 'CHF', name: '瑞士法郎' },
-  { code: 'IDR', name: '印尼盾' },
-  { code: 'MYR', name: '马来西亚林吉特' },
-  { code: 'TWD', name: '新台币' },
-  { code: 'VND', name: '越南盾' },
-]
+const currencies = computed(() => {
+  const names = new Intl.DisplayNames([localeStore.locale], { type: 'currency' })
+  return ['USD', 'EUR', 'GBP', 'JPY', 'CNY', 'KRW', 'SGD', 'AUD', 'CHF', 'IDR', 'MYR', 'TWD', 'VND']
+    .map(code => ({ code, name: names.of(code) || code }))
+})
 
 // 表单数据
 const formData = ref({

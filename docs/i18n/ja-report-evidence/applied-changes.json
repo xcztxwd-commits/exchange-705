@@ -1,0 +1,208 @@
+{
+  "dictionary": [
+    {
+      "key": "networkErrorOrNotImplemented",
+      "before": "通信エラーが発生したか、この機能は現在利用できません",
+      "after": "処理結果を確認できませんでした。状況をご確認ください"
+    },
+    {
+      "key": "transferFailed",
+      "before": "振替に失敗しました。もう一度お試しください",
+      "after": "振替の処理結果を確認できませんでした。振替履歴をご確認ください"
+    },
+    {
+      "key": "rejectReason",
+      "before": "非承認理由",
+      "after": "不承認理由"
+    },
+    {
+      "key": "uploadPassportOrIdBothSides",
+      "before": "パスポートまたは本人確認書類の必要な面をアップロードしてください",
+      "after": "本人確認書類の画像を2枚アップロードしてください。提出する面・ページが不明な場合は、サポートへお問い合わせください。"
+    },
+    {
+      "key": "uploadPassportOrIdBack",
+      "before": "本人確認書類の裏面",
+      "after": "本人確認書類の画像（2枚目）"
+    },
+    {
+      "key": "imageSizeExceeded",
+      "before": "画像は5MB以下にしてください",
+      "after": "画像のファイルサイズは5MB以下にしてください"
+    },
+    {
+      "key": "submitSuccessPendingReview",
+      "before": "申請を受け付けました。審査をお待ちください",
+      "after": "申請を受け付けました。審査結果をお待ちください"
+    },
+    {
+      "key": "customerService",
+      "before": "カスタマーサービス",
+      "after": "カスタマーサポート"
+    },
+    {
+      "key": "verified",
+      "before": "確認済み",
+      "after": "本人確認済み"
+    },
+    {
+      "key": "unverified",
+      "before": "未確認",
+      "after": "本人確認未完了"
+    },
+    {
+      "key": "statusRejected",
+      "before": "非承認",
+      "after": "不承認"
+    },
+    {
+      "key": "imageSizeLimit",
+      "before": "画像は5MB以下にしてください",
+      "after": "画像のファイルサイズは5MB以下にしてください"
+    },
+    {
+      "key": "miningMachineRentalFee",
+      "before": "マイニング機器のレンタル料金",
+      "after": "マイニング機器のレンタル料（設定値）"
+    },
+    {
+      "key": "imageSizeCannotExceed5MB",
+      "before": "画像は5MB以下にしてください",
+      "after": "画像のファイルサイズは5MB以下にしてください"
+    },
+    {
+      "key": "noComplaintEmail",
+      "before": "苦情受付メールアドレスは現在表示できません",
+      "after": "苦情受付メールアドレスが設定されていません"
+    },
+    {
+      "key": "contactCustomerService",
+      "before": "カスタマーサービスに連絡",
+      "after": "カスタマーサポートに問い合わせる"
+    },
+    {
+      "key": "onlineCustomerService",
+      "before": "オンラインカスタマーサービス",
+      "after": "オンラインサポート"
+    },
+    {
+      "key": "noCustomerService",
+      "before": "カスタマーサービスが利用できません",
+      "after": "現在サポート窓口をご利用いただけません"
+    },
+    {
+      "key": "loadingCustomerService",
+      "before": "カスタマーサービスを読み込み中...",
+      "after": "サポート窓口を読み込み中..."
+    },
+    {
+      "key": "orderCreatedFailedNoId",
+      "before": "注文作成に失敗: 注文IDが取得できませんでした",
+      "after": "注文IDを取得できませんでした。再注文する前に注文履歴をご確認ください"
+    },
+    {
+      "key": "feesDescription",
+      "before": "借入人が返済期日までに返済義務を履行しない場合、貸付人が債権回収のために負担したすべての費用（弁護士費用を含みますが、これに限りません）を負担するものとします。",
+      "after": "借入人が返済期日までに返済義務を履行しない場合、貸付人が債権回収のために負担したすべての費用（法律費用を含みますが、これに限りません）を負担するものとします。"
+    },
+    {
+      "key": "severabilityDescription",
+      "before": "本契約のいずれかの条項が無効または執行不能と判断された場合でも、その他の条項の有効性および拘束力には影響しません。",
+      "after": "本契約のいずれかの条項が無効または執行不能と判断された場合、その条項は無効となり、その他の条項は引き続き有効で拘束力を有します。"
+    },
+    {
+      "key": "governingLawDescription",
+      "before": "本契約は、借入人が所在する国または地域の法律に従って解釈され、履行されるものとします。",
+      "after": "本契約は、借入人が所在する国または地域の法律に従って解釈および執行されるものとします。"
+    },
+    {
+      "key": "networkProtocol",
+      "before": "ネットワークプロトコル",
+      "after": "ネットワーク"
+    },
+    {
+      "key": "rejectReasonLabel",
+      "before": "非承認理由",
+      "after": "不承認理由"
+    },
+    {
+      "key": "contactSupport",
+      "before": "カスタマーサービスにお問い合わせください",
+      "after": "カスタマーサポートへお問い合わせください"
+    },
+    {
+      "key": "onlineSupport",
+      "before": "オンラインカスタマーサービス",
+      "after": "オンラインサポート"
+    },
+    {
+      "key": "rejected",
+      "before": "非承認",
+      "after": "不承認"
+    },
+    {
+      "key": "kycUnverified",
+      "before": "未確認",
+      "after": "本人確認未完了"
+    },
+    {
+      "key": "kycVerified",
+      "before": "確認済み",
+      "after": "本人確認済み"
+    },
+    {
+      "key": "onlineService",
+      "before": "オンラインカスタマーサービス",
+      "after": "オンラインサポート"
+    },
+    {
+      "key": "remaining9",
+      "before": "非承認理由",
+      "after": "不承認理由"
+    },
+    {
+      "key": "myMiningMachines",
+      "before": "保有マイニングマシン",
+      "after": "利用中のマイニングマシン"
+    },
+    {
+      "key": "verifiedStatus",
+      "before": "確認済み",
+      "after": "本人確認済み"
+    },
+    {
+      "key": "unverifiedStatus",
+      "before": "未確認",
+      "after": "本人確認未完了"
+    },
+    {
+      "key": "lockRent",
+      "before": "レンタル料",
+      "after": "レンタル料（設定値）"
+    },
+    {
+      "key": "noRecordsText",
+      "before": "履歴はありません",
+      "after": "データがありません"
+    },
+    {
+      "key": "rejectedText",
+      "before": "非承認",
+      "after": "不承認"
+    },
+    {
+      "key": "rejectReasonText",
+      "before": "非承認理由",
+      "after": "不承認理由"
+    }
+  ],
+  "ui": {
+    "The loan amount must be at least {amount}.": "借入金額は{amount}以上にしてください",
+    "The loan amount must not exceed {amount}.": "借入金額は{amount}以下にしてください",
+    "The subscription amount must be at least {amount}.": "申込金額は{amount}以上にしてください",
+    "The subscription amount must not exceed {amount}.": "申込金額は{amount}以下にしてください",
+    "Unable to retrieve the complaint email address.": "苦情受付メールアドレスを取得できませんでした",
+    "This contact address is currently unavailable.": "現在この連絡先をご利用いただけません",
+    "Unable to confirm the result. Check the relevant history or status before submitting again.": "処理結果を確認できませんでした。再送信する前に、該当する履歴や処理状況をご確認ください。"
+  }
+}

@@ -34,3 +34,6 @@ __pycache__/
 !exchange-backend/src/main/resources/db/manual/705-user-leverage.sql
 !exchange-backend/src/main/resources/db/manual/705-price-control.sql
 !exchange-backend/src/main/resources/db/migration/create_control_history.sql
+
+# Reviewed additive net-equity migration.
+!exchange-backend/src/main/resources/db/asset-equity/V001__net_equity_history.sql

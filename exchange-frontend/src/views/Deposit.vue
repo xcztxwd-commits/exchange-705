@@ -397,7 +397,7 @@ onMounted(() => {
       <!-- 二维码和地址 -->
       <div class="qr-section">
         <div class="qr-code" v-if="qrCodeUrl">
-          <img :src="qrCodeUrl" alt="QR Code" />
+          <img :src="qrCodeUrl" :alt="localeStore.t('qrCode')" />
         </div>
         <div class="qr-code-placeholder" v-else>
           <svg class="placeholder-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -462,7 +462,7 @@ onMounted(() => {
             <div class="upload-text">{{ localeStore.t('clickToUpload') }}</div>
           </div>
           <div v-else class="upload-preview">
-            <img :src="proofPreview" alt="Proof" />
+            <img :src="proofPreview" :alt="localeStore.t('uploadPaymentVoucher')" />
             <button class="remove-button" @click="removeProof">×</button>
           </div>
         </div>
@@ -543,7 +543,7 @@ onMounted(() => {
               <div class="upload-text">{{ localeStore.t('clickToUpload') }}</div>
             </div>
             <div v-else class="upload-preview">
-              <img :src="proofPreview" alt="Proof" />
+              <img :src="proofPreview" :alt="localeStore.t('uploadPaymentVoucher')" />
               <button class="remove-button" @click="removeProof">×</button>
             </div>
           </div>

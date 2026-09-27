@@ -10,7 +10,7 @@ const dialog = ref<HTMLDialogElement>()
 const draft = ref<number | string>(props.modelValue)
 const choices = computed(() => leverageChoices(props.max))
 const valid = computed(() => Number.isInteger(Number(draft.value)) && Number(draft.value) >= 1 && Number(draft.value) <= props.max)
-const title = computed(() => locale.locale === 'zh-TW' ? '調整槓桿' : 'Adjust leverage')
+const title = computed(() => locale.text('調整槓桿', 'Adjust leverage'))
 let previousOverflow = ''
 let isOpen = false
 function open() {
@@ -53,7 +53,7 @@ onUnmounted(restoreScroll)
         <div class="leverage-presets">
           <button v-for="value in choices" :key="value" type="button" :aria-pressed="Number(draft) === value" @click="draft = value">{{ value }}×</button>
         </div>
-        <p v-if="!valid" class="input-error" role="status">{{ locale.locale === 'zh-TW' ? '請輸入範圍內的整數' : 'Enter a whole number within the range' }} (1–{{ max }})</p>
+        <p v-if="!valid" class="input-error" role="status">{{ locale.text('請輸入範圍內的整數', 'Enter a whole number within the range') }} (1–{{ max }})</p>
         <footer><button type="button" class="cancel" @click="close">{{ locale.t('cancelText') }}</button><button type="submit" class="confirm" :disabled="!valid">{{ locale.t('confirmBtnText') }}</button></footer>
       </form>
     </dialog>

@@ -12,7 +12,7 @@ const props = defineProps<{ mode: 'contract' | 'term'; symbol: string; catalog: 
 const emit = defineEmits<{ counts: [open: number, pending: number]; changed: [] }>()
 const market = useMarketStore()
 const locale = useLocaleStore()
-const text = (zh: string, en: string) => locale.locale.startsWith('zh') ? zh : en
+const text = locale.text
 const orders = ref<any[]>([])
 const loading = ref(false)
 const error = ref('')
@@ -39,7 +39,7 @@ function name(order: any) {
   const s = info(order)
   return s?.category === 'Forex' || s?.sourceCategory === 'Forex' ? displaySymbol(s) : s?.baseCurrency && s?.quoteCurrency ? `${s.baseCurrency}/${s.quoteCurrency}` : label
 }
-function money(value: any) { return value != null && Number.isFinite(Number(value)) ? Number(value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—' }
+function money(value: any) { return value != null && Number.isFinite(Number(value)) ? Number(value).toLocaleString(locale.locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—' }
 function price(value: any, order: any) { return Number(value) > 0 ? Number(value).toFixed(info(order)?.pricePrecision ?? 2) : '—' }
 function livePrice(order: any) { return market.getQuoteStatus(order.symbol, now.value) === 'available' ? market.getPrice(order.symbol) : NaN }
 function profit(order: any) { return order.status === 'OPEN' ? (Number.isFinite(livePrice(order)) ? calculateContractProfit(order, livePrice(order), market.getConversionRate(order.symbol, order.quoteCurrency)) : NaN) : Number(order.profit) }
@@ -61,7 +61,7 @@ function liquidation(order: any) {
 }
 function expiry(order: any) { return orderTimestamp(order.openTime) + Number(order.duration) * 1000 }
 function remaining(order: any) { const end = expiry(order); return Number.isFinite(end) ? Math.max(0, Math.ceil((end - now.value - serverOffset) / 1000)) : null }
-function date(value: number) { return Number.isFinite(value) ? new Date(value).toLocaleString() : '—' }
+function date(value: number) { return Number.isFinite(value) ? new Date(value).toLocaleString(locale.locale) : '—' }
 async function refresh() {
   const version = ++generation
   const mode = props.mode
@@ -138,8 +138,8 @@ onUnmounted(() => { disposed = true; generation++; clearInterval(timer) })
     <p v-if="loading && !orders.length" class="empty" role="status">{{ text('載入訂單…', 'Loading orders…') }}</p>
     <div v-else-if="!visibleOrders.length && !error" class="empty">{{ text('暫無', 'No ') }}{{ mode === 'term' ? (tab === 'history' ? text('歷史交易', 'past trades') : text('進行中的交易', 'active trades')) : (tab === 'pending' ? text('委託', 'pending orders') : text('持倉', 'positions')) }}<small>{{ text('成交後可在此查看訂單狀態與詳情', 'Orders and their status will appear here') }}</small></div>
     <article v-for="order in visibleOrders.slice(0, 20)" :key="order.id" class="order-card" :class="{ 'contract-order': mode === 'contract' }">
-      <header><strong>{{ name(order) }}</strong><span :class="['badge', ['BUY', 'UP'].includes(order.side || order.direction) ? 'up' : 'down']">{{ ['BUY', 'UP'].includes(order.side || order.direction) ? text('多 ↑', 'Long ↑') : text('空 ↓', 'Short ↓') }}</span><span v-if="mode === 'contract'">{{ order.leverage }}×</span><span class="order-status">{{ order.status === 'PENDING' ? text('待成交', 'Pending') : order.status === 'CLOSED' ? text('已結算', 'Settled') : text('進行中', 'Active') }}</span></header>
-      <dl><div><dt>{{ text('數量 / 金額', 'Size / Amount') }}</dt><dd>{{ mode === 'contract' ? `${order.quantity} ${locale.t('lots')}` : `${money(order.amount)} USD` }}</dd></div><div><dt>{{ order.status === 'PENDING' ? text('委託價格', 'Limit price') : text('成交價格', 'Entry price') }}</dt><dd>{{ price(order.status === 'PENDING' ? order.price : order.openPrice, order) }}</dd></div>
+      <header><strong>{{ name(order) }}</strong><span :class="['badge', ['BUY', 'UP'].includes(order.side || order.direction) ? 'up' : 'down']">{{ mode === 'term' ? (order.direction === 'UP' ? text('預測上漲 ↑', 'Buy up ↑') : text('預測下跌 ↓', 'Buy down ↓')) : (order.side === 'BUY' ? text('多 ↑', 'Long ↑') : text('空 ↓', 'Short ↓')) }}</span><span v-if="mode === 'contract'">{{ order.leverage }}×</span><span class="order-status">{{ order.status === 'PENDING' ? text('待成交', 'Pending') : order.status === 'CLOSED' ? text('已結算', 'Settled') : text('進行中', 'Active') }}</span></header>
+      <dl><div><dt>{{ text('數量 / 金額', 'Size / Amount') }}</dt><dd>{{ mode === 'contract' ? `${order.quantity} ${locale.t('lots')}` : `${money(order.amount)} USD` }}</dd></div><div><dt>{{ order.status === 'PENDING' ? text('委託價格', 'Limit price') : (mode === 'contract' ? locale.t('openPrice') : text('開始價格', 'Entry price')) }}</dt><dd>{{ price(order.status === 'PENDING' ? order.price : order.openPrice, order) }}</dd></div>
         <template v-if="mode === 'contract'"><div><dt>{{ text('參考現價', 'Current price') }}</dt><dd>{{ price(livePrice(order), order) }}</dd></div><div><dt>{{ text('盈虧', 'P/L') }} (USD)</dt><dd :class="profit(order) < 0 ? 'down' : 'up'">{{ money(profit(order)) }}</dd></div><div><dt>{{ text('止盈', 'Take profit') }}</dt><dd>{{ price(order.takeProfit, order) }}</dd></div><div><dt>{{ text('止損', 'Stop loss') }}</dt><dd>{{ price(order.stopLoss, order) }}</dd></div></template>
         <template v-else><div><dt>{{ text('到期時間', 'Expiry') }}</dt><dd>{{ date(expiry(order)) }}</dd></div><div><dt>{{ order.status === 'CLOSED' ? text('結算盈虧', 'Settled P/L') : text('剩餘時間', 'Remaining') }}</dt><dd>{{ order.status === 'CLOSED' ? money(order.profit) + ' USD' : remaining(order) === null ? '—' : remaining(order) === 0 ? text('等待結算', 'Awaiting settlement') : remaining(order) + 's' }}</dd></div></template>
       </dl>
@@ -148,7 +148,7 @@ onUnmounted(() => { disposed = true; generation++; clearInterval(timer) })
     <router-link v-if="visibleOrders.length > 20" to="/orders">{{ text('查看其餘訂單', 'View more orders') }} ›</router-link>
     <TradeSheet :open="!!selected" :busy="busy" :title="action === 'close' ? text('確認平倉', 'Confirm close') : action === 'cancel' ? text('確認撤單', 'Confirm cancellation') : text('訂單詳情', 'Order details')" @close="selected = null">
       <template v-if="selected"><h3>{{ name(selected) }} · {{ selected.side || selected.direction }} · #{{ selected.id }}</h3>
-        <dl class="detail-list"><div><dt>{{ text('數量 / 金額', 'Size / Amount') }}</dt><dd>{{ selected.quantity ?? selected.amount }} {{ mode === 'contract' ? locale.t('lots') : 'USD' }}</dd></div><div><dt>{{ text('委託 / 成交價', 'Limit / Entry') }}</dt><dd>{{ price(selected.status === 'PENDING' ? selected.price : selected.openPrice, selected) }}</dd></div><div><dt>{{ text('狀態', 'Status') }}</dt><dd>{{ selected.status }}</dd></div><div><dt>{{ text('參考現價', 'Current price') }}</dt><dd>{{ price(livePrice(selected), selected) }}</dd></div><div v-if="mode === 'contract'"><dt>{{ text('保證金 / 手續費', 'Margin / Fee') }}</dt><dd>{{ money(selected.margin) }} / {{ money(selected.fee) }} USD</dd></div><div v-else><dt>{{ text('到期時間', 'Expiry') }}</dt><dd>{{ date(expiry(selected)) }}</dd></div></dl>
+        <dl class="detail-list"><div><dt>{{ text('數量 / 金額', 'Size / Amount') }}</dt><dd>{{ selected.quantity ?? selected.amount }} {{ mode === 'contract' ? locale.t('lots') : 'USD' }}</dd></div><div><dt>{{ text('委託 / 成交價', 'Limit / Entry') }}</dt><dd>{{ price(selected.status === 'PENDING' ? selected.price : selected.openPrice, selected) }}</dd></div><div><dt>{{ text('狀態', 'Status') }}</dt><dd>{{ selected.status === 'PENDING' ? text('待成交', 'Pending') : selected.status === 'CLOSED' ? text('已結算', 'Settled') : text('進行中', 'Active') }}</dd></div><div><dt>{{ text('參考現價', 'Current price') }}</dt><dd>{{ price(livePrice(selected), selected) }}</dd></div><div v-if="mode === 'contract'"><dt>{{ text('保證金 / 手續費', 'Margin / Fee') }}</dt><dd>{{ money(selected.margin) }} / {{ money(selected.fee) }} USD</dd></div><div v-else><dt>{{ text('到期時間', 'Expiry') }}</dt><dd>{{ date(expiry(selected)) }}</dd></div></dl>
         <template v-if="action === 'detail' && mode === 'contract'"><p>{{ text('止盈止損 · 留空移除；依當前方向校驗', 'Protection · Leave blank to remove; validated for this direction') }}</p><label class="protection-label">{{ text('止盈價格', 'Take profit') }}<input v-model="takeProfit" type="number" inputmode="decimal" :step="10 ** -(info(selected)?.pricePrecision ?? 2)" /></label><label class="protection-label">{{ text('止損價格', 'Stop loss') }}<input v-model="stopLoss" type="number" inputmode="decimal" :step="10 ** -(info(selected)?.pricePrecision ?? 2)" /></label><p v-if="protectionInvalid" class="error">{{ text('請檢查保護價格的方向、精度及行情狀態', 'Check protection direction, precision and quote availability') }}</p></template>
         <p v-if="action !== 'detail'">{{ text('請核對品種、方向及數量，確認後提交。成交與結算以服務端為準。', 'Check instrument, side and size before confirming. Execution is server-authoritative.') }}</p><p v-if="error" role="alert" class="error">{{ error }}</p>
       </template>

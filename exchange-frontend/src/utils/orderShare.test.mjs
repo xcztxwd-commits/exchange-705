@@ -50,7 +50,7 @@ for (const template of ['referenceGold', 'referenceWhite', 'referenceTerminal'])
   assert.throws(() => drawSharePoster(canvas, order, { ...options, template }, shareCopy('en'), 'DEMO', 'UTC', undefined, undefined, {}))
   printed.length = 0
   drawSharePoster(canvas, { ...order, kind: 'option', amount: 200, closePrice: 1e-8 }, { ...options, template, mode: 'both' }, shareCopy('en'), 'DEMO', 'UTC', undefined, chart, {})
-  assert.ok(printed.includes('投資額'))
+  assert.ok(printed.includes(shareCopy('en').investment))
   assert.ok(printed.some(value => value.includes('-25.00%')))
   assert.ok(printed.some(value => value.includes('0.00000001')))
 }
@@ -86,3 +86,30 @@ for (const template of shareTemplates.filter(shareNeedsChart)) {
   if (template === 'journal' || template === 'chart') assert.ok(printed.some(value => value.includes('Recent market candles')))
 }
 console.log('Order share: recent candles and old-order background rendering passed')
+
+// Every drawable word must originate in the selected locale, never a fixed-language label.
+const { posterLocales, shareLanguage } = await import('./orderShareLocales.ts')
+assert.equal(shareLanguage('ja-JP'), 'ja')
+assert.equal(shareLanguage('ZH_cn'), 'zh-TW')
+assert.equal(shareLanguage('fr-CA'), 'fr')
+assert.equal(shareLanguage('unknown'), 'en')
+for (const locale of Object.keys(posterLocales)) {
+  const copy = shareCopy(locale)
+  const dictionary = Object.values(copy)
+  for (const template of shareTemplates) {
+    for (const mode of ['amount', 'rate', 'both', 'none']) {
+      printed.length = 0
+      drawSharePoster(canvas, order, { ...options, template, mode }, copy, 'DEMO', 'UTC', undefined, recent, {})
+      for (const text of printed) {
+        let remainder = text.replaceAll('USDJPY', '').replaceAll('USD/JPY', '').replaceAll('USD / JPY', '').replaceAll('DEMO', '').replaceAll('UTC', '').replaceAll('Test', '')
+        for (const word of [...dictionary].sort((a, b) => b.length - a.length)) remainder = remainder.replaceAll(word, '')
+        remainder = remainder.replaceAll('1m', '').replace(/[0-9\s.,:·()+#%/*—→T-]/g, '')
+        assert.equal(remainder, '', `${locale}/${template}/${mode} unlocalized text: ${text}`)
+      }
+      if (locale !== 'ja') assert.ok(!printed.some(text => /[\u3040-\u30ff]/.test(text)), `${locale}/${template} leaked Japanese`)
+    }
+  }
+}
+assert.equal(readFileSync(new URL('./orderShareLocales.ts', import.meta.url), 'utf8'), readFileSync(new URL('../../../exchange-pc/src/utils/orderShareLocales.ts', import.meta.url), 'utf8'))
+assert.equal(shareBackgrounds.referenceWhite, 'reference-white-neutral.png')
+console.log('Localization: 19 locales × 16 templates × 4 display modes passed')

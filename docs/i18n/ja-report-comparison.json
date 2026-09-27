@@ -1,0 +1,1882 @@
+[
+  {
+    "key": "getNoticeFailed",
+    "before": "お知らせリストの取得に失敗しました",
+    "after": "お知らせを取得できませんでした",
+    "grade": "A",
+    "recommendation": "建议采用。更简洁自然；若页面确实需要强调“列表”，可保留「一覧」。",
+    "current": "お知らせを取得できませんでした",
+    "decision": "检查现有调用并保留；未发现本轮需要重新定义的业务对象。",
+    "calls": [
+      {
+        "file": "exchange-pc/src/views/DesktopTrade.vue",
+        "line": 3675,
+        "text": "console.error(localeStore.t('getNoticeFailed'), e);"
+      }
+    ]
+  },
+  {
+    "key": "networkErrorOrNotImplemented",
+    "before": "ネットワーク例外またはインターフェイスが実装されていません",
+    "after": "通信エラーが発生したか、この機能は現在利用できません",
+    "grade": "C",
+    "recommendation": "面向用户比原文好，但仍把“通信异常”和“功能不可用”混在一起。建议按真实错误类型拆分提示。",
+    "current": "処理結果を確認できませんでした。状況をご確認ください",
+    "decision": "删除网络错误或功能未实现的猜测；PC保留真实 e.message，日语请求层区分读请求通信失败与写请求结果未知。",
+    "calls": [
+      {
+        "file": "exchange-pc/src/views/DesktopTrade.vue",
+        "line": 2112,
+        "text": "let errMsg = e.response?.data?.message || e.message || localeStore.t('networkErrorOrNotImplemented');"
+      },
+      {
+        "file": "exchange-pc/src/views/DesktopTrade.vue",
+        "line": 2338,
+        "text": "ElMessage.error(e.response?.data?.message || e.message || localeStore.t('networkErrorOrNotImplemented'));"
+      },
+      {
+        "file": "exchange-pc/src/views/DesktopTrade.vue",
+        "line": 2458,
+        "text": "ElMessage.error(e.response?.data?.message || e.message || localeStore.t('networkErrorOrNotImplemented'));"
+      }
+    ]
+  },
+  {
+    "key": "ensurePhotoClearSizeLimit",
+    "before": "写真が鮮明に表示され、5MB 以下であることを確認してください。 JPG/PNG形式をサポートします。",
+    "after": "文字や顔が鮮明に写った、5MB以下のJPGまたはPNG画像をアップロードしてください。",
+    "grade": "B",
+    "recommendation": "证件上传场景更自然；但新增“文字或脸部”条件。若该 key 被普通图片上传复用，会产生误导。",
+    "current": "文字や顔が鮮明に写った、5MB以下のJPGまたはPNG画像をアップロードしてください。",
+    "decision": "检查到PC本人确认图片区域使用，未发现复用于一般图片上传；保留清晰文字/脸部要求。",
+    "calls": [
+      {
+        "file": "exchange-pc/src/views/DesktopTrade.vue",
+        "line": 1195,
+        "text": "<div class=\"text-xs text-gray-400 dark:text-gray-500 mt-2\">{{ localeStore.t('ensurePhotoClearSizeLimit') }}</div>"
+      }
+    ]
+  },
+  {
+    "key": "copySuccess2",
+    "before": "正常にコピーされました",
+    "after": "コピーしました",
+    "grade": "A",
+    "recommendation": "建议采用。产品提示更自然，无需强调“正常”。",
+    "current": "コピーしました",
+    "decision": "检查现有调用并保留；未发现本轮需要重新定义的业务对象。",
+    "calls": [
+      {
+        "file": "exchange-pc/src/views/DesktopTrade.vue",
+        "line": 3688,
+        "text": "ElMessage.success(localeStore.t('copySuccess2'));"
+      }
+    ]
+  },
+  {
+    "key": "loginSuccess",
+    "before": "ログイン成功",
+    "after": "ログインしました",
+    "grade": "A",
+    "recommendation": "建议采用。完整句式更自然。",
+    "current": "ログインしました",
+    "decision": "检查现有调用并保留；未发现本轮需要重新定义的业务对象。",
+    "calls": [
+      {
+        "file": "exchange-frontend/src/views/Login.vue",
+        "line": 90,
+        "text": "showToastMessage(localeStore.t('loginSuccess'), 'success')"
+      },
+      {
+        "file": "exchange-pc/src/views/DesktopTrade.vue",
+        "line": 1710,
+        "text": "ElMessage.success(localeStore.t('loginSuccess'));"
+      },
+      {
+        "file": "exchange-pc/src/views/Login.vue",
+        "line": 90,
+        "text": "showToastMessage(localeStore.t('loginSuccess'), 'success')"
+      }
+    ]
+  },
+  {
+    "key": "pleaseEnterEmail",
+    "before": "まずメールを入力してください",
+    "after": "メールアドレスを入力してください",
+    "grade": "A",
+    "recommendation": "建议采用。更明确，且删除无依据的“首先”。",
+    "current": "メールアドレスを入力してください",
+    "decision": "检查现有调用并保留；未发现本轮需要重新定义的业务对象。",
+    "calls": [
+      {
+        "file": "exchange-frontend/src/views/ForgotPassword.vue",
+        "line": 36,
+        "text": "showToast(localeStore.t('pleaseEnterEmail'), 'error')"
+      },
+      {
+        "file": "exchange-pc/src/views/DesktopTrade.vue",
+        "line": 1782,
+        "text": "ElMessage.error(localeStore.t('pleaseEnterEmail'));"
+      },
+      {
+        "file": "exchange-pc/src/views/ForgotPassword.vue",
+        "line": 36,
+        "text": "showToast(localeStore.t('pleaseEnterEmail'), 'error')"
+      }
+    ]
+  },
+  {
+    "key": "updateSuccess",
+    "before": "更新成功",
+    "after": "更新しました",
+    "grade": "A",
+    "recommendation": "建议采用。",
+    "current": "更新しました",
+    "decision": "检查现有调用并保留；未发现本轮需要重新定义的业务对象。",
+    "calls": [
+      {
+        "file": "exchange-frontend/src/views/BindBankCard.vue",
+        "line": 98,
+        "text": "showToast(editingCard.value ? localeStore.t('updateSuccess') : localeStore.t('addSuccess'), 'success')"
+      },
+      {
+        "file": "exchange-frontend/src/views/BindDigitalCurrency.vue",
+        "line": 97,
+        "text": "showToast(editingAddress.value ? localeStore.t('updateSuccess') : localeStore.t('addSuccess'), 'success')"
+      },
+      {
+        "file": "exchange-pc/src/views/BindBankCard.vue",
+        "line": 98,
+        "text": "showToast(editingCard.value ? localeStore.t('updateSuccess') : localeStore.t('addSuccess'), 'success')"
+      },
+      {
+        "file": "exchange-pc/src/views/BindDigitalCurrency.vue",
+        "line": 97,
+        "text": "showToast(editingAddress.value ? localeStore.t('updateSuccess') : localeStore.t('addSuccess'), 'success')"
+      }
+    ]
+  },
+  {
+    "key": "addSuccess",
+    "before": "追加成功",
+    "after": "追加しました",
+    "grade": "A",
+    "recommendation": "建议采用。",
+    "current": "追加しました",
+    "decision": "检查现有调用并保留；未发现本轮需要重新定义的业务对象。",
+    "calls": [
+      {
+        "file": "exchange-frontend/src/views/BindBankCard.vue",
+        "line": 98,
+        "text": "showToast(editingCard.value ? localeStore.t('updateSuccess') : localeStore.t('addSuccess'), 'success')"
+      },
+      {
+        "file": "exchange-frontend/src/views/BindDigitalCurrency.vue",
+        "line": 97,
+        "text": "showToast(editingAddress.value ? localeStore.t('updateSuccess') : localeStore.t('addSuccess'), 'success')"
+      },
+      {
+        "file": "exchange-pc/src/views/BindBankCard.vue",
+        "line": 98,
+        "text": "showToast(editingCard.value ? localeStore.t('updateSuccess') : localeStore.t('addSuccess'), 'success')"
+      },
+      {
+        "file": "exchange-pc/src/views/BindDigitalCurrency.vue",
+        "line": 97,
+        "text": "showToast(editingAddress.value ? localeStore.t('updateSuccess') : localeStore.t('addSuccess'), 'success')"
+      }
+    ]
+  },
+  {
+    "key": "operationFailed",
+    "before": "操作失敗",
+    "after": "操作に失敗しました",
+    "grade": "A",
+    "recommendation": "建议采用。完整自然。",
+    "current": "操作に失敗しました",
+    "decision": "检查现有调用并保留；未发现本轮需要重新定义的业务对象。",
+    "calls": [
+      {
+        "file": "exchange-frontend/src/views/BindBankCard.vue",
+        "line": 103,
+        "text": "showToast(res.message || localeStore.t('operationFailed'), 'error')"
+      },
+      {
+        "file": "exchange-frontend/src/views/BindBankCard.vue",
+        "line": 107,
+        "text": "showToast(e.response?.data?.message || localeStore.t('operationFailed'), 'error')"
+      },
+      {
+        "file": "exchange-frontend/src/views/BindDigitalCurrency.vue",
+        "line": 102,
+        "text": "showToast(res.message || localeStore.t('operationFailed'), 'error')"
+      },
+      {
+        "file": "exchange-frontend/src/views/BindDigitalCurrency.vue",
+        "line": 106,
+        "text": "showToast(e.response?.data?.message || localeStore.t('operationFailed'), 'error')"
+      },
+      {
+        "file": "exchange-pc/src/views/BindBankCard.vue",
+        "line": 103,
+        "text": "showToast(res.message || localeStore.t('operationFailed'), 'error')"
+      },
+      {
+        "file": "exchange-pc/src/views/BindBankCard.vue",
+        "line": 107,
+        "text": "showToast(e.response?.data?.message || localeStore.t('operationFailed'), 'error')"
+      },
+      {
+        "file": "exchange-pc/src/views/BindDigitalCurrency.vue",
+        "line": 102,
+        "text": "showToast(res.message || localeStore.t('operationFailed'), 'error')"
+      },
+      {
+        "file": "exchange-pc/src/views/BindDigitalCurrency.vue",
+        "line": 106,
+        "text": "showToast(e.response?.data?.message || localeStore.t('operationFailed'), 'error')"
+      }
+    ]
+  },
+  {
+    "key": "deleteSuccess",
+    "before": "削除成功",
+    "after": "削除しました",
+    "grade": "A",
+    "recommendation": "建议采用。",
+    "current": "削除しました",
+    "decision": "检查现有调用并保留；未发现本轮需要重新定义的业务对象。",
+    "calls": [
+      {
+        "file": "exchange-frontend/src/views/BindBankCard.vue",
+        "line": 130,
+        "text": "showToast(localeStore.t('deleteSuccess'), 'success')"
+      },
+      {
+        "file": "exchange-frontend/src/views/BindDigitalCurrency.vue",
+        "line": 126,
+        "text": "showToast(localeStore.t('deleteSuccess'), 'success')"
+      },
+      {
+        "file": "exchange-pc/src/views/BindBankCard.vue",
+        "line": 130,
+        "text": "showToast(localeStore.t('deleteSuccess'), 'success')"
+      },
+      {
+        "file": "exchange-pc/src/views/BindDigitalCurrency.vue",
+        "line": 126,
+        "text": "showToast(localeStore.t('deleteSuccess'), 'success')"
+      }
+    ]
+  },
+  {
+    "key": "deleteFailed",
+    "before": "削除失敗",
+    "after": "削除に失敗しました",
+    "grade": "A",
+    "recommendation": "建议采用。",
+    "current": "削除に失敗しました",
+    "decision": "检查现有调用并保留；未发现本轮需要重新定义的业务对象。",
+    "calls": [
+      {
+        "file": "exchange-frontend/src/views/BindBankCard.vue",
+        "line": 133,
+        "text": "showToast(res.message || localeStore.t('deleteFailed'), 'error')"
+      },
+      {
+        "file": "exchange-frontend/src/views/BindBankCard.vue",
+        "line": 137,
+        "text": "showToast(e.response?.data?.message || localeStore.t('deleteFailed'), 'error')"
+      },
+      {
+        "file": "exchange-frontend/src/views/BindDigitalCurrency.vue",
+        "line": 129,
+        "text": "showToast(res.message || localeStore.t('deleteFailed'), 'error')"
+      },
+      {
+        "file": "exchange-frontend/src/views/BindDigitalCurrency.vue",
+        "line": 133,
+        "text": "showToast(e.response?.data?.message || localeStore.t('deleteFailed'), 'error')"
+      },
+      {
+        "file": "exchange-pc/src/views/BindBankCard.vue",
+        "line": 133,
+        "text": "showToast(res.message || localeStore.t('deleteFailed'), 'error')"
+      },
+      {
+        "file": "exchange-pc/src/views/BindBankCard.vue",
+        "line": 137,
+        "text": "showToast(e.response?.data?.message || localeStore.t('deleteFailed'), 'error')"
+      },
+      {
+        "file": "exchange-pc/src/views/BindDigitalCurrency.vue",
+        "line": 129,
+        "text": "showToast(res.message || localeStore.t('deleteFailed'), 'error')"
+      },
+      {
+        "file": "exchange-pc/src/views/BindDigitalCurrency.vue",
+        "line": 133,
+        "text": "showToast(e.response?.data?.message || localeStore.t('deleteFailed'), 'error')"
+      }
+    ]
+  },
+  {
+    "key": "transferSuccess",
+    "before": "振替成功",
+    "after": "振替が完了しました",
+    "grade": "B",
+    "recommendation": "语言更好；仅在划转确实已完成时使用。若只是请求已受理，应改为“受け付けました”。",
+    "current": "振替が完了しました",
+    "decision": "transfer/submit 成功响应后显示；后端事务执行资金转移，不是仅受理。",
+    "calls": [
+      {
+        "file": "exchange-frontend/src/views/Transfer.vue",
+        "line": 306,
+        "text": "showToast(localeStore.t('transferSuccess'), 'success')"
+      },
+      {
+        "file": "exchange-pc/src/views/Transfer.vue",
+        "line": 306,
+        "text": "showToast(localeStore.t('transferSuccess'), 'success')"
+      }
+    ]
+  },
+  {
+    "key": "transferFailed",
+    "before": "振替失敗、もう一度お試しください",
+    "after": "振替に失敗しました。もう一度お試しください",
+    "grade": "B",
+    "recommendation": "更自然；但只有在系统确认上一笔未成功时才应建议重试，避免重复提交。",
+    "current": "振替の処理結果を確認できませんでした。振替履歴をご確認ください",
+    "decision": "不再鼓励直接重试，改为先核对振替履歴；请求层区分未知结果。",
+    "calls": [
+      {
+        "file": "exchange-frontend/src/views/Transfer.vue",
+        "line": 312,
+        "text": "showToast(res.message || localeStore.t('transferFailed'), 'error')"
+      },
+      {
+        "file": "exchange-frontend/src/views/Transfer.vue",
+        "line": 316,
+        "text": "showToast(e.response?.data?.message || e.message || localeStore.t('transferFailed'), 'error')"
+      },
+      {
+        "file": "exchange-pc/src/views/DesktopTrade.vue",
+        "line": 3495,
+        "text": "ElMessage.error(res?.message || localeStore.t('transferFailed'));"
+      },
+      {
+        "file": "exchange-pc/src/views/DesktopTrade.vue",
+        "line": 3498,
+        "text": "ElMessage.error(e.response?.data?.message || localeStore.t('transferFailed'));"
+      },
+      {
+        "file": "exchange-pc/src/views/Transfer.vue",
+        "line": 312,
+        "text": "showToast(res.message || localeStore.t('transferFailed'), 'error')"
+      },
+      {
+        "file": "exchange-pc/src/views/Transfer.vue",
+        "line": 316,
+        "text": "showToast(e.response?.data?.message || e.message || localeStore.t('transferFailed'), 'error')"
+      }
+    ]
+  },
+  {
+    "key": "uploadPassportOrIdBothSides",
+    "before": "パスポート/証明書の表裏をアップロードしてください",
+    "after": "パスポートまたは本人確認書類の必要な面をアップロードしてください",
+    "grade": "C",
+    "recommendation": "方向正确，但“必要な面”过于模糊。最好在选择证件类型后动态显示具体所需页面。",
+    "current": "本人確認書類の画像を2枚アップロードしてください。提出する面・ページが不明な場合は、サポートへお問い合わせください。",
+    "decision": "前后端无证件类型字段且固定要求两张图。明确两张图片及咨询提示；未凭空定义护照第二页，也未修改KYC规则。",
+    "calls": [
+      {
+        "file": "exchange-frontend/src/views/Verification.vue",
+        "line": 63,
+        "text": "<div class=\"upload-title\">{{ localeStore.t('uploadPassportOrIdBothSides') }}</div>"
+      },
+      {
+        "file": "exchange-pc/src/views/Verification.vue",
+        "line": 63,
+        "text": "<div class=\"upload-title\">{{ localeStore.t('uploadPassportOrIdBothSides') }}</div>"
+      }
+    ]
+  },
+  {
+    "key": "uploadPassportOrIdFront",
+    "before": "パスポート/証明書の表面をアップロード",
+    "after": "パスポートの顔写真ページまたは本人確認書類の表面",
+    "grade": "B",
+    "recommendation": "对槽位标题很合适；若这是操作按钮，建议保留“アップロード”动作词。",
+    "current": "パスポートの顔写真ページまたは本人確認書類の表面",
+    "decision": "保留顔写真ページ/表面，实际用于上传槽位说明和图像替代文本。",
+    "calls": [
+      {
+        "file": "exchange-frontend/src/views/Verification.vue",
+        "line": 76,
+        "text": ":alt=\"localeStore.t('uploadPassportOrIdFront')\""
+      },
+      {
+        "file": "exchange-frontend/src/views/Verification.vue",
+        "line": 82,
+        "text": ":alt=\"localeStore.t('uploadPassportOrIdFront')\""
+      },
+      {
+        "file": "exchange-frontend/src/views/Verification.vue",
+        "line": 86,
+        "text": "<div class=\"upload-label\">{{ localeStore.t('uploadPassportOrIdFront') }}</div>"
+      },
+      {
+        "file": "exchange-frontend/src/views/Verification.vue",
+        "line": 304,
+        "text": "showToast(localeStore.t('uploadPassportOrIdFront'), 'error')"
+      },
+      {
+        "file": "exchange-pc/src/views/Verification.vue",
+        "line": 76,
+        "text": ":alt=\"localeStore.t('uploadPassportOrIdFront')\""
+      },
+      {
+        "file": "exchange-pc/src/views/Verification.vue",
+        "line": 82,
+        "text": ":alt=\"localeStore.t('uploadPassportOrIdFront')\""
+      },
+      {
+        "file": "exchange-pc/src/views/Verification.vue",
+        "line": 86,
+        "text": "<div class=\"upload-label\">{{ localeStore.t('uploadPassportOrIdFront') }}</div>"
+      },
+      {
+        "file": "exchange-pc/src/views/Verification.vue",
+        "line": 304,
+        "text": "showToast(localeStore.t('uploadPassportOrIdFront'), 'error')"
+      }
+    ]
+  },
+  {
+    "key": "uploadPassportOrIdBack",
+    "before": "パスポート/証明書の裏面をアップロード",
+    "after": "本人確認書類の裏面",
+    "grade": "C",
+    "recommendation": "避免了“护照背面”的错误表达，但必须确认流程代码是否也不再要求护照第二张图。",
+    "current": "本人確認書類の画像（2枚目）",
+    "decision": "第二槽改称画像（2枚目），不把所有护照叫作背面。第二张具体资料仍待产品确认。",
+    "calls": [
+      {
+        "file": "exchange-frontend/src/views/Verification.vue",
+        "line": 107,
+        "text": ":alt=\"localeStore.t('uploadPassportOrIdBack')\""
+      },
+      {
+        "file": "exchange-frontend/src/views/Verification.vue",
+        "line": 113,
+        "text": ":alt=\"localeStore.t('uploadPassportOrIdBack')\""
+      },
+      {
+        "file": "exchange-frontend/src/views/Verification.vue",
+        "line": 117,
+        "text": "<div class=\"upload-label\">{{ localeStore.t('uploadPassportOrIdBack') }}</div>"
+      },
+      {
+        "file": "exchange-frontend/src/views/Verification.vue",
+        "line": 309,
+        "text": "showToast(localeStore.t('uploadPassportOrIdBack'), 'error')"
+      },
+      {
+        "file": "exchange-pc/src/views/Verification.vue",
+        "line": 107,
+        "text": ":alt=\"localeStore.t('uploadPassportOrIdBack')\""
+      },
+      {
+        "file": "exchange-pc/src/views/Verification.vue",
+        "line": 113,
+        "text": ":alt=\"localeStore.t('uploadPassportOrIdBack')\""
+      },
+      {
+        "file": "exchange-pc/src/views/Verification.vue",
+        "line": 117,
+        "text": "<div class=\"upload-label\">{{ localeStore.t('uploadPassportOrIdBack') }}</div>"
+      },
+      {
+        "file": "exchange-pc/src/views/Verification.vue",
+        "line": 309,
+        "text": "showToast(localeStore.t('uploadPassportOrIdBack'), 'error')"
+      }
+    ]
+  },
+  {
+    "key": "imageSizeExceeded",
+    "before": "画像サイズは5MBを超えることはできません",
+    "after": "画像は5MB以下にしてください",
+    "grade": "A",
+    "recommendation": "建议采用。可进一步统一为「画像のファイルサイズは5MB以下にしてください」。",
+    "current": "画像のファイルサイズは5MB以下にしてください",
+    "decision": "检查现有调用并保留；未发现本轮需要重新定义的业务对象。",
+    "calls": [
+      {
+        "file": "exchange-frontend/src/views/Verification.vue",
+        "line": 220,
+        "text": "showToast(localeStore.t('imageSizeExceeded'), 'error')"
+      },
+      {
+        "file": "exchange-frontend/src/views/Verification.vue",
+        "line": 248,
+        "text": "showToast(localeStore.t('imageSizeExceeded'), 'error')"
+      },
+      {
+        "file": "exchange-pc/src/views/Verification.vue",
+        "line": 220,
+        "text": "showToast(localeStore.t('imageSizeExceeded'), 'error')"
+      },
+      {
+        "file": "exchange-pc/src/views/Verification.vue",
+        "line": 248,
+        "text": "showToast(localeStore.t('imageSizeExceeded'), 'error')"
+      }
+    ]
+  },
+  {
+    "key": "submitSuccessPendingReview",
+    "before": "提出成功、審査待ち",
+    "after": "申請を受け付けました。審査をお待ちください",
+    "grade": "A",
+    "recommendation": "明显改善。若是审批流程，建议后半句可写「審査結果をお待ちください」。",
+    "current": "申請を受け付けました。審査結果をお待ちください",
+    "decision": "检查现有调用并保留；未发现本轮需要重新定义的业务对象。",
+    "calls": [
+      {
+        "file": "exchange-frontend/src/views/Verification.vue",
+        "line": 330,
+        "text": "showToast(localeStore.t('submitSuccessPendingReview'), 'success')"
+      },
+      {
+        "file": "exchange-pc/src/views/Verification.vue",
+        "line": 330,
+        "text": "showToast(localeStore.t('submitSuccessPendingReview'), 'success')"
+      }
+    ]
+  },
+  {
+    "key": "submitFailed",
+    "before": "提出失敗、もう一度お試しください",
+    "after": "送信に失敗しました。もう一度お試しください",
+    "grade": "B",
+    "recommendation": "网络发送失败时合理；若是业务申请被拒绝，不应使用“送信失敗”。",
+    "current": "送信に失敗しました。もう一度お試しください",
+    "decision": "检查现有调用并保留；未发现本轮需要重新定义的业务对象。",
+    "calls": [
+      {
+        "file": "exchange-frontend/src/views/Verification.vue",
+        "line": 335,
+        "text": "showToast(res.message || localeStore.t('submitFailed'), 'error')"
+      },
+      {
+        "file": "exchange-frontend/src/views/Verification.vue",
+        "line": 348,
+        "text": "displayMessage = localeStore.t('submitFailed')"
+      },
+      {
+        "file": "exchange-pc/src/views/DesktopTrade.vue",
+        "line": 2335,
+        "text": "ElMessage.error(res?.message || localeStore.t('submitFailed'));"
+      },
+      {
+        "file": "exchange-pc/src/views/DesktopTrade.vue",
+        "line": 2368,
+        "text": "ElMessage.error(res?.message || localeStore.t('submitFailed'));"
+      },
+      {
+        "file": "exchange-pc/src/views/DesktopTrade.vue",
+        "line": 2371,
+        "text": "ElMessage.error(e.response?.data?.message || localeStore.t('submitFailed'));"
+      },
+      {
+        "file": "exchange-pc/src/views/DesktopTrade.vue",
+        "line": 3285,
+        "text": "ElMessage.error(res?.message || localeStore.t('submitFailed'));"
+      },
+      {
+        "file": "exchange-pc/src/views/DesktopTrade.vue",
+        "line": 3288,
+        "text": "ElMessage.error(e.response?.data?.message || localeStore.t('submitFailed'));"
+      },
+      {
+        "file": "exchange-pc/src/views/DesktopTrade.vue",
+        "line": 3391,
+        "text": "ElMessage.error(res?.message || localeStore.t('submitFailed'));"
+      },
+      {
+        "file": "exchange-pc/src/views/DesktopTrade.vue",
+        "line": 3394,
+        "text": "ElMessage.error(e.response?.data?.message || localeStore.t('submitFailed'));"
+      },
+      {
+        "file": "exchange-pc/src/views/Verification.vue",
+        "line": 335,
+        "text": "showToast(res.message || localeStore.t('submitFailed'), 'error')"
+      },
+      {
+        "file": "exchange-pc/src/views/Verification.vue",
+        "line": 348,
+        "text": "displayMessage = localeStore.t('submitFailed')"
+      }
+    ]
+  },
+  {
+    "key": "scanQRCodeOrEnterInviteCode",
+    "before": "上のQRコードをスキャンするか、招待コードを入力して登録を確認してください",
+    "after": "上のQRコードを読み取るか、登録画面で招待コードを入力してください",
+    "grade": "B",
+    "recommendation": "更自然，但新增“登録画面”位置且删除“确认注册”含义，需核对真实流程。",
+    "current": "上のQRコードを読み取るか、登録画面で招待コードを入力してください",
+    "decision": "检查现有调用并保留；未发现本轮需要重新定义的业务对象。",
+    "calls": [
+      {
+        "file": "exchange-frontend/src/views/Invite.vue",
+        "line": 113,
+        "text": "{{ localeStore.t('scanQRCodeOrEnterInviteCode') }}"
+      },
+      {
+        "file": "exchange-pc/src/views/Invite.vue",
+        "line": 113,
+        "text": "{{ localeStore.t('scanQRCodeOrEnterInviteCode') }}"
+      }
+    ]
+  },
+  {
+    "key": "noSymbolData",
+    "before": "シンボルデータなし",
+    "after": "銘柄情報がありません",
+    "grade": "B",
+    "recommendation": "面向用户更友好；纯货币对/交易对场景可考虑用「通貨ペア情報」或「取引ペア情報」。",
+    "current": "銘柄情報がありません",
+    "decision": "检查现有调用并保留；未发现本轮需要重新定义的业务对象。",
+    "calls": [
+      {
+        "file": "exchange-frontend/src/views/Home.vue",
+        "line": 948,
+        "text": "<div v-else class=\"empty-symbols\">{{ localeStore.t('noSymbolData') }}</div>"
+      },
+      {
+        "file": "exchange-pc/src/views/Home.vue",
+        "line": 981,
+        "text": "<div v-else class=\"empty-symbols\">{{ localeStore.t('noSymbolData') }}</div>"
+      }
+    ]
+  },
+  {
+    "key": "amountCannotBeLessThan",
+    "before": "融資額はこれ以下にすることはできません",
+    "after": "借入金額の下限：",
+    "grade": "C",
+    "recommendation": "从错误提示改成标签，语义用途发生变化。若用于校验错误，应改为「借入金額は{min}以上にしてください」。",
+    "current": "借入金額の下限：",
+    "decision": "实际借款校验改用插值完整句，不再依赖此前标签式拼接。",
+    "calls": []
+  },
+  {
+    "key": "amountCannotBeGreaterThan",
+    "before": "融資額はこれを超えることはできません",
+    "after": "借入金額の上限：",
+    "grade": "C",
+    "recommendation": "同上。若用于校验错误，应改为「借入金額は{max}以下にしてください」。",
+    "current": "借入金額の上限：",
+    "decision": "实际借款校验改用插值完整句，不再依赖此前标签式拼接。",
+    "calls": []
+  },
+  {
+    "key": "firstName",
+    "before": "名前",
+    "after": "名",
+    "grade": "A",
+    "recommendation": "建议采用。明确是 first name 字段时更准确。",
+    "current": "名",
+    "decision": "检查现有调用并保留；未发现本轮需要重新定义的业务对象。",
+    "calls": [
+      {
+        "file": "exchange-frontend/src/views/LoanContract.vue",
+        "line": 149,
+        "text": "<span class=\"info-label\">{{ localeStore.t('firstName') }}:</span>"
+      },
+      {
+        "file": "exchange-pc/src/views/LoanContract.vue",
+        "line": 149,
+        "text": "<span class=\"info-label\">{{ localeStore.t('firstName') }}:</span>"
+      }
+    ]
+  },
+  {
+    "key": "phone",
+    "before": "電話",
+    "after": "電話番号",
+    "grade": "A",
+    "recommendation": "建议采用。输入项更明确。",
+    "current": "電話番号",
+    "decision": "检查现有调用并保留；未发现本轮需要重新定义的业务对象。",
+    "calls": [
+      {
+        "file": "exchange-frontend/src/views/LoanContract.vue",
+        "line": 161,
+        "text": "<span class=\"info-label\">{{ localeStore.t('phone') }}:</span>"
+      },
+      {
+        "file": "exchange-frontend/src/views/LoanPersonalInfo.vue",
+        "line": 408,
+        "text": "formDataToSend.append('phone', fullPhone)"
+      },
+      {
+        "file": "exchange-pc/src/views/DesktopTrade.vue",
+        "line": 2311,
+        "text": "formData.append('phone', personalInfoForm.value.phone);"
+      },
+      {
+        "file": "exchange-pc/src/views/LoanContract.vue",
+        "line": 161,
+        "text": "<span class=\"info-label\">{{ localeStore.t('phone') }}:</span>"
+      },
+      {
+        "file": "exchange-pc/src/views/LoanPersonalInfo.vue",
+        "line": 408,
+        "text": "formDataToSend.append('phone', fullPhone)"
+      }
+    ]
+  },
+  {
+    "key": "name",
+    "before": "名前",
+    "after": "氏名",
+    "grade": "B",
+    "recommendation": "真实姓名字段中更准确；若通用 key 还用于昵称、商品名等，会产生错误。",
+    "current": "氏名",
+    "decision": "活动引用为借款合同真实姓名，不是商品名；保留氏名，补修已签署区域虚构姓名1。",
+    "calls": [
+      {
+        "file": "exchange-frontend/src/components/OrderShareModal.vue",
+        "line": 231,
+        "text": "<button v-for=\"name in templates\" :key=\"name\" type=\"button\" :aria-label=\"copy[name]\" :aria-pressed=\"options.template === name\" :class=\"['pnl-template', { selected: options.template === name }]\" @click=\"options.template = name\">"
+      },
+      {
+        "file": "exchange-frontend/src/views/Home.vue",
+        "line": 858,
+        "text": "<span class=\"name\">{{ displaySymbol(s) }}</span>"
+      },
+      {
+        "file": "exchange-frontend/src/views/LoanContract.vue",
+        "line": 165,
+        "text": "<span class=\"info-label\">{{ localeStore.t('name') }}:</span>"
+      },
+      {
+        "file": "exchange-frontend/src/views/LoanContract.vue",
+        "line": 279,
+        "text": "<div class=\"signature-label\">{{ localeStore.t('name') }}: {{ loan.realName || localeStore.t('notConfigured') }}</div>"
+      },
+      {
+        "file": "exchange-pc/src/components/OrderShareModal.vue",
+        "line": 231,
+        "text": "<button v-for=\"name in templates\" :key=\"name\" type=\"button\" :aria-label=\"copy[name]\" :aria-pressed=\"options.template === name\" :class=\"['pnl-template', { selected: options.template === name }]\" @click=\"options.template = name\">"
+      },
+      {
+        "file": "exchange-pc/src/views/Home.vue",
+        "line": 891,
+        "text": "<span class=\"name\">{{ displaySymbol(s) }}</span>"
+      },
+      {
+        "file": "exchange-pc/src/views/LoanContract.vue",
+        "line": 165,
+        "text": "<span class=\"info-label\">{{ localeStore.t('name') }}:</span>"
+      },
+      {
+        "file": "exchange-pc/src/views/LoanContract.vue",
+        "line": 279,
+        "text": "<div class=\"signature-label\">{{ localeStore.t('name') }}: {{ loan.realName || localeStore.t('notConfigured') }}</div>"
+      }
+    ]
+  },
+  {
+    "key": "earlyRepayment",
+    "before": "繰り上げ返済",
+    "after": "繰上返済",
+    "grade": "A",
+    "recommendation": "可采用。属于书写风格统一，不是原文错误；应全站统一一种写法。",
+    "current": "繰上返済",
+    "decision": "检查现有调用并保留；未发现本轮需要重新定义的业务对象。",
+    "calls": [
+      {
+        "file": "exchange-frontend/src/views/LoanContract.vue",
+        "line": 218,
+        "text": "<div class=\"section-title\">{{ localeStore.t('earlyRepayment') }}</div>"
+      },
+      {
+        "file": "exchange-pc/src/views/LoanContract.vue",
+        "line": 218,
+        "text": "<div class=\"section-title\">{{ localeStore.t('earlyRepayment') }}</div>"
+      }
+    ]
+  },
+  {
+    "key": "contractAlreadySigned",
+    "before": "契約はすでに署名されており、再度署名することはできません",
+    "after": "この契約書は署名済みです。再度署名することはできません",
+    "grade": "A",
+    "recommendation": "建议采用。对象更明确，句子更自然。",
+    "current": "この契約書は署名済みです。再度署名することはできません",
+    "decision": "检查现有调用并保留；未发现本轮需要重新定义的业务对象。",
+    "calls": [
+      {
+        "file": "exchange-frontend/src/views/LoanSign.vue",
+        "line": 117,
+        "text": "showToast(localeStore.t('contractAlreadySigned'), 'error')"
+      },
+      {
+        "file": "exchange-frontend/src/views/LoanSign.vue",
+        "line": 143,
+        "text": "showToast(localeStore.t('contractAlreadySigned'), 'error')"
+      },
+      {
+        "file": "exchange-frontend/src/views/LoanSign.vue",
+        "line": 226,
+        "text": "<div class=\"sign-instruction\" v-else style=\"color: #ff4444;\">{{ localeStore.t('contractAlreadySigned') }}</div>"
+      },
+      {
+        "file": "exchange-pc/src/views/LoanSign.vue",
+        "line": 117,
+        "text": "showToast(localeStore.t('contractAlreadySigned'), 'error')"
+      },
+      {
+        "file": "exchange-pc/src/views/LoanSign.vue",
+        "line": 143,
+        "text": "showToast(localeStore.t('contractAlreadySigned'), 'error')"
+      },
+      {
+        "file": "exchange-pc/src/views/LoanSign.vue",
+        "line": 226,
+        "text": "<div class=\"sign-instruction\" v-else style=\"color: #ff4444;\">{{ localeStore.t('contractAlreadySigned') }}</div>"
+      }
+    ]
+  },
+  {
+    "key": "resign",
+    "before": "再署名",
+    "after": "署名をやり直す",
+    "grade": "B",
+    "recommendation": "签名板重写场景更自然；若是真正对合同发起第二次正式签署，仍可用「再署名」。",
+    "current": "署名をやり直す",
+    "decision": "检查现有调用并保留；未发现本轮需要重新定义的业务对象。",
+    "calls": [
+      {
+        "file": "exchange-frontend/src/views/LoanSign.vue",
+        "line": 243,
+        "text": "<button class=\"resign-btn\" @click=\"clearSignature\">{{ localeStore.t('resign') }}</button>"
+      },
+      {
+        "file": "exchange-pc/src/views/LoanSign.vue",
+        "line": 243,
+        "text": "<button class=\"resign-btn\" @click=\"clearSignature\">{{ localeStore.t('resign') }}</button>"
+      }
+    ]
+  },
+  {
+    "key": "signSuccess",
+    "before": "契約は正常に署名されました",
+    "after": "契約書への署名が完了しました",
+    "grade": "A",
+    "recommendation": "建议采用。准确描述签署动作，但不要等同于整个合同流程完成。",
+    "current": "契約書への署名が完了しました",
+    "decision": "检查现有调用并保留；未发现本轮需要重新定义的业务对象。",
+    "calls": [
+      {
+        "file": "exchange-frontend/src/views/LoanSign.vue",
+        "line": 175,
+        "text": "showToast(localeStore.t('signSuccess'), 'success')"
+      },
+      {
+        "file": "exchange-pc/src/views/DesktopTrade.vue",
+        "line": 2582,
+        "text": "ElMessage.success(localeStore.t('signSuccess'));"
+      },
+      {
+        "file": "exchange-pc/src/views/LoanSign.vue",
+        "line": 175,
+        "text": "showToast(localeStore.t('signSuccess'), 'success')"
+      }
+    ]
+  },
+  {
+    "key": "imageSizeLimit",
+    "before": "画像サイズは5MBを超えることはできません",
+    "after": "画像は5MB以下にしてください",
+    "grade": "A",
+    "recommendation": "建议采用并与其他 5MB 提示统一。",
+    "current": "画像のファイルサイズは5MB以下にしてください",
+    "decision": "检查现有调用并保留；未发现本轮需要重新定义的业务对象。",
+    "calls": [
+      {
+        "file": "exchange-frontend/src/views/LoanPersonalInfo.vue",
+        "line": 209,
+        "text": "showToast(localeStore.t('imageSizeLimit'), 'error')"
+      },
+      {
+        "file": "exchange-frontend/src/views/LoanPersonalInfo.vue",
+        "line": 237,
+        "text": "showToast(localeStore.t('imageSizeLimit'), 'error')"
+      },
+      {
+        "file": "exchange-frontend/src/views/LoanPersonalInfo.vue",
+        "line": 274,
+        "text": "showToast(localeStore.t('imageSizeLimit'), 'error')"
+      },
+      {
+        "file": "exchange-pc/src/views/LoanPersonalInfo.vue",
+        "line": 209,
+        "text": "showToast(localeStore.t('imageSizeLimit'), 'error')"
+      },
+      {
+        "file": "exchange-pc/src/views/LoanPersonalInfo.vue",
+        "line": 237,
+        "text": "showToast(localeStore.t('imageSizeLimit'), 'error')"
+      },
+      {
+        "file": "exchange-pc/src/views/LoanPersonalInfo.vue",
+        "line": 274,
+        "text": "showToast(localeStore.t('imageSizeLimit'), 'error')"
+      }
+    ]
+  },
+  {
+    "key": "uploadIdFrontBack",
+    "before": "IDカードの表と裏",
+    "after": "本人確認書類の表面・裏面",
+    "grade": "C",
+    "recommendation": "范围从 ID 卡扩大到所有本人确认文件。必须按证件类型定义是否需要双面，不能一刀切。",
+    "current": "本人確認書類の表面・裏面",
+    "decision": "用于 LoanPersonalInfo 的固定正面/反面/手持图流程；未冒充通用一图认证。证件类型和合规要求待确认。",
+    "calls": [
+      {
+        "file": "exchange-frontend/src/views/LoanPersonalInfo.vue",
+        "line": 509,
+        "text": "<div class=\"form-label\">{{ localeStore.t('uploadIdFrontBack') }} <span class=\"required\">*</span></div>"
+      },
+      {
+        "file": "exchange-pc/src/views/LoanPersonalInfo.vue",
+        "line": 509,
+        "text": "<div class=\"form-label\">{{ localeStore.t('uploadIdFrontBack') }} <span class=\"required\">*</span></div>"
+      }
+    ]
+  },
+  {
+    "key": "noFinancialProducts",
+    "before": "金融商品がありません",
+    "after": "運用商品はありません",
+    "grade": "B",
+    "recommendation": "若页面只展示投资/运用产品，则更贴切；若范围包含更广的金融产品，会缩窄含义。",
+    "current": "運用商品はありません",
+    "decision": "检查现有调用并保留；未发现本轮需要重新定义的业务对象。",
+    "calls": [
+      {
+        "file": "exchange-frontend/src/views/FinancialManagement.vue",
+        "line": 19,
+        "text": "<div class=\"empty-text\">{{ localeStore.t('noFinancialProducts') }}</div>"
+      },
+      {
+        "file": "exchange-pc/src/views/FinancialManagement.vue",
+        "line": 19,
+        "text": "<div class=\"empty-text\">{{ localeStore.t('noFinancialProducts') }}</div>"
+      }
+    ]
+  },
+  {
+    "key": "pleaseContactUsThroughService",
+    "before": "サービスチャネルを通じてお問い合わせください",
+    "after": "サポート窓口へお問い合わせください",
+    "grade": "A",
+    "recommendation": "建议采用。自然且面向用户。",
+    "current": "サポート窓口へお問い合わせください",
+    "decision": "检查现有调用并保留；未发现本轮需要重新定义的业务对象。",
+    "calls": [
+      {
+        "file": "exchange-frontend/src/views/Deposit.vue",
+        "line": 186,
+        "text": "showToast(localeStore.t('pleaseContactUsThroughService'), 'success')"
+      },
+      {
+        "file": "exchange-pc/src/views/Deposit.vue",
+        "line": 186,
+        "text": "showToast(localeStore.t('pleaseContactUsThroughService'), 'success')"
+      }
+    ]
+  },
+  {
+    "key": "imageSizeCannotExceed5MB",
+    "before": "画像サイズは5MBを超えることはできません",
+    "after": "画像は5MB以下にしてください",
+    "grade": "A",
+    "recommendation": "建议采用并统一。",
+    "current": "画像のファイルサイズは5MB以下にしてください",
+    "decision": "检查现有调用并保留；未发现本轮需要重新定义的业务对象。",
+    "calls": [
+      {
+        "file": "exchange-frontend/src/views/Deposit.vue",
+        "line": 203,
+        "text": "showToast(localeStore.t('imageSizeCannotExceed5MB'), 'error')"
+      },
+      {
+        "file": "exchange-pc/src/views/Deposit.vue",
+        "line": 203,
+        "text": "showToast(localeStore.t('imageSizeCannotExceed5MB'), 'error')"
+      }
+    ]
+  },
+  {
+    "key": "remarkCurrencyName",
+    "before": "備考通貨名",
+    "after": "備考（通貨名など）",
+    "grade": "C",
+    "recommendation": "新增「など」意味着除了币种名还可填写其他内容。若字段只允许币种名，不应这样改。",
+    "current": "備考（通貨名など）",
+    "decision": "Withdraw 的 remark 自由文本直接提交，不限制为货币名，保留「備考（通貨名など）」。",
+    "calls": [
+      {
+        "file": "exchange-frontend/src/views/Withdraw.vue",
+        "line": 75,
+        "text": "<div class=\"form-label\">{{ localeStore.t('remarkCurrencyName') }}</div>"
+      },
+      {
+        "file": "exchange-frontend/src/views/Withdraw.vue",
+        "line": 142,
+        "text": "<div class=\"form-label\">{{ localeStore.t('remarkCurrencyName') }}</div>"
+      },
+      {
+        "file": "exchange-pc/src/views/Withdraw.vue",
+        "line": 75,
+        "text": "<div class=\"form-label\">{{ localeStore.t('remarkCurrencyName') }}</div>"
+      },
+      {
+        "file": "exchange-pc/src/views/Withdraw.vue",
+        "line": 142,
+        "text": "<div class=\"form-label\">{{ localeStore.t('remarkCurrencyName') }}</div>"
+      }
+    ]
+  },
+  {
+    "key": "complaintEmail",
+    "before": "苦情メール",
+    "after": "苦情受付メールアドレス",
+    "grade": "A",
+    "recommendation": "建议采用。用途明确。",
+    "current": "苦情受付メールアドレス",
+    "decision": "检查现有调用并保留；未发现本轮需要重新定义的业务对象。",
+    "calls": [
+      {
+        "file": "exchange-frontend/src/views/Complaint.vue",
+        "line": 9,
+        "text": "<div class=\"header-title\">{{ localeStore.t('complaintEmail') }}</div>"
+      },
+      {
+        "file": "exchange-frontend/src/views/Complaint.vue",
+        "line": 27,
+        "text": "<div class=\"email-title\">{{ localeStore.t('complaintEmail') }}</div>"
+      },
+      {
+        "file": "exchange-frontend/src/views/Profile.vue",
+        "line": 37,
+        "text": "{ label: localeStore.t('complaintEmail'), icon: '', route: '/complaint' },"
+      },
+      {
+        "file": "exchange-pc/src/views/Complaint.vue",
+        "line": 9,
+        "text": "<div class=\"header-title\">{{ localeStore.t('complaintEmail') }}</div>"
+      },
+      {
+        "file": "exchange-pc/src/views/Complaint.vue",
+        "line": 27,
+        "text": "<div class=\"email-title\">{{ localeStore.t('complaintEmail') }}</div>"
+      },
+      {
+        "file": "exchange-pc/src/views/DesktopTrade.vue",
+        "line": 1296,
+        "text": "<div v-if=\"complaintEmail\" class=\"flex items-center justify-between p-3 bg-white dark:bg-[#131722] rounded border border-gray-100 dark:border-[#2b3139] shadow-sm\">"
+      },
+      {
+        "file": "exchange-pc/src/views/Profile.vue",
+        "line": 36,
+        "text": "{ label: localeStore.t('complaintEmail'), icon: '', route: '/complaint' },"
+      }
+    ]
+  },
+  {
+    "key": "noComplaintEmail",
+    "before": "苦情メールが利用できません",
+    "after": "苦情受付メールアドレスは現在表示できません",
+    "grade": "C",
+    "recommendation": "把“不可用”解释成“当前无法显示”，相当于假定故障原因。应区分未配置、获取失败、显示失败。",
+    "current": "苦情受付メールアドレスが設定されていません",
+    "decision": "拆分正常响应缺失邮箱、加载失败、有邮箱但不可用三个状态，不能把API失败当未配置。",
+    "calls": [
+      {
+        "file": "exchange-frontend/src/views/Complaint.vue",
+        "line": 21,
+        "text": "<div class=\"empty-text\">{{ loadError ? localeStore.text('', 'Unable to retrieve the complaint email address.') : (complaintEmail ? localeStore.text('', 'This contact address is currently unavailable.') : localeStore.t('noComplaintEmail')) }}</div>"
+      },
+      {
+        "file": "exchange-pc/src/views/Complaint.vue",
+        "line": 21,
+        "text": "<div class=\"empty-text\">{{ loadError ? localeStore.text('', 'Unable to retrieve the complaint email address.') : (complaintEmail ? localeStore.text('', 'This contact address is currently unavailable.') : localeStore.t('noComplaintEmail')) }}</div>"
+      }
+    ]
+  },
+  {
+    "key": "usStockMarketClosed",
+    "before": "米国株式市場休業、取引不可",
+    "after": "米国株式市場は取引時間外です",
+    "grade": "B",
+    "recommendation": "若触发条件就是非交易时段，改后更好；若也覆盖休市、暂停交易、账户限制等，则含义不准确。",
+    "current": "米国株式市場は取引時間外です",
+    "decision": "当前静态扫描未发现直接引用；保留，不把无引用当作运行时验证通过。",
+    "calls": []
+  },
+  {
+    "key": "forexMarketClosed",
+    "before": "外国為替市場休業、取引不可",
+    "after": "外国為替市場は取引時間外です",
+    "grade": "B",
+    "recommendation": "同上。",
+    "current": "外国為替市場は取引時間外です",
+    "decision": "当前静态扫描未发现直接引用；保留，不把无引用当作运行时验证通过。",
+    "calls": []
+  },
+  {
+    "key": "metalMarketClosed",
+    "before": "貴金属市場休業、取引不可",
+    "after": "貴金属市場は取引時間外です",
+    "grade": "B",
+    "recommendation": "同上。",
+    "current": "貴金属市場は取引時間外です",
+    "decision": "当前静态扫描未发现直接引用；保留，不把无引用当作运行时验证通过。",
+    "calls": []
+  },
+  {
+    "key": "loadSymbolsFailed",
+    "before": "取引ペアの読み込みに失敗しました",
+    "after": "銘柄一覧を取得できませんでした",
+    "grade": "B",
+    "recommendation": "多资产页面更自然；若页面只有货币对，原有“取引ペア”可能更准确。",
+    "current": "銘柄一覧を取得できませんでした",
+    "decision": "当前静态扫描未发现直接引用；保留，不把无引用当作运行时验证通过。",
+    "calls": []
+  },
+  {
+    "key": "loadAllSymbolsFailed",
+    "before": "すべてのシンボルの読み込みに失敗しました",
+    "after": "銘柄一覧を取得できませんでした",
+    "grade": "B",
+    "recommendation": "可用，但删除“全部”会丢失部分失败/全部失败的区分。",
+    "current": "銘柄一覧を取得できませんでした",
+    "decision": "当前静态扫描未发现直接引用；保留，不把无引用当作运行时验证通过。",
+    "calls": []
+  },
+  {
+    "key": "loadSymbolInfoFailed",
+    "before": "取引ペア情報の読み込みに失敗しました",
+    "after": "銘柄情報を取得できませんでした",
+    "grade": "B",
+    "recommendation": "多资产场景合理；纯交易对详情可保留交易对术语。",
+    "current": "銘柄情報を取得できませんでした",
+    "decision": "当前静态扫描未发现直接引用；保留，不把无引用当作运行时验证通过。",
+    "calls": []
+  },
+  {
+    "key": "selectTradingPair",
+    "before": "取引ペアを選択",
+    "after": "銘柄・通貨ペアを選択",
+    "grade": "B",
+    "recommendation": "跨股票/外汇等多资产选择器中合理；单一资产场景会显得冗余。",
+    "current": "銘柄・通貨ペアを選択",
+    "decision": "检查现有调用并保留；未发现本轮需要重新定义的业务对象。",
+    "calls": [
+      {
+        "file": "exchange-pc/src/views/Trade.vue",
+        "line": 1473,
+        "text": "<span class=\"symbol-sidebar-title\">{{ localeStore.t('selectTradingPair') }}</span>"
+      }
+    ]
+  },
+  {
+    "key": "repaymentMethodDescription",
+    "before": "返済方法: 現金引き出しの前に返済を完了する必要があり、資金を口座から直接差し引くことはできません。",
+    "after": "返済方法：出金前に返済を完了する必要があります。返済金を口座残高から直接差し引くことはできません。",
+    "grade": "D",
+    "recommendation": "语言自然，但与 earlyRepaymentConfirm 的“从资金账户扣款”存在直接逻辑冲突。必须先核对真实还款资金来源。",
+    "current": "返済方法：出金前に返済を完了する必要があります。返済金を口座残高から直接差し引くことはできません。",
+    "decision": "保留原合同限制；后端 earlyRepayment 确实扣 FUND 余额，合同矛盾未解决，不能仅靠翻译认证上线。",
+    "calls": [
+      {
+        "file": "exchange-frontend/src/views/LoanContract.vue",
+        "line": 199,
+        "text": "{{ localeStore.t('repaymentMethodDescription') }}"
+      },
+      {
+        "file": "exchange-pc/src/views/LoanContract.vue",
+        "line": 199,
+        "text": "{{ localeStore.t('repaymentMethodDescription') }}"
+      }
+    ]
+  },
+  {
+    "key": "earlyRepaymentDescription",
+    "before": "借り手は、ペナルティを支払うことなく早期返済を行うことができます。",
+    "after": "借入人は、違約金を支払うことなく繰上返済できます。",
+    "grade": "B",
+    "recommendation": "更像合同语言；但“无违约金”不等同于所有手续费均为零，需与收费规则一致。",
+    "current": "借入人は、違約金を支払うことなく繰上返済できます。",
+    "decision": "检查现有调用并保留；未发现本轮需要重新定义的业务对象。",
+    "calls": [
+      {
+        "file": "exchange-frontend/src/views/LoanContract.vue",
+        "line": 220,
+        "text": "{{ localeStore.t('earlyRepaymentDescription') }}"
+      },
+      {
+        "file": "exchange-pc/src/views/LoanContract.vue",
+        "line": 220,
+        "text": "{{ localeStore.t('earlyRepaymentDescription') }}"
+      }
+    ]
+  },
+  {
+    "key": "defaultDescription",
+    "before": "借り手が期限までに返済に失敗した場合、追加の通知や要求なしに、未払いの元本と利息をすべて即座に支払う必要があります。",
+    "after": "借入人が返済期日までに返済しない場合、追加の通知や請求を受けることなく、未払いの元本および利息の全額を直ちに支払うものとします。",
+    "grade": "B",
+    "recommendation": "日语明显改善；正式合同仍应与原始法律文本逐句核对。",
+    "current": "借入人が返済期日までに返済しない場合、追加の通知や請求を受けることなく、未払いの元本および利息の全額を直ちに支払うものとします。",
+    "decision": "检查现有调用并保留；未发现本轮需要重新定义的业务对象。",
+    "calls": [
+      {
+        "file": "exchange-frontend/src/views/LoanContract.vue",
+        "line": 227,
+        "text": "{{ localeStore.t('defaultDescription') }}"
+      },
+      {
+        "file": "exchange-pc/src/views/LoanContract.vue",
+        "line": 227,
+        "text": "{{ localeStore.t('defaultDescription') }}"
+      }
+    ]
+  },
+  {
+    "key": "feesDescription",
+    "before": "借り手が期限までに返済義務を履行しない場合、回収プロセス中に貸し手が負担したすべての費用（法律費用を含むがこれに限定されない）を負担することに同意します。",
+    "after": "借入人が返済期日までに返済義務を履行しない場合、貸付人が債権回収のために負担したすべての費用（弁護士費用を含みますが、これに限りません）を負担するものとします。",
+    "grade": "C",
+    "recommendation": "整体更自然，但「法律費用」→「弁護士費用」改变了示例范围。需根据原始合同文本决定，不能仅作为语言润色。",
+    "current": "借入人が返済期日までに返済義務を履行しない場合、貸付人が債権回収のために負担したすべての費用（法律費用を含みますが、これに限りません）を負担するものとします。",
+    "decision": "恢复英文源 legal fees 的较宽含义「法律費用」。繁中源写律師費，源文本本身不一致；不宣称法务确认。",
+    "calls": [
+      {
+        "file": "exchange-frontend/src/views/LoanContract.vue",
+        "line": 234,
+        "text": "{{ localeStore.t('feesDescription') }}"
+      },
+      {
+        "file": "exchange-pc/src/views/LoanContract.vue",
+        "line": 234,
+        "text": "{{ localeStore.t('feesDescription') }}"
+      }
+    ]
+  },
+  {
+    "key": "severabilityDescription",
+    "before": "本契約のいずれかの条項が無効または執行不能と判断された場合、その条項は無効となり、残りの条項は完全に有効で拘束力があります。",
+    "after": "本契約のいずれかの条項が無効または執行不能と判断された場合でも、その他の条項の有効性および拘束力には影響しません。",
+    "grade": "C",
+    "recommendation": "核心意思保留且更简洁，但删除了对无效条款本身的处理表述。正式合同应按原文核对。",
+    "current": "本契約のいずれかの条項が無効または執行不能と判断された場合、その条項は無効となり、その他の条項は引き続き有効で拘束力を有します。",
+    "decision": "补回「その条項は無効となり」，保留原合同对无效条款本身的处理。",
+    "calls": [
+      {
+        "file": "exchange-frontend/src/views/LoanContract.vue",
+        "line": 241,
+        "text": "{{ localeStore.t('severabilityDescription') }}"
+      },
+      {
+        "file": "exchange-pc/src/views/LoanContract.vue",
+        "line": 241,
+        "text": "{{ localeStore.t('severabilityDescription') }}"
+      }
+    ]
+  },
+  {
+    "key": "governingLawDescription",
+    "before": "本契約は、借り手が所在する国/地域の法律に従って解釈および執行されます。",
+    "after": "本契約は、借入人が所在する国または地域の法律に従って解釈され、履行されるものとします。",
+    "grade": "D",
+    "recommendation": "「執行」改为「履行」不是单纯同义润色，法律概念可能发生变化。必须回到合同原始语言确认。",
+    "current": "本契約は、借入人が所在する国または地域の法律に従って解釈および執行されるものとします。",
+    "decision": "恢复執行概念，撤销履行替换；仍须以正式源合同和法务确认为准。",
+    "calls": [
+      {
+        "file": "exchange-frontend/src/views/LoanContract.vue",
+        "line": 262,
+        "text": "{{ localeStore.t('governingLawDescription') }}"
+      },
+      {
+        "file": "exchange-pc/src/views/LoanContract.vue",
+        "line": 262,
+        "text": "{{ localeStore.t('governingLawDescription') }}"
+      }
+    ]
+  },
+  {
+    "key": "completeAgreementDescription",
+    "before": "両当事者は、本文書が当事者間の完全な契約を構成することを同意します。両当事者はさらに、本契約の条件に対する変更、補足、または修正は、書面で行われ、発効する前に両当事者によって署名される必要があることに同意します。",
+    "after": "両当事者は、本書が当事者間の完全な合意を構成することに同意します。本契約の条件の変更、追加または修正は書面によるものとし、効力を生じる前に両当事者が署名する必要があります。",
+    "grade": "C",
+    "recommendation": "日语更自然，且「完全な合意」更合适；但作为正式合同条款仍应依据源合同审定。",
+    "current": "両当事者は、本書が当事者間の完全な合意を構成することに同意します。本契約の条件の変更、追加または修正は書面によるものとし、効力を生じる前に両当事者が署名する必要があります。",
+    "decision": "保留自然表达与书面、双方签署、生效前等要素，法律效力仍未认证。",
+    "calls": [
+      {
+        "file": "exchange-frontend/src/views/LoanContract.vue",
+        "line": 269,
+        "text": "{{ localeStore.t('completeAgreementDescription') }}"
+      },
+      {
+        "file": "exchange-pc/src/views/LoanContract.vue",
+        "line": 269,
+        "text": "{{ localeStore.t('completeAgreementDescription') }}"
+      }
+    ]
+  },
+  {
+    "key": "repaymentSuccess",
+    "before": "返済成功",
+    "after": "返済が完了しました",
+    "grade": "B",
+    "recommendation": "更自然；仅在后端确认还款完成时使用。",
+    "current": "返済が完了しました",
+    "decision": "后端更新COMPLETED返回后显示完成；请求超时不再统一断言失败。",
+    "calls": [
+      {
+        "file": "exchange-frontend/src/views/LoanRecords.vue",
+        "line": 216,
+        "text": "showToastMessage(localeStore.t('repaymentSuccess'), 'success')"
+      },
+      {
+        "file": "exchange-pc/src/views/LoanRecords.vue",
+        "line": 216,
+        "text": "showToastMessage(localeStore.t('repaymentSuccess'), 'success')"
+      }
+    ]
+  },
+  {
+    "key": "repaymentFailed",
+    "before": "返済失敗",
+    "after": "返済に失敗しました",
+    "grade": "B",
+    "recommendation": "更自然；若状态可能未知，应避免把网络超时直接显示为确定失败。",
+    "current": "返済に失敗しました",
+    "decision": "保留明确失败用途；无响应的日语写请求优先显示结果未知。",
+    "calls": [
+      {
+        "file": "exchange-frontend/src/views/LoanRecords.vue",
+        "line": 219,
+        "text": "showToastMessage(res?.message || localeStore.t('repaymentFailed'), 'error')"
+      },
+      {
+        "file": "exchange-frontend/src/views/LoanRecords.vue",
+        "line": 222,
+        "text": "showToastMessage(e?.response?.data?.message || e?.message || localeStore.t('repaymentFailed'), 'error')"
+      },
+      {
+        "file": "exchange-pc/src/views/LoanRecords.vue",
+        "line": 219,
+        "text": "showToastMessage(res?.message || localeStore.t('repaymentFailed'), 'error')"
+      },
+      {
+        "file": "exchange-pc/src/views/LoanRecords.vue",
+        "line": 222,
+        "text": "showToastMessage(e?.response?.data?.message || e?.message || localeStore.t('repaymentFailed'), 'error')"
+      }
+    ]
+  },
+  {
+    "key": "earlyRepaymentButton",
+    "before": "早期返済",
+    "after": "繰上返済",
+    "grade": "A",
+    "recommendation": "建议采用并与 earlyRepayment 统一。",
+    "current": "繰上返済",
+    "decision": "检查现有调用并保留；未发现本轮需要重新定义的业务对象。",
+    "calls": [
+      {
+        "file": "exchange-frontend/src/views/LoanRecords.vue",
+        "line": 315,
+        "text": "{{ localeStore.t('earlyRepaymentButton') }}"
+      },
+      {
+        "file": "exchange-pc/src/views/LoanRecords.vue",
+        "line": 315,
+        "text": "{{ localeStore.t('earlyRepaymentButton') }}"
+      }
+    ]
+  },
+  {
+    "key": "earlyRepaymentConfirm",
+    "before": "早期返済を行いますか？システムが自動的に利息を計算し、資金口座から差し引きます。",
+    "after": "繰上返済しますか？利息を自動計算し、返済額を資金口座から差し引きます。",
+    "grade": "D",
+    "recommendation": "句子更自然，但与 repaymentMethodDescription 中“不能从账户余额直接扣除”矛盾。需先确认业务逻辑后再定稿。",
+    "current": "繰上返済しますか？利息を自動計算し、返済額を資金口座から差し引きます。",
+    "decision": "保留扣款说明：LoanService.earlyRepayment 计算本金+实际利息并扣 FUND.available，成功后 COMPLETED；与合同限制的冲突单列待业务确认。",
+    "calls": [
+      {
+        "file": "exchange-frontend/src/views/LoanRecords.vue",
+        "line": 209,
+        "text": "const confirmed = await showConfirmDialog(localeStore.t('earlyRepaymentConfirm'))"
+      },
+      {
+        "file": "exchange-pc/src/views/LoanRecords.vue",
+        "line": 209,
+        "text": "const confirmed = await showConfirmDialog(localeStore.t('earlyRepaymentConfirm'))"
+      }
+    ]
+  },
+  {
+    "key": "walletMain",
+    "before": "ウォレットのホームページ",
+    "after": "ウォレット",
+    "grade": "A",
+    "recommendation": "导航/标题场景建议采用；若需区分钱包首页和子页，可使用「ウォレットホーム」。",
+    "current": "ウォレット",
+    "decision": "当前静态扫描未发现直接引用；保留，不把无引用当作运行时验证通过。",
+    "calls": []
+  },
+  {
+    "key": "oldPassword",
+    "before": "元のパスワード",
+    "after": "現在のパスワード",
+    "grade": "A",
+    "recommendation": "建议采用。更符合修改密码语境。",
+    "current": "現在のパスワード",
+    "decision": "检查现有调用并保留；未发现本轮需要重新定义的业务对象。",
+    "calls": [
+      {
+        "file": "exchange-pc/src/views/DesktopTrade.vue",
+        "line": 1260,
+        "text": "<div class=\"text-gray-600 dark:text-gray-300 font-medium text-sm mb-2\">{{ localeStore.t('oldPassword') }}<span class=\"text-red-500\">*</span></div>"
+      }
+    ]
+  },
+  {
+    "key": "enterOldPassword",
+    "before": "元のパスワードを入力してください",
+    "after": "現在のパスワードを入力してください",
+    "grade": "A",
+    "recommendation": "建议采用。",
+    "current": "現在のパスワードを入力してください",
+    "decision": "检查现有调用并保留；未发现本轮需要重新定义的业务对象。",
+    "calls": [
+      {
+        "file": "exchange-pc/src/views/DesktopTrade.vue",
+        "line": 1261,
+        "text": "<input v-model=\"passwordForm.oldPassword\" type=\"password\" class=\"w-full bg-gray-50 dark:bg-[#181c27] border border-gray-200 dark:border-[#2b3139]-none rounded-lg px-4 py-3 outline-none focus:ring-1 focus:ring-[#8cc63f]/30 transition-all text-gray-700 dark:text-gray-200\" :placeholder=\"localeStore.t('enterOldPassword')\" />"
+      }
+    ]
+  },
+  {
+    "key": "rejected",
+    "before": "拒否されました",
+    "after": "非承認",
+    "grade": "C",
+    "recommendation": "不是语法错误，但“明确审核不通过”更建议「不承認」。应区分未审批、审批不通过、需要修改等状态。",
+    "current": "不承認",
+    "decision": "REJECTED专用分支改为不承認；不影响PENDING/VERIFIED分支。",
+    "calls": [
+      {
+        "file": "exchange-pc/src/views/DesktopTrade.vue",
+        "line": 492,
+        "text": "<div v-else-if=\"loan.status === 'REJECTED'\" class=\"flex-1 py-2.5 text-center text-red-500 font-bold text-sm bg-red-50 rounded-lg\">{{ localeStore.t('rejected') }}</div>"
+      }
+    ]
+  },
+  {
+    "key": "cycle",
+    "before": "サイクル",
+    "after": "期間",
+    "grade": "C",
+    "recommendation": "若表示产品总期限，after 更好；若表示结算周期/重复间隔，则应使用「周期」「決済間隔」等。必须查字段定义。",
+    "current": "期間",
+    "decision": "未发现当前前台直接调用；活动产品页面使用 termDays 和独立運用期間标签。不能证明未使用键适合未来任意周期。",
+    "calls": []
+  },
+  {
+    "key": "yield",
+    "before": "収入",
+    "after": "収益",
+    "grade": "C",
+    "recommendation": "若是收益金额，after 合理；若显示百分比，应考虑「利回り」「収益率」等。必须根据单位和计算口径确认。",
+    "current": "収益",
+    "decision": "未发现当前前台直接调用；已区分 dailyYield 金额与 dailyYieldRate 百分比，保留通用収益。",
+    "calls": []
+  },
+  {
+    "key": "network",
+    "before": "ネットワークプロトコル",
+    "after": "ネットワーク",
+    "grade": "B",
+    "recommendation": "区块链充值/提现网络场景更自然；若字段确实是技术协议，不能删除“プロトコル”。",
+    "current": "ネットワーク",
+    "decision": "当前静态扫描未发现直接引用；保留，不把无引用当作运行时验证通过。",
+    "calls": []
+  },
+  {
+    "key": "enterNetwork",
+    "before": "ネットワークプロトコルを入力してください",
+    "after": "ネットワークを入力してください",
+    "grade": "B",
+    "recommendation": "文本输入框中可用；若实际是下拉选择，应改为「ネットワークを選択してください」。",
+    "current": "ネットワークを入力してください",
+    "decision": "当前静态扫描未发现直接引用；保留，不把无引用当作运行时验证通过。",
+    "calls": []
+  },
+  {
+    "key": "enterPayeeAccount",
+    "before": "受取人の口座を入力してください",
+    "after": "受取人の口座番号を入力してください",
+    "grade": "B",
+    "recommendation": "银行账号场景更明确；若支持钱包地址或平台账户，则被错误缩窄为“号码”。",
+    "current": "受取人の口座番号を入力してください",
+    "decision": "当前静态扫描未发现直接引用；保留，不把无引用当作运行时验证通过。",
+    "calls": []
+  },
+  {
+    "key": "firstNameQuote",
+    "before": "名前:",
+    "after": "名：",
+    "grade": "A",
+    "recommendation": "建议采用并统一全角标点。",
+    "current": "名：",
+    "decision": "检查现有调用并保留；未发现本轮需要重新定义的业务对象。",
+    "calls": [
+      {
+        "file": "exchange-pc/src/views/DesktopTrade.vue",
+        "line": 360,
+        "text": "<div v-if=\"localeStore.locale !== 'ja'\" class=\"flex mb-1\"><span class=\"w-16 text-gray-500 dark:text-gray-400 dark:text-gray-500\">{{ localeStore.t('firstNameQuote') }}</span> <span class=\"font-medium\">{{ currentLoanRecord.realName ? currentLoanRecord.realName.charAt(0) : localeStore.t('unknownText') }}</span></div>"
+      }
+    ]
+  },
+  {
+    "key": "lastNameQuote",
+    "before": "姓:",
+    "after": "姓：",
+    "grade": "A",
+    "recommendation": "建议采用并统一全角标点。",
+    "current": "姓：",
+    "decision": "检查现有调用并保留；未发现本轮需要重新定义的业务对象。",
+    "calls": [
+      {
+        "file": "exchange-pc/src/views/DesktopTrade.vue",
+        "line": 361,
+        "text": "<div v-if=\"localeStore.locale !== 'ja'\" class=\"flex mb-1\"><span class=\"w-16 text-gray-500 dark:text-gray-400 dark:text-gray-500\">{{ localeStore.t('lastNameQuote') }}</span> <span class=\"font-medium\">{{ currentLoanRecord.realName ? currentLoanRecord.realName.substring(1) : localeStore.t('unknownText') }}</span></div>"
+      }
+    ]
+  },
+  {
+    "key": "nameQuote",
+    "before": "名前:",
+    "after": "氏名：",
+    "grade": "B",
+    "recommendation": "真实姓名场景更准确；通用 name key 仍需检查复用范围。",
+    "current": "氏名：",
+    "decision": "用于合同姓名，保留氏名。",
+    "calls": [
+      {
+        "file": "exchange-pc/src/views/DesktopTrade.vue",
+        "line": 364,
+        "text": "<div class=\"flex mb-2\"><span class=\"w-16 text-gray-500 dark:text-gray-400 dark:text-gray-500\">{{ localeStore.t('nameQuote') }}</span> <span class=\"font-medium\">{{ currentLoanRecord.realName || localeStore.t('unknownText') }}</span></div>"
+      }
+    ]
+  },
+  {
+    "key": "resignQuote",
+    "before": "再署名",
+    "after": "署名をやり直す",
+    "grade": "B",
+    "recommendation": "与 resign 同样判断。",
+    "current": "署名をやり直す",
+    "decision": "检查现有调用并保留；未发现本轮需要重新定义的业务对象。",
+    "calls": [
+      {
+        "file": "exchange-pc/src/views/DesktopTrade.vue",
+        "line": 410,
+        "text": "<button @click=\"clearSignature\" class=\"flex-1 bg-white dark:bg-[#131722] border border-gray-200 dark:border-[#363c4e] border border-gray-200 dark:border-[#2b3139]-gray-300 text-gray-700 dark:text-gray-200 py-3 rounded-lg font-bold text-sm hover:bg-gray-50 dark:hover:bg-[#181c27] dark:bg-[#181c27] transition-colors\">{{ localeStore.t('resignQuote') }}</button>"
+      }
+    ]
+  },
+  {
+    "key": "viewAgreementAndSign",
+    "before": "契約書を確認し、契約書に署名します",
+    "after": "契約書を確認して署名",
+    "grade": "A",
+    "recommendation": "按钮/入口文案明显更简洁。若统一动词形式，可用「契約書を確認して署名する」。",
+    "current": "契約書を確認して署名",
+    "decision": "当前静态扫描未发现直接引用；保留，不把无引用当作运行时验证通过。",
+    "calls": []
+  },
+  {
+    "key": "myMiningMachines",
+    "before": "私のマイニングマシン",
+    "after": "保有マイニングマシン",
+    "grade": "B",
+    "recommendation": "更正式，但“保有”带有持有/拥有含义。若业务是租赁或使用权，建议「利用中のマイニングマシン」等。",
+    "current": "利用中のマイニングマシン",
+    "decision": "改为利用中，避免把租赁使用权直接写成所有权。",
+    "calls": []
+  },
+  {
+    "key": "minimum",
+    "before": "最小値:",
+    "after": "最小：",
+    "grade": "B",
+    "recommendation": "简洁，但不是绝对更好。金额/数量场景建议写清对象，如「最低金額」。",
+    "current": "最小：",
+    "decision": "检查现有调用并保留；未发现本轮需要重新定义的业务对象。",
+    "calls": [
+      {
+        "file": "exchange-pc/src/views/DesktopTrade.vue",
+        "line": 334,
+        "text": "<span>{{ localeStore.t('minimum') }} {{ formatMoney(activeFinancialProduct.minPurchase) }}</span>"
+      },
+      {
+        "file": "exchange-pc/src/views/DesktopTrade.vue",
+        "line": 444,
+        "text": "<span>{{ localeStore.t('minimum') }} {{ formatMoney(currentLoanSetting.minAmount) }}</span>"
+      }
+    ]
+  },
+  {
+    "key": "maximum",
+    "before": "最大:",
+    "after": "最大：",
+    "grade": "B",
+    "recommendation": "同上。",
+    "current": "最大：",
+    "decision": "检查现有调用并保留；未发现本轮需要重新定义的业务对象。",
+    "calls": [
+      {
+        "file": "exchange-pc/src/views/DesktopTrade.vue",
+        "line": 335,
+        "text": "<span>{{ localeStore.t('maximum') }} {{ formatMoney(activeFinancialProduct.maxPurchase) }}</span>"
+      },
+      {
+        "file": "exchange-pc/src/views/DesktopTrade.vue",
+        "line": 445,
+        "text": "<span>{{ localeStore.t('maximum') }} {{ formatMoney(currentLoanSetting.maxAmount) }}</span>"
+      }
+    ]
+  },
+  {
+    "key": "lockRent",
+    "before": "レンタル申込金額",
+    "after": "レンタル料",
+    "grade": "D",
+    "recommendation": "高风险：申请金额/锁定金额与“租赁费”不是同一概念。必须确认资金性质后再定名。",
+    "current": "レンタル料（設定値）",
+    "decision": "改为レンタル料（設定値）：绑定 rentalFee，而不是 purchaseAmount；FinancialService 未单独扣除 rentalFee，收费定义待业务确认，不改称锁定本金。",
+    "calls": [
+      {
+        "file": "exchange-pc/src/views/DesktopTrade.vue",
+        "line": 341,
+        "text": "<div class=\"flex justify-between items-center\"><span class=\"font-medium\">{{ localeStore.t('lockRent') }}</span><span class=\"font-bold text-gray-800 dark:text-gray-100\">{{ formatMoney(activeFinancialProduct.rentalFee) }}</span></div>"
+      },
+      {
+        "file": "exchange-pc/src/views/DesktopTrade.vue",
+        "line": 508,
+        "text": "<div class=\"text-sm text-gray-500 dark:text-gray-400 dark:text-gray-500\">{{ localeStore.t('lockRent') }}: <span class=\"font-mono text-gray-700 dark:text-gray-200 font-medium\">{{ Number(product.rentalFee).toFixed(2) }}</span></div>"
+      }
+    ]
+  },
+  {
+    "key": "estTotalYield",
+    "before": "推定総収益",
+    "after": "予想総収益",
+    "grade": "B",
+    "recommendation": "两者都自然，属于措辞风格。真正需要核对的是是否含本金、是否扣费、是否为估算值。",
+    "current": "予想総収益",
+    "decision": "对应 dailyYield × termDays，仅预计收益，不含本金；没有自行加入费用后净收益或复利含义。",
+    "calls": [
+      {
+        "file": "exchange-pc/src/views/DesktopTrade.vue",
+        "line": 534,
+        "text": "<div class=\"col-span-2\">{{ localeStore.t('estTotalYield') }}: <span class=\"font-bold text-[#8cc63f] font-mono block mt-1\">{{ Number(order.totalYield).toFixed(2) }}</span></div>"
+      }
+    ]
+  },
+  {
+    "key": "noYieldRecordsText",
+    "before": "収益実績はまだありません",
+    "after": "収益履歴はありません",
+    "grade": "B",
+    "recommendation": "记录列表中 after 更简洁；若强调“尚无实际收益产生”，原文语义更贴切。",
+    "current": "収益履歴はありません",
+    "decision": "检查现有调用并保留；未发现本轮需要重新定义的业务对象。",
+    "calls": [
+      {
+        "file": "exchange-pc/src/views/DesktopTrade.vue",
+        "line": 568,
+        "text": "<el-empty :description=\"localeStore.t('noYieldRecordsText')\" />"
+      }
+    ]
+  },
+  {
+    "key": "viewAndSignAgreement",
+    "before": "契約書を確認し、契約書に署名します",
+    "after": "契約書を確認して署名",
+    "grade": "A",
+    "recommendation": "建议采用。与同类按钮保持一致。",
+    "current": "契約書を確認して署名",
+    "decision": "检查现有调用并保留；未发现本轮需要重新定义的业务对象。",
+    "calls": [
+      {
+        "file": "exchange-pc/src/views/DesktopTrade.vue",
+        "line": 487,
+        "text": "{{ loan.contractSigned ? localeStore.t('alreadySignedText') : localeStore.t('viewAndSignAgreement') }}"
+      }
+    ]
+  },
+  {
+    "key": "noRecordsText",
+    "before": "まだ記録がありません",
+    "after": "履歴はありません",
+    "grade": "C",
+    "recommendation": "若 key 是通用无数据组件，“履歴”会把所有数据都解释为历史记录。只适合历史列表。",
+    "current": "データがありません",
+    "decision": "恢复通用データがありません，专门历史页已有独立履歴键。",
+    "calls": []
+  },
+  {
+    "key": "rejectedText",
+    "before": "拒否されました",
+    "after": "非承認",
+    "grade": "C",
+    "recommendation": "与 rejected 同样问题。若明确审批不通过，更建议「不承認」或完整句「承認されませんでした」。",
+    "current": "不承認",
+    "decision": "REJECTED专用分支改为不承認；不影响PENDING/APPROVED分支。",
+    "calls": [
+      {
+        "file": "exchange-pc/src/views/DesktopTrade.vue",
+        "line": 768,
+        "text": "{{ record.status === 'COMPLETED' ? localeStore.t('completedText') : (record.status === 'REJECTED' ? localeStore.t('rejectedText') : localeStore.t('reviewingText')) }}"
+      },
+      {
+        "file": "exchange-pc/src/views/DesktopTrade.vue",
+        "line": 894,
+        "text": "{{ record.status === 'COMPLETED' ? localeStore.t('completedText') : (record.status === 'REJECTED' ? localeStore.t('rejectedText') : (record.status === 'APPROVED' ? localeStore.t('passed') : localeStore.t('reviewingText'))) }}"
+      }
+    ]
+  },
+  {
+    "key": "customerServiceText",
+    "before": "顧客サービス",
+    "after": "カスタマーサポート",
+    "grade": "A",
+    "recommendation": "建议采用。现代产品界面更自然。",
+    "current": "カスタマーサポート",
+    "decision": "当前静态扫描未发现直接引用；保留，不把无引用当作运行时验证通过。",
+    "calls": []
+  },
+  {
+    "key": "officialEmail",
+    "before": "公式メール",
+    "after": "公式メールアドレス",
+    "grade": "A",
+    "recommendation": "建议采用。明确是地址。",
+    "current": "公式メールアドレス",
+    "decision": "检查现有调用并保留；未发现本轮需要重新定义的业务对象。",
+    "calls": [
+      {
+        "file": "exchange-pc/src/views/DesktopTrade.vue",
+        "line": 1299,
+        "text": "{{ localeStore.t('officialEmail') }}"
+      }
+    ]
+  },
+  {
+    "key": "networkError",
+    "before": "ネットワーク異常",
+    "after": "通信エラーが発生しました",
+    "grade": "A",
+    "recommendation": "建议采用。面向用户自然。",
+    "current": "通信エラーが発生しました",
+    "decision": "检查现有调用并保留；未发现本轮需要重新定义的业务对象。",
+    "calls": [
+      {
+        "file": "exchange-frontend/src/utils/request.ts",
+        "line": 65,
+        "text": "return Promise.reject(new Error(readOnly ? locale.t('networkError') : locale.text('', 'Unable to confirm the result. Check the relevant history or status before submitting again.')))"
+      },
+      {
+        "file": "exchange-pc/src/utils/request.ts",
+        "line": 65,
+        "text": "return Promise.reject(new Error(readOnly ? locale.t('networkError') : locale.text('', 'Unable to confirm the result. Check the relevant history or status before submitting again.')))"
+      },
+      {
+        "file": "exchange-pc/src/views/DesktopTrade.vue",
+        "line": 1915,
+        "text": "return localeStore.t('networkError');"
+      },
+      {
+        "file": "exchange-pc/src/views/DesktopTrade.vue",
+        "line": 2902,
+        "text": "ElMessage.error(parseErrorMsg(e, localeStore.t('networkError')));"
+      },
+      {
+        "file": "exchange-pc/src/views/DesktopTrade.vue",
+        "line": 2945,
+        "text": "ElMessage.error(parseErrorMsg(e, localeStore.t('networkError')));"
+      },
+      {
+        "file": "exchange-pc/src/views/DesktopTrade.vue",
+        "line": 2977,
+        "text": "ElMessage.error(parseErrorMsg(e, localeStore.t('networkError')));"
+      },
+      {
+        "file": "exchange-pc/src/views/DesktopTrade.vue",
+        "line": 3006,
+        "text": "ElMessage.error(parseErrorMsg(e, localeStore.t('networkError')));"
+      },
+      {
+        "file": "exchange-pc/src/views/DesktopTrade.vue",
+        "line": 3029,
+        "text": "ElMessage.error(parseErrorMsg(e, localeStore.t('networkError')));"
+      }
+    ]
+  },
+  {
+    "key": "pleaseEnterOldPassword",
+    "before": "古いパスワードを入力してください",
+    "after": "現在のパスワードを入力してください",
+    "grade": "A",
+    "recommendation": "建议采用。",
+    "current": "現在のパスワードを入力してください",
+    "decision": "当前静态扫描未发现直接引用；保留，不把无引用当作运行时验证通过。",
+    "calls": []
+  },
+  {
+    "key": "passed",
+    "before": "合格",
+    "after": "承認済み",
+    "grade": "C",
+    "recommendation": "审批流程中更自然；若表示考试/检测通过或本人确认完成，可能应使用「合格」「確認済み」「本人確認済み」等。",
+    "current": "承認済み",
+    "decision": "仅出金APPROVED分支，不是KYC或考试结果；保留承認済み。",
+    "calls": [
+      {
+        "file": "exchange-pc/src/views/DesktopTrade.vue",
+        "line": 894,
+        "text": "{{ record.status === 'COMPLETED' ? localeStore.t('completedText') : (record.status === 'REJECTED' ? localeStore.t('rejectedText') : (record.status === 'APPROVED' ? localeStore.t('passed') : localeStore.t('reviewingText'))) }}"
+      }
+    ]
+  }
+]

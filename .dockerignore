@@ -7,3 +7,12 @@
 后台密码.txt
 .env
 docker-*.log
+
+# Never send backups, reports or credentials to the Docker build context.
+rollback
+reports
+.env.*
+**/*.log
+**/*.pem
+**/*.key
+**/__pycache__

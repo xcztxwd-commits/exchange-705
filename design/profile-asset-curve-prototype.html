@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>个人中心 · 资产走势原型</title>
+  <style>
+    :root { font-family: Inter, -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif; color: #17211b; background: #ecefea; font-synthesis: none; }
+    * { box-sizing: border-box; }
+    body { margin: 0; }
+    button { font: inherit; cursor: pointer; }
+    button:focus-visible, [tabindex]:focus-visible { outline: 2px solid #a3e268; outline-offset: 3px; }
+    .stage { min-height: 100vh; display: flex; align-items: center; justify-content: center; gap: clamp(36px, 6vw, 96px); padding: 28px; }
+    .notes { width: 360px; color: #233128; }
+    .eyebrow { color: #69805e; font-size: 12px; font-weight: 750; letter-spacing: .18em; }
+    .notes h1 { margin: 16px 0 20px; font-size: 48px; line-height: 1.12; letter-spacing: -.055em; }
+    .notes > p { font-size: 15px; line-height: 1.85; color: #657267; }
+    .note-list { margin-top: 44px; display: grid; gap: 18px; }
+    .note { padding: 18px 20px; border: 1px solid #d4dcd1; border-radius: 18px; background: #f6f8f4; }
+    .note b { font-size: 14px; }
+    .note p { margin: 5px 0 0; color: #69766c; font-size: 13px; line-height: 1.6; }
+    .notes small { display: block; margin-top: 24px; color: #8c998d; }
+    .device { position: relative; flex: none; width: 412px; height: min(874px, calc(100vh - 56px)); min-height: 640px; overflow: hidden; border: 8px solid #17201a; border-radius: 42px; background: #f6f7f4; box-shadow: 0 40px 90px #263a2938, 0 8px 20px #263a2914; }
+    .screen { height: 100%; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; padding-bottom: 93px; }
+    .screen::-webkit-scrollbar { display: none; }
+    .status { height: 28px; display: flex; justify-content: space-between; align-items: end; padding: 0 25px; font-size: 11px; font-weight: 700; color: #27332a; }
+    .status .marks { letter-spacing: 2px; }
+    .topbar { display: flex; align-items: center; justify-content: space-between; padding: 22px 20px 24px; }
+    .identity { display: flex; align-items: center; gap: 11px; }
+    .avatar { width: 41px; height: 41px; border-radius: 15px; display: grid; place-items: center; color: #eaf7dd; font-size: 20px; font-weight: 700; background: linear-gradient(145deg, #365b3e, #132a22); }
+    .identity strong { display: block; font-size: 16px; line-height: 1.1; }
+    .identity small { display: block; margin-top: 5px; color: #8a9589; font-size: 11px; letter-spacing: .02em; }
+    .header-tools { display: flex; gap: 8px; }
+    .icon-button { width: 37px; height: 37px; display: grid; place-items: center; border: 0; border-radius: 13px; background: #e9ede6; color: #4d5d4f; }
+    svg.icon { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+    .hero { margin: 0 14px; padding: 23px 21px 18px; overflow: hidden; border-radius: 25px; color: #f4faee; background: radial-gradient(circle at 88% 0%, #304334 0, transparent 38%), linear-gradient(145deg, #1a2921, #101c17 68%); box-shadow: 0 18px 30px #263a2920; }
+    .hero-top, .trend-title, .hero-foot { display: flex; align-items: center; justify-content: space-between; }
+    .hero-label { color: #aebfb0; font-size: 12px; letter-spacing: .04em; }
+    .hero-top .icon-button { width: 31px; height: 31px; border-radius: 10px; background: #ffffff16; color: #c5d5c6; }
+    .hero-top .icon { width: 18px; height: 18px; }
+    .balance { display: flex; align-items: baseline; gap: 8px; margin: 11px 0 8px; white-space: nowrap; }
+    .balance .amount { font-size: clamp(37px, 10vw, 43px); line-height: 1.07; font-weight: 750; font-variant-numeric: tabular-nums; letter-spacing: -.065em; }
+    .balance .currency { font-size: 12px; font-weight: 700; color: #b0c0b3; }
+    .delta { min-height: 24px; display: flex; align-items: center; gap: 7px; font-size: 12px; color: #b7c5b9; }
+    .delta strong { color: #baf18b; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .delta .badge { display: inline-flex; align-items: center; padding: 3px 6px; border-radius: 5px; background: #b8ef801c; color: #c4f39a; font-size: 10px; font-weight: 750; }
+    .rule { height: 1px; margin: 20px 0 16px; background: #ffffff1b; }
+    .trend-title strong { font-size: 13px; font-weight: 650; }
+    .trend-title small { color: #83988a; font-size: 10px; }
+    .chart-wrap { position: relative; margin: 11px -21px 0; height: 185px; }
+    .chart-wrap svg { display: block; width: 100%; height: 100%; overflow: visible; touch-action: pan-y; }
+    .grid { stroke: #eaffdf14; stroke-width: 1; stroke-dasharray: 3 5; }
+    .trend-line { fill: none; stroke: #b8ef80; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+    .crosshair { stroke: #c6e5c0a6; stroke-width: 1; stroke-dasharray: 3 4; }
+    .point { fill: #d8ffae; stroke: #183024; stroke-width: 3; }
+    .chart-hit { fill: transparent; cursor: crosshair; }
+    .tooltip { position: absolute; z-index: 3; min-width: 110px; padding: 8px 10px; transform: translateX(-50%); border: 1px solid #9ab58933; border-radius: 9px; background: #26392d; box-shadow: 0 7px 20px #0003; text-align: center; pointer-events: none; }
+    .tooltip small { display: block; margin-bottom: 2px; color: #a8bda9; font-size: 10px; }
+    .tooltip b { font-size: 12px; font-variant-numeric: tabular-nums; }
+    .axis { display: flex; justify-content: space-between; margin: 0 1px 15px; color: #829688; font-size: 10px; }
+    .ranges { display: grid; grid-template-columns: repeat(4, 1fr); padding: 4px; border-radius: 12px; background: #ffffff12; }
+    .ranges button { min-height: 32px; border: 0; border-radius: 9px; background: transparent; color: #9ead9f; font-size: 11px; font-weight: 650; }
+    .ranges button[aria-selected="true"] { background: #d2f5b1; color: #18321f; box-shadow: 0 2px 7px #0002; }
+    .hero-foot { margin-top: 15px; color: #819689; font-size: 10px; }
+    .hero-foot span:last-child { display: flex; gap: 5px; align-items: center; }
+    .hero-foot i { width: 5px; height: 5px; border-radius: 50%; background: #a7e576; }
+    .private-cover { display: none; position: absolute; inset: 0; place-items: center; color: #aab9ac; font-size: 12px; background: #14231b; }
+    .privacy .private-cover { display: grid; }
+    .privacy .chart-wrap svg, .privacy .axis { visibility: hidden; }
+    .section-title { display: flex; align-items: baseline; justify-content: space-between; margin: 23px 21px 14px; }
+    .section-title h2 { margin: 0; font-size: 17px; letter-spacing: -.025em; }
+    .section-title span { color: #9ba69a; font-size: 11px; }
+    .actions { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 0 14px; }
+    .action { min-height: 91px; padding: 13px; display: flex; flex-direction: column; align-items: flex-start; gap: 10px; border: 1px solid #eef0eb; border-radius: 18px; background: #fff; color: #233126; text-align: left; box-shadow: 0 4px 12px #20351a08; }
+    .action .icon-disc { width: 35px; height: 35px; display: grid; place-items: center; border-radius: 12px; background: #e7f5dc; color: #4c8136; }
+    .action .icon { width: 18px; height: 18px; stroke-width: 2.2; }
+    .action span:last-child { font-size: 13px; font-weight: 700; }
+    .distribution { margin: 0 14px; padding: 19px 19px 17px; border: 1px solid #eef0eb; border-radius: 19px; background: #fff; }
+    .distribution-head { display: flex; justify-content: space-between; align-items: center; }
+    .distribution-head strong { font-size: 14px; }
+    .distribution-head small { color: #99a598; font-size: 10px; }
+    .stack { display: flex; gap: 3px; height: 8px; overflow: hidden; margin: 17px 0 16px; border-radius: 10px; }
+    .stack span:first-child { width: 53.46%; background: #94c85e; }.stack span:nth-child(2) { width: 28.12%; background: #b8d89a; }.stack span:nth-child(3) { flex: 1; background: #dce8d2; }
+    .dist-row { display: grid; grid-template-columns: 12px 1fr auto; align-items: center; gap: 8px; padding: 6px 0; color: #718074; font-size: 11px; }
+    .dist-row b { color: #3c4b3e; font-size: 11px; font-weight: 650; font-variant-numeric: tabular-nums; }
+    .dot { width: 7px; height: 7px; border-radius: 50%; background: #94c85e; }.dot.b { background: #b8d89a; }.dot.c { background: #dce8d2; }
+    .menu { margin: 20px 14px 0; overflow: hidden; border: 1px solid #eef0eb; border-radius: 18px; background: #fff; }
+    .menu button { width: 100%; height: 53px; display: flex; align-items: center; justify-content: space-between; padding: 0 18px; border: 0; border-bottom: 1px solid #f0f2ed; background: #fff; color: #28352b; font-size: 13px; text-align: left; }
+    .menu button:last-child { border-bottom: 0; }.menu button span:last-child { color: #a0ada1; font-size: 19px; }
+    .tabbar { position: absolute; z-index: 4; right: 0; bottom: 0; left: 0; height: 73px; display: grid; grid-template-columns: repeat(4, 1fr); align-items: center; border-top: 1px solid #edf0e9; background: #fffffff2; backdrop-filter: blur(12px); padding-bottom: 5px; }
+    .tabbar button { height: 57px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; border: 0; background: none; color: #a0aaa0; font-size: 10px; }
+    .tabbar button.active { color: #578b3d; font-weight: 700; }.tabbar .icon { width: 20px; height: 20px; }
+    .toast { position: absolute; z-index: 10; left: 50%; bottom: 87px; width: max-content; max-width: 80%; padding: 9px 14px; transform: translateX(-50%); border-radius: 10px; background: #27392c; color: #fff; font-size: 12px; box-shadow: 0 8px 20px #0003; }
+    [hidden] { display: none !important; }
+    @media (max-width: 850px) { .stage { display: block; min-height: 0; padding: 0; }.notes { display: none; }.device { width: 100%; height: 100dvh; min-height: 0; border: 0; border-radius: 0; box-shadow: none; } }
+    @media (prefers-reduced-motion: no-preference) { .trend-line, .chart-area { transition: d .28s ease; }.action:active, .icon-button:active { transform: scale(.96); } }
+  </style>
+</head>
+<body>
+  <div class="stage">
+    <aside class="notes">
+      <div class="eyebrow">PROFILE / ASSET TREND</div>
+      <h1>让资产变化<br>一眼可读。</h1>
+      <p>保留现有个人中心导航。把总额、变化与曲线收进一张卡，用品牌绿色而非照搬交易所粉色高亮。</p>
+      <div class="note-list">
+        <div class="note"><b>01 · 克制的金融视觉</b><p>石墨底色、细线面积图、大数字。图形是信息，不是装饰。</p></div>
+        <div class="note"><b>02 · 资金变化，不等于收益</b><p>文案使用「较期初变化」，入金与划转不被误报为盈利。</p></div>
+        <div class="note"><b>03 · 可触摸的原型</b><p>切换周期、拖动读数、隐藏资产均可操作。</p></div>
+      </div>
+      <small>概念原型 · 所有金额与曲线均为演示数据</small>
+    </aside>
+    <div class="device" id="device">
+      <div class="screen">
+        <div class="status"><span>9:41</span><span class="marks">▰▰▰ ●</span></div>
+        <header class="topbar">
+          <div class="identity"><div class="avatar">U</div><div><strong>user</strong><small>UID 7000017</small></div></div>
+          <div class="header-tools">
+            <button class="icon-button" aria-label="语言" data-demo="语言设置"><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 4 6 4 9s-1 6-4 9M12 3c-3 3-4 6-4 9s1 6 4 9"/></svg></button>
+            <button class="icon-button" aria-label="退出" data-demo="退出登录"><svg class="icon" viewBox="0 0 24 24"><path d="M9 4H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4M13 8l4 4-4 4m4-4H8"/></svg></button>
+          </div>
+        </header>
+        <main>
+          <section class="hero" aria-label="总资产与资金变动趋势">
+            <div class="hero-top"><span class="hero-label">总账户资产折合</span><button id="privacyButton" class="icon-button" aria-label="隐藏资产" aria-pressed="false"><svg class="icon" viewBox="0 0 24 24"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"/><circle cx="12" cy="12" r="2.5"/></svg></button></div>
+            <div class="balance"><span class="amount" id="balance">$243,541.37</span><span class="currency">USD</span></div>
+            <div class="delta"><span id="deltaLabel">较 1 月前</span><strong id="deltaValue">+$0.00</strong><span class="badge" id="deltaPercent">+0.00%</span></div>
+            <div class="rule"></div>
+            <div class="trend-title"><strong>资金变动趋势</strong><small>USD · 数据示意</small></div>
+            <div class="chart-wrap" id="chartWrap">
+              <svg id="chart" viewBox="0 0 360 185" preserveAspectRatio="none" role="img" tabindex="0" aria-label="资产走势，可使用左右方向键查看各时点">
+                <defs><linearGradient id="areaFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#b8ef80" stop-opacity=".25"/><stop offset="100%" stop-color="#b8ef80" stop-opacity="0"/></linearGradient></defs>
+                <path class="grid" d="M0 35H360 M0 91H360 M0 147H360"/>
+                <path id="areaPath" class="chart-area" fill="url(#areaFill)"/>
+                <path id="linePath" class="trend-line"/>
+                <line id="crosshair" class="crosshair" y1="0" y2="185" hidden/>
+                <circle id="point" class="point" r="5" hidden/>
+                <rect class="chart-hit" width="360" height="185"/>
+              </svg>
+              <div class="tooltip" id="tooltip" hidden><small id="tipDate"></small><b id="tipAmount"></b></div>
+              <div class="private-cover">资产走势已隐藏</div>
+            </div>
+            <div class="axis"><span id="axisStart">8月28日</span><span id="axisMiddle">9月12日</span><span id="axisEnd">今天</span></div>
+            <div class="ranges" role="tablist" aria-label="资产走势周期">
+              <button role="tab" data-range="1D" aria-selected="false">1日</button>
+              <button role="tab" data-range="1W" aria-selected="false">1周</button>
+              <button role="tab" data-range="1M" aria-selected="true">1月</button>
+              <button role="tab" data-range="1Y" aria-selected="false">1年</button>
+            </div>
+            <div class="hero-foot"><span>资产余额变化 · 不代表投资收益</span><span><i></i>演示数据</span></div>
+          </section>
+          <div class="section-title"><h2>快捷操作</h2><span>常用服务</span></div>
+          <div class="actions">
+            <button class="action" data-demo="入金"><span class="icon-disc"><svg class="icon" viewBox="0 0 24 24"><path d="M12 3v14m-5-5 5 5 5-5M4 20h16"/></svg></span><span>入金</span></button>
+            <button class="action" data-demo="出金"><span class="icon-disc"><svg class="icon" viewBox="0 0 24 24"><path d="M12 21V7m-5 5 5-5 5 5M4 4h16"/></svg></span><span>出金</span></button>
+            <button class="action" data-demo="划转"><span class="icon-disc"><svg class="icon" viewBox="0 0 24 24"><path d="M4 8h16m-4-4 4 4-4 4M20 16H4m4-4-4 4 4 4"/></svg></span><span>划转</span></button>
+          </div>
+          <div class="section-title"><h2>账户分布</h2><span>总资产构成</span></div>
+          <section class="distribution" aria-label="账户分布，演示数据">
+            <div class="distribution-head"><strong>资产结构</strong><small>含可用与冻结</small></div>
+            <div class="stack"><span></span><span></span><span></span></div>
+            <div class="dist-row"><i class="dot"></i><span>资金账户</span><b>$130,200.00</b></div>
+            <div class="dist-row"><i class="dot b"></i><span>合约账户</span><b>$68,476.25</b></div>
+            <div class="dist-row"><i class="dot c"></i><span>期权账户</span><b>$44,865.12</b></div>
+          </section>
+          <div class="menu"><button data-demo="钱包">钱包 <span>›</span></button><button data-demo="实名认证">实名认证 <span>›</span></button><button data-demo="邀请好友">邀请好友 <span>›</span></button><button data-demo="修改密码">修改密码 <span>›</span></button></div>
+        </main>
+      </div>
+      <nav class="tabbar" aria-label="主导航">
+        <button data-demo="市场"><svg class="icon" viewBox="0 0 24 24"><path d="M3 11 12 4l9 7v9H3zM9 20v-6h6v6"/></svg>市场</button>
+        <button data-demo="交易"><svg class="icon" viewBox="0 0 24 24"><path d="M4 7h16m-4-4 4 4-4 4M20 17H4m4-4-4 4 4 4"/></svg>交易</button>
+        <button data-demo="订单"><svg class="icon" viewBox="0 0 24 24"><path d="M7 3h10l3 3v15H4V3h3m2 6h8m-8 4h8m-8 4h5"/></svg>订单</button>
+        <button class="active" aria-current="page"><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="8" r="3"/><path d="M5 21v-2a7 7 0 0 1 14 0v2H5Z"/></svg>个人中心</button>
+      </nav>
+      <div class="toast" id="toast" role="status" hidden></div>
+    </div>
+  </div>
+  <script>
+    // 纯演示数据；上线后由已认证的资产趋势接口提供。
+    const END = 243541.37;
+    const configs = {
+      '1D': { start: 241060.05, count: 34, amp: 460, cycles: 4.2, label: '较 1 日前', axis: ['00:00', '12:00', '现在'], days: 1 },
+      '1W': { start: 238796.22, count: 36, amp: 860, cycles: 3.1, label: '较 1 周前', axis: ['9月20日', '9月23日', '今天'], days: 7 },
+      '1M': { start: 231282.40, count: 40, amp: 1840, cycles: 4.1, label: '较 1 月前', axis: ['8月28日', '9月12日', '今天'], days: 30 },
+      '1Y': { start: 196810.85, count: 48, amp: 6700, cycles: 5.4, label: '较 1 年前', axis: ['去年9月', '今年3月', '今天'], days: 365 }
+    };
+    const $ = id => document.getElementById(id);
+    const money = value => '$' + value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const signedMoney = value => (value >= 0 ? '+' : '−') + money(Math.abs(value));
+    let range = '1M';
+    let values = [];
+    let xy = [];
+    let privateMode = false;
+    let activeIndex = -1;
+    let dragging = false;
+    function makeValues({ start, count, amp, cycles }) {
+      return Array.from({ length: count }, (_, i) => {
+        const t = i / (count - 1);
+        const wave = Math.sin(Math.PI * t) * (Math.sin(t * Math.PI * 2 * cycles) * .72 + Math.sin(t * 37) * .28) * amp;
+        return i === count - 1 ? END : start + (END - start) * t + wave;
+      });
+    }
+    if (Object.values(configs).some(config => makeValues(config)[0] !== config.start || makeValues(config).at(-1) !== END)) {
+      throw new Error('演示曲线端点与资产值不一致');
+    }
+    function draw(nextRange) {
+      range = nextRange;
+      activeIndex = -1;
+      hideTip();
+      const config = configs[range];
+      values = makeValues(config);
+      const min = Math.min(...values), max = Math.max(...values), pad = Math.max((max - min) * .16, 100);
+      xy = values.map((value, i) => ({ x: i * 360 / (values.length - 1), y: 168 - (value - min + pad) / (max - min + pad * 2) * 150 }));
+      const path = xy.map((p, i) => `${i ? 'L' : 'M'}${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ');
+      $('linePath').setAttribute('d', path);
+      $('areaPath').setAttribute('d', `${path} L360 185 L0 185 Z`);
+      const change = END - config.start;
+      $('deltaLabel').textContent = config.label;
+      $('deltaValue').textContent = signedMoney(change);
+      $('deltaPercent').textContent = `${change >= 0 ? '+' : '−'}${(Math.abs(change) / config.start * 100).toFixed(2)}%`;
+      ['axisStart', 'axisMiddle', 'axisEnd'].forEach((id, i) => $(id).textContent = config.axis[i]);
+      document.querySelectorAll('[data-range]').forEach(button => button.setAttribute('aria-selected', String(button.dataset.range === range)));
+      $('chart').setAttribute('aria-label', `${range}资产走势，期初${money(config.start)}，当前${money(END)}，左右方向键查看各时点`);
+      if (privateMode) togglePrivate(true);
+    }
+    function dateFor(index) {
+      const config = configs[range];
+      const now = new Date('2026-09-27T09:41:00+08:00');
+      const at = new Date(now.getTime() - (1 - index / (values.length - 1)) * config.days * 86400000);
+      return range === '1D' ? new Intl.DateTimeFormat('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false }).format(at) : new Intl.DateTimeFormat('zh-CN', { month: 'numeric', day: 'numeric' }).format(at);
+    }
+    function showPoint(index) {
+      if (privateMode) return;
+      activeIndex = Math.max(0, Math.min(values.length - 1, index));
+      const p = xy[activeIndex];
+      $('crosshair').setAttribute('x1', p.x); $('crosshair').setAttribute('x2', p.x);
+      $('point').setAttribute('cx', p.x); $('point').setAttribute('cy', p.y);
+      $('crosshair').hidden = false; $('point').hidden = false;
+      const tip = $('tooltip');
+      tip.hidden = false;
+      tip.style.left = `${Math.max(18, Math.min(82, p.x / 360 * 100))}%`;
+      tip.style.top = `${Math.max(1, p.y - 55)}px`;
+      $('tipDate').textContent = dateFor(activeIndex);
+      $('tipAmount').textContent = money(values[activeIndex]);
+    }
+    function hideTip() { $('crosshair').hidden = true; $('point').hidden = true; $('tooltip').hidden = true; }
+    function indexFromPointer(event) {
+      const rect = $('chart').getBoundingClientRect();
+      return Math.round(Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width)) * (values.length - 1));
+    }
+    function togglePrivate(force) {
+      privateMode = typeof force === 'boolean' ? force : !privateMode;
+      $('device').classList.toggle('privacy', privateMode);
+      $('balance').textContent = privateMode ? '••••••••' : money(END);
+      $('deltaValue').hidden = privateMode; $('deltaPercent').hidden = privateMode;
+      $('deltaLabel').textContent = privateMode ? '资产金额已隐藏' : configs[range].label;
+      document.querySelectorAll('.dist-row b').forEach(value => {
+        value.dataset.original ||= value.textContent;
+        value.textContent = privateMode ? '••••' : value.dataset.original;
+      });
+      $('privacyButton').setAttribute('aria-label', privateMode ? '显示资产' : '隐藏资产');
+      $('privacyButton').setAttribute('aria-pressed', String(privateMode));
+      $('chart').setAttribute('aria-label', privateMode ? '资产走势已隐藏' : `${range}资产走势，左右方向键查看各时点`);
+      hideTip();
+    }
+    document.querySelectorAll('[data-range]').forEach(button => button.addEventListener('click', () => draw(button.dataset.range)));
+    $('privacyButton').addEventListener('click', () => togglePrivate());
+    $('chart').addEventListener('pointerdown', event => { dragging = true; showPoint(indexFromPointer(event)); });
+    $('chart').addEventListener('pointermove', event => { if (dragging || event.pointerType === 'mouse') showPoint(indexFromPointer(event)); });
+    $('chart').addEventListener('pointerup', () => { dragging = false; });
+    $('chart').addEventListener('pointercancel', () => { dragging = false; hideTip(); });
+    $('chart').addEventListener('pointerleave', () => { if (!dragging) hideTip(); });
+    $('chart').addEventListener('keydown', event => { if (event.key === 'ArrowRight' || event.key === 'ArrowLeft') { event.preventDefault(); showPoint((activeIndex < 0 ? 0 : activeIndex) + (event.key === 'ArrowRight' ? 1 : -1)); } });
+    let toastTimer;
+    document.querySelectorAll('[data-demo]').forEach(button => button.addEventListener('click', () => { $('toast').textContent = `原型演示 · ${button.dataset.demo}`; $('toast').hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => $('toast').hidden = true, 1700); }));
+    draw('1M');
+  </script>
+</body>
+</html>

@@ -20,7 +20,7 @@ public class RegisterRequest {
     @NotBlank
     private String confirmPassword;
 
-    @NotBlank
+    // Registration email verification is temporarily disabled.
     private String verifyCode;
 
     private String invitationCode;

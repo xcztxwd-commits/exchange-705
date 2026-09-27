@@ -186,6 +186,38 @@ class MinimalFixRegressionTest {
         req.setVerifyCode(old.getCode());assertThrows(BusinessException.class,()->auth.resetPassword(req));
         assertEquals(200,status(request("GET","/api/user/assets",login(a),null)));
     }
+    @Test void registrationWithOnlyEmailAndPasswordIsRejected() throws Exception {
+        String address = prefix + "twofields@example.invalid";
+        Map<String,Object> req = map("email", address, "password", PASSWORD);
+        assertEquals(400, status(request("POST", "/api/auth/register", null, req)));
+        assertFalse(users.existsByEmail(address));
+    }
+
+    @Test void registrationWithoutInvitationOrCodeCreatesUsableAccount() throws Exception {
+        String address = prefix + "nocode@example.invalid";
+        Map<String,Object> req = map("email", address, "password", PASSWORD, "confirmPassword", PASSWORD);
+        assertFalse(codes.findAll().stream().anyMatch(code -> address.equals(code.getEmail())));
+        MvcResult result = request("POST", "/api/auth/register", null, req);
+        assertEquals(200, status(result));
+        UserAccount created = users.findByEmail(address).orElseThrow(AssertionError::new);
+        assertTrue(encoder.matches(PASSWORD, created.getPasswordHash()));
+        assertNotEquals(PASSWORD, created.getPasswordHash());
+        assertNull(created.getParentUserId());
+        assertNull(created.getInviteCode());
+        assertNotNull(created.getMyInviteCode());
+        assertEquals(3, assets.findByUserId(created.getId()).size());
+        for (String coin : Arrays.asList("FUND", "CONTRACT", "OPTION")) {
+            assertTrue(assets.findByUserIdAndCoin(created.getId(), coin).isPresent());
+        }
+        MvcResult loggedIn = request("POST", "/api/auth/login", null, map("account", address, "password", PASSWORD));
+        assertEquals(200, status(loggedIn));
+        String token = body(loggedIn).path("token").asText();
+        assertFalse(token.isEmpty());
+        assertEquals(200, status(request("GET", "/api/user/assets", token, null)));
+        assertEquals(400, status(request("POST", "/api/auth/register", null, req)));
+        assertFalse(codes.findAll().stream().anyMatch(code -> address.equals(code.getEmail())));
+    }
+
     @Test void registerRejectsMismatchedConfirmationWithoutCreatingUser()throws Exception{
         UserAccount candidate=new UserAccount();candidate.setEmail(prefix+"new@example.invalid");VerifyCode code=code(candidate,"register");
         Map<String,Object> req=map("email",candidate.getEmail(),"password",PASSWORD,"confirmPassword",PASSWORD+"x","verifyCode",code.getCode());
@@ -546,9 +578,9 @@ class MinimalFixRegressionTest {
         org.mockito.Mockito.when(quotes.controlStatus(1L)).thenReturn(map("id", 1));
         assertEquals(200, status(request("GET", base, token, null)));
         assertEquals(200, status(request("POST", base + "/start", token, valid)));
-        org.mockito.Mockito.verify(quotes).startControl(org.mockito.ArgumentMatchers.eq(1L), org.mockito.ArgumentMatchers.eq(10), org.mockito.ArgumentMatchers.eq(new BigDecimal("100")), org.mockito.ArgumentMatchers.eq(10), org.mockito.ArgumentMatchers.eq(true), org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.argThat(o -> Boolean.TRUE.equals(o.getAutoRestore()) && "GRADUAL".equals(o.getRestoreMode()) && o.getRestoreDurationSeconds() == 10 && o.getRestoreIntensity() == 5 && o.getRestoreRandomOscillation() && o.getAutoReplaceHistory()));
+        org.mockito.Mockito.verify(quotes).startControl(org.mockito.ArgumentMatchers.eq(1L), org.mockito.ArgumentMatchers.eq(10), org.mockito.ArgumentMatchers.eq(new BigDecimal("100")), org.mockito.ArgumentMatchers.eq(10), org.mockito.ArgumentMatchers.eq(true), org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.argThat(o -> Boolean.FALSE.equals(o.getAutoRestore()) && "GRADUAL".equals(o.getRestoreMode()) && o.getRestoreDurationSeconds() == 10 && o.getRestoreIntensity() == 5 && o.getRestoreRandomOscillation() && o.getAutoReplaceHistory()));
         assertEquals(200, status(request("POST", base + "/start", token, map("durationSeconds", 10, "targetPrice", 100, "intensity", 10))));
-        org.mockito.Mockito.verify(quotes).startControl(org.mockito.ArgumentMatchers.eq(1L), org.mockito.ArgumentMatchers.eq(10), org.mockito.ArgumentMatchers.eq(new BigDecimal("100")), org.mockito.ArgumentMatchers.eq(10), org.mockito.ArgumentMatchers.eq(false), org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.argThat(o -> Boolean.TRUE.equals(o.getAutoRestore()) && "GRADUAL".equals(o.getRestoreMode()) && o.getRestoreDurationSeconds() == 10 && o.getRestoreIntensity() == 5 && o.getRestoreRandomOscillation() && o.getAutoReplaceHistory()));
+        org.mockito.Mockito.verify(quotes).startControl(org.mockito.ArgumentMatchers.eq(1L), org.mockito.ArgumentMatchers.eq(10), org.mockito.ArgumentMatchers.eq(new BigDecimal("100")), org.mockito.ArgumentMatchers.eq(10), org.mockito.ArgumentMatchers.eq(false), org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.argThat(o -> Boolean.FALSE.equals(o.getAutoRestore()) && "GRADUAL".equals(o.getRestoreMode()) && o.getRestoreDurationSeconds() == 10 && o.getRestoreIntensity() == 5 && o.getRestoreRandomOscillation() && o.getAutoReplaceHistory()));
         assertEquals(400, status(request("POST", base + "/start", token, map("durationSeconds", 10, "targetPrice", 100, "intensity", 1, "randomOscillation", null))));
         assertEquals(400, status(request("POST", base + "/start", superToken, map("durationSeconds", 0, "targetPrice", 100, "intensity", 1))));
         assertEquals(400, status(request("POST", base + "/start", superToken, map("durationSeconds", 10, "targetPrice", -1, "intensity", 1))));

@@ -1,27 +1,41 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
-import { dispose, init, type CandleType, type Chart, type Coordinate, type DataLoaderGetBarsParams, type KLineData, type OverlayCreate } from 'klinecharts'
+import { dispose, init, registerLocale, type CandleType, type Chart, type Coordinate, type DataLoaderGetBarsParams, type KLineData, type OverlayCreate } from 'klinecharts'
 import { useMarketStore } from '@/store/market'
 import marketWebSocket, { showSourceConnectionWarning } from '@/utils/marketWebSocket'
 import { useLocaleStore } from '@/store/locale'
+import { chartLocale } from '@/utils/chartLocale'
 import request from '@/utils/request'
 import { candleFromQuote, chartPeriod, normalizeCandles } from '@/utils/chartData'
 import { registerTradingDrawingOverlays } from '@/utils/chartOverlays'
 import { indicatorCatalog, normalizePreferences, validParameters, validTimezone } from '@/utils/chartPreferences'
 import { displaySymbol } from '@/utils/displaySymbol'
+import AppSelect from '@/components/AppSelect.vue'
 
 const props = defineProps<{ symbol: string; category?: string; interval?: string; height?: number; compact?: boolean; pricePrecision?: number }>()
 const emit = defineEmits<{ (e: 'ready'): void }>()
 const market = useMarketStore()
 const locale = useLocaleStore()
 const container = ref<HTMLDivElement>()
-const chinese = computed(() => locale.getCurrentLocale().startsWith('zh'))
-const text = (zh: string, en: string) => chinese.value ? zh : en
+const text = locale.text
+const candleOptions = computed(() => [
+  { value: 'candle_solid', label: text('蠟燭圖', 'Candles') },
+  { value: 'candle_stroke', label: text('空心蠟燭', 'Hollow') },
+  { value: 'ohlc', label: 'OHLC' },
+  { value: 'area', label: text('面積圖', 'Area') },
+])
+const scaleOptions = computed(() => [
+  { value: 'normal', label: text('線性', 'Linear') },
+  { value: 'logarithm', label: text('對數', 'Logarithmic') },
+  { value: 'percentage', label: text('百分比', 'Percentage') },
+])
 const interval = computed(() => props.interval || '1m')
 const dark = ref(false)
 const fullscreen = ref(false)
 const loading = ref(false)
 const historyLoading = ref(false)
+const historyWaiting = ref(false)
+const historyUnsupported = ref(false)
 const error = ref(false)
 const empty = ref(false)
 const exhausted = ref(false)
@@ -53,7 +67,7 @@ const parameterError = ref('')
 const selectedStudies = computed(() => indicatorCatalog.filter(item => preferences.value.indicators.includes(item.name)))
 // Mobile preview keeps the price pane readable; full screen retains every saved study.
 const displayedStudies = computed(() => selectedStudies.value.filter(item => !props.compact || fullscreen.value || item.main))
-const visibleStudies = computed(() => indicatorCatalog.filter(item => `${item.name} ${item.zh} ${item.en}`.toLowerCase().includes(search.value.toLowerCase())))
+const visibleStudies = computed(() => indicatorCatalog.filter(item => `${item.name} ${item.zh} ${item.en} ${text(item.zh, item.en)}`.toLowerCase().includes(search.value.toLowerCase())))
 const zones = (() => {
   const api = Intl as typeof Intl & { supportedValuesOf?: (key: string) => string[] }
   return [...new Set(['UTC', 'Asia/Shanghai', 'Asia/Hong_Kong', 'Asia/Singapore', 'Asia/Tokyo', 'Europe/London', 'America/New_York', Intl.DateTimeFormat().resolvedOptions().timeZone, ...(api.supportedValuesOf?.('timeZone') || [])])]
@@ -68,6 +82,12 @@ let historyWindow = 200
 let historyRetryAt = 0
 let historyRetryTimer: ReturnType<typeof setTimeout> | undefined
 let historyFailures = 0
+let activeHistoryLoads = 0
+let pendingHistory: { before: number; oldest: number; seen: Set<number>; attempts: number; limit: number } | null = null
+let pendingLatestTimer: ReturnType<typeof setTimeout> | undefined
+let pendingLatestAttempts = 0
+let gapCheckTimer: ReturnType<typeof setTimeout> | undefined
+let pageRequests = new Map<string, Promise<PageResult>>()
 let chart: Chart | null = null
 let controller = new AbortController()
 let revision = 0
@@ -118,7 +138,8 @@ function applyTheme() {
     separator: { color: grid, activeBackgroundColor: 'rgba(140,198,63,.12)' },
     indicator: { tooltip: { showRule: compact ? 'follow_cross' : 'always', legend: { size: 10 }, title: { size: 10 } } },
   })
-  chart.setLocale(chinese.value ? 'zh-CN' : 'en-US')
+  registerLocale(locale.locale, chartLocale(locale.locale, locale.t))
+  chart.setLocale(locale.locale)
   const axis = { name: preferences.value.scale, paneId: 'candle_pane' }
   chart.overrideYAxis(axis)
 }
@@ -267,12 +288,14 @@ function changeColor() {
 }
 function keydown(event: KeyboardEvent) {
   if (dialog.value?.open) return
-  if ((event.target as HTMLElement).matches('input, select, textarea')) return
+  if ((event.target as HTMLElement).closest('input, select, textarea, [role="combobox"]')) return
   if (event.key === 'Escape') { cancelDrawing(); fullscreen.value = false }
   if (event.key === 'Delete' && selected.value) { event.preventDefault(); removeDrawing() }
 }
 
 const sourceMissing = ref(false)
+
+type PageResult = { candles: KLineData[]; pending: boolean; exhausted: boolean; retryAt: number; limited?: boolean }
 
 function roundedRequestSize(missing: number): number {
   return Math.ceil((Math.max(0, Math.ceil(missing)) + 100) / 100) * 100
@@ -282,22 +305,20 @@ function requestedBarCount(history: boolean): number {
   if (!chart) return 200
   const barSpace = chart.getBarSpace().bar
   if (!Number.isFinite(barSpace) || barSpace <= 0) return 200
-  if (!history) {
-    const width = chart.getSize('candle_pane', 'main')?.width || container.value?.clientWidth || 0
-    return Math.max(200, roundedRequestSize(width / barSpace))
-  }
+  if (!history) return 200 // Latest and first screen share the same complete cache page.
   const oldest = chart.getDataList()[0]
   if (!oldest) return 200
   const x = (chart.convertToPixel({ timestamp: oldest.timestamp }) as Partial<Coordinate>).x
-  return roundedRequestSize(typeof x === 'number' && Number.isFinite(x) ? x / barSpace : -chart.getVisibleRange().realFrom)
+  const missing = typeof x === 'number' && Number.isFinite(x) ? x / barSpace : -chart.getVisibleRange().realFrom
+  return Math.min(200, Math.max(2, roundedRequestSize(missing)))
 }
 
-async function fetchBars(before: number, signal: AbortSignal, limit = 200) {
+async function requestBars(before: number, signal: AbortSignal, limit: number): Promise<PageResult> {
   const history = Number.isFinite(before)
   const url = '/market/kline/' + (history ? 'history/' : '') + encodeURIComponent(props.symbol)
   const query = { interval: interval.value, limit, ...(history ? { endTime: before - 1 } : { category: props.category || 'Crypto' }) }
-  let response: any
   for (let attempt = 0; attempt < 8; attempt++) {
+    let response: any
     try {
       response = await request.get(url, { params: query, signal })
     } catch (failure) {
@@ -305,24 +326,39 @@ async function fetchBars(before: number, signal: AbortSignal, limit = 200) {
       response = await request.get('/market/redis/kline/' + encodeURIComponent(props.symbol), { params: query, signal })
     }
     if (signal.aborted) throw new Error('Aborted')
-    if (!response?.data?.pending) break
+    const rows = response?.data?.kline_list ?? response?.data
+    if (response?.ret === 200 && Array.isArray(rows)) {
+      const validated = normalizeCandles(rows)
+      if (rows.length && !validated.length) throw new Error('Invalid candle data')
+      const aligned = normalizeCandles(rows, Infinity, interval.value)
+      if (validated.length && !aligned.length) throw new Error('No aligned candles')
+      const candles = aligned.filter(bar => bar.timestamp < before)
+      if (history && aligned.length && !candles.length) throw new Error('History cursor was not honored')
+      sourceMissing.value = !!response.data?.missingData
+      if (candles.length || !response.data?.pending || attempt === 7)
+        return { candles, pending: !!response.data?.pending, exhausted: response.data?.exhausted === true, retryAt: Number(response.data?.retryAt) || 0 }
+    } else if (!response?.data?.pending) {
+      throw new Error('Chart data unavailable')
+    } else if (attempt === 7) {
+      return { candles: [], pending: true, exhausted: false, retryAt: Number(response.data?.retryAt) || 0 }
+    }
     await new Promise<void>((resolve, reject) => {
       const abort = () => { clearTimeout(timer); reject(new Error('Aborted')) }
       const timer = setTimeout(() => { signal.removeEventListener('abort', abort); resolve() }, 1000)
       signal.addEventListener('abort', abort, { once: true })
     })
   }
-  if (response?.data?.status === 'unavailable' || response?.ret !== 200) throw new Error('Chart data unavailable')
-  sourceMissing.value = !!response.data?.missingData
-  const rows = response.data?.kline_list ?? response.data
-  if (!Array.isArray(rows)) throw new Error('Invalid candle response')
-  const validated = normalizeCandles(rows)
-  if (rows.length && !validated.length) throw new Error('Invalid candle data')
-  const aligned = normalizeCandles(rows, Infinity, interval.value)
-  if (validated.length && !aligned.length) throw new Error('No aligned candles')
-  const candles = aligned.filter(bar => bar.timestamp < before)
-  if (history && aligned.length && !candles.length) throw new Error('History cursor was not honored')
-  return { candles }
+  throw new Error('Chart data pending')
+}
+
+function fetchBars(before: number, signal: AbortSignal, limit = 200): Promise<PageResult> {
+  const key = `${before}:${limit}`
+  const requests = pageRequests
+  const existing = requests.get(key)
+  if (existing) return existing
+  const pending = requestBars(before, signal, limit).finally(() => requests.delete(key))
+  requests.set(key, pending)
+  return pending
 }
 
 async function fetchHistory(before: number, signal: AbortSignal, requestedLimit = 200) {
@@ -330,43 +366,35 @@ async function fetchHistory(before: number, signal: AbortSignal, requestedLimit 
     const result = await fetchBars(before, signal, requestedLimit)
     return { ...result, candles: result.candles.slice(-requestedLimit), limited: false }
   } catch (failure) {
-    if (signal.aborted) throw failure
+    if (signal.aborted || ![404, 405].includes(Number((failure as { response?: { status?: number } })?.response?.status))) throw failure
+    historyUnsupported.value = true
     // The existing latest endpoint accepts up to 1000 bars. Use that window when
     // the cursor endpoint is missing or temporarily unavailable; never fabricate history.
-    while (true) {
-      const limit = Math.min(1000, Math.max(historyWindow + requestedLimit, (chart?.getDataList().length || 0) + requestedLimit))
-      const result = await fetchBars(Infinity, signal, limit)
-      if (signal.aborted) throw new Error('Aborted')
-      historyWindow = limit
-      const candles = result.candles.filter(bar => bar.timestamp < before).slice(-requestedLimit)
-      if (candles.length) return { ...result, candles, limited: false }
-      if (limit === 1000) return { ...result, candles, limited: true }
-    }
-  }
-}
-
-async function fetchWindow(before: number, signal: AbortSignal, wanted: number) {
-  const history = Number.isFinite(before)
-  const first = history
-    ? await fetchHistory(before, signal, Math.min(200, wanted))
-    : { ...await fetchBars(Infinity, signal, Math.min(1000, wanted)), limited: false }
-  let candles = first.candles.slice(-wanted)
-  let limited = first.limited
-  let exhausted = history && !candles.length && !limited
-  while (candles.length && candles.length < wanted && !limited) {
-    const older = await fetchHistory(candles[0]!.timestamp, signal, Math.min(200, wanted - candles.length))
+    const limit = Math.min(1000, Math.max(historyWindow + requestedLimit, (chart?.getDataList().length || 0) + requestedLimit))
+    const result = await fetchBars(Infinity, signal, limit)
     if (signal.aborted) throw new Error('Aborted')
-    if (!older.candles.length) { exhausted = !older.limited; limited = older.limited; break }
-    candles = [...older.candles, ...candles]
-    limited = older.limited
+    historyWindow = limit
+    const candles = result.candles.filter(bar => bar.timestamp < before).slice(-requestedLimit)
+    return { ...result, candles, limited: !candles.length && limit === 1000 && !result.pending }
   }
-  return { candles, limited, exhausted }
 }
 
 function retryHistoryOnScroll() {
-  if (!chart || loading.value || historyLoading.value || chart.getVisibleRange().from > 20 || !error.value || !retry || Date.now() < historyRetryAt) return
+  if (!chart || loading.value || historyLoading.value || chart.getVisibleRange().from > 0 || !error.value || !retry || Date.now() < historyRetryAt) return
   historyFailures = 0
   retry()
+}
+
+function scheduleGapCheck() {
+  clearTimeout(gapCheckTimer)
+  gapCheckTimer = setTimeout(retryHistoryOnScroll, 100)
+}
+
+function schedulePendingLatest(pending: boolean) {
+  clearTimeout(pendingLatestTimer)
+  if (!pending) { pendingLatestAttempts = 0; return }
+  if (++pendingLatestAttempts <= 8)
+    pendingLatestTimer = setTimeout(() => { if (!controller.signal.aborted) void syncLatest() }, 1000)
 }
 
 function cacheBars() {
@@ -380,54 +408,95 @@ async function loadBars(params: DataLoaderGetBarsParams, version: number, signal
   if (params.type === 'backward') { params.callback([], { backward: false }); return }
   const history = params.type === 'forward'
   if (history && !['1m', '5m', '15m', '30m', '1h', '1d'].includes(interval.value)) {
-    params.callback([], { forward: false, backward: false }); exhausted.value = true; return
+    params.callback([], { forward: false, backward: false }); historyUnsupported.value = true; return
   }
-  loading.value = !history
-  historyLoading.value = history
+  if (history) historyLoading.value = ++activeHistoryLoads > 0
+  else loading.value = true
   error.value = false
-  const before = history && params.timestamp !== null ? params.timestamp : Infinity
+  const unfinished = history ? pendingHistory : null
+  const before = history ? unfinished?.before ?? params.timestamp ?? Infinity : Infinity
+  const limit = history ? unfinished?.limit ?? requestedBarCount(true) : 200
   try {
-    const result = await fetchWindow(before, signal, requestedBarCount(history))
-    const { candles } = result
+    const result = history ? await fetchHistory(before, signal, limit) : await fetchBars(Infinity, signal, 200)
     if (version !== revision || signal.aborted) return
-    historyLimited.value = result.limited
-    params.callback(candles, { forward: candles.length > 0 && !result.limited && !result.exhausted, backward: false })
-    cacheBars()
-    exhausted.value = result.exhausted
-    if (!history) {
-      empty.value = candles.length === 0; restoreDrawings(); emit('ready')
+    let candles = result.candles
+    if (unfinished) {
+      if (candles.some(bar => bar.timestamp >= unfinished.oldest && bar.timestamp < before && !unfinished.seen.has(bar.timestamp)))
+        throw new Error('Partial history has a middle gap')
+      candles = candles.filter(bar => bar.timestamp < unfinished.oldest)
     }
-    retry = null
-    historyFailures = 0
+    if (!result.candles.length && !result.pending && !result.exhausted && !result.limited)
+      throw new Error('Empty history page is not proof of exhaustion')
+    historyLimited.value = !!result.limited
+    exhausted.value = result.exhausted
+    const partial = history && result.pending && result.candles.length < limit
+    if (partial) {
+      pendingHistory = { before, oldest: candles[0]?.timestamp ?? unfinished?.oldest ?? before,
+        seen: new Set([...(unfinished?.seen || []), ...result.candles.map(bar => bar.timestamp)]),
+        attempts: (unfinished?.attempts || 0) + 1, limit }
+      historyWaiting.value = true
+    } else if (history) { pendingHistory = null; historyWaiting.value = false }
+    loading.value = false // A valid page is visible before the next page starts.
+    params.callback(candles, { forward: !!(result.candles.length && !partial && !result.limited && !result.exhausted), backward: false })
+    cacheBars()
+    if (!history) {
+      empty.value = !candles.length && !result.pending
+      historyWaiting.value = !candles.length && result.pending
+      if (candles.length) { restoreDrawings(); emit('ready') }
+      schedulePendingLatest(result.pending)
+    }
+    if (partial) {
+      retry = () => { void loadBars(params, version, signal) }
+      clearTimeout(historyRetryTimer)
+      if (pendingHistory!.attempts <= 8) {
+        const resume = () => {
+          if (version !== revision || signal.aborted || !pendingHistory) return
+          if (historyLoading.value) { historyRetryTimer = setTimeout(resume, 1000); return }
+          retry?.()
+        }
+        historyRetryTimer = setTimeout(resume, 1000)
+      }
+    } else {
+      retry = null; historyFailures = 0
+      if (!history && !candles.length && result.pending) retry = () => { void syncLatest() }
+      if (history && !candles.length && !result.exhausted && !result.limited && chart.getVisibleRange().from === 0)
+        queueMicrotask(() => { if (version === revision) chart?.scrollByDistance(0, 0) })
+    }
   } catch {
     if (signal.aborted || version !== revision) return
     // Retry resumes the failed page without resetting the user's viewport.
     error.value = true
     retry = () => { void loadBars(params, version, signal) }
+    // Always release the library's loading lock. Retrying must not require a reload.
+    params.callback([], { forward: false, backward: false })
     if (history) {
-      // Always release the library's loading lock. Retrying must not require a reload.
-      params.callback([], { forward: false, backward: false })
       historyRetryAt = Date.now() + 3000
       if (++historyFailures <= 3) {
         clearTimeout(historyRetryTimer)
         historyRetryTimer = setTimeout(() => {
-          if (!signal.aborted && version === revision && error.value && !historyLoading.value && chart && chart.getVisibleRange().from <= 20) retry?.()
+          if (!signal.aborted && version === revision && error.value && !historyLoading.value && chart && chart.getVisibleRange().from === 0) retry?.()
         }, 3000)
       }
     }
   } finally {
-    if (version === revision) { loading.value = false; historyLoading.value = false; replayQuote() }
+    if (version === revision) {
+      loading.value = false
+      if (history) historyLoading.value = --activeHistoryLoads > 0
+      replayQuote()
+    }
   }
 }
 
 async function syncLatest() {
-  if (!chart || !realtime || loading.value || historyLoading.value || syncing) return
+  if (!chart || !realtime || loading.value || syncing) return
   const version = revision, signal = controller.signal
   const session = market.quoteStatusMap[props.symbol]?.simulationSession
   syncing = true
   lastSyncAttempt = Date.now()
+  let pendingRefresh = false
   try {
     const result = await fetchBars(Infinity, signal)
+    pendingRefresh = result.pending
     if (signal.aborted || version !== revision || !chart) return
     const existing = chart.getDataList()
     const previousLast = existing[existing.length - 1]?.timestamp || 0
@@ -438,7 +507,7 @@ async function syncLatest() {
       if (!older.candles.length) throw new Error('Candle gap unavailable')
       candles = [...older.candles, ...candles]
     }
-    if (signal.aborted || version !== revision || !chart || historyLoading.value || session !== market.quoteStatusMap[props.symbol]?.simulationSession) return
+    if (signal.aborted || version !== revision || !chart || session !== market.quoteStatusMap[props.symbol]?.simulationSession) return
     if (!candles.length) throw new Error('No latest candles')
     const current = chart.getDataList()
     const range = chart.getVisibleRange()
@@ -468,6 +537,7 @@ async function syncLatest() {
       last = bar
     }
     empty.value = chart.getDataList().length === 0
+    if (!empty.value && !pendingHistory) historyWaiting.value = false
     if (manuallyScrolled && anchor && x !== undefined) {
       const nextX = (chart.convertToPixel({ timestamp: anchor }) as Partial<Coordinate>).x
       if (nextX !== undefined && nextX !== x) chart.scrollByDistance(x - nextX, 0)
@@ -480,6 +550,7 @@ async function syncLatest() {
   } finally {
     if (version === revision) {
       syncing = false
+      schedulePendingLatest(pendingRefresh)
       if (session !== market.quoteStatusMap[props.symbol]?.simulationSession) void syncLatest()
     }
   }
@@ -503,8 +574,16 @@ function resetMarket() {
   lastSyncAttempt = 0
   historyWindow = 200
   historyFailures = 0
+  activeHistoryLoads = 0
+  pendingHistory = null
+  pendingLatestAttempts = 0
+  pageRequests = new Map()
   historyLimited.value = false
   clearTimeout(historyRetryTimer)
+  clearTimeout(pendingLatestTimer)
+  clearTimeout(gapCheckTimer)
+  historyWaiting.value = false
+  historyUnsupported.value = false
   syncError.value = false
   error.value = false
   empty.value = false
@@ -567,11 +646,11 @@ watch(preferences, () => {
   applyTheme()
   try { localStorage.setItem(preferenceKey, JSON.stringify(preferences.value)); preferenceSaved.value = true } catch { preferenceSaved.value = false }
 }, { deep: true })
-watch(chinese, applyTheme)
+watch(() => locale.locale, applyTheme)
 watch(timezone, value => chart?.setTimezone(value))
-watch(stageHeight, async () => { await nextTick(); chart?.resize() })
+watch(stageHeight, async () => { await nextTick(); chart?.resize(); scheduleGapCheck() })
 watch(magnet, () => chart?.overrideOverlay({ groupId, mode: magnet.value ? 'weak_magnet' : 'normal' }))
-watch(fullscreen, async () => { await nextTick(); chart?.resize() })
+watch(fullscreen, async () => { await nextTick(); chart?.resize(); scheduleGapCheck() })
 
 onMounted(() => {
   if (!container.value) return
@@ -584,13 +663,15 @@ onMounted(() => {
   applyTheme()
   applyIndicators()
   resetMarket()
-  chart.subscribeAction('onScroll', () => { manuallyScrolled = true; retryHistoryOnScroll() })
+  chart.subscribeAction('onScroll', () => { manuallyScrolled = true; scheduleGapCheck() })
+  chart.subscribeAction('onZoom', scheduleGapCheck)
+  chart.subscribeAction('onVisibleRangeChange', scheduleGapCheck)
   stopConnected = marketWebSocket.onConnected(() => { void syncLatest() })
   syncTimer = setInterval(() => {
     if (document.visibilityState === 'hidden') return
     if (Date.now() - lastSyncAttempt >= (market.quoteStatusMap[props.symbol]?.controlHistory ? 900 : 14_000)) void syncLatest()
   }, 1000)
-  resizeObserver = new ResizeObserver(() => { chart?.resize(); applyTheme() })
+  resizeObserver = new ResizeObserver(() => { chart?.resize(); applyTheme(); scheduleGapCheck() })
   resizeObserver.observe(container.value)
   themeObserver = new MutationObserver(applyTheme)
   themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] })
@@ -607,6 +688,8 @@ onUnmounted(() => {
   controller.abort()
   clearInterval(syncTimer)
   clearTimeout(historyRetryTimer)
+  clearTimeout(pendingLatestTimer)
+  clearTimeout(gapCheckTimer)
   stopConnected?.()
   resizeObserver?.disconnect()
   themeObserver?.disconnect()
@@ -618,7 +701,7 @@ onUnmounted(() => {
 <template>
   <div class="chart-workspace" :class="{ 'chart-dark': dark, 'chart-fullscreen': fullscreen }" :style="height && !fullscreen ? { height: height + 'px' } : undefined" tabindex="0" :aria-label="text('K 線圖表', 'Candlestick chart')" @keydown="keydown">
     <div class="chart-toolbar">
-      <label class="chart-select"><span class="sr-only">{{ text('圖表類型', 'Chart type') }}</span><select v-model="candleType" :aria-label="text('圖表類型', 'Chart type')"><option value="candle_solid">{{ text('蠟燭圖', 'Candles') }}</option><option value="candle_stroke">{{ text('空心蠟燭', 'Hollow') }}</option><option value="ohlc">OHLC</option><option value="area">{{ text('面積圖', 'Area') }}</option></select></label>
+      <AppSelect class="chart-select" :model-value="candleType" :options="candleOptions" :label="text('圖表類型', 'Chart type')" :compact="true" :dark="dark" @update:model-value="candleType = $event as CandleType" />
       <span class="toolbar-divider"></span>
       <button class="toolbar-indicators" aria-haspopup="dialog" @click="openPanel('indicators')"><svg viewBox="0 0 24 24"><path d="m3 17 5-7 5 4 8-10M3 21h18" /></svg>{{ text('指標', 'Indicators') }} <span class="tool-count">{{ selectedStudies.length }}</span></button>
       <button aria-haspopup="dialog" :aria-label="text('時區設定', 'Timezone settings')" @click="openPanel('timezone')"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 7v5l3 2" /></svg><span class="toolbar-label">{{ text('時區', 'Timezone') }}</span></button>
@@ -635,7 +718,7 @@ onUnmounted(() => {
     <div class="chart-body">
       <div class="drawing-rail" role="toolbar" :aria-label="text('繪圖工具', 'Drawing tools')">
         <button :class="{ active: !activeTool }" :title="text('游標 / 取消繪圖 (Esc)', 'Cursor / Cancel drawing (Esc)')" :aria-label="text('游標', 'Cursor')" @click="cancelDrawing"><svg viewBox="0 0 24 24"><path d="m5 3 14 10-7 1-3 7z" /></svg></button>
-        <button v-for="tool in tools" :key="tool.name" :disabled="!count" :class="{ active: activeTool === tool.name }" :title="chinese ? tool.zh : tool.en" :aria-label="chinese ? tool.zh : tool.en" :aria-pressed="activeTool === tool.name" @click="chooseTool(tool.name)"><svg viewBox="0 0 24 24"><path :d="tool.path" /></svg></button>
+        <button v-for="tool in tools" :key="tool.name" :disabled="!count" :class="{ active: activeTool === tool.name }" :title="text(tool.zh, tool.en)" :aria-label="text(tool.zh, tool.en)" :aria-pressed="activeTool === tool.name" @click="chooseTool(tool.name)"><svg viewBox="0 0 24 24"><path :d="tool.path" /></svg></button>
         <span class="rail-divider"></span>
         <label class="color-control" :title="text('線條顏色', 'Drawing color')"><input v-model="color" type="color" :aria-label="text('線條顏色', 'Drawing color')" @input="changeColor"></label>
         <button :class="{ active: magnet }" :aria-pressed="magnet" :title="text('磁吸', 'Magnet')" :aria-label="text('磁吸', 'Magnet')" @click="magnet = !magnet"><svg viewBox="0 0 24 24"><path d="M5 4v9a7 7 0 0 0 14 0V4h-4v9a3 3 0 0 1-6 0V4zM5 8h4m6 0h4" /></svg></button>
@@ -645,10 +728,10 @@ onUnmounted(() => {
       </div>
       <div class="chart-stage" :style="{ minHeight: stageHeight }">
         <div ref="container" class="kline-chart" :style="{ touchAction: activeTool ? 'none' : 'pan-y' }"></div>
-        <div v-if="loading || empty || (error && !count)" class="chart-message" role="status">
+        <div v-if="loading || (historyWaiting && !count) || empty || (error && !count)" class="chart-message" role="status">
           <span v-if="loading" class="loading-dot"></span>
-          <span>{{ loading ? text('正在載入行情…', 'Loading candles…') : error ? text('行情載入失敗', 'Could not load candles') : text('暫無 K 線數據', 'No candle data') }}</span>
-          <button v-if="error" @click="retryLoad">{{ text('重試', 'Retry') }}</button>
+          <span>{{ loading ? text('正在載入行情…', 'Loading candles…') : historyWaiting ? text('等待原始 K 線…', 'Waiting for source candles…') : error ? text('行情載入失敗', 'Could not load candles') : text('暫無 K 線數據', 'No candle data') }}</span>
+          <button v-if="error || historyWaiting" @click="retryLoad">{{ text('重試', 'Retry') }}</button>
         </div>
         <div v-if="activeTool" class="drawing-hint">{{ activeTool === 'brush' ? text('按住拖動繪製 · Esc 取消', 'Drag to draw · Esc to cancel') : text('點擊圖表設定錨點 · Esc 取消', 'Click to place points · Esc to cancel') }}</div>
       </div>
@@ -657,8 +740,10 @@ onUnmounted(() => {
       <span v-if="showSourceConnectionWarning(market.quoteStatusMap[props.symbol])">{{ text('數據源連接失敗，正在重試', 'Data source connection failed; retrying') }}</span>
       <span v-if="sourceMissing">{{ text('原始行情缺失，未补造数据', 'Original source data missing; no fabricated candles') }}</span>
       <span v-if="historyLoading">{{ text('正在載入更早行情…', 'Loading older candles…') }}</span>
+      <button v-else-if="historyWaiting" class="retry-history" @click="retryLoad">{{ text('歷史頁待刷新 · 重試', 'History page pending · Retry') }}</button>
       <button v-else-if="error" class="retry-history" @click="retryLoad">{{ count ? text('歷史載入失敗 · 點擊重試', 'History failed · Retry') : text('行情載入失敗 · 重試', 'Candles unavailable · Retry') }}</button>
       <span v-else-if="historyLimited">{{ text('已到目前接口可回溯範圍', 'History limit reached for the current data source') }}</span>
+      <span v-else-if="historyUnsupported">{{ text('歷史接口不支持，使用有限回溯', 'History endpoint unsupported; using limited fallback') }}</span>
       <span v-else-if="snapshotError">{{ text('快照失敗，請重新嘗試', 'Snapshot failed; please retry') }}</span>
       <button v-else-if="syncError" class="retry-history" @click="syncLatest">{{ text('最新 K 線未完整同步 · 重試', 'Latest candles incomplete · Retry') }}</button>
       <span v-else-if="!saved">{{ text('繪圖無法儲存至此瀏覽器', 'Drawing storage unavailable') }}</span>
@@ -668,7 +753,7 @@ onUnmounted(() => {
     </div>
     <dialog ref="dialog" class="chart-dialog" :class="{ 'snapshot-dialog': panel === 'snapshot' }" aria-labelledby="chart-panel-title" @click="($event.target === dialog) && dialog?.close()">
       <header class="panel-header">
-        <div><span class="panel-eyebrow">{{ displaySymbol(props.symbol) }} · {{ interval }}</span><h2 id="chart-panel-title">{{ panel === 'indicators' ? text('技術指標', 'Technical indicators') : panel === 'timezone' ? text('圖表時區', 'Chart timezone') : panel === 'settings' ? text('圖表設定', 'Chart settings') : text('圖表快照', 'Chart snapshot') }}</h2></div>
+        <div><span class="panel-eyebrow">{{ displaySymbol(props.symbol) }} · {{ text(interval, interval) }}</span><h2 id="chart-panel-title">{{ panel === 'indicators' ? text('技術指標', 'Technical indicators') : panel === 'timezone' ? text('圖表時區', 'Chart timezone') : panel === 'settings' ? text('圖表設定', 'Chart settings') : text('圖表快照', 'Chart snapshot') }}</h2></div>
         <button autofocus :aria-label="text('關閉', 'Close')" @click="dialog?.close()"><svg viewBox="0 0 24 24"><path d="m6 6 12 12M6 18 18 6" /></svg></button>
       </header>
       <div class="panel-content">
@@ -679,9 +764,9 @@ onUnmounted(() => {
             <h3>{{ main ? text('主圖疊加', 'Price overlays') : text('副圖分析', 'Oscillators & volume') }}</h3>
             <div class="indicator-grid">
               <div v-for="item in visibleStudies.filter(item => item.main === main)" :key="item.name" class="indicator-card" :class="{ chosen: preferences.indicators.includes(item.name) }">
-                <label><input type="checkbox" :checked="preferences.indicators.includes(item.name)" :aria-label="item.name" @change="toggleStudy(item.name)"><span><strong>{{ item.name }}</strong><small>{{ chinese ? item.zh : item.en }}</small></span></label>
+                <label><input type="checkbox" :checked="preferences.indicators.includes(item.name)" :aria-label="item.name" @change="toggleStudy(item.name)"><span><strong>{{ item.name }}</strong><small>{{ text(item.zh, item.en) }}</small></span></label>
                 <div v-if="preferences.indicators.includes(item.name) && item.params.length" class="indicator-params">
-                  <label v-for="(value, index) in preferences.parameters[item.name] || item.params" :key="index"><span>{{ parameterLabel(item.name, index) }}</span><input type="number" min="1" max="500" :step="item.name === 'SAR' || (item.name === 'BOLL' && index === 1) ? 0.1 : 1" :value="value" :aria-label="item.name + ' parameter ' + (index + 1)" @change="updateParameter(item.name, index, $event)"></label>
+                  <label v-for="(value, index) in preferences.parameters[item.name] || item.params" :key="index"><span>{{ parameterLabel(item.name, index) }}</span><input type="number" min="1" max="500" :step="item.name === 'SAR' || (item.name === 'BOLL' && index === 1) ? 0.1 : 1" :value="value" :aria-label="item.name + ' ' + parameterLabel(item.name, index)" @change="updateParameter(item.name, index, $event)"></label>
                 </div>
               </div>
             </div>
@@ -697,7 +782,7 @@ onUnmounted(() => {
         </template>
         <template v-else-if="panel === 'settings'">
           <h3>{{ text('價格與外觀', 'Price & appearance') }}</h3>
-          <label class="setting-row"><span>{{ text('價格刻度', 'Price scale') }}</span><select v-model="preferences.scale" :aria-label="text('價格刻度', 'Price scale')"><option value="normal">{{ text('線性', 'Linear') }}</option><option value="logarithm">{{ text('對數', 'Logarithmic') }}</option><option value="percentage">{{ text('百分比', 'Percentage') }}</option></select></label>
+          <div class="setting-row"><span>{{ text('價格刻度', 'Price scale') }}</span><AppSelect class="setting-select" v-model="preferences.scale" :options="scaleOptions" :label="text('價格刻度', 'Price scale')" :compact="true" :dark="dark" /></div>
           <label class="setting-row"><span>{{ text('上漲顏色', 'Up color') }}</span><input v-model="preferences.upColor" type="color" :aria-label="text('上漲顏色', 'Up color')"></label>
           <label class="setting-row"><span>{{ text('下跌顏色', 'Down color') }}</span><input v-model="preferences.downColor" type="color" :aria-label="text('下跌顏色', 'Down color')"></label>
           <h3>{{ text('輔助顯示', 'Display options') }}</h3>
@@ -723,7 +808,7 @@ button:hover, button.active { background: var(--chart-hover); color: var(--chart
 button:disabled { opacity: .35; cursor: default; }
 button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--chart-accent); outline-offset: -2px; }
 svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
-.chart-select select { background: var(--chart-bg); border: 0; border-radius: 4px; height: 28px; max-width: 120px; padding: 0 3px; cursor: pointer; }
+.chart-select { width: 120px; flex: none; }
 .toolbar-divider { width: 1px; height: 15px; background: var(--chart-border); flex-shrink: 0; }
 .toolbar-spacer { flex: 1; }
 .chart-body { flex: 1; min-height: 0; display: flex; overflow-y: auto; overscroll-behavior-y: contain; }
@@ -779,7 +864,7 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 .timezone-list button { justify-content: space-between; padding: 10px; border-radius: 6px; text-align: left; }
 .local-timezone { color: var(--chart-accent); margin: 0 0 10px; }
 .setting-row { display: flex; align-items: center; justify-content: space-between; min-height: 46px; gap: 12px; border-bottom: 1px solid var(--chart-border); font-size: 12px; cursor: pointer; }
-.setting-row select { border: 1px solid var(--chart-border); border-radius: 6px; background: var(--chart-bg); padding: 6px; }
+.setting-select { width: 150px; }
 .setting-row input[type=color] { background: transparent; border: 1px solid var(--chart-border); border-radius: 4px; width: 36px; height: 28px; padding: 2px; cursor: pointer; }
 .reset-preferences { margin-top: 20px; color: var(--chart-accent); }
 .panel-footer { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 12px 22px; border-top: 1px solid var(--chart-border); font-size: 10px; flex-shrink: 0; }
@@ -789,6 +874,6 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 .snapshot-download { display: inline-flex; margin-top: 16px; }
 @media (max-width: 600px) { .toolbar-label { display: none; } .study-strip > span { display: none; } .chart-dialog { width: calc(100vw - 16px); max-height: calc(100dvh - 20px); border-radius: 10px; } .panel-header, .panel-footer { padding: 12px 14px; } .panel-content { padding: 12px 14px 16px; } .indicator-grid { grid-template-columns: 1fr; } .panel-header h2 { font-size: 17px; } }
 @keyframes spin { to { transform: rotate(360deg); } }
-@media (max-width: 600px) { .chart-toolbar { gap: 2px; padding: 0 3px; } .chart-select select { max-width: 87px; } .drawing-rail { width: 35px; padding-inline: 1px; } .chart-footer { padding: 0 5px; gap: 3px; } .footer-meta { max-width: 110px; overflow: hidden; text-overflow: ellipsis; } }
+@media (max-width: 600px) { .chart-toolbar { gap: 2px; padding: 0 3px; } .chart-select { width: 87px; } .drawing-rail { width: 35px; padding-inline: 1px; } .chart-footer { padding: 0 5px; gap: 3px; } .footer-meta { max-width: 110px; overflow: hidden; text-overflow: ellipsis; } }
 @media (prefers-reduced-motion: reduce) { .loading-dot { animation: none; } }
 </style>

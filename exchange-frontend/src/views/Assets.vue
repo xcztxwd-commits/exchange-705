@@ -85,7 +85,7 @@ onMounted(() => {
     <!-- 总资产卡片 -->
     <div class="total-assets-card">
       <CurrencyPicker v-model="currency" />
-      <p v-if="rate === null" role="alert">汇率暂不可用，请稍后重试</p>
+      <p v-if="rate === null" role="alert">{{ localeStore.text('匯率暫不可用，請稍後重試', 'Exchange rate unavailable; please retry later') }}</p>
       <div class="total-assets-header">
         <div class="total-assets-label">{{ localeStore.t('totalAccountAssetsConverted') }}</div>
         <div 

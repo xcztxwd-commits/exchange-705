@@ -400,7 +400,7 @@ const contractBalance = ref(0)
 
 // 成功弹窗
 const showSuccessModal = ref(false)
-const successMessage = ref(localeStore.t('orderConfirmed'))
+const successMessage = ref('')
 
 // 页面提示消息
 const toastMessage = ref('')
@@ -487,13 +487,13 @@ function formatPrice(price: number | null | undefined, precision: number = 2) {
     }
     return defaultValue
   }
-  return numPrice.toLocaleString('en-US', { minimumFractionDigits: precision, maximumFractionDigits: precision })
+  return numPrice.toLocaleString(localeStore.locale, { minimumFractionDigits: precision, maximumFractionDigits: precision })
 }
 
 function formatMoney(v: number | string | undefined | null) {
   const n = Number(v ?? 0)
   if (!Number.isFinite(n)) return '--'
-  return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  return n.toLocaleString(localeStore.locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
 // 格式化日期时间
@@ -515,8 +515,6 @@ async function selectSymbol(symbol: string, category: string) {
   // 加载交易对详细信息（包含合约设置）
   await loadSymbolInfo(symbol)
   
-  // 加载K线数据（选择交易对时，强制从HTTP接口获取，使用较大的limit确保获取足够的数据）
-  await marketStore.fetchKlines(symbol, category, currentInterval.value, 200)
 }
 
 // 加载交易对详细信息
@@ -539,8 +537,6 @@ async function loadSymbolInfo(symbol: string) {
 // 切换K线周期
 async function changeInterval(interval: string) {
   currentInterval.value = interval
-  // 切换周期时，强制从HTTP接口获取新的K线数据，使用较大的limit确保获取足够的数据
-  await marketStore.fetchKlines(currentSymbol.value, currentCategory.value, interval, 200)
 }
 
 // 监听订单类型变化，切换到挂单时设置默认价格为当前价格
@@ -565,21 +561,21 @@ watch(
 
 // 获取K线数据中的最高价
 function getKlineHigh(): number {
-  const klines = marketStore.getKlines(currentSymbol.value, 100)
+  const klines = marketStore.getKlines(currentSymbol.value, 100, currentInterval.value)
   if (!klines || klines.length === 0) return 0
   return Math.max(...klines.map(k => k.high))
 }
 
 // 获取K线数据中的开盘价（最新一根）
 function getKlineOpen(): number {
-  const klines = marketStore.getKlines(currentSymbol.value, 100)
+  const klines = marketStore.getKlines(currentSymbol.value, 100, currentInterval.value)
   if (!klines || klines.length === 0) return 0
   return klines[klines.length - 1]?.open || 0
 }
 
 // 获取K线数据中的最低价
 function getKlineLow(): number {
-  const klines = marketStore.getKlines(currentSymbol.value, 100)
+  const klines = marketStore.getKlines(currentSymbol.value, 100, currentInterval.value)
   if (!klines || klines.length === 0) return 0
   return Math.min(...klines.map(k => k.low))
 }
@@ -1248,7 +1244,7 @@ async function loadOptionBalance() {
 
 // 监听K线数据变化，更新High, Open, Low
 watch(
-  () => marketStore.getKlines(currentSymbol.value),
+  () => marketStore.getKlines(currentSymbol.value, 100, currentInterval.value),
   (klines) => {
     if (klines && klines.length > 0) {
       const latest = klines[klines.length - 1]
@@ -1277,7 +1273,7 @@ watch(
     if (newPrice > 0) {
       if (!currentKlineData.value) {
         // 如果还没有K线数据，先初始化
-        const klines = marketStore.getKlines(currentSymbol.value)
+        const klines = marketStore.getKlines(currentSymbol.value, 100, currentInterval.value)
         if (klines && klines.length > 0) {
           const latest = klines[klines.length - 1]
           if (latest) {
@@ -1438,9 +1434,9 @@ onUnmounted(() => {
     <div class="chart-section">
       <!-- 价格信息（High, Open, Low） -->
       <div class="kline-info">
-        <span class="kline-info-item">High: {{ formatPrice(getKlineHigh(), 2) }}</span>
-        <span class="kline-info-item">Open: {{ formatPrice(getKlineOpen(), 2) }}</span>
-        <span class="kline-info-item">Low: {{ formatPrice(getKlineLow(), 2) }}</span>
+        <span class="kline-info-item">{{ localeStore.t('chartHigh') }}: {{ formatPrice(getKlineHigh(), 2) }}</span>
+        <span class="kline-info-item">{{ localeStore.t('chartOpen') }}: {{ formatPrice(getKlineOpen(), 2) }}</span>
+        <span class="kline-info-item">{{ localeStore.t('chartLow') }}: {{ formatPrice(getKlineLow(), 2) }}</span>
       </div>
 
       <!-- TradingView K线图 -->

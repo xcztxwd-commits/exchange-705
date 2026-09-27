@@ -1,15 +1,17 @@
 <template>
   <aside v-if="affected.length" class="quote-status" role="status" aria-live="polite">
     <details>
-      <summary>部分数据源连接失败（{{ affected.length }}）</summary>
+      <summary>{{ locale.text('部分行情來源連線失敗（{count}）', 'Some price feeds are unavailable ({count})', { count: affected.length }) }}</summary>
       <div v-for="item in affected" :key="item.symbol">
-        {{ displaySymbol(item.symbol) }}：数据源连接失败，正在重试
+        {{ locale.text('{symbol}：行情來源連線失敗，正在重試', '{symbol}: price feed unavailable; retrying', { symbol: displaySymbol(item.symbol) }) }}
       </div>
     </details>
   </aside>
 </template>
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useLocaleStore } from '@/store/locale'
+const locale = useLocaleStore()
 import { useMarketStore } from '@/store/market'
 import { showSourceConnectionWarning } from '@/utils/marketWebSocket'
 import { displaySymbol } from '@/utils/displaySymbol'

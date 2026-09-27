@@ -55,6 +55,25 @@ public class ForexQuoteMarketService {
             this.endTime = endTime;
             this.key = code + ":" + interval + ":" + limit + (endTime == null ? "" : ":" + endTime);
         }
+        @Override public boolean equals(Object other) { return other instanceof KlineRequest && key.equals(((KlineRequest) other).key); }
+        @Override public int hashCode() { return key.hashCode(); }
+        boolean sameWindow(KlineRequest other) {
+            return code.equals(other.code) && interval.equals(other.interval) && Objects.equals(endTime, other.endTime);
+        }
+        boolean covers(KlineRequest other) {
+            return sameWindow(other) && limit >= other.limit;
+        }
+        static KlineRequest fromCacheKey(String key, KlineRequest query) {
+            String prefix = query.code + ":" + query.interval + ":";
+            if (!key.startsWith(prefix)) return null;
+            String[] fields = key.substring(prefix.length()).split(":");
+            if (fields.length < 1 || fields.length > 2) return null;
+            try {
+                KlineRequest candidate = new KlineRequest(query.code, query.interval, Integer.parseInt(fields[0]),
+                        fields.length == 2 ? Long.parseLong(fields[1]) : null);
+                return candidate.sameWindow(query) ? candidate : null;
+            } catch (NumberFormatException ignored) { return null; }
+        }
     }
     private static class Group {
         final String category;
@@ -68,6 +87,7 @@ public class ForexQuoteMarketService {
         final Object quoteLock = new Object();
         final Set<String> processingFailed = new HashSet<>();
         volatile String activeKey;
+        volatile KlineRequest activeRequest;
         volatile long nextAllowed, nextQuotes, lastLog;
         volatile int failures;
         volatile String error;
@@ -175,14 +195,13 @@ public class ForexQuoteMarketService {
                 group.failures = 0; group.error = incomplete ? "partial_response" : null;
                 // Missing/invalid items retain their own unavailable state. Healthy items in the
                 // same batch must not inherit their backoff; one batch still serves the whole group.
-                return;
             }
             KlineRequest request;
             if (System.currentTimeMillis() < group.nextKlines) return;
             synchronized (group) {
                 Iterator<KlineRequest> iterator = group.pending.values().iterator();
                 if (!iterator.hasNext()) return;
-                request = iterator.next(); iterator.remove(); group.activeKey = request.key;
+                request = iterator.next(); iterator.remove(); group.activeKey = request.key; group.activeRequest = request;
             }
             try {
                 http.begin();
@@ -210,7 +229,7 @@ public class ForexQuoteMarketService {
                     log.warn("Market {} K-line unavailable: {}; retry in {}ms", group.category, group.klineError, delay);
                     group.lastKlineLog = System.currentTimeMillis();
                 }
-            } finally { http.end(); group.activeKey = null; }
+            } finally { http.end(); group.activeKey = null; group.activeRequest = null; }
         } catch (Exception failure) { fail(group, failure, true); }
     }
     private void receiveYahoo(String yahooSymbol, Map<String,Object> quote) {
@@ -423,23 +442,55 @@ public class ForexQuoteMarketService {
         KlineRequest request = new KlineRequest(code, interval, Math.min(1000, Math.max(1, limit == null ? 100 : limit)), endTime);
         Map<String, Object> saved;
         String status;
+        boolean pending;
         synchronized (group) {
             saved = group.klines.get(request.key);
-            boolean fresh = saved != null && System.currentTimeMillis() - QuoteState.time(saved.get("fetchedAt")) < (endTime == null ? 15000 : 300000);
+            KlineRequest covered = request;
+            long now = System.currentTimeMillis(), maxAge = endTime == null ? 15000 : 300000;
+            boolean fresh = saved != null && now - QuoteState.time(saved.get("fetchedAt")) < maxAge;
+            int savedRows = saved == null ? 0 : ControlHistoryStore.rows(saved).size();
+            boolean full = savedRows >= request.limit, partialCoverage = false;
+            for (Map.Entry<String, Map<String, Object>> entry : group.klines.entrySet()) {
+                KlineRequest candidate = KlineRequest.fromCacheKey(entry.getKey(), request);
+                if (candidate == null) continue;
+                int candidateRows = ControlHistoryStore.rows(entry.getValue()).size();
+                if (candidateRows == 0) continue;
+                boolean candidateFresh = now - QuoteState.time(entry.getValue().get("fetchedAt")) < maxAge;
+                if (candidateRows < request.limit || !candidate.covers(request)) {
+                    if (!full && candidateRows > savedRows) {
+                        saved = entry.getValue(); savedRows = candidateRows; fresh = candidateFresh;
+                        partialCoverage = !candidate.equals(request);
+                    }
+                    continue;
+                }
+                if (!full || candidateFresh && !fresh || candidateFresh == fresh && candidate.limit < covered.limit) {
+                    saved = entry.getValue(); covered = candidate; fresh = candidateFresh; full = true; partialCoverage = false;
+                }
+            }
             status = fresh ? "available" : saved == null ? "unavailable" : "stale";
             // Only configured products can create work; request traffic cannot grow the symbol registry.
-            if (!fresh && group.codes.contains(code) && group.pending.size() < MAX_PENDING && !request.key.equals(group.activeKey))
-                group.pending.putIfAbsent(request.key, request);
+            KlineRequest work = covered;
+            if (!fresh || partialCoverage) {
+                if (group.activeRequest != null && group.activeRequest.covers(request)) work = group.activeRequest;
+                else for (KlineRequest queued : group.pending.values()) if (queued.covers(request)) { work = queued; break; }
+                if (group.codes.contains(code) && group.pending.size() < MAX_PENDING && !work.key.equals(group.activeKey))
+                    group.pending.putIfAbsent(work.key, work);
+            }
+            pending = group.failures == 0 && group.klineFailures == 0
+                    && (group.pending.containsKey(work.key) || work.key.equals(group.activeKey));
         }
         Map<String, Object> result = new HashMap<>();
         Map<String, Object> data = new HashMap<>();
         List<Map<String, Object>> rows = new ArrayList<>();
-        if (saved != null) for (Map<String, Object> row : (List<Map<String, Object>>) ((Map<?, ?>) saved.get("data")).get("kline_list")) rows.add(new HashMap<>(row));
+        if (saved != null) {
+            List<Map<String, Object>> sourceRows = ControlHistoryStore.rows(saved);
+            for (int i = Math.max(0, sourceRows.size() - request.limit); i < sourceRows.size(); i++) rows.add(new HashMap<>(sourceRows.get(i)));
+        }
         if (group.failures > 0 || group.klineFailures > 0) status = saved == null ? "unavailable" : "stale";
         data.put("code", code); data.put("kline_list", rows); data.put("status", status);
         data.put("fetchedAt", saved == null ? null : saved.get("fetchedAt"));
         data.put("retryAt", Math.max(group.nextAllowed, group.nextKlines));
-        synchronized (group) { data.put("pending", group.failures == 0 && group.klineFailures == 0 && (group.pending.containsKey(request.key) || request.key.equals(group.activeKey))); }
+        data.put("pending", pending);
         result.put("ret", saved == null ? 503 : 200); result.put("msg", status);
         result.put("status", status); result.put("data", data);
         return result;
@@ -497,8 +548,8 @@ public class ForexQuoteMarketService {
         TreeMap<Long, Map<String, Object>> history = new TreeMap<>();
         if (saved != null) for (Map<String, Object> row : saved) history.put(RandomMarketPath.timestamp(row), row);
         Group group = group(sourceCategory(config));
-        String prefix = marketCode(config) + ":" + interval + ":";
         synchronized (group) {
+            String prefix = marketCode(config) + ":" + interval + ":";
             for (Map.Entry<String, Map<String, Object>> entry : group.klines.entrySet()) {
                 if (!entry.getKey().startsWith(prefix)) continue;
                 for (Map<String, Object> row : (List<Map<String, Object>>) ((Map<?, ?>) entry.getValue().get("data")).get("kline_list")) {

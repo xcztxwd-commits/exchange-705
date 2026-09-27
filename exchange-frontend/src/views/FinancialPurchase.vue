@@ -88,12 +88,12 @@ function showConfirm() {
   }
 
   if (amount < product.value.minPurchase) {
-    showToast(`${localeStore.t('purchaseAmountCannotBeLessThan')}${formatMoney(product.value.minPurchase)}`, 'error')
+    showToast(localeStore.text('', 'The subscription amount must be at least {amount}.', { amount: formatMoney(product.value.minPurchase) }), 'error')
     return
   }
 
   if (amount > product.value.maxPurchase) {
-    showToast(`${localeStore.t('purchaseAmountCannotBeGreaterThan')}${formatMoney(product.value.maxPurchase)}`, 'error')
+    showToast(localeStore.text('', 'The subscription amount must not exceed {amount}.', { amount: formatMoney(product.value.maxPurchase) }), 'error')
     return
   }
 
@@ -185,7 +185,7 @@ onMounted(() => {
         </div>
         <div class="detail-item">
           <span class="detail-label">{{ localeStore.t('financialTerm') }}</span>
-          <span class="detail-value">{{ product.termDays }}</span>
+          <span class="detail-value">{{ product.termDays }}{{ localeStore.t('daysUnit') }}</span>
         </div>
         <div class="detail-item">
           <span class="detail-label">{{ localeStore.t('maxPurchase') }}</span>
@@ -212,7 +212,7 @@ onMounted(() => {
       <div class="product-description">
         <div class="description-title">{{ localeStore.t('productDescription') }}</div>
         <div class="description-content">
-          {{ product.description || 'The cloud mining machine is hosted by USD to the super-computing power mining machine of the platform, and the mining revenue from the Al super-intelligent platform mining pool is carried out. Super Al intelligent mining, the daily rate of return is ' + formatPercent(product.dailyYieldRate) + '%. One-time limit is ' + formatMoney(product.minPurchase) + ' to ' + formatMoney(product.maxPurchase) + '.' }}
+          {{ product.description || localeStore.t('noData') }}
         </div>
       </div>
     </div>
@@ -233,10 +233,10 @@ onMounted(() => {
           </div>
           <div class="confirm-item">
             <span class="confirm-label">{{ localeStore.t('financialTerm') }}</span>
-            <span class="confirm-value">{{ confirmData?.termDays }}</span>
+            <span class="confirm-value">{{ confirmData?.termDays }}{{ localeStore.t('daysUnit') }}</span>
           </div>
           <div class="confirm-item">
-            <span class="confirm-label">{{ localeStore.t('expectedDailyYield') }}</span>
+            <span class="confirm-label">{{ localeStore.t('estDailyYield') }}</span>
             <span class="confirm-value">{{ formatMoney(confirmData?.dailyYield) }}</span>
           </div>
           <div class="confirm-item">

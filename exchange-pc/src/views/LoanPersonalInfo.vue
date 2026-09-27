@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import Tabbar from '@/components/Tabbar.vue'
 import request from '@/utils/request'
 import { useAuthStore } from '@/store/auth'
 import { getImageUrl } from '@/utils/imageUrl'
 import { useLocaleStore } from '@/store/locale'
+import AppSelect from '@/components/AppSelect.vue'
 
 const router = useRouter()
 const auth = useAuthStore()
@@ -111,8 +112,14 @@ const countryCodes = [
 ]
 
 const selectedCountryCode = ref('+1') // 默认区号为+1
-const showCountryCodeSelector = ref(false)
-const countryCodeSearch = ref('')
+const countryOptions = computed(() => {
+  const names = new Intl.DisplayNames([localeStore.locale], { type: 'region' })
+  return countryCodes.map(country => {
+    const region = [...country.flag].map(char => String.fromCharCode(char.codePointAt(0)! - 0x1f1e6 + 65)).join('')
+    const name = region === 'US' ? [names.of('US'), names.of('CA')].join(' / ') : names.of(region)
+    return { value: country.code, label: `${country.code} · ${name || region}`, icon: country.flag }
+  })
+})
 
 const formData = ref({
   realName: '',
@@ -120,47 +127,6 @@ const formData = ref({
   phone: '',
   address: ''
 })
-
-// 获取选中的国家标志
-function getSelectedCountryFlag() {
-  const country = countryCodes.find(c => c.code === selectedCountryCode.value)
-  return country?.flag || '🇺🇸'
-}
-
-// 过滤国家代码列表
-const filteredCountryCodes = computed(() => {
-  if (!countryCodeSearch.value.trim()) {
-    return countryCodes
-  }
-  const search = countryCodeSearch.value.toLowerCase()
-  return countryCodes.filter(country => 
-    country.name.toLowerCase().includes(search) ||
-    country.code.includes(search)
-  )
-})
-
-// 选择国家代码
-function selectCountryCode(code: string) {
-  selectedCountryCode.value = code
-  showCountryCodeSelector.value = false
-  countryCodeSearch.value = ''
-}
-
-// 处理点击外部关闭下拉框
-function handleClickOutside(event: Event) {
-  const target = event.target as HTMLElement
-  const dropdown = document.querySelector('.country-code-dropdown')
-  const selector = document.querySelector('.country-code-selector')
-  
-  if (dropdown && selector && 
-      !dropdown.contains(target) && 
-      !selector.contains(target)) {
-    showCountryCodeSelector.value = false
-    countryCodeSearch.value = ''
-  }
-}
-
-
 
 // 图片上传
 const frontImageFile = ref<File | null>(null)
@@ -470,11 +436,6 @@ async function submitPersonalInfo() {
 onMounted(() => {
   loadKycInfo()
   checkPersonalInfo()
-  document.addEventListener('click', handleClickOutside)
-})
-
-onUnmounted(() => {
-  document.removeEventListener('click', handleClickOutside)
 })
 </script>
 
@@ -521,17 +482,7 @@ onUnmounted(() => {
       <div class="form-section">
         <div class="form-label">{{ localeStore.t('phoneNumber') }} <span class="required">*</span></div>
         <div class="phone-input-wrapper">
-          <div 
-            class="country-code-selector" 
-            @click="!verified && (showCountryCodeSelector = !showCountryCodeSelector)"
-            :class="{ disabled: verified }"
-          >
-            <span class="country-code-flag">{{ getSelectedCountryFlag() }}</span>
-            <span class="country-code-value">{{ selectedCountryCode }}</span>
-            <svg class="dropdown-arrow" :class="{ 'rotated': showCountryCodeSelector }" width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-          </div>
+          <AppSelect class="country-code-select" :model-value="selectedCountryCode" :options="countryOptions" :display-label="selectedCountryCode" :placeholder="selectedCountryCode" :label="localeStore.t('searchCountryOrCode')" :search-placeholder="localeStore.t('searchCountryOrCode')" :searchable="true" :disabled="verified" :min-menu-width="300" @update:model-value="selectedCountryCode = String($event)" />
           <input
             v-model="formData.phone"
             type="tel"
@@ -539,29 +490,6 @@ onUnmounted(() => {
             :placeholder="localeStore.t('enterPhoneNumber')"
             :disabled="verified"
           />
-          <div v-if="showCountryCodeSelector" class="country-code-dropdown" @click.stop>
-            <div class="dropdown-search">
-          <input
-            v-model="countryCodeSearch" 
-            type="text" 
-            :placeholder="localeStore.t('searchCountryOrCode')"
-            class="search-input"
-          />
-            </div>
-            <div class="dropdown-list">
-              <div
-                v-for="country in filteredCountryCodes"
-                :key="country.code"
-                class="dropdown-item"
-                :class="{ active: selectedCountryCode === country.code }"
-                @click="selectCountryCode(country.code)"
-              >
-                <span class="item-flag">{{ country.flag }}</span>
-                <span class="item-code">{{ country.code }}</span>
-                <span class="item-name">{{ country.name }}</span>
-              </div>
-            </div>
-          </div>
         </div>
       </div>
 
@@ -939,140 +867,11 @@ onUnmounted(() => {
   align-items: stretch;
 }
 
-.country-code-selector {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 12px 12px;
-  border: 1px solid #e0e0e0;
-  border-radius: 8px;
-  background: #fff;
-  cursor: pointer;
-  min-width: 100px;
-  justify-content: space-between;
-  user-select: none;
-}
-
-.country-code-selector.disabled {
-  background: #f5f5f5;
-  cursor: not-allowed;
-  color: #999;
-}
-
-.country-code-flag {
-  font-size: 18px;
-  line-height: 1;
-}
-
-.country-code-value {
-  font-size: 14px;
-  font-weight: 500;
-  color: #333;
-  flex: 1;
-}
-
-.dropdown-arrow {
-  width: 12px;
-  height: 12px;
-  color: #666;
-  transition: transform 0.2s;
-}
-
-.dropdown-arrow.rotated {
-  transform: rotate(180deg);
-}
+.country-code-select { flex: 0 0 112px; width: 112px; }
 
 .phone-input {
   flex: 1;
+  min-width: 0;
 }
 
-.country-code-dropdown {
-  position: absolute;
-  top: calc(100% + 8px);
-  left: 0;
-  right: 0;
-  background: #fff;
-  border: 1px solid #e0e0e0;
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  z-index: 1000;
-  max-height: 300px;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
-
-.dropdown-search {
-  padding: 12px;
-  border-bottom: 1px solid #e0e0e0;
-}
-
-.search-input {
-  width: 100%;
-  padding: 8px 12px;
-  border: 1px solid #e0e0e0;
-  border-radius: 6px;
-  font-size: 14px;
-  box-sizing: border-box;
-}
-
-.search-input:focus {
-  outline: none;
-  border-color: #2abf4b;
-}
-
-.dropdown-list {
-  flex: 1;
-  overflow-y: auto;
-  max-height: 250px;
-}
-
-.dropdown-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
-  cursor: pointer;
-  transition: background 0.2s;
-  border-bottom: 1px solid #f5f5f5;
-}
-
-.dropdown-item:last-child {
-  border-bottom: none;
-}
-
-.dropdown-item:hover {
-  background: #f5f5f5;
-}
-
-.dropdown-item.active {
-  background: #e8f5e9;
-  color: #2abf4b;
-}
-
-.item-flag {
-  font-size: 20px;
-  line-height: 1;
-  width: 24px;
-  text-align: center;
-}
-
-.item-code {
-  font-size: 14px;
-  font-weight: 500;
-  color: #333;
-  min-width: 50px;
-}
-
-.item-name {
-  font-size: 14px;
-  color: #666;
-  flex: 1;
-}
-
-.dropdown-item.active .item-code,
-.dropdown-item.active .item-name {
-  color: #2abf4b;
-}
 </style>
-

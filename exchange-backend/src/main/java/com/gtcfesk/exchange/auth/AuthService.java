@@ -120,15 +120,7 @@ public class AuthService {
             throw new BusinessException("email exists");
         }
 
-        VerifyCode latest = verifyCodeRepository
-                .findTopByEmailAndSceneOrderByIdDesc(req.getEmail(), "register")
-                .orElseThrow(() -> new BusinessException("code not found"));
-
-        validateCode(latest, req.getVerifyCode());
-
-        latest.setCode("");
-        latest.setExpireAt(LocalDateTime.now().minusSeconds(1));
-        verifyCodeRepository.save(latest);
+        // Registration email verification is temporarily disabled; password reset still requires it.
         UserAccount user = new UserAccount();
         user.setEmail(req.getEmail());
         user.setPasswordHash(passwordEncoder.encode(req.getPassword()));
@@ -174,7 +166,7 @@ public class AuthService {
     }
 
     public void sendEmailCode(SendCodeRequest req) {
-        if (!java.util.Arrays.asList("register", "forget_password", "change_password").contains(req.getScene())) {
+        if (!java.util.Arrays.asList("forget_password", "change_password").contains(req.getScene())) {
             throw new BusinessException("验证码用途无效");
         }
         String code = String.valueOf(100000 + new java.security.SecureRandom().nextInt(900000)); // 六位

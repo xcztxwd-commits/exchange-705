@@ -55,14 +55,58 @@ public class SystemConfigService {
     public static final String SHARE_TEMPLATES_KEY = "share.templates";
     public static final List<String> SHARE_TEMPLATES = java.util.Arrays.asList("light", "dark", "chart", "gold", "globe", "architecture", "city", "referenceGold", "referenceWhite", "referenceTerminal", "launch", "aurora", "racing", "receipt", "journal", "voyage");
 
-    // The first enabled template is the default; one value keeps ordering and availability atomic.
-    public static List<String> shareTemplates(String value) {
+    public static final List<String> SHARE_LANGUAGES = java.util.Arrays.asList(
+            "zh-TW", "en", "fr", "de", "ru", "es", "pt", "it", "ar", "tr", "id", "my", "hi", "cs", "pl", "ja", "ko", "th", "vi");
+
+    public static String shareLanguage(String locale) {
+        String tag = locale == null ? "en" : locale.trim().replace('_', '-').toLowerCase(java.util.Locale.ROOT);
+        if (tag.equals("zh") || tag.startsWith("zh-")) return "zh-TW";
+        String language = tag.split("-", 2)[0];
+        return SHARE_LANGUAGES.contains(language) ? language : "en";
+    }
+
+    public static List<String> shareTemplates(String value) { return shareTemplates(value, "en"); }
+
+    // Legacy CSV remains readable. Version 2 stores ordered language scopes atomically.
+    public static List<String> shareTemplates(String value, String locale) {
         if (value == null) return SHARE_TEMPLATES;
-        List<String> selected = java.util.Arrays.asList(value.split(",", -1));
-        if (selected.isEmpty() || !SHARE_TEMPLATES.containsAll(selected)
-                || new java.util.HashSet<>(selected).size() != selected.size())
-            throw new com.gtcfesk.exchange.common.BusinessException("至少启用一款分享模板，模板不能重复或使用未知编号");
-        return selected;
+        if (!value.trim().startsWith("{")) {
+            List<String> selected = java.util.Arrays.asList(value.split(",", -1));
+            if (!SHARE_TEMPLATES.containsAll(selected) || new java.util.HashSet<>(selected).size() != selected.size())
+                throw invalidShareTemplates();
+            return selected;
+        }
+        try {
+            com.fasterxml.jackson.databind.JsonNode root = new com.fasterxml.jackson.databind.ObjectMapper().readTree(value);
+            if (root.size() != 2 || !root.path("version").isIntegralNumber() || root.path("version").intValue() != 2
+                    || !root.path("templates").isArray() || root.path("templates").size() == 0) throw invalidShareTemplates();
+            java.util.Set<String> ids = new java.util.HashSet<>(), covered = new java.util.HashSet<>();
+            List<String> selected = new java.util.ArrayList<>();
+            for (com.fasterxml.jackson.databind.JsonNode row : root.path("templates")) {
+                String id = row.path("id").asText();
+                com.fasterxml.jackson.databind.JsonNode languages = row.path("languages");
+                if (!row.isObject() || row.size() != 2 || !SHARE_TEMPLATES.contains(id) || !ids.add(id)
+                        || !languages.isArray() || languages.size() == 0) throw invalidShareTemplates();
+                java.util.Set<String> scope = new java.util.HashSet<>();
+                for (com.fasterxml.jackson.databind.JsonNode language : languages) {
+                    String code = language.asText();
+                    if (!language.isTextual() || !("*".equals(code) || SHARE_LANGUAGES.contains(code)) || !scope.add(code))
+                        throw invalidShareTemplates();
+                }
+                if (scope.contains("*")) {
+                    if (scope.size() != 1) throw invalidShareTemplates();
+                    covered.addAll(SHARE_LANGUAGES);
+                } else covered.addAll(scope);
+                if (scope.contains("*") || scope.contains(shareLanguage(locale))) selected.add(id);
+            }
+            if (!covered.containsAll(SHARE_LANGUAGES))
+                throw new com.gtcfesk.exchange.common.BusinessException("每种页面语言至少需要一款模板，请启用全语言通用模板或补齐语言配置");
+            return selected;
+        } catch (java.io.IOException invalid) { throw invalidShareTemplates(); }
+    }
+
+    private static com.gtcfesk.exchange.common.BusinessException invalidShareTemplates() {
+        return new com.gtcfesk.exchange.common.BusinessException("分享模板配置无效：请检查模板编号、语言范围及重复项");
     }
 
     public void saveConfig(String key, String value, String description) {

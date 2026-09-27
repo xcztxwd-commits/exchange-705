@@ -14,26 +14,14 @@
         <button v-for="i in ['1m', '5m', '15m', '30m', '1h', '1d']" :key="i"
                 @click="currentInterval = i"
                 :class="['px-3 py-1.5 rounded text-sm font-medium transition-colors uppercase', currentInterval === i ? 'bg-[#8cc63f] text-white shadow-sm' : 'hover:bg-gray-100 dark:hover:bg-[#2b3139] dark:bg-[#2b3139] text-gray-600 dark:text-gray-300']">
-          {{ i }}
+          {{ localeStore.text(i, i) }}
         </button>
       </div>
       
       <div class="flex items-center space-x-6 text-gray-600 dark:text-gray-300 font-medium pr-4 absolute right-0 h-full">
         <button @click="showCreditLoan = true" class="hover:text-[#8cc63f] flex items-center transition-colors"><el-icon class="mr-1 text-lg"><Money /></el-icon> {{ localeStore.t('creditLoan') }}</button>
         <button @click="showWealth = true" class="hover:text-[#8cc63f] flex items-center transition-colors"><el-icon class="mr-1 text-lg"><Coin /></el-icon> {{ localeStore.t('financialManagement') }}</button>
-        <el-dropdown trigger="click" @command="handleLangChange">
-          <span class="el-dropdown-link cursor-pointer flex items-center hover:text-[#8cc63f] transition-colors">
-            <img class="language-flag" :src="currentLanguage.flag" alt="" />
-            {{ currentLanguage.label }} <el-icon class="el-icon--right"><arrow-down /></el-icon>
-          </span>
-          <template #dropdown>
-            <el-dropdown-menu>
-              <el-dropdown-item v-for="lang in languages" :key="lang.locale" :command="lang.locale">
-                <img class="language-flag" :src="lang.flag" alt="" />{{ lang.label }}
-              </el-dropdown-item>
-            </el-dropdown-menu>
-          </template>
-        </el-dropdown>
+        <AppSelect style="width: 150px" :model-value="localeStore.locale" :options="languageOptions" :label="localeStore.t('language')" :compact="true" :min-menu-width="190" @update:model-value="handleLangChange(String($event))" />
         
         <el-switch v-model="isDarkMode" @change="toggleDarkMode" class="ml-2" style="--el-switch-on-color: #2c2c2c; --el-switch-off-color: #e5e7eb">
           <template #active-action>
@@ -63,10 +51,7 @@
               <el-icon><Search /></el-icon>
             </template>
           </el-input>
-          <el-select v-model="currentCategory" :placeholder="localeStore.t('pleaseSelect')" class="w-[110px] custom-select-small shrink-0">
-            <el-option :label="localeStore.t('all')" value="" />
-            <el-option v-for="cat in (marketStore as any).categories" :key="cat.key || cat.id" :label="cat.label || cat.name" :value="cat.key || cat.code" />
-          </el-select>
+          <AppSelect v-model="currentCategory" :options="categoryOptions" :label="localeStore.t('productList')" :compact="true" class="shrink-0" style="width: 110px" />
         </div>
         <div class="flex-1 overflow-y-auto custom-scrollbar">
           <div v-for="symbol in filteredSymbols" :key="symbol.symbol"
@@ -95,11 +80,11 @@
            <div>
              <div class="text-xl font-bold text-gray-800 dark:text-gray-100 tracking-tight">{{ currentDisplaySymbol }}</div>
              <div class="text-gray-400 dark:text-gray-500 text-xs flex space-x-4 mt-0.5 font-mono">
-               <span>time {{ currentTime }}</span>
-               <span>open <span class="text-gray-600 dark:text-gray-300">{{ currentKline.open }}</span></span>
-               <span>high <span class="text-gray-600 dark:text-gray-300">{{ currentKline.high }}</span></span>
-               <span>low <span class="text-gray-600 dark:text-gray-300">{{ currentKline.low }}</span></span>
-               <span>close <span class="text-gray-600 dark:text-gray-300">{{ currentKline.close }}</span></span>
+               <span>{{ localeStore.t('chartTime') }} {{ currentTime }}</span>
+               <span>{{ localeStore.t('chartOpen') }} <span class="text-gray-600 dark:text-gray-300">{{ currentKline.open }}</span></span>
+               <span>{{ localeStore.t('chartHigh') }} <span class="text-gray-600 dark:text-gray-300">{{ currentKline.high }}</span></span>
+               <span>{{ localeStore.t('chartLow') }} <span class="text-gray-600 dark:text-gray-300">{{ currentKline.low }}</span></span>
+               <span>{{ localeStore.t('chartClose') }} <span class="text-gray-600 dark:text-gray-300">{{ currentKline.close }}</span></span>
              </div>
            </div>
         </div>
@@ -189,7 +174,7 @@
                </thead>
                <tbody>
                  <tr v-if="currentOrderList.length === 0">
-                   <td colspan="11" class="text-center py-8 text-gray-400 dark:text-gray-500">{{ localeStore.t('noneText') }}{{ localeStore.t('recordText') }}</td>
+                   <td colspan="11" class="text-center py-8 text-gray-400 dark:text-gray-500">{{ localeStore.t('noRecords') }}</td>
                  </tr>
                  <tr v-for="order in currentOrderList" :key="order.id" class="border-b border-gray-200 dark:border-[#2b3139] hover:bg-gray-50 dark:hover:bg-[#181c27] dark:bg-[#181c27] transition-colors">
                     <td class="py-3 px-4 font-bold text-gray-700 dark:text-gray-200">{{ displaySymbol(order) }}</td>
@@ -235,10 +220,7 @@
            </div>
            
            <div class="flex items-center gap-3 mb-5">
-           <el-select v-model="orderType" class="flex-1 min-w-0 custom-select">
-             <el-option :label="localeStore.t('marketPrice')" value="market" />
-             <el-option :label="localeStore.t('limitPrice')" value="limit" />
-           </el-select>
+           <AppSelect v-model="orderType" :options="orderTypeOptions" :label="`${localeStore.t('marketPrice')} / ${localeStore.t('limitPrice')}`" class="flex-1 min-w-0" />
            <LeverageControl v-model="selectedLeverage" :max="maxLeverage" :disabled="!currentSymbolInfo" :symbol="currentDisplaySymbol" />
            </div>
 
@@ -249,7 +231,7 @@
 
            <div class="space-y-5">
              <div class="pt-2">
-               <div class="text-gray-600 dark:text-gray-300 mb-2 font-medium text-sm">{{ localeStore.t('tradingAmount') }}(Step:0.01)</div>
+               <div class="text-gray-600 dark:text-gray-300 mb-2 font-medium text-sm">{{ localeStore.text('數量（手）', 'Quantity (lots)') }} · {{ localeStore.text('最小變動', 'Step') }}: 0.01</div>
                <el-input-number v-model="quantity" :min="0" :step="0.01" class="w-full custom-input-number" />
              </div>
 
@@ -282,7 +264,7 @@
 
              </div>
 
-             <p v-if="currentSymbolInfo && !Number.isFinite(estimatedMargin)" role="status" class="text-xs text-amber-600 mt-2">{{ localeStore.locale === 'zh-TW' ? '結算匯率暫不可用' : 'Settlement rate unavailable' }}</p>
+             <p v-if="currentSymbolInfo && !Number.isFinite(estimatedMargin)" role="status" class="text-xs text-amber-600 mt-2">{{ localeStore.text('結算匯率暫不可用', 'Settlement rate unavailable') }}</p>
              <div class="flex space-x-3 pt-4">
                <button :disabled="!currentSymbolInfo || !orderReady" @click="submitContractOrder('BUY')" class="disabled:opacity-50 disabled:cursor-not-allowed flex-1 bg-[#8cc63f] text-white py-3.5 rounded-lg font-bold text-base hover:bg-[#7ab036] transition-colors shadow-sm shadow-green-200">{{ localeStore.t('buy') }}</button>
                <button :disabled="!currentSymbolInfo || !orderReady" @click="submitContractOrder('SELL')" class="disabled:opacity-50 disabled:cursor-not-allowed flex-1 bg-[#ff4d4f] text-white py-3.5 rounded-lg font-bold text-base hover:bg-[#e64042] transition-colors shadow-sm shadow-red-200">{{ localeStore.t('sell') }}</button>
@@ -309,7 +291,7 @@
            </div>
 
            <div class="flex justify-between items-center text-sm mb-6 px-1">
-             <span class="text-gray-500 dark:text-gray-400 dark:text-gray-500 font-medium">{{ localeStore.t('expectedReturn') }}{{ localeStore.t('rate') }}</span>
+             <span class="text-gray-500 dark:text-gray-400 dark:text-gray-500 font-medium">{{ localeStore.t('expectedReturnRate') }}</span>
              <span class="font-bold text-gray-800 dark:text-gray-100 text-lg">{{ (currentOptionProfitRate * 100).toFixed(0) }}%</span>
            </div>
 
@@ -344,7 +326,7 @@
 
         <div class="flex flex-col space-y-1">
           <div class="flex items-center border border-gray-200 dark:border-[#2b3139] rounded-lg px-4 py-3 focus-within:border border-gray-200 dark:border-[#2b3139]-[#8cc63f] focus-within:ring-1 focus-within:ring-[#8cc63f]/20 transition-all bg-white dark:bg-[#131722]">
-            <span class="text-gray-500 dark:text-gray-400 dark:text-gray-500 w-16 font-medium">{{ localeStore.t('amountLabel') }}</span>
+            <span class="text-gray-500 dark:text-gray-400 dark:text-gray-500 w-16 font-medium">{{ localeStore.t('subscribeAmount') }}</span>
             <input v-model="financialPurchaseAmount" type="number" class="flex-1 outline-none text-gray-800 dark:text-gray-100 font-mono text-base bg-transparent" :placeholder="`(${formatMoney(activeFinancialProduct.minPurchase)} - ${formatMoney(activeFinancialProduct.maxPurchase)})`" />
             <button @click="setMaxFinancialPurchase" class="text-white text-xs ml-2 bg-[#8cc63f] px-3 py-1.5 rounded font-bold hover:bg-[#7ab036] transition-colors shadow-sm">{{ localeStore.t('maxButton') }}</button>
           </div>
@@ -355,7 +337,7 @@
         </div>
 
         <div class="text-sm text-gray-600 dark:text-gray-300 space-y-3 mt-4 bg-gray-50 dark:bg-[#181c27] p-5 rounded-lg border border-gray-100 dark:border-[#2b3139]">
-          <div class="flex justify-between items-center"><span class="font-medium">{{ localeStore.t('estDailyYield') }}</span><span class="font-bold text-[#8cc63f]">{{ Number(activeFinancialProduct.dailyYieldRate).toFixed(2) }}%</span></div>
+          <div class="flex justify-between items-center"><span class="font-medium">{{ localeStore.t('expectedDailyYield') }}</span><span class="font-bold text-[#8cc63f]">{{ Number(activeFinancialProduct.dailyYieldRate).toFixed(2) }}%</span></div>
           <div class="flex justify-between items-center"><span class="font-medium">{{ localeStore.t('lockRent') }}</span><span class="font-bold text-gray-800 dark:text-gray-100">{{ formatMoney(activeFinancialProduct.rentalFee) }}</span></div>
           <div class="flex justify-between items-center"><span class="font-medium">{{ localeStore.t('financePeriod') }}</span><span class="font-bold text-gray-800 dark:text-gray-100">{{ activeFinancialProduct.termDays }}{{ localeStore.t('days') }}</span></div>
         </div>
@@ -369,14 +351,14 @@
 
     <el-dialog v-model="showLoanContract" :title="localeStore.t('loanAgreementQuote')" width="600px" class="custom-dialog rounded-xl">
       <div v-if="currentLoanRecord" class="p-4 h-[60vh] overflow-y-auto custom-scrollbar text-sm text-gray-700 dark:text-gray-200 leading-relaxed">
-        <div class="font-bold text-lg mb-2">{{ localeStore.t('loanAgreementTitle') }}("{{ currentLoanRecord.id }}"){{ localeStore.t('dateText') }}</div>
+        <div class="font-bold text-lg mb-2">{{ localeStore.t('loanAgreementTitle') }} #{{ currentLoanRecord.id }}</div>
         <div class="text-[#8cc63f] mb-4">{{ currentLoanRecord.createdAt }}</div>
-        <div class="mb-4">（「{{ localeStore.t('effectiveText') }}{{ localeStore.t('dateText') }}」）{{ localeStore.t('signByPartiesText3') }}：</div>
+        <div class="mb-4">（「{{ localeStore.t('effectiveText') }}」）{{ localeStore.t('signByPartiesText3') }}：</div>
 
         <div class="mb-6">
           <div class="font-bold text-base mb-2">{{ localeStore.t('borrowerQuote') }}</div>
-          <div class="flex mb-1"><span class="w-16 text-gray-500 dark:text-gray-400 dark:text-gray-500">{{ localeStore.t('firstNameQuote') }}</span> <span class="font-medium">{{ currentLoanRecord.realName ? currentLoanRecord.realName.charAt(0) : localeStore.t('unknownText') }}</span></div>
-          <div class="flex mb-1"><span class="w-16 text-gray-500 dark:text-gray-400 dark:text-gray-500">{{ localeStore.t('lastNameQuote') }}</span> <span class="font-medium">{{ currentLoanRecord.realName ? currentLoanRecord.realName.substring(1) : localeStore.t('unknownText') }}</span></div>
+          <div v-if="localeStore.locale !== 'ja'" class="flex mb-1"><span class="w-16 text-gray-500 dark:text-gray-400 dark:text-gray-500">{{ localeStore.t('firstNameQuote') }}</span> <span class="font-medium">{{ currentLoanRecord.realName ? currentLoanRecord.realName.charAt(0) : localeStore.t('unknownText') }}</span></div>
+          <div v-if="localeStore.locale !== 'ja'" class="flex mb-1"><span class="w-16 text-gray-500 dark:text-gray-400 dark:text-gray-500">{{ localeStore.t('lastNameQuote') }}</span> <span class="font-medium">{{ currentLoanRecord.realName ? currentLoanRecord.realName.substring(1) : localeStore.t('unknownText') }}</span></div>
           <div class="flex mb-1"><span class="w-16 text-gray-500 dark:text-gray-400 dark:text-gray-500">{{ localeStore.t('addressQuote') }}</span> <span class="font-medium">{{ currentLoanRecord.address || localeStore.t('noneText') }}</span></div>
           <div class="flex mb-1"><span class="w-16 text-gray-500 dark:text-gray-400 dark:text-gray-500">{{ localeStore.t('phoneQuote') }}</span> <span class="font-medium">{{ currentLoanRecord.phone || localeStore.t('noneText') }}</span></div>
           <div class="flex mb-2"><span class="w-16 text-gray-500 dark:text-gray-400 dark:text-gray-500">{{ localeStore.t('nameQuote') }}</span> <span class="font-medium">{{ currentLoanRecord.realName || localeStore.t('unknownText') }}</span></div>
@@ -386,17 +368,17 @@
         <div class="mb-6">
           <div class="font-bold text-base mb-2">{{ localeStore.t('repaymentTermsQuote') }}</div>
           <div class="flex mb-2"><span class="w-16 text-gray-500 dark:text-gray-400 dark:text-gray-500">{{ localeStore.t('amountQuote') }}</span> <span class="text-[#8cc63f] font-bold">{{ formatMoney(currentLoanRecord.amount) }}</span></div>
-          <div>{{ localeStore.t('borrowerAgreesToRepayQuote') }}<span class="text-[#8cc63f] font-bold">{{ formatMoney(currentLoanRecord.amount) }}</span>{{ localeStore.t('loanQuote') }}</div>
+          <div>{{ localeStore.text('借款人同意償還借款 {amount}。', 'The borrower agrees to repay {amount} (the loan).', { amount: formatMoney(currentLoanRecord.amount) }) }}</div>
         </div>
 
         <div class="mb-6">
           <div class="font-bold text-base mb-2">{{ localeStore.t('termsQuote') }}</div>
           <div class="flex mb-2"><span class="w-16 text-gray-500 dark:text-gray-400 dark:text-gray-500">{{ localeStore.t('interestRateQuote') }}</span> <span class="text-[#8cc63f] font-bold">{{ currentLoanRecord.dailyRate }}%</span></div>
-          <div class="mb-2">{{ localeStore.t('partiesAgreeInterestQuote') }}<span class="text-[#8cc63f] font-bold">{{ currentLoanRecord.dailyRate }}%</span>{{ localeStore.t('calculatedDailyQuote') }}</div>
+          <div class="mb-2">{{ localeStore.text('雙方同意日利率為 {rate}%。', 'The agreed daily interest rate is {rate}%.', { rate: currentLoanRecord.dailyRate }) }}</div>
           <div class="flex mb-2"><span class="w-16 text-gray-500 dark:text-gray-400 dark:text-gray-500">{{ localeStore.t('loanTermQuote') }}</span> <span class="text-[#8cc63f] font-bold">{{ currentLoanRecord.days }}{{ localeStore.t('days') }}</span></div>
-          <div class="mb-2">{{ localeStore.t('loanTermIsQuote') }}<span class="text-[#8cc63f] font-bold">{{ currentLoanRecord.days }}</span>{{ localeStore.t('daysQuote') }}</div>
+          <div class="mb-2">{{ localeStore.text('借款期限為 {days} 天。', 'The loan term is {days} days.', { days: currentLoanRecord.days }) }}</div>
           <div class="mb-2">{{ localeStore.t('repaymentMethodQuote') }}</div>
-          <div>{{ localeStore.t('borrowerAgreesToRepayBeforeMaturityQuote') }}<span class="text-[#8cc63f] font-bold">{{ formatMoney(currentLoanRecord.amount) }}</span>{{ localeStore.t('principalAndQuote') }}<span class="text-[#8cc63f] font-bold">{{ formatMoney(currentLoanRecord.totalInterest) }}</span>{{ localeStore.t('interestQuote') }}</div>
+          <div>{{ localeStore.text('借款人同意到期前償還本金 {principal} 及利息 {interest}。', 'The borrower agrees to repay principal of {principal} and interest of {interest} by maturity.', { principal: formatMoney(currentLoanRecord.amount), interest: formatMoney(currentLoanRecord.totalInterest) }) }}</div>
         </div>
       </div>
       <template #footer>
@@ -465,9 +447,7 @@
         </div>
         <div class="flex items-center border border-gray-200 dark:border-[#2b3139] rounded-lg px-4 py-3 focus-within:border border-gray-200 dark:border-[#2b3139]-[#8cc63f] focus-within:ring-1 focus-within:ring-[#8cc63f]/20 transition-all bg-white dark:bg-[#131722]">
           <span class="text-gray-500 dark:text-gray-400 dark:text-gray-500 w-16 font-medium">{{ localeStore.t('loanTermShort') }}</span>
-          <select v-model="selectedLoanSettingId" class="flex-1 outline-none bg-transparent text-gray-800 dark:text-gray-100 font-medium text-base cursor-pointer appearance-none">
-            <option v-for="setting in loanSettings" :key="setting.id" :value="setting.id">{{ setting.days }}{{ localeStore.t('daysUnit') }}</option>
-          </select>
+          <AppSelect class="flex-1" v-model="selectedLoanSettingId" :options="loanTermOptions" :label="localeStore.t('loanTermShort')" />
         </div>
         <div class="text-sm text-gray-600 dark:text-gray-300 space-y-3 mt-6 bg-gray-50 dark:bg-[#181c27] p-5 rounded-lg border border-gray-100 dark:border-[#2b3139]">
           <div class="flex justify-between items-center"><span class="font-medium">{{ localeStore.t('dailyInterestRate') }}</span><span class="font-bold text-gray-800 dark:text-gray-100">{{ currentLoanSetting ? currentLoanSetting.dailyRate : 0 }}%</span></div>
@@ -524,7 +504,7 @@
                 <img :src="getImageUrl(product.imageUrl)" class="w-14 h-14 rounded-full shadow-inner object-contain bg-gray-50 dark:bg-[#181c27] p-1" />
                 <div>
                   <div class="font-bold text-lg text-gray-800 dark:text-gray-100 mb-1">{{ product.name }}</div>
-                  <div class="text-sm text-gray-500 dark:text-gray-400 dark:text-gray-500 mb-0.5">{{ localeStore.t('estDailyYield') }}: <span class="font-bold text-gray-700 dark:text-gray-200">{{ Number(product.dailyYieldRate).toFixed(2) }}%</span></div>
+                  <div class="text-sm text-gray-500 dark:text-gray-400 dark:text-gray-500 mb-0.5">{{ localeStore.t('expectedDailyYield') }}: <span class="font-bold text-gray-700 dark:text-gray-200">{{ Number(product.dailyYieldRate).toFixed(2) }}%</span></div>
                   <div class="text-sm text-gray-500 dark:text-gray-400 dark:text-gray-500">{{ localeStore.t('lockRent') }}: <span class="font-mono text-gray-700 dark:text-gray-200 font-medium">{{ Number(product.rentalFee).toFixed(2) }}</span></div>
                 </div>
               </div>
@@ -597,7 +577,7 @@
           <div class="space-y-2 text-sm text-gray-600 dark:text-gray-300">
             <div class="flex justify-between"><span>{{ localeStore.t('dailyProfit') }}</span><span class="font-bold text-gray-800 dark:text-gray-100">{{ Number(yieldRecord.dailyYield).toFixed(2) }}</span></div>
             <div class="flex justify-between"><span>{{ localeStore.t('totalYield') }}</span><span class="font-bold text-gray-800 dark:text-gray-100">{{ Number(yieldRecord.cumulativeYield).toFixed(2) }}</span></div>
-            <div class="flex justify-between" v-if="yieldRecord.paidAt"><span>{{ localeStore.t('issueText') }}{{ localeStore.t('timeText') }}</span><span class="text-gray-400 dark:text-gray-500">{{ yieldRecord.paidAt }}</span></div>
+            <div class="flex justify-between" v-if="yieldRecord.paidAt"><span>{{ localeStore.t('paidAt') }}</span><span class="text-gray-400 dark:text-gray-500">{{ yieldRecord.paidAt }}</span></div>
           </div>
         </div>
       </div>
@@ -616,7 +596,7 @@
         <div class="flex-1 p-8 overflow-y-auto bg-white dark:bg-[#131722] custom-scrollbar relative">
           <div v-if="activeUserMenu === 'assets'" class="max-w-2xl mx-auto">
             <CurrencyPicker v-model="displayCurrency" />
-            <p v-if="displayRate === null" role="alert">汇率暂不可用，请稍后重试</p>
+            <p v-if="displayRate === null" role="alert">{{ localeStore.text('匯率暫不可用，請稍後重試', 'Exchange rate unavailable; please retry later') }}</p>
             <div class="text-center mb-10 bg-gray-50 dark:bg-[#181c27] p-8 rounded-2xl border border-gray-100 dark:border-[#2b3139] shadow-sm relative overflow-hidden">
               <div class="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-[#8cc63f] to-[#aae061]"></div>
               <div class="inline-block bg-white dark:bg-[#131722] px-4 py-1.5 rounded-full text-gray-500 dark:text-gray-400 dark:text-gray-500 text-sm font-medium mb-4 shadow-sm border border-gray-100 dark:border-[#2b3139]">UID:< {{ auth.user?.id || '8959285729' }}</div>
@@ -702,7 +682,7 @@
                 </div>
                 <div class="text-sm text-gray-500 dark:text-gray-400 dark:text-gray-500 mb-1">{{ localeStore.t('depositAddressText') }}</div>
                 <div class="font-mono font-medium text-gray-800 dark:text-gray-100 bg-white dark:bg-[#131722] px-4 py-2 rounded border border-gray-200 dark:border-[#2b3139] inline-block mb-3 select-all">{{ selectedDepositSetting.address }}</div>
-                <div class="text-xs text-gray-400 dark:text-gray-500">{{ localeStore.t('onlySupportVia') }} {{ selectedDepositSetting.network }} {{ localeStore.t('networkDepositText') }}</div>
+                <div class="text-xs text-gray-400 dark:text-gray-500">{{ localeStore.text('此入金地址僅支援 {network} 網路。', 'This deposit address only supports the {network} network.', { network: selectedDepositSetting.network }) }}</div>
               </div>
             </div>
             
@@ -812,24 +792,16 @@
                 <div>
                   <div class="text-sm font-bold text-gray-700 dark:text-gray-200 mb-2">{{ localeStore.t('currency') }}</div>
                   <div class="relative">
-                    <select v-model="withdrawForm.currency" class="w-full bg-gray-50 dark:bg-[#181c27] border border-gray-200 dark:border-[#2b3139]-none rounded-lg px-4 py-3 outline-none focus:ring-1 focus:ring-[#8cc63f]/30 transition-all text-gray-700 dark:text-gray-200 appearance-none">
-                      <option value="" disabled selected hidden>{{ localeStore.t('pleaseText') }}选择{{ localeStore.t('currency') }}</option>
-                      <option v-for="c in availableCurrencies" :key="c" :value="c">{{ c }}</option>
-                    </select>
-                    <el-icon class="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500 pointer-events-none"><ArrowRight /></el-icon>
+                    <AppSelect :model-value="withdrawForm.currency" :options="withdrawCurrencyOptions" :label="localeStore.t('currency')" :placeholder="localeStore.t('pleaseSelectCurrency')" @update:model-value="withdrawForm.currency = String($event)" />
                   </div>
                 </div>
                 
                 <div>
                   <div class="text-sm font-bold text-gray-700 dark:text-gray-200 mb-2">{{ localeStore.t('withdrawAddressText') }}</div>
                   <div class="relative">
-                    <select v-model="withdrawForm.address" class="w-full bg-gray-50 dark:bg-[#181c27] border border-gray-200 dark:border-[#2b3139]-none rounded-lg px-4 py-3 outline-none focus:ring-1 focus:ring-[#8cc63f]/30 transition-all text-gray-700 dark:text-gray-200 appearance-none">
-                      <option value="" disabled selected hidden>{{ localeStore.t('pleaseSelectWithdrawAddress') }}</option>
-                      <option v-for="addr in userDigitalAddresses" :key="addr.id" :value="addr.address">{{ addr.address }} ({{ addr.network }})</option>
-                    </select>
-                    <el-icon class="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500 pointer-events-none"><ArrowRight /></el-icon>
+                    <AppSelect :model-value="withdrawForm.address" :options="digitalAddressOptions" :label="localeStore.t('withdrawAddressText')" :placeholder="localeStore.t('pleaseSelectWithdrawAddress')" @update:model-value="withdrawForm.address = String($event)" />
                   </div>
-                  <div v-if="userDigitalAddresses.length === 0" class="text-xs text-red-400 mt-1">{{ localeStore.t('noneText') }}{{ localeStore.t('boundText') }}{{ localeStore.t('withdrawAddressText') }}，{{ localeStore.t('pleaseContactFirst') }}{{ localeStore.t('customerServiceText') }}{{ localeStore.t('orBindOnMobile') }}</div>
+                  <div v-if="userDigitalAddresses.length === 0" class="text-xs text-red-400 mt-1">{{ localeStore.text('尚未登記出金地址，請聯絡客服或在手機端登記。', 'No withdrawal address is registered. Contact support or register one on mobile.') }}</div>
                 </div>
                 
                 <div>
@@ -869,20 +841,15 @@
                   <div class="text-sm font-bold text-gray-700 dark:text-gray-200 mb-2">{{ localeStore.t('currency') }}</div>
                   <div class="relative">
                     <CurrencyPicker v-model="withdrawCurrency" />
-                    <el-icon class="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500 pointer-events-none"><ArrowRight /></el-icon>
                   </div>
                 </div>
                 
                 <div>
                   <div class="text-sm font-bold text-gray-700 dark:text-gray-200 mb-2">{{ localeStore.t('payeeAccount') }}</div>
                   <div class="relative">
-                    <select v-model="withdrawForm.address" class="w-full bg-gray-50 dark:bg-[#181c27] border border-gray-200 dark:border-[#2b3139]-none rounded-lg px-4 py-3 outline-none focus:ring-1 focus:ring-[#8cc63f]/30 transition-all text-gray-700 dark:text-gray-200 appearance-none">
-                      <option value="" disabled selected hidden>{{ localeStore.t('pleaseSelectPayeeAccount') }}</option>
-                      <option v-for="card in userBankCards" :key="card.id" :value="card.recipientAccount">{{ card.bankName }} - {{ card.recipientAccount }}</option>
-                    </select>
-                    <el-icon class="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500 pointer-events-none"><ArrowRight /></el-icon>
+                    <AppSelect :model-value="withdrawForm.address" :options="bankAccountOptions" :label="localeStore.t('payeeAccount')" :placeholder="localeStore.t('pleaseSelectPayeeAccount')" @update:model-value="withdrawForm.address = String($event)" />
                   </div>
-                  <div v-if="userBankCards.length === 0" class="text-xs text-red-400 mt-1">{{ localeStore.t('noneText') }}{{ localeStore.t('boundText') }}{{ localeStore.t('bankCardText2') }}，{{ localeStore.t('pleaseContactFirst') }}{{ localeStore.t('customerServiceText') }}{{ localeStore.t('orBindOnMobile') }}</div>
+                  <div v-if="userBankCards.length === 0" class="text-xs text-red-400 mt-1">{{ localeStore.text('尚未登記銀行帳戶，請聯絡客服或在手機端登記。', 'No bank account is registered. Contact support or register one on mobile.') }}</div>
                 </div>
                 
                 <div>
@@ -952,12 +919,7 @@
                     <div class="text-sm font-bold text-gray-700 dark:text-gray-200 mb-2 pl-12 relative">
                       <div class="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 rounded-full border border-gray-200 dark:border-[#2b3139]-2 border border-gray-200 dark:border-[#2b3139]-gray-400 bg-white dark:bg-[#131722]"></div>{{ localeStore.t('fromAccount') }}</div>
                     <div class="relative pl-10">
-                      <select v-model="transferForm.fromAccount" @change="handleTransferAccountChange" class="w-full bg-gray-50 dark:bg-[#181c27] border border-gray-200 dark:border-[#2b3139]-none rounded-lg px-4 py-3.5 outline-none focus:ring-1 focus:ring-[#8cc63f]/30 transition-all text-gray-800 dark:text-gray-100 font-medium appearance-none shadow-inner inset-shadow">
-                        <option value="FUND">{{ localeStore.t('fundAccount') }}</option>
-                        <option value="CONTRACT">{{ localeStore.t('contractAccount') }}</option>
-                        <option value="OPTION">{{ localeStore.t('optionsAccount') }}</option>
-                      </select>
-                      <el-icon class="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500 pointer-events-none"><ArrowDown /></el-icon>
+                      <AppSelect :model-value="transferForm.fromAccount" :options="transferAccountOptions" :label="localeStore.t('fromAccount')" @update:model-value="transferForm.fromAccount = String($event)" @change="handleTransferAccountChange" />
                     </div>
                   </div>
                   
@@ -965,12 +927,7 @@
                     <div class="text-sm font-bold text-gray-700 dark:text-gray-200 mb-2 pl-12 relative">
                       <div class="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 rounded-full bg-[#8cc63f] ring-4 ring-green-50"></div>{{ localeStore.t('toAccount') }}</div>
                     <div class="relative pl-10">
-                      <select v-model="transferForm.toAccount" @change="handleTransferAccountChange" class="w-full bg-gray-50 dark:bg-[#181c27] border border-gray-200 dark:border-[#2b3139]-none rounded-lg px-4 py-3.5 outline-none focus:ring-1 focus:ring-[#8cc63f]/30 transition-all text-gray-800 dark:text-gray-100 font-medium appearance-none shadow-inner inset-shadow">
-                        <option value="FUND">{{ localeStore.t('fundAccount') }}</option>
-                        <option value="CONTRACT">{{ localeStore.t('contractAccount') }}</option>
-                        <option value="OPTION">{{ localeStore.t('optionsAccount') }}</option>
-                      </select>
-                      <el-icon class="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500 pointer-events-none"><ArrowDown /></el-icon>
+                      <AppSelect :model-value="transferForm.toAccount" :options="transferAccountOptions" :label="localeStore.t('toAccount')" @update:model-value="transferForm.toAccount = String($event)" @change="handleTransferAccountChange" />
                     </div>
                   </div>
                 </div>
@@ -1004,7 +961,7 @@
             <div class="mt-6 bg-white dark:bg-[#131722] p-6 rounded-xl border border-gray-100 dark:border-[#2b3139] shadow-sm">
               <h3 class="text-lg font-bold text-gray-800 dark:text-gray-100 mb-4">{{ localeStore.t('transferRecords') }}</h3>
               <div v-if="transferRecords.length === 0" class="text-center py-6 text-gray-400 dark:text-gray-500">
-                <el-empty :description="`${localeStore.t('noneText2')}${localeStore.t('transferText')}${localeStore.t('recordText2')}`" :image-size="60"></el-empty>
+                <el-empty :description="localeStore.t('noTransferRecords')" :image-size="60"></el-empty>
               </div>
               <div v-else class="space-y-4">
                 <div v-for="record in transferRecords" :key="record.id" class="border border-gray-200 dark:border-[#2b3139]-b border border-gray-200 dark:border-[#2b3139]-gray-50 pb-4 last:border border-gray-200 dark:border-[#2b3139]-0 last:pb-0">
@@ -1114,8 +1071,8 @@
                   <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-1">{{ localeStore.t('kyc') }}</h2>
                   <p class="text-gray-500 dark:text-gray-400 dark:text-gray-500 text-sm">
                     <span v-if="isKycVerified" class="text-[#8cc63f] font-medium">{{ localeStore.t('kycPassedFeatureNormal') }}。</span>
-                    <span v-else-if="kycStatus === 'PENDING'" class="text-orange-500 font-medium">{{ localeStore.t('yourText') }}{{ localeStore.t('authText') }}{{ localeStore.t('infoIsBeing') }}{{ localeStore.t('reviewingText') }}，{{ localeStore.t('pleaseWaitPatiently') }}。</span>
-                    <span v-else>{{ localeStore.t('completeRealName') }}{{ localeStore.t('authText') }}{{ localeStore.t('toUnlockAdvancedFeatures') }}。</span>
+                    <span v-else-if="kycStatus === 'PENDING'" class="text-orange-500 font-medium">{{ localeStore.t('verificationPending') }}</span>
+                    <span v-else>{{ localeStore.t('completeAuthToUnlockFeatures') }}</span>
                   </p>
                 </div>
               </div>
@@ -1308,11 +1265,11 @@
                   <input v-model="passwordForm.newPassword" type="password" class="w-full bg-gray-50 dark:bg-[#181c27] border border-gray-200 dark:border-[#2b3139]-none rounded-lg px-4 py-3 outline-none focus:ring-1 focus:ring-[#8cc63f]/30 transition-all text-gray-700 dark:text-gray-200" :placeholder="localeStore.t('enterNewPassword')" />
                 </div>
                 <div>
-                  <div class="text-gray-600 dark:text-gray-300 font-medium text-sm mb-2">{{ localeStore.t('confirmText') }}{{ localeStore.t('newPassword2') }} <span class="text-red-500">*</span></div>
+                  <div class="text-gray-600 dark:text-gray-300 font-medium text-sm mb-2">{{ localeStore.t('confirmPassword') }} <span class="text-red-500">*</span></div>
                   <input v-model="passwordForm.confirmPassword" type="password" class="w-full bg-gray-50 dark:bg-[#181c27] border border-gray-200 dark:border-[#2b3139]-none rounded-lg px-4 py-3 outline-none focus:ring-1 focus:ring-[#8cc63f]/30 transition-all text-gray-700 dark:text-gray-200" :placeholder="localeStore.t('enterConfirmPassword')" />
                 </div>
                 <div class="pt-4">
-                  <button @click="submitPasswordChange" class="w-full bg-[#8cc63f] text-white py-3.5 rounded-lg font-bold text-base hover:bg-[#7ab036] transition-colors shadow-md shadow-green-200/50">{{ localeStore.t('confirmText') }}修改</button>
+                  <button @click="submitPasswordChange" class="w-full bg-[#8cc63f] text-white py-3.5 rounded-lg font-bold text-base hover:bg-[#7ab036] transition-colors shadow-md shadow-green-200/50">{{ localeStore.t('changePassword') }}</button>
                 </div>
               </div>
             </div>
@@ -1387,7 +1344,7 @@
     <el-dialog v-model="showPersonalInfoModal" :title="localeStore.t('personalInfoVerification')" width="450px" class="custom-dialog rounded-xl overflow-hidden">
       <div class="space-y-4 px-2 py-2 max-h-[60vh] overflow-y-auto custom-scrollbar">
         <div class="bg-blue-50 text-blue-600 p-3 rounded-lg text-sm mb-4">
-          {{ localeStore.t('forPurpose') }}{{ localeStore.t('yourText') }}{{ localeStore.t('fundSecurity') }}，{{ localeStore.t('pleaseText') }}{{ localeStore.t('completeRealInfoFirst') }}{{ localeStore.t('authText') }}{{ localeStore.t('submitWaitAdminReview') }}。
+          {{ localeStore.text('為保障資金安全，請填寫本人確認資料並提交審核。', 'Complete your identity information and submit it for review to protect your funds.') }}
         </div>
         <div>
           <div class="text-gray-600 dark:text-gray-300 font-medium text-sm mb-2">{{ localeStore.t('realName') }}<span class="text-red-500">*</span></div>
@@ -1399,11 +1356,11 @@
         </div>
         <div>
           <div class="text-gray-600 dark:text-gray-300 font-medium text-sm mb-2">{{ localeStore.t('contactPhone') }}<span class="text-red-500">*</span></div>
-          <input v-model="personalInfoForm.phone" type="text" class="w-full border border-gray-200 dark:border-[#2b3139] rounded-lg px-4 py-2.5 outline-none focus:border border-gray-200 dark:border-[#2b3139]-[#8cc63f] focus:ring-1 focus:ring-[#8cc63f]/20 transition-all bg-white dark:bg-[#131722]" :placeholder="`${localeStore.t('pleaseEnterText')}${localeStore.t('yourContactPhone')}`" />
+          <input v-model="personalInfoForm.phone" type="text" class="w-full border border-gray-200 dark:border-[#2b3139] rounded-lg px-4 py-2.5 outline-none focus:border border-gray-200 dark:border-[#2b3139]-[#8cc63f] focus:ring-1 focus:ring-[#8cc63f]/20 transition-all bg-white dark:bg-[#131722]" :placeholder="localeStore.t('pleaseEnterContactPhone')" />
         </div>
         <div>
           <div class="text-gray-600 dark:text-gray-300 font-medium text-sm mb-2">{{ localeStore.t('homeAddress2') }} <span class="text-red-500">*</span></div>
-          <textarea v-model="personalInfoForm.address" class="w-full border border-gray-200 dark:border-[#2b3139] rounded-lg px-4 py-2.5 outline-none focus:border border-gray-200 dark:border-[#2b3139]-[#8cc63f] focus:ring-1 focus:ring-[#8cc63f]/20 transition-all bg-white dark:bg-[#131722] resize-none h-20" :placeholder="`${localeStore.t('pleaseEnterText')}${localeStore.t('yourText')}${localeStore.t('detailText')}${localeStore.t('homeAddress2')}`"></textarea>
+          <textarea v-model="personalInfoForm.address" class="w-full border border-gray-200 dark:border-[#2b3139] rounded-lg px-4 py-2.5 outline-none focus:border border-gray-200 dark:border-[#2b3139]-[#8cc63f] focus:ring-1 focus:ring-[#8cc63f]/20 transition-all bg-white dark:bg-[#131722] resize-none h-20" :placeholder="localeStore.t('pleaseEnterDetailedHomeAddress')"></textarea>
         </div>
         
         <div class="space-y-4 pt-2 border-t border-gray-200 dark:border-[#2b3139] mt-4">
@@ -1504,15 +1461,15 @@
       <div class="space-y-4 px-2 py-4">
         <div>
           <div class="text-gray-600 dark:text-gray-300 font-medium text-sm mb-2">{{ localeStore.t('openingBankText') }} <span class="text-red-500">*</span></div>
-          <input v-model="bindBankForm.bankName" type="text" class="w-full bg-gray-50 dark:bg-[#181c27] border border-gray-200 dark:border-[#2b3139]-none rounded-lg px-4 py-3 outline-none focus:ring-1 focus:ring-[#8cc63f]/30 transition-all text-gray-700 dark:text-gray-200" :placeholder="`${localeStore.t('pleaseEnterText')}${localeStore.t('openingBankText')}${localeStore.t('nameText2')}`" />
+          <input v-model="bindBankForm.bankName" type="text" class="w-full bg-gray-50 dark:bg-[#181c27] border border-gray-200 dark:border-[#2b3139]-none rounded-lg px-4 py-3 outline-none focus:ring-1 focus:ring-[#8cc63f]/30 transition-all text-gray-700 dark:text-gray-200" :placeholder="localeStore.t('enterBankName')" />
         </div>
         <div>
           <div class="text-gray-600 dark:text-gray-300 font-medium text-sm mb-2">{{ localeStore.t('bankCardNoText') }} <span class="text-red-500">*</span></div>
-          <input v-model="bindBankForm.recipientAccount" type="text" class="w-full bg-gray-50 dark:bg-[#181c27] border border-gray-200 dark:border-[#2b3139]-none rounded-lg px-4 py-3 outline-none focus:ring-1 focus:ring-[#8cc63f]/30 transition-all text-gray-700 dark:text-gray-200" :placeholder="`${localeStore.t('pleaseEnterText')}${localeStore.t('bankCardNoText')}`" />
+          <input v-model="bindBankForm.recipientAccount" type="text" class="w-full bg-gray-50 dark:bg-[#181c27] border border-gray-200 dark:border-[#2b3139]-none rounded-lg px-4 py-3 outline-none focus:ring-1 focus:ring-[#8cc63f]/30 transition-all text-gray-700 dark:text-gray-200" :placeholder="localeStore.t('pleaseEnterBankCardNo')" />
         </div>
         <div>
           <div class="text-gray-600 dark:text-gray-300 font-medium text-sm mb-2">{{ localeStore.t('accountNameText') }} <span class="text-red-500">*</span></div>
-          <input v-model="bindBankForm.recipientName" type="text" class="w-full bg-gray-50 dark:bg-[#181c27] border border-gray-200 dark:border-[#2b3139]-none rounded-lg px-4 py-3 outline-none focus:ring-1 focus:ring-[#8cc63f]/30 transition-all text-gray-700 dark:text-gray-200" :placeholder="`${localeStore.t('pleaseEnterText')}${localeStore.t('accountNameText')}`" />
+          <input v-model="bindBankForm.recipientName" type="text" class="w-full bg-gray-50 dark:bg-[#181c27] border border-gray-200 dark:border-[#2b3139]-none rounded-lg px-4 py-3 outline-none focus:ring-1 focus:ring-[#8cc63f]/30 transition-all text-gray-700 dark:text-gray-200" :placeholder="localeStore.t('enterPayeeName')" />
         </div>
         <div>
           <div class="text-gray-600 dark:text-gray-300 font-medium text-sm mb-2">{{ localeStore.t('branchAddress') }}<span class="text-gray-400 dark:text-gray-500 font-normal text-xs">({{ localeStore.t('optionalText') }})</span></div>
@@ -1536,26 +1493,18 @@
         <div>
           <div class="text-gray-600 dark:text-gray-300 font-medium text-sm mb-2">{{ localeStore.t('currencyType') }}<span class="text-red-500">*</span></div>
           <div class="relative">
-            <select v-model="bindDigitalForm.currency" class="w-full bg-gray-50 dark:bg-[#181c27] border border-gray-200 dark:border-[#2b3139]-none rounded-lg px-4 py-3 outline-none focus:ring-1 focus:ring-[#8cc63f]/30 transition-all text-gray-700 dark:text-gray-200 appearance-none">
-              <option value="" disabled selected hidden>{{ localeStore.t('pleaseText') }}{{ localeStore.t('select') }}{{ localeStore.t('currencyType') }}</option>
-              <option v-for="c in ['USDT', 'USDC', 'BTC', 'ETH']" :key="c" :value="c">{{ c }}</option>
-            </select>
-            <el-icon class="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500 pointer-events-none"><ArrowDown /></el-icon>
+            <AppSelect :model-value="bindDigitalForm.currency" :options="bindCurrencyOptions" :label="localeStore.t('currencyType')" :placeholder="localeStore.t('pleaseSelectCurrency')" @update:model-value="bindDigitalForm.currency = String($event)" />
           </div>
         </div>
         <div>
           <div class="text-gray-600 dark:text-gray-300 font-medium text-sm mb-2">{{ localeStore.t('networkProtocol') }}<span class="text-red-500">*</span></div>
           <div class="relative">
-            <select v-model="bindDigitalForm.network" class="w-full bg-gray-50 dark:bg-[#181c27] border border-gray-200 dark:border-[#2b3139]-none rounded-lg px-4 py-3 outline-none focus:ring-1 focus:ring-[#8cc63f]/30 transition-all text-gray-700 dark:text-gray-200 appearance-none">
-              <option value="" disabled selected hidden>{{ localeStore.t('pleaseText') }}{{ localeStore.t('selectNetworkText') }}</option>
-              <option v-for="n in ['TRC20', 'ERC20', 'OMNI', 'BEP20']" :key="n" :value="n">{{ n }}</option>
-            </select>
-            <el-icon class="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500 pointer-events-none"><ArrowDown /></el-icon>
+            <AppSelect :model-value="bindDigitalForm.network" :options="bindNetworkOptions" :label="localeStore.t('networkProtocol')" :placeholder="localeStore.t('selectNetworkText')" @update:model-value="bindDigitalForm.network = String($event)" />
           </div>
         </div>
         <div>
           <div class="text-gray-600 dark:text-gray-300 font-medium text-sm mb-2">{{ localeStore.t('walletAddressLabel') }}<span class="text-red-500">*</span></div>
-          <textarea v-model="bindDigitalForm.address" class="w-full bg-gray-50 dark:bg-[#181c27] border border-gray-200 dark:border-[#2b3139]-none rounded-lg px-4 py-3 outline-none focus:ring-1 focus:ring-[#8cc63f]/30 transition-all text-gray-700 dark:text-gray-200 resize-none h-20" :placeholder="`${localeStore.t('pleaseEnterText')}${localeStore.t('orText')}${localeStore.t('pasteText')}${localeStore.t('walletAddressLabel')}`"></textarea>
+          <textarea v-model="bindDigitalForm.address" class="w-full bg-gray-50 dark:bg-[#181c27] border border-gray-200 dark:border-[#2b3139]-none rounded-lg px-4 py-3 outline-none focus:ring-1 focus:ring-[#8cc63f]/30 transition-all text-gray-700 dark:text-gray-200 resize-none h-20" :placeholder="localeStore.t('pleaseEnterOrPasteWalletAddress')"></textarea>
         </div>
       </div>
       <template #footer>
@@ -1624,17 +1573,8 @@
           </div>
         </div>
         <div>
-          <div class="text-gray-600 dark:text-gray-300 font-medium text-sm mb-2">{{ localeStore.t('inviteCode') }} <span class="text-red-500">*</span></div>
-          <input v-model="registerInviteCode" :readonly="registerInviteLocked" type="text" class="w-full bg-gray-50 dark:bg-[#181c27] border border-gray-200 dark:border-[#2b3139]-none rounded-lg px-4 py-3 outline-none focus:ring-1 focus:ring-[#8cc63f]/30 transition-all text-gray-700 dark:text-gray-200" :placeholder="registerInviteLocked ? localeStore.t('inviteCodeFilled') : localeStore.t('inviteCodeRequired')" />
-        </div>
-        <div>
-          <div class="text-gray-600 dark:text-gray-300 font-medium text-sm mb-2">{{ localeStore.t('verifyCode') }} <span class="text-red-500">*</span></div>
-          <div class="flex space-x-2">
-            <input v-model="registerVerifyCode" type="text" class="flex-1 bg-gray-50 dark:bg-[#181c27] border border-gray-200 dark:border-[#2b3139]-none rounded-lg px-4 py-3 outline-none focus:ring-1 focus:ring-[#8cc63f]/30 transition-all text-gray-700 dark:text-gray-200" :placeholder="localeStore.t('verifyCodePlaceholder')" />
-            <button @click="sendRegisterCode" :disabled="registerSending || registerCountdown > 0" class="bg-[#8cc63f] text-white px-4 py-3 rounded-lg font-bold text-sm hover:bg-[#7ab036] transition-colors disabled:opacity-50 whitespace-nowrap">
-              {{ registerSending ? localeStore.t('sending') : registerCountdown > 0 ? `${registerCountdown}${localeStore.t('seconds')}` : localeStore.t('send') }}
-            </button>
-          </div>
+          <div class="text-gray-600 dark:text-gray-300 font-medium text-sm mb-2">{{ localeStore.t('inviteCode') }}</div>
+          <input v-model="registerInviteCode" :readonly="registerInviteLocked" type="text" class="w-full bg-gray-50 dark:bg-[#181c27] border border-gray-200 dark:border-[#2b3139]-none rounded-lg px-4 py-3 outline-none focus:ring-1 focus:ring-[#8cc63f]/30 transition-all text-gray-700 dark:text-gray-200" :placeholder="registerInviteLocked ? localeStore.t('inviteCodeFilled') : localeStore.t('inviteCodeEmpty')" />
         </div>
         <div class="text-center text-sm text-gray-500 dark:text-gray-400 dark:text-gray-500 mt-4">
           {{ localeStore.t('gotoLogin') }}
@@ -1700,6 +1640,7 @@
 </template>
 
 <script setup lang="ts">
+import AppSelect from '@/components/AppSelect.vue'
 import CurrencyPicker from '@/components/CurrencyPicker.vue'
 import LogoGlint from '@/components/LogoGlint.vue'
 import { useFiatCurrency } from '@/utils/fiatCurrency'
@@ -1726,13 +1667,17 @@ import { formatDateTime } from '@/utils/dateTime';
 import { getImageUrl } from '@/utils/imageUrl';
 import { displaySymbol } from '@/utils/displaySymbol';
 import KlineChart from '@/components/KlineChart.vue';
-import { Money, Coin, ArrowDown, Check, ArrowRight, Search, Box, Plus, Camera, UploadFilled, SuccessFilled, WarningFilled, Promotion, Lock, Service, DocumentCopy, Message, Bell, Edit, Moon, Sunny } from '@element-plus/icons-vue';
+import { Money, Coin, Check, ArrowRight, Search, Box, Plus, Camera, UploadFilled, SuccessFilled, WarningFilled, Promotion, Lock, Service, DocumentCopy, Message, Bell, Edit, Moon, Sunny } from '@element-plus/icons-vue';
 import VueQrcode from '@chenfengyuan/vue-qrcode';
 
 
 const marketStore = useMarketStore();
 const auth = useAuthStore();
 const localeStore = useLocaleStore();
+const plainOptions = (values: string[]) => values.map(value => ({ value, label: value }));
+const bindCurrencyOptions = plainOptions(['USDT', 'USDC', 'BTC', 'ETH']);
+const bindNetworkOptions = plainOptions(['TRC20', 'ERC20', 'OMNI', 'BEP20']);
+const languageOptions = languages.map(language => ({ value: language.locale, label: language.label, iconSrc: language.flag }));
 const shareOrder = ref<{ id: string | number; kind: ShareKind } | null>(null);
 const shareLabel = computed(() => shareCopy(localeStore.locale).share);
 localeStore.loadLocale();
@@ -1781,45 +1726,13 @@ const registerPassword = ref('');
 const registerConfirmPassword = ref('');
 const registerInviteCode = ref('');
 const registerInviteLocked = ref(false);
-const registerVerifyCode = ref('');
-const registerSending = ref(false);
 const registerLoading = ref(false);
 const registerShowPwd = ref(false);
 const registerShowPwd2 = ref(false);
-const registerCountdown = ref(0);
-const registerCountdownTimer = ref<number | null>(null);
-
-const sendRegisterCode = async () => {
-  if (registerSending.value || registerCountdown.value > 0) return;
-  if (!registerEmail.value) {
-    ElMessage.error(localeStore.t('sendCodeFail'));
-    return;
-  }
-  registerSending.value = true;
-  try {
-    await request.post('/auth/sendEmailCode', {
-      email: registerEmail.value,
-      scene: 'register',
-    });
-    ElMessage.success(localeStore.t('sendCodeSuccess'));
-    registerCountdown.value = 60;
-    registerCountdownTimer.value = window.setInterval(() => {
-      registerCountdown.value--;
-      if (registerCountdown.value <= 0 && registerCountdownTimer.value !== null) {
-        clearInterval(registerCountdownTimer.value);
-        registerCountdownTimer.value = null;
-      }
-    }, 1000);
-  } catch (e: any) {
-    ElMessage.error(e?.message || localeStore.t('sendCodeFail'));
-  } finally {
-    registerSending.value = false;
-  }
-};
 
 const onRegisterSubmit = async () => {
   if (registerLoading.value) return;
-  if (!registerEmail.value || !registerPassword.value || !registerConfirmPassword.value || !registerVerifyCode.value || !registerInviteCode.value) {
+  if (!registerEmail.value || !registerPassword.value || !registerConfirmPassword.value) {
     ElMessage.error(localeStore.t('pleaseEnterAllRequiredFields'));
     return;
   }
@@ -1837,8 +1750,7 @@ const onRegisterSubmit = async () => {
       email: registerEmail.value,
       password: registerPassword.value,
       confirmPassword: registerConfirmPassword.value,
-      verifyCode: registerVerifyCode.value,
-      invitationCode: registerInviteCode.value,
+      invitationCode: registerInviteCode.value.trim() || undefined,
     });
     ElMessage.success(localeStore.t('registerSuccess'));
     showRegisterModal.value = false;
@@ -1966,17 +1878,11 @@ onUnmounted(() => {
   if (timeInterval) {
     clearInterval(timeInterval);
   }
-  if (registerCountdownTimer.value !== null) {
-    clearInterval(registerCountdownTimer.value);
-    registerCountdownTimer.value = null;
-  }
   if (forgotCountdownTimer.value !== null) {
     clearInterval(forgotCountdownTimer.value);
     forgotCountdownTimer.value = null;
   }
 });
-
-const currentLanguage = computed(() => languages.find(lang => lang.locale === localeStore.locale) || languages[0]!);
 
 const handleLangChange = (locale: string) => {
   localeStore.setLocale(locale as any);
@@ -2041,11 +1947,19 @@ onMounted(() => {
 
 const currentSymbol = ref('');
 const currentCategory = ref('');
+const categoryOptions = computed(() => [
+  { value: '', label: localeStore.t('all') },
+  ...((marketStore as any).categories || []).map((category: any) => ({ value: category.key || category.code, label: localeStore.categoryLabel(category.key || category.code, category.label || category.name) })),
+]);
 const currentInterval = ref('5m');
 
 const searchQuery = ref('');
 const tradeMode = ref('contract');
 const orderType = ref('market');
+const orderTypeOptions = computed(() => [
+  { value: 'market', label: localeStore.t('marketPrice') },
+  { value: 'limit', label: localeStore.t('limitPrice') },
+]);
 const limitPrice = ref<number>();
 
 watch(orderType, (newVal) => {
@@ -2162,16 +2076,16 @@ const submitFinancialPurchase = async () => {
   
   const amountNum = Number(financialPurchaseAmount.value);
   if (isNaN(amountNum) || amountNum <= 0) {
-    ElMessage.warning(`${localeStore.t('pleaseEnterText')}${localeStore.t('validText')}${localeStore.t('subscribe')}${localeStore.t('quantityText')}`);
+    ElMessage.warning(localeStore.t('pleaseEnterValidSubscribeQuantity'));
     return;
   }
   if (activeFinancialProduct.value) {
     if (amountNum < activeFinancialProduct.value.minPurchase) {
-      ElMessage.warning(`${localeStore.t('cannotBeLessThanMin')}${localeStore.t('subscribe')}${localeStore.t('quantityText')} ${activeFinancialProduct.value.minPurchase}`);
+      ElMessage.warning(localeStore.text('最低申購金額：{amount}', 'Minimum subscription amount: {amount}', { amount: activeFinancialProduct.value.minPurchase }));
       return;
     }
     if (amountNum > activeFinancialProduct.value.maxPurchase) {
-      ElMessage.warning(`${localeStore.t('cannotBeGreaterThan')}最大${localeStore.t('subscribe')}${localeStore.t('quantityText')} ${activeFinancialProduct.value.maxPurchase}`);
+      ElMessage.warning(localeStore.text('最高申購金額：{amount}', 'Maximum subscription amount: {amount}', { amount: activeFinancialProduct.value.maxPurchase }));
       return;
     }
   }
@@ -2182,7 +2096,7 @@ const submitFinancialPurchase = async () => {
       purchaseAmount: amountNum
     });
     if (res && res.success !== false) {
-      ElMessage.success(`${localeStore.t('financialText')}${localeStore.t('subscribe')}${localeStore.t('successText')}`);
+      ElMessage.success(localeStore.text('申購已提交', 'Subscription submitted.'));
       showFinancialPurchase.value = false;
       loadWalletBalances(); // 刷新{{ localeStore.t('balanceText') }}
       wealthTab.value = 'purchased';
@@ -2195,7 +2109,7 @@ const submitFinancialPurchase = async () => {
       ElMessage.error(errMsg);
     }
   } catch (e: any) {
-    let errMsg = e.response?.data?.message || localeStore.t('networkErrorOrNotImplemented');
+    let errMsg = e.response?.data?.message || e.message || localeStore.t('networkErrorOrNotImplemented');
     if (errMsg.includes('申购失败:') || errMsg.includes(`${localeStore.t('subscribeFailed2')}:`)) {
       errMsg = errMsg.replace('申购失败: ', '').replace(`${localeStore.t('subscribeFailed2')}: `, '');
     }
@@ -2206,6 +2120,7 @@ const loanAmount = ref('');
 const showCreditLoan = ref(false);
 const loanSettings = ref<any[]>([]);
 const selectedLoanSettingId = ref<number | string>('');
+const loanTermOptions = computed(() => loanSettings.value.map(setting => ({ value: setting.id, label: `${setting.days}${localeStore.t('daysUnit')}` })));
 
 const currentLoanSetting = computed(() => {
   return loanSettings.value.find(s => s.id === selectedLoanSettingId.value) || null;
@@ -2420,7 +2335,7 @@ const submitPersonalInfo = async () => {
       ElMessage.error(res?.message || localeStore.t('submitFailed'));
     }
   } catch (e: any) {
-    ElMessage.error(e.response?.data?.message || localeStore.t('networkErrorOrNotImplemented'));
+    ElMessage.error(e.response?.data?.message || e.message || localeStore.t('networkErrorOrNotImplemented'));
   }
 };
 
@@ -2447,7 +2362,7 @@ const submitPersonalInfoFromKyc = async () => {
       }
     });
     if (res && res.success !== false) {
-      ElMessage.success(`${localeStore.t('realName2')}${localeStore.t('authText')}${localeStore.t('dataSubmitSuccessWaitReview')}`);
+      ElMessage.success(localeStore.t('dataSubmitSuccessWaitReview'));
       loadKycStatus(); // 更新页面状态为 PENDING
     } else {
       ElMessage.error(res?.message || localeStore.t('submitFailed'));
@@ -2460,7 +2375,7 @@ const submitPersonalInfoFromKyc = async () => {
 const formatMoney = (v: number | string | undefined | null) => {
   const n = Number(v ?? 0)
   if (!Number.isFinite(n)) return '--';
-  return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return n.toLocaleString(localeStore.locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 };
 
 const setMaxLoanAmount = () => {
@@ -2495,7 +2410,7 @@ const submitLoan = async () => {
   }
   const amountNum = Number(loanAmount.value);
   if (isNaN(amountNum) || amountNum <= 0) {
-    ElMessage.warning(`${localeStore.t('pleaseEnterText')}${localeStore.t('validText')}${localeStore.t('loanAmount')}`);
+    ElMessage.warning(localeStore.t('pleaseEnterValidAmount'));
     return;
   }
   if (!currentLoanSetting.value) {
@@ -2503,17 +2418,17 @@ const submitLoan = async () => {
     return;
   }
   if (currentLoanSetting.value.minAmount && amountNum < currentLoanSetting.value.minAmount) {
-    ElMessage.warning(`${localeStore.t('amountCannotBeLessThan')} ${currentLoanSetting.value.minAmount}`);
+    ElMessage.warning(localeStore.text('', 'The loan amount must be at least {amount}.', { amount: currentLoanSetting.value.minAmount }));
     return;
   }
   if (currentLoanSetting.value.maxAmount && amountNum > currentLoanSetting.value.maxAmount) {
-    ElMessage.warning(`${localeStore.t('amountText')}${localeStore.t('cannotBeGreaterThan')} ${currentLoanSetting.value.maxAmount}`);
+    ElMessage.warning(localeStore.text('', 'The loan amount must not exceed {amount}.', { amount: currentLoanSetting.value.maxAmount }));
     return;
   }
   try {
     const personalInfoRes: any = await request.get('/loan/personal-info/status');
     if (!personalInfoRes || !personalInfoRes.success || !personalInfoRes.verified || !personalInfoRes.data) {
-      ElMessage.warning(`${localeStore.t('getPersonalInfoFailed')}${localeStore.t('authText')}${localeStore.t('infoFailed')}，${localeStore.t('pleaseEnsureCompletedRealNameAuth')}`);
+      ElMessage.warning(localeStore.text('無法取得本人確認資料，請確認已完成本人確認。', 'Unable to retrieve identity information. Check that identity verification is complete.'));
       return;
     }
     const personalInfo = personalInfoRes.data;
@@ -2540,7 +2455,7 @@ const submitLoan = async () => {
       ElMessage.error(res?.message || localeStore.t('loanApplyFailed'));
     }
   } catch (e: any) {
-    ElMessage.error(e.response?.data?.message || localeStore.t('networkErrorOrNotImplemented'));
+    ElMessage.error(e.response?.data?.message || e.message || localeStore.t('networkErrorOrNotImplemented'));
   }
 };
 
@@ -2558,10 +2473,10 @@ const openLoanRecords = async () => {
       userLoanRecords.value = res.list || [];
       showLoanRecordsModal.value = true;
     } else {
-      ElMessage.error(res?.message || `${localeStore.t('getText')}${localeStore.t('recordText')}${localeStore.t('failedText')}`);
+      ElMessage.error(res?.message || localeStore.text('無法取得借款記錄', 'Unable to load loan records.'));
     }
   } catch (e: any) {
-    ElMessage.error(e.response?.data?.message || `${localeStore.t('getText')}${localeStore.t('recordText')}${localeStore.t('failedText')}`);
+    ElMessage.error(e.response?.data?.message || localeStore.text('無法取得借款記錄', 'Unable to load loan records.'));
   }
 };
 
@@ -2711,7 +2626,7 @@ const showYieldListModal = async (order: any) => {
 const earlyRedeemOrder = async (order: any) => {
   try {
     await ElMessageBox.confirm(
-      `${localeStore.t('confirmDefaultRedeem1')} ${Number(order.penaltyRate || 0).toFixed(2)}% ${localeStore.t('confirmDefaultRedeem2')}。`,
+      localeStore.text('確認提前贖回？將扣除 {rate}% 手續費。', 'Redeem early? An early redemption fee of {rate}% applies.', { rate: Number(order.penaltyRate || 0).toFixed(2) }),
       localeStore.t('defaultRedeem'),
       {
         confirmButtonText: localeStore.t('confirmRedeemBtn'),
@@ -2940,7 +2855,7 @@ const submitContractOrder = async (side: 'BUY' | 'SELL') => {
     return;
   }
   if (!Number.isFinite(quantity.value) || quantity.value < 0.01) {
-    ElMessage.warning(`${localeStore.t('pleaseEnterText')}${localeStore.t('validText')}${localeStore.t('buyIn')}${localeStore.t('quantityText')}`);
+    ElMessage.warning(localeStore.t('enterValidQuantity'));
     return;
   }
 
@@ -2952,7 +2867,7 @@ const submitContractOrder = async (side: 'BUY' | 'SELL') => {
   }
 
   if (orderType.value === 'limit' && (!limitPrice.value || limitPrice.value <= 0)) {
-    ElMessage.warning(`${localeStore.t('pleaseEnterText')}${localeStore.t('validOrderPrice')}`);
+    ElMessage.warning(localeStore.t('enterLimitPrice'));
     return;
   }
 
@@ -2977,7 +2892,7 @@ const submitContractOrder = async (side: 'BUY' | 'SELL') => {
   try {
     const res: any = await request.post('/trade/contract/order', params);
     if (res && res.success !== false) {
-      ElMessage.success(`${side === 'BUY' ? localeStore.t('buyIn') : localeStore.t('sellText')} ${localeStore.t('orderSuccess')}`);
+      ElMessage.success(side === 'BUY' ? localeStore.t('orderSuccess') : localeStore.t('sellSuccess'));
       loadWalletBalances();
       loadContractOrders();
     } else {
@@ -2997,7 +2912,7 @@ const submitOptionOrder = async (direction: 'UP' | 'DOWN') => {
   
   const amount = Number(optionAmount.value);
   if (isNaN(amount) || amount < 50) {
-    ElMessage.warning(`${localeStore.t('tradeText')}${localeStore.t('quantityText')}${localeStore.t('cannotBeLessThan')} 50`);
+    ElMessage.warning(localeStore.text('最低交易金額：{amount}', 'Minimum trade amount: {amount}', { amount: 50 }));
     return;
   }
 
@@ -3019,7 +2934,7 @@ const submitOptionOrder = async (direction: 'UP' | 'DOWN') => {
   try {
     const res: any = await request.post('/trade/option/order', params);
     if (res && res.success !== false) {
-      ElMessage.success(`${direction === 'UP' ? localeStore.t('buyUpText') : localeStore.t('buyDownText')} ${localeStore.t('orderSuccess')}`);
+      ElMessage.success(direction === 'UP' ? localeStore.t('buyUpSuccess') : localeStore.t('buyDownSuccess'));
       optionAmount.value = ''; // 重置金额
       loadWalletBalances();
       loadOptionOrders();
@@ -3065,7 +2980,7 @@ const submitTpSl = async () => {
 
 const closePosition = async (order: any) => {
   try {
-    await ElMessageBox.confirm(`${localeStore.t('confirmCloseOrder')} ${displaySymbol(order)} ${localeStore.t('orderQuestion')}`, localeStore.t('closeConfirm'), {
+    await ElMessageBox.confirm(localeStore.text('確認平倉 {symbol}？', 'Close the {symbol} position?', { symbol: displaySymbol(order) }), localeStore.t('closeConfirm'), {
       confirmButtonText: localeStore.t('confirmBtnText'),
       cancelButtonText: localeStore.t('cancelText'),
       type: 'warning',
@@ -3074,7 +2989,7 @@ const closePosition = async (order: any) => {
     const pInfo = marketStore.priceMap[order.symbol];
     const currentPrice = pInfo ? Number(pInfo.price) : 0;
     if (currentPrice <= 0) {
-      ElMessage.warning(`${localeStore.t('notYet')}${localeStore.t('getText')}${localeStore.t('toCurrentPrice')}，${localeStore.t('cannotClosePosition2')}`);
+      ElMessage.warning(localeStore.t('currentPriceNotAvailable'));
       return;
     }
 
@@ -3095,7 +3010,7 @@ const closePosition = async (order: any) => {
 
 const cancelOrder = async (order: any) => {
   try {
-    await ElMessageBox.confirm(`${localeStore.t('confirmCancelOrder')} ${displaySymbol(order)} ${localeStore.t('pendingOrderQuestion')}`, localeStore.t('cancelOrderConfirm'), {
+    await ElMessageBox.confirm(localeStore.text('確認撤銷 {symbol} 的未成交委託？', 'Cancel the pending order for {symbol}?', { symbol: displaySymbol(order) }), localeStore.t('cancelOrderConfirm'), {
       confirmButtonText: localeStore.t('confirmBtnText'),
       cancelButtonText: localeStore.t('cancelText'),
       type: 'warning',
@@ -3195,10 +3110,6 @@ watch(orderSubTab, () => {
 onUnmounted(() => {
   if (timeInterval) {
     clearInterval(timeInterval);
-  }
-  if (registerCountdownTimer.value !== null) {
-    clearInterval(registerCountdownTimer.value);
-    registerCountdownTimer.value = null;
   }
   if (forgotCountdownTimer.value !== null) {
     clearInterval(forgotCountdownTimer.value);
@@ -3337,7 +3248,7 @@ const submitDeposit = async () => {
     address = selectedDepositSetting.value.address;
   } else if (type === 'bank') {
     if (!bankSetting.value) {
-      ElMessage.warning(`${localeStore.t('currentlyNotSupported')}${localeStore.t('bankCardDeposit')}`);
+      ElMessage.warning(localeStore.t('contactServiceForBankCard'));
       return;
     }
     network = bankSetting.value.bankName;
@@ -3345,7 +3256,7 @@ const submitDeposit = async () => {
   }
   
   if (!depositForm.value.amount || Number(depositForm.value.amount) <= 0) {
-    ElMessage.warning(`${localeStore.t('pleaseEnterText')}${localeStore.t('validDepositAmount')}`);
+    ElMessage.warning(localeStore.t('pleaseEnterValidDepositAmount'));
     return;
   }
   if (!depositForm.value.proofImage) {
@@ -3393,6 +3304,9 @@ const withdrawForm = ref({
 const availableCurrencies = ref(['USD', 'USDT', 'BTC', 'ETH']);
 const userDigitalAddresses = ref<any[]>([]);
 const userBankCards = ref<any[]>([]);
+const withdrawCurrencyOptions = computed(() => plainOptions(availableCurrencies.value));
+const digitalAddressOptions = computed(() => userDigitalAddresses.value.map(addr => ({ value: addr.address, label: `${addr.address} (${addr.network})` })));
+const bankAccountOptions = computed(() => userBankCards.value.map(card => ({ value: card.recipientAccount, label: `${card.bankName} - ${card.recipientAccount}` })));
 const withdrawRecords = ref<any[]>([]);
 
 const loadWithdrawRecords = async () => {
@@ -3437,7 +3351,7 @@ const submitWithdraw = async () => {
     return;
   }
   if (!withdrawForm.value.amount || Number(withdrawForm.value.amount) <= 0) {
-    ElMessage.warning(`${localeStore.t('pleaseEnterText')}${localeStore.t('validWithdrawAmount')}`);
+    ElMessage.warning(localeStore.t('pleaseEnterWithdrawAmount'));
     return;
   }
   
@@ -3491,6 +3405,11 @@ const transferForm = ref({
   toAccount: 'CONTRACT',
   amount: ''
 });
+const transferAccountOptions = computed(() => [
+  { value: 'FUND', label: localeStore.t('fundAccount') },
+  { value: 'CONTRACT', label: localeStore.t('contractAccount') },
+  { value: 'OPTION', label: localeStore.t('optionsAccount') },
+]);
 const transferRecords = ref<any[]>([]);
 
 const getAccountName = (accountCode: string) => {
@@ -3550,12 +3469,12 @@ const submitTransfer = async () => {
   
   const amount = Number(transferForm.value.amount);
   if (!amount || amount <= 0) {
-    ElMessage.warning(`${localeStore.t('pleaseEnterText')}${localeStore.t('validText')}${localeStore.t('transferText')}数量`);
+    ElMessage.warning(localeStore.t('pleaseEnterValidTransferAmount'));
     return;
   }
   
   if (amount > getAvailableTransferBalance()) {
-    ElMessage.warning(`${localeStore.t('transferText')}${localeStore.t('quantityText')}${localeStore.t('cannotBeGreaterThan')}${localeStore.t('availableText')}${localeStore.t('balanceText')}`);
+    ElMessage.warning(localeStore.text('劃轉金額超過可用餘額', 'The transfer amount exceeds the available balance.'));
     return;
   }
 
@@ -3696,7 +3615,7 @@ const submitBindDigital = async () => {
       res = await request.post('/wallet/digital-addresses', bindDigitalForm.value);
     }
     if (res && res.success !== false) {
-      ElMessage.success(editingDigitalId.value ? localeStore.t('modifySuccess') : `${localeStore.t('digitalText2')}${localeStore.t('currency')}${localeStore.t('addressBindSuccess')}`);
+      ElMessage.success(editingDigitalId.value ? localeStore.t('modifySuccess') : localeStore.t('digitalCurrencyAddressBindSuccess'));
       showBindDigitalModal.value = false;
       loadUserWithdrawAccounts(); // 刷新出金页面的选择项
     } else {
@@ -3738,9 +3657,15 @@ const loadCustomerServiceLink = async () => {
   }
 }
 
+watch(() => localeStore.locale, () => {
+  announcements.value = []
+  if (activeUserMenu.value === 'announcement') void loadAnnouncements()
+})
 const loadAnnouncements = async () => {
+  const language = localeStore.locale
   try {
-    const res: any = await request.get('/user/announcements');
+    const res: any = await request.get('/user/announcements', { params: { language } });
+    if (localeStore.locale !== language) return;
     if (res && res.success !== false) {
       const allAnnouncements = res.announcements || res.data || [];
       // 过滤出当前语言的公告
@@ -3778,7 +3703,7 @@ const submitPasswordChange = async () => {
     return;
   }
   if (passwordForm.value.newPassword !== passwordForm.value.confirmPassword) {
-    ElMessage.warning(`${localeStore.t('twoInputs')}${localeStore.t('newPassword2')}${localeStore.t('inconsistent')}`);
+    ElMessage.warning(localeStore.t('passwordNotMatch'));
     return;
   }
   try {
@@ -3834,15 +3759,6 @@ const darkLogoUrl = `${import.meta.env.BASE_URL}img/logo-dark.svg`
   height: auto;
   padding: 0;
   background: transparent;
-}
-
-.language-flag {
-  width: 24px;
-  height: 18px;
-  object-fit: contain;
-  border-radius: 2px;
-  margin-right: 8px;
-  flex-shrink: 0;
 }
 
 .pnl-share-entry { display:inline-flex; align-items:center; justify-content:center; width:36px; height:36px; padding:0; border:1px solid #e6e8ed; border-radius:9px; background:transparent; color:#679700; cursor:pointer; }
@@ -3974,15 +3890,6 @@ const darkLogoUrl = `${import.meta.env.BASE_URL}img/logo-dark.svg`
 }
 .custom-search .el-input__wrapper.is-focus {
   background-color: #fff;
-  box-shadow: 0 0 0 1px #8cc63f inset !important;
-}
-
-.custom-select .el-input__wrapper {
-  box-shadow: 0 0 0 1px #e5e7eb inset !important;
-  border-radius: 8px;
-  padding: 4px 12px;
-}
-.custom-select .el-input__wrapper.is-focus {
   box-shadow: 0 0 0 1px #8cc63f inset !important;
 }
 

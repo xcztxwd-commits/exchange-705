@@ -1,0 +1,60 @@
+[
+  {
+    "app": "pc",
+    "languages": [
+      "zh-TW",
+      "en",
+      "fr",
+      "de",
+      "ru",
+      "es",
+      "pt",
+      "it",
+      "ar",
+      "tr",
+      "id",
+      "my",
+      "hi",
+      "cs",
+      "pl",
+      "ja",
+      "ko",
+      "th",
+      "vi"
+    ],
+    "japaneseReload": true,
+    "languagePicker": true,
+    "chartLocale": true,
+    "runtimeErrors": [],
+    "businessWrites": []
+  },
+  {
+    "app": "mobile",
+    "languages": [
+      "zh-TW",
+      "en",
+      "fr",
+      "de",
+      "ru",
+      "es",
+      "pt",
+      "it",
+      "ar",
+      "tr",
+      "id",
+      "my",
+      "hi",
+      "cs",
+      "pl",
+      "ja",
+      "ko",
+      "th",
+      "vi"
+    ],
+    "japaneseReload": true,
+    "languagePicker": true,
+    "chartLocale": true,
+    "runtimeErrors": [],
+    "businessWrites": []
+  }
+]

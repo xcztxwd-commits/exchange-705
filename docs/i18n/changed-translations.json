@@ -1,0 +1,5108 @@
+[
+  {
+    "locale": "ja",
+    "key": "cannotBeLessThan",
+    "before": "以下にすることはできません",
+    "after": "次の値以上で指定してください："
+  },
+  {
+    "locale": "ja",
+    "key": "tradeText",
+    "before": "トランザクション",
+    "after": "取引"
+  },
+  {
+    "locale": "ja",
+    "key": "setFailed",
+    "before": "セットアップに失敗しました",
+    "after": "設定に失敗しました"
+  },
+  {
+    "locale": "ja",
+    "key": "cannotClosePosition",
+    "before": "ポジションをクローズできません",
+    "after": "ポジションを決済できません"
+  },
+  {
+    "locale": "ja",
+    "key": "closePositionFailed",
+    "before": "ポジションをクローズできませんでした",
+    "after": "ポジションの決済に失敗しました"
+  },
+  {
+    "locale": "ja",
+    "key": "getCategoryFailed",
+    "before": "通貨分類の取得に失敗しました",
+    "after": "銘柄分類を取得できませんでした"
+  },
+  {
+    "locale": "ja",
+    "key": "getDepositNetworkFailed",
+    "before": "リチャージネットワークリストの取得に失敗しました",
+    "after": "入金ネットワーク一覧を取得できませんでした"
+  },
+  {
+    "locale": "ja",
+    "key": "pleaseSelectDepositNetwork",
+    "before": "最初に充電ネットワークを選択してください",
+    "after": "入金ネットワークを選択してください"
+  },
+  {
+    "locale": "ja",
+    "key": "validDepositAmount",
+    "before": "有効なチャージ金額",
+    "after": "有効な入金額"
+  },
+  {
+    "locale": "ja",
+    "key": "pleaseUploadVoucher",
+    "before": "支払い伝票をアップロードしてください",
+    "after": "入金確認書類をアップロードしてください"
+  },
+  {
+    "locale": "ja",
+    "key": "getWithdrawFailed",
+    "before": "現金を引き出す",
+    "after": "出金履歴を取得できませんでした"
+  },
+  {
+    "locale": "ja",
+    "key": "getWithdrawAccountFailed",
+    "before": "通貨引き出し口座情報の取得に失敗しました",
+    "after": "出金先口座の情報を取得できませんでした"
+  },
+  {
+    "locale": "ja",
+    "key": "validWithdrawAmount",
+    "before": "有効な引き出し金額",
+    "after": "有効な出金額"
+  },
+  {
+    "locale": "my",
+    "key": "getTransferFailed",
+    "before": "လွှ���ပြောင်းရယူပါ။",
+    "after": "ငွေလွှဲမှတ်တမ်းကို ရယူ၍မရပါ"
+  },
+  {
+    "locale": "ja",
+    "key": "getTransferFailed",
+    "before": "転送を取得する",
+    "after": "振替履歴を取得できませんでした"
+  },
+  {
+    "locale": "ja",
+    "key": "transferAccountsCannotBeSame",
+    "before": "送金口座と送金口座を同じにすることはできません",
+    "after": "振替元と振替先には異なる口座を指定してください"
+  },
+  {
+    "locale": "ja",
+    "key": "transferText",
+    "before": "転送",
+    "after": "資金振替"
+  },
+  {
+    "locale": "ja",
+    "key": "cannotBeGreaterThan",
+    "before": "以下を超えることはできません",
+    "after": "次の値以下で指定してください："
+  },
+  {
+    "locale": "ja",
+    "key": "balanceText",
+    "before": "バランス",
+    "after": "残高"
+  },
+  {
+    "locale": "ja",
+    "key": "bindFailed",
+    "before": "バインドに失敗しました",
+    "after": "登録に失敗しました"
+  },
+  {
+    "locale": "ja",
+    "key": "digitalText2",
+    "before": "数字",
+    "after": "暗号資産"
+  },
+  {
+    "locale": "hi",
+    "key": "addressBindSuccess",
+    "before": "पता बाइंडिंग ��फल",
+    "after": "पता सफलतापूर्वक जोड़ा गया"
+  },
+  {
+    "locale": "ja",
+    "key": "addressBindSuccess",
+    "before": "アドレスバインドが成功しました",
+    "after": "アドレスを登録しました"
+  },
+  {
+    "locale": "ja",
+    "key": "getNoticeFailed",
+    "before": "お知らせリストの取得に失敗しました",
+    "after": "お知らせを取得できませんでした"
+  },
+  {
+    "locale": "ja",
+    "key": "copyFailedSelectManually",
+    "before": "コピーに失敗しました。手動でコピーを選択してください",
+    "after": "コピーできませんでした。テキストを選択してコピーしてください"
+  },
+  {
+    "locale": "ja",
+    "key": "twoInputs",
+    "before": "2回入力しました",
+    "after": "確認用の"
+  },
+  {
+    "locale": "ja",
+    "key": "inconsistent",
+    "before": "一貫性のない",
+    "after": "が一致しません"
+  },
+  {
+    "locale": "ja",
+    "key": "submittingText",
+    "before": "提出中",
+    "after": "送信中"
+  },
+  {
+    "locale": "ja",
+    "key": "submitSignature",
+    "before": "署名を提出する",
+    "after": "署名を送信"
+  },
+  {
+    "locale": "ja",
+    "key": "noDataText",
+    "before": "まだデータがありません",
+    "after": "データがありません"
+  },
+  {
+    "locale": "ja",
+    "key": "issueText",
+    "before": "問題",
+    "after": "支払い"
+  },
+  {
+    "locale": "ja",
+    "key": "dailyProfit",
+    "before": "その日の収入",
+    "after": "本日の収益"
+  },
+  {
+    "locale": "ja",
+    "key": "bankCardText2",
+    "before": "銀行カード",
+    "after": "銀行口座"
+  },
+  {
+    "locale": "ja",
+    "key": "infoIsBeing",
+    "before": "情報が発信されています",
+    "after": "情報の審査中です"
+  },
+  {
+    "locale": "ar",
+    "key": "toUnlockAdvancedFeatures",
+    "before": "لفتح الميزات المتقدمة مثل السحب النقدي والاقتر��ض",
+    "after": " لتفعيل الميزات المتقدمة مثل السحب والاقتراض"
+  },
+  {
+    "locale": "ja",
+    "key": "toUnlockAdvancedFeatures",
+    "before": "現金引き出しや借入などの高度な機能のロックを解除するには",
+    "after": "出金や借入れをご利用いただくため"
+  },
+  {
+    "locale": "ja",
+    "key": "completeRealName",
+    "before": "完全な本名",
+    "after": "本人確認を完了"
+  },
+  {
+    "locale": "ja",
+    "key": "noNotices",
+    "before": "まだ発表はありません",
+    "after": "お知らせはありません"
+  },
+  {
+    "locale": "ja",
+    "key": "contentUnderConstruction",
+    "before": "制作中のコンテンツ",
+    "after": "準備中です"
+  },
+  {
+    "locale": "ja",
+    "key": "submitWaitAdminReview",
+    "before": "。送信後、管理者のレビューを待つ必要があります",
+    "after": "送信後、審査が完了するまでお待ちください"
+  },
+  {
+    "locale": "ja",
+    "key": "forFundSecurityCompleteAuth",
+    "before": "資金の安全のため、最初に正確な情報を入力してください",
+    "after": "資金保護のため、本人確認を完了してください"
+  },
+  {
+    "locale": "ja",
+    "key": "yourContactPhone",
+    "before": "あなたの連絡先番号",
+    "after": "連絡先電話番号"
+  },
+  {
+    "locale": "ja",
+    "key": "contractBalanceInsufficient2",
+    "before": "契約資産残高不足",
+    "after": "証拠金取引口座の残高が不足しています"
+  },
+  {
+    "locale": "ja",
+    "key": "requiredText2",
+    "before": "必要です",
+    "after": "必要"
+  },
+  {
+    "locale": "ja",
+    "key": "optionBalanceInsufficient2",
+    "before": "オプション資産残高不足",
+    "after": "期限取引口座の残高が不足しています"
+  },
+  {
+    "locale": "ja",
+    "key": "getDurationFailed",
+    "before": "取得期間",
+    "after": "取引期間を取得できませんでした"
+  },
+  {
+    "locale": "my",
+    "key": "cannotBeGreaterThanMax",
+    "before": "အမြင့်ဆုံးထက် မကြီးန���ုင်ပါဘူး။",
+    "after": "အများဆုံးပမာဏထက် မကျော်ရပါ။"
+  },
+  {
+    "locale": "ja",
+    "key": "financialText",
+    "before": "財務管理",
+    "after": "資産運用"
+  },
+  {
+    "locale": "ru",
+    "key": "subscribeFailed",
+    "before": "Подписка не уд��лась",
+    "after": "Не удалось оформить подписку"
+  },
+  {
+    "locale": "ja",
+    "key": "subscribeFailed",
+    "before": "購読に失敗しました",
+    "after": "申込みに失敗しました"
+  },
+  {
+    "locale": "ja",
+    "key": "networkErrorOrNotImplemented",
+    "before": "ネットワーク例外またはインターフェイスが実装されていません",
+    "after": "処理結果を確認できませんでした。状況をご確認ください"
+  },
+  {
+    "locale": "ja",
+    "key": "getLoanConfigFailed",
+    "before": "ローン構成の取得に失敗しました",
+    "after": "借入条件を取得できませんでした"
+  },
+  {
+    "locale": "ja",
+    "key": "getText",
+    "before": "得る",
+    "after": "取得"
+  },
+  {
+    "locale": "ja",
+    "key": "getFinancialProductsFailed",
+    "before": "金融商品の取得に失敗した",
+    "after": "運用商品を取得できませんでした"
+  },
+  {
+    "locale": "ja",
+    "key": "imageSizeCannotExceed",
+    "before": "画像サイズはこれを超えることはできません",
+    "after": "画像サイズの上限："
+  },
+  {
+    "locale": "ja",
+    "key": "uploadFailed",
+    "before": "読み込みに失敗しました",
+    "after": "アップロードに失敗しました"
+  },
+  {
+    "locale": "ja",
+    "key": "statusFailed",
+    "before": "ステータスが失敗しました",
+    "after": "状態を取得できませんでした"
+  },
+  {
+    "locale": "ja",
+    "key": "pleaseFillCompletePersonalInfo",
+    "before": "完全な個人情報を入力してください",
+    "after": "個人情報の必須項目をすべて入力してください"
+  },
+  {
+    "locale": "ja",
+    "key": "pleaseUploadCompleteIdPhotos",
+    "before": "完全な証明写真をアップロードしてください",
+    "after": "必要な本人確認書類の画像をすべてアップロードしてください"
+  },
+  {
+    "locale": "hi",
+    "key": "personalInfoSubmitSuccessWaitReview",
+    "before": "व्यक्तिगत जानकारी सफलतापूर्वक सबमिट की गई, कृपया समी���्षा की प्रतीक्षा करें",
+    "after": "व्यक्तिगत जानकारी जमा कर दी गई है। कृपया समीक्षा की प्रतीक्षा करें।"
+  },
+  {
+    "locale": "my",
+    "key": "dataSubmitSuccessWaitReview",
+    "before": "အချက်���လက်ကို အောင်မြင်စွာ ပေးပို့ထားပြီး၊ ကျေးဇူးပြု၍ ပြန်လည်သုံးသပ်ရန် စောင့်ပါ။",
+    "after": "အချက်အလက်များ ပေးပို့ပြီးပါပြီ။ စစ်ဆေးမှုကို စောင့်ပါ။"
+  },
+  {
+    "locale": "ja",
+    "key": "pleaseCompletePersonalInfoAuthFirst",
+    "before": "最初に個人情報の確認を完了してください",
+    "after": "先に本人確認を完了してください"
+  },
+  {
+    "locale": "ja",
+    "key": "validLoanAmount",
+    "before": "実質借入額",
+    "after": "有効な借入金額"
+  },
+  {
+    "locale": "ja",
+    "key": "getPersonalInfoFailed",
+    "before": "個人的なものにする",
+    "after": "個人情報を取得できませんでした"
+  },
+  {
+    "locale": "ja",
+    "key": "infoFailed",
+    "before": "メッセージが失敗しました",
+    "after": "情報の取得に失敗しました"
+  },
+  {
+    "locale": "ja",
+    "key": "pleaseEnsureCompletedRealNameAuth",
+    "before": "completedText の���名認証を確認してください",
+    "after": "本人確認が完了していることをご確認ください"
+  },
+  {
+    "locale": "ja",
+    "key": "creditLoanApplySuccess",
+    "before": "クレジットローンの申請が成功しました",
+    "after": "借入申込みを受け付けました"
+  },
+  {
+    "locale": "ru",
+    "key": "loanApplyFailed",
+    "before": "Заявк�� на кредит не удалась",
+    "after": "Не удалось подать заявку на кредит"
+  },
+  {
+    "locale": "ja",
+    "key": "loanApplyFailed",
+    "before": "ローンの申し込みが失敗しました",
+    "after": "借入申込みに失敗しました"
+  },
+  {
+    "locale": "ja",
+    "key": "repaySuccess",
+    "before": "返済が成功しました",
+    "after": "返済が完了しました"
+  },
+  {
+    "locale": "ja",
+    "key": "getLoanDetailsFailed",
+    "before": "ローンの詳細を取得できませんでした",
+    "after": "借入明細を取得できませんでした"
+  },
+  {
+    "locale": "ja",
+    "key": "pleaseSignOnCanvasFirst",
+    "before": "まず製図板に署名してください",
+    "after": "署名欄に署名してください"
+  },
+  {
+    "locale": "ja",
+    "key": "getProfitListFailed",
+    "before": "収入リストの取得に失敗しました",
+    "after": "収益履歴を取得できませんでした"
+  },
+  {
+    "locale": "vi",
+    "key": "getProfitListFailed",
+    "before": "Không thể lấy được danh s��ch thu nhập",
+    "after": "Không thể tải lịch sử thu nhập"
+  },
+  {
+    "locale": "hi",
+    "key": "loadAccountAssetsFailed",
+    "before": "ख���ता परिसंपत्तियाँ लोड करने में विफल",
+    "after": "खाते की परिसंपत्तियाँ लोड नहीं हो सकीं"
+  },
+  {
+    "locale": "ja",
+    "key": "loadAccountAssetsFailed",
+    "before": "アカウント資産のロードに失敗しました",
+    "after": "口座資産を取得できませんでした"
+  },
+  {
+    "locale": "ja",
+    "key": "loadDurationOrdersFailed",
+    "before": "期間注文のロードに失敗しました",
+    "after": "期限取引の注文を取得できませんでした"
+  },
+  {
+    "locale": "ja",
+    "key": "loadOrdersFailed",
+    "before": "オーダーのロードに失敗しました",
+    "after": "注文を取得できませんでした"
+  },
+  {
+    "locale": "ja",
+    "key": "digital",
+    "before": "digital",
+    "after": "暗号資産"
+  },
+  {
+    "locale": "ja",
+    "key": "digitalCurrencyDeposit",
+    "before": "デジタル通貨のリチャージ",
+    "after": "暗号資産の入金"
+  },
+  {
+    "locale": "ja",
+    "key": "bankCardDeposit2",
+    "before": "銀行カードのリチャージ",
+    "after": "銀行振込による入金"
+  },
+  {
+    "locale": "ja",
+    "key": "transferSuccess2",
+    "before": "転送成功",
+    "after": "振替が完了しました"
+  },
+  {
+    "locale": "ja",
+    "key": "boundText",
+    "before": "縛られた",
+    "after": "登録済み"
+  },
+  {
+    "locale": "my",
+    "key": "orBindOnMobile",
+    "before": "သို့မဟုတ် မိုဘိုင်းဂိတ���တွင် စည်းပါ။",
+    "after": "သို့မဟုတ် မိုဘိုင်းတွင် မှတ်ပုံတင်ပါ"
+  },
+  {
+    "locale": "ja",
+    "key": "orBindOnMobile",
+    "before": "またはモバイル端末にバインドする",
+    "after": "またはモバイル版で登録してください"
+  },
+  {
+    "locale": "ja",
+    "key": "boundBankCard",
+    "before": "銀行カードをバインドする",
+    "after": "登録済み銀行口座"
+  },
+  {
+    "locale": "ja",
+    "key": "nameText2",
+    "before": "名前",
+    "after": "氏名"
+  },
+  {
+    "locale": "ja",
+    "key": "noWithdrawRecords2",
+    "before": "まだ出金記録がありません",
+    "after": "出金履歴はありません"
+  },
+  {
+    "locale": "ja",
+    "key": "optionsAccount2",
+    "before": "オプション口座",
+    "after": "期限取引口座"
+  },
+  {
+    "locale": "ja",
+    "key": "fundAccount2",
+    "before": "資本勘定",
+    "after": "資金口座"
+  },
+  {
+    "locale": "ja",
+    "key": "contractAccount2",
+    "before": "契約口座",
+    "after": "証拠金取引口座"
+  },
+  {
+    "locale": "ru",
+    "key": "pleaseEnterBankCardNo",
+    "before": "Пожалуйста, введите номер банк��вской карты",
+    "after": "Введите номер банковского счёта"
+  },
+  {
+    "locale": "ja",
+    "key": "pleaseEnterBankCardNo",
+    "before": "銀行カード番号を入力してください",
+    "after": "口座番号を入力してください"
+  },
+  {
+    "locale": "ja",
+    "key": "pleaseEnterPayeeRealName",
+    "before": "アカウント所有者の本名を入力してください",
+    "after": "口座名義人の氏名を入力してください"
+  },
+  {
+    "locale": "hi",
+    "key": "pleaseEnterOrPasteWalletAddress",
+    "before": "कृपया अपना वॉलेट ��ता दर्ज करें या चिपकाएँ",
+    "after": "अपना वॉलेट पता दर्ज करें या पेस्ट करें"
+  },
+  {
+    "locale": "ja",
+    "key": "bankCardBindSuccess",
+    "before": "銀行カードのバインドが成功しました",
+    "after": "銀行口座を登録しました"
+  },
+  {
+    "locale": "ja",
+    "key": "digitalCurrencyAddressBindSuccess",
+    "before": "数値通貨アドレスのバインドが成功しました",
+    "after": "暗号資産の出金先アドレスを登録しました"
+  },
+  {
+    "locale": "my",
+    "key": "completeAuthToUnlockFeatures",
+    "before": "ငွေထုတ်ခြင်းနှင့် ချေးငှားခြင်းကဲ့သို့သော အဆ���့်မြင့်အင်္ဂါရပ်များကို လော့ခ်ဖွင့်ရန် အမည်ရင်း စစ်မှန်ကြောင်းအထောက်အထားပြခြင်းကို အပြီးသတ်ပါ။",
+    "after": "ငွေထုတ်ခြင်းနှင့် ချေးငှားခြင်းကို အသုံးပြုရန် အထောက်အထားစိစစ်ခြင်းကို အပြီးသတ်ပါ။"
+  },
+  {
+    "locale": "ja",
+    "key": "completeAuthToUnlockFeatures",
+    "before": "実名認��を完了すると、引き出しや借入などの高度な機能のロックが解除されます。",
+    "after": "出金や借入れをご利用いただくには、本人確認を完了してください。"
+  },
+  {
+    "locale": "ja",
+    "key": "uploadIdPhoto",
+    "before": "証明写真をアップロードする",
+    "after": "本人確認書類の画像をアップロード"
+  },
+  {
+    "locale": "ja",
+    "key": "ensurePhotoClearSizeLimit",
+    "before": "写真が鮮明に表示され、5MB 以下であることを確認してください。 JPG/PNG形式をサポートします。",
+    "after": "文字や顔が鮮明に写った、5MB以下のJPGまたはPNG画像をアップロードしてください。"
+  },
+  {
+    "locale": "ja",
+    "key": "idFrontUploadSuccess",
+    "before": "ID カードの表面が正常にアップロードされました",
+    "after": "本人確認書類の表面をアップロードしました"
+  },
+  {
+    "locale": "ja",
+    "key": "idBackUploadSuccess",
+    "before": "IDカードの裏面が正常にアップロードされました",
+    "after": "本人確認書類の裏面をアップロードしました"
+  },
+  {
+    "locale": "ja",
+    "key": "idHandheldUploadSuccess",
+    "before": "所持している身分証明書の写真が正常にアップロードされました",
+    "after": "本人確認書類を持った本人の写真をアップロードしました"
+  },
+  {
+    "locale": "ru",
+    "key": "authInfoSubmitSuccessWaitReview",
+    "before": "Информация для аутентификации по настоящему имени отправлен�� успешно. Подождите проверки.",
+    "after": "Данные для подтверждения личности отправлены. Дождитесь проверки."
+  },
+  {
+    "locale": "ja",
+    "key": "authInfoSubmitSuccessWaitReview",
+    "before": "実名認証情報が正常に送信されました。審査をお待ちください。",
+    "after": "本人確認情報を送信しました。審査をお待ちください"
+  },
+  {
+    "locale": "ja",
+    "key": "copySuccess2",
+    "before": "正常にコピーされました",
+    "after": "コピーしました"
+  },
+  {
+    "locale": "vi",
+    "key": "copySuccess2",
+    "before": "��ã sao chép thành công",
+    "after": "Đã sao chép"
+  },
+  {
+    "locale": "my",
+    "key": "pleaseFillCompletePasswordInfo",
+    "before": "စကာ��ဝှက်အချက်အလက်အပြည့်အစုံကို ဖြည့်ပါ။",
+    "after": "စကားဝှက်အချက်အလက်အားလုံးကို ဖြည့်ပါ။"
+  },
+  {
+    "locale": "ja",
+    "key": "pleaseFillCompletePasswordInfo",
+    "before": "完全なパスワード情報を入力してください",
+    "after": "パスワードの必須項目をすべて入力してください"
+  },
+  {
+    "locale": "ja",
+    "key": "hoursOnlineService2",
+    "before": "プロフェッショナルな回答とサービスをオンラインで毎時間提供します",
+    "after": "時間オンラインで対応"
+  },
+  {
+    "locale": "ja",
+    "key": "noLoanRecords2",
+    "before": "まだ融資実績がありません",
+    "after": "借入履歴はありません"
+  },
+  {
+    "locale": "ja",
+    "key": "forFundSecurityCompleteAuthFirst",
+    "before": "資金の安全のため、最初に実際の情報の認証を完了してください。送信後は、管理者による審査を待つ必要があります。",
+    "after": "資金保護のため、先に本人確認を完了してください。送信後、審査が完了するまでお待ちください。"
+  },
+  {
+    "locale": "ko",
+    "key": "forFundSecurityCompleteAuthFirst",
+    "before": "고객님의 자금 안전을 위해 실정보 인증을 ��저 완료해 주시기 바랍니다. 제출 후 관리자의 검토를 기다려야 합니다.",
+    "after": "자금 보호를 위해 먼저 본인 인증을 완료해 주세요. 제출 후 심사를 기다려 주세요."
+  },
+  {
+    "locale": "ar",
+    "key": "pleaseEnterContactPhone",
+    "before": "الرجاء إدخال رقم الاتصال ��لخاص بك",
+    "after": "يرجى إدخال رقم هاتف للتواصل"
+  },
+  {
+    "locale": "ja",
+    "key": "homeAddress2",
+    "before": "自宅の住所",
+    "after": "住所"
+  },
+  {
+    "locale": "ja",
+    "key": "pleaseEnterValidSubscribeQuantity",
+    "before": "有効な購読数量を入力してください",
+    "after": "有効な申込金額を入力してください"
+  },
+  {
+    "locale": "ja",
+    "key": "financialSubscribeSuccess",
+    "before": "財務管理 正常に購読する",
+    "after": "申込みを受け付けました"
+  },
+  {
+    "locale": "ja",
+    "key": "defaultRedeemSuccess",
+    "before": "デフォルトの償還が成功しました",
+    "after": "中途解約が完了しました"
+  },
+  {
+    "locale": "ja",
+    "key": "alreadyRedeemed",
+    "before": "償還された",
+    "after": "解約済み"
+  },
+  {
+    "locale": "hi",
+    "key": "withdrawApplicationSubmittedWaitReview",
+    "before": "सिक्का निकासी आवेदन जमा कर दिया गया है, कृपया समीक्षा की प्रतीक���षा करें",
+    "after": "निकासी का आवेदन जमा कर दिया गया है। कृपया समीक्षा की प्रतीक्षा करें।"
+  },
+  {
+    "locale": "ja",
+    "key": "withdrawApplicationSubmittedWaitReview",
+    "before": "コインの出金申請が送信されました。審査をお待ちください",
+    "after": "出金申請を受け付けました。審査をお待ちください"
+  },
+  {
+    "locale": "ja",
+    "key": "cryptoWithdraw",
+    "before": "デジタル通貨の出金",
+    "after": "暗号資産の出金"
+  },
+  {
+    "locale": "ja",
+    "key": "arrivalText",
+    "before": "領収書",
+    "after": "着金"
+  },
+  {
+    "locale": "ja",
+    "key": "bankCardWithdraw",
+    "before": "銀行カードによる現金引き出し",
+    "after": "銀行口座への出金"
+  },
+  {
+    "locale": "ja",
+    "key": "noDepositRecords2",
+    "before": "まだ充電記録がありません",
+    "after": "入金履歴がありません"
+  },
+  {
+    "locale": "ja",
+    "key": "emailLogin",
+    "before": "メールログイン",
+    "after": "メールアドレスでログイン"
+  },
+  {
+    "locale": "ja",
+    "key": "emailRegister",
+    "before": "メール登録",
+    "after": "メールアドレスで登録"
+  },
+  {
+    "locale": "ja",
+    "key": "emailPlaceholder",
+    "before": "メールを入力",
+    "after": "メールアドレスを入力してください"
+  },
+  {
+    "locale": "ja",
+    "key": "verifyCode",
+    "before": "メールコード",
+    "after": "認証コード"
+  },
+  {
+    "locale": "ja",
+    "key": "forgotPassword",
+    "before": "パスワードを忘れた",
+    "after": "パスワードを忘れた方"
+  },
+  {
+    "locale": "ja",
+    "key": "newUserJoin",
+    "before": "初めてですか？ 参加",
+    "after": "初めての方はこちらから登録"
+  },
+  {
+    "locale": "ja",
+    "key": "gotoLogin",
+    "before": "すでにアカウント？ ログイン",
+    "after": "登録済みの方はこちらからログイン"
+  },
+  {
+    "locale": "ja",
+    "key": "sendCodeSuccess",
+    "before": "確認コードを送信しました。メールを確認してください",
+    "after": "認証コードを送信しました。メールをご確認ください"
+  },
+  {
+    "locale": "ja",
+    "key": "registerSuccess",
+    "before": "登録成功、ログインしてください",
+    "after": "登録が完了しました。ログインしてください"
+  },
+  {
+    "locale": "vi",
+    "key": "registerFail",
+    "before": "Đăng ký kh��ng thành công",
+    "after": "Đăng ký không thành công"
+  },
+  {
+    "locale": "ja",
+    "key": "loginSuccess",
+    "before": "ログイン成功",
+    "after": "ログインしました"
+  },
+  {
+    "locale": "ja",
+    "key": "loginFail",
+    "before": "ユーザーが見つかりません",
+    "after": "ログインに失敗しました"
+  },
+  {
+    "locale": "ja",
+    "key": "resetSuccess",
+    "before": "リセット成功、ログインしてください",
+    "after": "パスワードを再設定しました。ログインしてください"
+  },
+  {
+    "locale": "ja",
+    "key": "resetFail",
+    "before": "リセットに失敗しました",
+    "after": "再設定に失敗しました"
+  },
+  {
+    "locale": "ja",
+    "key": "pleaseEnterEmail",
+    "before": "まずメールを入力してください",
+    "after": "メールアドレスを入力してください"
+  },
+  {
+    "locale": "ja",
+    "key": "codeSentCheckEmail",
+    "before": "確認コードを送信しました。メールを確認してください",
+    "after": "認証コードを送信しました。メールをご確認ください"
+  },
+  {
+    "locale": "ja",
+    "key": "resetSuccessLogin",
+    "before": "リセット成功、新しいパスワードでログインしてください",
+    "after": "パスワードを再設定しました。新しいパスワードでログインしてください"
+  },
+  {
+    "locale": "ja",
+    "key": "resetFailed",
+    "before": "セットアップに失敗しました",
+    "after": "再設定に失敗しました"
+  },
+  {
+    "locale": "ja",
+    "key": "verifyCodeRequired",
+    "before": "確認コードを入力してください",
+    "after": "認証コードを入力してください"
+  },
+  {
+    "locale": "ja",
+    "key": "verifyCodeEmpty",
+    "before": "確認コードを入力してください",
+    "after": "認証コードを入力してください"
+  },
+  {
+    "locale": "ja",
+    "key": "verifyCodePlaceholder",
+    "before": "確認コードを入力してください",
+    "after": "認証コードを入力してください"
+  },
+  {
+    "locale": "ja",
+    "key": "tabbarMarket",
+    "before": "市場",
+    "after": "マーケット"
+  },
+  {
+    "locale": "ja",
+    "key": "tabbarPersonalCenter",
+    "before": "個人センター",
+    "after": "マイページ"
+  },
+  {
+    "locale": "ja",
+    "key": "myAssets",
+    "before": "私の資産",
+    "after": "保有資産"
+  },
+  {
+    "locale": "ja",
+    "key": "totalAccountAssetsConverted",
+    "before": "総アカウント資産換算",
+    "after": "口座資産合計（換算額）"
+  },
+  {
+    "locale": "ja",
+    "key": "bindBankCard",
+    "before": "銀行カードをバインド",
+    "after": "銀行口座を登録"
+  },
+  {
+    "locale": "ja",
+    "key": "bindDigitalCurrencyAddress",
+    "before": "暗号通貨アドレスをバインド",
+    "after": "暗号資産アドレスを登録"
+  },
+  {
+    "locale": "ja",
+    "key": "noBoundBankCards",
+    "before": "バインドされた銀行カードがありません",
+    "after": "銀行口座が登録されていません"
+  },
+  {
+    "locale": "ja",
+    "key": "addBankCard",
+    "before": "銀行カードを追加",
+    "after": "銀行口座を追加"
+  },
+  {
+    "locale": "ja",
+    "key": "noBoundDigitalAddresses",
+    "before": "バインドされた暗号通貨アドレスがありません",
+    "after": "暗号資産アドレスが登録されていません"
+  },
+  {
+    "locale": "ja",
+    "key": "bankAddress",
+    "before": "銀行住所",
+    "after": "銀行所在地"
+  },
+  {
+    "locale": "ja",
+    "key": "update",
+    "before": "日付",
+    "after": "更新"
+  },
+  {
+    "locale": "ja",
+    "key": "pleaseFillCompleteInfo",
+    "before": "すべての情報を入力してください",
+    "after": "必須項目をすべて入力してください"
+  },
+  {
+    "locale": "ja",
+    "key": "updateSuccess",
+    "before": "更新成功",
+    "after": "更新しました"
+  },
+  {
+    "locale": "ja",
+    "key": "addSuccess",
+    "before": "追加成功",
+    "after": "追加しました"
+  },
+  {
+    "locale": "ja",
+    "key": "operationFailed",
+    "before": "操作失敗",
+    "after": "操作に失敗しました"
+  },
+  {
+    "locale": "ja",
+    "key": "deleteSuccess",
+    "before": "削除成功",
+    "after": "削除しました"
+  },
+  {
+    "locale": "ja",
+    "key": "deleteFailed",
+    "before": "削除失敗",
+    "after": "削除に失敗しました"
+  },
+  {
+    "locale": "ja",
+    "key": "transfer",
+    "before": "転送",
+    "after": "資金振替"
+  },
+  {
+    "locale": "ja",
+    "key": "from",
+    "before": "から",
+    "after": "振替元"
+  },
+  {
+    "locale": "ja",
+    "key": "to",
+    "before": "へ",
+    "after": "振替先"
+  },
+  {
+    "locale": "ja",
+    "key": "transferAmount",
+    "before": "振替数量",
+    "after": "振替金額"
+  },
+  {
+    "locale": "ja",
+    "key": "pleaseEnterTransferAmount",
+    "before": "振替数量を入力してください",
+    "after": "振替金額を入力してください"
+  },
+  {
+    "locale": "ja",
+    "key": "transferRecords",
+    "before": "振替記録",
+    "after": "振替履歴"
+  },
+  {
+    "locale": "ja",
+    "key": "noTransferRecords",
+    "before": "振替記録がありません",
+    "after": "振替履歴はありません"
+  },
+  {
+    "locale": "ja",
+    "key": "selectAccount",
+    "before": "アカウントを選択",
+    "after": "口座を選択"
+  },
+  {
+    "locale": "ja",
+    "key": "contractAccount",
+    "before": "契約口座",
+    "after": "証拠金取引口座"
+  },
+  {
+    "locale": "ja",
+    "key": "pleaseEnterValidTransferAmount",
+    "before": "有効な振替数量を入力してください",
+    "after": "有効な振替金額を入力してください"
+  },
+  {
+    "locale": "ja",
+    "key": "fromAndToAccountCannotBeSame",
+    "before": "送金元と送金先のアカウントは同じにできません",
+    "after": "振替元口座と振替先口座は別の口座を選択してください"
+  },
+  {
+    "locale": "ja",
+    "key": "transferSuccess",
+    "before": "振替成功",
+    "after": "振替が完了しました"
+  },
+  {
+    "locale": "ja",
+    "key": "transferFailed",
+    "before": "振替失敗、もう一度お試しください",
+    "after": "振替の処理結果を確認できませんでした。振替履歴をご確認ください"
+  },
+  {
+    "locale": "ja",
+    "key": "idNumberLabel",
+    "before": "証明書番号",
+    "after": "本人確認書類番号"
+  },
+  {
+    "locale": "ja",
+    "key": "verificationRejected",
+    "before": "本人確認申請が拒否されました",
+    "after": "本人確認申請が承認されませんでした"
+  },
+  {
+    "locale": "ja",
+    "key": "rejectReason",
+    "before": "拒否理由",
+    "after": "不承認理由"
+  },
+  {
+    "locale": "ja",
+    "key": "passportOrIdNumber",
+    "before": "パスポート/証明書番号",
+    "after": "パスポート番号／本人確認書類番号"
+  },
+  {
+    "locale": "ja",
+    "key": "enterPassportOrIdNumber",
+    "before": "パスポート/証明書番号を入力してください",
+    "after": "パスポート番号または本人確認書類番号を入力してください"
+  },
+  {
+    "locale": "ja",
+    "key": "uploadPassportOrIdBothSides",
+    "before": "パスポート/証明書の表裏をアップロードしてください",
+    "after": "本人確認書類の画像を2枚アップロードしてください。提出する面・ページが不明な場合は、サポートへお問い合わせください。"
+  },
+  {
+    "locale": "ja",
+    "key": "uploadPassportOrIdFront",
+    "before": "パスポート/証明書の表面をアップロード",
+    "after": "パスポートの顔写真ページまたは本人確認書類の表面"
+  },
+  {
+    "locale": "ja",
+    "key": "uploadPassportOrIdBack",
+    "before": "パスポート/証明書の裏面をアップロード",
+    "after": "本人確認書類の画像（2枚目）"
+  },
+  {
+    "locale": "ja",
+    "key": "imageSizeExceeded",
+    "before": "画像サイズは5MBを超えることはできません",
+    "after": "画像のファイルサイズは5MB以下にしてください"
+  },
+  {
+    "locale": "ja",
+    "key": "submitSuccessPendingReview",
+    "before": "提出成功、審査待ち",
+    "after": "申請を受け付けました。審査結果をお待ちください"
+  },
+  {
+    "locale": "ja",
+    "key": "submitFailed",
+    "before": "提出失敗、もう一度お試しください",
+    "after": "送信に失敗しました。もう一度お試しください"
+  },
+  {
+    "locale": "ja",
+    "key": "inviteQRCode",
+    "before": "QRコードを招待",
+    "after": "招待用QRコード"
+  },
+  {
+    "locale": "ja",
+    "key": "scanQRCodeOrEnterInviteCode",
+    "before": "上のQRコードをスキャンするか、招待コードを入力して登録を確認してください",
+    "after": "上のQRコードを読み取るか、登録画面で招待コードを入力してください"
+  },
+  {
+    "locale": "ja",
+    "key": "searchSymbolContract",
+    "before": "シンボル / 契約を検索",
+    "after": "銘柄・通貨ペアを検索"
+  },
+  {
+    "locale": "ja",
+    "key": "today",
+    "before": "日",
+    "after": "本日"
+  },
+  {
+    "locale": "ja",
+    "key": "contractAsset",
+    "before": "契約資産:",
+    "after": "証拠金取引口座資産"
+  },
+  {
+    "locale": "ja",
+    "key": "optionAccount",
+    "before": "オプション口座:",
+    "after": "期限取引口座"
+  },
+  {
+    "locale": "ja",
+    "key": "flashWithdraw",
+    "before": "フラッシュ出金",
+    "after": "出金"
+  },
+  {
+    "locale": "ja",
+    "key": "creditLoan",
+    "before": "信用ローン",
+    "after": "借入れ"
+  },
+  {
+    "locale": "ja",
+    "key": "bankCardBuy",
+    "before": "銀行カードで購入",
+    "after": "銀行振込"
+  },
+  {
+    "locale": "ja",
+    "key": "financialManagement",
+    "before": "金融管理",
+    "after": "資産運用"
+  },
+  {
+    "locale": "ja",
+    "key": "noSymbolData",
+    "before": "シンボルデータなし",
+    "after": "銘柄情報がありません"
+  },
+  {
+    "locale": "ja",
+    "key": "customerService",
+    "before": "カスタマーサービス",
+    "after": "カスタマーサポート"
+  },
+  {
+    "locale": "ja",
+    "key": "loanRecords",
+    "before": "融資履歴",
+    "after": "借入履歴"
+  },
+  {
+    "locale": "ja",
+    "key": "loanInfo",
+    "before": "ローン情報",
+    "after": "借入情報"
+  },
+  {
+    "locale": "ja",
+    "key": "loanPersonalInfo",
+    "before": "個人情報の貸与",
+    "after": "借入申込者情報"
+  },
+  {
+    "locale": "ja",
+    "key": "startEnjoyLoanService",
+    "before": "レンディングサービスを始めましょう",
+    "after": "借入サービスを利用する"
+  },
+  {
+    "locale": "ja",
+    "key": "verified",
+    "before": "確認済み",
+    "after": "本人確認済み"
+  },
+  {
+    "locale": "ja",
+    "key": "unverified",
+    "before": "未検証",
+    "after": "本人確認未完了"
+  },
+  {
+    "locale": "ja",
+    "key": "min",
+    "before": "最小の",
+    "after": "最小"
+  },
+  {
+    "locale": "ja",
+    "key": "loanTerm",
+    "before": "融資期間",
+    "after": "借入期間"
+  },
+  {
+    "locale": "my",
+    "key": "freeDays",
+    "before": "အတိုးမဲ့န��့ရက်များ",
+    "after": "အတိုးမဲ့ရက်များ"
+  },
+  {
+    "locale": "ja",
+    "key": "freeDays",
+    "before": "無利息日",
+    "after": "無利息期間"
+  },
+  {
+    "locale": "ja",
+    "key": "borrowNow",
+    "before": "今すぐ借りる",
+    "after": "借入れを申し込む"
+  },
+  {
+    "locale": "ja",
+    "key": "pleaseEnterValidAmount",
+    "before": "有効なローン金額を入力してください",
+    "after": "有効な借入金額を入力してください"
+  },
+  {
+    "locale": "ar",
+    "key": "pleaseSelectLoanTerm",
+    "before": "الرجا�� تحديد مدة القرض",
+    "after": "يرجى اختيار مدة القرض"
+  },
+  {
+    "locale": "ja",
+    "key": "pleaseSelectLoanTerm",
+    "before": "融資期間を選択してください",
+    "after": "借入期間を選択してください"
+  },
+  {
+    "locale": "ja",
+    "key": "amountCannotBeLessThan",
+    "before": "融資額はこれ以下にすることはできません",
+    "after": "借入金額の下限："
+  },
+  {
+    "locale": "ja",
+    "key": "amountCannotBeGreaterThan",
+    "before": "融資額はこれを超えることはできません",
+    "after": "借入金額の上限："
+  },
+  {
+    "locale": "ja",
+    "key": "applicationFailed",
+    "before": "アプリケーションが失敗しました",
+    "after": "申請に失敗しました"
+  },
+  {
+    "locale": "ja",
+    "key": "noLoanRecords",
+    "before": "まだ融資実績がありません",
+    "after": "借入履歴はありません"
+  },
+  {
+    "locale": "ja",
+    "key": "loanAmount",
+    "before": "金額",
+    "after": "借入金額"
+  },
+  {
+    "locale": "ja",
+    "key": "repaymentAmount",
+    "before": "返済する必要がある",
+    "after": "返済金額"
+  },
+  {
+    "locale": "ja",
+    "key": "overdueFee",
+    "before": "賠償金の清算",
+    "after": "延滞金"
+  },
+  {
+    "locale": "ja",
+    "key": "approvedAt",
+    "before": "与えられた時間",
+    "after": "承認日時"
+  },
+  {
+    "locale": "ja",
+    "key": "agreement",
+    "before": "合意",
+    "after": "契約書"
+  },
+  {
+    "locale": "ja",
+    "key": "statusOverdue",
+    "before": "期限を過ぎました",
+    "after": "延滞中"
+  },
+  {
+    "locale": "ja",
+    "key": "statusRejected",
+    "before": "拒否されました",
+    "after": "不承認"
+  },
+  {
+    "locale": "ja",
+    "key": "realName",
+    "before": "本名",
+    "after": "氏名"
+  },
+  {
+    "locale": "ja",
+    "key": "idNumber",
+    "before": "ID番号",
+    "after": "本人確認書類番号"
+  },
+  {
+    "locale": "ja",
+    "key": "homeAddress",
+    "before": "自宅の住所",
+    "after": "住所"
+  },
+  {
+    "locale": "ja",
+    "key": "enterRealName",
+    "before": "本名を入力してください",
+    "after": "氏名を入力してください"
+  },
+  {
+    "locale": "ja",
+    "key": "enterIdNumber",
+    "before": "ID番号を入力してください",
+    "after": "本人確認書類番号を入力してください"
+  },
+  {
+    "locale": "my",
+    "key": "enterHomeAddress",
+    "before": "သင့်အိ���်လိပ်စာကို ထည့်သွင်းပါ။",
+    "after": "နေအိမ်လိပ်စာကို ထည့်ပါ။"
+  },
+  {
+    "locale": "ja",
+    "key": "submitApplication",
+    "before": "申請書を提出する",
+    "after": "申込みを送信"
+  },
+  {
+    "locale": "ja",
+    "key": "borrower",
+    "before": "借り手",
+    "after": "借入人"
+  },
+  {
+    "locale": "ja",
+    "key": "firstName",
+    "before": "名前",
+    "after": "名"
+  },
+  {
+    "locale": "ja",
+    "key": "phone",
+    "before": "電話",
+    "after": "電話番号"
+  },
+  {
+    "locale": "ja",
+    "key": "name",
+    "before": "名前",
+    "after": "氏名"
+  },
+  {
+    "locale": "ja",
+    "key": "borrowerAgreesToRepay",
+    "before": "借り手が返済に同意する",
+    "after": "借入人は返済に同意します"
+  },
+  {
+    "locale": "ja",
+    "key": "repaymentApplicability",
+    "before": "返済適性",
+    "after": "返済への充当"
+  },
+  {
+    "locale": "ja",
+    "key": "earlyRepayment",
+    "before": "繰り上げ返済",
+    "after": "繰上返済"
+  },
+  {
+    "locale": "ja",
+    "key": "default",
+    "before": "契約違反",
+    "after": "債務不履行"
+  },
+  {
+    "locale": "ja",
+    "key": "fees",
+    "before": "コスト",
+    "after": "費用"
+  },
+  {
+    "locale": "ja",
+    "key": "otherTerms",
+    "before": "その他の用語",
+    "after": "その他の条項"
+  },
+  {
+    "locale": "ja",
+    "key": "completeAgreement",
+    "before": "完全な合意",
+    "after": "完全合意"
+  },
+  {
+    "locale": "ja",
+    "key": "contractAlreadySigned",
+    "before": "契約はすでに署名されており、再度署名することはできません",
+    "after": "この契約書は署名済みです。再度署名することはできません"
+  },
+  {
+    "locale": "ja",
+    "key": "resign",
+    "before": "再署名",
+    "after": "署名をやり直す"
+  },
+  {
+    "locale": "ja",
+    "key": "signSuccess",
+    "before": "契約は正常に署名されました",
+    "after": "契約書への署名が完了しました"
+  },
+  {
+    "locale": "ja",
+    "key": "uploadIdFront",
+    "before": "IDカードの表面をアップロードしてください",
+    "after": "本人確認書類の表面をアップロードしてください"
+  },
+  {
+    "locale": "my",
+    "key": "uploadIdBack",
+    "before": "သင်၏ ID က��်၏ နောက်ဘက်ခြမ်းကို အပ်လုဒ်လုပ်ပါ။",
+    "after": "အထောက်အထားကတ်၏ နောက်ဘက်ပုံကို တင်ပါ။"
+  },
+  {
+    "locale": "ja",
+    "key": "uploadIdBack",
+    "before": "IDカードの裏面をアップロードしてください",
+    "after": "本人確認書類の裏面をアップロードしてください"
+  },
+  {
+    "locale": "ja",
+    "key": "uploadHandheldId",
+    "before": "IDカードを持った写真をアップロードしてください",
+    "after": "本人確認書類を持った本人の写真をアップロードしてください"
+  },
+  {
+    "locale": "ja",
+    "key": "submitReview",
+    "before": "レビューのために送信する",
+    "after": "審査を申請"
+  },
+  {
+    "locale": "ja",
+    "key": "imageSizeLimit",
+    "before": "画像サイズは5MBを超えることはできません",
+    "after": "画像のファイルサイズは5MB以下にしてください"
+  },
+  {
+    "locale": "ja",
+    "key": "uploadIdFrontBack",
+    "before": "IDカードの表と裏",
+    "after": "本人確認書類の表面・裏面"
+  },
+  {
+    "locale": "ja",
+    "key": "searchCountryOrCode",
+    "before": "国番号または市外局番を検索する",
+    "after": "国名または国番号で検索"
+  },
+  {
+    "locale": "ja",
+    "key": "personalInfoApproved",
+    "before": "あなたの個人情報が承認されました",
+    "after": "本人確認が承認されました"
+  },
+  {
+    "locale": "ja",
+    "key": "repaymentMethodDescription",
+    "before": "返済方法: 現金引き出しの前に返済を完了する必要があり、資金を口座から直接差し引くことはできません。",
+    "after": "返済方法：出金前に返済を完了する必要があります。返済金を口座残高から直接差し引くことはできません。"
+  },
+  {
+    "locale": "ja",
+    "key": "earlyRepaymentDescription",
+    "before": "借り手は、ペナルティを支払うことなく早期返済を行うことができます。",
+    "after": "借入人は、違約金を支払うことなく繰上返済できます。"
+  },
+  {
+    "locale": "ja",
+    "key": "defaultDescription",
+    "before": "借り手が期限までに返済に失敗した場合、追加の通知や要求なしに、未払いの元本と利息をすべて即座に支払う必要があります。",
+    "after": "借入人が返済期日までに返済しない場合、追加の通知や請求を受けることなく、未払いの元本および利息の全額を直ちに支払うものとします。"
+  },
+  {
+    "locale": "ja",
+    "key": "feesDescription",
+    "before": "借り手が期限までに返済義務を履行しない場合、回収プロセス中に貸し手が負担したすべての費用（法律費用を含むがこれに限定されない）を負担することに同意します。",
+    "after": "借入人が返済期日までに返済義務を履行しない場合、貸付人が債権回収のために負担したすべての費用（法律費用を含みますが、これに限りません）を負担するものとします。"
+  },
+  {
+    "locale": "ja",
+    "key": "severabilityDescription",
+    "before": "本契約のいずれかの条項が無効または執行不能と判断された場合、その条項は無効となり、残りの条項は完全に有効で拘束力があります。",
+    "after": "本契約のいずれかの条項が無効または執行不能と判断された場合、その条項は無効となり、その他の条項は引き続き有効で拘束力を有します。"
+  },
+  {
+    "locale": "th",
+    "key": "otherTermsDescription",
+    "before": "บริษัทจะชำระเงินตามเงื่อนไขของข้อตกลงนี้ในสกุลเงินของยอดคงเหลือในบ���ญชี ทั้งสองฝ่ายมีสิทธิลงนามข้อตกลงนี้ และไม่มีฝ่ายใดละเมิดสิทธิ์ของบุคคลที่สามหรือละเมิดข้อตกลงอื่น ๆ ระหว่างทั้งสองฝ่าย",
+    "after": "บริษัทจะชำระเงินตามเงื่อนไขของข้อตกลงนี้ในสกุลเงินของยอดคงเหลือในบัญชี ทั้งสองฝ่ายมีสิทธิลงนามข้อตกลงนี้ และไม่มีฝ่ายใดละเมิดสิทธิ์ของบุคคลที่สามหรือละเมิดข้อตกลงอื่น ๆ ระหว่างทั้งสองฝ่าย"
+  },
+  {
+    "locale": "ja",
+    "key": "governingLawDescription",
+    "before": "本契約は、借り手が所在する国/地域の法律に従って解釈および執行されます。",
+    "after": "本契約は、借入人が所在する国または地域の法律に従って解釈および執行されるものとします。"
+  },
+  {
+    "locale": "ja",
+    "key": "completeAgreementDescription",
+    "before": "両当事者は、本文書が当事者間の完全な契約を構成することを同意します。両当事者はさらに、本契約の条件に対する変更、補足、または修正は、書面で行われ、発効する前に両当事者によって署名される必要があることに同意します。",
+    "after": "両当事者は、本書が当事者間の完全な合意を構成することに同意します。本契約の条件の変更、追加または修正は書面によるものとし、効力を生じる前に両当事者が署名する必要があります。"
+  },
+  {
+    "locale": "ja",
+    "key": "repaymentSuccess",
+    "before": "返済成功",
+    "after": "返済が完了しました"
+  },
+  {
+    "locale": "ja",
+    "key": "repaymentFailed",
+    "before": "返済失敗",
+    "after": "返済に失敗しました"
+  },
+  {
+    "locale": "ja",
+    "key": "earlyRepaymentButton",
+    "before": "早期返済",
+    "after": "繰上返済"
+  },
+  {
+    "locale": "ja",
+    "key": "earlyRepaymentConfirm",
+    "before": "早期返済を行いますか？システムが自動的に利息を計算し、資金口座から差し引きます。",
+    "after": "繰上返済しますか？利息を自動計算し、返済額を資金口座から差し引きます。"
+  },
+  {
+    "locale": "th",
+    "key": "earlyRepaymentConfirm",
+    "before": "คุณแน่ใจหรือไม่ว่าต้องการชำระคืนล่วงหน้า? ระบบจะคำนวณดอกเบี้ยและหักออกจากบัญชีเงินทุนโดยอัตโน��ัติ",
+    "after": "คุณแน่ใจหรือไม่ว่าต้องการชำระคืนก่อนกำหนด? ระบบจะคำนวณดอกเบี้ยและหักเงินจากบัญชีเงินทุนโดยอัตโนมัติ"
+  },
+  {
+    "locale": "ja",
+    "key": "noFinancialProducts",
+    "before": "金融商品がありません",
+    "after": "運用商品はありません"
+  },
+  {
+    "locale": "zh-TW",
+    "key": "expectedDailyYield",
+    "before": "預計日產",
+    "after": "預估每日收益率"
+  },
+  {
+    "locale": "en",
+    "key": "expectedDailyYield",
+    "before": "Expected Daily Yield",
+    "after": "Estimated daily return rate"
+  },
+  {
+    "locale": "fr",
+    "key": "expectedDailyYield",
+    "before": "Nissan attendu",
+    "after": "Taux de rendement quotidien estimé"
+  },
+  {
+    "locale": "de",
+    "key": "expectedDailyYield",
+    "before": "Erwartete Tagesrendite",
+    "after": "Geschätzte tägliche Rendite"
+  },
+  {
+    "locale": "ru",
+    "key": "expectedDailyYield",
+    "before": "Ожидаемый Ниссан",
+    "after": "Ожидаемая дневная доходность"
+  },
+  {
+    "locale": "es",
+    "key": "expectedDailyYield",
+    "before": "Rendimento diário esperado",
+    "after": "Tasa de rentabilidad diaria estimada"
+  },
+  {
+    "locale": "pt",
+    "key": "expectedDailyYield",
+    "before": "Rendimiento diario esperado",
+    "after": "Taxa de rentabilidade diária estimada"
+  },
+  {
+    "locale": "it",
+    "key": "expectedDailyYield",
+    "before": "Rendimento giornaliero previsto",
+    "after": "Tasso di rendimento giornaliero stimato"
+  },
+  {
+    "locale": "ar",
+    "key": "expectedDailyYield",
+    "before": "العائد اليومي المتوقع",
+    "after": "معدل العائد اليومي المقدر"
+  },
+  {
+    "locale": "tr",
+    "key": "expectedDailyYield",
+    "before": "Beklenen günlük getiri",
+    "after": "Tahmini günlük getiri oranı"
+  },
+  {
+    "locale": "id",
+    "key": "expectedDailyYield",
+    "before": "Hasil harian yang diharapkan",
+    "after": "Estimasi tingkat imbal hasil harian"
+  },
+  {
+    "locale": "my",
+    "key": "expectedDailyYield",
+    "before": "မျှော်မှန်းထားသော နေ့စဉ်အမြတ်",
+    "after": "ခန့်မှန်းနေ့စဉ်အမြတ်နှုန်း"
+  },
+  {
+    "locale": "hi",
+    "key": "expectedDailyYield",
+    "before": "अपेक्षित दैनिक रिटर्न",
+    "after": "अनुमानित दैनिक प्रतिफल दर"
+  },
+  {
+    "locale": "cs",
+    "key": "expectedDailyYield",
+    "before": "Očekávaný denní výnos",
+    "after": "Odhadovaná denní míra výnosu"
+  },
+  {
+    "locale": "pl",
+    "key": "expectedDailyYield",
+    "before": "Oczekiwany dzienny zysk",
+    "after": "Szacowana dzienna stopa zwrotu"
+  },
+  {
+    "locale": "ja",
+    "key": "expectedDailyYield",
+    "before": "予想日産",
+    "after": "予想日次収益率"
+  },
+  {
+    "locale": "ko",
+    "key": "expectedDailyYield",
+    "before": "예상 일일 수익",
+    "after": "예상 일일 수익률"
+  },
+  {
+    "locale": "th",
+    "key": "expectedDailyYield",
+    "before": "คาดว่านิสสัน",
+    "after": "อัตราผลตอบแทนต่อวันโดยประมาณ"
+  },
+  {
+    "locale": "vi",
+    "key": "expectedDailyYield",
+    "before": "Nissan dự kiến",
+    "after": "Tỷ suất sinh lời hằng ngày dự kiến"
+  },
+  {
+    "locale": "ja",
+    "key": "miningMachineRental",
+    "before": "マイニングマシン賃貸",
+    "after": "マイニング機器のレンタル"
+  },
+  {
+    "locale": "ja",
+    "key": "purchaseList",
+    "before": "購入リスト",
+    "after": "申込履歴"
+  },
+  {
+    "locale": "ja",
+    "key": "noPurchaseRecords",
+    "before": "購入記録がありません",
+    "after": "申込履歴はありません"
+  },
+  {
+    "locale": "ja",
+    "key": "purchaseAmount",
+    "before": "購入金額",
+    "after": "申込金額"
+  },
+  {
+    "locale": "ja",
+    "key": "purchaseTime",
+    "before": "購入時間",
+    "after": "申込日時"
+  },
+  {
+    "locale": "ja",
+    "key": "earlyRedeem",
+    "before": "早期償還",
+    "after": "中途解約"
+  },
+  {
+    "locale": "ja",
+    "key": "viewYieldList",
+    "before": "収益リストを表示",
+    "after": "収益履歴を表示"
+  },
+  {
+    "locale": "ja",
+    "key": "penaltyFee",
+    "before": "ペナルティ料金",
+    "after": "中途解約手数料"
+  },
+  {
+    "locale": "ja",
+    "key": "payPenaltyToRedeem",
+    "before": "早期償還を申請するにはペナルティ料金を支払ってください",
+    "after": "中途解約には手数料がかかります"
+  },
+  {
+    "locale": "ja",
+    "key": "redeemSuccess",
+    "before": "償還成功",
+    "after": "解約が完了しました"
+  },
+  {
+    "locale": "ja",
+    "key": "redeemFailed",
+    "before": "償還失敗",
+    "after": "解約に失敗しました"
+  },
+  {
+    "locale": "ja",
+    "key": "calculatePenaltyFailed",
+    "before": "ペナルティの計算に失敗しました",
+    "after": "中途解約手数料を計算できませんでした"
+  },
+  {
+    "locale": "ja",
+    "key": "enterValidPurchaseAmount",
+    "before": "有効な購入金額を入力してください",
+    "after": "有効な申込金額を入力してください"
+  },
+  {
+    "locale": "ja",
+    "key": "purchaseAmountCannotBeLessThan",
+    "before": "サブスクリプション金額を以下にすることはできません",
+    "after": "申込金額の下限："
+  },
+  {
+    "locale": "ja",
+    "key": "purchaseAmountCannotBeGreaterThan",
+    "before": "購入金額は以下より大きくできません",
+    "after": "申込金額の上限："
+  },
+  {
+    "locale": "ja",
+    "key": "purchaseSuccess",
+    "before": "購入成功",
+    "after": "申込みを受け付けました"
+  },
+  {
+    "locale": "ja",
+    "key": "purchaseFailed",
+    "before": "購入失敗",
+    "after": "申込みに失敗しました"
+  },
+  {
+    "locale": "ru",
+    "key": "financialTerm",
+    "before": "Период финансового уп��авления",
+    "after": "Срок инвестирования"
+  },
+  {
+    "locale": "ja",
+    "key": "financialTerm",
+    "before": "金融期間",
+    "after": "運用期間"
+  },
+  {
+    "locale": "ja",
+    "key": "maxPurchase",
+    "before": "最大購入",
+    "after": "申込上限"
+  },
+  {
+    "locale": "ja",
+    "key": "enterLockAmount",
+    "before": "ロック金額を入力してください",
+    "after": "申込金額を入力してください"
+  },
+  {
+    "locale": "ja",
+    "key": "miningMachineRentalFee",
+    "before": "マイニングマシン賃貸料",
+    "after": "マイニング機器のレンタル料（設定値）"
+  },
+  {
+    "locale": "ja",
+    "key": "yieldList",
+    "before": "収益リスト",
+    "after": "収益履歴"
+  },
+  {
+    "locale": "ja",
+    "key": "closeOrderSuccess",
+    "before": "注文が正常に閉じられました",
+    "after": "ポジションを決済しました"
+  },
+  {
+    "locale": "ja",
+    "key": "closeOrderFailed",
+    "before": "注文を閉じるのに失敗しました",
+    "after": "ポジションの決済に失敗しました"
+  },
+  {
+    "locale": "ja",
+    "key": "cancelOrderSuccess",
+    "before": "注文が正常にキャンセルされました",
+    "after": "注文を取り消しました"
+  },
+  {
+    "locale": "ja",
+    "key": "cancelOrderFailed",
+    "before": "注文のキャンセルに失敗しました",
+    "after": "注文の取消に失敗しました"
+  },
+  {
+    "locale": "ja",
+    "key": "pendingYield",
+    "before": "保留中の収益",
+    "after": "未払い収益"
+  },
+  {
+    "locale": "ja",
+    "key": "yieldDays",
+    "before": "収益日数",
+    "after": "収益計算日数"
+  },
+  {
+    "locale": "ja",
+    "key": "noYieldRecords",
+    "before": "収益記録がありません",
+    "after": "収益履歴はありません"
+  },
+  {
+    "locale": "ja",
+    "key": "statusPendingPayment",
+    "before": "支払い保留中",
+    "after": "未払い"
+  },
+  {
+    "locale": "ja",
+    "key": "statusRedeemed",
+    "before": "償還済み",
+    "after": "解約済み"
+  },
+  {
+    "locale": "ja",
+    "key": "depositRecords",
+    "before": "入金記録",
+    "after": "入金履歴"
+  },
+  {
+    "locale": "ja",
+    "key": "digitalCurrency",
+    "before": "デジタル通貨",
+    "after": "暗号資産"
+  },
+  {
+    "locale": "ja",
+    "key": "bankCard",
+    "before": "銀行カード",
+    "after": "銀行口座"
+  },
+  {
+    "locale": "ja",
+    "key": "uploadProof",
+    "before": "証明をアップロード",
+    "after": "入金確認書類をアップロード"
+  },
+  {
+    "locale": "ja",
+    "key": "accountName",
+    "before": "口座名",
+    "after": "口座名義"
+  },
+  {
+    "locale": "ja",
+    "key": "contactServiceForBankCard",
+    "before": "入金用銀行カードを取得するには、プラットフォームのオンラインサービスにお問い合わせください",
+    "after": "振込先の銀行口座についてはサポートへお問い合わせください"
+  },
+  {
+    "locale": "ja",
+    "key": "contactService",
+    "before": "サービスに連絡",
+    "after": "サポートに問い合わせる"
+  },
+  {
+    "locale": "ja",
+    "key": "pleaseContactUsThroughService",
+    "before": "サービスチャネルを通じてお問い合わせください",
+    "after": "サポート窓口へお問い合わせください"
+  },
+  {
+    "locale": "ja",
+    "key": "imageSizeCannotExceed5MB",
+    "before": "画像サイズは5MBを超えることはできません",
+    "after": "画像のファイルサイズは5MB以下にしてください"
+  },
+  {
+    "locale": "th",
+    "key": "pleaseEnterValidDepositAmount",
+    "before": "กรุณากรอกจำนวน��งินที่เติมให้ถูกต้อง",
+    "after": "กรุณาระบุจำนวนเงินฝากที่ถูกต้อง"
+  },
+  {
+    "locale": "ja",
+    "key": "pleaseUploadDepositProof",
+    "before": "入金証明をアップロードしてください",
+    "after": "入金確認書類をアップロードしてください"
+  },
+  {
+    "locale": "ja",
+    "key": "imageUploadFailed",
+    "before": "読み込みに失敗しました",
+    "after": "画像のアップロードに失敗しました"
+  },
+  {
+    "locale": "ja",
+    "key": "depositType",
+    "before": "タイプ",
+    "after": "入金方法"
+  },
+  {
+    "locale": "ja",
+    "key": "depositTypeDigital",
+    "before": "デジタル通貨",
+    "after": "暗号資産"
+  },
+  {
+    "locale": "ja",
+    "key": "depositTypeBank",
+    "before": "銀行カード",
+    "after": "銀行振込"
+  },
+  {
+    "locale": "ja",
+    "key": "withdrawRecords",
+    "before": "出金記録",
+    "after": "出金履歴"
+  },
+  {
+    "locale": "ja",
+    "key": "remarkCurrencyName",
+    "before": "備考通貨名",
+    "after": "備考（通貨名など）"
+  },
+  {
+    "locale": "ja",
+    "key": "expectedArrivalAmount",
+    "before": "予想到着金額",
+    "after": "着金予定額"
+  },
+  {
+    "locale": "ja",
+    "key": "arrivalAmount",
+    "before": "到着金額",
+    "after": "着金額"
+  },
+  {
+    "locale": "ja",
+    "key": "statusPendingReview",
+    "before": "審査保留中",
+    "after": "審査中"
+  },
+  {
+    "locale": "ja",
+    "key": "noWithdrawRecords",
+    "before": "出金記録がありません",
+    "after": "出金履歴はありません"
+  },
+  {
+    "locale": "ja",
+    "key": "marketClosed",
+    "before": "市場休業",
+    "after": "取引時間外"
+  },
+  {
+    "locale": "ja",
+    "key": "codeNotFound",
+    "before": "確認コードが見つかりません",
+    "after": "認証コードが見つかりません"
+  },
+  {
+    "locale": "ja",
+    "key": "codeWrong",
+    "before": "確認コードが間違っています",
+    "after": "認証コードが正しくありません"
+  },
+  {
+    "locale": "ja",
+    "key": "codeExpired",
+    "before": "確認コードが期限切れです",
+    "after": "認証コードの有効期限が切れています"
+  },
+  {
+    "locale": "ja",
+    "key": "codeNotExistsResend",
+    "before": "確認コードが見つかりません。再送してください",
+    "after": "認証コードが見つかりません。再送信してください"
+  },
+  {
+    "locale": "ja",
+    "key": "complaintEmail",
+    "before": "苦情メール",
+    "after": "苦情受付メールアドレス"
+  },
+  {
+    "locale": "ja",
+    "key": "noComplaintEmail",
+    "before": "苦情メールが利用できません",
+    "after": "苦情受付メールアドレスが設定されていません"
+  },
+  {
+    "locale": "ja",
+    "key": "contactCustomerService",
+    "before": "カスタマーサービスに連絡",
+    "after": "カスタマーサポートに問い合わせる"
+  },
+  {
+    "locale": "ja",
+    "key": "onlineCustomerService",
+    "before": "オンラインカスタマーサービス",
+    "after": "オンラインサポート"
+  },
+  {
+    "locale": "ja",
+    "key": "noCustomerService",
+    "before": "カスタマーサービスが利用できません",
+    "after": "現在サポート窓口をご利用いただけません"
+  },
+  {
+    "locale": "ja",
+    "key": "loadingCustomerService",
+    "before": "カスタマーサービスを読み込み中...",
+    "after": "サポート窓口を読み込み中..."
+  },
+  {
+    "locale": "th",
+    "key": "loadingCustomerService",
+    "before": "กำ��ังโหลดการบริการลูกค้า...",
+    "after": "กำลังโหลดฝ่ายบริการลูกค้า..."
+  },
+  {
+    "locale": "ja",
+    "key": "frozen",
+    "before": "凍結",
+    "after": "拘束中"
+  },
+  {
+    "locale": "ja",
+    "key": "optionAccountTitle",
+    "before": "オプション口座",
+    "after": "期限取引口座"
+  },
+  {
+    "locale": "ja",
+    "key": "contractAccountTitle",
+    "before": "契約口座",
+    "after": "証拠金取引口座"
+  },
+  {
+    "locale": "ja",
+    "key": "billDetails",
+    "before": "請求書の詳細",
+    "after": "入出金明細"
+  },
+  {
+    "locale": "ja",
+    "key": "contract",
+    "before": "契約",
+    "after": "証拠金取引"
+  },
+  {
+    "locale": "ja",
+    "key": "term",
+    "before": "期間",
+    "after": "期限取引"
+  },
+  {
+    "locale": "ja",
+    "key": "pendingOrders",
+    "before": "保留中の注文",
+    "after": "未約定注文"
+  },
+  {
+    "locale": "ja",
+    "key": "orderHistory",
+    "before": "履歴",
+    "after": "取引履歴"
+  },
+  {
+    "locale": "ja",
+    "key": "closed",
+    "before": "クローズ済み",
+    "after": "決済済み"
+  },
+  {
+    "locale": "ja",
+    "key": "currentMargin",
+    "before": "現在の証拠金",
+    "after": "使用証拠金"
+  },
+  {
+    "locale": "zh-TW",
+    "key": "riskRate",
+    "before": "風險率",
+    "after": "保證金維持率"
+  },
+  {
+    "locale": "en",
+    "key": "riskRate",
+    "before": "Risk Rate",
+    "after": "Margin level"
+  },
+  {
+    "locale": "fr",
+    "key": "riskRate",
+    "before": "Taux de risque",
+    "after": "Niveau de marge"
+  },
+  {
+    "locale": "de",
+    "key": "riskRate",
+    "before": "Risikorate",
+    "after": "Margin-Level"
+  },
+  {
+    "locale": "ru",
+    "key": "riskRate",
+    "before": "Уровень риска",
+    "after": "Уровень маржи"
+  },
+  {
+    "locale": "es",
+    "key": "riskRate",
+    "before": "Tasa de riesgo",
+    "after": "Nivel de margen"
+  },
+  {
+    "locale": "pt",
+    "key": "riskRate",
+    "before": "Tasa de Riesgo",
+    "after": "Nível de margem"
+  },
+  {
+    "locale": "it",
+    "key": "riskRate",
+    "before": "Tasso di Rischio",
+    "after": "Livello di margine"
+  },
+  {
+    "locale": "ar",
+    "key": "riskRate",
+    "before": "معدل المخاطر",
+    "after": "مستوى الهامش"
+  },
+  {
+    "locale": "tr",
+    "key": "riskRate",
+    "before": "Risk Oranı",
+    "after": "Marjin seviyesi"
+  },
+  {
+    "locale": "id",
+    "key": "riskRate",
+    "before": "Tingkat Risiko",
+    "after": "Tingkat margin"
+  },
+  {
+    "locale": "my",
+    "key": "riskRate",
+    "before": "အန္တရာယ်နှုန်း",
+    "after": "မာဂျင်အဆင့်"
+  },
+  {
+    "locale": "hi",
+    "key": "riskRate",
+    "before": "जोखिम दर",
+    "after": "मार्जिन स्तर"
+  },
+  {
+    "locale": "cs",
+    "key": "riskRate",
+    "before": "Míra rizika",
+    "after": "Úroveň marže"
+  },
+  {
+    "locale": "pl",
+    "key": "riskRate",
+    "before": "Wskaźnik ryzyka",
+    "after": "Poziom depozytu zabezpieczającego"
+  },
+  {
+    "locale": "ja",
+    "key": "riskRate",
+    "before": "リスク率",
+    "after": "証拠金維持率"
+  },
+  {
+    "locale": "ko",
+    "key": "riskRate",
+    "before": "위험률",
+    "after": "증거금 비율"
+  },
+  {
+    "locale": "th",
+    "key": "riskRate",
+    "before": "อัตราความเสี่ยง",
+    "after": "ระดับมาร์จิน"
+  },
+  {
+    "locale": "vi",
+    "key": "riskRate",
+    "before": "tỷ lệ rủi ro",
+    "after": "Mức ký quỹ"
+  },
+  {
+    "locale": "ja",
+    "key": "openTime",
+    "before": "オープン時間",
+    "after": "新規約定日時"
+  },
+  {
+    "locale": "ja",
+    "key": "createTime",
+    "before": "作成時間",
+    "after": "注文日時"
+  },
+  {
+    "locale": "ja",
+    "key": "stopLoss",
+    "before": "ストップロス",
+    "after": "損切り"
+  },
+  {
+    "locale": "ja",
+    "key": "takeProfit",
+    "before": "テイクプロフィット",
+    "after": "利確"
+  },
+  {
+    "locale": "ja",
+    "key": "modifyTPSL",
+    "before": "テイクプロフィットとストップロスを変更する",
+    "after": "利確・損切りを変更"
+  },
+  {
+    "locale": "ja",
+    "key": "closeOrder",
+    "before": "注文を閉じる",
+    "after": "ポジションを決済"
+  },
+  {
+    "locale": "ja",
+    "key": "cancelOrder",
+    "before": "注文をキャンセル",
+    "after": "注文取消"
+  },
+  {
+    "locale": "ja",
+    "key": "buyUp",
+    "before": "上昇買い",
+    "after": "上昇を予想（ハイ）"
+  },
+  {
+    "locale": "ja",
+    "key": "buyDown",
+    "before": "下降買い",
+    "after": "下落を予想（ロー）"
+  },
+  {
+    "locale": "ja",
+    "key": "lookUp",
+    "before": "上昇見",
+    "after": "上昇を予想"
+  },
+  {
+    "locale": "ja",
+    "key": "loadContractOrdersFailed",
+    "before": "契約注文の読み込みに失敗しました",
+    "after": "証拠金取引の注文を取得できませんでした"
+  },
+  {
+    "locale": "ja",
+    "key": "loadOptionOrdersFailed",
+    "before": "オプション注文の読み込みに失敗しました",
+    "after": "期限取引の注文を取得できませんでした"
+  },
+  {
+    "locale": "ja",
+    "key": "loadContractBalanceFailed",
+    "before": "契約残高の読み込みに失敗しました",
+    "after": "証拠金取引口座の残高を取得できませんでした"
+  },
+  {
+    "locale": "en",
+    "key": "marketPrice",
+    "before": "Market Price",
+    "after": "Market"
+  },
+  {
+    "locale": "fr",
+    "key": "marketPrice",
+    "before": "Prix du marché",
+    "after": "Au marché"
+  },
+  {
+    "locale": "de",
+    "key": "marketPrice",
+    "before": "Marktpreis",
+    "after": "Market"
+  },
+  {
+    "locale": "ru",
+    "key": "marketPrice",
+    "before": "Рыночная цена",
+    "after": "Рыночный"
+  },
+  {
+    "locale": "es",
+    "key": "marketPrice",
+    "before": "Precio de mercado",
+    "after": "A mercado"
+  },
+  {
+    "locale": "pt",
+    "key": "marketPrice",
+    "before": "Precio de Mercado",
+    "after": "A mercado"
+  },
+  {
+    "locale": "it",
+    "key": "marketPrice",
+    "before": "Prezzo di Mercato",
+    "after": "A mercato"
+  },
+  {
+    "locale": "ar",
+    "key": "marketPrice",
+    "before": "سعر السوق",
+    "after": "سوق"
+  },
+  {
+    "locale": "tr",
+    "key": "marketPrice",
+    "before": "Piyasa Fiyatı",
+    "after": "Piyasa"
+  },
+  {
+    "locale": "id",
+    "key": "marketPrice",
+    "before": "Harga Pasar",
+    "after": "Pasar"
+  },
+  {
+    "locale": "my",
+    "key": "marketPrice",
+    "before": "စျေးကွက်စျေးနှုန်း",
+    "after": "ဈေးကွက်အော်ဒါ"
+  },
+  {
+    "locale": "hi",
+    "key": "marketPrice",
+    "before": "बाजार मूल्य",
+    "after": "मार्केट"
+  },
+  {
+    "locale": "cs",
+    "key": "marketPrice",
+    "before": "Tržní cena",
+    "after": "Tržní"
+  },
+  {
+    "locale": "pl",
+    "key": "marketPrice",
+    "before": "Cena rynkowa",
+    "after": "Rynkowe"
+  },
+  {
+    "locale": "ja",
+    "key": "marketPrice",
+    "before": "市場価格",
+    "after": "成行"
+  },
+  {
+    "locale": "ko",
+    "key": "marketPrice",
+    "before": "시장 가격",
+    "after": "시장가"
+  },
+  {
+    "locale": "vi",
+    "key": "marketPrice",
+    "before": "giá thị trường",
+    "after": "Thị trường"
+  },
+  {
+    "locale": "ja",
+    "key": "buyQuantityLabel",
+    "before": "購入数量（ステップ:0.01）",
+    "after": "注文数量（増分：0.01）"
+  },
+  {
+    "locale": "ja",
+    "key": "estimatedFee",
+    "before": "推定手数料",
+    "after": "取引手数料（概算）"
+  },
+  {
+    "locale": "ja",
+    "key": "estimatedMargin",
+    "before": "推定証拠金",
+    "after": "必要証拠金（概算）"
+  },
+  {
+    "locale": "ja",
+    "key": "selectExpiryTime",
+    "before": "有効期限を選択",
+    "after": "取引期間を選択"
+  },
+  {
+    "locale": "ja",
+    "key": "closeTime",
+    "before": "クローズ時間",
+    "after": "決済日時"
+  },
+  {
+    "locale": "ja",
+    "key": "orderConfirmed",
+    "before": "注文が確認されました",
+    "after": "注文を受け付けました"
+  },
+  {
+    "locale": "ja",
+    "key": "usStockMarketClosed",
+    "before": "米国株式市場休業、取引不可",
+    "after": "米国株式市場は取引時間外です"
+  },
+  {
+    "locale": "ja",
+    "key": "forexMarketClosed",
+    "before": "外国為替市場休業、取引不可",
+    "after": "外国為替市場は取引時間外です"
+  },
+  {
+    "locale": "ja",
+    "key": "metalMarketClosed",
+    "before": "貴金属市場休業、取引不可",
+    "after": "貴金属市場は取引時間外です"
+  },
+  {
+    "locale": "ja",
+    "key": "buyFailed",
+    "before": "購入に失敗しました。再試行してください",
+    "after": "買い注文に失敗しました。もう一度お試しください"
+  },
+  {
+    "locale": "ja",
+    "key": "sellFailed",
+    "before": "売却に失敗しました。再試行してください",
+    "after": "売り注文に失敗しました。もう一度お試しください"
+  },
+  {
+    "locale": "ja",
+    "key": "loadDurationOptionsFailed",
+    "before": "期間オプションの読み込みに失敗しました",
+    "after": "取引期間を取得できませんでした"
+  },
+  {
+    "locale": "ja",
+    "key": "loadSymbolsFailed",
+    "before": "取引ペアの読み込みに失敗しました",
+    "after": "銘柄一覧を取得できませんでした"
+  },
+  {
+    "locale": "ja",
+    "key": "loadAllSymbolsFailed",
+    "before": "すべてのシンボルの読み込みに失敗しました",
+    "after": "銘柄一覧を取得できませんでした"
+  },
+  {
+    "locale": "ja",
+    "key": "loadSymbolInfoFailed",
+    "before": "取引ペア情報の読み込みに失敗しました",
+    "after": "銘柄情報を取得できませんでした"
+  },
+  {
+    "locale": "ja",
+    "key": "loadOptionBalanceFailed",
+    "before": "オプション残高の読み込みに失敗しました",
+    "after": "期限取引口座の残高を取得できませんでした"
+  },
+  {
+    "locale": "ja",
+    "key": "selectTradingPair",
+    "before": "取引ペアを選択",
+    "after": "銘柄・通貨ペアを選択"
+  },
+  {
+    "locale": "ja",
+    "key": "orderCreatedFailedNoId",
+    "before": "注文作成に失敗: 注文IDが取得できませんでした",
+    "after": "注文IDを取得できませんでした。再注文する前に注文履歴をご確認ください"
+  },
+  {
+    "locale": "ja",
+    "key": "currentPriceInvalid",
+    "before": "現在の価格が無効です。自動クローズできません",
+    "after": "有効な価格を取得できないため、自動決済できません"
+  },
+  {
+    "locale": "ja",
+    "key": "insufficientOptionBalance",
+    "before": "オプション残高不足",
+    "after": "期限取引口座の残高が不足しています"
+  },
+  {
+    "locale": "ja",
+    "key": "buyUpFailed",
+    "before": "購入できませんでした。もう一度お試しください",
+    "after": "上昇予想の注文に失敗しました"
+  },
+  {
+    "locale": "ja",
+    "key": "buyDownFailed",
+    "before": "下降買いが失敗しました。再試行してください",
+    "after": "下落予想の注文に失敗しました"
+  },
+  {
+    "locale": "ja",
+    "key": "chartTime",
+    "before": "時間",
+    "after": "日時"
+  },
+  {
+    "locale": "ja",
+    "key": "productList",
+    "before": "製品一覧",
+    "after": "商品一覧"
+  },
+  {
+    "locale": "ja",
+    "key": "optionsTerm",
+    "before": "期間",
+    "after": "期限取引"
+  },
+  {
+    "locale": "fr",
+    "key": "limitPrice",
+    "before": "limite de prix",
+    "after": "À cours limité"
+  },
+  {
+    "locale": "de",
+    "key": "limitPrice",
+    "before": "Preislimit",
+    "after": "Limit"
+  },
+  {
+    "locale": "ru",
+    "key": "limitPrice",
+    "before": "ценовой предел",
+    "after": "Лимитный"
+  },
+  {
+    "locale": "es",
+    "key": "limitPrice",
+    "before": "límite de precio",
+    "after": "Limitada"
+  },
+  {
+    "locale": "pt",
+    "key": "limitPrice",
+    "before": "limite de preço",
+    "after": "Limitada"
+  },
+  {
+    "locale": "it",
+    "key": "limitPrice",
+    "before": "limite di prezzo",
+    "after": "Limite"
+  },
+  {
+    "locale": "ar",
+    "key": "limitPrice",
+    "before": "حد السعر",
+    "after": "محدد السعر"
+  },
+  {
+    "locale": "tr",
+    "key": "limitPrice",
+    "before": "fiyat sınırı",
+    "after": "Limit"
+  },
+  {
+    "locale": "id",
+    "key": "limitPrice",
+    "before": "batas harga",
+    "after": "Limit"
+  },
+  {
+    "locale": "my",
+    "key": "limitPrice",
+    "before": "စျေးနှုန်းကန့်သတ်ချက်",
+    "after": "ကန့်သတ်ဈေးအော်ဒါ"
+  },
+  {
+    "locale": "hi",
+    "key": "limitPrice",
+    "before": "मूल्य सीमा",
+    "after": "लिमिट"
+  },
+  {
+    "locale": "cs",
+    "key": "limitPrice",
+    "before": "cenový limit",
+    "after": "Limitní"
+  },
+  {
+    "locale": "pl",
+    "key": "limitPrice",
+    "before": "limit cenowy",
+    "after": "Z limitem"
+  },
+  {
+    "locale": "ja",
+    "key": "limitPrice",
+    "before": "価格制限",
+    "after": "指値"
+  },
+  {
+    "locale": "ko",
+    "key": "limitPrice",
+    "before": "가격 제한",
+    "after": "지정가"
+  },
+  {
+    "locale": "th",
+    "key": "limitPrice",
+    "before": "ขีด จำกัด ราคา",
+    "after": "จำกัดราคา"
+  },
+  {
+    "locale": "vi",
+    "key": "limitPrice",
+    "before": "giới hạn giá",
+    "after": "Giới hạn"
+  },
+  {
+    "locale": "en",
+    "key": "orderPrice",
+    "before": "Order Price",
+    "after": "Order price"
+  },
+  {
+    "locale": "fr",
+    "key": "orderPrice",
+    "before": "Prix de commission",
+    "after": "Prix de l’ordre"
+  },
+  {
+    "locale": "de",
+    "key": "orderPrice",
+    "before": "Provisionspreis",
+    "after": "Orderpreis"
+  },
+  {
+    "locale": "ru",
+    "key": "orderPrice",
+    "before": "Цена комиссии",
+    "after": "Цена ордера"
+  },
+  {
+    "locale": "es",
+    "key": "orderPrice",
+    "before": "Precio de comisión",
+    "after": "Precio de la orden"
+  },
+  {
+    "locale": "pt",
+    "key": "orderPrice",
+    "before": "Preço de comissão",
+    "after": "Preço da ordem"
+  },
+  {
+    "locale": "it",
+    "key": "orderPrice",
+    "before": "Prezzo della commissione",
+    "after": "Prezzo dell’ordine"
+  },
+  {
+    "locale": "ar",
+    "key": "orderPrice",
+    "before": "سعر العمولة",
+    "after": "سعر الأمر"
+  },
+  {
+    "locale": "tr",
+    "key": "orderPrice",
+    "before": "Komisyon fiyatı",
+    "after": "Emir fiyatı"
+  },
+  {
+    "locale": "id",
+    "key": "orderPrice",
+    "before": "Harga komisi",
+    "after": "Harga order"
+  },
+  {
+    "locale": "my",
+    "key": "orderPrice",
+    "before": "ကော်မရှင်ဈေး",
+    "after": "အော်ဒါဈေးနှုန်း"
+  },
+  {
+    "locale": "hi",
+    "key": "orderPrice",
+    "before": "कमीशन मूल्य",
+    "after": "ऑर्डर मूल्य"
+  },
+  {
+    "locale": "cs",
+    "key": "orderPrice",
+    "before": "Provizní cena",
+    "after": "Cena pokynu"
+  },
+  {
+    "locale": "pl",
+    "key": "orderPrice",
+    "before": "Cena prowizyjna",
+    "after": "Cena zlecenia"
+  },
+  {
+    "locale": "ja",
+    "key": "orderPrice",
+    "before": "手数料価格",
+    "after": "注文価格"
+  },
+  {
+    "locale": "ko",
+    "key": "orderPrice",
+    "before": "수수료 가격",
+    "after": "주문 가격"
+  },
+  {
+    "locale": "th",
+    "key": "orderPrice",
+    "before": "ราคาคอมมิชชั่น",
+    "after": "ราคาคำสั่ง"
+  },
+  {
+    "locale": "vi",
+    "key": "orderPrice",
+    "before": "Giá hoa hồng",
+    "after": "Giá đặt lệnh"
+  },
+  {
+    "locale": "ja",
+    "key": "financialPurchase",
+    "before": "金融サブスクリプション",
+    "after": "運用商品の申込み"
+  },
+  {
+    "locale": "ja",
+    "key": "financialOrders",
+    "before": "財務管理命令",
+    "after": "運用商品の申込履歴"
+  },
+  {
+    "locale": "ar",
+    "key": "walletMain",
+    "before": "الصفح�� الرئيسية للمحفظة",
+    "after": "المحفظة الرئيسية"
+  },
+  {
+    "locale": "ja",
+    "key": "walletMain",
+    "before": "ウォレットのホームページ",
+    "after": "ウォレット"
+  },
+  {
+    "locale": "ja",
+    "key": "assetsOverview",
+    "before": "資産の概要",
+    "after": "資産概要"
+  },
+  {
+    "locale": "my",
+    "key": "recharge",
+    "before": "အားပြ��်သွင်းပါ။",
+    "after": "ငွေသွင်းရန်"
+  },
+  {
+    "locale": "ja",
+    "key": "recharge",
+    "before": "リチャージ",
+    "after": "入金"
+  },
+  {
+    "locale": "ja",
+    "key": "withdrawCoin",
+    "before": "コインを引き出す",
+    "after": "出金"
+  },
+  {
+    "locale": "ja",
+    "key": "kyc",
+    "before": "実名認証",
+    "after": "本人確認"
+  },
+  {
+    "locale": "ja",
+    "key": "support",
+    "before": "カスタマーサービスにお問い合わせください",
+    "after": "サポート"
+  },
+  {
+    "locale": "ja",
+    "key": "fundAccountBalance",
+    "before": "基金口座残高",
+    "after": "資金口座残高"
+  },
+  {
+    "locale": "ja",
+    "key": "contractAccountBalance",
+    "before": "契約口座残高",
+    "after": "証拠金取引口座残高"
+  },
+  {
+    "locale": "ja",
+    "key": "optionAccountBalance",
+    "before": "オプション口座残高",
+    "after": "期限取引口座残高"
+  },
+  {
+    "locale": "ja",
+    "key": "frozenAmount",
+    "before": "フリーズ",
+    "after": "拘束額"
+  },
+  {
+    "locale": "ja",
+    "key": "depositApplication",
+    "before": "リチャージアプリ",
+    "after": "入金申請"
+  },
+  {
+    "locale": "ja",
+    "key": "withdrawApplication",
+    "before": "退会申請",
+    "after": "出金申請"
+  },
+  {
+    "locale": "ja",
+    "key": "transferApplication",
+    "before": "譲渡申請",
+    "after": "振替申請"
+  },
+  {
+    "locale": "hi",
+    "key": "walletAddressLabel",
+    "before": "बटुए ��ा पता",
+    "after": "वॉलेट पता"
+  },
+  {
+    "locale": "ja",
+    "key": "bankCardLabel",
+    "before": "銀行カード",
+    "after": "銀行口座"
+  },
+  {
+    "locale": "ja",
+    "key": "digitalCurrencyLabel",
+    "before": "デジタル通貨",
+    "after": "暗号資産"
+  },
+  {
+    "locale": "ja",
+    "key": "networkProtocol",
+    "before": "ネットワークプロトコル",
+    "after": "ネットワーク"
+  },
+  {
+    "locale": "ja",
+    "key": "personalInfoVerification",
+    "before": "個人情報の認証",
+    "after": "本人確認"
+  },
+  {
+    "locale": "ja",
+    "key": "takeProfitPrice",
+    "before": "利食い価格",
+    "after": "利確価格"
+  },
+  {
+    "locale": "ja",
+    "key": "confirmPurchase",
+    "before": "サブスクリプションを確認する",
+    "after": "申込みを確認"
+  },
+  {
+    "locale": "ja",
+    "key": "contractDetails",
+    "before": "契約内容",
+    "after": "取引詳細"
+  },
+  {
+    "locale": "zh-TW",
+    "key": "openPrice",
+    "before": "開倉價",
+    "after": "開倉成交價"
+  },
+  {
+    "locale": "en",
+    "key": "openPrice",
+    "before": "Open Price",
+    "after": "Entry price"
+  },
+  {
+    "locale": "fr",
+    "key": "openPrice",
+    "before": "Prix d'ouverture",
+    "after": "Prix d’entrée"
+  },
+  {
+    "locale": "de",
+    "key": "openPrice",
+    "before": "Eröffnungspreis",
+    "after": "Einstiegskurs"
+  },
+  {
+    "locale": "ru",
+    "key": "openPrice",
+    "before": "Цена открытия",
+    "after": "Цена входа"
+  },
+  {
+    "locale": "es",
+    "key": "openPrice",
+    "before": "Precio de apertura",
+    "after": "Precio de entrada"
+  },
+  {
+    "locale": "pt",
+    "key": "openPrice",
+    "before": "preço de abertura",
+    "after": "Preço de entrada"
+  },
+  {
+    "locale": "it",
+    "key": "openPrice",
+    "before": "prezzo di apertura",
+    "after": "Prezzo di apertura della posizione"
+  },
+  {
+    "locale": "ar",
+    "key": "openPrice",
+    "before": "سعر الافتتاح",
+    "after": "سعر فتح المركز"
+  },
+  {
+    "locale": "tr",
+    "key": "openPrice",
+    "before": "açılış fiyatı",
+    "after": "Pozisyon açılış fiyatı"
+  },
+  {
+    "locale": "id",
+    "key": "openPrice",
+    "before": "harga pembukaan",
+    "after": "Harga pembukaan posisi"
+  },
+  {
+    "locale": "my",
+    "key": "openPrice",
+    "before": "အဖွင့်စျေးနှုန်း",
+    "after": "အဝင်ဈေးနှုန်း"
+  },
+  {
+    "locale": "hi",
+    "key": "openPrice",
+    "before": "शुरुआती कीमत",
+    "after": "पोज़िशन खोलने का मूल्य"
+  },
+  {
+    "locale": "cs",
+    "key": "openPrice",
+    "before": "otevírací cena",
+    "after": "Vstupní cena"
+  },
+  {
+    "locale": "pl",
+    "key": "openPrice",
+    "before": "cena otwarcia",
+    "after": "Cena otwarcia pozycji"
+  },
+  {
+    "locale": "ja",
+    "key": "openPrice",
+    "before": "始値",
+    "after": "新規約定価格"
+  },
+  {
+    "locale": "ko",
+    "key": "openPrice",
+    "before": "오픈 가격",
+    "after": "진입 가격"
+  },
+  {
+    "locale": "th",
+    "key": "openPrice",
+    "before": "ราคาเปิด",
+    "after": "ราคาเปิดสถานะ"
+  },
+  {
+    "locale": "vi",
+    "key": "openPrice",
+    "before": "giá mở cửa",
+    "after": "Giá mở vị thế"
+  },
+  {
+    "locale": "ja",
+    "key": "closePosition",
+    "before": "ポジションを閉じる",
+    "after": "ポジションを決済"
+  },
+  {
+    "locale": "ja",
+    "key": "action",
+    "before": "アクション",
+    "after": "操作"
+  },
+  {
+    "locale": "en",
+    "key": "closeTimeLabel",
+    "before": "Close Time",
+    "after": "Close time"
+  },
+  {
+    "locale": "fr",
+    "key": "closeTimeLabel",
+    "before": "Heure de fermeture",
+    "after": "Date de clôture"
+  },
+  {
+    "locale": "de",
+    "key": "closeTimeLabel",
+    "before": "Schließzeit",
+    "after": "Schließungszeitpunkt"
+  },
+  {
+    "locale": "ru",
+    "key": "closeTimeLabel",
+    "before": "Время закрытия",
+    "after": "Время закрытия позиции"
+  },
+  {
+    "locale": "es",
+    "key": "closeTimeLabel",
+    "before": "hora de cierre",
+    "after": "Fecha de cierre"
+  },
+  {
+    "locale": "pt",
+    "key": "closeTimeLabel",
+    "before": "Hora de fechamento",
+    "after": "Data de fecho"
+  },
+  {
+    "locale": "it",
+    "key": "closeTimeLabel",
+    "before": "Orario di chiusura",
+    "after": "Data di chiusura"
+  },
+  {
+    "locale": "ar",
+    "key": "closeTimeLabel",
+    "before": "وقت الإغلاق",
+    "after": "وقت إغلاق المركز"
+  },
+  {
+    "locale": "tr",
+    "key": "closeTimeLabel",
+    "before": "Kapanış zamanı",
+    "after": "Pozisyon kapanış zamanı"
+  },
+  {
+    "locale": "id",
+    "key": "closeTimeLabel",
+    "before": "Waktu penutupan",
+    "after": "Waktu penutupan posisi"
+  },
+  {
+    "locale": "my",
+    "key": "closeTimeLabel",
+    "before": "ပိတ်ချိန်",
+    "after": "အရောင်းအဝယ်ပိတ်ချိန်"
+  },
+  {
+    "locale": "hi",
+    "key": "closeTimeLabel",
+    "before": "समापन का समय",
+    "after": "पोज़िशन बंद करने का समय"
+  },
+  {
+    "locale": "cs",
+    "key": "closeTimeLabel",
+    "before": "Zavírací doba",
+    "after": "Čas uzavření pozice"
+  },
+  {
+    "locale": "pl",
+    "key": "closeTimeLabel",
+    "before": "Czas zamknięcia",
+    "after": "Czas zamknięcia pozycji"
+  },
+  {
+    "locale": "ja",
+    "key": "closeTimeLabel",
+    "before": "閉店時間",
+    "after": "決済日時"
+  },
+  {
+    "locale": "ko",
+    "key": "closeTimeLabel",
+    "before": "폐관시간",
+    "after": "포지션 청산 시각"
+  },
+  {
+    "locale": "th",
+    "key": "closeTimeLabel",
+    "before": "เวลาปิด",
+    "after": "เวลาปิดสถานะ"
+  },
+  {
+    "locale": "vi",
+    "key": "closeTimeLabel",
+    "before": "Giờ đóng cửa",
+    "after": "Thời gian đóng vị thế"
+  },
+  {
+    "locale": "zh-TW",
+    "key": "openTimeLabel",
+    "before": "開倉時間",
+    "after": "開倉成交時間"
+  },
+  {
+    "locale": "en",
+    "key": "openTimeLabel",
+    "before": "Open Time",
+    "after": "Entry time"
+  },
+  {
+    "locale": "fr",
+    "key": "openTimeLabel",
+    "before": "Heure d'ouverture",
+    "after": "Date d’ouverture"
+  },
+  {
+    "locale": "de",
+    "key": "openTimeLabel",
+    "before": "Öffnungszeit",
+    "after": "Eröffnungszeitpunkt"
+  },
+  {
+    "locale": "ru",
+    "key": "openTimeLabel",
+    "before": "Время работы",
+    "after": "Время открытия позиции"
+  },
+  {
+    "locale": "es",
+    "key": "openTimeLabel",
+    "before": "Horario de apertura",
+    "after": "Fecha de apertura"
+  },
+  {
+    "locale": "pt",
+    "key": "openTimeLabel",
+    "before": "Horário de abertura",
+    "after": "Data de abertura"
+  },
+  {
+    "locale": "it",
+    "key": "openTimeLabel",
+    "before": "Orario di apertura",
+    "after": "Data di apertura"
+  },
+  {
+    "locale": "ar",
+    "key": "openTimeLabel",
+    "before": "وقت الافتتاح",
+    "after": "وقت فتح المركز"
+  },
+  {
+    "locale": "tr",
+    "key": "openTimeLabel",
+    "before": "Açılış zamanı",
+    "after": "Pozisyon açılış zamanı"
+  },
+  {
+    "locale": "id",
+    "key": "openTimeLabel",
+    "before": "Waktu pembukaan",
+    "after": "Waktu pembukaan posisi"
+  },
+  {
+    "locale": "my",
+    "key": "openTimeLabel",
+    "before": "ဖွင့်ချိန်",
+    "after": "အရောင်းအဝယ်ဖွင့်ချိန်"
+  },
+  {
+    "locale": "hi",
+    "key": "openTimeLabel",
+    "before": "खुलने का समय",
+    "after": "पोज़िशन खोलने का समय"
+  },
+  {
+    "locale": "cs",
+    "key": "openTimeLabel",
+    "before": "Otevírací doba",
+    "after": "Čas otevření pozice"
+  },
+  {
+    "locale": "pl",
+    "key": "openTimeLabel",
+    "before": "Czas otwarcia",
+    "after": "Czas otwarcia pozycji"
+  },
+  {
+    "locale": "ja",
+    "key": "openTimeLabel",
+    "before": "開館時間",
+    "after": "新規約定日時"
+  },
+  {
+    "locale": "ko",
+    "key": "openTimeLabel",
+    "before": "영업시간",
+    "after": "포지션 진입 시각"
+  },
+  {
+    "locale": "th",
+    "key": "openTimeLabel",
+    "before": "เวลาเปิดทำการ",
+    "after": "เวลาเปิดสถานะ"
+  },
+  {
+    "locale": "vi",
+    "key": "openTimeLabel",
+    "before": "Giờ mở cửa",
+    "after": "Thời gian mở vị thế"
+  },
+  {
+    "locale": "ja",
+    "key": "rejectReasonLabel",
+    "before": "拒否理由",
+    "after": "不承認理由"
+  },
+  {
+    "locale": "ja",
+    "key": "clickToChange",
+    "before": "クリックして置き換えます",
+    "after": "クリックして変更"
+  },
+  {
+    "locale": "ja",
+    "key": "idCardFront",
+    "before": "IDカード表面",
+    "after": "本人確認書類の表面"
+  },
+  {
+    "locale": "ja",
+    "key": "idCardBack",
+    "before": "IDカードの裏面",
+    "after": "本人確認書類の裏面"
+  },
+  {
+    "locale": "ja",
+    "key": "idCardHand",
+    "before": "IDカードを持っている",
+    "after": "本人確認書類を持った本人の写真"
+  },
+  {
+    "locale": "ja",
+    "key": "symbol",
+    "before": "シンボル",
+    "after": "銘柄"
+  },
+  {
+    "locale": "ja",
+    "key": "enjoyLoanService",
+    "before": "レンディングサービスを始めましょう",
+    "after": "借入サービスを利用する"
+  },
+  {
+    "locale": "ja",
+    "key": "withdrawAmount",
+    "before": "出金数量",
+    "after": "出金額"
+  },
+  {
+    "locale": "ko",
+    "key": "enterWithdrawAmount",
+    "before": "출금금액을 입력��주세요",
+    "after": "출금 금액을 입력해 주세요"
+  },
+  {
+    "locale": "my",
+    "key": "expectedArrival",
+    "before": "ခန��်မှန်းခြေ ရောက်ရှိလာသည့် ပမာဏ",
+    "after": "လက်ခံရရှိမည့် ခန့်မှန်းပမာဏ"
+  },
+  {
+    "locale": "ja",
+    "key": "expectedArrival",
+    "before": "入荷予定数量",
+    "after": "着金予定額"
+  },
+  {
+    "locale": "ja",
+    "key": "fromAccount",
+    "before": "から",
+    "after": "振替元口座"
+  },
+  {
+    "locale": "ja",
+    "key": "toAccount",
+    "before": "到着",
+    "after": "振替先口座"
+  },
+  {
+    "locale": "ja",
+    "key": "confirmTransfer",
+    "before": "転送の確認",
+    "after": "振替を確認"
+  },
+  {
+    "locale": "ja",
+    "key": "addDigitalAddress",
+    "before": "デジタル通貨アドレスを追加",
+    "after": "暗号資産アドレスを追加"
+  },
+  {
+    "locale": "ja",
+    "key": "kycVerification",
+    "before": "実名認証",
+    "after": "本人確認"
+  },
+  {
+    "locale": "ja",
+    "key": "pendingReview",
+    "before": "検討中",
+    "after": "審査中"
+  },
+  {
+    "locale": "ja",
+    "key": "oldPassword",
+    "before": "元のパスワード",
+    "after": "現在のパスワード"
+  },
+  {
+    "locale": "ja",
+    "key": "enterOldPassword",
+    "before": "元のパスワードを入力してください",
+    "after": "現在のパスワードを入力してください"
+  },
+  {
+    "locale": "ja",
+    "key": "contactSupport",
+    "before": "カスタマーサービスにお問い合わせください",
+    "after": "カスタマーサポートへお問い合わせください"
+  },
+  {
+    "locale": "ja",
+    "key": "onlineSupport",
+    "before": "オンラインカスタマーサービス",
+    "after": "オンラインサポート"
+  },
+  {
+    "locale": "ja",
+    "key": "uploadPaymentVoucher",
+    "before": "支払い伝票をアップロードする",
+    "after": "入金確認書類をアップロード"
+  },
+  {
+    "locale": "my",
+    "key": "clickUploadVoucher",
+    "before": "လက်မှတ်၏ ဖန��သားပြင်ဓာတ်ပုံကို အပ်လုဒ်လုပ်ရန် နှိပ်ပါ။",
+    "after": "ငွေပေးချေမှုအထောက်အထားတင်ရန် နှိပ်ပါ။"
+  },
+  {
+    "locale": "ja",
+    "key": "clickUploadVoucher",
+    "before": "クリックして証明書のスクリーンショットをアップロードします",
+    "after": "クリックして入金確認書類の画像をアップロード"
+  },
+  {
+    "locale": "ja",
+    "key": "submitDepositApplication",
+    "before": "リチャージ申請を提出する",
+    "after": "入金申請を送信"
+  },
+  {
+    "locale": "vi",
+    "key": "completed",
+    "before": "��ã hoàn thành",
+    "after": "Đã hoàn tất"
+  },
+  {
+    "locale": "ja",
+    "key": "rejected",
+    "before": "拒否されました",
+    "after": "不承認"
+  },
+  {
+    "locale": "th",
+    "key": "rejected",
+    "before": "ถูกปฏิเส��",
+    "after": "ถูกปฏิเสธ"
+  },
+  {
+    "locale": "ja",
+    "key": "ordersInProgress",
+    "before": "エスクローでの注文",
+    "after": "運用中の申込み"
+  },
+  {
+    "locale": "ja",
+    "key": "cycle",
+    "before": "サイクル",
+    "after": "期間"
+  },
+  {
+    "locale": "hi",
+    "key": "yield",
+    "before": "आ��",
+    "after": "आय"
+  },
+  {
+    "locale": "ja",
+    "key": "yield",
+    "before": "収入",
+    "after": "収益"
+  },
+  {
+    "locale": "ja",
+    "key": "earlyRedemption",
+    "before": "デフォルトの償還",
+    "after": "中途解約"
+  },
+  {
+    "locale": "fr",
+    "key": "unsettled",
+    "before": "Instable",
+    "after": "Non dénoué"
+  },
+  {
+    "locale": "de",
+    "key": "unsettled",
+    "before": "Unruhig",
+    "after": "Nicht abgerechnet"
+  },
+  {
+    "locale": "ru",
+    "key": "unsettled",
+    "before": "Неурегулированный",
+    "after": "Не рассчитано"
+  },
+  {
+    "locale": "es",
+    "key": "unsettled",
+    "before": "Inquieto",
+    "after": "Pendiente de liquidación"
+  },
+  {
+    "locale": "pt",
+    "key": "unsettled",
+    "before": "Inquieto",
+    "after": "Por liquidar"
+  },
+  {
+    "locale": "it",
+    "key": "unsettled",
+    "before": "Instabile",
+    "after": "Non liquidato"
+  },
+  {
+    "locale": "ar",
+    "key": "unsettled",
+    "before": "غير مستقر",
+    "after": "غير مسوّى"
+  },
+  {
+    "locale": "tr",
+    "key": "unsettled",
+    "before": "Kararsız",
+    "after": "Henüz sonuçlanmadı"
+  },
+  {
+    "locale": "id",
+    "key": "unsettled",
+    "before": "Gelisah",
+    "after": "Belum diselesaikan"
+  },
+  {
+    "locale": "my",
+    "key": "unsettled",
+    "before": "အညစ်မခံ",
+    "after": "မရှင်းလင်းရသေး"
+  },
+  {
+    "locale": "hi",
+    "key": "unsettled",
+    "before": "अस्थिर",
+    "after": "निपटान लंबित"
+  },
+  {
+    "locale": "cs",
+    "key": "unsettled",
+    "before": "Nevyrovnaný",
+    "after": "Nevypořádáno"
+  },
+  {
+    "locale": "pl",
+    "key": "unsettled",
+    "before": "Niespokojny",
+    "after": "Nierozliczone"
+  },
+  {
+    "locale": "ja",
+    "key": "unsettled",
+    "before": "不安定",
+    "after": "未決済"
+  },
+  {
+    "locale": "ko",
+    "key": "unsettled",
+    "before": "불안하다",
+    "after": "미정산"
+  },
+  {
+    "locale": "th",
+    "key": "unsettled",
+    "before": "ไม่มั่นคง",
+    "after": "ยังไม่ชำระราคา"
+  },
+  {
+    "locale": "vi",
+    "key": "unsettled",
+    "before": "bất ổn",
+    "after": "Chưa quyết toán"
+  },
+  {
+    "locale": "ja",
+    "key": "optionsAccount",
+    "before": "オプション口座",
+    "after": "期限取引口座"
+  },
+  {
+    "locale": "ja",
+    "key": "branchAddress",
+    "before": "���座開設銀行住所",
+    "after": "支店所在地"
+  },
+  {
+    "locale": "ja",
+    "key": "network",
+    "before": "ネットワークプロトコル",
+    "after": "ネットワーク"
+  },
+  {
+    "locale": "ja",
+    "key": "enterNetwork",
+    "before": "ネットワークプロトコルを入力してください",
+    "after": "ネットワークを入力してください"
+  },
+  {
+    "locale": "ru",
+    "key": "enterWalletAddress",
+    "before": "Пожалуйста, введите адрес ко��елька",
+    "after": "Введите адрес кошелька"
+  },
+  {
+    "locale": "ja",
+    "key": "enterPayeeName",
+    "before": "お支払い受取人の名前を入力してください",
+    "after": "口座名義人の氏名を入力してください"
+  },
+  {
+    "locale": "ja",
+    "key": "enterPayeeAccount",
+    "before": "受取人の口座を入力してください",
+    "after": "受取人の口座番号を入力してください"
+  },
+  {
+    "locale": "my",
+    "key": "passwordNotMatch",
+    "before": "စကားဝှက်နှစ်ခု ထည့်သွင���းမှုမှာ မကိုက်ညီပါ။",
+    "after": "စကားဝှက်နှစ်ခု မတူပါ။"
+  },
+  {
+    "locale": "ja",
+    "key": "passwordNotMatch",
+    "before": "2 つのパスワード入力が矛盾しています",
+    "after": "パスワードが一致しません"
+  },
+  {
+    "locale": "ja",
+    "key": "options",
+    "before": "オプション",
+    "after": "期限取引"
+  },
+  {
+    "locale": "ja",
+    "key": "availableAmount",
+    "before": "利用可能数量",
+    "after": "利用可能額"
+  },
+  {
+    "locale": "ja",
+    "key": "totalAmount",
+    "before": "総量",
+    "after": "合計金額"
+  },
+  {
+    "locale": "ja",
+    "key": "assetsAccount",
+    "before": "資産勘定",
+    "after": "資産口座"
+  },
+  {
+    "locale": "ja",
+    "key": "rechargeRecords",
+    "before": "リチャージ記録",
+    "after": "入金履歴"
+  },
+  {
+    "locale": "ja",
+    "key": "rechargeAmount",
+    "before": "リチャージ量",
+    "after": "入金額"
+  },
+  {
+    "locale": "ja",
+    "key": "digitalAddress",
+    "before": "デジタル通貨アドレス",
+    "after": "暗号資産アドレス"
+  },
+  {
+    "locale": "th",
+    "key": "networkType",
+    "before": "ประเภ���เครือข่าย",
+    "after": "ประเภทเครือข่าย"
+  },
+  {
+    "locale": "ja",
+    "key": "submitRecharge",
+    "before": "リチャージを送信する",
+    "after": "入金申請を送信"
+  },
+  {
+    "locale": "ja",
+    "key": "withdrawAll",
+    "before": "全部撤回",
+    "after": "全額出金"
+  },
+  {
+    "locale": "hi",
+    "key": "withdrawFee",
+    "before": "���ैंडलिंग शुल्क",
+    "after": "शुल्क"
+  },
+  {
+    "locale": "ja",
+    "key": "submitWithdraw",
+    "before": "引き出しを送信する",
+    "after": "出金申請を送信"
+  },
+  {
+    "locale": "ja",
+    "key": "transferFrom",
+    "before": "アカウントから",
+    "after": "振替元口座"
+  },
+  {
+    "locale": "ja",
+    "key": "transferTo",
+    "before": "アカウントに",
+    "after": "振替先口座"
+  },
+  {
+    "locale": "ja",
+    "key": "transferAll",
+    "before": "全部転送",
+    "after": "全額振替"
+  },
+  {
+    "locale": "ja",
+    "key": "kycUnverified",
+    "before": "認定されていません",
+    "after": "本人確認未完了"
+  },
+  {
+    "locale": "ja",
+    "key": "kycPending",
+    "before": "検討中",
+    "after": "審査中"
+  },
+  {
+    "locale": "ja",
+    "key": "kycVerified",
+    "before": "認定済み",
+    "after": "本人確認済み"
+  },
+  {
+    "locale": "my",
+    "key": "onlineService",
+    "before": "အွန်လိုင်းဖောက်သည်ဝန်ဆောင်မှ��",
+    "after": "အွန်လိုင်းဖောက်သည်ဝန်ဆောင်မှု"
+  },
+  {
+    "locale": "ja",
+    "key": "onlineService",
+    "before": "オンラインカスタマーサービス",
+    "after": "オンラインサポート"
+  },
+  {
+    "locale": "ja",
+    "key": "remaining1",
+    "before": "証明写真を持っている",
+    "after": "本人確認書類を持った本人の写真"
+  },
+  {
+    "locale": "ja",
+    "key": "remaining9",
+    "before": "拒否理由",
+    "after": "不承認理由"
+  },
+  {
+    "locale": "ja",
+    "key": "remaining10",
+    "before": "クリックまたはドラッグして証明書のスクリーンショットをアップロードします",
+    "after": "クリックまたはドラッグして入金確認書類の画像をアップロード"
+  },
+  {
+    "locale": "ko",
+    "key": "remaining10",
+    "before": "인증서의 스크린샷을 업로드���려면 클릭하거나 드래그하세요.",
+    "after": "클릭하거나 드래그하여 입금 증빙을 업로드하세요."
+  },
+  {
+    "locale": "ja",
+    "key": "transferAmountPlaceholder",
+    "before": "送金額を入力してください",
+    "after": "振替金額を入力してください"
+  },
+  {
+    "locale": "ja",
+    "key": "borrowerQuote",
+    "before": "借り手",
+    "after": "借入人"
+  },
+  {
+    "locale": "ja",
+    "key": "firstNameQuote",
+    "before": "名前:",
+    "after": "名："
+  },
+  {
+    "locale": "ja",
+    "key": "lastNameQuote",
+    "before": "姓:",
+    "after": "姓："
+  },
+  {
+    "locale": "ja",
+    "key": "nameQuote",
+    "before": "名前:",
+    "after": "氏名："
+  },
+  {
+    "locale": "ja",
+    "key": "partiesQuote",
+    "before": "以下、総称して「当事者」といいます��",
+    "after": "以下、総称して「当事者」といいます。"
+  },
+  {
+    "locale": "hi",
+    "key": "repaymentTermsQuote",
+    "before": "पुनर्भुगत��न की शर्तें",
+    "after": "पुनर्भुगतान की शर्तें"
+  },
+  {
+    "locale": "my",
+    "key": "borrowerAgreesToRepayQuote",
+    "before": "ချေးယူသူက ပြန်ဆပ်ရန် သဘောတ���သည်။",
+    "after": "ချေးယူသူက ပြန်ဆပ်ရန် သဘောတူသည်။"
+  },
+  {
+    "locale": "fr",
+    "key": "daysQuote",
+    "before": "Dieu.",
+    "after": "jours."
+  },
+  {
+    "locale": "de",
+    "key": "daysQuote",
+    "before": "Gott.",
+    "after": "Tage."
+  },
+  {
+    "locale": "ru",
+    "key": "daysQuote",
+    "before": "Боже.",
+    "after": "дней."
+  },
+  {
+    "locale": "es",
+    "key": "daysQuote",
+    "before": "Dios.",
+    "after": "días."
+  },
+  {
+    "locale": "pt",
+    "key": "daysQuote",
+    "before": "Deus.",
+    "after": "dias."
+  },
+  {
+    "locale": "it",
+    "key": "daysQuote",
+    "before": "Dio.",
+    "after": "giorni."
+  },
+  {
+    "locale": "ar",
+    "key": "daysQuote",
+    "before": "الله.",
+    "after": "أيام."
+  },
+  {
+    "locale": "tr",
+    "key": "daysQuote",
+    "before": "Tanrım.",
+    "after": "gün."
+  },
+  {
+    "locale": "id",
+    "key": "daysQuote",
+    "before": "Tuhan.",
+    "after": "hari."
+  },
+  {
+    "locale": "my",
+    "key": "daysQuote",
+    "before": "ဘုရား။",
+    "after": "ရက်။"
+  },
+  {
+    "locale": "hi",
+    "key": "daysQuote",
+    "before": "भगवान.",
+    "after": "दिन।"
+  },
+  {
+    "locale": "cs",
+    "key": "daysQuote",
+    "before": "Bože.",
+    "after": "dní."
+  },
+  {
+    "locale": "pl",
+    "key": "daysQuote",
+    "before": "Bóg.",
+    "after": "dni."
+  },
+  {
+    "locale": "ja",
+    "key": "daysQuote",
+    "before": "神様。",
+    "after": "日。"
+  },
+  {
+    "locale": "ko",
+    "key": "daysQuote",
+    "before": "신.",
+    "after": "일."
+  },
+  {
+    "locale": "th",
+    "key": "daysQuote",
+    "before": "พระเจ้า",
+    "after": "วัน"
+  },
+  {
+    "locale": "vi",
+    "key": "daysQuote",
+    "before": "Chúa ơi.",
+    "after": "ngày."
+  },
+  {
+    "locale": "ja",
+    "key": "principalAndQuote",
+    "before": "元金合計",
+    "after": "元本および"
+  },
+  {
+    "locale": "fr",
+    "key": "interestQuote",
+    "before": "intérêt.",
+    "after": "intérêts."
+  },
+  {
+    "locale": "de",
+    "key": "interestQuote",
+    "before": "Interesse.",
+    "after": "Zinsen."
+  },
+  {
+    "locale": "ru",
+    "key": "interestQuote",
+    "before": "интерес.",
+    "after": "проценты."
+  },
+  {
+    "locale": "es",
+    "key": "interestQuote",
+    "before": "interés.",
+    "after": "intereses."
+  },
+  {
+    "locale": "pt",
+    "key": "interestQuote",
+    "before": "interesse.",
+    "after": "juros."
+  },
+  {
+    "locale": "it",
+    "key": "interestQuote",
+    "before": "interesse.",
+    "after": "interessi."
+  },
+  {
+    "locale": "tr",
+    "key": "interestQuote",
+    "before": "ilgi.",
+    "after": "faiz."
+  },
+  {
+    "locale": "my",
+    "key": "interestQuote",
+    "before": "အကျိုးစီးပွား။",
+    "after": "အတိုး။"
+  },
+  {
+    "locale": "hi",
+    "key": "interestQuote",
+    "before": "रुचि.",
+    "after": "ब्याज।"
+  },
+  {
+    "locale": "cs",
+    "key": "interestQuote",
+    "before": "zájem.",
+    "after": "úrok."
+  },
+  {
+    "locale": "pl",
+    "key": "interestQuote",
+    "before": "zainteresowanie.",
+    "after": "odsetki."
+  },
+  {
+    "locale": "ja",
+    "key": "interestQuote",
+    "before": "興味。",
+    "after": "利息。"
+  },
+  {
+    "locale": "ko",
+    "key": "interestQuote",
+    "before": "관심.",
+    "after": "이자."
+  },
+  {
+    "locale": "ja",
+    "key": "resignQuote",
+    "before": "再署名",
+    "after": "署名をやり直す"
+  },
+  {
+    "locale": "ja",
+    "key": "rechargeApplication",
+    "before": "リチャージアプリ",
+    "after": "入金申請"
+  },
+  {
+    "locale": "my",
+    "key": "rechargeChannel",
+    "before": "ချန်နယ်ကို အားပြန်သွင်း��ါ။",
+    "after": "ငွေသွင်းနည်းလမ်း"
+  },
+  {
+    "locale": "ja",
+    "key": "rechargeChannel",
+    "before": "リチャージチャンネル",
+    "after": "入金方法"
+  },
+  {
+    "locale": "th",
+    "key": "rechargeChannel",
+    "before": "ช่���งเติมเงิน",
+    "after": "ช่องทางฝากเงิน"
+  },
+  {
+    "locale": "ja",
+    "key": "withdrawChannel",
+    "before": "出金チャネル",
+    "after": "出金方法"
+  },
+  {
+    "locale": "ru",
+    "key": "uploadIDFront",
+    "before": "Загрузите лицевую сторону своего удостоверени�� личности",
+    "after": "Загрузите лицевую сторону документа, удостоверяющего личность"
+  },
+  {
+    "locale": "ja",
+    "key": "uploadIDFront",
+    "before": "IDカードの表面をアップロードしてください",
+    "after": "本人確認書類の表面をアップロードしてください"
+  },
+  {
+    "locale": "ja",
+    "key": "uploadIDBack",
+    "before": "IDカードの裏面をアップロードしてください",
+    "after": "本人確認書類の裏面をアップロードしてください"
+  },
+  {
+    "locale": "ja",
+    "key": "uploadHandheldID",
+    "before": "手持ちIDカードをアップロードする",
+    "after": "本人確認書類を持った本人の写真をアップロードしてください"
+  },
+  {
+    "locale": "ja",
+    "key": "bindBankCardTitle",
+    "before": "銀行カードをバインドする",
+    "after": "銀行口座を登録"
+  },
+  {
+    "locale": "ja",
+    "key": "bindDigitalAddressTitle",
+    "before": "デジタル通貨アドレスをバインドする",
+    "after": "暗号資産アドレスを登録"
+  },
+  {
+    "locale": "ja",
+    "key": "viewAgreementAndSign",
+    "before": "契約書を確認し、契約書に署名します",
+    "after": "契約書を確認して署名"
+  },
+  {
+    "locale": "ja",
+    "key": "repayImmediately",
+    "before": "すぐに返済してください",
+    "after": "返済する"
+  },
+  {
+    "locale": "ja",
+    "key": "cleared",
+    "before": "解決済み",
+    "after": "完済"
+  },
+  {
+    "locale": "ja",
+    "key": "loanTermShort",
+    "before": "融資期間",
+    "after": "借入期間"
+  },
+  {
+    "locale": "ja",
+    "key": "needRepay",
+    "before": "返済する必要がある",
+    "after": "返済予定額"
+  },
+  {
+    "locale": "ja",
+    "key": "myMiningMachines",
+    "before": "私のマイニングマシン",
+    "after": "利用中のマイニングマシン"
+  },
+  {
+    "locale": "ja",
+    "key": "minimum",
+    "before": "最小値:",
+    "after": "最小："
+  },
+  {
+    "locale": "ja",
+    "key": "maximum",
+    "before": "最大:",
+    "after": "最大："
+  },
+  {
+    "locale": "ja",
+    "key": "freeInterestDays",
+    "before": "無利息日",
+    "after": "無利息期間"
+  },
+  {
+    "locale": "ja",
+    "key": "verifiedStatus",
+    "before": "確認済み",
+    "after": "本人確認済み"
+  },
+  {
+    "locale": "ja",
+    "key": "unverifiedStatus",
+    "before": "未検証",
+    "after": "本人確認未完了"
+  },
+  {
+    "locale": "ja",
+    "key": "setTpSl",
+    "before": "テイクプロフィットとストップロスを設定する",
+    "after": "利確・損切りを設定"
+  },
+  {
+    "locale": "ja",
+    "key": "buyIn",
+    "before": "購入",
+    "after": "買い"
+  },
+  {
+    "locale": "ja",
+    "key": "estMargin",
+    "before": "推定マージン",
+    "after": "必要証拠金（概算）"
+  },
+  {
+    "locale": "ja",
+    "key": "buyPrice",
+    "before": "入札価格",
+    "after": "購入価格"
+  },
+  {
+    "locale": "ja",
+    "key": "estProfit",
+    "before": "推定収益",
+    "after": "予想損益"
+  },
+  {
+    "locale": "ja",
+    "key": "actualProfit",
+    "before": "実際の収入",
+    "after": "確定損益"
+  },
+  {
+    "locale": "ja",
+    "key": "selectExpiry",
+    "before": "有効期限を選択してください",
+    "after": "取引期間を選択してください"
+  },
+  {
+    "locale": "ja",
+    "key": "closeConfirm",
+    "before": "閉位置の確認",
+    "after": "決済の確認"
+  },
+  {
+    "locale": "hi",
+    "key": "cancelOrderConfirm",
+    "before": "र���्दीकरण की पुष्टि",
+    "after": "ऑर्डर रद्द करने की पुष्टि"
+  },
+  {
+    "locale": "ja",
+    "key": "cancelOrderConfirm",
+    "before": "キャンセル確認",
+    "after": "注文取消の確認"
+  },
+  {
+    "locale": "ja",
+    "key": "availableFund",
+    "before": "available funds",
+    "after": "取引可能額"
+  },
+  {
+    "locale": "ja",
+    "key": "subscribeList",
+    "before": "購読リスト",
+    "after": "申込履歴"
+  },
+  {
+    "locale": "zh-TW",
+    "key": "estDailyYield",
+    "before": "预计日产",
+    "after": "預估每日收益金額"
+  },
+  {
+    "locale": "en",
+    "key": "estDailyYield",
+    "before": "Est. Daily Yield",
+    "after": "Estimated daily earnings"
+  },
+  {
+    "locale": "fr",
+    "key": "estDailyYield",
+    "before": "Nissan attendu",
+    "after": "Gains quotidiens estimés"
+  },
+  {
+    "locale": "de",
+    "key": "estDailyYield",
+    "before": "Nissan erwartet",
+    "after": "Geschätzter Tagesertrag"
+  },
+  {
+    "locale": "ru",
+    "key": "estDailyYield",
+    "before": "Ожидаемый Ниссан",
+    "after": "Ожидаемый дневной доход"
+  },
+  {
+    "locale": "es",
+    "key": "estDailyYield",
+    "before": "Nissan esperado",
+    "after": "Ganancias diarias estimadas"
+  },
+  {
+    "locale": "pt",
+    "key": "estDailyYield",
+    "before": "Esperado Nissan",
+    "after": "Ganhos diários estimados"
+  },
+  {
+    "locale": "it",
+    "key": "estDailyYield",
+    "before": "Atteso Nissan",
+    "after": "Guadagni giornalieri stimati"
+  },
+  {
+    "locale": "ar",
+    "key": "estDailyYield",
+    "before": "نيسان المنتظر",
+    "after": "الأرباح اليومية المقدرة"
+  },
+  {
+    "locale": "tr",
+    "key": "estDailyYield",
+    "before": "Beklenen Nissan",
+    "after": "Tahmini günlük kazanç"
+  },
+  {
+    "locale": "id",
+    "key": "estDailyYield",
+    "before": "Nissan yang diharapkan",
+    "after": "Estimasi pendapatan harian"
+  },
+  {
+    "locale": "my",
+    "key": "estDailyYield",
+    "before": "Nissan က မျှော်လင့်ထားပါတယ်။",
+    "after": "ခန့်မှန်းနေ့စဉ်ဝင်ငွေ"
+  },
+  {
+    "locale": "hi",
+    "key": "estDailyYield",
+    "before": "अपेक्षित निसान",
+    "after": "अनुमानित दैनिक आय"
+  },
+  {
+    "locale": "cs",
+    "key": "estDailyYield",
+    "before": "Očekávaný Nissan",
+    "after": "Odhadovaný denní výnos"
+  },
+  {
+    "locale": "pl",
+    "key": "estDailyYield",
+    "before": "Oczekiwany Nissan",
+    "after": "Szacowany dzienny zysk"
+  },
+  {
+    "locale": "ja",
+    "key": "estDailyYield",
+    "before": "期待される日産",
+    "after": "予想日次収益額"
+  },
+  {
+    "locale": "ko",
+    "key": "estDailyYield",
+    "before": "예상 일일 수익",
+    "after": "예상 일일 수익금"
+  },
+  {
+    "locale": "th",
+    "key": "estDailyYield",
+    "before": "คาดว่านิสสัน",
+    "after": "รายได้ต่อวันโดยประมาณ"
+  },
+  {
+    "locale": "vi",
+    "key": "estDailyYield",
+    "before": "Nissan dự kiến",
+    "after": "Thu nhập hằng ngày dự kiến"
+  },
+  {
+    "locale": "ja",
+    "key": "lockRent",
+    "before": "ロックアップ家賃",
+    "after": "レンタル料（設定値）"
+  },
+  {
+    "locale": "ja",
+    "key": "subscribe",
+    "before": "定期購入",
+    "after": "申し込む"
+  },
+  {
+    "locale": "ja",
+    "key": "financePeriod",
+    "before": "財務管理サイクル",
+    "after": "運用期間"
+  },
+  {
+    "locale": "ja",
+    "key": "subscribeAmount",
+    "before": "購読数量",
+    "after": "申込金額"
+  },
+  {
+    "locale": "ja",
+    "key": "subscribeTime",
+    "before": "購読時間",
+    "after": "申込日時"
+  },
+  {
+    "locale": "ja",
+    "key": "estTotalYield",
+    "before": "推定総収益",
+    "after": "予想総収益"
+  },
+  {
+    "locale": "ja",
+    "key": "defaultRedeem",
+    "before": "デフォルトの償還",
+    "after": "中途解約"
+  },
+  {
+    "locale": "ja",
+    "key": "confirmDefaultRedeem1",
+    "before": "この注文をデフォルトで引き換えてもよろしいですか?差し引かれます",
+    "after": "この申込みを中途解約しますか？差し引かれる金額："
+  },
+  {
+    "locale": "ja",
+    "key": "confirmDefaultRedeem2",
+    "before": "賠償金の清算",
+    "after": "中途解約手数料"
+  },
+  {
+    "locale": "th",
+    "key": "confirmDefaultRedeem2",
+    "before": "ค่าเสียห���ยที่ชำระบัญชีแล้ว",
+    "after": "ค่าปรับ"
+  },
+  {
+    "locale": "ja",
+    "key": "confirmRedeem",
+    "before": "引き換えを確認する",
+    "after": "中途解約を確認"
+  },
+  {
+    "locale": "ja",
+    "key": "paidYieldText",
+    "before": "発行されました",
+    "after": "支払済み収益"
+  },
+  {
+    "locale": "ja",
+    "key": "yieldDaysText",
+    "before": "稼げる日数",
+    "after": "収益計算日数"
+  },
+  {
+    "locale": "ja",
+    "key": "pendingYieldText",
+    "before": "発行予定",
+    "after": "未払い収益"
+  },
+  {
+    "locale": "ja",
+    "key": "noYieldRecordsText",
+    "before": "収益実績はまだありません",
+    "after": "収益履歴はありません"
+  },
+  {
+    "locale": "ja",
+    "key": "confirmRedeemBtn",
+    "before": "引き換えを確認する",
+    "after": "中途解約を確認"
+  },
+  {
+    "locale": "ja",
+    "key": "viewAndSignAgreement",
+    "before": "契約書を確認し、契約書に署名します",
+    "after": "契約書を確認して署名"
+  },
+  {
+    "locale": "ja",
+    "key": "signByPartiesText",
+    "before": "(「発効日」) は次の者によって署名されています。",
+    "after": "（発効日）。以下の当事者が署名します。"
+  },
+  {
+    "locale": "ja",
+    "key": "signByPartiesText2",
+    "before": "(「発効日」) は次の者によって署名されます。",
+    "after": "（発効日）。以下の当事者が署名します。"
+  },
+  {
+    "locale": "ja",
+    "key": "noneText",
+    "before": "まだありません",
+    "after": "なし"
+  },
+  {
+    "locale": "ja",
+    "key": "noRecordsText",
+    "before": "まだ記録がありません",
+    "after": "データがありません"
+  },
+  {
+    "locale": "ja",
+    "key": "buyDownSuccess",
+    "before": "売買注文が正常に完了しました",
+    "after": "下落を予想する注文を受け付けました"
+  },
+  {
+    "locale": "ja",
+    "key": "buyUpSuccess",
+    "before": "注文を無事に買い占めました",
+    "after": "上昇を予想する注文を受け付けました"
+  },
+  {
+    "locale": "zh-TW",
+    "key": "buyDownText",
+    "before": "買跌",
+    "after": "預測下跌"
+  },
+  {
+    "locale": "en",
+    "key": "buyDownText",
+    "before": "Buy Down",
+    "after": "Predict fall"
+  },
+  {
+    "locale": "fr",
+    "key": "buyDownText",
+    "before": "Acheter ou vendre",
+    "after": "Prévoir une baisse"
+  },
+  {
+    "locale": "de",
+    "key": "buyDownText",
+    "before": "Kaufen oder verkaufen",
+    "after": "Rückgang prognostizieren"
+  },
+  {
+    "locale": "ru",
+    "key": "buyDownText",
+    "before": "Купить или продать",
+    "after": "Прогноз снижения"
+  },
+  {
+    "locale": "es",
+    "key": "buyDownText",
+    "before": "comprar o vender",
+    "after": "Prever una bajada"
+  },
+  {
+    "locale": "pt",
+    "key": "buyDownText",
+    "before": "Comprar ou vender",
+    "after": "Prever uma descida"
+  },
+  {
+    "locale": "it",
+    "key": "buyDownText",
+    "before": "Compra o vendi",
+    "after": "Prevedi un ribasso"
+  },
+  {
+    "locale": "ar",
+    "key": "buyDownText",
+    "before": "شراء أو بيع",
+    "after": "توقع الانخفاض"
+  },
+  {
+    "locale": "tr",
+    "key": "buyDownText",
+    "before": "Satın al veya sat",
+    "after": "Düşüş tahmini"
+  },
+  {
+    "locale": "id",
+    "key": "buyDownText",
+    "before": "Beli atau jual",
+    "after": "Prediksi turun"
+  },
+  {
+    "locale": "my",
+    "key": "buyDownText",
+    "before": "ဝယ်သည်ဖြစ်စေ၊ ရောင်းသည်ဖြစ်စေ၊",
+    "after": "ဈေးကျမည်ဟု ခန့်မှန်း"
+  },
+  {
+    "locale": "hi",
+    "key": "buyDownText",
+    "before": "खरीदें या बेचें",
+    "after": "गिरने का अनुमान"
+  },
+  {
+    "locale": "cs",
+    "key": "buyDownText",
+    "before": "Koupit nebo prodat",
+    "after": "Očekávaný pokles"
+  },
+  {
+    "locale": "pl",
+    "key": "buyDownText",
+    "before": "Kup lub sprzedaj",
+    "after": "Prognoza spadku"
+  },
+  {
+    "locale": "ja",
+    "key": "buyDownText",
+    "before": "買うか売るか",
+    "after": "下落を予想"
+  },
+  {
+    "locale": "ko",
+    "key": "buyDownText",
+    "before": "매도(하락)",
+    "after": "하락 예측"
+  },
+  {
+    "locale": "th",
+    "key": "buyDownText",
+    "before": "ซื้อหรือขาย",
+    "after": "คาดการณ์ลง"
+  },
+  {
+    "locale": "vi",
+    "key": "buyDownText",
+    "before": "Mua hoặc bán",
+    "after": "Dự đoán giảm"
+  },
+  {
+    "locale": "zh-TW",
+    "key": "buyUpText",
+    "before": "買漲",
+    "after": "預測上漲"
+  },
+  {
+    "locale": "en",
+    "key": "buyUpText",
+    "before": "Buy Up",
+    "after": "Predict rise"
+  },
+  {
+    "locale": "fr",
+    "key": "buyUpText",
+    "before": "Acheter",
+    "after": "Prévoir une hausse"
+  },
+  {
+    "locale": "de",
+    "key": "buyUpText",
+    "before": "Aufkaufen",
+    "after": "Anstieg prognostizieren"
+  },
+  {
+    "locale": "ru",
+    "key": "buyUpText",
+    "before": "Скупить",
+    "after": "Прогноз роста"
+  },
+  {
+    "locale": "es",
+    "key": "buyUpText",
+    "before": "comprar",
+    "after": "Prever una subida"
+  },
+  {
+    "locale": "pt",
+    "key": "buyUpText",
+    "before": "Compre",
+    "after": "Prever uma subida"
+  },
+  {
+    "locale": "it",
+    "key": "buyUpText",
+    "before": "Acquista",
+    "after": "Prevedi un rialzo"
+  },
+  {
+    "locale": "ar",
+    "key": "buyUpText",
+    "before": "شراء ما يصل",
+    "after": "توقع الارتفاع"
+  },
+  {
+    "locale": "tr",
+    "key": "buyUpText",
+    "before": "Satın al",
+    "after": "Yükseliş tahmini"
+  },
+  {
+    "locale": "id",
+    "key": "buyUpText",
+    "before": "Belilah",
+    "after": "Prediksi naik"
+  },
+  {
+    "locale": "my",
+    "key": "buyUpText",
+    "before": "တက်ဝယ်ပါ။",
+    "after": "ဈေးတက်မည်ဟု ခန့်မှန်း"
+  },
+  {
+    "locale": "hi",
+    "key": "buyUpText",
+    "before": "खरीदो",
+    "after": "बढ़ने का अनुमान"
+  },
+  {
+    "locale": "cs",
+    "key": "buyUpText",
+    "before": "Koupit",
+    "after": "Očekávaný růst"
+  },
+  {
+    "locale": "pl",
+    "key": "buyUpText",
+    "before": "Kupuj",
+    "after": "Prognoza wzrostu"
+  },
+  {
+    "locale": "ja",
+    "key": "buyUpText",
+    "before": "買い占め",
+    "after": "上昇を予想"
+  },
+  {
+    "locale": "ko",
+    "key": "buyUpText",
+    "before": "매수(상승)",
+    "after": "상승 예측"
+  },
+  {
+    "locale": "th",
+    "key": "buyUpText",
+    "before": "ซื้อขึ้น",
+    "after": "คาดการณ์ขึ้น"
+  },
+  {
+    "locale": "vi",
+    "key": "buyUpText",
+    "before": "mua lên",
+    "after": "Dự đoán tăng"
+  },
+  {
+    "locale": "ja",
+    "key": "orderSuccess",
+    "before": "注文は正常に完了しました",
+    "after": "注文を受け付けました"
+  },
+  {
+    "locale": "ja",
+    "key": "sellSuccess",
+    "before": "注文が正常に販売されました",
+    "after": "売り注文を受け付けました"
+  },
+  {
+    "locale": "ja",
+    "key": "sellText",
+    "before": "売る",
+    "after": "売り"
+  },
+  {
+    "locale": "ja",
+    "key": "recordText",
+    "before": "記録する",
+    "after": "履歴"
+  },
+  {
+    "locale": "ja",
+    "key": "effectiveText",
+    "before": "発効する",
+    "after": "発効日"
+  },
+  {
+    "locale": "ja",
+    "key": "voucherUploadSuccess",
+    "before": "証明書が正常にアップロードされました",
+    "after": "入金確認書類をアップロードしました"
+  },
+  {
+    "locale": "ja",
+    "key": "depositSubmitWaitReview",
+    "before": "リチャージ申請が送信されました。審査をお待ちください",
+    "after": "入金申請を受け付けました。審査をお待ちください"
+  },
+  {
+    "locale": "ja",
+    "key": "selectNetworkGetAddress",
+    "before": "リチャージネットワークを選択してアドレスを取得してください",
+    "after": "入金ネットワークを選択すると、入金先アドレスが表示されます"
+  },
+  {
+    "locale": "ja",
+    "key": "digitalText",
+    "before": "Digital",
+    "after": "暗号資産"
+  },
+  {
+    "locale": "hi",
+    "key": "depositAddressText",
+    "before": "���िचार्ज पता",
+    "after": "जमा पता"
+  },
+  {
+    "locale": "ja",
+    "key": "depositAddressText",
+    "before": "リチャージアドレス",
+    "after": "入金先アドレス"
+  },
+  {
+    "locale": "ja",
+    "key": "onlySupportVia",
+    "before": "パスのみをサポートします",
+    "after": "対応ネットワーク："
+  },
+  {
+    "locale": "ja",
+    "key": "networkDepositText",
+    "before": "オンラインリチャージ",
+    "after": "ネットワーク経由の入金"
+  },
+  {
+    "locale": "ja",
+    "key": "bankCardDeposit",
+    "before": "銀行カードのリチャージ",
+    "after": "銀行振込による入金"
+  },
+  {
+    "locale": "ja",
+    "key": "cryptoDeposit",
+    "before": "デジタル通貨のリチャージ",
+    "after": "暗号資産の入金"
+  },
+  {
+    "locale": "th",
+    "key": "pleaseSelectPayeeAccount",
+    "before": "กรุณาเลือกบัญชีผู้รับ��ลประโยชน์",
+    "after": "กรุณาเลือกบัญชีผู้รับเงิน"
+  },
+  {
+    "locale": "ja",
+    "key": "bankCardWithdrawArrival",
+    "before": "銀行カード現金引き出し - 到着",
+    "after": "銀行口座への出金・着金額"
+  },
+  {
+    "locale": "ja",
+    "key": "rejectedText",
+    "before": "拒否されました",
+    "after": "不承認"
+  },
+  {
+    "locale": "ja",
+    "key": "reviewingText",
+    "before": "検討中",
+    "after": "審査中"
+  },
+  {
+    "locale": "ja",
+    "key": "rejectReasonText",
+    "before": "拒否理由",
+    "after": "不承認理由"
+  },
+  {
+    "locale": "my",
+    "key": "cryptoWithdrawArrival",
+    "before": "ဒစ်ဂျ��်တယ်ငွေကြေး ထုတ်ယူခြင်း - အပ်ငွေ",
+    "after": "ဒစ်ဂျစ်တယ်ငွေကြေးထုတ်ယူမှု — လက်ခံရရှိမည့်ပမာဏ"
+  },
+  {
+    "locale": "ja",
+    "key": "cryptoWithdrawArrival",
+    "before": "デジタル通貨の出金 - 入金",
+    "after": "暗号資産の出金・着金数量"
+  },
+  {
+    "locale": "ja",
+    "key": "contractToFund",
+    "before": "契約勘定 -- 資本勘定",
+    "after": "証拠金取引口座から資金口座へ"
+  },
+  {
+    "locale": "ja",
+    "key": "openingBankText",
+    "before": "預金銀行",
+    "after": "銀行名"
+  },
+  {
+    "locale": "ja",
+    "key": "bankCardNoText",
+    "before": "銀行カード番号",
+    "after": "口座番号"
+  },
+  {
+    "locale": "ja",
+    "key": "accountNameText",
+    "before": "アカウント名",
+    "after": "口座名義"
+  },
+  {
+    "locale": "ja",
+    "key": "optionalText",
+    "before": "オプション",
+    "after": "任意"
+  },
+  {
+    "locale": "ja",
+    "key": "intlTransferRequired",
+    "before": "国際送金が必要です",
+    "after": "国際送金の場合は必須"
+  },
+  {
+    "locale": "ja",
+    "key": "kycPassedFeatureNormal",
+    "before": "実名認証に合格し、すべての機能を正常に使用できます",
+    "after": "本人確認が完了しました。各機能をご利用いただけます"
+  },
+  {
+    "locale": "ja",
+    "key": "nameText",
+    "before": "名前",
+    "after": "氏名"
+  },
+  {
+    "locale": "hi",
+    "key": "inviteFriendsRegister",
+    "before": "पंजीकरण के लिए मित्रों को आमंत्रित क��ें",
+    "after": "मित्रों को पंजीकरण के लिए आमंत्रित करें"
+  },
+  {
+    "locale": "ja",
+    "key": "hoursOnlineService",
+    "before": "プロフェッショナルな回答とサービスをオンラインで毎時間提供します",
+    "after": "時間オンラインで対応"
+  },
+  {
+    "locale": "ja",
+    "key": "customerServiceText",
+    "before": "顧客サービス",
+    "after": "カスタマーサポート"
+  },
+  {
+    "locale": "th",
+    "key": "customerServiceText",
+    "before": "การบริการลูก���้า",
+    "after": "ฝ่ายบริการลูกค้า"
+  },
+  {
+    "locale": "ja",
+    "key": "officialEmail",
+    "before": "公式メール",
+    "after": "公式メールアドレス"
+  },
+  {
+    "locale": "ja",
+    "key": "closePositionSuccess",
+    "before": "ポジションが正常にクローズされました",
+    "after": "ポジションを決済しました"
+  },
+  {
+    "locale": "ja",
+    "key": "tpSlSetSuccess",
+    "before": "テイクプロフィットとストップロスが正常に設定されました",
+    "after": "利確・損切りを設定しました"
+  },
+  {
+    "locale": "ja",
+    "key": "networkError",
+    "before": "ネットワーク異常",
+    "after": "通信エラーが発生しました"
+  },
+  {
+    "locale": "ja",
+    "key": "optionBalanceInsufficient",
+    "before": "オプション資産残高不足",
+    "after": "期限取引口座の残高が不足しています"
+  },
+  {
+    "locale": "ru",
+    "key": "tradingStatus",
+    "before": "Транз��кция",
+    "after": "В процессе"
+  },
+  {
+    "locale": "ja",
+    "key": "tradingStatus",
+    "before": "トランザクション",
+    "after": "取引中"
+  },
+  {
+    "locale": "ja",
+    "key": "contractBalanceInsufficient",
+    "before": "契約資産残高不足",
+    "after": "証拠金取引口座の残高が不足しています"
+  },
+  {
+    "locale": "ja",
+    "key": "requiredText",
+    "before": "必要です",
+    "after": "必要額"
+  },
+  {
+    "locale": "ja",
+    "key": "startEnjoyLoanServices",
+    "before": "ローンサービスを始めましょう",
+    "after": "借入サービスを利用する"
+  },
+  {
+    "locale": "ja",
+    "key": "clickToUploadVoucher",
+    "before": "クリックして認証情報をアップロードします",
+    "after": "クリックして入金確認書類をアップロード"
+  },
+  {
+    "locale": "ja",
+    "key": "submitTransfer",
+    "before": "転送の確認",
+    "after": "振替を実行"
+  },
+  {
+    "locale": "my",
+    "key": "pleaseEnterOldPassword",
+    "before": "စကားဝ��က်ဟောင်းကို ထည့်ပါ။",
+    "after": "စကားဝှက်အဟောင်းကို ထည့်ပါ။"
+  },
+  {
+    "locale": "ja",
+    "key": "pleaseEnterOldPassword",
+    "before": "古いパスワードを入力してください",
+    "after": "現在のパスワードを入力してください"
+  },
+  {
+    "locale": "ja",
+    "key": "notConfigured",
+    "before": "まだ設定されていません",
+    "after": "未設定"
+  },
+  {
+    "locale": "ja",
+    "key": "passed",
+    "before": "合格",
+    "after": "承認済み"
+  },
+  {
+    "locale": "ja",
+    "key": "noneText2",
+    "before": "まだありません",
+    "after": "なし"
+  },
+  {
+    "locale": "ja",
+    "key": "recordText2",
+    "before": "記録する",
+    "after": "履歴"
+  },
+  {
+    "locale": "ja",
+    "key": "completeRealInfoFirst",
+    "before": "最初に実際の情報を入力してください",
+    "after": "先に本人確認情報を入力してください"
+  },
+  {
+    "locale": "ja",
+    "key": "subscribeFailed2",
+    "before": "購読に失敗しました",
+    "after": "申込みに失敗しました"
+  },
+  {
+    "locale": "ja",
+    "key": "getFinancialProductFailed",
+    "before": "金融商品の取得に失敗した",
+    "after": "運用商品を取得できませんでした"
+  },
+  {
+    "locale": "ja",
+    "key": "realName2",
+    "before": "本名",
+    "after": "氏名"
+  },
+  {
+    "locale": "ja",
+    "key": "cannotClosePosition2",
+    "before": "ポジションをクローズできません",
+    "after": "ポジションを決済できません"
+  },
+  {
+    "locale": "ja",
+    "key": "deposit2",
+    "before": "リチャージ",
+    "after": "入金"
+  },
+  {
+    "locale": "ja",
+    "key": "lightningWithdraw",
+    "before": "ライトニングセレクション",
+    "after": "クイック出金"
+  }
+]

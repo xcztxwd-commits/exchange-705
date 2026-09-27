@@ -58,6 +58,7 @@ public class PersistentPriceControl {
             Task task = start(config, raw, start, duration, ControlHistoryStore.number(raw.get("price")), intensity, oscillation, true, requestKey);
             if (flows.get(task.id).isEmpty()) {
                 RecoveryOptions options = new RecoveryOptions();
+                options.setAutoRestore(true);
                 options.setRestoreDurationSeconds(duration); options.setRestoreIntensity(intensity); options.setRestoreRandomOscillation(oscillation);
                 if (!previousFlow.isEmpty()) options.setAutoReplaceHistory(Boolean.TRUE.equals(store.decode((String)previousFlow.get("options_json")).get("autoReplaceHistory")));
                 flows.create(task, options);

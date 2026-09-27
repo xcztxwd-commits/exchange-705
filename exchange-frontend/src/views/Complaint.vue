@@ -18,7 +18,7 @@
 
       <div v-else-if="!emailAvailable" class="empty-state">
         <div class="empty-icon">📧</div>
-        <div class="empty-text">{{ localeStore.t('noComplaintEmail') }}</div>
+        <div class="empty-text">{{ loadError ? localeStore.text('', 'Unable to retrieve the complaint email address.') : (complaintEmail ? localeStore.text('', 'This contact address is currently unavailable.') : localeStore.t('noComplaintEmail')) }}</div>
         <div class="empty-desc">{{ localeStore.t('pleaseTryLaterOrContactUs') }}</div>
       </div>
 
@@ -56,6 +56,7 @@ localeStore.loadLocale()
 const loading = ref(true)
 const complaintEmail = ref('')
 const emailAvailable = ref(false)
+const loadError = ref(false)
 const copied = ref(false)
 
 // Toast 提示
@@ -75,6 +76,8 @@ function showToast(message: string, type: 'success' | 'error' = 'error') {
 // 加载投诉邮箱
 async function loadComplaintEmail() {
   loading.value = true
+  loadError.value = false
+  complaintEmail.value = ''
   try {
     const res: any = await request.get('/user/complaint/email')
     if (res && res.email) {
@@ -84,6 +87,7 @@ async function loadComplaintEmail() {
       emailAvailable.value = false
     }
   } catch (e: any) {
+    loadError.value = true
     console.error('Failed to load complaint email:', e)
     emailAvailable.value = false
     showToast(localeStore.t('loadFailed'), 'error')

@@ -63,12 +63,17 @@ watch(() => auth.token, (newToken) => {
   }
 }, { immediate: true })
 
+const onLocaleStorage = (event: StorageEvent) => {
+  if (event.key === 'locale') localeStore.loadLocale()
+}
 onMounted(() => {
+  window.addEventListener('storage', onLocaleStorage)
   // 加载用户信息
   auth.load()
 })
 
 onUnmounted(() => {
+  window.removeEventListener('storage', onLocaleStorage)
   stopHeartbeat()
 })
 </script>

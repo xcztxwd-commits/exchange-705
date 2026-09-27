@@ -54,12 +54,26 @@ const tabs: TabItem[] = [
 }
 .tabbar-item {
   display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   color: #777;
-  font-size: 12px;
+  font-size: 11px;
+}
+.tabbar-item .text {
+  max-width: 100%;
+  height: 16px;
+  line-height: 16px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: center;
 }
 .tabbar-icon {
+  flex-shrink: 0;
   width: 22px;
   height: 22px;
   margin-bottom: 2px;
@@ -69,7 +83,6 @@ const tabs: TabItem[] = [
   font-weight: 700;
 }
 </style>
-
 
 
 

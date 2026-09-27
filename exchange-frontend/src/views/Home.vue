@@ -21,10 +21,10 @@ auth.load()
 
 // 公告弹窗相关
 const showAnnouncementModal = ref(false)
-const countdown = ref(6)
+const countdown = ref(2)
 const countdownTimer = ref<number | null>(null)
 const hasShownAnnouncement = ref(false)
-const latestAnnouncement = ref<{ title?: string; content?: string } | null>(null) // 最新公告（根据当前语言）
+const latestAnnouncement = ref<{ title?: string; content?: string; countdownSeconds?: number } | null>(null) // 最新公告（根据当前语言）
 
 // 价格轮询定时器
 
@@ -525,11 +525,18 @@ function closeAnnouncementModal() {
 
 // 启动倒计时
 function startCountdown() {
-  countdown.value = 6
+  if (countdownTimer.value !== null) {
+    clearInterval(countdownTimer.value)
+    countdownTimer.value = null
+  }
+  const seconds = latestAnnouncement.value?.countdownSeconds ?? 2
+  countdown.value = Number.isInteger(seconds) && seconds >= 0 ? seconds : 2
+  if (countdown.value === 0) return
   countdownTimer.value = window.setInterval(() => {
     countdown.value--
-    if (countdown.value <= 0) {
-      closeAnnouncementModal()
+    if (countdown.value <= 0 && countdownTimer.value !== null) {
+      clearInterval(countdownTimer.value)
+      countdownTimer.value = null
     }
   }, 1000)
 }
@@ -564,6 +571,8 @@ function getLanguageForBackend(localeKey: string): string {
 
 // 加载最新公告（根据当前语言）
 async function loadLatestAnnouncement() {
+  const requestedLocale = localeStore.locale
+  latestAnnouncement.value = null
   try {
     // 获取当前语言代码
     const currentLocale = localeStore.getCurrentLocale ? localeStore.getCurrentLocale() : (localeStore.locale || 'en')
@@ -577,25 +586,28 @@ async function loadLatestAnnouncement() {
       }
     })
     
+    if (localeStore.locale !== requestedLocale) return
     if (res && res.announcement) {
       latestAnnouncement.value = {
-        title: res.announcement.title || 'Welcome to use',
-        content: res.announcement.content || ''
+        title: res.announcement.title || localeStore.t('welcomeToUse'),
+        content: res.announcement.content || '',
+        countdownSeconds: res.announcement.countdownSeconds ?? 2
       }
       console.log('[Home] Loaded latest announcement for language:', currentLanguage)
     } else {
       // 如果没有公告，使用默认内容
       latestAnnouncement.value = {
         title: localeStore.t('welcomeToUse') || 'Welcome to use',
-        content: 'Due to policy reasons, services are not provided to North Korea, Israel, China, Vanuatu, and Cuba.'
+        content: localeStore.t('announcementContent')
       }
     }
   } catch (e) {
+    if (localeStore.locale !== requestedLocale) return
     console.error('[Home] Failed to load latest announcement:', e)
     // 如果加载失败，使用默认内容
     latestAnnouncement.value = {
       title: localeStore.t('welcomeToUse') || 'Welcome to use',
-      content: 'Due to policy reasons, services are not provided to North Korea, Israel, China, Vanuatu, and Cuba.'
+      content: localeStore.t('announcementContent')
     }
   }
 }
@@ -892,7 +904,7 @@ const logoUrl = '/img/logo.svg'
             :class="{ active: activeCategory === cat.key }"
             @click="selectCategory(cat.key)"
           >
-            {{ cat.label }}
+            {{ localeStore.categoryLabel(cat.key, cat.label) }}
           </span>
         </div>
       </div>

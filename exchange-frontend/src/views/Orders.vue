@@ -1088,7 +1088,7 @@ function formatPrice(v: number | string | undefined | null) {
           </div>
           <div class="order-body">
             <div class="order-type-badge" :class="order.type === 'buy' ? 'buy' : 'sell'">
-              {{ order.type === 'buy' ? '買入' : '賣出' }} {{ order.lots }} 手數 · {{ order.leverage }}×
+              {{ order.type === 'buy' ? localeStore.t('buy') : localeStore.t('sell') }} {{ order.lots }} {{ localeStore.t('lots') }} · {{ order.leverage }}×
             </div>
             <div class="order-details">
               <div class="detail-item">
@@ -1205,7 +1205,7 @@ function formatPrice(v: number | string | undefined | null) {
           </div>
           <div class="order-body">
             <div class="order-type-badge" :class="order.type === 'buy' ? 'buy' : 'sell'">
-              {{ localeStore.t('lookUp') }}:{{ order.direction === 'UP' ? (order.baseCurrency || '') : (order.quoteCurrency || '') }}
+              {{ localeStore.t(order.direction === 'UP' ? 'buyUpText' : 'buyDownText') }}
             </div>
             <div class="order-details">
               <div class="detail-item">
@@ -1250,7 +1250,7 @@ function formatPrice(v: number | string | undefined | null) {
           <div class="order-detail-basic">
             <div class="order-detail-symbol">{{ displaySymbol(detailOrder) }}</div>
             <div class="order-detail-id-time">
-              <span>訂單 ID #{{ detailOrder?.id }}</span>
+              <span>{{ localeStore.t('orderId') }} #{{ detailOrder?.id }}</span>
               <span>{{ detailOrder?.openTime }}</span>
             </div>
           </div>
@@ -1284,7 +1284,7 @@ function formatPrice(v: number | string | undefined | null) {
               class="order-type-badge pending-badge" 
               :class="detailOrder?.direction === 'UP' ? 'buy' : 'sell'"
             >
-              {{ localeStore.t('lookUp') }}{{ detailOrder?.direction === 'UP' ? (detailOrder?.baseCurrency || '') : (detailOrder?.quoteCurrency || '') }}
+              {{ localeStore.t(detailOrder?.direction === 'UP' ? 'buyUpText' : 'buyDownText') }}
             </span>
             <!-- 合约订单显示买入/卖出 -->
             <span 
@@ -1292,7 +1292,7 @@ function formatPrice(v: number | string | undefined | null) {
               class="order-type-badge pending-badge" 
               :class="detailOrder?.type === 'buy' ? 'buy' : 'sell'"
             >
-              {{ detailOrder?.type === 'buy' ? '買入' : '賣出' }} {{ detailOrder?.lots }}手數
+              {{ detailOrder?.type === 'buy' ? localeStore.t('buy') : localeStore.t('sell') }} {{ detailOrder?.lots }} {{ localeStore.t('lots') }}
             </span>
           </div>
           

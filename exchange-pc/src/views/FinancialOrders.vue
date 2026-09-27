@@ -141,7 +141,7 @@ onMounted(() => {
                   <span class="info-value">{{ formatMoney(order.purchaseAmount) }}</span>
                 </div>
                 <div class="info-item">
-                  <span class="info-label">{{ localeStore.t('expectedDailyYield') }}</span>
+                  <span class="info-label">{{ localeStore.t('estDailyYield') }}</span>
                   <span class="info-value">{{ formatMoney(order.dailyYield) }}</span>
                 </div>
               </div>
@@ -175,7 +175,7 @@ onMounted(() => {
       <div class="redeem-dialog">
         <div class="dialog-content">
           <div class="dialog-message">
-            {{ localeStore.t('payPenaltyToRedeem') }} {{ penaltyAmount }}{{ currentOrder?.currency }} {{ localeStore.t('penaltyFee') }}
+            {{ localeStore.text('確認提前贖回？手續費為 {amount} {currency}。', 'Redeem early? The early redemption fee is {amount} {currency}.', { amount: penaltyAmount, currency: currentOrder?.currency || '' }) }}
           </div>
         </div>
         <div class="dialog-footer">

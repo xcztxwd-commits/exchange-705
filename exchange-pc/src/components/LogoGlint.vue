@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useLocaleStore } from '@/store/locale'
+const locale = useLocaleStore()
 defineProps<{ src: string; dark?: boolean }>()
 
 function replay(event: Event) {
@@ -22,7 +24,7 @@ function finish(event: AnimationEvent) {
     class="logo-glint"
     :class="{ 'logo-glint--dark': dark }"
     :style="{ '--logo-mask': `url(${src})` }"
-    aria-label="Replay FOREX EXCHANGE logo animation"
+    :aria-label="locale.text('重播 FOREX EXCHANGE 標誌動畫', 'Replay FOREX EXCHANGE logo animation')"
     @mouseenter="replay"
     @click="replay"
     @animationend="finish"

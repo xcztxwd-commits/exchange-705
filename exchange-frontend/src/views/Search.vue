@@ -17,7 +17,7 @@
           type="text"
           v-model="searchKeyword"
           class="search-input"
-          placeholder="搜索币种/合约"
+          :placeholder="locale.t('searchSymbolContract')"
           @input="handleSearch"
           @focus="isSearching = true"
         />
@@ -28,13 +28,13 @@
     <!-- 搜索结果 -->
     <div class="search-content">
       <div v-if="loading" class="loading-state">
-        <div class="loading-text">搜索中...</div>
+        <div class="loading-text">{{ locale.text('搜尋中…', 'Searching…') }}</div>
       </div>
       <div v-else-if="searchKeyword && searchResults.length === 0" class="empty-state">
-        <div class="empty-text">未找到相关结果</div>
+        <div class="empty-text">{{ locale.text('找不到相關結果', 'No matching results') }}</div>
       </div>
       <div v-else-if="searchKeyword && searchResults.length > 0" class="results-section">
-        <div class="results-title">搜索結果</div>
+        <div class="results-title">{{ locale.text('搜尋結果', 'Search results') }}</div>
         <div class="results-list">
           <div
             v-for="item in searchResults"
@@ -55,7 +55,7 @@
         </div>
       </div>
       <div v-else class="empty-state">
-        <div class="empty-text">请输入搜索关键词</div>
+        <div class="empty-text">{{ locale.text('請輸入搜尋關鍵字', 'Enter a search term') }}</div>
       </div>
     </div>
 
@@ -65,6 +65,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useLocaleStore } from '@/store/locale'
 import { useRouter } from 'vue-router'
 import Tabbar from '@/components/Tabbar.vue'
 import request from '@/utils/request'
@@ -72,6 +73,7 @@ import { useMarketStore } from '@/store/market'
 import { displaySymbol } from '@/utils/displaySymbol'
 
 const router = useRouter()
+const locale = useLocaleStore()
 const marketStore = useMarketStore()
 
 const searchInputRef = ref<HTMLInputElement | null>(null)
@@ -91,7 +93,7 @@ function formatPrice(price: number | null | undefined) {
   if (isNaN(numPrice)) {
     return '0.00'
   }
-  return numPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 5 })
+  return numPrice.toLocaleString(locale.locale, { minimumFractionDigits: 2, maximumFractionDigits: 5 })
 }
 
 // 获取价格（优先使用实时价格，否则使用数据库中的价格）

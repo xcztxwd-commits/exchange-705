@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useLocaleStore } from '@/store/locale'
 import request from '@/utils/request'
@@ -14,13 +14,9 @@ const password = ref('')
 const confirmPassword = ref('')
 const inviteCode = ref('')
 const inviteLocked = ref(false)
-const verifyCode = ref('')
-const sending = ref(false)
 const loading = ref(false)
 const showPwd = ref(false)
 const showPwd2 = ref(false)
-const countdown = ref(0)
-const countdownTimer = ref<number | null>(null)
 
 // 显示提示消息（与其他页面样式一致）
 function showToastMessage(message: string, type: 'success' | 'error' = 'error') {
@@ -90,48 +86,9 @@ onMounted(() => {
   }
 })
 
-const sendCode = async () => {
-  if (sending.value || countdown.value > 0) return
-  if (!email.value) {
-    showToastMessage(localeStore.t('sendCodeFail'), 'error')
-    return
-  }
-  sending.value = true
-  try {
-    await request.post('/auth/sendEmailCode', {
-      email: email.value,
-      scene: 'register',
-    })
-    showToastMessage(localeStore.t('sendCodeSuccess'), 'success')
-    // 启动60秒倒计时
-    countdown.value = 60
-    countdownTimer.value = window.setInterval(() => {
-      countdown.value--
-      if (countdown.value <= 0) {
-        if (countdownTimer.value !== null) {
-          clearInterval(countdownTimer.value)
-          countdownTimer.value = null
-        }
-      }
-    }, 1000)
-  } catch (e: any) {
-    showToastMessage(e?.message || localeStore.t('sendCodeFail'), 'error')
-  } finally {
-    sending.value = false
-  }
-}
-
-// 组件卸载时清理定时器
-onUnmounted(() => {
-  if (countdownTimer.value !== null) {
-    clearInterval(countdownTimer.value)
-    countdownTimer.value = null
-  }
-})
-
 const onSubmit = async () => {
   if (loading.value) return
-  if (!email.value || !password.value || !confirmPassword.value || !verifyCode.value || !inviteCode.value) {
+  if (!email.value || !password.value || !confirmPassword.value) {
     showToastMessage(localeStore.t('pleaseEnterAllRequiredFields'), 'error')
     return
   }
@@ -149,8 +106,7 @@ const onSubmit = async () => {
       email: email.value,
       password: password.value,
       confirmPassword: confirmPassword.value,
-      verifyCode: verifyCode.value,
-      invitationCode: inviteCode.value,
+      invitationCode: inviteCode.value.trim() || undefined,
     })
     showToastMessage(localeStore.t('registerSuccess'), 'success')
     setTimeout(() => {
@@ -256,24 +212,13 @@ const onSubmit = async () => {
       </div>
 
       <div class="form-group">
-      <div class="form-label">{{ localeStore.t('inviteCode') }} <span style="color: #e25d4d;">*</span></div>
+      <div class="form-label">{{ localeStore.t('inviteCode') }}</div>
       <input
         v-model="inviteCode"
         class="input-box"
         :readonly="inviteLocked"
-        :placeholder="inviteLocked ? localeStore.t('inviteCodeFilled') : localeStore.t('inviteCodeRequired')"
-        required
+        :placeholder="inviteLocked ? localeStore.t('inviteCodeFilled') : localeStore.t('inviteCodeEmpty')"
       />
-      </div>
-
-      <div class="form-group">
-        <div class="form-label">{{ localeStore.t('verifyCode') }}</div>
-        <div class="flex-row">
-          <input v-model="verifyCode" class="input-box" :placeholder="localeStore.t('verifyCodePlaceholder')" />
-          <button class="verify-btn" :disabled="sending || countdown > 0" type="button" @click="sendCode">
-            {{ sending ? localeStore.t('sending') : countdown > 0 ? `${countdown}${localeStore.t('seconds')}` : localeStore.t('send') }}
-          </button>
-        </div>
       </div>
 
       <button class="primary-btn" :disabled="loading" @click="onSubmit">

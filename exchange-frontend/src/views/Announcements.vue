@@ -140,6 +140,8 @@ function getLanguageForBackend(localeKey: string): string {
 
 // 加载公告列表（根据当前语言）
 async function loadAnnouncements() {
+  const requestedLocale = localeStore.locale
+  announcements.value = []
   loading.value = true
   try {
     // 获取当前语言代码（转换为后端支持的格式）
@@ -155,6 +157,7 @@ async function loadAnnouncements() {
       }
     })
     
+    if (localeStore.locale !== requestedLocale) return
     if (res && res.announcements) {
       announcements.value = res.announcements
       console.log('[Announcements] Loaded', res.announcements.length, 'announcements for language:', currentLanguage)
@@ -162,11 +165,12 @@ async function loadAnnouncements() {
       announcements.value = []
     }
   } catch (e: any) {
+    if (localeStore.locale !== requestedLocale) return
     console.error(localeStore.t('loadAnnouncementsFailed'), e)
     showToast(localeStore.t('loadFailed'), 'error')
     announcements.value = []
   } finally {
-    loading.value = false
+    if (localeStore.locale === requestedLocale) loading.value = false
   }
 }
 

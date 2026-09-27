@@ -104,10 +104,4 @@ router.beforeEach((to, _from, next) => {
   next()
 })
 
-router.afterEach((to, from, failure) => {
-  if (!failure && from.matched.length && to.fullPath !== from.fullPath) {
-    window.dispatchEvent(new Event('forex-route-change'))
-  }
-})
-
 export default router

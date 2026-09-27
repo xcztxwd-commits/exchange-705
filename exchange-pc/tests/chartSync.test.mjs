@@ -10,7 +10,7 @@ for (const app of ['exchange-pc', 'exchange-frontend']) {
   const sync = source.slice(source.indexOf('async function syncLatest()'), source.indexOf('\nfunction resetMarket()'))
   const code = ts.transpile(sync, { target: ts.ScriptTarget.ES2022 })
   const bar = (timestamp, close = 11) => ({ timestamp, open: 10, high: 12, low: 9, close, volume: 3 })
-  async function run(initial, pages, manual = true) {
+  async function run(initial, pages, manual = true, history = false) {
     const data = initial.slice(), updates = [], requests = [], scrolls = []
     let offset = 0
     const context = {
@@ -26,7 +26,7 @@ for (const app of ['exchange-pc', 'exchange-frontend']) {
         if (data.at(-1)?.timestamp === candle.timestamp) data[data.length - 1] = candle
         else { data.push(candle); offset -= 7 }
       },
-      loading: { value: false }, historyLoading: { value: false }, syncing: false,
+      loading: { value: false }, historyLoading: { value: history }, syncing: false,
       revision: 1, controller: new AbortController(), lastSyncAttempt: 0,
       fetchBars: async before => {
         requests.push(before)
@@ -34,6 +34,7 @@ for (const app of ['exchange-pc', 'exchange-frontend']) {
       },
       manuallyScrolled: manual, empty: { value: false }, dataWarning: { value: false },
       staleCandles: { value: false }, syncError: { value: false }, cacheBars: () => {}, replayQuote: () => {},
+      pendingHistory: null, historyWaiting: { value: false }, schedulePendingLatest: () => {},
     }
     await new Function(...Object.keys(context), code + '; return syncLatest()')(...Object.values(context))
     assert.equal(context.syncError.value, false)
@@ -69,5 +70,10 @@ for (const app of ['exchange-pc', 'exchange-frontend']) {
     const result = await run([], [[bar(1)]])
     assert.equal(result.empty, false)
     assert.deepEqual(result.data, [bar(1)])
+  })
+  test(`${app}: latest update continues during history load without moving manual viewport`, async () => {
+    const result = await run([bar(1), bar(2)], [[bar(2), bar(3)]], true, true)
+    assert.deepEqual(result.data.map(item => item.timestamp), [1, 2, 3])
+    assert.equal(result.offset, 0)
   })
 }

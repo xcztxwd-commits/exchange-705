@@ -2,6 +2,8 @@ package com.gtcfesk.exchange.admin;
 
 import com.gtcfesk.exchange.entity.Announcement;
 import com.gtcfesk.exchange.repository.AnnouncementRepository;
+import javax.validation.Valid;
+import javax.validation.constraints.Min;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -41,7 +43,7 @@ public class AdminAnnouncementController {
      * 创建公告
      */
     @PostMapping("/create")
-    public ResponseEntity<?> createAnnouncement(@RequestBody AnnouncementRequest req) {
+    public ResponseEntity<?> createAnnouncement(@Valid @RequestBody AnnouncementRequest req) {
         Announcement announcement = new Announcement();
         announcement.setTitle(req.getTitle());
         announcement.setContent(req.getContent());
@@ -49,6 +51,8 @@ public class AdminAnnouncementController {
         announcement.setPriority(req.getPriority() != null ? req.getPriority() : 0);
         announcement.setLanguage(req.getLanguage() != null && !req.getLanguage().trim().isEmpty() ? req.getLanguage() : "en");
         
+        if (req.getCountdownSeconds() != null) announcement.setCountdownSeconds(req.getCountdownSeconds());
+
         Announcement saved = announcementRepository.save(announcement);
         
         Map<String, Object> result = new HashMap<>();
@@ -63,7 +67,7 @@ public class AdminAnnouncementController {
     @PutMapping("/{id}")
     public ResponseEntity<?> updateAnnouncement(
             @PathVariable Long id,
-            @RequestBody AnnouncementRequest req) {
+            @Valid @RequestBody AnnouncementRequest req) {
         
         return announcementRepository.findById(id)
                 .map(announcement -> {
@@ -83,6 +87,9 @@ public class AdminAnnouncementController {
                         announcement.setLanguage(req.getLanguage());
                     }
                     
+                    if (req.getCountdownSeconds() != null) {
+                        announcement.setCountdownSeconds(req.getCountdownSeconds());
+                    }
                     announcementRepository.save(announcement);
                     
                     Map<String, Object> result = new HashMap<>();
@@ -114,6 +121,8 @@ public class AdminAnnouncementController {
         private String title;
         private String content;
         private String status; // PUBLISHED, DRAFT, HIDDEN
+        @Min(value = 0, message = "倒计时不能小于0秒")
+        private Integer countdownSeconds;
         private Integer priority;
         private String language; // en, zh-TW, zh-CN, fr, ja, ko, th, vi, id, es, pt, ar, tr, ru, de, it
     }

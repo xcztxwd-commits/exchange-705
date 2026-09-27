@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>个人中心资产曲线 · 四版融合原型</title>
+  <style>
+    :root { font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif; color: #171b16; background: #e9ece7; font-synthesis: none; }
+    * { box-sizing: border-box; }
+    body { margin: 0; }
+    button { font: inherit; cursor: pointer; }
+    button:focus-visible, svg:focus-visible { outline: 2px solid #78b837; outline-offset: 3px; }
+    .gallery-header { max-width: 945px; margin: 0 auto; padding: 46px 20px 25px; }
+    .gallery-header .kicker { color: #5d8e38; font-size: 11px; font-weight: 800; letter-spacing: .18em; }
+    .gallery-header h1 { margin: 9px 0 10px; font-size: clamp(27px, 4vw, 42px); line-height: 1.15; letter-spacing: -.05em; }
+    .gallery-header p { max-width: 700px; margin: 0; color: #6d776b; font-size: 14px; line-height: 1.7; }
+    .jump { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 20px; }
+    .jump a { padding: 9px 14px; border: 1px solid #d7dfd1; border-radius: 20px; color: #4d6846; background: #f8faf5; text-decoration: none; font-size: 12px; font-weight: 700; }
+    .concept-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 440px)); justify-content: center; gap: 26px; max-width: 945px; margin: 0 auto; padding: 0 20px 55px; }
+    .concept { min-width: 0; padding: 19px 19px 23px; border: 1px solid #dce2d8; border-radius: 25px; background: #f9faf8; box-shadow: 0 12px 35px #2f48200c; }
+    .concept-head { display: grid; grid-template-columns: 34px 1fr; column-gap: 8px; min-height: 74px; }
+    .concept-no { color: #78a754; font-size: 11px; font-weight: 800; letter-spacing: .06em; padding-top: 5px; }
+    .concept h2 { margin: 0 0 3px; font-size: 18px; }
+    .concept-head p { margin: 0; color: #8a9686; font-size: 11px; line-height: 1.5; }
+    .phone { position: relative; width: min(100%, 390px); height: 714px; margin: 0 auto; overflow: hidden; border: 5px solid #293029; border-radius: 31px; background: #fff; box-shadow: 0 18px 30px #1d2e1922; }
+    .screen { height: 100%; overflow-y: auto; scrollbar-width: none; padding-bottom: 63px; }
+    .screen::-webkit-scrollbar { display: none; }
+    .profile-head { min-height: 72px; display: flex; align-items: flex-start; justify-content: space-between; padding: 15px 15px 0; }
+    .profile-name { font-size: 14px; line-height: 1.5; }
+    .profile-uid { margin-top: 3px; font-size: 14px; }
+    .profile-tools { display: flex; gap: 10px; }
+    .head-button { width: 32px; height: 32px; display: grid; place-items: center; border: 0; border-radius: 9px; background: #f6f6f6; color: #333; }
+    .icon { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+    .asset-card { position: relative; isolation: isolate; margin: 0 14px 15px; padding: 21px 19px 17px; overflow: hidden; border-radius: 18px; background: #f7f7f7; }
+    .asset-card::before { content: ''; position: absolute; z-index: -1; pointer-events: none; inset: 0; }
+    .asset-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+    .asset-head strong { font-size: 17px; letter-spacing: -.03em; white-space: nowrap; }
+    .asset-head span { color: #9a9a9a; font-size: 10px; white-space: nowrap; }
+    .balance-row { display: flex; align-items: center; justify-content: space-between; gap: 4px; margin-top: 17px; }
+    .balance-row strong { min-width: 0; color: #060806; font-size: clamp(31px, 8.7vw, 38px); font-weight: 750; line-height: 1.08; letter-spacing: -.055em; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .eye { flex: none; width: 32px; height: 32px; display: grid; place-items: center; border: 0; background: none; color: #656e63; }
+    .eye .icon { width: 20px; height: 20px; }
+    .delta-row { display: flex; align-items: center; gap: 7px; min-height: 18px; margin-top: 7px; color: #959f93; font-size: 10px; white-space: nowrap; }
+    .delta-row b { color: #689e31; font-size: 11px; font-variant-numeric: tabular-nums; }
+    .delta-row i { width: 4px; height: 4px; border-radius: 50%; background: #b7c7af; }
+    .chart-caption { display: flex; align-items: center; justify-content: space-between; margin-top: 13px; color: #3c4839; font-size: 10px; font-weight: 700; }
+    .chart-caption small { color: #a6afa2; font-size: 9px; font-weight: 500; letter-spacing: .05em; }
+    .chart-shell { position: relative; height: 139px; margin: 3px -19px 0; overflow: hidden; }
+    .chart-shell svg { position: relative; z-index: 1; width: 100%; height: 100%; display: block; touch-action: pan-y; }
+    .chart-grid { fill: none; stroke: #dde6da; stroke-width: .6; stroke-dasharray: 3 5; }
+    .chart-area { opacity: .62; }
+    .chart-glow, .chart-echo { fill: none; }
+    .chart-line { fill: none; stroke: #73b100; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+    .end-ring { fill: #f7f7f7; stroke: #79b33a; stroke-width: 2; }
+    .crosshair { stroke: #8dae7c; stroke-width: 1; stroke-dasharray: 3 3; }
+    .active-point { fill: #fff; stroke: #70ac32; stroke-width: 2.5; }
+    .hit { fill: transparent; cursor: crosshair; }
+    .tip { position: absolute; z-index: 4; width: max-content; min-width: 94px; padding: 6px 8px; transform: translateX(-50%); border: 1px solid #dfe8d9; border-radius: 8px; background: #fff; box-shadow: 0 5px 12px #284e1820; color: #253124; text-align: center; pointer-events: none; }
+    .tip small { display: block; color: #859284; font-size: 9px; }.tip b { display: block; margin-top: 2px; font-size: 10px; font-variant-numeric: tabular-nums; }
+    .axis { display: flex; justify-content: space-between; margin-top: -3px; color: #a0a9a0; font-size: 9px; }
+    .periods { display: grid; grid-template-columns: repeat(4, 1fr); gap: 2px; margin-top: 12px; }
+    .periods button { min-height: 29px; border: 0; border-radius: 8px; background: transparent; color: #7d877c; font-size: 10px; }
+    .periods button[aria-selected="true"] { background: #e7eedf; color: #4c7c25; font-weight: 700; }
+    .asset-private { position: absolute; z-index: 3; inset: 0; display: none; place-items: center; color: #8a9587; background: #f7f7f7; font-size: 12px; }
+    .phone.is-private .asset-private { display: grid; }.phone.is-private .chart-shell svg { visibility: hidden; }
+    .quick { display: grid; grid-template-columns: repeat(2, 1fr); gap: 9px; margin: 0 14px 15px; }
+    .quick button { min-height: 78px; display: flex; align-items: center; gap: 11px; padding: 11px 13px; border: 0; border-radius: 15px; background: #f7f7f7; color: #090b08; text-align: left; }
+    .quick-icon { flex: none; width: 39px; height: 39px; display: grid; place-items: center; border-radius: 10px; background: linear-gradient(145deg, #98df5d, #50a956); color: #fff; }
+    .quick-icon .icon { width: 22px; height: 22px; stroke-width: 2.3; }
+    .quick-text { min-width: 0; flex: 1; }.quick-text b { display: block; font-size: 14px; }.quick-text small { display: block; margin-top: 3px; color: #a0a0a0; font-size: 10px; white-space: nowrap; }.quick .arrow { color: #aaa; font-size: 19px; font-weight: 300; }
+    .menu-list { display: grid; gap: 9px; margin: 0 14px; }
+    .menu-list button { height: 53px; display: flex; align-items: center; gap: 11px; padding: 0 17px; border: 0; border-radius: 13px; background: #efefef; color: #101310; text-align: left; }
+    .menu-list button::before { content: ''; width: 3px; height: 18px; border-radius: 3px; background: #75b436; }.menu-list button span { flex: 1; font-size: 14px; }.menu-list button em { color: #a0a0a0; font-style: normal; font-size: 17px; }
+    .tabbar { position: absolute; z-index: 5; right: 0; bottom: 0; left: 0; height: 58px; display: grid; grid-template-columns: repeat(4, 1fr); border-top: 1px solid #e9e9e9; background: #fff; }
+    .tabbar button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; border: 0; background: none; color: #9a9a9a; font-size: 9px; }.tabbar .icon { width: 18px; height: 18px; }.tabbar button.active { color: #79af3a; font-weight: 700; }
+    .toast { position: absolute; z-index: 8; left: 50%; bottom: 68px; width: max-content; max-width: 80%; padding: 7px 10px; transform: translateX(-50%); border-radius: 9px; background: #263b25; color: #fff; box-shadow: 0 6px 13px #20391e30; font-size: 10px; }
+    [hidden] { display: none !important; }
+    /* A：原生常规。几乎只加图，现有卡片风格保持原样。 */
+    .classic .chart-grid, .classic .chart-glow, .classic .chart-echo, .classic .particle-cloud, .classic .tech-bars { display: none; }
+    .classic .chart-line { stroke: #72b22e; stroke-width: 2; }.classic .chart-area { opacity: .54; }
+    /* B：粒子点阵。点沿真实曲线，不用装饰点造出虚假波形。 */
+    .particle .asset-card { background: #f6f8f5; }.particle .asset-card::before { background-image: radial-gradient(#a7c49732 .5px, transparent .5px); background-size: 10px 10px; mask-image: linear-gradient(to bottom, transparent 25%, #000 75%); }
+    .particle .chart-grid, .particle .chart-echo, .particle .chart-glow, .particle .tech-bars { display: none; }.particle .chart-area { opacity: .12; }.particle .chart-line { stroke: #77a94e; stroke-width: .9; opacity: .38; }.particle .end-ring { fill: #75b838; stroke: #f7faf4; stroke-width: 2.5; }
+    .particle .periods button[aria-selected="true"] { background: #e9f2e3; }.particle .chart-caption small { color: #80a36f; }
+    /* C：光线。留住灰白底，只在数据线上施加柔光。 */
+    .light .asset-card { background: linear-gradient(180deg, #f8f9f7 0%, #f6f8f5 100%); }.light .asset-card::before { background: radial-gradient(ellipse at 64% 77%, #dbefc93c, transparent 55%); }
+    .light .chart-grid, .light .particle-cloud, .light .tech-bars { display: none; }.light .chart-area { opacity: .75; }.light .chart-glow { stroke: #8cd44e; stroke-width: 12; opacity: .12; filter: blur(5px); }.light .chart-echo { stroke: #afe878; stroke-width: 5; opacity: .2; filter: blur(2px); }.light .chart-line { stroke: url(#line-light); stroke-width: 2.1; }.light .end-ring { fill: #effce7; stroke: #79bd3f; filter: drop-shadow(0 0 4px #9bd46c); }
+    .light .periods button[aria-selected="true"] { background: #eaf4e3; box-shadow: inset 0 -2px #80b64d; }
+    /* D：炫酷仪表。网格与辅助线限于图表区，主页面不换肤。 */
+    .cool .asset-card { background: linear-gradient(155deg, #f1f6ef, #f7f8f6 64%); border: 1px solid #e4ebdf; }.cool .asset-card::before { background: radial-gradient(ellipse at 91% 69%, #a9d68a25, transparent 45%); }
+    .cool .chart-shell { background-image: linear-gradient(#d9e8d02a 1px, transparent 1px), linear-gradient(90deg, #d9e8d02a 1px, transparent 1px); background-size: 21px 21px; }.cool .chart-grid, .cool .particle-cloud { display: none; }.cool .chart-area { opacity: .52; }.cool .chart-glow { stroke: #90c76c; stroke-width: 9; opacity: .1; filter: blur(4px); }.cool .chart-echo { stroke: #8dbb76; stroke-width: 1; stroke-dasharray: 3 6; opacity: .36; }.cool .chart-line { stroke: #5d9d31; stroke-width: 2.2; }.cool .end-ring { fill: #6aaa36; stroke: #eff9e8; stroke-width: 2.5; }
+    .cool .periods button[aria-selected="true"] { background: #dcebd5; color: #3f7629; }.cool .chart-caption small { color: #6d9b5d; font-weight: 700; }.cool .tech-bars { opacity: .55; }
+    @media (max-width: 900px) { .concept-grid { grid-template-columns: minmax(0, 440px); }.gallery-header { max-width: 480px; } }
+    @media (max-width: 440px) { .gallery-header { padding-top: 26px; }.concept-grid { padding: 0 8px 30px; gap: 13px; }.concept { padding: 13px 6px 18px; border-radius: 20px; }.concept-head { padding: 0 8px; }.phone { height: 710px; } }
+    @media (prefers-reduced-motion: no-preference) { .particle .particle-cloud .spark { animation: pulse 2.3s ease-in-out infinite alternate; }.light .end-ring { animation: breathe 2.2s ease-in-out infinite alternate; } @keyframes pulse { to { opacity: .25; } } @keyframes breathe { to { filter: drop-shadow(0 0 7px #93d656); } } }
+  </style>
+</head>
+<body>
+  <header class="gallery-header">
+    <div class="kicker">ASSET TREND / ROUND TWO</div>
+    <h1>同一页面，四种曲线气质。</h1>
+    <p>保留你现有个人中心的白底、浅灰卡、入金/出金按钮与绿色导航。四版只改变资产卡中的曲线表达；金额、周期和交互保持一致，便于直接比较。</p>
+    <nav class="jump" aria-label="跳转到方案"><a href="#classic">01 常规原生</a><a href="#particle">02 粒子点阵</a><a href="#light">03 柔光流线</a><a href="#cool">04 炫酷仪表</a></nav>
+  </header>
+  <main class="concept-grid" id="conceptGrid"></main>
+  <script>
+    const concepts = [
+      { id: 'classic', number: '01', title: '常规 · 原生', note: '最贴近现有页面。细线、浅填充，把图当数据而非装饰。', chartNote: 'ASSET TREND' },
+      { id: 'particle', number: '02', title: '粒子 · 点阵', note: '用真实采样点构成曲线，像素感呼应参考图，但更轻。', chartNote: 'DOT SERIES' },
+      { id: 'light', number: '03', title: '光线 · 流光', note: '柔和双层光线与干净白灰底，强调精致感。', chartNote: 'LIGHT TRACE' },
+      { id: 'cool', number: '04', title: '炫酷 · 仪表', note: '细网格、辅助轨迹和末端数据点，偏交易产品气质。', chartNote: 'LIVE VIEW' }
+    ];
+    const icon = (name) => ({
+      globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 4 6 4 9s-1 6-4 9M12 3c-3 3-4 6-4 9s1 6 4 9"/>',
+      exit: '<path d="M9 4H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4M13 8l4 4-4 4m4-4H8"/>',
+      eye: '<path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"/><circle cx="12" cy="12" r="2.5"/>',
+      down: '<path d="M12 3v15m-5-5 5 5 5-5"/>',
+      home: '<path d="M3 11 12 4l9 7v9H3zM9 20v-6h6v6"/>',
+      trade: '<path d="M4 7h16m-4-4 4 4-4 4M20 17H4m4-4-4 4 4 4"/>',
+      order: '<path d="M6 3h12v18H6zM9 8h6m-6 4h6m-6 4h4"/>',
+      wallet: '<path d="M3 6h18v15H3zM3 6V4h15m3 7h-7v5h7"/><circle cx="17" cy="13.5" r=".5"/>',
+    })[name];
+    const svgIcon = name => `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true">${icon(name)}</svg>`;
+    const RANGE = {
+      '1D': { count: 34, start: 241060.05, amp: 360, cycles: 4.2, label: '近 1 日資產變動', days: 1 },
+      '1W': { count: 35, start: 238796.22, amp: 780, cycles: 3.7, label: '近 1 週資產變動', days: 7 },
+      '1M': { count: 39, start: 231282.40, amp: 1640, cycles: 4.4, label: '近 1 月資產變動', days: 30 },
+      '1Y': { count: 46, start: 196810.85, amp: 6200, cycles: 5.1, label: '近 1 年資產變動', days: 365 }
+    };
+    const END = 243541.37;
+    const money = n => '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const sample = cfg => Array.from({ length: cfg.count }, (_, i) => {
+      const t = i / (cfg.count - 1);
+      const wave = Math.sin(Math.PI * t) * (Math.sin(t * Math.PI * 2 * cfg.cycles) * .72 + Math.sin(t * 35) * .28) * cfg.amp;
+      return i === cfg.count - 1 ? END : cfg.start + (END - cfg.start) * t + wave;
+    });
+    if (Object.values(RANGE).some(cfg => sample(cfg)[0] !== cfg.start || sample(cfg).at(-1) !== END)) throw new Error('曲线端点不一致');
+    function makePhone(c) {
+      return `<article class="concept" id="${c.id}">
+        <div class="concept-head"><div class="concept-no">${c.number}</div><div><h2>${c.title}</h2><p>${c.note}</p></div></div>
+        <div class="phone ${c.id}" data-variant="${c.id}"><div class="screen">
+          <header class="profile-head"><div><div class="profile-name">user</div><div class="profile-uid">UID: 7000017</div></div><div class="profile-tools"><button class="head-button" aria-label="语言" data-demo="語言">${svgIcon('globe')}</button><button class="head-button" aria-label="退出" data-demo="退出">${svgIcon('exit')}</button></div></header>
+          <section class="asset-card" aria-label="我的資產與資產走勢">
+            <div class="asset-head"><strong>我的資產</strong><span>總帳戶資產折合</span></div>
+            <div class="balance-row"><strong class="balance">${money(END)}</strong><button class="eye" aria-label="隱藏資產" aria-pressed="false">${svgIcon('eye')}</button></div>
+            <div class="delta-row"><span class="delta-label"></span><i></i><b class="delta-value"></b></div>
+            <div class="chart-caption"><span>資產走勢</span><small>${c.chartNote}</small></div>
+            <div class="chart-shell">
+              <svg viewBox="0 0 340 139" preserveAspectRatio="none" role="img" tabindex="0" aria-label="資產走勢，可用左右方向鍵讀取各點">
+                <defs>
+                  <linearGradient id="area-${c.id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#8cc856" stop-opacity=".3"/><stop offset="100%" stop-color="#8cc856" stop-opacity="0"/></linearGradient>
+                  <linearGradient id="line-${c.id}" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#83b864"/><stop offset="55%" stop-color="#75b637"/><stop offset="100%" stop-color="#a0d864"/></linearGradient>
+                </defs>
+                <path class="chart-grid" d="M0 36H340 M0 82H340 M0 125H340"/>
+                <g class="tech-bars"></g><path class="chart-area" fill="url(#area-${c.id})"/>
+                <path class="chart-glow"/><path class="chart-echo"/><path class="chart-line"/>
+                <g class="particle-cloud"></g><circle class="end-ring" r="3.5"/>
+                <line class="crosshair" y1="0" y2="139" hidden/><circle class="active-point" r="4.5" hidden/>
+                <rect class="hit" width="340" height="139"/>
+              </svg>
+              <div class="tip" hidden><small></small><b></b></div>
+              <div class="asset-private">資產走勢已隱藏</div>
+            </div>
+            <div class="axis"><span class="axis-start"></span><span class="axis-mid"></span><span>現在</span></div>
+            <div class="periods" role="tablist" aria-label="資產走勢週期"><button role="tab" data-range="1D">1日</button><button role="tab" data-range="1W">1週</button><button role="tab" data-range="1M">1月</button><button role="tab" data-range="1Y">1年</button></div>
+          </section>
+          <div class="quick"><button data-demo="入金"><span class="quick-icon">${svgIcon('down')}</span><span class="quick-text"><b>入金</b><small>帳單詳情</small></span><span class="arrow">›</span></button><button data-demo="出金"><span class="quick-icon">${svgIcon('down')}</span><span class="quick-text"><b>出金</b><small>帳單詳情</small></span><span class="arrow">›</span></button></div>
+          <div class="menu-list"><button data-demo="錢包"><span>錢包</span><em>›</em></button><button data-demo="劃轉"><span>劃轉</span><em>›</em></button><button data-demo="實名認證"><span>實名認證</span><em>›</em></button><button data-demo="邀請好友"><span>邀請好友</span><em>›</em></button><button data-demo="修改密碼"><span>修改密碼</span><em>›</em></button></div>
+        </div><nav class="tabbar" aria-label="底部導航"><button data-demo="市場">${svgIcon('home')}市場</button><button data-demo="交易">${svgIcon('trade')}交易</button><button data-demo="訂單">${svgIcon('order')}訂單</button><button class="active" aria-current="page">${svgIcon('wallet')}個人中心</button></nav><div class="toast" role="status" hidden></div></div>
+      </article>`;
+    }
+    document.getElementById('conceptGrid').innerHTML = concepts.map(makePhone).join('');
+    function initPhone(phone) {
+      let range = '1M', values = [], points = [], active = -1, dragging = false, hidden = false, toastTimer;
+      const q = selector => phone.querySelector(selector);
+      const chart = q('.chart-shell svg');
+      if (phone.dataset.variant === 'particle') q('.chart-caption').after(q('.periods'));
+      if (phone.dataset.variant === 'cool') q('.delta-row').after(q('.periods'));
+      function hideTip() { q('.crosshair').hidden = true; q('.active-point').hidden = true; q('.tip').hidden = true; }
+      function showPoint(index) {
+        if (hidden) return;
+        active = Math.max(0, Math.min(values.length - 1, index));
+        const point = points[active];
+        q('.crosshair').setAttribute('x1', point.x); q('.crosshair').setAttribute('x2', point.x);
+        q('.active-point').setAttribute('cx', point.x); q('.active-point').setAttribute('cy', point.y);
+        q('.crosshair').hidden = false; q('.active-point').hidden = false;
+        const tip = q('.tip'); tip.hidden = false;
+        tip.style.left = `${Math.max(15, Math.min(85, point.x / 340 * 100))}%`;
+        tip.style.top = `${Math.max(2, point.y - 40)}px`;
+        const at = new Date(Date.now() - (1 - active / (values.length - 1)) * RANGE[range].days * 86400000);
+        tip.querySelector('small').textContent = range === '1D' ? new Intl.DateTimeFormat('zh-TW', { hour: '2-digit', minute: '2-digit' }).format(at) : new Intl.DateTimeFormat('zh-TW', { month: 'numeric', day: 'numeric' }).format(at);
+        tip.querySelector('b').textContent = money(values[active]);
+      }
+      function render(nextRange) {
+        range = nextRange; active = -1; hideTip();
+        const cfg = RANGE[range]; values = sample(cfg);
+        const min = Math.min(...values), max = Math.max(...values), pad = Math.max((max - min) * .15, 100);
+        points = values.map((v, i) => ({ x: i * 340 / (values.length - 1), y: 124 - (v - min + pad) / (max - min + pad * 2) * 110 }));
+        const line = points.map((p, i) => `${i ? 'L' : 'M'}${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ');
+        q('.chart-line').setAttribute('d', line); q('.chart-glow').setAttribute('d', line); q('.chart-echo').setAttribute('d', line);
+        q('.chart-area').setAttribute('d', `${line} L340 139 L0 139 Z`);
+        q('.end-ring').setAttribute('cx', points.at(-1).x); q('.end-ring').setAttribute('cy', points.at(-1).y);
+        const particleGroup = q('.particle-cloud');
+        particleGroup.replaceChildren();
+        if (phone.dataset.variant === 'particle') {
+          for (let i = 0; i < points.length - 1; i++) {
+            for (let j = 0; j < 3; j++) {
+              const t = j / 3, p = { x: points[i].x + (points[i + 1].x - points[i].x) * t, y: points[i].y + (points[i + 1].y - points[i].y) * t };
+              const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+              dot.setAttribute('cx', p.x.toFixed(1)); dot.setAttribute('cy', p.y.toFixed(1)); dot.setAttribute('r', j === 1 ? '1.8' : '1.4'); dot.setAttribute('fill', i % 6 === 0 ? '#5d9c3d' : '#79ba53'); dot.setAttribute('opacity', String(.65 + (i % 4) * .08));
+              if (i % 11 === 0) dot.classList.add('spark');
+              particleGroup.append(dot);
+              if ((i + j) % 3 === 0) { const echo = dot.cloneNode(); echo.setAttribute('cy', (p.y + 7 + (i % 3) * 3).toFixed(1)); echo.setAttribute('r', '1'); echo.setAttribute('opacity', '.15'); particleGroup.append(echo); }
+            }
+          }
+        }
+        const bars = q('.tech-bars'); bars.replaceChildren();
+        if (phone.dataset.variant === 'cool') {
+          points.forEach((p, i) => { if (i % 3) return; const bar = document.createElementNS('http://www.w3.org/2000/svg', 'line'); bar.setAttribute('x1', p.x); bar.setAttribute('x2', p.x); bar.setAttribute('y1', Math.min(133, p.y + 13)); bar.setAttribute('y2', '135'); bar.setAttribute('stroke', '#9ccc80'); bar.setAttribute('stroke-width', '1.2'); bars.append(bar); });
+        }
+        q('.delta-label').textContent = hidden ? '資產金額已隱藏' : cfg.label;
+        const diff = END - cfg.start;
+        q('.delta-value').textContent = `+${money(diff)}  (+${(diff / cfg.start * 100).toFixed(2)}%)`;
+        const dateFmt = new Intl.DateTimeFormat('zh-TW', { month: 'numeric', day: 'numeric' });
+        q('.axis-start').textContent = range === '1D' ? '00:00' : dateFmt.format(new Date(Date.now() - cfg.days * 86400000));
+        q('.axis-mid').textContent = range === '1D' ? '12:00' : dateFmt.format(new Date(Date.now() - cfg.days * 43200000));
+        q('.periods').querySelectorAll('button').forEach(b => b.setAttribute('aria-selected', String(b.dataset.range === range)));
+        chart.setAttribute('aria-label', hidden ? '資產走勢已隱藏' : `${range}資產走勢，期初${money(cfg.start)}，現在${money(END)}。左右方向鍵讀取各點`);
+      }
+      q('.periods').addEventListener('click', event => { const b = event.target.closest('[data-range]'); if (b) render(b.dataset.range); });
+      q('.eye').addEventListener('click', () => {
+        hidden = !hidden; phone.classList.toggle('is-private', hidden);
+        q('.balance').textContent = hidden ? '••••••••' : money(END);
+        q('.delta-label').textContent = hidden ? '資產金額已隱藏' : RANGE[range].label;
+        q('.delta-value').hidden = hidden;
+        q('.eye').setAttribute('aria-label', hidden ? '顯示資產' : '隱藏資產'); q('.eye').setAttribute('aria-pressed', String(hidden));
+        chart.setAttribute('aria-label', hidden ? '資產走勢已隱藏' : `${range}資產走勢，左右方向鍵讀取各點`);
+        hideTip();
+      });
+      const pointerIndex = event => { const r = chart.getBoundingClientRect(); return Math.round(Math.max(0, Math.min(1, (event.clientX - r.left) / r.width)) * (values.length - 1)); };
+      chart.addEventListener('pointerdown', e => { dragging = true; showPoint(pointerIndex(e)); });
+      chart.addEventListener('pointermove', e => { if (dragging || e.pointerType === 'mouse') showPoint(pointerIndex(e)); });
+      chart.addEventListener('pointerup', () => { dragging = false; });
+      chart.addEventListener('pointercancel', () => { dragging = false; hideTip(); });
+      chart.addEventListener('pointerleave', () => { if (!dragging) hideTip(); });
+      chart.addEventListener('keydown', e => { if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { e.preventDefault(); showPoint((active < 0 ? 0 : active) + (e.key === 'ArrowRight' ? 1 : -1)); } });
+      phone.querySelectorAll('[data-demo]').forEach(b => b.addEventListener('click', () => { const toast = q('.toast'); toast.textContent = `原型演示 · ${b.dataset.demo}`; toast.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => toast.hidden = true, 1400); }));
+      render(range);
+    }
+    document.querySelectorAll('.phone').forEach(initPhone);
+  </script>
+</body>
+</html>

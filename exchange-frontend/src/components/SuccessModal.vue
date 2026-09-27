@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { useRouter } from 'vue-router'
+import { useLocaleStore } from '@/store/locale'
+const localeStore = useLocaleStore()
 
 const props = defineProps<{
   visible: boolean
@@ -43,16 +45,16 @@ function goToOrders() {
       
       <!-- 确认消息 -->
       <div class="modal-message">
-        {{ message || '您的訂單已確認' }}
+        {{ message || localeStore.t('orderConfirmed') }}
       </div>
       
       <!-- 操作按钮 -->
       <div class="modal-buttons">
         <button class="btn-secondary" @click="goToOrders">
-          訂單頁面
+          {{ localeStore.t('orderList') }}
         </button>
         <button class="btn-primary" @click="handleConfirm">
-          確認
+          {{ localeStore.t('confirm') }}
         </button>
       </div>
     </div>

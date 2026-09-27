@@ -1,0 +1,207 @@
+/* 01 同源石墨：只改夜间外观，白色模式沿用原设计。 */
+.trade-page > header .desktop-language { width: 150px !important; flex: 0 0 150px; }
+.trade-page > header > div:last-child > button { flex-shrink: 0; white-space: nowrap; }
+.trade-page .trade-layout > aside:first-child > div:first-child .app-select { width: 110px !important; flex: 0 0 110px; }
+.trade-page .trade-layout > aside:first-child > div:first-child .custom-search { min-width: 0; flex: 1 1 auto; }
+
+html.dark {
+  color-scheme: dark;
+  --night-base: #1b1d20;
+  --night-panel: #23262a;
+  --night-chart: #1d2023;
+  --night-raised: #2b2f33;
+  --night-hover: #33383b;
+  --night-border: #393d41;
+  --night-text: #e8ebe8;
+  --night-secondary: #adb3ae;
+  --night-muted: #929b94;
+  --night-green: #9bc45b;
+  --night-green-fill: #7fa84c;
+  --night-red: #e47171;
+
+  --el-color-primary: var(--night-green);
+  --el-color-primary-light-3: #accf76;
+  --el-color-primary-light-5: #bad990;
+  --el-color-primary-light-7: #35482a;
+  --el-color-primary-light-9: #283426;
+  --el-color-success: var(--night-green);
+  --el-color-danger: var(--night-red);
+  --el-bg-color: var(--night-panel);
+  --el-bg-color-page: var(--night-base);
+  --el-bg-color-overlay: var(--night-raised);
+  --el-fill-color-blank: var(--night-panel);
+  --el-fill-color: var(--night-raised);
+  --el-fill-color-light: var(--night-raised);
+  --el-fill-color-lighter: var(--night-hover);
+  --el-fill-color-dark: #353b3e;
+  --el-border-color: var(--night-border);
+  --el-border-color-light: #34393d;
+  --el-border-color-lighter: #303538;
+  --el-text-color-primary: var(--night-text);
+  --el-text-color-regular: var(--night-secondary);
+  --el-text-color-secondary: var(--night-muted);
+  --el-text-color-placeholder: #828b85;
+  --el-disabled-bg-color: #272b2e;
+  --el-disabled-text-color: #858e87;
+  --el-mask-color: rgb(11 13 13 / 70%);
+
+  background: var(--night-base);
+  scrollbar-color: #535a57 var(--night-panel);
+  scrollbar-width: thin;
+
+  body, #app { background: var(--night-base); color: var(--night-text); }
+  * { scrollbar-color: #535a57 transparent; scrollbar-width: thin; }
+  *::-webkit-scrollbar { width: 8px; height: 8px; }
+  *::-webkit-scrollbar-track { background: var(--night-panel); }
+  *::-webkit-scrollbar-thumb { background: #535a57; border: 2px solid var(--night-panel); border-radius: 8px; }
+  *::-webkit-scrollbar-thumb:hover { background: #6a736c; }
+  .custom-scrollbar::-webkit-scrollbar { width: 8px; height: 8px; }
+  .custom-scrollbar::-webkit-scrollbar-track { background: var(--night-panel); }
+  .custom-scrollbar::-webkit-scrollbar-thumb { background: #535a57; border: 2px solid var(--night-panel); border-radius: 8px; }
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #6a736c; }
+}
+
+/* 旧页面的深蓝 Tailwind 夜间类集中换色，避免逐页改布局或影响日间样式。 */
+html.dark .trade-page { background: var(--night-base) !important; color: var(--night-text) !important; }
+html.dark .trade-page > header,
+html.dark .trade-layout > aside { background: var(--night-panel) !important; }
+html.dark .trade-chart-panel,
+html.dark .trade-chart-panel > :last-child { background: var(--night-base) !important; }
+html.dark .trade-page [class~='dark:bg-[#131722]'] { background-color: var(--night-panel) !important; }
+html.dark .trade-page [class~='dark:bg-[#181c27]'],
+html.dark .trade-page [class~='dark:bg-[#181c27]/50'],
+html.dark .trade-page [class~='dark:bg-[#181c27]/80'] { background-color: var(--night-raised) !important; }
+html.dark .trade-page [class~='dark:bg-[#2b3139]'],
+html.dark .trade-page [class~='dark:bg-[#2b3139]/80'] { background-color: var(--night-hover) !important; }
+html.dark .trade-page [class~='dark:bg-[#363c4e]'] { background-color: #3b4144 !important; }
+html.dark .trade-page [class~='dark:border-[#2b3139]'] { border-color: var(--night-border) !important; }
+html.dark .trade-page [class~='dark:border-[#363c4e]'] { border-color: #464d4b !important; }
+html.dark .trade-page [class~='dark:text-gray-100'],
+html.dark .trade-page [class~='dark:text-gray-200'] { color: var(--night-text) !important; }
+html.dark .trade-page [class~='dark:text-gray-300'] { color: #c6ccc6 !important; }
+html.dark .trade-page [class~='dark:text-gray-400'] { color: var(--night-secondary) !important; }
+html.dark .trade-page [class~='dark:text-gray-500'] { color: var(--night-muted) !important; }
+html.dark .trade-page [class~='dark:hover:bg-[#181c27]']:hover,
+html.dark .trade-page [class~='dark:hover:bg-[#2b3139]']:hover { background-color: var(--night-hover) !important; }
+html.dark .trade-page [class~='bg-[#8cc63f]'] { background-color: var(--night-green-fill) !important; }
+html.dark .trade-page [class~='bg-[#ff4d4f]'] { background-color: #bd5458 !important; }
+html.dark .trade-page [class~='text-[#8cc63f]'] { color: var(--night-green) !important; }
+html.dark .trade-page [class~='text-[#ff4d4f]'] { color: var(--night-red) !important; }
+html.dark .trade-page [class~='bg-green-100'] { background-color: #304029 !important; }
+
+/* 顶部、行情列表、资金卡、图表和订单区沿用白色页面的层级。 */
+html.dark .trade-page > header { border-color: var(--night-border) !important; box-shadow: none; }
+html.dark .trade-layout > aside:first-child > .custom-scrollbar > div { border-color: var(--night-border) !important; }
+html.dark .trade-layout > aside:first-child > .custom-scrollbar > div:hover { background: var(--night-hover) !important; }
+html.dark .trade-layout > aside:last-child > div:first-child {
+  background: linear-gradient(115deg, #709843, #88b152) !important;
+  box-shadow: 0 5px 18px rgb(0 0 0 / 16%);
+}
+html.dark .trade-layout > aside:last-child > div:first-child * { color: #fff !important; }
+html.dark .trade-chart-panel .trade-chart { background: var(--night-chart) !important; }
+html.dark .trade-chart-panel table thead { color: var(--night-secondary); }
+html.dark .trade-page .pnl-share-entry { border-color: var(--night-border); color: var(--night-green); }
+html.dark .trade-page .pnl-share-entry:hover { background: #35432d; }
+
+/* K 线工具栏、指标设置、截图和原生 dialog 共用石墨层。 */
+html.dark .chart-dark {
+  --chart-bg: var(--night-chart);
+  --chart-border: var(--night-border);
+  --chart-ink: var(--night-secondary);
+  --chart-hover: var(--night-raised);
+  --chart-accent: var(--night-green);
+}
+html.dark .chart-dark .chart-dialog { background: var(--night-panel); color: var(--night-text); }
+html.dark .chart-dark .chart-dialog .panel-search,
+html.dark .chart-dark .chart-dialog input:not([type='checkbox']):not([type='color']),
+html.dark .chart-dark .chart-dialog select { background: var(--night-raised); border-color: var(--night-border); color: var(--night-text); }
+html.dark .chart-dark .drawing-rail { scrollbar-color: #535a57 transparent; }
+
+/* 搜索、下拉、数值步进、开关：本体与传送到 body 的菜单同一套颜色。 */
+html.dark .trade-page .custom-search .el-input__wrapper,
+html.dark .trade-page .custom-input-number .el-input__wrapper,
+html.dark .trade-page .custom-input-large .el-input__wrapper,
+html.dark .el-input__wrapper,
+html.dark .el-select__wrapper,
+html.dark .el-textarea__inner {
+  background: var(--night-raised) !important;
+  box-shadow: 0 0 0 1px var(--night-border) inset !important;
+  color: var(--night-text) !important;
+}
+html.dark .el-input__wrapper:hover,
+html.dark .el-select__wrapper:hover { box-shadow: 0 0 0 1px #69736a inset !important; }
+html.dark .el-input__wrapper.is-focus,
+html.dark .el-select__wrapper.is-focused,
+html.dark .custom-search .el-input__wrapper.is-focus,
+html.dark .custom-input-number .el-input__wrapper.is-focus,
+html.dark .custom-input-large .el-input__wrapper.is-focus { box-shadow: 0 0 0 1px var(--night-green) inset !important; }
+html.dark .el-input__inner,
+html.dark .el-textarea__inner { color: var(--night-text); caret-color: var(--night-green); }
+html.dark .el-input-number__increase,
+html.dark .el-input-number__decrease,
+html.dark .custom-input-number .el-input-number__increase,
+html.dark .custom-input-number .el-input-number__decrease { background: #353a3d !important; color: var(--night-secondary); border-color: var(--night-border) !important; }
+html.dark .el-switch { --el-switch-off-color: #4d5450 !important; }
+html.dark .el-switch__core { border-color: #4d5450; }
+html.dark .el-popper,
+html.dark .el-dropdown-menu,
+html.dark .el-select-dropdown { background: var(--night-raised); color: var(--night-text); border-color: var(--night-border); }
+
+html.dark .app-select .app-select__trigger,
+html.dark .app-select__menu {
+  background: var(--night-raised) !important;
+  color: var(--night-text) !important;
+  border-color: var(--night-border) !important;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 10%);
+}
+html.dark .app-select__menu { box-shadow: 0 18px 48px rgb(0 0 0 / 34%); }
+html.dark .app-select .app-select__trigger:hover { background: #343a3a !important; border-color: #69736a !important; }
+html.dark .app-select .app-select__trigger:focus-visible,
+html.dark .app-select.is-open .app-select__trigger { border-color: var(--night-green) !important; box-shadow: 0 0 0 3px rgb(155 196 91 / 18%); }
+html.dark .app-select__search input { background: var(--night-panel) !important; border-color: var(--night-border) !important; color: var(--night-text) !important; }
+html.dark .app-select__search input::placeholder { color: var(--night-muted); }
+html.dark .app-select__option:hover,
+html.dark .app-select__option.is-active { background: var(--night-hover) !important; }
+html.dark .app-select__option.is-selected { background: #35432d !important; color: #c6e39e !important; }
+html.dark .app-select__option-text small,
+html.dark .app-select__value.is-placeholder,
+html.dark .app-select__empty { color: var(--night-muted) !important; }
+
+/* 财务、借款、登录和个人中心弹层不再留白底。 */
+html.dark .el-overlay { background-color: rgb(10 12 13 / 70%); }
+html.dark .el-dialog,
+html.dark .custom-dialog { background: var(--night-panel); color: var(--night-text); border: 1px solid var(--night-border); }
+html.dark .custom-dialog .el-dialog__header { border-color: var(--night-border); }
+html.dark .custom-dialog .el-dialog__title { color: var(--night-text); }
+html.dark .custom-dialog .el-dialog__body { color: var(--night-secondary); }
+html.dark .custom-dialog [class~='bg-white'] { background-color: var(--night-panel) !important; }
+html.dark .custom-dialog [class~='bg-gray-50'] { background-color: var(--night-raised) !important; }
+html.dark .custom-dialog [class~='from-white'] { --tw-gradient-from: transparent !important; }
+html.dark .custom-dialog input.bg-transparent { background: transparent; color: var(--night-text); caret-color: var(--night-green); }
+html.dark .leverage-trigger { background: var(--night-raised); color: var(--night-text); border-color: var(--night-border); }
+html.dark .leverage-dialog { background: var(--night-panel); color: var(--night-text); border: 1px solid var(--night-border); }
+html.dark .leverage-number,
+html.dark .leverage-presets button,
+html.dark .leverage-dialog .cancel { background: var(--night-raised); border-color: var(--night-border); }
+html.dark .leverage-number label { border-color: var(--night-border); }
+html.dark .leverage-presets button[aria-pressed='true'] { background: #35432d; color: var(--night-green); }
+html.dark .position-sizing { color: var(--night-secondary); }
+html.dark .liquidation-estimates { background: var(--night-raised); border: 1px solid var(--night-border); }
+html.dark .allocation-presets button,
+html.dark .sizing-hint { color: var(--night-muted); }
+html.dark .allocation-presets button[aria-pressed='true'],
+html.dark .allocation-label output { color: var(--night-green); }
+html.dark .position-sizing input[type='range']::-webkit-slider-runnable-track { background: linear-gradient(to right, var(--night-green) var(--allocation), #4d5450 var(--allocation)); }
+html.dark .position-sizing input[type='range']::-webkit-slider-thumb { background: var(--night-panel); border-color: var(--night-green); }
+
+/* 独立语言页也跟随交易页的夜间开关。 */
+html.dark .page-shell { background: var(--night-base); }
+html.dark .auth-card { background: var(--night-panel); color: var(--night-text); box-shadow: 0 18px 48px rgb(0 0 0 / 20%); }
+html.dark .auth-title,
+html.dark .lang-name { color: var(--night-text); }
+html.dark .lang-item { border-color: var(--night-border); background: var(--night-raised); }
+html.dark .lang-item:hover { background: var(--night-hover); }
+html.dark .lang-item[style] { border-color: var(--night-green) !important; background: #35432d !important; }
+html.dark .icon-btn { background: var(--night-raised); border-color: var(--night-border); color: var(--night-text); }
+html.dark .icon-btn svg path { stroke: currentColor; }
+html.dark .input-box { background: var(--night-raised); border-color: var(--night-border); color: var(--night-text); }

@@ -8,6 +8,10 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /** Real market service + durable H2 flows; only repository/provider/Redis are isolated fixtures. */
 class ControlFlowMarketIntegrationTest {
+    private static RecoveryOptions enabledRecovery() {
+        RecoveryOptions options = new RecoveryOptions(); options.setAutoRestore(true); return options;
+    }
+
     final PriceControlTest fixture = new PriceControlTest();
     final ForexQuoteMarketService market = fixture.market;
     final java.util.concurrent.atomic.AtomicReference<com.gtcfesk.exchange.entity.TradingSymbol> saved = fixture.saved;
@@ -26,7 +30,7 @@ class ControlFlowMarketIntegrationTest {
     @Test void backendTimerRestoresRandomBaseWithoutChangingSwitch() throws Exception {
         market.randomMarket(1L, true, null);
         Long session = saved.get().getRandomMarketStartedAt();
-        RecoveryOptions options = new RecoveryOptions(); options.setRestoreMode("QUICK");
+        RecoveryOptions options = enabledRecovery(); options.setRestoreMode("QUICK");
         market.startControl(1L, 1, new BigDecimal("120"), 1, false, "random-flow", options);
         Thread.sleep(1100);
         market.completeControls();
@@ -37,7 +41,7 @@ class ControlFlowMarketIntegrationTest {
         assertEquals(1, database.count("market_control_publication"));
     }
     @Test void manualOneClickCancelsPendingAutomaticRecovery() throws Exception {
-        market.startControl(1L, 1, new BigDecimal("120"), 1, false, "cancel-flow", new RecoveryOptions());
+        market.startControl(1L, 1, new BigDecimal("120"), 1, false, "cancel-flow", enabledRecovery());
         market.manualControl(1L, false, BigDecimal.ZERO);
         Thread.sleep(1100); market.completeControls();
         assertEquals("SOURCE", market.internalPrice("TEST").get("controlState"));

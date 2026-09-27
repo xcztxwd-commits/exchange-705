@@ -1,11 +1,9 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import request from '@/utils/request'
-
-export const currencies = ['USD', 'EUR', 'JPY', 'GBP', 'AUD', 'CAD', 'SGD', 'CNY']
-const names = ['美元', '欧元', '日元', '英镑', '澳元', '加元', '新加坡元', '人民币']
-export const currencyOptions = currencies.map((code, i) => ({ code, label: `${code} · ${names[i]}` }))
+import { useLocaleStore } from '@/store/locale'
 
 export function useFiatCurrency() {
+  const locale = useLocaleStore()
   const currency = ref('USD')
   const rates = ref<Record<string, { quoteToUsdRate: number; conversionAvailable: boolean; conversionExpiresAt: number }>>({})
   const now = ref(Date.now())
@@ -27,9 +25,9 @@ export function useFiatCurrency() {
     now.value = Date.now()
   }
   const formatAsset = (amount: number | string | undefined | null) => rate.value === null ? '—' :
-    new Intl.NumberFormat('en-US', { style: 'currency', currency: currency.value, currencyDisplay: 'code', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(amount || 0) / rate.value)
-  const usdPreview = (amount: number | string | null) => rate.value === null ? '汇率暂不可用，请稍后重试' :
-    `≈ ${(Number(amount || 0) * rate.value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD（以提交时汇率为准）`
+    new Intl.NumberFormat(locale.locale, { style: 'currency', currency: currency.value, currencyDisplay: 'code', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(amount || 0) / rate.value)
+  const usdPreview = (amount: number | string | null) => rate.value === null ? locale.text('匯率暫不可用，請稍後重試', 'Exchange rate unavailable; please retry later') :
+    locale.text('≈ {amount} USD（以提交時匯率為準）', '≈ {amount} USD (rate at submission applies)', { amount: (Number(amount || 0) * rate.value).toLocaleString(locale.locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) })
   let timer: ReturnType<typeof setInterval>
   onMounted(() => {
     void refreshRates()

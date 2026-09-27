@@ -1,0 +1,7633 @@
+[
+  {
+    "key": "leverage",
+    "value": "レバレッジ",
+    "files": [
+      "exchange-frontend\\src\\components\\LeverageControl.vue",
+      "exchange-frontend\\src\\utils\\orderShareLocales.ts",
+      "exchange-frontend\\src\\views\\Trade.vue",
+      "exchange-pc\\src\\components\\LeverageControl.vue",
+      "exchange-pc\\src\\utils\\orderShareLocales.ts",
+      "exchange-pc\\src\\views\\Trade.vue"
+    ]
+  },
+  {
+    "key": "validOrderPrice",
+    "value": "有効な注文価格",
+    "files": []
+  },
+  {
+    "key": "orderFailed",
+    "value": "注文に失敗しました",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "cannotBeLessThan",
+    "value": "次の値以上で指定してください：",
+    "files": []
+  },
+  {
+    "key": "tradeText",
+    "value": "取引",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "setFailed",
+    "value": "設定に失敗しました",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "cannotClosePosition",
+    "value": "ポジションを決済できません",
+    "files": []
+  },
+  {
+    "key": "closePositionFailed",
+    "value": "ポジションの決済に失敗しました",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "getCategoryFailed",
+    "value": "銘柄分類を取得できませんでした",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "getDepositNetworkFailed",
+    "value": "入金ネットワーク一覧を取得できませんでした",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "pleaseSelectDepositNetwork",
+    "value": "入金ネットワークを選択してください",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "currentlyNotSupported",
+    "value": "現在サポートされていません",
+    "files": []
+  },
+  {
+    "key": "validDepositAmount",
+    "value": "有効な入金額",
+    "files": []
+  },
+  {
+    "key": "pleaseUploadVoucher",
+    "value": "入金確認書類をアップロードしてください",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "getWithdrawFailed",
+    "value": "出金履歴を取得できませんでした",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "failedText",
+    "value": "失敗しました",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "getWithdrawAccountFailed",
+    "value": "出金先口座の情報を取得できませんでした",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "validWithdrawAmount",
+    "value": "有効な出金額",
+    "files": []
+  },
+  {
+    "key": "balanceInsufficient",
+    "value": "残高不足",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "getTransferFailed",
+    "value": "振替履歴を取得できませんでした",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "transferAccountsCannotBeSame",
+    "value": "振替元と振替先には異なる口座を指定してください",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "transferText",
+    "value": "資金振替",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "cannotBeGreaterThan",
+    "value": "次の値以下で指定してください：",
+    "files": []
+  },
+  {
+    "key": "balanceText",
+    "value": "残高",
+    "files": [
+      "exchange-frontend\\src\\views\\Home.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "bindFailed",
+    "value": "登録に失敗しました",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "digitalText2",
+    "value": "暗号資産",
+    "files": []
+  },
+  {
+    "key": "addressBindSuccess",
+    "value": "アドレスを登録しました",
+    "files": []
+  },
+  {
+    "key": "getNoticeFailed",
+    "value": "お知らせを取得できませんでした",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "copyFailedSelectManually",
+    "value": "コピーできませんでした。テキストを選択してコピーしてください",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "twoInputs",
+    "value": "確認用の",
+    "files": []
+  },
+  {
+    "key": "inconsistent",
+    "value": "が一致しません",
+    "files": []
+  },
+  {
+    "key": "passwordModifySuccessReLogin",
+    "value": "パスワードが正常に変更されました。再度ログインしてください",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "passwordModifyFailed",
+    "value": "パスワード変更に失敗しました",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "submittingText",
+    "value": "送信中",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "submitSignature",
+    "value": "署名を送信",
+    "files": [
+      "exchange-frontend\\src\\views\\LoanSign.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\LoanSign.vue"
+    ]
+  },
+  {
+    "key": "noDataText",
+    "value": "データがありません",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "issueText",
+    "value": "支払い",
+    "files": []
+  },
+  {
+    "key": "dailyProfit",
+    "value": "本日の収益",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "bankCardText2",
+    "value": "銀行口座",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "yourText",
+    "value": "あなたの",
+    "files": []
+  },
+  {
+    "key": "infoIsBeing",
+    "value": "情報の審査中です",
+    "files": []
+  },
+  {
+    "key": "toUnlockAdvancedFeatures",
+    "value": "出金や借入れをご利用いただくため",
+    "files": []
+  },
+  {
+    "key": "completeRealName",
+    "value": "本人確認を完了",
+    "files": []
+  },
+  {
+    "key": "pleaseWaitPatiently",
+    "value": "しばらくお待ちください",
+    "files": []
+  },
+  {
+    "key": "noNotices",
+    "value": "お知らせはありません",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "contentUnderConstruction",
+    "value": "準備中です",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "submitWaitAdminReview",
+    "value": "送信後、審査が完了するまでお待ちください",
+    "files": []
+  },
+  {
+    "key": "forFundSecurityCompleteAuth",
+    "value": "資金保護のため、本人確認を完了してください",
+    "files": []
+  },
+  {
+    "key": "yourContactPhone",
+    "value": "連絡先電話番号",
+    "files": []
+  },
+  {
+    "key": "pleaseText",
+    "value": "お願いします",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "contractBalanceInsufficient2",
+    "value": "証拠金取引口座の残高が不足しています",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "requiredText2",
+    "value": "必要",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "availableText2",
+    "value": "利用可能",
+    "files": []
+  },
+  {
+    "key": "optionBalanceInsufficient2",
+    "value": "期限取引口座の残高が不足しています",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "getDurationFailed",
+    "value": "取引期間を取得できませんでした",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "validText",
+    "value": "有効な",
+    "files": []
+  },
+  {
+    "key": "cannotBeLessThanMin",
+    "value": "最小値未満にすることはできません",
+    "files": []
+  },
+  {
+    "key": "cannotBeGreaterThanMax",
+    "value": "最大値を超えることはできません",
+    "files": []
+  },
+  {
+    "key": "financialText",
+    "value": "資産運用",
+    "files": []
+  },
+  {
+    "key": "subscribeFailed",
+    "value": "申込みに失敗しました",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "networkErrorOrNotImplemented",
+    "value": "処理結果を確認できませんでした。状況をご確認ください",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "getLoanConfigFailed",
+    "value": "借入条件を取得できませんでした",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "getText",
+    "value": "取得",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "getFinancialProductsFailed",
+    "value": "運用商品を取得できませんでした",
+    "files": []
+  },
+  {
+    "key": "onlySupportImageFormat",
+    "value": "アップロードできるのは画像形式のみです",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "imageSizeCannotExceed",
+    "value": "画像サイズの上限：",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "uploadFailed",
+    "value": "アップロードに失敗しました",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "statusFailed",
+    "value": "状態を取得できませんでした",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "pleaseFillCompletePersonalInfo",
+    "value": "個人情報の必須項目をすべて入力してください",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "pleaseUploadCompleteIdPhotos",
+    "value": "必要な本人確認書類の画像をすべてアップロードしてください",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "personalInfoSubmitSuccessWaitReview",
+    "value": "個人情報は正常に送信されました。審査をお待ちください",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "dataSubmitSuccessWaitReview",
+    "value": "情報は正常に送信されました。審査をお待ちください",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "pleaseCompletePersonalInfoAuthFirst",
+    "value": "先に本人確認を完了してください",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "validLoanAmount",
+    "value": "有効な借入金額",
+    "files": []
+  },
+  {
+    "key": "getPersonalInfoFailed",
+    "value": "個人情報を取得できませんでした",
+    "files": []
+  },
+  {
+    "key": "infoFailed",
+    "value": "情報の取得に失敗しました",
+    "files": []
+  },
+  {
+    "key": "pleaseEnsureCompletedRealNameAuth",
+    "value": "本人確認が完了していることをご確認ください",
+    "files": []
+  },
+  {
+    "key": "creditLoanApplySuccess",
+    "value": "借入申込みを受け付けました",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "loanApplyFailed",
+    "value": "借入申込みに失敗しました",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "repaySuccess",
+    "value": "返済が完了しました",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "repayFailed",
+    "value": "返済に失敗しました",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "getLoanDetailsFailed",
+    "value": "借入明細を取得できませんでした",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "pleaseSignOnCanvasFirst",
+    "value": "署名欄に署名してください",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "getProfitListFailed",
+    "value": "収益履歴を取得できませんでした",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "loadAccountAssetsFailed",
+    "value": "口座資産を取得できませんでした",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "loadDurationOrdersFailed",
+    "value": "期限取引の注文を取得できませんでした",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "loadOrdersFailed",
+    "value": "注文を取得できませんでした",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "currentPriceNotAvailable",
+    "value": "現在の価格はまだ取得されていません。お待ちください。",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "pleaseLoginFirst",
+    "value": "まずログインしてください",
+    "files": [
+      "exchange-frontend\\src\\views\\Home.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "returnToLogin",
+    "value": "ログインに戻る",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "digitalCurrencyDeposit",
+    "value": "暗号資産の入金",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "bankCardDeposit2",
+    "value": "銀行振込による入金",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "transferSuccess2",
+    "value": "振替が完了しました",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "boundText",
+    "value": "登録済み",
+    "files": []
+  },
+  {
+    "key": "pleaseContactFirst",
+    "value": "まずはご連絡ください",
+    "files": []
+  },
+  {
+    "key": "orBindOnMobile",
+    "value": "またはモバイル版で登録してください",
+    "files": []
+  },
+  {
+    "key": "boundBankCard",
+    "value": "登録済み銀行口座",
+    "files": []
+  },
+  {
+    "key": "remarkText",
+    "value": "備考",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "nameText2",
+    "value": "氏名",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "completedText",
+    "value": "完了しました",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "noWithdrawRecords2",
+    "value": "出金履歴はありません",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "optionsAccount2",
+    "value": "期限取引口座",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "fundAccount2",
+    "value": "資金口座",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "contractAccount2",
+    "value": "証拠金取引口座",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "pleaseEnterText",
+    "value": "入力してください",
+    "files": []
+  },
+  {
+    "key": "pleaseEnterBankCardNo",
+    "value": "口座番号を入力してください",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "pleaseEnterPayeeRealName",
+    "value": "口座名義人の氏名を入力してください",
+    "files": []
+  },
+  {
+    "key": "pleaseSelectCurrencyType",
+    "value": "通貨の種類を選択してください",
+    "files": []
+  },
+  {
+    "key": "pleaseSelectNetwork2",
+    "value": "ネットワークを選択してください",
+    "files": []
+  },
+  {
+    "key": "pleaseEnterOrPasteWalletAddress",
+    "value": "ウォレットアドレスを入力または貼り付けてください",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "pleaseFillAllRequiredFields",
+    "value": "必要な情報をすべて入力してください",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "bankCardBindSuccess",
+    "value": "銀行口座を登録しました",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "digitalCurrencyAddressBindSuccess",
+    "value": "暗号資産の出金先アドレスを登録しました",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "completeAuthToUnlockFeatures",
+    "value": "出金や借入れをご利用いただくには、本人確認を完了してください。",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "uploadIdPhoto",
+    "value": "本人確認書類の画像をアップロード",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "ensurePhotoClearSizeLimit",
+    "value": "文字や顔が鮮明に写った、5MB以下のJPGまたはPNG画像をアップロードしてください。",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "idFrontUploadSuccess",
+    "value": "本人確認書類の表面をアップロードしました",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "idBackUploadSuccess",
+    "value": "本人確認書類の裏面をアップロードしました",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "idHandheldUploadSuccess",
+    "value": "本人確認書類を持った本人の写真をアップロードしました",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "authInfoSubmitSuccessWaitReview",
+    "value": "本人確認情報を送信しました。審査をお待ちください",
+    "files": []
+  },
+  {
+    "key": "copySuccess2",
+    "value": "コピーしました",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "pleaseFillCompletePasswordInfo",
+    "value": "パスワードの必須項目をすべて入力してください",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "newPassword2",
+    "value": "新しいパスワード",
+    "files": []
+  },
+  {
+    "key": "hoursOnlineService2",
+    "value": "時間オンラインで対応",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "noLoanRecords2",
+    "value": "借入履歴はありません",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "forFundSecurityCompleteAuthFirst",
+    "value": "資金保護のため、先に本人確認を完了してください。送信後、審査が完了するまでお待ちください。",
+    "files": []
+  },
+  {
+    "key": "contactPhone",
+    "value": "連絡先番号",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "pleaseEnterContactPhone",
+    "value": "連絡先番号を入力してください",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "homeAddress2",
+    "value": "住所",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "pleaseEnterDetailedHomeAddress",
+    "value": "詳しい自宅住所を入力してください",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "pleaseEnterValidSubscribeQuantity",
+    "value": "有効な申込金額を入力してください",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "financialSubscribeSuccess",
+    "value": "申込みを受け付けました",
+    "files": []
+  },
+  {
+    "key": "defaultRedeemSuccess",
+    "value": "中途解約が完了しました",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "alreadyRedeemed",
+    "value": "解約済み",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "withdrawApplicationSubmittedWaitReview",
+    "value": "出金申請を受け付けました。審査をお待ちください",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "cryptoWithdraw",
+    "value": "暗号資産の出金",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "arrivalText",
+    "value": "着金",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "bankCardWithdraw",
+    "value": "銀行口座への出金",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "noDepositRecords2",
+    "value": "入金履歴がありません",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "emailLogin",
+    "value": "メールアドレスでログイン",
+    "files": [
+      "exchange-frontend\\src\\views\\ForgotPassword.vue",
+      "exchange-frontend\\src\\views\\Login.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\ForgotPassword.vue",
+      "exchange-pc\\src\\views\\Login.vue"
+    ]
+  },
+  {
+    "key": "emailRegister",
+    "value": "メールアドレスで登録",
+    "files": [
+      "exchange-frontend\\src\\views\\Register.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\Register.vue"
+    ]
+  },
+  {
+    "key": "emailPlaceholder",
+    "value": "メールアドレスを入力してください",
+    "files": [
+      "exchange-frontend\\src\\views\\ForgotPassword.vue",
+      "exchange-frontend\\src\\views\\Login.vue",
+      "exchange-frontend\\src\\views\\Register.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\ForgotPassword.vue",
+      "exchange-pc\\src\\views\\Login.vue",
+      "exchange-pc\\src\\views\\Register.vue"
+    ]
+  },
+  {
+    "key": "password",
+    "value": "パスワード",
+    "files": [
+      "exchange-frontend\\src\\views\\ChangePassword.vue",
+      "exchange-frontend\\src\\views\\ForgotPassword.vue",
+      "exchange-frontend\\src\\views\\Login.vue",
+      "exchange-frontend\\src\\views\\Register.vue",
+      "exchange-pc\\src\\views\\ChangePassword.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\ForgotPassword.vue",
+      "exchange-pc\\src\\views\\Login.vue",
+      "exchange-pc\\src\\views\\Register.vue"
+    ]
+  },
+  {
+    "key": "passwordPlaceholder",
+    "value": "パスワードを入力",
+    "files": [
+      "exchange-frontend\\src\\views\\ChangePassword.vue",
+      "exchange-frontend\\src\\views\\ForgotPassword.vue",
+      "exchange-frontend\\src\\views\\Login.vue",
+      "exchange-frontend\\src\\views\\Register.vue",
+      "exchange-pc\\src\\views\\ChangePassword.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\ForgotPassword.vue",
+      "exchange-pc\\src\\views\\Login.vue",
+      "exchange-pc\\src\\views\\Register.vue"
+    ]
+  },
+  {
+    "key": "confirmPassword",
+    "value": "パスワード確認",
+    "files": [
+      "exchange-frontend\\src\\views\\ChangePassword.vue",
+      "exchange-frontend\\src\\views\\ForgotPassword.vue",
+      "exchange-frontend\\src\\views\\Register.vue",
+      "exchange-pc\\src\\views\\ChangePassword.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\ForgotPassword.vue",
+      "exchange-pc\\src\\views\\Register.vue"
+    ]
+  },
+  {
+    "key": "inviteCode",
+    "value": "招待コード",
+    "files": [
+      "exchange-frontend\\src\\views\\Invite.vue",
+      "exchange-frontend\\src\\views\\Register.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\Invite.vue",
+      "exchange-pc\\src\\views\\Register.vue"
+    ]
+  },
+  {
+    "key": "verifyCode",
+    "value": "認証コード",
+    "files": [
+      "exchange-frontend\\src\\views\\ChangePassword.vue",
+      "exchange-frontend\\src\\views\\ForgotPassword.vue",
+      "exchange-pc\\src\\views\\ChangePassword.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\ForgotPassword.vue"
+    ]
+  },
+  {
+    "key": "send",
+    "value": "送信",
+    "files": [
+      "exchange-frontend\\src\\views\\ChangePassword.vue",
+      "exchange-frontend\\src\\views\\ForgotPassword.vue",
+      "exchange-pc\\src\\views\\ChangePassword.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\ForgotPassword.vue"
+    ]
+  },
+  {
+    "key": "login",
+    "value": "ログイン",
+    "files": [
+      "exchange-frontend\\src\\views\\Login.vue",
+      "exchange-frontend\\src\\views\\Register.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\Login.vue",
+      "exchange-pc\\src\\views\\Register.vue"
+    ]
+  },
+  {
+    "key": "register",
+    "value": "登録",
+    "files": [
+      "exchange-frontend\\src\\views\\Login.vue",
+      "exchange-frontend\\src\\views\\Register.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\Login.vue",
+      "exchange-pc\\src\\views\\Register.vue"
+    ]
+  },
+  {
+    "key": "forgotPassword",
+    "value": "パスワードを忘れた方",
+    "files": [
+      "exchange-frontend\\src\\views\\ForgotPassword.vue",
+      "exchange-frontend\\src\\views\\Login.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\ForgotPassword.vue",
+      "exchange-pc\\src\\views\\Login.vue"
+    ]
+  },
+  {
+    "key": "newUserJoin",
+    "value": "初めての方はこちらから登録",
+    "files": [
+      "exchange-frontend\\src\\views\\Login.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\Login.vue"
+    ]
+  },
+  {
+    "key": "gotoLogin",
+    "value": "登録済みの方はこちらからログイン",
+    "files": [
+      "exchange-frontend\\src\\views\\Register.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\Register.vue"
+    ]
+  },
+  {
+    "key": "resetPassword",
+    "value": "パスワード再設定",
+    "files": [
+      "exchange-frontend\\src\\views\\ForgotPassword.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\ForgotPassword.vue"
+    ]
+  },
+  {
+    "key": "noAccountTip",
+    "value": "デモ口座を作ってすぐ取引！",
+    "files": [
+      "exchange-frontend\\src\\views\\Login.vue",
+      "exchange-pc\\src\\views\\Login.vue"
+    ]
+  },
+  {
+    "key": "sendCodeSuccess",
+    "value": "認証コードを送信しました。メールをご確認ください",
+    "files": [
+      "exchange-frontend\\src\\views\\ChangePassword.vue",
+      "exchange-pc\\src\\views\\ChangePassword.vue"
+    ]
+  },
+  {
+    "key": "sendCodeFail",
+    "value": "コード送信に失敗しました",
+    "files": []
+  },
+  {
+    "key": "registerSuccess",
+    "value": "登録が完了しました。ログインしてください",
+    "files": [
+      "exchange-frontend\\src\\views\\Register.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\Register.vue"
+    ]
+  },
+  {
+    "key": "registerFail",
+    "value": "登録に失敗しました",
+    "files": [
+      "exchange-frontend\\src\\views\\Register.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\Register.vue"
+    ]
+  },
+  {
+    "key": "loginSuccess",
+    "value": "ログインしました",
+    "files": [
+      "exchange-frontend\\src\\views\\Login.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\Login.vue"
+    ]
+  },
+  {
+    "key": "loginFail",
+    "value": "ログインに失敗しました",
+    "files": [
+      "exchange-frontend\\src\\views\\Login.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\Login.vue"
+    ]
+  },
+  {
+    "key": "resetSuccess",
+    "value": "パスワードを再設定しました。ログインしてください",
+    "files": []
+  },
+  {
+    "key": "resetFail",
+    "value": "再設定に失敗しました",
+    "files": []
+  },
+  {
+    "key": "userNotFound",
+    "value": "ユーザーが見つかりません",
+    "files": []
+  },
+  {
+    "key": "pleaseWait",
+    "value": "お待ちください...",
+    "files": [
+      "exchange-frontend\\src\\views\\Login.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\Login.vue"
+    ]
+  },
+  {
+    "key": "sending",
+    "value": "送信中",
+    "files": [
+      "exchange-frontend\\src\\views\\ForgotPassword.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\ForgotPassword.vue"
+    ]
+  },
+  {
+    "key": "submitting",
+    "value": "送信中...",
+    "files": [
+      "exchange-frontend\\src\\views\\ChangePassword.vue",
+      "exchange-frontend\\src\\views\\Deposit.vue",
+      "exchange-frontend\\src\\views\\ForgotPassword.vue",
+      "exchange-frontend\\src\\views\\LoanApplyInfo.vue",
+      "exchange-frontend\\src\\views\\LoanPersonalInfo.vue",
+      "exchange-frontend\\src\\views\\LoanSign.vue",
+      "exchange-frontend\\src\\views\\Register.vue",
+      "exchange-frontend\\src\\views\\Verification.vue",
+      "exchange-frontend\\src\\views\\Withdraw.vue",
+      "exchange-pc\\src\\views\\ChangePassword.vue",
+      "exchange-pc\\src\\views\\Deposit.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\ForgotPassword.vue",
+      "exchange-pc\\src\\views\\LoanApplyInfo.vue",
+      "exchange-pc\\src\\views\\LoanPersonalInfo.vue",
+      "exchange-pc\\src\\views\\LoanSign.vue",
+      "exchange-pc\\src\\views\\Register.vue",
+      "exchange-pc\\src\\views\\Verification.vue",
+      "exchange-pc\\src\\views\\Withdraw.vue"
+    ]
+  },
+  {
+    "key": "seconds",
+    "value": "秒",
+    "files": [
+      "exchange-frontend\\src\\views\\ChangePassword.vue",
+      "exchange-pc\\src\\views\\ChangePassword.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "inviteCodeFilled",
+    "value": "招待リンクから入力済み",
+    "files": [
+      "exchange-frontend\\src\\views\\Register.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\Register.vue"
+    ]
+  },
+  {
+    "key": "inviteCodeRequired",
+    "value": "招待コードを入力してください（必須）",
+    "files": []
+  },
+  {
+    "key": "pleaseEnterEmail",
+    "value": "メールアドレスを入力してください",
+    "files": [
+      "exchange-frontend\\src\\views\\ForgotPassword.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\ForgotPassword.vue"
+    ]
+  },
+  {
+    "key": "codeSentCheckEmail",
+    "value": "認証コードを送信しました。メールをご確認ください",
+    "files": [
+      "exchange-frontend\\src\\views\\ForgotPassword.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\ForgotPassword.vue"
+    ]
+  },
+  {
+    "key": "sendFailed",
+    "value": "送信に失敗しました",
+    "files": [
+      "exchange-frontend\\src\\views\\ChangePassword.vue",
+      "exchange-frontend\\src\\views\\ForgotPassword.vue",
+      "exchange-pc\\src\\views\\ChangePassword.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\ForgotPassword.vue"
+    ]
+  },
+  {
+    "key": "pleaseFillAllFields",
+    "value": "すべての必須項目を入力してください",
+    "files": [
+      "exchange-frontend\\src\\views\\ForgotPassword.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\ForgotPassword.vue"
+    ]
+  },
+  {
+    "key": "passwordsNotMatch",
+    "value": "パスワードが一致しません",
+    "files": [
+      "exchange-frontend\\src\\views\\ChangePassword.vue",
+      "exchange-frontend\\src\\views\\ForgotPassword.vue",
+      "exchange-frontend\\src\\views\\Register.vue",
+      "exchange-pc\\src\\views\\ChangePassword.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\ForgotPassword.vue",
+      "exchange-pc\\src\\views\\Register.vue"
+    ]
+  },
+  {
+    "key": "resetSuccessLogin",
+    "value": "パスワードを再設定しました。新しいパスワードでログインしてください",
+    "files": [
+      "exchange-frontend\\src\\views\\ForgotPassword.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\ForgotPassword.vue"
+    ]
+  },
+  {
+    "key": "resetFailed",
+    "value": "再設定に失敗しました",
+    "files": [
+      "exchange-frontend\\src\\views\\ForgotPassword.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\ForgotPassword.vue"
+    ]
+  },
+  {
+    "key": "pleaseEnterEmailAndPassword",
+    "value": "メールアドレスとパスワードを入力してください",
+    "files": [
+      "exchange-frontend\\src\\views\\Login.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\Login.vue"
+    ]
+  },
+  {
+    "key": "pleaseEnterAllRequiredFields",
+    "value": "すべての必須項目を入力してください",
+    "files": [
+      "exchange-frontend\\src\\views\\Register.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\Register.vue"
+    ]
+  },
+  {
+    "key": "passwordTooShort",
+    "value": "パスワードが短すぎます。6文字以上入力してください",
+    "files": [
+      "exchange-frontend\\src\\views\\Register.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\Register.vue"
+    ]
+  },
+  {
+    "key": "emailInvalid",
+    "value": "メールアドレスの形式が正しくありません",
+    "files": []
+  },
+  {
+    "key": "verifyCodeRequired",
+    "value": "認証コードを入力してください",
+    "files": [
+      "exchange-frontend\\src\\views\\ChangePassword.vue",
+      "exchange-pc\\src\\views\\ChangePassword.vue"
+    ]
+  },
+  {
+    "key": "inviteCodeEmpty",
+    "value": "招待コードを入力してください",
+    "files": [
+      "exchange-frontend\\src\\views\\Register.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\Register.vue"
+    ]
+  },
+  {
+    "key": "emailRequired",
+    "value": "メールアドレスを入力してください",
+    "files": []
+  },
+  {
+    "key": "passwordRequired",
+    "value": "パスワードを入力してください",
+    "files": []
+  },
+  {
+    "key": "confirmPasswordRequired",
+    "value": "パスワードを再度入力してください",
+    "files": [
+      "exchange-frontend\\src\\views\\ChangePassword.vue",
+      "exchange-pc\\src\\views\\ChangePassword.vue"
+    ]
+  },
+  {
+    "key": "verifyCodeEmpty",
+    "value": "認証コードを入力してください",
+    "files": []
+  },
+  {
+    "key": "confirmPasswordPlaceholder",
+    "value": "パスワードを再度入力してください",
+    "files": [
+      "exchange-frontend\\src\\views\\ChangePassword.vue",
+      "exchange-frontend\\src\\views\\ForgotPassword.vue",
+      "exchange-frontend\\src\\views\\Register.vue",
+      "exchange-pc\\src\\views\\ChangePassword.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\ForgotPassword.vue",
+      "exchange-pc\\src\\views\\Register.vue"
+    ]
+  },
+  {
+    "key": "verifyCodePlaceholder",
+    "value": "認証コードを入力してください",
+    "files": [
+      "exchange-frontend\\src\\views\\ChangePassword.vue",
+      "exchange-frontend\\src\\views\\ForgotPassword.vue",
+      "exchange-pc\\src\\views\\ChangePassword.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\ForgotPassword.vue"
+    ]
+  },
+  {
+    "key": "user",
+    "value": "ユーザー",
+    "files": [
+      "exchange-frontend\\src\\components\\Tabbar.vue",
+      "exchange-frontend\\src\\store\\auth.ts",
+      "exchange-frontend\\src\\views\\Home.vue",
+      "exchange-pc\\src\\components\\Tabbar.vue",
+      "exchange-pc\\src\\store\\auth.ts",
+      "exchange-pc\\src\\views\\Home.vue"
+    ]
+  },
+  {
+    "key": "uid",
+    "value": "UID:",
+    "files": [
+      "exchange-frontend\\src\\views\\Profile.vue",
+      "exchange-pc\\src\\views\\Home.vue",
+      "exchange-pc\\src\\views\\Profile.vue"
+    ]
+  },
+  {
+    "key": "tabbarMarket",
+    "value": "マーケット",
+    "files": [
+      "exchange-frontend\\src\\components\\Tabbar.vue",
+      "exchange-pc\\src\\components\\Tabbar.vue"
+    ]
+  },
+  {
+    "key": "tabbarTrade",
+    "value": "取引",
+    "files": [
+      "exchange-frontend\\src\\components\\Tabbar.vue",
+      "exchange-pc\\src\\components\\Tabbar.vue"
+    ]
+  },
+  {
+    "key": "tabbarOrder",
+    "value": "注文",
+    "files": [
+      "exchange-frontend\\src\\components\\Tabbar.vue",
+      "exchange-pc\\src\\components\\Tabbar.vue"
+    ]
+  },
+  {
+    "key": "tabbarPersonalCenter",
+    "value": "マイページ",
+    "files": [
+      "exchange-frontend\\src\\components\\Tabbar.vue",
+      "exchange-pc\\src\\components\\Tabbar.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "wallet",
+    "value": "ウォレット",
+    "files": [
+      "exchange-frontend\\src\\views\\Profile.vue",
+      "exchange-frontend\\src\\views\\Wallet.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\Profile.vue",
+      "exchange-pc\\src\\views\\Wallet.vue"
+    ]
+  },
+  {
+    "key": "myAssets",
+    "value": "保有資産",
+    "files": [
+      "exchange-frontend\\src\\views\\Assets.vue",
+      "exchange-frontend\\src\\views\\Profile.vue",
+      "exchange-frontend\\src\\views\\Wallet.vue",
+      "exchange-pc\\src\\views\\Assets.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\Profile.vue",
+      "exchange-pc\\src\\views\\Wallet.vue"
+    ]
+  },
+  {
+    "key": "totalAccountAssetsConverted",
+    "value": "口座資産合計（換算額）",
+    "files": [
+      "exchange-frontend\\src\\views\\Assets.vue",
+      "exchange-frontend\\src\\views\\Profile.vue",
+      "exchange-frontend\\src\\views\\Wallet.vue",
+      "exchange-pc\\src\\views\\Assets.vue",
+      "exchange-pc\\src\\views\\Profile.vue",
+      "exchange-pc\\src\\views\\Wallet.vue"
+    ]
+  },
+  {
+    "key": "bindBankCard",
+    "value": "銀行口座を登録",
+    "files": [
+      "exchange-frontend\\src\\views\\BindBankCard.vue",
+      "exchange-frontend\\src\\views\\Wallet.vue",
+      "exchange-pc\\src\\views\\BindBankCard.vue",
+      "exchange-pc\\src\\views\\Wallet.vue"
+    ]
+  },
+  {
+    "key": "bindDigitalCurrencyAddress",
+    "value": "暗号資産アドレスを登録",
+    "files": [
+      "exchange-frontend\\src\\views\\BindDigitalCurrency.vue",
+      "exchange-frontend\\src\\views\\Wallet.vue",
+      "exchange-pc\\src\\views\\BindDigitalCurrency.vue",
+      "exchange-pc\\src\\views\\Wallet.vue"
+    ]
+  },
+  {
+    "key": "recipientName",
+    "value": "受取人名",
+    "files": [
+      "exchange-frontend\\src\\views\\BindBankCard.vue",
+      "exchange-pc\\src\\views\\BindBankCard.vue"
+    ]
+  },
+  {
+    "key": "walletAddress",
+    "value": "ウォレットアドレス",
+    "files": [
+      "exchange-frontend\\src\\views\\BindDigitalCurrency.vue",
+      "exchange-pc\\src\\views\\BindDigitalCurrency.vue"
+    ]
+  },
+  {
+    "key": "noBoundBankCards",
+    "value": "銀行口座が登録されていません",
+    "files": [
+      "exchange-frontend\\src\\views\\BindBankCard.vue",
+      "exchange-pc\\src\\views\\BindBankCard.vue"
+    ]
+  },
+  {
+    "key": "addBankCard",
+    "value": "銀行口座を追加",
+    "files": [
+      "exchange-frontend\\src\\views\\BindBankCard.vue",
+      "exchange-pc\\src\\views\\BindBankCard.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "noBoundDigitalAddresses",
+    "value": "暗号資産アドレスが登録されていません",
+    "files": [
+      "exchange-frontend\\src\\views\\BindDigitalCurrency.vue",
+      "exchange-pc\\src\\views\\BindDigitalCurrency.vue"
+    ]
+  },
+  {
+    "key": "addAddress",
+    "value": "アドレスを追加",
+    "files": [
+      "exchange-frontend\\src\\views\\BindDigitalCurrency.vue",
+      "exchange-pc\\src\\views\\BindDigitalCurrency.vue"
+    ]
+  },
+  {
+    "key": "bankAddress",
+    "value": "銀行所在地",
+    "files": [
+      "exchange-frontend\\src\\views\\BindBankCard.vue",
+      "exchange-pc\\src\\views\\BindBankCard.vue"
+    ]
+  },
+  {
+    "key": "swift",
+    "value": "SWIFT",
+    "files": [
+      "exchange-frontend\\src\\views\\BindBankCard.vue",
+      "exchange-pc\\src\\views\\BindBankCard.vue"
+    ]
+  },
+  {
+    "key": "update",
+    "value": "更新",
+    "files": [
+      "exchange-frontend\\src\\views\\BindBankCard.vue",
+      "exchange-frontend\\src\\views\\BindDigitalCurrency.vue",
+      "exchange-pc\\src\\views\\BindBankCard.vue",
+      "exchange-pc\\src\\views\\BindDigitalCurrency.vue"
+    ]
+  },
+  {
+    "key": "add",
+    "value": "追加",
+    "files": [
+      "exchange-frontend\\src\\views\\BindBankCard.vue",
+      "exchange-frontend\\src\\views\\BindDigitalCurrency.vue",
+      "exchange-pc\\src\\views\\BindBankCard.vue",
+      "exchange-pc\\src\\views\\BindDigitalCurrency.vue"
+    ]
+  },
+  {
+    "key": "pleaseFillCompleteInfo",
+    "value": "必須項目をすべて入力してください",
+    "files": [
+      "exchange-frontend\\src\\views\\BindBankCard.vue",
+      "exchange-frontend\\src\\views\\BindDigitalCurrency.vue",
+      "exchange-pc\\src\\views\\BindBankCard.vue",
+      "exchange-pc\\src\\views\\BindDigitalCurrency.vue"
+    ]
+  },
+  {
+    "key": "updateSuccess",
+    "value": "更新しました",
+    "files": [
+      "exchange-frontend\\src\\views\\BindBankCard.vue",
+      "exchange-frontend\\src\\views\\BindDigitalCurrency.vue",
+      "exchange-pc\\src\\views\\BindBankCard.vue",
+      "exchange-pc\\src\\views\\BindDigitalCurrency.vue"
+    ]
+  },
+  {
+    "key": "addSuccess",
+    "value": "追加しました",
+    "files": [
+      "exchange-frontend\\src\\views\\BindBankCard.vue",
+      "exchange-frontend\\src\\views\\BindDigitalCurrency.vue",
+      "exchange-pc\\src\\views\\BindBankCard.vue",
+      "exchange-pc\\src\\views\\BindDigitalCurrency.vue"
+    ]
+  },
+  {
+    "key": "operationFailed",
+    "value": "操作に失敗しました",
+    "files": [
+      "exchange-frontend\\src\\views\\BindBankCard.vue",
+      "exchange-frontend\\src\\views\\BindDigitalCurrency.vue",
+      "exchange-pc\\src\\views\\BindBankCard.vue",
+      "exchange-pc\\src\\views\\BindDigitalCurrency.vue"
+    ]
+  },
+  {
+    "key": "deleteSuccess",
+    "value": "削除しました",
+    "files": [
+      "exchange-frontend\\src\\views\\BindBankCard.vue",
+      "exchange-frontend\\src\\views\\BindDigitalCurrency.vue",
+      "exchange-pc\\src\\views\\BindBankCard.vue",
+      "exchange-pc\\src\\views\\BindDigitalCurrency.vue"
+    ]
+  },
+  {
+    "key": "deleteFailed",
+    "value": "削除に失敗しました",
+    "files": [
+      "exchange-frontend\\src\\views\\BindBankCard.vue",
+      "exchange-frontend\\src\\views\\BindDigitalCurrency.vue",
+      "exchange-pc\\src\\views\\BindBankCard.vue",
+      "exchange-pc\\src\\views\\BindDigitalCurrency.vue"
+    ]
+  },
+  {
+    "key": "delete",
+    "value": "削除",
+    "files": [
+      "exchange-frontend\\src\\views\\BindBankCard.vue",
+      "exchange-frontend\\src\\views\\BindDigitalCurrency.vue",
+      "exchange-pc\\src\\views\\BindBankCard.vue",
+      "exchange-pc\\src\\views\\BindDigitalCurrency.vue"
+    ]
+  },
+  {
+    "key": "transfer",
+    "value": "資金振替",
+    "files": [
+      "exchange-frontend\\src\\views\\Profile.vue",
+      "exchange-frontend\\src\\views\\Transfer.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\Profile.vue",
+      "exchange-pc\\src\\views\\Transfer.vue"
+    ]
+  },
+  {
+    "key": "from",
+    "value": "振替元",
+    "files": [
+      "exchange-frontend\\src\\components\\AssetPixelChart.vue",
+      "exchange-frontend\\src\\views\\Transfer.vue",
+      "exchange-pc\\src\\views\\Transfer.vue"
+    ]
+  },
+  {
+    "key": "to",
+    "value": "振替先",
+    "files": [
+      "exchange-frontend\\src\\views\\Transfer.vue",
+      "exchange-pc\\src\\views\\Transfer.vue"
+    ]
+  },
+  {
+    "key": "swap",
+    "value": "交換",
+    "files": [
+      "exchange-frontend\\src\\views\\Transfer.vue",
+      "exchange-pc\\src\\views\\Transfer.vue"
+    ]
+  },
+  {
+    "key": "transferAmount",
+    "value": "振替金額",
+    "files": [
+      "exchange-frontend\\src\\views\\Transfer.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\Transfer.vue"
+    ]
+  },
+  {
+    "key": "available",
+    "value": "利用可能",
+    "files": [
+      "exchange-frontend\\src\\components\\KlineChart.vue",
+      "exchange-frontend\\src\\components\\TradeOrders.vue",
+      "exchange-frontend\\src\\utils\\marketWebSocket.ts",
+      "exchange-frontend\\src\\utils\\useOrderSizing.ts",
+      "exchange-frontend\\src\\views\\Trade.vue",
+      "exchange-frontend\\src\\views\\Transfer.vue",
+      "exchange-pc\\src\\components\\KlineChart.vue",
+      "exchange-pc\\src\\utils\\marketWebSocket.ts",
+      "exchange-pc\\src\\utils\\useOrderSizing.ts",
+      "exchange-pc\\src\\views\\Transfer.vue"
+    ]
+  },
+  {
+    "key": "pleaseEnterTransferAmount",
+    "value": "振替金額を入力してください",
+    "files": [
+      "exchange-frontend\\src\\views\\Transfer.vue",
+      "exchange-pc\\src\\views\\Transfer.vue"
+    ]
+  },
+  {
+    "key": "all",
+    "value": "すべて",
+    "files": [
+      "exchange-frontend\\src\\views\\Transfer.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\Transfer.vue"
+    ]
+  },
+  {
+    "key": "transferring",
+    "value": "振替中...",
+    "files": [
+      "exchange-frontend\\src\\views\\Transfer.vue",
+      "exchange-pc\\src\\views\\Transfer.vue"
+    ]
+  },
+  {
+    "key": "transferRecords",
+    "value": "振替履歴",
+    "files": [
+      "exchange-frontend\\src\\views\\Transfer.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\Transfer.vue"
+    ]
+  },
+  {
+    "key": "noTransferRecords",
+    "value": "振替履歴はありません",
+    "files": [
+      "exchange-frontend\\src\\views\\Transfer.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\Transfer.vue"
+    ]
+  },
+  {
+    "key": "selectAccount",
+    "value": "口座を選択",
+    "files": [
+      "exchange-frontend\\src\\views\\Transfer.vue",
+      "exchange-pc\\src\\views\\Transfer.vue"
+    ]
+  },
+  {
+    "key": "contractAccount",
+    "value": "証拠金取引口座",
+    "files": [
+      "exchange-frontend\\src\\views\\Transfer.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\Transfer.vue"
+    ]
+  },
+  {
+    "key": "pleaseEnterValidTransferAmount",
+    "value": "有効な振替金額を入力してください",
+    "files": [
+      "exchange-frontend\\src\\views\\Transfer.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\Transfer.vue"
+    ]
+  },
+  {
+    "key": "insufficientBalance",
+    "value": "残高不足",
+    "files": [
+      "exchange-frontend\\src\\views\\Transfer.vue",
+      "exchange-pc\\src\\views\\Transfer.vue"
+    ]
+  },
+  {
+    "key": "fromAndToAccountCannotBeSame",
+    "value": "振替元口座と振替先口座は別の口座を選択してください",
+    "files": [
+      "exchange-frontend\\src\\views\\Transfer.vue",
+      "exchange-pc\\src\\views\\Transfer.vue"
+    ]
+  },
+  {
+    "key": "transferSuccess",
+    "value": "振替が完了しました",
+    "files": [
+      "exchange-frontend\\src\\views\\Transfer.vue",
+      "exchange-pc\\src\\views\\Transfer.vue"
+    ]
+  },
+  {
+    "key": "transferFailed",
+    "value": "振替の処理結果を確認できませんでした。振替履歴をご確認ください",
+    "files": [
+      "exchange-frontend\\src\\views\\Transfer.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\Transfer.vue"
+    ]
+  },
+  {
+    "key": "verification",
+    "value": "本人確認",
+    "files": [
+      "exchange-frontend\\src\\views\\Profile.vue",
+      "exchange-frontend\\src\\views\\Verification.vue",
+      "exchange-pc\\src\\views\\Profile.vue",
+      "exchange-pc\\src\\views\\Verification.vue"
+    ]
+  },
+  {
+    "key": "verificationCompleted",
+    "value": "本人確認が完了しました",
+    "files": [
+      "exchange-frontend\\src\\views\\Verification.vue",
+      "exchange-pc\\src\\views\\Verification.vue"
+    ]
+  },
+  {
+    "key": "fullName",
+    "value": "氏名",
+    "files": [
+      "exchange-frontend\\src\\views\\Verification.vue",
+      "exchange-pc\\src\\views\\Verification.vue"
+    ]
+  },
+  {
+    "key": "idNumberLabel",
+    "value": "本人確認書類番号",
+    "files": [
+      "exchange-frontend\\src\\views\\Verification.vue",
+      "exchange-pc\\src\\views\\Verification.vue"
+    ]
+  },
+  {
+    "key": "verificationPending",
+    "value": "本人確認申請は審査中です。しばらくお待ちください",
+    "files": [
+      "exchange-frontend\\src\\views\\Verification.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\Verification.vue"
+    ]
+  },
+  {
+    "key": "verificationRejected",
+    "value": "本人確認申請が承認されませんでした",
+    "files": [
+      "exchange-frontend\\src\\views\\Verification.vue",
+      "exchange-pc\\src\\views\\Verification.vue"
+    ]
+  },
+  {
+    "key": "rejectReason",
+    "value": "不承認理由",
+    "files": [
+      "exchange-frontend\\src\\views\\Verification.vue",
+      "exchange-pc\\src\\views\\Verification.vue"
+    ]
+  },
+  {
+    "key": "resubmit",
+    "value": "再提出",
+    "files": [
+      "exchange-frontend\\src\\views\\Verification.vue",
+      "exchange-pc\\src\\views\\Verification.vue"
+    ]
+  },
+  {
+    "key": "kycApplicationPending",
+    "value": "審査中の申請があります。お待ちください",
+    "files": [
+      "exchange-frontend\\src\\views\\Verification.vue",
+      "exchange-pc\\src\\views\\Verification.vue"
+    ]
+  },
+  {
+    "key": "kycAlreadyCompleted",
+    "value": "本人確認が完了しました",
+    "files": [
+      "exchange-frontend\\src\\views\\Verification.vue",
+      "exchange-pc\\src\\views\\Verification.vue"
+    ]
+  },
+  {
+    "key": "passportOrIdNumber",
+    "value": "パスポート番号／本人確認書類番号",
+    "files": [
+      "exchange-frontend\\src\\views\\Verification.vue",
+      "exchange-pc\\src\\views\\Verification.vue"
+    ]
+  },
+  {
+    "key": "enterName",
+    "value": "氏名を入力してください",
+    "files": [
+      "exchange-frontend\\src\\views\\Verification.vue",
+      "exchange-pc\\src\\views\\Verification.vue"
+    ]
+  },
+  {
+    "key": "enterPassportOrIdNumber",
+    "value": "パスポート番号または本人確認書類番号を入力してください",
+    "files": [
+      "exchange-frontend\\src\\views\\Verification.vue",
+      "exchange-pc\\src\\views\\Verification.vue"
+    ]
+  },
+  {
+    "key": "uploadPassportOrIdBothSides",
+    "value": "本人確認書類の画像を2枚アップロードしてください。提出する面・ページが不明な場合は、サポートへお問い合わせください。",
+    "files": [
+      "exchange-frontend\\src\\views\\Verification.vue",
+      "exchange-pc\\src\\views\\Verification.vue"
+    ]
+  },
+  {
+    "key": "uploadPassportOrIdFront",
+    "value": "パスポートの顔写真ページまたは本人確認書類の表面",
+    "files": [
+      "exchange-frontend\\src\\views\\Verification.vue",
+      "exchange-pc\\src\\views\\Verification.vue"
+    ]
+  },
+  {
+    "key": "uploadPassportOrIdBack",
+    "value": "本人確認書類の画像（2枚目）",
+    "files": [
+      "exchange-frontend\\src\\views\\Verification.vue",
+      "exchange-pc\\src\\views\\Verification.vue"
+    ]
+  },
+  {
+    "key": "imageSizeExceeded",
+    "value": "画像のファイルサイズは5MB以下にしてください",
+    "files": [
+      "exchange-frontend\\src\\views\\Verification.vue",
+      "exchange-pc\\src\\views\\Verification.vue"
+    ]
+  },
+  {
+    "key": "submitSuccessPendingReview",
+    "value": "申請を受け付けました。審査結果をお待ちください",
+    "files": [
+      "exchange-frontend\\src\\views\\Verification.vue",
+      "exchange-pc\\src\\views\\Verification.vue"
+    ]
+  },
+  {
+    "key": "submitFailed",
+    "value": "送信に失敗しました。もう一度お試しください",
+    "files": [
+      "exchange-frontend\\src\\views\\Verification.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\Verification.vue"
+    ]
+  },
+  {
+    "key": "inviteFriend",
+    "value": "友達を招待",
+    "files": [
+      "exchange-frontend\\src\\views\\Invite.vue",
+      "exchange-frontend\\src\\views\\Profile.vue",
+      "exchange-pc\\src\\views\\Invite.vue",
+      "exchange-pc\\src\\views\\Profile.vue"
+    ]
+  },
+  {
+    "key": "copyInviteLink",
+    "value": "招待リンクをコピー",
+    "files": [
+      "exchange-frontend\\src\\views\\Invite.vue",
+      "exchange-pc\\src\\views\\Invite.vue"
+    ]
+  },
+  {
+    "key": "generatingQRCode",
+    "value": "QRコード生成中...",
+    "files": [
+      "exchange-frontend\\src\\views\\Invite.vue",
+      "exchange-pc\\src\\views\\Invite.vue"
+    ]
+  },
+  {
+    "key": "inviteQRCode",
+    "value": "招待用QRコード",
+    "files": [
+      "exchange-frontend\\src\\views\\Invite.vue",
+      "exchange-pc\\src\\views\\Invite.vue"
+    ]
+  },
+  {
+    "key": "scanQRCodeOrEnterInviteCode",
+    "value": "上のQRコードを読み取るか、登録画面で招待コードを入力してください",
+    "files": [
+      "exchange-frontend\\src\\views\\Invite.vue",
+      "exchange-pc\\src\\views\\Invite.vue"
+    ]
+  },
+  {
+    "key": "inviteLinkCopied",
+    "value": "招待リンクをコピーしました",
+    "files": [
+      "exchange-frontend\\src\\views\\Invite.vue",
+      "exchange-pc\\src\\views\\Invite.vue"
+    ]
+  },
+  {
+    "key": "searchSymbolContract",
+    "value": "銘柄・通貨ペアを検索",
+    "files": [
+      "exchange-frontend\\src\\views\\Home.vue",
+      "exchange-frontend\\src\\views\\Search.vue",
+      "exchange-pc\\src\\views\\Home.vue",
+      "exchange-pc\\src\\views\\Search.vue"
+    ]
+  },
+  {
+    "key": "today",
+    "value": "本日",
+    "files": []
+  },
+  {
+    "key": "fundAccount",
+    "value": "資金口座",
+    "files": [
+      "exchange-frontend\\src\\views\\Transfer.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\Transfer.vue"
+    ]
+  },
+  {
+    "key": "contractAsset",
+    "value": "証拠金取引口座資産",
+    "files": []
+  },
+  {
+    "key": "optionAccount",
+    "value": "期限取引口座",
+    "files": [
+      "exchange-frontend\\src\\views\\Transfer.vue",
+      "exchange-pc\\src\\views\\Transfer.vue"
+    ]
+  },
+  {
+    "key": "quickDeposit",
+    "value": "クイック入金",
+    "files": [
+      "exchange-frontend\\src\\views\\Home.vue"
+    ]
+  },
+  {
+    "key": "flashWithdraw",
+    "value": "出金",
+    "files": []
+  },
+  {
+    "key": "creditLoan",
+    "value": "借入れ",
+    "files": [
+      "exchange-frontend\\src\\views\\Home.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\Home.vue"
+    ]
+  },
+  {
+    "key": "bankCardBuy",
+    "value": "銀行振込",
+    "files": [
+      "exchange-frontend\\src\\views\\Home.vue",
+      "exchange-pc\\src\\views\\Home.vue"
+    ]
+  },
+  {
+    "key": "financialManagement",
+    "value": "資産運用",
+    "files": [
+      "exchange-frontend\\src\\views\\FinancialManagement.vue",
+      "exchange-frontend\\src\\views\\Home.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\FinancialManagement.vue",
+      "exchange-pc\\src\\views\\Home.vue"
+    ]
+  },
+  {
+    "key": "noSymbolData",
+    "value": "銘柄情報がありません",
+    "files": [
+      "exchange-frontend\\src\\views\\Home.vue",
+      "exchange-pc\\src\\views\\Home.vue"
+    ]
+  },
+  {
+    "key": "customerService",
+    "value": "カスタマーサポート",
+    "files": [
+      "exchange-frontend\\src\\views\\Home.vue",
+      "exchange-pc\\src\\views\\Home.vue"
+    ]
+  },
+  {
+    "key": "language",
+    "value": "言語",
+    "files": [
+      "exchange-frontend\\src\\components\\DemoNotice.vue",
+      "exchange-frontend\\src\\views\\Home.vue",
+      "exchange-frontend\\src\\views\\LanguageSelect.vue",
+      "exchange-frontend\\src\\views\\Profile.vue",
+      "exchange-pc\\src\\components\\DemoNotice.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\Home.vue",
+      "exchange-pc\\src\\views\\LanguageSelect.vue",
+      "exchange-pc\\src\\views\\Profile.vue"
+    ]
+  },
+  {
+    "key": "vip",
+    "value": "VIP",
+    "files": [
+      "exchange-pc\\src\\views\\Home.vue",
+      "exchange-pc\\src\\views\\Profile.vue"
+    ]
+  },
+  {
+    "key": "loan",
+    "value": "ローン",
+    "files": [
+      "exchange-frontend\\src\\views\\CreditLoan.vue",
+      "exchange-frontend\\src\\views\\LoanContract.vue",
+      "exchange-frontend\\src\\views\\LoanSign.vue",
+      "exchange-pc\\src\\views\\CreditLoan.vue",
+      "exchange-pc\\src\\views\\LoanContract.vue",
+      "exchange-pc\\src\\views\\LoanSign.vue"
+    ]
+  },
+  {
+    "key": "loanRecords",
+    "value": "借入履歴",
+    "files": [
+      "exchange-frontend\\src\\views\\LoanRecords.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\LoanRecords.vue"
+    ]
+  },
+  {
+    "key": "loanInfo",
+    "value": "借入情報",
+    "files": [
+      "exchange-frontend\\src\\views\\LoanApplyInfo.vue",
+      "exchange-pc\\src\\views\\LoanApplyInfo.vue"
+    ]
+  },
+  {
+    "key": "loanPersonalInfo",
+    "value": "借入申込者情報",
+    "files": [
+      "exchange-frontend\\src\\views\\LoanPersonalInfo.vue",
+      "exchange-pc\\src\\views\\LoanPersonalInfo.vue"
+    ]
+  },
+  {
+    "key": "startEnjoyLoanService",
+    "value": "借入サービスを利用する",
+    "files": [
+      "exchange-frontend\\src\\views\\CreditLoan.vue",
+      "exchange-pc\\src\\views\\CreditLoan.vue"
+    ]
+  },
+  {
+    "key": "verified",
+    "value": "本人確認済み",
+    "files": [
+      "exchange-frontend\\src\\views\\CreditLoan.vue",
+      "exchange-frontend\\src\\views\\LoanPersonalInfo.vue",
+      "exchange-pc\\src\\views\\CreditLoan.vue",
+      "exchange-pc\\src\\views\\LoanPersonalInfo.vue"
+    ]
+  },
+  {
+    "key": "unverified",
+    "value": "本人確認未完了",
+    "files": [
+      "exchange-frontend\\src\\views\\CreditLoan.vue",
+      "exchange-pc\\src\\views\\CreditLoan.vue"
+    ]
+  },
+  {
+    "key": "enterAmount",
+    "value": "金額を入力してください",
+    "files": [
+      "exchange-frontend\\src\\views\\CreditLoan.vue",
+      "exchange-pc\\src\\views\\CreditLoan.vue"
+    ]
+  },
+  {
+    "key": "max",
+    "value": "最大値",
+    "files": [
+      "exchange-frontend\\src\\components\\LeverageControl.vue",
+      "exchange-frontend\\src\\views\\CreditLoan.vue",
+      "exchange-frontend\\src\\views\\FinancialPurchase.vue",
+      "exchange-pc\\src\\components\\LeverageControl.vue",
+      "exchange-pc\\src\\views\\CreditLoan.vue",
+      "exchange-pc\\src\\views\\FinancialPurchase.vue"
+    ]
+  },
+  {
+    "key": "min",
+    "value": "最小",
+    "files": [
+      "exchange-frontend\\src\\views\\CreditLoan.vue",
+      "exchange-pc\\src\\views\\CreditLoan.vue"
+    ]
+  },
+  {
+    "key": "loanTerm",
+    "value": "借入期間",
+    "files": [
+      "exchange-frontend\\src\\views\\CreditLoan.vue",
+      "exchange-frontend\\src\\views\\LoanContract.vue",
+      "exchange-frontend\\src\\views\\LoanRecords.vue",
+      "exchange-pc\\src\\views\\CreditLoan.vue",
+      "exchange-pc\\src\\views\\LoanContract.vue",
+      "exchange-pc\\src\\views\\LoanRecords.vue"
+    ]
+  },
+  {
+    "key": "pleaseSelect",
+    "value": "選択してください",
+    "files": [
+      "exchange-frontend\\src\\views\\CreditLoan.vue",
+      "exchange-pc\\src\\views\\CreditLoan.vue"
+    ]
+  },
+  {
+    "key": "days",
+    "value": "日",
+    "files": [
+      "exchange-frontend\\src\\views\\CreditLoan.vue",
+      "exchange-pc\\src\\views\\CreditLoan.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "dailyRate",
+    "value": "日利率",
+    "files": [
+      "exchange-frontend\\src\\views\\CreditLoan.vue",
+      "exchange-frontend\\src\\views\\LoanRecords.vue",
+      "exchange-pc\\src\\views\\CreditLoan.vue",
+      "exchange-pc\\src\\views\\LoanRecords.vue"
+    ]
+  },
+  {
+    "key": "freeDays",
+    "value": "無利息期間",
+    "files": [
+      "exchange-frontend\\src\\views\\CreditLoan.vue",
+      "exchange-pc\\src\\views\\CreditLoan.vue"
+    ]
+  },
+  {
+    "key": "totalInterest",
+    "value": "利息総額",
+    "files": [
+      "exchange-frontend\\src\\views\\CreditLoan.vue",
+      "exchange-frontend\\src\\views\\LoanRecords.vue",
+      "exchange-pc\\src\\views\\CreditLoan.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\LoanRecords.vue"
+    ]
+  },
+  {
+    "key": "borrowNow",
+    "value": "借入れを申し込む",
+    "files": [
+      "exchange-frontend\\src\\views\\CreditLoan.vue",
+      "exchange-pc\\src\\views\\CreditLoan.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "pleaseCompleteVerification",
+    "value": "まず本人確認を完了してください",
+    "files": [
+      "exchange-frontend\\src\\views\\CreditLoan.vue",
+      "exchange-pc\\src\\views\\CreditLoan.vue"
+    ]
+  },
+  {
+    "key": "pleaseEnterValidAmount",
+    "value": "有効な借入金額を入力してください",
+    "files": [
+      "exchange-frontend\\src\\views\\CreditLoan.vue",
+      "exchange-pc\\src\\views\\CreditLoan.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "pleaseSelectLoanTerm",
+    "value": "借入期間を選択してください",
+    "files": [
+      "exchange-frontend\\src\\views\\CreditLoan.vue",
+      "exchange-pc\\src\\views\\CreditLoan.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "amountCannotBeLessThan",
+    "value": "借入金額の下限：",
+    "files": []
+  },
+  {
+    "key": "amountCannotBeGreaterThan",
+    "value": "借入金額の上限：",
+    "files": []
+  },
+  {
+    "key": "applicationSubmittedSuccess",
+    "value": "申請は正常に送信されました",
+    "files": [
+      "exchange-frontend\\src\\views\\CreditLoan.vue",
+      "exchange-frontend\\src\\views\\LoanApplyInfo.vue",
+      "exchange-pc\\src\\views\\CreditLoan.vue",
+      "exchange-pc\\src\\views\\LoanApplyInfo.vue"
+    ]
+  },
+  {
+    "key": "applicationFailed",
+    "value": "申請に失敗しました",
+    "files": [
+      "exchange-frontend\\src\\views\\CreditLoan.vue",
+      "exchange-frontend\\src\\views\\LoanApplyInfo.vue",
+      "exchange-frontend\\src\\views\\LoanPersonalInfo.vue",
+      "exchange-pc\\src\\views\\CreditLoan.vue",
+      "exchange-pc\\src\\views\\LoanApplyInfo.vue",
+      "exchange-pc\\src\\views\\LoanPersonalInfo.vue"
+    ]
+  },
+  {
+    "key": "loading",
+    "value": "読み込み中...",
+    "files": [
+      "exchange-frontend\\src\\components\\AssetPixelChart.vue",
+      "exchange-frontend\\src\\components\\KlineChart.vue",
+      "exchange-frontend\\src\\utils\\orderShareLocales.ts",
+      "exchange-frontend\\src\\views\\Announcements.vue",
+      "exchange-frontend\\src\\views\\Assets.vue",
+      "exchange-frontend\\src\\views\\Complaint.vue",
+      "exchange-frontend\\src\\views\\CustomerService.vue",
+      "exchange-frontend\\src\\views\\Deposit.vue",
+      "exchange-frontend\\src\\views\\DepositRecords.vue",
+      "exchange-frontend\\src\\views\\ForgotPassword.vue",
+      "exchange-frontend\\src\\views\\Invite.vue",
+      "exchange-frontend\\src\\views\\LoanRecords.vue",
+      "exchange-frontend\\src\\views\\Login.vue",
+      "exchange-frontend\\src\\views\\Orders.vue",
+      "exchange-frontend\\src\\views\\Register.vue",
+      "exchange-frontend\\src\\views\\Search.vue",
+      "exchange-frontend\\src\\views\\Transfer.vue",
+      "exchange-frontend\\src\\views\\Withdraw.vue",
+      "exchange-pc\\src\\components\\KlineChart.vue",
+      "exchange-pc\\src\\utils\\orderShareLocales.ts",
+      "exchange-pc\\src\\views\\Announcements.vue",
+      "exchange-pc\\src\\views\\Assets.vue",
+      "exchange-pc\\src\\views\\Complaint.vue",
+      "exchange-pc\\src\\views\\CustomerService.vue",
+      "exchange-pc\\src\\views\\Deposit.vue",
+      "exchange-pc\\src\\views\\DepositRecords.vue",
+      "exchange-pc\\src\\views\\ForgotPassword.vue",
+      "exchange-pc\\src\\views\\Invite.vue",
+      "exchange-pc\\src\\views\\LoanRecords.vue",
+      "exchange-pc\\src\\views\\Login.vue",
+      "exchange-pc\\src\\views\\Orders.vue",
+      "exchange-pc\\src\\views\\Register.vue",
+      "exchange-pc\\src\\views\\Search.vue",
+      "exchange-pc\\src\\views\\Transfer.vue",
+      "exchange-pc\\src\\views\\Withdraw.vue"
+    ]
+  },
+  {
+    "key": "noLoanRecords",
+    "value": "借入履歴はありません",
+    "files": [
+      "exchange-frontend\\src\\views\\LoanRecords.vue",
+      "exchange-pc\\src\\views\\LoanRecords.vue"
+    ]
+  },
+  {
+    "key": "loanAmount",
+    "value": "借入金額",
+    "files": [
+      "exchange-frontend\\src\\views\\LoanContract.vue",
+      "exchange-frontend\\src\\views\\LoanRecords.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\LoanContract.vue",
+      "exchange-pc\\src\\views\\LoanRecords.vue"
+    ]
+  },
+  {
+    "key": "repaymentAmount",
+    "value": "返済金額",
+    "files": [
+      "exchange-frontend\\src\\views\\LoanRecords.vue",
+      "exchange-pc\\src\\views\\LoanRecords.vue"
+    ]
+  },
+  {
+    "key": "overdueFee",
+    "value": "延滞金",
+    "files": [
+      "exchange-frontend\\src\\views\\LoanRecords.vue",
+      "exchange-pc\\src\\views\\LoanRecords.vue"
+    ]
+  },
+  {
+    "key": "approvedAt",
+    "value": "承認日時",
+    "files": [
+      "exchange-frontend\\src\\views\\LoanRecords.vue",
+      "exchange-pc\\src\\views\\LoanRecords.vue"
+    ]
+  },
+  {
+    "key": "repaymentDate",
+    "value": "返済日",
+    "files": [
+      "exchange-frontend\\src\\views\\LoanRecords.vue",
+      "exchange-pc\\src\\views\\LoanRecords.vue"
+    ]
+  },
+  {
+    "key": "agreement",
+    "value": "契約書",
+    "files": [
+      "exchange-frontend\\src\\views\\LoanRecords.vue",
+      "exchange-pc\\src\\views\\LoanRecords.vue"
+    ]
+  },
+  {
+    "key": "statusPending",
+    "value": "審査待ち",
+    "files": [
+      "exchange-frontend\\src\\views\\Deposit.vue",
+      "exchange-frontend\\src\\views\\DepositRecords.vue",
+      "exchange-frontend\\src\\views\\LoanRecords.vue",
+      "exchange-pc\\src\\views\\Deposit.vue",
+      "exchange-pc\\src\\views\\DepositRecords.vue",
+      "exchange-pc\\src\\views\\LoanRecords.vue"
+    ]
+  },
+  {
+    "key": "statusApproved",
+    "value": "承認済み",
+    "files": [
+      "exchange-frontend\\src\\views\\LoanRecords.vue",
+      "exchange-frontend\\src\\views\\Withdraw.vue",
+      "exchange-pc\\src\\views\\LoanRecords.vue",
+      "exchange-pc\\src\\views\\Withdraw.vue"
+    ]
+  },
+  {
+    "key": "statusSigned",
+    "value": "署名済み",
+    "files": [
+      "exchange-frontend\\src\\views\\LoanRecords.vue",
+      "exchange-pc\\src\\views\\LoanRecords.vue"
+    ]
+  },
+  {
+    "key": "statusCompleted",
+    "value": "完了しました",
+    "files": [
+      "exchange-frontend\\src\\views\\Deposit.vue",
+      "exchange-frontend\\src\\views\\DepositRecords.vue",
+      "exchange-frontend\\src\\views\\FinancialOrders.vue",
+      "exchange-frontend\\src\\views\\LoanRecords.vue",
+      "exchange-frontend\\src\\views\\Withdraw.vue",
+      "exchange-pc\\src\\views\\Deposit.vue",
+      "exchange-pc\\src\\views\\DepositRecords.vue",
+      "exchange-pc\\src\\views\\FinancialOrders.vue",
+      "exchange-pc\\src\\views\\LoanRecords.vue",
+      "exchange-pc\\src\\views\\Withdraw.vue"
+    ]
+  },
+  {
+    "key": "statusOverdue",
+    "value": "延滞中",
+    "files": [
+      "exchange-frontend\\src\\views\\LoanRecords.vue",
+      "exchange-pc\\src\\views\\LoanRecords.vue"
+    ]
+  },
+  {
+    "key": "statusRejected",
+    "value": "不承認",
+    "files": [
+      "exchange-frontend\\src\\views\\Deposit.vue",
+      "exchange-frontend\\src\\views\\DepositRecords.vue",
+      "exchange-frontend\\src\\views\\LoanRecords.vue",
+      "exchange-frontend\\src\\views\\Withdraw.vue",
+      "exchange-pc\\src\\views\\Deposit.vue",
+      "exchange-pc\\src\\views\\DepositRecords.vue",
+      "exchange-pc\\src\\views\\LoanRecords.vue",
+      "exchange-pc\\src\\views\\Withdraw.vue"
+    ]
+  },
+  {
+    "key": "realName",
+    "value": "氏名",
+    "files": [
+      "exchange-frontend\\src\\views\\LoanApplyInfo.vue",
+      "exchange-frontend\\src\\views\\LoanPersonalInfo.vue",
+      "exchange-frontend\\src\\views\\Verification.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\LoanApplyInfo.vue",
+      "exchange-pc\\src\\views\\LoanPersonalInfo.vue",
+      "exchange-pc\\src\\views\\Verification.vue"
+    ]
+  },
+  {
+    "key": "idNumber",
+    "value": "本人確認書類番号",
+    "files": [
+      "exchange-frontend\\src\\views\\LoanApplyInfo.vue",
+      "exchange-frontend\\src\\views\\LoanPersonalInfo.vue",
+      "exchange-frontend\\src\\views\\Verification.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\LoanApplyInfo.vue",
+      "exchange-pc\\src\\views\\LoanPersonalInfo.vue",
+      "exchange-pc\\src\\views\\Verification.vue"
+    ]
+  },
+  {
+    "key": "phoneNumber",
+    "value": "電話番号",
+    "files": [
+      "exchange-frontend\\src\\views\\LoanApplyInfo.vue",
+      "exchange-frontend\\src\\views\\LoanPersonalInfo.vue",
+      "exchange-pc\\src\\views\\LoanApplyInfo.vue",
+      "exchange-pc\\src\\views\\LoanPersonalInfo.vue"
+    ]
+  },
+  {
+    "key": "homeAddress",
+    "value": "住所",
+    "files": [
+      "exchange-frontend\\src\\views\\LoanApplyInfo.vue",
+      "exchange-frontend\\src\\views\\LoanPersonalInfo.vue",
+      "exchange-pc\\src\\views\\LoanApplyInfo.vue",
+      "exchange-pc\\src\\views\\LoanPersonalInfo.vue"
+    ]
+  },
+  {
+    "key": "enterRealName",
+    "value": "氏名を入力してください",
+    "files": [
+      "exchange-frontend\\src\\views\\LoanApplyInfo.vue",
+      "exchange-frontend\\src\\views\\LoanPersonalInfo.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\LoanApplyInfo.vue",
+      "exchange-pc\\src\\views\\LoanPersonalInfo.vue"
+    ]
+  },
+  {
+    "key": "enterIdNumber",
+    "value": "本人確認書類番号を入力してください",
+    "files": [
+      "exchange-frontend\\src\\views\\LoanApplyInfo.vue",
+      "exchange-frontend\\src\\views\\LoanPersonalInfo.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\LoanApplyInfo.vue",
+      "exchange-pc\\src\\views\\LoanPersonalInfo.vue"
+    ]
+  },
+  {
+    "key": "enterPhoneNumber",
+    "value": "電話番号を入力してください",
+    "files": [
+      "exchange-frontend\\src\\views\\LoanApplyInfo.vue",
+      "exchange-frontend\\src\\views\\LoanPersonalInfo.vue",
+      "exchange-pc\\src\\views\\LoanApplyInfo.vue",
+      "exchange-pc\\src\\views\\LoanPersonalInfo.vue"
+    ]
+  },
+  {
+    "key": "enterHomeAddress",
+    "value": "自宅の住所を入力してください",
+    "files": [
+      "exchange-frontend\\src\\views\\LoanApplyInfo.vue",
+      "exchange-frontend\\src\\views\\LoanPersonalInfo.vue",
+      "exchange-pc\\src\\views\\LoanApplyInfo.vue",
+      "exchange-pc\\src\\views\\LoanPersonalInfo.vue"
+    ]
+  },
+  {
+    "key": "submitApplication",
+    "value": "申込みを送信",
+    "files": [
+      "exchange-frontend\\src\\views\\LoanApplyInfo.vue",
+      "exchange-pc\\src\\views\\LoanApplyInfo.vue"
+    ]
+  },
+  {
+    "key": "loanAgreement",
+    "value": "ローン契約書",
+    "files": [
+      "exchange-frontend\\src\\views\\LoanContract.vue",
+      "exchange-pc\\src\\views\\LoanContract.vue"
+    ]
+  },
+  {
+    "key": "date",
+    "value": "日付",
+    "files": [
+      "exchange-frontend\\src\\components\\TradeOrders.vue"
+    ]
+  },
+  {
+    "key": "effectiveDate",
+    "value": "発効日",
+    "files": [
+      "exchange-frontend\\src\\views\\LoanContract.vue",
+      "exchange-pc\\src\\views\\LoanContract.vue"
+    ]
+  },
+  {
+    "key": "signedByBothParties",
+    "value": "以下の当事者による署名",
+    "files": [
+      "exchange-frontend\\src\\views\\LoanContract.vue",
+      "exchange-pc\\src\\views\\LoanContract.vue"
+    ]
+  },
+  {
+    "key": "borrower",
+    "value": "借入人",
+    "files": [
+      "exchange-frontend\\src\\views\\LoanContract.vue",
+      "exchange-pc\\src\\views\\LoanContract.vue"
+    ]
+  },
+  {
+    "key": "firstName",
+    "value": "名",
+    "files": [
+      "exchange-frontend\\src\\views\\LoanContract.vue",
+      "exchange-pc\\src\\views\\LoanContract.vue"
+    ]
+  },
+  {
+    "key": "lastName",
+    "value": "姓",
+    "files": [
+      "exchange-frontend\\src\\views\\LoanContract.vue",
+      "exchange-pc\\src\\views\\LoanContract.vue"
+    ]
+  },
+  {
+    "key": "address",
+    "value": "住所",
+    "files": [
+      "exchange-frontend\\src\\views\\LoanContract.vue",
+      "exchange-frontend\\src\\views\\LoanPersonalInfo.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\LoanContract.vue",
+      "exchange-pc\\src\\views\\LoanPersonalInfo.vue"
+    ]
+  },
+  {
+    "key": "phone",
+    "value": "電話番号",
+    "files": [
+      "exchange-frontend\\src\\views\\LoanContract.vue",
+      "exchange-frontend\\src\\views\\LoanPersonalInfo.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\LoanContract.vue",
+      "exchange-pc\\src\\views\\LoanPersonalInfo.vue"
+    ]
+  },
+  {
+    "key": "name",
+    "value": "氏名",
+    "files": [
+      "exchange-frontend\\src\\components\\OrderShareModal.vue",
+      "exchange-frontend\\src\\views\\Home.vue",
+      "exchange-frontend\\src\\views\\LoanContract.vue",
+      "exchange-pc\\src\\components\\OrderShareModal.vue",
+      "exchange-pc\\src\\views\\Home.vue",
+      "exchange-pc\\src\\views\\LoanContract.vue"
+    ]
+  },
+  {
+    "key": "bothParties",
+    "value": "以下、総称して「当事者」といいます。",
+    "files": [
+      "exchange-frontend\\src\\views\\LoanContract.vue",
+      "exchange-pc\\src\\views\\LoanContract.vue"
+    ]
+  },
+  {
+    "key": "repaymentTerms",
+    "value": "返済条件",
+    "files": [
+      "exchange-frontend\\src\\views\\LoanContract.vue",
+      "exchange-pc\\src\\views\\LoanContract.vue"
+    ]
+  },
+  {
+    "key": "borrowerAgreesToRepay",
+    "value": "借入人は返済に同意します",
+    "files": []
+  },
+  {
+    "key": "terms",
+    "value": "規約",
+    "files": [
+      "exchange-frontend\\src\\views\\LoanContract.vue",
+      "exchange-pc\\src\\views\\LoanContract.vue"
+    ]
+  },
+  {
+    "key": "interestRate",
+    "value": "金利",
+    "files": [
+      "exchange-frontend\\src\\views\\LoanContract.vue",
+      "exchange-pc\\src\\views\\LoanContract.vue"
+    ]
+  },
+  {
+    "key": "calculatedDaily",
+    "value": "日単位で計算",
+    "files": []
+  },
+  {
+    "key": "loanTermDays",
+    "value": "この融資の期限は、",
+    "files": []
+  },
+  {
+    "key": "repaymentMethod",
+    "value": "返済方法",
+    "files": []
+  },
+  {
+    "key": "repaymentApplicability",
+    "value": "返済への充当",
+    "files": [
+      "exchange-frontend\\src\\views\\LoanContract.vue",
+      "exchange-pc\\src\\views\\LoanContract.vue"
+    ]
+  },
+  {
+    "key": "earlyRepayment",
+    "value": "繰上返済",
+    "files": [
+      "exchange-frontend\\src\\views\\LoanContract.vue",
+      "exchange-pc\\src\\views\\LoanContract.vue"
+    ]
+  },
+  {
+    "key": "default",
+    "value": "債務不履行",
+    "files": [
+      "exchange-frontend\\src\\utils\\marketWebSocket.ts",
+      "exchange-frontend\\src\\views\\LoanContract.vue",
+      "exchange-pc\\src\\utils\\marketWebSocket.ts",
+      "exchange-pc\\src\\views\\LoanContract.vue"
+    ]
+  },
+  {
+    "key": "fees",
+    "value": "費用",
+    "files": [
+      "exchange-frontend\\src\\views\\LoanContract.vue",
+      "exchange-frontend\\src\\views\\Trade.vue",
+      "exchange-pc\\src\\views\\LoanContract.vue"
+    ]
+  },
+  {
+    "key": "severability",
+    "value": "分離条項",
+    "files": [
+      "exchange-frontend\\src\\views\\LoanContract.vue",
+      "exchange-pc\\src\\views\\LoanContract.vue"
+    ]
+  },
+  {
+    "key": "legalEffect",
+    "value": "法的効果",
+    "files": [
+      "exchange-frontend\\src\\views\\LoanContract.vue",
+      "exchange-pc\\src\\views\\LoanContract.vue"
+    ]
+  },
+  {
+    "key": "otherTerms",
+    "value": "その他の条項",
+    "files": [
+      "exchange-frontend\\src\\views\\LoanContract.vue",
+      "exchange-pc\\src\\views\\LoanContract.vue"
+    ]
+  },
+  {
+    "key": "governingLaw",
+    "value": "準拠法",
+    "files": [
+      "exchange-frontend\\src\\views\\LoanContract.vue",
+      "exchange-pc\\src\\views\\LoanContract.vue"
+    ]
+  },
+  {
+    "key": "completeAgreement",
+    "value": "完全合意",
+    "files": [
+      "exchange-frontend\\src\\views\\LoanContract.vue",
+      "exchange-pc\\src\\views\\LoanContract.vue"
+    ]
+  },
+  {
+    "key": "signature",
+    "value": "署名",
+    "files": [
+      "exchange-frontend\\src\\views\\LoanContract.vue",
+      "exchange-frontend\\src\\views\\LoanSign.vue",
+      "exchange-pc\\src\\views\\LoanContract.vue",
+      "exchange-pc\\src\\views\\LoanSign.vue"
+    ]
+  },
+  {
+    "key": "signDate",
+    "value": "署名日",
+    "files": [
+      "exchange-frontend\\src\\views\\LoanContract.vue",
+      "exchange-pc\\src\\views\\LoanContract.vue"
+    ]
+  },
+  {
+    "key": "pleaseSign",
+    "value": "署名してください",
+    "files": [
+      "exchange-frontend\\src\\views\\LoanSign.vue",
+      "exchange-pc\\src\\views\\LoanSign.vue"
+    ]
+  },
+  {
+    "key": "contractAlreadySigned",
+    "value": "この契約書は署名済みです。再度署名することはできません",
+    "files": [
+      "exchange-frontend\\src\\views\\LoanSign.vue",
+      "exchange-pc\\src\\views\\LoanSign.vue"
+    ]
+  },
+  {
+    "key": "resign",
+    "value": "署名をやり直す",
+    "files": [
+      "exchange-frontend\\src\\views\\LoanSign.vue",
+      "exchange-pc\\src\\views\\LoanSign.vue"
+    ]
+  },
+  {
+    "key": "signing",
+    "value": "署名中...",
+    "files": [
+      "exchange-frontend\\src\\views\\LoanSign.vue",
+      "exchange-pc\\src\\views\\LoanSign.vue"
+    ]
+  },
+  {
+    "key": "signSuccess",
+    "value": "契約書への署名が完了しました",
+    "files": [
+      "exchange-frontend\\src\\views\\LoanSign.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\LoanSign.vue"
+    ]
+  },
+  {
+    "key": "signFailed",
+    "value": "署名に失敗しました",
+    "files": [
+      "exchange-frontend\\src\\views\\LoanSign.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\LoanSign.vue"
+    ]
+  },
+  {
+    "key": "loanIdNotExists",
+    "value": "ローンIDが存在しません",
+    "files": [
+      "exchange-frontend\\src\\views\\LoanContract.vue",
+      "exchange-frontend\\src\\views\\LoanSign.vue",
+      "exchange-pc\\src\\views\\LoanContract.vue",
+      "exchange-pc\\src\\views\\LoanSign.vue"
+    ]
+  },
+  {
+    "key": "pleaseSignFirst",
+    "value": "まずは署名してください",
+    "files": [
+      "exchange-frontend\\src\\views\\LoanSign.vue",
+      "exchange-pc\\src\\views\\LoanSign.vue"
+    ]
+  },
+  {
+    "key": "loadLoanInfoFailed",
+    "value": "ローン情報の読み込みに失敗しました",
+    "files": [
+      "exchange-frontend\\src\\views\\LoanContract.vue",
+      "exchange-frontend\\src\\views\\LoanSign.vue",
+      "exchange-pc\\src\\views\\LoanContract.vue",
+      "exchange-pc\\src\\views\\LoanSign.vue"
+    ]
+  },
+  {
+    "key": "loadFailed",
+    "value": "読み込みに失敗しました",
+    "files": [
+      "exchange-frontend\\src\\views\\Announcements.vue",
+      "exchange-frontend\\src\\views\\Complaint.vue",
+      "exchange-frontend\\src\\views\\CustomerService.vue",
+      "exchange-frontend\\src\\views\\FinancialPurchase.vue",
+      "exchange-frontend\\src\\views\\FinancialYieldList.vue",
+      "exchange-frontend\\src\\views\\Invite.vue",
+      "exchange-frontend\\src\\views\\LoanContract.vue",
+      "exchange-frontend\\src\\views\\LoanSign.vue",
+      "exchange-pc\\src\\views\\Announcements.vue",
+      "exchange-pc\\src\\views\\Complaint.vue",
+      "exchange-pc\\src\\views\\CustomerService.vue",
+      "exchange-pc\\src\\views\\FinancialPurchase.vue",
+      "exchange-pc\\src\\views\\FinancialYieldList.vue",
+      "exchange-pc\\src\\views\\Invite.vue",
+      "exchange-pc\\src\\views\\LoanContract.vue",
+      "exchange-pc\\src\\views\\LoanSign.vue"
+    ]
+  },
+  {
+    "key": "uploadIdFront",
+    "value": "本人確認書類の表面をアップロードしてください",
+    "files": [
+      "exchange-frontend\\src\\views\\LoanPersonalInfo.vue",
+      "exchange-pc\\src\\views\\LoanPersonalInfo.vue"
+    ]
+  },
+  {
+    "key": "uploadIdBack",
+    "value": "本人確認書類の裏面をアップロードしてください",
+    "files": [
+      "exchange-frontend\\src\\views\\LoanPersonalInfo.vue",
+      "exchange-pc\\src\\views\\LoanPersonalInfo.vue"
+    ]
+  },
+  {
+    "key": "uploadHandheldId",
+    "value": "本人確認書類を持った本人の写真をアップロードしてください",
+    "files": [
+      "exchange-frontend\\src\\views\\LoanPersonalInfo.vue",
+      "exchange-pc\\src\\views\\LoanPersonalInfo.vue"
+    ]
+  },
+  {
+    "key": "submitReview",
+    "value": "審査を申請",
+    "files": [
+      "exchange-frontend\\src\\views\\LoanPersonalInfo.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\LoanPersonalInfo.vue"
+    ]
+  },
+  {
+    "key": "submitSuccessWaitReview",
+    "value": "送信は成功しました。審査待ちです",
+    "files": [
+      "exchange-frontend\\src\\views\\LoanPersonalInfo.vue",
+      "exchange-pc\\src\\views\\LoanPersonalInfo.vue"
+    ]
+  },
+  {
+    "key": "onlyImageFiles",
+    "value": "画像ファイルのみアップロード可能です",
+    "files": [
+      "exchange-frontend\\src\\views\\LoanPersonalInfo.vue",
+      "exchange-frontend\\src\\views\\Verification.vue",
+      "exchange-pc\\src\\views\\LoanPersonalInfo.vue",
+      "exchange-pc\\src\\views\\Verification.vue"
+    ]
+  },
+  {
+    "key": "imageSizeLimit",
+    "value": "画像のファイルサイズは5MB以下にしてください",
+    "files": [
+      "exchange-frontend\\src\\views\\LoanPersonalInfo.vue",
+      "exchange-pc\\src\\views\\LoanPersonalInfo.vue"
+    ]
+  },
+  {
+    "key": "uploadIdFrontBack",
+    "value": "本人確認書類の表面・裏面",
+    "files": [
+      "exchange-frontend\\src\\views\\LoanPersonalInfo.vue",
+      "exchange-pc\\src\\views\\LoanPersonalInfo.vue"
+    ]
+  },
+  {
+    "key": "searchCountryOrCode",
+    "value": "国名または国番号で検索",
+    "files": [
+      "exchange-frontend\\src\\views\\LoanPersonalInfo.vue",
+      "exchange-pc\\src\\views\\LoanPersonalInfo.vue"
+    ]
+  },
+  {
+    "key": "personalInfoApproved",
+    "value": "本人確認が承認されました",
+    "files": [
+      "exchange-frontend\\src\\views\\LoanPersonalInfo.vue",
+      "exchange-pc\\src\\views\\LoanPersonalInfo.vue"
+    ]
+  },
+  {
+    "key": "noFinancialProducts",
+    "value": "運用商品はありません",
+    "files": [
+      "exchange-frontend\\src\\views\\FinancialManagement.vue",
+      "exchange-pc\\src\\views\\FinancialManagement.vue"
+    ]
+  },
+  {
+    "key": "productImage",
+    "value": "商品画像",
+    "files": [
+      "exchange-frontend\\src\\views\\FinancialManagement.vue",
+      "exchange-frontend\\src\\views\\FinancialPurchase.vue",
+      "exchange-pc\\src\\views\\FinancialManagement.vue",
+      "exchange-pc\\src\\views\\FinancialPurchase.vue"
+    ]
+  },
+  {
+    "key": "expectedDailyYield",
+    "value": "予想日次収益率",
+    "files": [
+      "exchange-frontend\\src\\views\\FinancialManagement.vue",
+      "exchange-frontend\\src\\views\\FinancialPurchase.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\FinancialManagement.vue",
+      "exchange-pc\\src\\views\\FinancialPurchase.vue"
+    ]
+  },
+  {
+    "key": "miningMachineRental",
+    "value": "マイニング機器のレンタル",
+    "files": [
+      "exchange-frontend\\src\\views\\FinancialManagement.vue",
+      "exchange-frontend\\src\\views\\FinancialPurchase.vue",
+      "exchange-pc\\src\\views\\FinancialManagement.vue",
+      "exchange-pc\\src\\views\\FinancialPurchase.vue"
+    ]
+  },
+  {
+    "key": "purchase",
+    "value": "購入",
+    "files": [
+      "exchange-frontend\\src\\views\\FinancialManagement.vue",
+      "exchange-frontend\\src\\views\\FinancialPurchase.vue",
+      "exchange-pc\\src\\views\\FinancialManagement.vue",
+      "exchange-pc\\src\\views\\FinancialPurchase.vue"
+    ]
+  },
+  {
+    "key": "purchaseList",
+    "value": "申込履歴",
+    "files": [
+      "exchange-frontend\\src\\views\\FinancialOrders.vue",
+      "exchange-pc\\src\\views\\FinancialOrders.vue"
+    ]
+  },
+  {
+    "key": "noPurchaseRecords",
+    "value": "申込履歴はありません",
+    "files": [
+      "exchange-frontend\\src\\views\\FinancialOrders.vue",
+      "exchange-pc\\src\\views\\FinancialOrders.vue"
+    ]
+  },
+  {
+    "key": "purchaseAmount",
+    "value": "申込金額",
+    "files": [
+      "exchange-frontend\\src\\views\\FinancialOrders.vue",
+      "exchange-frontend\\src\\views\\FinancialPurchase.vue",
+      "exchange-pc\\src\\views\\FinancialOrders.vue",
+      "exchange-pc\\src\\views\\FinancialPurchase.vue"
+    ]
+  },
+  {
+    "key": "purchaseTime",
+    "value": "申込日時",
+    "files": [
+      "exchange-frontend\\src\\views\\FinancialOrders.vue",
+      "exchange-pc\\src\\views\\FinancialOrders.vue"
+    ]
+  },
+  {
+    "key": "expectedTotalYield",
+    "value": "予想総収益",
+    "files": [
+      "exchange-frontend\\src\\views\\FinancialOrders.vue",
+      "exchange-pc\\src\\views\\FinancialOrders.vue"
+    ]
+  },
+  {
+    "key": "earlyRedeem",
+    "value": "中途解約",
+    "files": [
+      "exchange-frontend\\src\\views\\FinancialOrders.vue",
+      "exchange-pc\\src\\views\\FinancialOrders.vue"
+    ]
+  },
+  {
+    "key": "viewYieldList",
+    "value": "収益履歴を表示",
+    "files": [
+      "exchange-frontend\\src\\views\\FinancialOrders.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\FinancialOrders.vue"
+    ]
+  },
+  {
+    "key": "penaltyFee",
+    "value": "中途解約手数料",
+    "files": []
+  },
+  {
+    "key": "payPenaltyToRedeem",
+    "value": "中途解約には手数料がかかります",
+    "files": []
+  },
+  {
+    "key": "cancel",
+    "value": "キャンセル",
+    "files": [
+      "exchange-frontend\\src\\components\\LeverageControl.vue",
+      "exchange-frontend\\src\\components\\TradeOrders.vue",
+      "exchange-frontend\\src\\views\\BindBankCard.vue",
+      "exchange-frontend\\src\\views\\BindDigitalCurrency.vue",
+      "exchange-frontend\\src\\views\\Deposit.vue",
+      "exchange-frontend\\src\\views\\FinancialOrders.vue",
+      "exchange-frontend\\src\\views\\LoanRecords.vue",
+      "exchange-frontend\\src\\views\\Transfer.vue",
+      "exchange-frontend\\src\\views\\Withdraw.vue",
+      "exchange-pc\\src\\components\\LeverageControl.vue",
+      "exchange-pc\\src\\views\\BindBankCard.vue",
+      "exchange-pc\\src\\views\\BindDigitalCurrency.vue",
+      "exchange-pc\\src\\views\\Deposit.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\FinancialOrders.vue",
+      "exchange-pc\\src\\views\\LoanRecords.vue",
+      "exchange-pc\\src\\views\\Transfer.vue",
+      "exchange-pc\\src\\views\\Withdraw.vue"
+    ]
+  },
+  {
+    "key": "confirm",
+    "value": "確認",
+    "files": [
+      "exchange-frontend\\src\\components\\LeverageControl.vue",
+      "exchange-frontend\\src\\components\\SuccessModal.vue",
+      "exchange-frontend\\src\\components\\TradeOrders.vue",
+      "exchange-frontend\\src\\views\\BindBankCard.vue",
+      "exchange-frontend\\src\\views\\BindDigitalCurrency.vue",
+      "exchange-frontend\\src\\views\\ChangePassword.vue",
+      "exchange-frontend\\src\\views\\Deposit.vue",
+      "exchange-frontend\\src\\views\\FinancialOrders.vue",
+      "exchange-frontend\\src\\views\\LoanRecords.vue",
+      "exchange-frontend\\src\\views\\Transfer.vue",
+      "exchange-frontend\\src\\views\\Verification.vue",
+      "exchange-frontend\\src\\views\\Withdraw.vue",
+      "exchange-pc\\src\\components\\LeverageControl.vue",
+      "exchange-pc\\src\\components\\SuccessModal.vue",
+      "exchange-pc\\src\\views\\BindBankCard.vue",
+      "exchange-pc\\src\\views\\BindDigitalCurrency.vue",
+      "exchange-pc\\src\\views\\ChangePassword.vue",
+      "exchange-pc\\src\\views\\Deposit.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\FinancialOrders.vue",
+      "exchange-pc\\src\\views\\LoanRecords.vue",
+      "exchange-pc\\src\\views\\Transfer.vue",
+      "exchange-pc\\src\\views\\Verification.vue",
+      "exchange-pc\\src\\views\\Withdraw.vue"
+    ]
+  },
+  {
+    "key": "redeemSuccess",
+    "value": "解約が完了しました",
+    "files": [
+      "exchange-frontend\\src\\views\\FinancialOrders.vue",
+      "exchange-pc\\src\\views\\FinancialOrders.vue"
+    ]
+  },
+  {
+    "key": "redeemFailed",
+    "value": "解約に失敗しました",
+    "files": [
+      "exchange-frontend\\src\\views\\FinancialOrders.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\FinancialOrders.vue"
+    ]
+  },
+  {
+    "key": "calculatePenaltyFailed",
+    "value": "中途解約手数料を計算できませんでした",
+    "files": [
+      "exchange-frontend\\src\\views\\FinancialOrders.vue",
+      "exchange-pc\\src\\views\\FinancialOrders.vue"
+    ]
+  },
+  {
+    "key": "loadOrderListFailed",
+    "value": "注文リストの読み込みに失敗しました",
+    "files": [
+      "exchange-frontend\\src\\views\\FinancialOrders.vue",
+      "exchange-pc\\src\\views\\FinancialOrders.vue"
+    ]
+  },
+  {
+    "key": "productIdNotExists",
+    "value": "商品IDが存在しません",
+    "files": [
+      "exchange-frontend\\src\\views\\FinancialPurchase.vue",
+      "exchange-pc\\src\\views\\FinancialPurchase.vue"
+    ]
+  },
+  {
+    "key": "loadProductInfoFailed",
+    "value": "商品情報の読み込みに失敗しました",
+    "files": [
+      "exchange-frontend\\src\\views\\FinancialPurchase.vue",
+      "exchange-pc\\src\\views\\FinancialPurchase.vue"
+    ]
+  },
+  {
+    "key": "enterValidPurchaseAmount",
+    "value": "有効な申込金額を入力してください",
+    "files": [
+      "exchange-frontend\\src\\views\\FinancialPurchase.vue",
+      "exchange-pc\\src\\views\\FinancialPurchase.vue"
+    ]
+  },
+  {
+    "key": "purchaseAmountCannotBeLessThan",
+    "value": "申込金額の下限：",
+    "files": []
+  },
+  {
+    "key": "purchaseAmountCannotBeGreaterThan",
+    "value": "申込金額の上限：",
+    "files": []
+  },
+  {
+    "key": "purchaseSuccess",
+    "value": "申込みを受け付けました",
+    "files": [
+      "exchange-frontend\\src\\views\\FinancialPurchase.vue",
+      "exchange-pc\\src\\views\\FinancialPurchase.vue"
+    ]
+  },
+  {
+    "key": "purchaseFailed",
+    "value": "申込みに失敗しました",
+    "files": [
+      "exchange-frontend\\src\\views\\FinancialPurchase.vue",
+      "exchange-pc\\src\\views\\FinancialPurchase.vue"
+    ]
+  },
+  {
+    "key": "financialTerm",
+    "value": "運用期間",
+    "files": [
+      "exchange-frontend\\src\\views\\FinancialPurchase.vue",
+      "exchange-pc\\src\\views\\FinancialPurchase.vue"
+    ]
+  },
+  {
+    "key": "maxPurchase",
+    "value": "申込上限",
+    "files": [
+      "exchange-frontend\\src\\views\\FinancialPurchase.vue",
+      "exchange-pc\\src\\views\\FinancialPurchase.vue"
+    ]
+  },
+  {
+    "key": "enterLockAmount",
+    "value": "申込金額を入力してください",
+    "files": [
+      "exchange-frontend\\src\\views\\FinancialPurchase.vue",
+      "exchange-pc\\src\\views\\FinancialPurchase.vue"
+    ]
+  },
+  {
+    "key": "productDescription",
+    "value": "商品説明",
+    "files": [
+      "exchange-frontend\\src\\views\\FinancialPurchase.vue",
+      "exchange-pc\\src\\views\\FinancialPurchase.vue"
+    ]
+  },
+  {
+    "key": "miningMachineRentalFee",
+    "value": "マイニング機器のレンタル料（設定値）",
+    "files": [
+      "exchange-frontend\\src\\views\\FinancialPurchase.vue",
+      "exchange-pc\\src\\views\\FinancialPurchase.vue"
+    ]
+  },
+  {
+    "key": "expectedTotalYieldLabel",
+    "value": "予想総収益",
+    "files": [
+      "exchange-frontend\\src\\views\\FinancialPurchase.vue",
+      "exchange-pc\\src\\views\\FinancialPurchase.vue"
+    ]
+  },
+  {
+    "key": "yieldList",
+    "value": "収益履歴",
+    "files": [
+      "exchange-frontend\\src\\views\\FinancialYieldList.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\FinancialYieldList.vue"
+    ]
+  },
+  {
+    "key": "orderIdNotExists",
+    "value": "注文IDが存在しません",
+    "files": [
+      "exchange-frontend\\src\\views\\FinancialYieldList.vue",
+      "exchange-pc\\src\\views\\FinancialYieldList.vue"
+    ]
+  },
+  {
+    "key": "loadYieldListFailed",
+    "value": "収益リストの読み込みに失敗しました",
+    "files": [
+      "exchange-frontend\\src\\views\\FinancialYieldList.vue",
+      "exchange-pc\\src\\views\\FinancialYieldList.vue"
+    ]
+  },
+  {
+    "key": "totalYield",
+    "value": "総収益",
+    "files": [
+      "exchange-frontend\\src\\views\\FinancialYieldList.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\FinancialYieldList.vue"
+    ]
+  },
+  {
+    "key": "paidYield",
+    "value": "支払済み収益",
+    "files": [
+      "exchange-frontend\\src\\views\\FinancialYieldList.vue",
+      "exchange-pc\\src\\views\\FinancialYieldList.vue"
+    ]
+  },
+  {
+    "key": "pendingYield",
+    "value": "未払い収益",
+    "files": [
+      "exchange-frontend\\src\\views\\FinancialYieldList.vue",
+      "exchange-pc\\src\\views\\FinancialYieldList.vue"
+    ]
+  },
+  {
+    "key": "yieldDays",
+    "value": "収益計算日数",
+    "files": [
+      "exchange-frontend\\src\\views\\FinancialYieldList.vue",
+      "exchange-pc\\src\\views\\FinancialYieldList.vue"
+    ]
+  },
+  {
+    "key": "noYieldRecords",
+    "value": "収益履歴はありません",
+    "files": [
+      "exchange-frontend\\src\\views\\FinancialYieldList.vue",
+      "exchange-pc\\src\\views\\FinancialYieldList.vue"
+    ]
+  },
+  {
+    "key": "dailyYield",
+    "value": "日次収益",
+    "files": [
+      "exchange-frontend\\src\\views\\FinancialYieldList.vue",
+      "exchange-pc\\src\\views\\FinancialYieldList.vue"
+    ]
+  },
+  {
+    "key": "cumulativeYield",
+    "value": "累積収益",
+    "files": [
+      "exchange-frontend\\src\\views\\FinancialYieldList.vue",
+      "exchange-pc\\src\\views\\FinancialYieldList.vue"
+    ]
+  },
+  {
+    "key": "paidAt",
+    "value": "支払日時",
+    "files": [
+      "exchange-frontend\\src\\views\\FinancialYieldList.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\FinancialYieldList.vue"
+    ]
+  },
+  {
+    "key": "statusPendingPayment",
+    "value": "未払い",
+    "files": [
+      "exchange-frontend\\src\\views\\FinancialYieldList.vue",
+      "exchange-pc\\src\\views\\FinancialYieldList.vue"
+    ]
+  },
+  {
+    "key": "statusPaid",
+    "value": "支払済み",
+    "files": [
+      "exchange-frontend\\src\\views\\FinancialYieldList.vue",
+      "exchange-pc\\src\\views\\FinancialYieldList.vue"
+    ]
+  },
+  {
+    "key": "statusInProgress",
+    "value": "進行中",
+    "files": [
+      "exchange-frontend\\src\\views\\FinancialOrders.vue",
+      "exchange-pc\\src\\views\\FinancialOrders.vue"
+    ]
+  },
+  {
+    "key": "statusRedeemed",
+    "value": "解約済み",
+    "files": [
+      "exchange-frontend\\src\\views\\FinancialOrders.vue",
+      "exchange-pc\\src\\views\\FinancialOrders.vue"
+    ]
+  },
+  {
+    "key": "deposit",
+    "value": "入金",
+    "files": [
+      "exchange-frontend\\src\\views\\Deposit.vue",
+      "exchange-frontend\\src\\views\\Profile.vue",
+      "exchange-pc\\src\\views\\Deposit.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\Profile.vue"
+    ]
+  },
+  {
+    "key": "depositRecords",
+    "value": "入金履歴",
+    "files": [
+      "exchange-frontend\\src\\views\\Deposit.vue",
+      "exchange-frontend\\src\\views\\DepositRecords.vue",
+      "exchange-pc\\src\\views\\Deposit.vue",
+      "exchange-pc\\src\\views\\DepositRecords.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "digitalCurrency",
+    "value": "暗号資産",
+    "files": [
+      "exchange-frontend\\src\\views\\Withdraw.vue",
+      "exchange-pc\\src\\views\\Deposit.vue",
+      "exchange-pc\\src\\views\\Withdraw.vue"
+    ]
+  },
+  {
+    "key": "bankCard",
+    "value": "銀行口座",
+    "files": [
+      "exchange-frontend\\src\\views\\Withdraw.vue",
+      "exchange-pc\\src\\views\\Deposit.vue",
+      "exchange-pc\\src\\views\\Withdraw.vue"
+    ]
+  },
+  {
+    "key": "selectNetwork",
+    "value": "ネットワークを選択",
+    "files": [
+      "exchange-frontend\\src\\views\\Deposit.vue",
+      "exchange-pc\\src\\views\\Deposit.vue"
+    ]
+  },
+  {
+    "key": "pleaseSelectNetwork",
+    "value": "ネットワークを選択してください",
+    "files": [
+      "exchange-frontend\\src\\views\\Deposit.vue",
+      "exchange-pc\\src\\views\\Deposit.vue"
+    ]
+  },
+  {
+    "key": "qrCode",
+    "value": "QRコード",
+    "files": [
+      "exchange-frontend\\src\\views\\Deposit.vue",
+      "exchange-pc\\src\\views\\Deposit.vue"
+    ]
+  },
+  {
+    "key": "copyAddress",
+    "value": "アドレスをコピー",
+    "files": [
+      "exchange-frontend\\src\\views\\Deposit.vue",
+      "exchange-pc\\src\\views\\Deposit.vue"
+    ]
+  },
+  {
+    "key": "copy",
+    "value": "コピー",
+    "files": [
+      "exchange-frontend\\src\\views\\Complaint.vue",
+      "exchange-frontend\\src\\views\\Invite.vue",
+      "exchange-pc\\src\\views\\Complaint.vue",
+      "exchange-pc\\src\\views\\Invite.vue"
+    ]
+  },
+  {
+    "key": "depositAmount",
+    "value": "入金額",
+    "files": [
+      "exchange-frontend\\src\\views\\Deposit.vue",
+      "exchange-pc\\src\\views\\Deposit.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "enterDepositAmount",
+    "value": "入金額を入力してください",
+    "files": [
+      "exchange-frontend\\src\\views\\Deposit.vue",
+      "exchange-pc\\src\\views\\Deposit.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "uploadProof",
+    "value": "入金確認書類をアップロード",
+    "files": [
+      "exchange-frontend\\src\\views\\Deposit.vue",
+      "exchange-pc\\src\\views\\Deposit.vue"
+    ]
+  },
+  {
+    "key": "clickToUpload",
+    "value": "クリックしてアップロード",
+    "files": [
+      "exchange-frontend\\src\\views\\Deposit.vue",
+      "exchange-pc\\src\\views\\Deposit.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "submit",
+    "value": "送信",
+    "files": [
+      "exchange-frontend\\src\\components\\LeverageControl.vue",
+      "exchange-frontend\\src\\views\\Deposit.vue",
+      "exchange-frontend\\src\\views\\Trade.vue",
+      "exchange-pc\\src\\components\\LeverageControl.vue",
+      "exchange-pc\\src\\views\\Deposit.vue"
+    ]
+  },
+  {
+    "key": "bankName",
+    "value": "銀行名",
+    "files": [
+      "exchange-frontend\\src\\views\\BindBankCard.vue",
+      "exchange-frontend\\src\\views\\Deposit.vue",
+      "exchange-pc\\src\\views\\BindBankCard.vue",
+      "exchange-pc\\src\\views\\Deposit.vue"
+    ]
+  },
+  {
+    "key": "bankAccount",
+    "value": "銀行口座",
+    "files": [
+      "exchange-frontend\\src\\views\\Deposit.vue",
+      "exchange-pc\\src\\views\\Deposit.vue"
+    ]
+  },
+  {
+    "key": "accountName",
+    "value": "口座名義",
+    "files": [
+      "exchange-frontend\\src\\views\\Deposit.vue",
+      "exchange-pc\\src\\views\\Deposit.vue"
+    ]
+  },
+  {
+    "key": "contactServiceForBankCard",
+    "value": "振込先の銀行口座についてはサポートへお問い合わせください",
+    "files": [
+      "exchange-frontend\\src\\views\\Deposit.vue",
+      "exchange-pc\\src\\views\\Deposit.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "contactService",
+    "value": "サポートに問い合わせる",
+    "files": [
+      "exchange-frontend\\src\\views\\Deposit.vue",
+      "exchange-pc\\src\\views\\Deposit.vue"
+    ]
+  },
+  {
+    "key": "addressCopied",
+    "value": "アドレスがコピーされました",
+    "files": [
+      "exchange-frontend\\src\\views\\Deposit.vue",
+      "exchange-pc\\src\\views\\Deposit.vue"
+    ]
+  },
+  {
+    "key": "copyFailed",
+    "value": "コピーに失敗しました",
+    "files": [
+      "exchange-frontend\\src\\views\\Deposit.vue",
+      "exchange-pc\\src\\views\\Deposit.vue"
+    ]
+  },
+  {
+    "key": "bankAccountCopied",
+    "value": "銀行口座番号がコピーされました",
+    "files": [
+      "exchange-frontend\\src\\views\\Deposit.vue",
+      "exchange-pc\\src\\views\\Deposit.vue"
+    ]
+  },
+  {
+    "key": "pleaseContactUsThroughService",
+    "value": "サポート窓口へお問い合わせください",
+    "files": [
+      "exchange-frontend\\src\\views\\Deposit.vue",
+      "exchange-pc\\src\\views\\Deposit.vue"
+    ]
+  },
+  {
+    "key": "pleaseSelectImageFile",
+    "value": "画像ファイルを選択してください",
+    "files": [
+      "exchange-frontend\\src\\views\\Deposit.vue",
+      "exchange-pc\\src\\views\\Deposit.vue"
+    ]
+  },
+  {
+    "key": "imageSizeCannotExceed5MB",
+    "value": "画像のファイルサイズは5MB以下にしてください",
+    "files": [
+      "exchange-frontend\\src\\views\\Deposit.vue",
+      "exchange-pc\\src\\views\\Deposit.vue"
+    ]
+  },
+  {
+    "key": "pleaseEnterValidDepositAmount",
+    "value": "有効な入金額を入力してください",
+    "files": [
+      "exchange-frontend\\src\\views\\Deposit.vue",
+      "exchange-pc\\src\\views\\Deposit.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "pleaseUploadDepositProof",
+    "value": "入金確認書類をアップロードしてください",
+    "files": [
+      "exchange-frontend\\src\\views\\Deposit.vue",
+      "exchange-pc\\src\\views\\Deposit.vue"
+    ]
+  },
+  {
+    "key": "imageUploadFailed",
+    "value": "画像のアップロードに失敗しました",
+    "files": [
+      "exchange-frontend\\src\\views\\Deposit.vue",
+      "exchange-frontend\\src\\views\\LoanPersonalInfo.vue",
+      "exchange-pc\\src\\views\\Deposit.vue",
+      "exchange-pc\\src\\views\\LoanPersonalInfo.vue"
+    ]
+  },
+  {
+    "key": "depositApplicationSubmitted",
+    "value": "入金申請が送信されました。審査をお待ちください",
+    "files": [
+      "exchange-frontend\\src\\views\\Deposit.vue",
+      "exchange-pc\\src\\views\\Deposit.vue"
+    ]
+  },
+  {
+    "key": "submitFailedPleaseRetry",
+    "value": "送信に失敗しました。再試行してください",
+    "files": [
+      "exchange-frontend\\src\\views\\Deposit.vue",
+      "exchange-frontend\\src\\views\\Withdraw.vue",
+      "exchange-pc\\src\\views\\Deposit.vue",
+      "exchange-pc\\src\\views\\Withdraw.vue"
+    ]
+  },
+  {
+    "key": "loadDepositSettingsFailed",
+    "value": "入金設定の読み込みに失敗しました",
+    "files": [
+      "exchange-frontend\\src\\views\\Deposit.vue",
+      "exchange-pc\\src\\views\\Deposit.vue"
+    ]
+  },
+  {
+    "key": "depositType",
+    "value": "入金方法",
+    "files": [
+      "exchange-frontend\\src\\views\\Deposit.vue",
+      "exchange-frontend\\src\\views\\DepositRecords.vue",
+      "exchange-pc\\src\\views\\Deposit.vue",
+      "exchange-pc\\src\\views\\DepositRecords.vue"
+    ]
+  },
+  {
+    "key": "unit",
+    "value": "単位",
+    "files": [
+      "exchange-frontend\\src\\utils\\chartLocale.ts",
+      "exchange-frontend\\src\\views\\Deposit.vue",
+      "exchange-frontend\\src\\views\\DepositRecords.vue",
+      "exchange-frontend\\src\\views\\Trade.vue",
+      "exchange-frontend\\src\\views\\Withdraw.vue",
+      "exchange-pc\\src\\utils\\chartLocale.ts",
+      "exchange-pc\\src\\views\\Deposit.vue",
+      "exchange-pc\\src\\views\\DepositRecords.vue",
+      "exchange-pc\\src\\views\\Withdraw.vue"
+    ]
+  },
+  {
+    "key": "time",
+    "value": "時間",
+    "files": [
+      "exchange-frontend\\src\\views\\Deposit.vue",
+      "exchange-frontend\\src\\views\\DepositRecords.vue",
+      "exchange-frontend\\src\\views\\Withdraw.vue",
+      "exchange-pc\\src\\views\\Deposit.vue",
+      "exchange-pc\\src\\views\\DepositRecords.vue",
+      "exchange-pc\\src\\views\\Withdraw.vue"
+    ]
+  },
+  {
+    "key": "remark",
+    "value": "備考",
+    "files": [
+      "exchange-frontend\\src\\views\\Deposit.vue",
+      "exchange-frontend\\src\\views\\DepositRecords.vue",
+      "exchange-frontend\\src\\views\\Withdraw.vue",
+      "exchange-pc\\src\\views\\Deposit.vue",
+      "exchange-pc\\src\\views\\DepositRecords.vue",
+      "exchange-pc\\src\\views\\Withdraw.vue"
+    ]
+  },
+  {
+    "key": "noRecords",
+    "value": "記録がありません",
+    "files": [
+      "exchange-frontend\\src\\views\\Deposit.vue",
+      "exchange-frontend\\src\\views\\DepositRecords.vue",
+      "exchange-pc\\src\\views\\Deposit.vue",
+      "exchange-pc\\src\\views\\DepositRecords.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "selectNetworkTitle",
+    "value": "ネットワークを選択",
+    "files": [
+      "exchange-frontend\\src\\views\\Deposit.vue",
+      "exchange-pc\\src\\views\\Deposit.vue"
+    ]
+  },
+  {
+    "key": "depositAmountLabel",
+    "value": "入金額",
+    "files": [
+      "exchange-frontend\\src\\views\\Deposit.vue",
+      "exchange-frontend\\src\\views\\DepositRecords.vue",
+      "exchange-pc\\src\\views\\Deposit.vue",
+      "exchange-pc\\src\\views\\DepositRecords.vue"
+    ]
+  },
+  {
+    "key": "depositTypeDigital",
+    "value": "暗号資産",
+    "files": [
+      "exchange-frontend\\src\\views\\Deposit.vue",
+      "exchange-frontend\\src\\views\\DepositRecords.vue",
+      "exchange-pc\\src\\views\\Deposit.vue",
+      "exchange-pc\\src\\views\\DepositRecords.vue"
+    ]
+  },
+  {
+    "key": "depositTypeBank",
+    "value": "銀行振込",
+    "files": [
+      "exchange-frontend\\src\\views\\Deposit.vue",
+      "exchange-frontend\\src\\views\\DepositRecords.vue",
+      "exchange-pc\\src\\views\\Deposit.vue",
+      "exchange-pc\\src\\views\\DepositRecords.vue"
+    ]
+  },
+  {
+    "key": "withdraw",
+    "value": "出金",
+    "files": [
+      "exchange-frontend\\src\\views\\Profile.vue",
+      "exchange-frontend\\src\\views\\Withdraw.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\Profile.vue",
+      "exchange-pc\\src\\views\\Withdraw.vue"
+    ]
+  },
+  {
+    "key": "withdrawRecords",
+    "value": "出金履歴",
+    "files": [
+      "exchange-frontend\\src\\views\\Withdraw.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\Withdraw.vue"
+    ]
+  },
+  {
+    "key": "currency",
+    "value": "通貨",
+    "files": [
+      "exchange-frontend\\src\\components\\CurrencyPicker.vue",
+      "exchange-frontend\\src\\utils\\fiatCurrency.ts",
+      "exchange-frontend\\src\\utils\\fiatCurrencyOptions.ts",
+      "exchange-frontend\\src\\views\\Assets.vue",
+      "exchange-frontend\\src\\views\\BindBankCard.vue",
+      "exchange-frontend\\src\\views\\BindDigitalCurrency.vue",
+      "exchange-frontend\\src\\views\\Deposit.vue",
+      "exchange-frontend\\src\\views\\Withdraw.vue",
+      "exchange-pc\\src\\components\\CurrencyPicker.vue",
+      "exchange-pc\\src\\utils\\fiatCurrency.ts",
+      "exchange-pc\\src\\utils\\fiatCurrencyOptions.ts",
+      "exchange-pc\\src\\views\\Assets.vue",
+      "exchange-pc\\src\\views\\BindBankCard.vue",
+      "exchange-pc\\src\\views\\BindDigitalCurrency.vue",
+      "exchange-pc\\src\\views\\Deposit.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\Withdraw.vue"
+    ]
+  },
+  {
+    "key": "pleaseSelectCurrency",
+    "value": "通貨を選択してください",
+    "files": [
+      "exchange-frontend\\src\\views\\BindBankCard.vue",
+      "exchange-frontend\\src\\views\\BindDigitalCurrency.vue",
+      "exchange-frontend\\src\\views\\Withdraw.vue",
+      "exchange-pc\\src\\views\\BindBankCard.vue",
+      "exchange-pc\\src\\views\\BindDigitalCurrency.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\Withdraw.vue"
+    ]
+  },
+  {
+    "key": "withdrawAddress",
+    "value": "出金アドレス",
+    "files": [
+      "exchange-frontend\\src\\views\\BindDigitalCurrency.vue",
+      "exchange-frontend\\src\\views\\Withdraw.vue",
+      "exchange-pc\\src\\views\\BindDigitalCurrency.vue",
+      "exchange-pc\\src\\views\\Withdraw.vue"
+    ]
+  },
+  {
+    "key": "pleaseSelectWithdrawAddress",
+    "value": "出金アドレスを選択してください",
+    "files": [
+      "exchange-frontend\\src\\views\\Withdraw.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\Withdraw.vue"
+    ]
+  },
+  {
+    "key": "quantity",
+    "value": "数量",
+    "files": [
+      "exchange-frontend\\src\\utils\\orderShareLocales.ts",
+      "exchange-frontend\\src\\views\\Trade.vue",
+      "exchange-frontend\\src\\views\\Transfer.vue",
+      "exchange-frontend\\src\\views\\Withdraw.vue",
+      "exchange-pc\\src\\utils\\orderShareLocales.ts",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\Transfer.vue",
+      "exchange-pc\\src\\views\\Withdraw.vue"
+    ]
+  },
+  {
+    "key": "remarkCurrencyName",
+    "value": "備考（通貨名など）",
+    "files": [
+      "exchange-frontend\\src\\views\\Withdraw.vue",
+      "exchange-pc\\src\\views\\Withdraw.vue"
+    ]
+  },
+  {
+    "key": "remarkPlaceholder",
+    "value": "備考",
+    "files": [
+      "exchange-frontend\\src\\views\\Withdraw.vue",
+      "exchange-pc\\src\\views\\Withdraw.vue"
+    ]
+  },
+  {
+    "key": "expectedArrivalAmount",
+    "value": "着金予定額",
+    "files": [
+      "exchange-frontend\\src\\views\\Withdraw.vue",
+      "exchange-pc\\src\\views\\Withdraw.vue"
+    ]
+  },
+  {
+    "key": "withdrawButton",
+    "value": "出金",
+    "files": [
+      "exchange-frontend\\src\\views\\Withdraw.vue",
+      "exchange-pc\\src\\views\\Withdraw.vue"
+    ]
+  },
+  {
+    "key": "recipientAccount",
+    "value": "受取人口座",
+    "files": [
+      "exchange-frontend\\src\\views\\BindBankCard.vue",
+      "exchange-frontend\\src\\views\\Withdraw.vue",
+      "exchange-pc\\src\\views\\BindBankCard.vue",
+      "exchange-pc\\src\\views\\Withdraw.vue"
+    ]
+  },
+  {
+    "key": "pleaseSelectRecipientAccount",
+    "value": "受取人口座を選択してください",
+    "files": [
+      "exchange-frontend\\src\\views\\Withdraw.vue",
+      "exchange-pc\\src\\views\\Withdraw.vue"
+    ]
+  },
+  {
+    "key": "pleaseSelectCurrencyAndWithdrawAddress",
+    "value": "通貨と出金アドレスを選択してください",
+    "files": [
+      "exchange-frontend\\src\\views\\Withdraw.vue",
+      "exchange-pc\\src\\views\\Withdraw.vue"
+    ]
+  },
+  {
+    "key": "pleaseSelectCurrencyAndRecipientAccount",
+    "value": "通貨と受取人口座を選択してください",
+    "files": [
+      "exchange-frontend\\src\\views\\Withdraw.vue",
+      "exchange-pc\\src\\views\\Withdraw.vue"
+    ]
+  },
+  {
+    "key": "pleaseEnterWithdrawAmount",
+    "value": "出金額を入力してください",
+    "files": [
+      "exchange-frontend\\src\\views\\Withdraw.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\Withdraw.vue"
+    ]
+  },
+  {
+    "key": "withdrawApplicationSubmitted",
+    "value": "出金申請が送信されました",
+    "files": [
+      "exchange-frontend\\src\\views\\Withdraw.vue",
+      "exchange-pc\\src\\views\\Withdraw.vue"
+    ]
+  },
+  {
+    "key": "selectCurrencyTitle",
+    "value": "通貨を選択",
+    "files": [
+      "exchange-frontend\\src\\views\\BindBankCard.vue",
+      "exchange-frontend\\src\\views\\BindDigitalCurrency.vue",
+      "exchange-frontend\\src\\views\\Withdraw.vue",
+      "exchange-pc\\src\\views\\BindBankCard.vue",
+      "exchange-pc\\src\\views\\BindDigitalCurrency.vue",
+      "exchange-pc\\src\\views\\Withdraw.vue"
+    ]
+  },
+  {
+    "key": "selectWithdrawAddressTitle",
+    "value": "出金アドレスを選択",
+    "files": [
+      "exchange-frontend\\src\\views\\Withdraw.vue",
+      "exchange-pc\\src\\views\\Withdraw.vue"
+    ]
+  },
+  {
+    "key": "selectRecipientAccountTitle",
+    "value": "受取人口座を選択",
+    "files": [
+      "exchange-frontend\\src\\views\\Withdraw.vue",
+      "exchange-pc\\src\\views\\Withdraw.vue"
+    ]
+  },
+  {
+    "key": "noAvailableAddresses",
+    "value": "利用可能なアドレスがありません",
+    "files": [
+      "exchange-frontend\\src\\views\\Withdraw.vue",
+      "exchange-pc\\src\\views\\Withdraw.vue"
+    ]
+  },
+  {
+    "key": "noAvailableAccounts",
+    "value": "利用可能な口座がありません",
+    "files": [
+      "exchange-frontend\\src\\views\\Withdraw.vue",
+      "exchange-pc\\src\\views\\Withdraw.vue"
+    ]
+  },
+  {
+    "key": "arrivalAmount",
+    "value": "着金額",
+    "files": [
+      "exchange-frontend\\src\\views\\Withdraw.vue",
+      "exchange-pc\\src\\views\\Withdraw.vue"
+    ]
+  },
+  {
+    "key": "withdrawAddressLabel",
+    "value": "出金アドレス",
+    "files": [
+      "exchange-frontend\\src\\views\\Withdraw.vue",
+      "exchange-pc\\src\\views\\Withdraw.vue"
+    ]
+  },
+  {
+    "key": "recipientAccountLabel",
+    "value": "受取人口座",
+    "files": [
+      "exchange-frontend\\src\\views\\Withdraw.vue",
+      "exchange-pc\\src\\views\\Withdraw.vue"
+    ]
+  },
+  {
+    "key": "statusPendingReview",
+    "value": "審査中",
+    "files": [
+      "exchange-frontend\\src\\views\\Withdraw.vue",
+      "exchange-pc\\src\\views\\Withdraw.vue"
+    ]
+  },
+  {
+    "key": "noWithdrawRecords",
+    "value": "出金履歴はありません",
+    "files": [
+      "exchange-frontend\\src\\views\\Withdraw.vue",
+      "exchange-pc\\src\\views\\Withdraw.vue"
+    ]
+  },
+  {
+    "key": "status",
+    "value": "状態",
+    "files": [
+      "exchange-frontend\\src\\components\\AssetPixelChart.vue",
+      "exchange-frontend\\src\\components\\KlineChart.vue",
+      "exchange-frontend\\src\\components\\LeverageControl.vue",
+      "exchange-frontend\\src\\components\\MarketQuoteStatus.vue",
+      "exchange-frontend\\src\\components\\OrderShareModal.vue",
+      "exchange-frontend\\src\\components\\TradeOrders.vue",
+      "exchange-frontend\\src\\views\\Deposit.vue",
+      "exchange-frontend\\src\\views\\DepositRecords.vue",
+      "exchange-frontend\\src\\views\\Trade.vue",
+      "exchange-frontend\\src\\views\\Withdraw.vue",
+      "exchange-pc\\src\\components\\KlineChart.vue",
+      "exchange-pc\\src\\components\\LeverageControl.vue",
+      "exchange-pc\\src\\components\\MarketQuoteStatus.vue",
+      "exchange-pc\\src\\components\\OrderShareModal.vue",
+      "exchange-pc\\src\\views\\Deposit.vue",
+      "exchange-pc\\src\\views\\DepositRecords.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\Trade.vue",
+      "exchange-pc\\src\\views\\Withdraw.vue"
+    ]
+  },
+  {
+    "key": "marketClosed",
+    "value": "取引時間外",
+    "files": [
+      "exchange-frontend\\src\\views\\Home.vue",
+      "exchange-pc\\src\\views\\Home.vue",
+      "exchange-pc\\src\\views\\Trade.vue"
+    ]
+  },
+  {
+    "key": "welcomeToUse",
+    "value": "ご利用ありがとうございます",
+    "files": [
+      "exchange-frontend\\src\\views\\Home.vue",
+      "exchange-pc\\src\\views\\Home.vue"
+    ]
+  },
+  {
+    "key": "announcementContent",
+    "value": "政策上の理由により、北朝鮮、イスラエル、中国、バヌアツ、キューバへのサービス提供は行っておりません。",
+    "files": [
+      "exchange-frontend\\src\\views\\Home.vue",
+      "exchange-pc\\src\\views\\Home.vue"
+    ]
+  },
+  {
+    "key": "accept",
+    "value": "同意する",
+    "files": [
+      "exchange-frontend\\src\\views\\Home.vue",
+      "exchange-pc\\src\\views\\Home.vue"
+    ]
+  },
+  {
+    "key": "accountDisabled",
+    "value": "アカウントが無効になっています",
+    "files": []
+  },
+  {
+    "key": "passwordWrong",
+    "value": "パスワードが間違っています",
+    "files": []
+  },
+  {
+    "key": "emailExists",
+    "value": "メールアドレスが既に存在します",
+    "files": []
+  },
+  {
+    "key": "codeNotFound",
+    "value": "認証コードが見つかりません",
+    "files": []
+  },
+  {
+    "key": "codeWrong",
+    "value": "認証コードが正しくありません",
+    "files": []
+  },
+  {
+    "key": "codeExpired",
+    "value": "認証コードの有効期限が切れています",
+    "files": []
+  },
+  {
+    "key": "codeNotExistsResend",
+    "value": "認証コードが見つかりません。再送信してください",
+    "files": []
+  },
+  {
+    "key": "changePassword",
+    "value": "パスワード変更",
+    "files": [
+      "exchange-frontend\\src\\views\\ChangePassword.vue",
+      "exchange-frontend\\src\\views\\Profile.vue",
+      "exchange-pc\\src\\views\\ChangePassword.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\Profile.vue"
+    ]
+  },
+  {
+    "key": "newPassword",
+    "value": "新しいパスワード",
+    "files": [
+      "exchange-frontend\\src\\views\\ChangePassword.vue",
+      "exchange-pc\\src\\views\\ChangePassword.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "enterNewPassword",
+    "value": "新しいパスワードを入力してください",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "passwordChangedSuccess",
+    "value": "パスワードが正常に変更されました",
+    "files": []
+  },
+  {
+    "key": "passwordChangedSuccessLogin",
+    "value": "パスワードが正常に変更されました。再度ログインしてください",
+    "files": [
+      "exchange-frontend\\src\\views\\ChangePassword.vue",
+      "exchange-pc\\src\\views\\ChangePassword.vue"
+    ]
+  },
+  {
+    "key": "changePasswordFailed",
+    "value": "変更に失敗しました。再試行してください",
+    "files": [
+      "exchange-frontend\\src\\views\\ChangePassword.vue",
+      "exchange-pc\\src\\views\\ChangePassword.vue"
+    ]
+  },
+  {
+    "key": "enterNewPasswordRequired",
+    "value": "新しいパスワードを入力してください",
+    "files": [
+      "exchange-frontend\\src\\views\\ChangePassword.vue",
+      "exchange-pc\\src\\views\\ChangePassword.vue"
+    ]
+  },
+  {
+    "key": "passwordLengthAtLeast",
+    "value": "パスワードは6文字以上である必要があります",
+    "files": [
+      "exchange-frontend\\src\\views\\ChangePassword.vue",
+      "exchange-pc\\src\\views\\ChangePassword.vue"
+    ]
+  },
+  {
+    "key": "complaintEmail",
+    "value": "苦情受付メールアドレス",
+    "files": [
+      "exchange-frontend\\src\\views\\Complaint.vue",
+      "exchange-frontend\\src\\views\\Profile.vue",
+      "exchange-pc\\src\\views\\Complaint.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\Profile.vue"
+    ]
+  },
+  {
+    "key": "noComplaintEmail",
+    "value": "苦情受付メールアドレスが設定されていません",
+    "files": [
+      "exchange-frontend\\src\\views\\Complaint.vue",
+      "exchange-pc\\src\\views\\Complaint.vue"
+    ]
+  },
+  {
+    "key": "pleaseTryLaterOrContactUs",
+    "value": "後でもう一度お試しいただくか、他の方法でお問い合わせください",
+    "files": [
+      "exchange-frontend\\src\\views\\Complaint.vue",
+      "exchange-frontend\\src\\views\\CustomerService.vue",
+      "exchange-pc\\src\\views\\Complaint.vue",
+      "exchange-pc\\src\\views\\CustomerService.vue"
+    ]
+  },
+  {
+    "key": "emailNotConfigured",
+    "value": "メールアドレスが設定されていません",
+    "files": [
+      "exchange-frontend\\src\\views\\Complaint.vue",
+      "exchange-pc\\src\\views\\Complaint.vue"
+    ]
+  },
+  {
+    "key": "copiedToClipboard",
+    "value": "クリップボードにコピーしました",
+    "files": [
+      "exchange-frontend\\src\\views\\Complaint.vue",
+      "exchange-pc\\src\\views\\Complaint.vue"
+    ]
+  },
+  {
+    "key": "copyFailedPleaseCopyManually",
+    "value": "コピーに失敗しました。手動でコピーしてください",
+    "files": [
+      "exchange-frontend\\src\\views\\Complaint.vue",
+      "exchange-pc\\src\\views\\Complaint.vue"
+    ]
+  },
+  {
+    "key": "contactCustomerService",
+    "value": "カスタマーサポートに問い合わせる",
+    "files": [
+      "exchange-frontend\\src\\views\\CustomerService.vue",
+      "exchange-frontend\\src\\views\\Profile.vue",
+      "exchange-pc\\src\\views\\CustomerService.vue",
+      "exchange-pc\\src\\views\\Profile.vue"
+    ]
+  },
+  {
+    "key": "onlineCustomerService",
+    "value": "オンラインサポート",
+    "files": [
+      "exchange-frontend\\src\\views\\CustomerService.vue",
+      "exchange-pc\\src\\views\\CustomerService.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "noCustomerService",
+    "value": "現在サポート窓口をご利用いただけません",
+    "files": [
+      "exchange-frontend\\src\\views\\CustomerService.vue",
+      "exchange-pc\\src\\views\\CustomerService.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "loadingCustomerService",
+    "value": "サポート窓口を読み込み中...",
+    "files": [
+      "exchange-frontend\\src\\views\\CustomerService.vue",
+      "exchange-pc\\src\\views\\CustomerService.vue"
+    ]
+  },
+  {
+    "key": "announcements",
+    "value": "お知らせ",
+    "files": [
+      "exchange-frontend\\src\\views\\Announcements.vue",
+      "exchange-frontend\\src\\views\\Profile.vue",
+      "exchange-pc\\src\\views\\Announcements.vue",
+      "exchange-pc\\src\\views\\Profile.vue"
+    ]
+  },
+  {
+    "key": "noAnnouncements",
+    "value": "お知らせがありません",
+    "files": [
+      "exchange-frontend\\src\\views\\Announcements.vue",
+      "exchange-pc\\src\\views\\Announcements.vue"
+    ]
+  },
+  {
+    "key": "noAnnouncementsDescription",
+    "value": "現在お知らせはありません",
+    "files": [
+      "exchange-frontend\\src\\views\\Announcements.vue",
+      "exchange-pc\\src\\views\\Announcements.vue"
+    ]
+  },
+  {
+    "key": "loadAnnouncementsFailed",
+    "value": "お知らせの読み込みに失敗しました",
+    "files": [
+      "exchange-frontend\\src\\views\\Announcements.vue",
+      "exchange-pc\\src\\views\\Announcements.vue"
+    ]
+  },
+  {
+    "key": "frozen",
+    "value": "拘束中",
+    "files": [
+      "exchange-frontend\\src\\views\\Assets.vue",
+      "exchange-pc\\src\\views\\Assets.vue"
+    ]
+  },
+  {
+    "key": "fundAccountTitle",
+    "value": "資金口座",
+    "files": [
+      "exchange-frontend\\src\\views\\Assets.vue",
+      "exchange-pc\\src\\views\\Assets.vue"
+    ]
+  },
+  {
+    "key": "optionAccountTitle",
+    "value": "期限取引口座",
+    "files": [
+      "exchange-frontend\\src\\views\\Assets.vue",
+      "exchange-pc\\src\\views\\Assets.vue"
+    ]
+  },
+  {
+    "key": "contractAccountTitle",
+    "value": "証拠金取引口座",
+    "files": [
+      "exchange-frontend\\src\\views\\Assets.vue",
+      "exchange-pc\\src\\views\\Assets.vue"
+    ]
+  },
+  {
+    "key": "loadAssetsFailed",
+    "value": "資産情報の読み込みに失敗しました",
+    "files": [
+      "exchange-frontend\\src\\views\\Assets.vue",
+      "exchange-pc\\src\\views\\Assets.vue"
+    ]
+  },
+  {
+    "key": "creditScore",
+    "value": "信用スコア",
+    "files": [
+      "exchange-pc\\src\\views\\Profile.vue"
+    ]
+  },
+  {
+    "key": "billDetails",
+    "value": "入出金明細",
+    "files": [
+      "exchange-frontend\\src\\views\\Profile.vue",
+      "exchange-pc\\src\\views\\Profile.vue"
+    ]
+  },
+  {
+    "key": "settings",
+    "value": "設定",
+    "files": [
+      "exchange-frontend\\src\\components\\KlineChart.vue",
+      "exchange-frontend\\src\\views\\Profile.vue",
+      "exchange-pc\\src\\components\\KlineChart.vue",
+      "exchange-pc\\src\\views\\Profile.vue"
+    ]
+  },
+  {
+    "key": "loadUserInfoFailed",
+    "value": "ユーザー情報の読み込みに失敗しました",
+    "files": [
+      "exchange-frontend\\src\\views\\Profile.vue",
+      "exchange-pc\\src\\views\\Profile.vue"
+    ]
+  },
+  {
+    "key": "contract",
+    "value": "証拠金取引",
+    "files": [
+      "exchange-frontend\\src\\components\\TradeOrders.vue",
+      "exchange-frontend\\src\\utils\\orderShare.ts",
+      "exchange-frontend\\src\\utils\\orderShareLocales.ts",
+      "exchange-frontend\\src\\views\\Orders.vue",
+      "exchange-frontend\\src\\views\\Trade.vue",
+      "exchange-pc\\src\\utils\\orderShare.ts",
+      "exchange-pc\\src\\utils\\orderShareLocales.ts",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\Orders.vue",
+      "exchange-pc\\src\\views\\Trade.vue"
+    ]
+  },
+  {
+    "key": "term",
+    "value": "期限取引",
+    "files": [
+      "exchange-frontend\\src\\components\\TradeOrders.vue",
+      "exchange-frontend\\src\\views\\Home.vue",
+      "exchange-frontend\\src\\views\\Orders.vue",
+      "exchange-frontend\\src\\views\\Search.vue",
+      "exchange-frontend\\src\\views\\Trade.vue",
+      "exchange-pc\\src\\views\\Home.vue",
+      "exchange-pc\\src\\views\\Orders.vue",
+      "exchange-pc\\src\\views\\Search.vue",
+      "exchange-pc\\src\\views\\Trade.vue"
+    ]
+  },
+  {
+    "key": "positions",
+    "value": "ポジション",
+    "files": [
+      "exchange-frontend\\src\\components\\TradeOrders.vue",
+      "exchange-frontend\\src\\views\\Orders.vue",
+      "exchange-frontend\\src\\views\\Trade.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\Orders.vue"
+    ]
+  },
+  {
+    "key": "pendingOrders",
+    "value": "未約定注文",
+    "files": [
+      "exchange-frontend\\src\\views\\Orders.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\Orders.vue"
+    ]
+  },
+  {
+    "key": "orderHistory",
+    "value": "取引履歴",
+    "files": [
+      "exchange-frontend\\src\\views\\Orders.vue",
+      "exchange-pc\\src\\views\\Orders.vue"
+    ]
+  },
+  {
+    "key": "trading",
+    "value": "取引中",
+    "files": [
+      "exchange-frontend\\src\\views\\Orders.vue",
+      "exchange-pc\\src\\views\\Orders.vue"
+    ]
+  },
+  {
+    "key": "closed",
+    "value": "決済済み",
+    "files": [
+      "exchange-frontend\\src\\utils\\orderShareLocales.ts",
+      "exchange-frontend\\src\\views\\Orders.vue",
+      "exchange-pc\\src\\utils\\orderShareLocales.ts",
+      "exchange-pc\\src\\views\\Orders.vue"
+    ]
+  },
+  {
+    "key": "profitLoss",
+    "value": "損益",
+    "files": [
+      "exchange-frontend\\src\\views\\Orders.vue",
+      "exchange-pc\\src\\views\\Orders.vue",
+      "exchange-pc\\src\\views\\Trade.vue"
+    ]
+  },
+  {
+    "key": "balance",
+    "value": "残高",
+    "files": [
+      "exchange-frontend\\src\\views\\Assets.vue",
+      "exchange-frontend\\src\\views\\CreditLoan.vue",
+      "exchange-frontend\\src\\views\\Orders.vue",
+      "exchange-frontend\\src\\views\\Withdraw.vue",
+      "exchange-pc\\src\\views\\Assets.vue",
+      "exchange-pc\\src\\views\\CreditLoan.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\Orders.vue",
+      "exchange-pc\\src\\views\\Trade.vue",
+      "exchange-pc\\src\\views\\Withdraw.vue"
+    ]
+  },
+  {
+    "key": "currentMargin",
+    "value": "使用証拠金",
+    "files": [
+      "exchange-frontend\\src\\views\\Orders.vue",
+      "exchange-pc\\src\\views\\Orders.vue"
+    ]
+  },
+  {
+    "key": "riskRate",
+    "value": "証拠金維持率",
+    "files": [
+      "exchange-frontend\\src\\views\\Orders.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\Orders.vue"
+    ]
+  },
+  {
+    "key": "buy",
+    "value": "買い",
+    "files": [
+      "exchange-frontend\\src\\utils\\orderShareLocales.ts",
+      "exchange-frontend\\src\\views\\Orders.vue",
+      "exchange-frontend\\src\\views\\Trade.vue",
+      "exchange-pc\\src\\utils\\orderShareLocales.ts",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\Orders.vue",
+      "exchange-pc\\src\\views\\Trade.vue"
+    ]
+  },
+  {
+    "key": "sell",
+    "value": "売り",
+    "files": [
+      "exchange-frontend\\src\\utils\\orderShareLocales.ts",
+      "exchange-frontend\\src\\views\\Orders.vue",
+      "exchange-frontend\\src\\views\\Trade.vue",
+      "exchange-pc\\src\\utils\\orderShareLocales.ts",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\Orders.vue",
+      "exchange-pc\\src\\views\\Trade.vue"
+    ]
+  },
+  {
+    "key": "lots",
+    "value": "ロット",
+    "files": [
+      "exchange-frontend\\src\\components\\TradeOrders.vue",
+      "exchange-frontend\\src\\utils\\orderShareLocales.ts",
+      "exchange-frontend\\src\\views\\Orders.vue",
+      "exchange-frontend\\src\\views\\Trade.vue",
+      "exchange-pc\\src\\utils\\orderShareLocales.ts",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\Orders.vue",
+      "exchange-pc\\src\\views\\Trade.vue"
+    ]
+  },
+  {
+    "key": "orderId",
+    "value": "注文ID",
+    "files": [
+      "exchange-frontend\\src\\utils\\orderShareLocales.ts",
+      "exchange-frontend\\src\\views\\Orders.vue",
+      "exchange-pc\\src\\utils\\orderShareLocales.ts",
+      "exchange-pc\\src\\views\\Orders.vue"
+    ]
+  },
+  {
+    "key": "openTime",
+    "value": "新規約定日時",
+    "files": [
+      "exchange-frontend\\src\\utils\\orderShareLocales.ts",
+      "exchange-frontend\\src\\views\\Orders.vue",
+      "exchange-pc\\src\\utils\\orderShareLocales.ts",
+      "exchange-pc\\src\\views\\Orders.vue",
+      "exchange-pc\\src\\views\\Trade.vue"
+    ]
+  },
+  {
+    "key": "createTime",
+    "value": "注文日時",
+    "files": [
+      "exchange-frontend\\src\\views\\Orders.vue",
+      "exchange-pc\\src\\views\\Orders.vue"
+    ]
+  },
+  {
+    "key": "totalProfitLoss",
+    "value": "総損益",
+    "files": [
+      "exchange-frontend\\src\\views\\Orders.vue",
+      "exchange-pc\\src\\views\\Orders.vue"
+    ]
+  },
+  {
+    "key": "noData",
+    "value": "データなし",
+    "files": [
+      "exchange-frontend\\src\\views\\FinancialPurchase.vue",
+      "exchange-frontend\\src\\views\\Orders.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\FinancialPurchase.vue",
+      "exchange-pc\\src\\views\\Orders.vue"
+    ]
+  },
+  {
+    "key": "orderDetails",
+    "value": "注文詳細",
+    "files": [
+      "exchange-frontend\\src\\utils\\orderShareLocales.ts",
+      "exchange-frontend\\src\\views\\Orders.vue",
+      "exchange-pc\\src\\utils\\orderShareLocales.ts",
+      "exchange-pc\\src\\views\\Orders.vue"
+    ]
+  },
+  {
+    "key": "margin",
+    "value": "証拠金",
+    "files": [
+      "exchange-frontend\\src\\utils\\orderShareLocales.ts",
+      "exchange-frontend\\src\\views\\Orders.vue",
+      "exchange-pc\\src\\utils\\orderShareLocales.ts",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\Orders.vue"
+    ]
+  },
+  {
+    "key": "fee",
+    "value": "手数料",
+    "files": [
+      "exchange-frontend\\src\\utils\\orderShareLocales.ts",
+      "exchange-frontend\\src\\views\\Orders.vue",
+      "exchange-frontend\\src\\views\\Withdraw.vue",
+      "exchange-pc\\src\\utils\\orderShareLocales.ts",
+      "exchange-pc\\src\\views\\Orders.vue",
+      "exchange-pc\\src\\views\\Withdraw.vue"
+    ]
+  },
+  {
+    "key": "stopLoss",
+    "value": "損切り",
+    "files": [
+      "exchange-frontend\\src\\components\\TradeOrders.vue",
+      "exchange-frontend\\src\\views\\Orders.vue",
+      "exchange-frontend\\src\\views\\Trade.vue",
+      "exchange-pc\\src\\views\\Orders.vue",
+      "exchange-pc\\src\\views\\Trade.vue"
+    ]
+  },
+  {
+    "key": "takeProfit",
+    "value": "利確",
+    "files": [
+      "exchange-frontend\\src\\components\\TradeOrders.vue",
+      "exchange-frontend\\src\\views\\Orders.vue",
+      "exchange-frontend\\src\\views\\Trade.vue",
+      "exchange-pc\\src\\views\\Orders.vue",
+      "exchange-pc\\src\\views\\Trade.vue"
+    ]
+  },
+  {
+    "key": "modifyTPSL",
+    "value": "利確・損切りを変更",
+    "files": [
+      "exchange-frontend\\src\\views\\Orders.vue",
+      "exchange-pc\\src\\views\\Orders.vue"
+    ]
+  },
+  {
+    "key": "closeOrder",
+    "value": "ポジションを決済",
+    "files": [
+      "exchange-frontend\\src\\views\\Orders.vue",
+      "exchange-pc\\src\\views\\Orders.vue"
+    ]
+  },
+  {
+    "key": "cancelOrder",
+    "value": "注文取消",
+    "files": [
+      "exchange-frontend\\src\\views\\Orders.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\Orders.vue"
+    ]
+  },
+  {
+    "key": "buyUp",
+    "value": "上昇を予想（ハイ）",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "buyDown",
+    "value": "下落を予想（ロー）",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "lookUp",
+    "value": "上昇を予想",
+    "files": [
+      "exchange-frontend\\src\\views\\Orders.vue",
+      "exchange-pc\\src\\views\\Orders.vue",
+      "exchange-pc\\src\\views\\Trade.vue"
+    ]
+  },
+  {
+    "key": "multiplier",
+    "value": "倍",
+    "files": [
+      "exchange-pc\\src\\views\\Trade.vue"
+    ]
+  },
+  {
+    "key": "amount",
+    "value": "金額",
+    "files": [
+      "exchange-frontend\\src\\components\\OrderShareModal.vue",
+      "exchange-frontend\\src\\utils\\orderShare.ts",
+      "exchange-frontend\\src\\utils\\orderShareLocales.ts",
+      "exchange-frontend\\src\\views\\CreditLoan.vue",
+      "exchange-frontend\\src\\views\\Orders.vue",
+      "exchange-frontend\\src\\views\\Trade.vue",
+      "exchange-frontend\\src\\views\\Withdraw.vue",
+      "exchange-pc\\src\\components\\OrderShareModal.vue",
+      "exchange-pc\\src\\utils\\orderShare.ts",
+      "exchange-pc\\src\\utils\\orderShareLocales.ts",
+      "exchange-pc\\src\\views\\CreditLoan.vue",
+      "exchange-pc\\src\\views\\Orders.vue",
+      "exchange-pc\\src\\views\\Trade.vue",
+      "exchange-pc\\src\\views\\Withdraw.vue"
+    ]
+  },
+  {
+    "key": "estimatedProfitLoss",
+    "value": "予想損益",
+    "files": [
+      "exchange-frontend\\src\\views\\Orders.vue",
+      "exchange-pc\\src\\views\\Orders.vue",
+      "exchange-pc\\src\\views\\Trade.vue"
+    ]
+  },
+  {
+    "key": "duration",
+    "value": "期間",
+    "files": [
+      "exchange-frontend\\src\\views\\Orders.vue",
+      "exchange-pc\\src\\views\\Orders.vue",
+      "exchange-pc\\src\\views\\Trade.vue"
+    ]
+  },
+  {
+    "key": "calculateCountdownFailed",
+    "value": "カウントダウンの計算に失敗しました",
+    "files": [
+      "exchange-frontend\\src\\views\\Orders.vue",
+      "exchange-pc\\src\\views\\Orders.vue"
+    ]
+  },
+  {
+    "key": "loadContractOrdersFailed",
+    "value": "証拠金取引の注文を取得できませんでした",
+    "files": [
+      "exchange-frontend\\src\\views\\Orders.vue",
+      "exchange-pc\\src\\views\\Orders.vue"
+    ]
+  },
+  {
+    "key": "loadOptionOrdersFailed",
+    "value": "期限取引の注文を取得できませんでした",
+    "files": [
+      "exchange-frontend\\src\\views\\Orders.vue",
+      "exchange-pc\\src\\views\\Orders.vue"
+    ]
+  },
+  {
+    "key": "loadContractBalanceFailed",
+    "value": "証拠金取引口座の残高を取得できませんでした",
+    "files": [
+      "exchange-frontend\\src\\views\\Orders.vue",
+      "exchange-pc\\src\\views\\Orders.vue",
+      "exchange-pc\\src\\views\\Trade.vue"
+    ]
+  },
+  {
+    "key": "loadPositionsFailed",
+    "value": "ポジションの読み込みに失敗しました",
+    "files": [
+      "exchange-frontend\\src\\views\\Orders.vue",
+      "exchange-pc\\src\\views\\Orders.vue"
+    ]
+  },
+  {
+    "key": "marketPrice",
+    "value": "成行",
+    "files": [
+      "exchange-frontend\\src\\views\\Trade.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\Trade.vue"
+    ]
+  },
+  {
+    "key": "limitOrder",
+    "value": "指値注文",
+    "files": [
+      "exchange-pc\\src\\views\\Trade.vue"
+    ]
+  },
+  {
+    "key": "enterPrice",
+    "value": "価格を入力",
+    "files": [
+      "exchange-pc\\src\\views\\Trade.vue"
+    ]
+  },
+  {
+    "key": "buyQuantityLabel",
+    "value": "注文数量（増分：0.01）",
+    "files": [
+      "exchange-pc\\src\\views\\Trade.vue"
+    ]
+  },
+  {
+    "key": "perLot",
+    "value": "ロットあたり",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\Trade.vue"
+    ]
+  },
+  {
+    "key": "estimatedFee",
+    "value": "取引手数料（概算）",
+    "files": [
+      "exchange-pc\\src\\views\\Trade.vue"
+    ]
+  },
+  {
+    "key": "estimatedMargin",
+    "value": "必要証拠金（概算）",
+    "files": [
+      "exchange-pc\\src\\views\\Trade.vue"
+    ]
+  },
+  {
+    "key": "statistics",
+    "value": "統計",
+    "files": []
+  },
+  {
+    "key": "open",
+    "value": "始値",
+    "files": [
+      "exchange-frontend\\src\\components\\AppSelect.vue",
+      "exchange-frontend\\src\\components\\LeverageControl.vue",
+      "exchange-pc\\src\\components\\AppSelect.vue",
+      "exchange-pc\\src\\components\\LeverageControl.vue",
+      "exchange-pc\\src\\views\\Trade.vue"
+    ]
+  },
+  {
+    "key": "close",
+    "value": "終値",
+    "files": [
+      "exchange-frontend\\src\\components\\LeverageControl.vue",
+      "exchange-frontend\\src\\components\\OrderShareModal.vue",
+      "exchange-frontend\\src\\components\\TradeOrders.vue",
+      "exchange-frontend\\src\\components\\TradeSheet.vue",
+      "exchange-frontend\\src\\utils\\orderShareLocales.ts",
+      "exchange-pc\\src\\components\\LeverageControl.vue",
+      "exchange-pc\\src\\components\\OrderShareModal.vue",
+      "exchange-pc\\src\\utils\\orderShareLocales.ts",
+      "exchange-pc\\src\\views\\Trade.vue"
+    ]
+  },
+  {
+    "key": "high",
+    "value": "高値",
+    "files": [
+      "exchange-pc\\src\\views\\Trade.vue"
+    ]
+  },
+  {
+    "key": "low",
+    "value": "安値",
+    "files": [
+      "exchange-pc\\src\\views\\Trade.vue"
+    ]
+  },
+  {
+    "key": "selectExpiryTime",
+    "value": "取引期間を選択",
+    "files": [
+      "exchange-pc\\src\\views\\Trade.vue"
+    ]
+  },
+  {
+    "key": "tradingAmount",
+    "value": "取引額",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\Trade.vue"
+    ]
+  },
+  {
+    "key": "enterTradingAmount",
+    "value": "取引金額を入力",
+    "files": [
+      "exchange-pc\\src\\views\\Trade.vue"
+    ]
+  },
+  {
+    "key": "expectedReturnRate",
+    "value": "予想収益率",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\Trade.vue"
+    ]
+  },
+  {
+    "key": "profitRate",
+    "value": "利益率",
+    "files": [
+      "exchange-pc\\src\\views\\Trade.vue"
+    ]
+  },
+  {
+    "key": "orderAutoSettled",
+    "value": "注文が自動的に決済されました",
+    "files": [
+      "exchange-pc\\src\\views\\Trade.vue"
+    ]
+  },
+  {
+    "key": "closeTime",
+    "value": "決済日時",
+    "files": [
+      "exchange-frontend\\src\\utils\\orderShareLocales.ts",
+      "exchange-pc\\src\\utils\\orderShareLocales.ts",
+      "exchange-pc\\src\\views\\Trade.vue"
+    ]
+  },
+  {
+    "key": "orderConfirmed",
+    "value": "注文を受け付けました",
+    "files": [
+      "exchange-frontend\\src\\components\\SuccessModal.vue",
+      "exchange-pc\\src\\components\\SuccessModal.vue",
+      "exchange-pc\\src\\views\\Trade.vue"
+    ]
+  },
+  {
+    "key": "usStockMarketClosed",
+    "value": "米国株式市場は取引時間外です",
+    "files": []
+  },
+  {
+    "key": "forexMarketClosed",
+    "value": "外国為替市場は取引時間外です",
+    "files": []
+  },
+  {
+    "key": "metalMarketClosed",
+    "value": "貴金属市場は取引時間外です",
+    "files": []
+  },
+  {
+    "key": "enterLimitPrice",
+    "value": "指値価格を入力してください",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\Trade.vue"
+    ]
+  },
+  {
+    "key": "enterValidQuantity",
+    "value": "有効な数量を入力してください",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\Trade.vue"
+    ]
+  },
+  {
+    "key": "buyFailed",
+    "value": "買い注文に失敗しました。もう一度お試しください",
+    "files": [
+      "exchange-pc\\src\\views\\Trade.vue"
+    ]
+  },
+  {
+    "key": "sellFailed",
+    "value": "売り注文に失敗しました。もう一度お試しください",
+    "files": [
+      "exchange-pc\\src\\views\\Trade.vue"
+    ]
+  },
+  {
+    "key": "loadDurationOptionsFailed",
+    "value": "取引期間を取得できませんでした",
+    "files": [
+      "exchange-pc\\src\\views\\Trade.vue"
+    ]
+  },
+  {
+    "key": "loadSymbolsFailed",
+    "value": "銘柄一覧を取得できませんでした",
+    "files": []
+  },
+  {
+    "key": "loadAllSymbolsFailed",
+    "value": "銘柄一覧を取得できませんでした",
+    "files": []
+  },
+  {
+    "key": "loadSymbolInfoFailed",
+    "value": "銘柄情報を取得できませんでした",
+    "files": []
+  },
+  {
+    "key": "loadOptionBalanceFailed",
+    "value": "期限取引口座の残高を取得できませんでした",
+    "files": []
+  },
+  {
+    "key": "selectTradingPair",
+    "value": "銘柄・通貨ペアを選択",
+    "files": [
+      "exchange-pc\\src\\views\\Trade.vue"
+    ]
+  },
+  {
+    "key": "orderCreatedFailedNoId",
+    "value": "注文IDを取得できませんでした。再注文する前に注文履歴をご確認ください",
+    "files": [
+      "exchange-pc\\src\\views\\Trade.vue"
+    ]
+  },
+  {
+    "key": "currentPriceInvalid",
+    "value": "有効な価格を取得できないため、自動決済できません",
+    "files": [
+      "exchange-pc\\src\\views\\Trade.vue"
+    ]
+  },
+  {
+    "key": "price",
+    "value": "価格",
+    "files": [
+      "exchange-frontend\\src\\utils\\marketWebSocket.ts",
+      "exchange-frontend\\src\\utils\\ws.ts",
+      "exchange-pc\\src\\utils\\marketWebSocket.ts",
+      "exchange-pc\\src\\utils\\ws.ts",
+      "exchange-pc\\src\\views\\Trade.vue"
+    ]
+  },
+  {
+    "key": "direction",
+    "value": "方向",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\Trade.vue"
+    ]
+  },
+  {
+    "key": "insufficientBalanceForTrade",
+    "value": "残高不足、取引を完了できません",
+    "files": [
+      "exchange-pc\\src\\views\\Trade.vue"
+    ]
+  },
+  {
+    "key": "insufficientOptionBalance",
+    "value": "期限取引口座の残高が不足しています",
+    "files": [
+      "exchange-pc\\src\\views\\Trade.vue"
+    ]
+  },
+  {
+    "key": "tradingAmountCannotBeLessThan",
+    "value": "取引金額は以下より小さくできません",
+    "files": [
+      "exchange-pc\\src\\views\\Trade.vue"
+    ]
+  },
+  {
+    "key": "tradingAmountCannotBeGreaterThan",
+    "value": "取引金額は以下より大きくできません",
+    "files": [
+      "exchange-pc\\src\\views\\Trade.vue"
+    ]
+  },
+  {
+    "key": "buyUpFailed",
+    "value": "上昇予想の注文に失敗しました",
+    "files": [
+      "exchange-pc\\src\\views\\Trade.vue"
+    ]
+  },
+  {
+    "key": "buyDownFailed",
+    "value": "下落予想の注文に失敗しました",
+    "files": [
+      "exchange-pc\\src\\views\\Trade.vue"
+    ]
+  },
+  {
+    "key": "chartTime",
+    "value": "日時",
+    "files": [
+      "exchange-frontend\\src\\utils\\chartLocale.ts",
+      "exchange-pc\\src\\utils\\chartLocale.ts",
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "chartOpen",
+    "value": "始値",
+    "files": [
+      "exchange-frontend\\src\\utils\\chartLocale.ts",
+      "exchange-pc\\src\\utils\\chartLocale.ts",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\Trade.vue"
+    ]
+  },
+  {
+    "key": "chartClose",
+    "value": "終値",
+    "files": [
+      "exchange-frontend\\src\\utils\\chartLocale.ts",
+      "exchange-pc\\src\\utils\\chartLocale.ts",
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "chartHigh",
+    "value": "高値",
+    "files": [
+      "exchange-frontend\\src\\utils\\chartLocale.ts",
+      "exchange-pc\\src\\utils\\chartLocale.ts",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\Trade.vue"
+    ]
+  },
+  {
+    "key": "chartLow",
+    "value": "安値",
+    "files": [
+      "exchange-frontend\\src\\utils\\chartLocale.ts",
+      "exchange-pc\\src\\utils\\chartLocale.ts",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\Trade.vue"
+    ]
+  },
+  {
+    "key": "chartMA5",
+    "value": "MA5",
+    "files": []
+  },
+  {
+    "key": "chartMA10",
+    "value": "MA10",
+    "files": []
+  },
+  {
+    "key": "chart24H",
+    "value": "24時間",
+    "files": []
+  },
+  {
+    "key": "repaymentMethodDescription",
+    "value": "返済方法：出金前に返済を完了する必要があります。返済金を口座残高から直接差し引くことはできません。",
+    "files": [
+      "exchange-frontend\\src\\views\\LoanContract.vue",
+      "exchange-pc\\src\\views\\LoanContract.vue"
+    ]
+  },
+  {
+    "key": "borrowerAgreesToRepayAtMaturity",
+    "value": "借り手は貸し手に返済することに同意します",
+    "files": []
+  },
+  {
+    "key": "principalAnd",
+    "value": "元本および",
+    "files": []
+  },
+  {
+    "key": "interest",
+    "value": "利息。",
+    "files": []
+  },
+  {
+    "key": "overdueFeeLabel",
+    "value": "延滞料:",
+    "files": [
+      "exchange-frontend\\src\\views\\LoanContract.vue",
+      "exchange-pc\\src\\views\\LoanContract.vue"
+    ]
+  },
+  {
+    "key": "overdueFeeDescription",
+    "value": "借り手が期限までに返済に失敗した場合、毎日",
+    "files": []
+  },
+  {
+    "key": "overdueFeeDescriptionEnd",
+    "value": "延滞料（日割り計算）を支払う必要があり、これは罰金ではなくペナルティ料金です。",
+    "files": []
+  },
+  {
+    "key": "earlyRepaymentDescription",
+    "value": "借入人は、違約金を支払うことなく繰上返済できます。",
+    "files": [
+      "exchange-frontend\\src\\views\\LoanContract.vue",
+      "exchange-pc\\src\\views\\LoanContract.vue"
+    ]
+  },
+  {
+    "key": "defaultDescription",
+    "value": "借入人が返済期日までに返済しない場合、追加の通知や請求を受けることなく、未払いの元本および利息の全額を直ちに支払うものとします。",
+    "files": [
+      "exchange-frontend\\src\\views\\LoanContract.vue",
+      "exchange-pc\\src\\views\\LoanContract.vue"
+    ]
+  },
+  {
+    "key": "feesDescription",
+    "value": "借入人が返済期日までに返済義務を履行しない場合、貸付人が債権回収のために負担したすべての費用（法律費用を含みますが、これに限りません）を負担するものとします。",
+    "files": [
+      "exchange-frontend\\src\\views\\LoanContract.vue",
+      "exchange-pc\\src\\views\\LoanContract.vue"
+    ]
+  },
+  {
+    "key": "severabilityDescription",
+    "value": "本契約のいずれかの条項が無効または執行不能と判断された場合、その条項は無効となり、その他の条項は引き続き有効で拘束力を有します。",
+    "files": [
+      "exchange-frontend\\src\\views\\LoanContract.vue",
+      "exchange-pc\\src\\views\\LoanContract.vue"
+    ]
+  },
+  {
+    "key": "legalEffectDescription",
+    "value": "本契約は両当事者に対して法的に拘束力があり、米国およびヨーロッパ内で署名され、発効することができます。両当事者は、本契約に署名する権限があることを宣言します。",
+    "files": [
+      "exchange-frontend\\src\\views\\LoanContract.vue",
+      "exchange-pc\\src\\views\\LoanContract.vue"
+    ]
+  },
+  {
+    "key": "otherTermsDescription",
+    "value": "会社は、本契約の条件に従って、口座残高の通貨で支払いを行います。両当事者は本契約に署名する権利を有し、いずれの当事者も第三者の権利を侵害したり、当事者間の他の契約に違反したりしてはなりません。",
+    "files": [
+      "exchange-frontend\\src\\views\\LoanContract.vue",
+      "exchange-pc\\src\\views\\LoanContract.vue"
+    ]
+  },
+  {
+    "key": "governingLawDescription",
+    "value": "本契約は、借入人が所在する国または地域の法律に従って解釈および執行されるものとします。",
+    "files": [
+      "exchange-frontend\\src\\views\\LoanContract.vue",
+      "exchange-pc\\src\\views\\LoanContract.vue"
+    ]
+  },
+  {
+    "key": "completeAgreementDescription",
+    "value": "両当事者は、本書が当事者間の完全な合意を構成することに同意します。本契約の条件の変更、追加または修正は書面によるものとし、効力を生じる前に両当事者が署名する必要があります。",
+    "files": [
+      "exchange-frontend\\src\\views\\LoanContract.vue",
+      "exchange-pc\\src\\views\\LoanContract.vue"
+    ]
+  },
+  {
+    "key": "bothPartiesAgreeToSign",
+    "value": "両当事者は上記の条件に同意し、以下のように署名します:",
+    "files": [
+      "exchange-frontend\\src\\views\\LoanContract.vue",
+      "exchange-pc\\src\\views\\LoanContract.vue"
+    ]
+  },
+  {
+    "key": "defaultAddress",
+    "value": "アメリカ合衆国",
+    "files": []
+  },
+  {
+    "key": "defaultPhone",
+    "value": "1-212111111",
+    "files": []
+  },
+  {
+    "key": "repaymentSuccess",
+    "value": "返済が完了しました",
+    "files": [
+      "exchange-frontend\\src\\views\\LoanRecords.vue",
+      "exchange-pc\\src\\views\\LoanRecords.vue"
+    ]
+  },
+  {
+    "key": "repaymentFailed",
+    "value": "返済に失敗しました",
+    "files": [
+      "exchange-frontend\\src\\views\\LoanRecords.vue",
+      "exchange-pc\\src\\views\\LoanRecords.vue"
+    ]
+  },
+  {
+    "key": "earlyRepaymentButton",
+    "value": "繰上返済",
+    "files": [
+      "exchange-frontend\\src\\views\\LoanRecords.vue",
+      "exchange-pc\\src\\views\\LoanRecords.vue"
+    ]
+  },
+  {
+    "key": "earlyRepaymentConfirm",
+    "value": "繰上返済しますか？利息を自動計算し、返済額を資金口座から差し引きます。",
+    "files": [
+      "exchange-frontend\\src\\views\\LoanRecords.vue",
+      "exchange-pc\\src\\views\\LoanRecords.vue"
+    ]
+  },
+  {
+    "key": "modifySuccess",
+    "value": "正常に変更されました",
+    "files": [
+      "exchange-frontend\\src\\views\\Orders.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\Orders.vue"
+    ]
+  },
+  {
+    "key": "modifyFailed",
+    "value": "変更に失敗しました",
+    "files": [
+      "exchange-frontend\\src\\views\\Orders.vue",
+      "exchange-pc\\src\\views\\Orders.vue"
+    ]
+  },
+  {
+    "key": "closeOrderSuccess",
+    "value": "ポジションを決済しました",
+    "files": [
+      "exchange-frontend\\src\\views\\Orders.vue",
+      "exchange-pc\\src\\views\\Orders.vue"
+    ]
+  },
+  {
+    "key": "closeOrderFailed",
+    "value": "ポジションの決済に失敗しました",
+    "files": [
+      "exchange-frontend\\src\\views\\Orders.vue",
+      "exchange-pc\\src\\views\\Orders.vue"
+    ]
+  },
+  {
+    "key": "cancelOrderSuccess",
+    "value": "注文を取り消しました",
+    "files": [
+      "exchange-frontend\\src\\views\\Orders.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\Orders.vue"
+    ]
+  },
+  {
+    "key": "cancelOrderFailed",
+    "value": "注文の取消に失敗しました",
+    "files": [
+      "exchange-frontend\\src\\views\\Orders.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\Orders.vue"
+    ]
+  },
+  {
+    "key": "productList",
+    "value": "商品一覧",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "placeOrder",
+    "value": "注文する",
+    "files": []
+  },
+  {
+    "key": "indicators",
+    "value": "インジケーター",
+    "files": [
+      "exchange-frontend\\src\\components\\KlineChart.vue",
+      "exchange-pc\\src\\components\\KlineChart.vue"
+    ]
+  },
+  {
+    "key": "optionsTerm",
+    "value": "期限取引",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "limitPrice",
+    "value": "指値",
+    "files": [
+      "exchange-frontend\\src\\views\\Trade.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\Trade.vue"
+    ]
+  },
+  {
+    "key": "orderPrice",
+    "value": "注文価格",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "expectedReturn",
+    "value": "予想収益",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "availableBalance",
+    "value": "利用可能残高",
+    "files": []
+  },
+  {
+    "key": "financialPurchase",
+    "value": "運用商品の申込み",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "financialOrders",
+    "value": "運用商品の申込履歴",
+    "files": []
+  },
+  {
+    "key": "walletMain",
+    "value": "ウォレット",
+    "files": []
+  },
+  {
+    "key": "assetsOverview",
+    "value": "資産概要",
+    "files": []
+  },
+  {
+    "key": "recharge",
+    "value": "入金",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "withdrawCoin",
+    "value": "出金",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "kyc",
+    "value": "本人確認",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "security",
+    "value": "セキュリティ設定",
+    "files": []
+  },
+  {
+    "key": "invite",
+    "value": "友達を招待する",
+    "files": [
+      "exchange-frontend\\src\\utils\\orderShareLocales.ts",
+      "exchange-pc\\src\\utils\\orderShareLocales.ts",
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "support",
+    "value": "サポート",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "logout",
+    "value": "ログアウト",
+    "files": [
+      "exchange-frontend\\src\\views\\Profile.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\Profile.vue"
+    ]
+  },
+  {
+    "key": "totalAssets",
+    "value": "総資産",
+    "files": []
+  },
+  {
+    "key": "fundAccountBalance",
+    "value": "資金口座残高",
+    "files": []
+  },
+  {
+    "key": "contractAccountBalance",
+    "value": "証拠金取引口座残高",
+    "files": []
+  },
+  {
+    "key": "optionAccountBalance",
+    "value": "期限取引口座残高",
+    "files": []
+  },
+  {
+    "key": "frozenAmount",
+    "value": "拘束額",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "depositApplication",
+    "value": "入金申請",
+    "files": []
+  },
+  {
+    "key": "withdrawApplication",
+    "value": "出金申請",
+    "files": []
+  },
+  {
+    "key": "transferApplication",
+    "value": "振替申請",
+    "files": []
+  },
+  {
+    "key": "walletAddressLabel",
+    "value": "ウォレットアドレス",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "bankCardLabel",
+    "value": "銀行口座",
+    "files": [
+      "exchange-frontend\\src\\views\\Deposit.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "digitalCurrencyLabel",
+    "value": "暗号資産",
+    "files": [
+      "exchange-frontend\\src\\views\\Deposit.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "networkProtocol",
+    "value": "ネットワーク",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "currencyType",
+    "value": "通貨の種類",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "personalInfoVerification",
+    "value": "本人確認",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "stopLossPrice",
+    "value": "損切り価格",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "takeProfitPrice",
+    "value": "利確価格",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "amountLabel",
+    "value": "数量",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "priceLabel",
+    "value": "価格",
+    "files": []
+  },
+  {
+    "key": "confirmPurchase",
+    "value": "申込みを確認",
+    "files": [
+      "exchange-frontend\\src\\views\\FinancialPurchase.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\FinancialPurchase.vue"
+    ]
+  },
+  {
+    "key": "contractDetails",
+    "value": "取引詳細",
+    "files": []
+  },
+  {
+    "key": "pleaseEnterQuantity",
+    "value": "取引数量を入力してください",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "orderList",
+    "value": "注文リスト",
+    "files": [
+      "exchange-frontend\\src\\components\\SuccessModal.vue",
+      "exchange-pc\\src\\components\\SuccessModal.vue"
+    ]
+  },
+  {
+    "key": "historyRecords",
+    "value": "履歴",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "orderNumber",
+    "value": "注文番号",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "openPrice",
+    "value": "新規約定価格",
+    "files": [
+      "exchange-frontend\\src\\components\\TradeOrders.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "currentPrice",
+    "value": "現在価格",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "profitAndLoss",
+    "value": "損益",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "handlingFee",
+    "value": "手数料",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "closePosition",
+    "value": "ポジションを決済",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "action",
+    "value": "操作",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "closeTimeLabel",
+    "value": "決済日時",
+    "files": []
+  },
+  {
+    "key": "openTimeLabel",
+    "value": "新規約定日時",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "save",
+    "value": "保存する",
+    "files": [
+      "exchange-frontend\\src\\components\\OrderShareModal.vue",
+      "exchange-frontend\\src\\utils\\orderShareLocales.ts",
+      "exchange-pc\\src\\components\\OrderShareModal.vue",
+      "exchange-pc\\src\\utils\\orderShareLocales.ts",
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "remarkLabel",
+    "value": "備考",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "timeLabel",
+    "value": "時間",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "rejectReasonLabel",
+    "value": "不承認理由",
+    "files": []
+  },
+  {
+    "key": "clickToChange",
+    "value": "クリックして変更",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "idCardFront",
+    "value": "本人確認書類の表面",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "idCardBack",
+    "value": "本人確認書類の裏面",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "idCardHand",
+    "value": "本人確認書類を持った本人の写真",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "announcementNotification",
+    "value": "お知らせ",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "symbol",
+    "value": "銘柄",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "enjoyLoanService",
+    "value": "借入サービスを利用する",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "withdrawAmount",
+    "value": "出金額",
+    "files": []
+  },
+  {
+    "key": "enterWithdrawAmount",
+    "value": "出金額を入力してください",
+    "files": []
+  },
+  {
+    "key": "expectedArrival",
+    "value": "着金予定額",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "fromAccount",
+    "value": "振替元口座",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "toAccount",
+    "value": "振替先口座",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "confirmTransfer",
+    "value": "振替を確認",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "totalAssetsEquivalent",
+    "value": "口座総資産の換算",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "payee",
+    "value": "受取人",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "payeeAccount",
+    "value": "受取人口座",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "addDigitalAddress",
+    "value": "暗号資産アドレスを追加",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "kycVerification",
+    "value": "本人確認",
+    "files": []
+  },
+  {
+    "key": "pendingReview",
+    "value": "審査中",
+    "files": []
+  },
+  {
+    "key": "personalInfo",
+    "value": "個人情報",
+    "files": []
+  },
+  {
+    "key": "identityProof",
+    "value": "身分証明書",
+    "files": []
+  },
+  {
+    "key": "inviteFriends",
+    "value": "友達を招待する",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "inviteLink",
+    "value": "専用の招待リンク",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "oldPassword",
+    "value": "現在のパスワード",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "enterOldPassword",
+    "value": "現在のパスワードを入力してください",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "enterConfirmPassword",
+    "value": "新しいパスワードをもう一度入力してください",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "contactSupport",
+    "value": "カスタマーサポートへお問い合わせください",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "onlineSupport",
+    "value": "オンラインサポート",
+    "files": []
+  },
+  {
+    "key": "uploadPaymentVoucher",
+    "value": "入金確認書類をアップロード",
+    "files": [
+      "exchange-frontend\\src\\views\\Deposit.vue",
+      "exchange-pc\\src\\views\\Deposit.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "clickUploadVoucher",
+    "value": "クリックして入金確認書類の画像をアップロード",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "clickReupload",
+    "value": "クリックして再アップロード",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "submitDepositApplication",
+    "value": "入金申請を送信",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "completed",
+    "value": "完了しました",
+    "files": []
+  },
+  {
+    "key": "rejected",
+    "value": "不承認",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "todayYield",
+    "value": "今日の収益",
+    "files": []
+  },
+  {
+    "key": "ordersInProgress",
+    "value": "運用中の申込み",
+    "files": []
+  },
+  {
+    "key": "cycle",
+    "value": "期間",
+    "files": []
+  },
+  {
+    "key": "yield",
+    "value": "収益",
+    "files": []
+  },
+  {
+    "key": "earlyRedemption",
+    "value": "中途解約",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "settled",
+    "value": "決済済み",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "unsettled",
+    "value": "未決済",
+    "files": []
+  },
+  {
+    "key": "buyNow",
+    "value": "今すぐ購入",
+    "files": []
+  },
+  {
+    "key": "minPurchaseAmount",
+    "value": "最低購入金額",
+    "files": []
+  },
+  {
+    "key": "optionsAccount",
+    "value": "期限取引口座",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "enterBankName",
+    "value": "銀行名を入力してください",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "branchAddress",
+    "value": "支店所在地",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "enterBranchAddress",
+    "value": "支店の詳細な住所を入力してください",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "network",
+    "value": "ネットワーク",
+    "files": []
+  },
+  {
+    "key": "enterNetwork",
+    "value": "ネットワークを入力してください",
+    "files": []
+  },
+  {
+    "key": "enterWalletAddress",
+    "value": "ウォレットアドレスを入力してください",
+    "files": []
+  },
+  {
+    "key": "enterPayeeName",
+    "value": "口座名義人の氏名を入力してください",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "enterPayeeAccount",
+    "value": "受取人の口座番号を入力してください",
+    "files": []
+  },
+  {
+    "key": "passwordNotMatch",
+    "value": "パスワードが一致しません",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "enterPassword",
+    "value": "パスワードを入力してください",
+    "files": []
+  },
+  {
+    "key": "assetTotal",
+    "value": "総資産",
+    "files": []
+  },
+  {
+    "key": "fund",
+    "value": "資金",
+    "files": []
+  },
+  {
+    "key": "options",
+    "value": "期限取引",
+    "files": [
+      "exchange-frontend\\src\\components\\CurrencyPicker.vue",
+      "exchange-frontend\\src\\utils\\request.ts",
+      "exchange-pc\\src\\components\\CurrencyPicker.vue",
+      "exchange-pc\\src\\utils\\request.ts",
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "availableAmount",
+    "value": "利用可能額",
+    "files": []
+  },
+  {
+    "key": "totalAmount",
+    "value": "合計金額",
+    "files": []
+  },
+  {
+    "key": "assetsAccount",
+    "value": "資産口座",
+    "files": []
+  },
+  {
+    "key": "rechargeRecords",
+    "value": "入金履歴",
+    "files": []
+  },
+  {
+    "key": "rechargeAmount",
+    "value": "入金額",
+    "files": []
+  },
+  {
+    "key": "digitalAddress",
+    "value": "暗号資産アドレス",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "networkType",
+    "value": "ネットワークの種類",
+    "files": []
+  },
+  {
+    "key": "selectNetworkType",
+    "value": "ネットワークの種類を選択してください",
+    "files": []
+  },
+  {
+    "key": "submitRecharge",
+    "value": "入金申請を送信",
+    "files": []
+  },
+  {
+    "key": "selectWithdrawAddress",
+    "value": "出金アドレスを選択してください",
+    "files": []
+  },
+  {
+    "key": "withdrawAll",
+    "value": "全額出金",
+    "files": []
+  },
+  {
+    "key": "withdrawFee",
+    "value": "手数料",
+    "files": []
+  },
+  {
+    "key": "submitWithdraw",
+    "value": "出金申請を送信",
+    "files": [
+      "exchange-frontend\\src\\views\\Withdraw.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\Withdraw.vue"
+    ]
+  },
+  {
+    "key": "transferFrom",
+    "value": "振替元口座",
+    "files": []
+  },
+  {
+    "key": "transferTo",
+    "value": "振替先口座",
+    "files": []
+  },
+  {
+    "key": "transferAll",
+    "value": "全額振替",
+    "files": []
+  },
+  {
+    "key": "kycUnverified",
+    "value": "本人確認未完了",
+    "files": []
+  },
+  {
+    "key": "kycPending",
+    "value": "審査中",
+    "files": []
+  },
+  {
+    "key": "kycVerified",
+    "value": "本人確認済み",
+    "files": []
+  },
+  {
+    "key": "inviteCodeLink",
+    "value": "招待リンク",
+    "files": []
+  },
+  {
+    "key": "onlineService",
+    "value": "オンラインサポート",
+    "files": []
+  },
+  {
+    "key": "logoutAccount",
+    "value": "アカウントからログアウトする",
+    "files": []
+  },
+  {
+    "key": "remaining1",
+    "value": "本人確認書類を持った本人の写真",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "remaining2",
+    "value": "確認する",
+    "files": []
+  },
+  {
+    "key": "remaining3",
+    "value": "キャンセル",
+    "files": []
+  },
+  {
+    "key": "remaining4",
+    "value": "保存する",
+    "files": []
+  },
+  {
+    "key": "remaining5",
+    "value": "備考",
+    "files": []
+  },
+  {
+    "key": "remaining6",
+    "value": "時間",
+    "files": []
+  },
+  {
+    "key": "remaining7",
+    "value": "ステータス",
+    "files": []
+  },
+  {
+    "key": "remaining8",
+    "value": "操作",
+    "files": []
+  },
+  {
+    "key": "remaining9",
+    "value": "不承認理由",
+    "files": []
+  },
+  {
+    "key": "remaining10",
+    "value": "クリックまたはドラッグして入金確認書類の画像をアップロード",
+    "files": []
+  },
+  {
+    "key": "remaining11",
+    "value": "まだありません",
+    "files": []
+  },
+  {
+    "key": "remaining12",
+    "value": "不明",
+    "files": []
+  },
+  {
+    "key": "assets",
+    "value": "資産",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "transferAmountPlaceholder",
+    "value": "振替金額を入力してください",
+    "files": []
+  },
+  {
+    "key": "loanAgreementQuote",
+    "value": "ローン契約書",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "dateQuote",
+    "value": "日付",
+    "files": []
+  },
+  {
+    "key": "effectiveDateQuote",
+    "value": "発効日",
+    "files": []
+  },
+  {
+    "key": "signByParties",
+    "value": "以下の当事者によって署名されています。",
+    "files": []
+  },
+  {
+    "key": "borrowerQuote",
+    "value": "借入人",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "firstNameQuote",
+    "value": "名：",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "lastNameQuote",
+    "value": "姓：",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "addressQuote",
+    "value": "住所:",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "phoneQuote",
+    "value": "電話番号:",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "nameQuote",
+    "value": "氏名：",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "partiesQuote",
+    "value": "以下、総称して「当事者」といいます。",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "repaymentTermsQuote",
+    "value": "返済条件",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "amountQuote",
+    "value": "金額:",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "borrowerAgreesToRepayQuote",
+    "value": "借り手が返済に同意する",
+    "files": []
+  },
+  {
+    "key": "loanQuote",
+    "value": "（「ローン」）。",
+    "files": []
+  },
+  {
+    "key": "termsQuote",
+    "value": "規約",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "interestRateQuote",
+    "value": "金利:",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "partiesAgreeInterestQuote",
+    "value": "両当事者は、金利が以下であることに同意します。",
+    "files": []
+  },
+  {
+    "key": "calculatedDailyQuote",
+    "value": "(日単位で計算されます)。",
+    "files": []
+  },
+  {
+    "key": "loanTermQuote",
+    "value": "融資期間:",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "loanTermIsQuote",
+    "value": "この融資の期限は、",
+    "files": []
+  },
+  {
+    "key": "daysQuote",
+    "value": "日。",
+    "files": []
+  },
+  {
+    "key": "repaymentMethodQuote",
+    "value": "本契約により生じた金額は以下のように返済されます。",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "borrowerAgreesToRepayBeforeMaturityQuote",
+    "value": "借り手は満期日前に返済することに同意する",
+    "files": []
+  },
+  {
+    "key": "principalAndQuote",
+    "value": "元本および",
+    "files": []
+  },
+  {
+    "key": "interestQuote",
+    "value": "利息。",
+    "files": []
+  },
+  {
+    "key": "signQuote",
+    "value": "署名",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "pleaseSignQuote",
+    "value": "署名してください",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "resignQuote",
+    "value": "署名をやり直す",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "submitSignatureQuote",
+    "value": "署名を提出する",
+    "files": []
+  },
+  {
+    "key": "submittingQuote",
+    "value": "送信中...",
+    "files": []
+  },
+  {
+    "key": "walletAsset",
+    "value": "ウォレット資産",
+    "files": []
+  },
+  {
+    "key": "walletBalance",
+    "value": "ウォレット残高",
+    "files": []
+  },
+  {
+    "key": "totalAccountAsset",
+    "value": "口座資産合計",
+    "files": []
+  },
+  {
+    "key": "rechargeApplication",
+    "value": "入金申請",
+    "files": []
+  },
+  {
+    "key": "rechargeChannel",
+    "value": "入金方法",
+    "files": []
+  },
+  {
+    "key": "withdrawChannel",
+    "value": "出金方法",
+    "files": []
+  },
+  {
+    "key": "uploadIDFront",
+    "value": "本人確認書類の表面をアップロードしてください",
+    "files": []
+  },
+  {
+    "key": "uploadIDBack",
+    "value": "本人確認書類の裏面をアップロードしてください",
+    "files": []
+  },
+  {
+    "key": "uploadHandheldID",
+    "value": "本人確認書類を持った本人の写真をアップロードしてください",
+    "files": []
+  },
+  {
+    "key": "bindBankCardTitle",
+    "value": "銀行口座を登録",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "bindDigitalAddressTitle",
+    "value": "暗号資産アドレスを登録",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "viewAgreementAndSign",
+    "value": "契約書を確認して署名",
+    "files": []
+  },
+  {
+    "key": "alreadySigned",
+    "value": "署名済み",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "repayImmediately",
+    "value": "返済する",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "cleared",
+    "value": "完済",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "amountShort",
+    "value": "金額",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "loanTermShort",
+    "value": "借入期間",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "dailyInterestRate",
+    "value": "日利率",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "needRepay",
+    "value": "返済予定額",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "repayDate",
+    "value": "返済日",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "pendingAudit",
+    "value": "審査待ち",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "miningMachineList",
+    "value": "マイニングマシン一覧",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "myMiningMachines",
+    "value": "利用中のマイニングマシン",
+    "files": []
+  },
+  {
+    "key": "day",
+    "value": "日",
+    "files": [
+      "exchange-frontend\\src\\utils\\chartData.ts",
+      "exchange-frontend\\src\\utils\\chartLocale.ts",
+      "exchange-frontend\\src\\utils\\dateTime.ts",
+      "exchange-pc\\src\\utils\\chartData.ts",
+      "exchange-pc\\src\\utils\\chartLocale.ts",
+      "exchange-pc\\src\\utils\\dateTime.ts"
+    ]
+  },
+  {
+    "key": "daysUnit",
+    "value": "日",
+    "files": [
+      "exchange-frontend\\src\\views\\FinancialPurchase.vue",
+      "exchange-frontend\\src\\views\\LoanContract.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\FinancialPurchase.vue",
+      "exchange-pc\\src\\views\\LoanContract.vue"
+    ]
+  },
+  {
+    "key": "minimum",
+    "value": "最小：",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "maximum",
+    "value": "最大：",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "maxButton",
+    "value": "最大値",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "freeInterestDays",
+    "value": "無利息期間",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "pleaseEnterAmount",
+    "value": "金額を入力してください",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "verifiedStatus",
+    "value": "本人確認済み",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "unverifiedStatus",
+    "value": "本人確認未完了",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "setTpSl",
+    "value": "利確・損切りを設定",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "buyIn",
+    "value": "買い",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "lot",
+    "value": "ロット",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "estFee",
+    "value": "手数料の目安",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "estMargin",
+    "value": "必要証拠金（概算）",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "buyPrice",
+    "value": "購入価格",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "settlePrice",
+    "value": "決済価格",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "periodSec",
+    "value": "期間（秒）",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "estProfit",
+    "value": "予想損益",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "actualProfit",
+    "value": "確定損益",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "rate",
+    "value": "率",
+    "files": [
+      "exchange-frontend\\src\\components\\OrderShareModal.vue",
+      "exchange-frontend\\src\\utils\\orderShare.ts",
+      "exchange-frontend\\src\\utils\\orderShareLocales.ts",
+      "exchange-pc\\src\\components\\OrderShareModal.vue",
+      "exchange-pc\\src\\utils\\orderShare.ts",
+      "exchange-pc\\src\\utils\\orderShareLocales.ts"
+    ]
+  },
+  {
+    "key": "selectExpiry",
+    "value": "取引期間を選択してください",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "closeConfirm",
+    "value": "決済の確認",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "confirmCloseOrder",
+    "value": "ポジションを決済することを確認します",
+    "files": []
+  },
+  {
+    "key": "orderQuestion",
+    "value": "注文?",
+    "files": []
+  },
+  {
+    "key": "cancelText",
+    "value": "キャンセル",
+    "files": [
+      "exchange-frontend\\src\\components\\LeverageControl.vue",
+      "exchange-pc\\src\\components\\LeverageControl.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "confirmText",
+    "value": "確認",
+    "files": []
+  },
+  {
+    "key": "cancelOrderConfirm",
+    "value": "注文取消の確認",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "confirmCancelOrder",
+    "value": "キャンセルを確認してください",
+    "files": []
+  },
+  {
+    "key": "pendingOrderQuestion",
+    "value": "保留中の注文ですか?",
+    "files": []
+  },
+  {
+    "key": "availableFund",
+    "value": "取引可能額",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "subscribeList",
+    "value": "申込履歴",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "estDailyYield",
+    "value": "予想日次収益額",
+    "files": [
+      "exchange-frontend\\src\\views\\FinancialOrders.vue",
+      "exchange-frontend\\src\\views\\FinancialPurchase.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\FinancialOrders.vue",
+      "exchange-pc\\src\\views\\FinancialPurchase.vue"
+    ]
+  },
+  {
+    "key": "lockRent",
+    "value": "レンタル料（設定値）",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "subscribe",
+    "value": "申し込む",
+    "files": [
+      "exchange-frontend\\src\\utils\\marketWebSocket.ts",
+      "exchange-pc\\src\\utils\\marketWebSocket.ts",
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "financePeriod",
+    "value": "運用期間",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "subscribeAmount",
+    "value": "申込金額",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "subscribeTime",
+    "value": "申込日時",
+    "files": []
+  },
+  {
+    "key": "estTotalYield",
+    "value": "予想総収益",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "inProgress",
+    "value": "進行中",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "defaultRedeem",
+    "value": "中途解約",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "confirmDefaultRedeem1",
+    "value": "この申込みを中途解約しますか？差し引かれる金額：",
+    "files": []
+  },
+  {
+    "key": "confirmDefaultRedeem2",
+    "value": "中途解約手数料",
+    "files": []
+  },
+  {
+    "key": "confirmRedeem",
+    "value": "中途解約を確認",
+    "files": [
+      "exchange-frontend\\src\\views\\FinancialOrders.vue",
+      "exchange-pc\\src\\views\\FinancialOrders.vue"
+    ]
+  },
+  {
+    "key": "totalYieldText",
+    "value": "総収益",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "paidYieldText",
+    "value": "支払済み収益",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "yieldDaysText",
+    "value": "収益計算日数",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "pendingYieldText",
+    "value": "未払い収益",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "noYieldRecordsText",
+    "value": "収益履歴はありません",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "quantityText",
+    "value": "数量",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "timeText",
+    "value": "時間",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "confirmRedeemBtn",
+    "value": "中途解約を確認",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "viewAndSignAgreement",
+    "value": "契約書を確認して署名",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "loanAgreementTitle",
+    "value": "ローン契約書",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "dateText",
+    "value": "日付",
+    "files": []
+  },
+  {
+    "key": "signByPartiesText",
+    "value": "（発効日）。以下の当事者が署名します。",
+    "files": []
+  },
+  {
+    "key": "signByPartiesText2",
+    "value": "（発効日）。以下の当事者が署名します。",
+    "files": []
+  },
+  {
+    "key": "unknownText",
+    "value": "不明",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "noneText",
+    "value": "なし",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "confirmBtnText",
+    "value": "OK",
+    "files": [
+      "exchange-frontend\\src\\components\\LeverageControl.vue",
+      "exchange-pc\\src\\components\\LeverageControl.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "noRecordsText",
+    "value": "データがありません",
+    "files": []
+  },
+  {
+    "key": "buyDownSuccess",
+    "value": "下落を予想する注文を受け付けました",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "buyUpSuccess",
+    "value": "上昇を予想する注文を受け付けました",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "buyDownText",
+    "value": "下落を予想",
+    "files": [
+      "exchange-frontend\\src\\views\\Orders.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\Orders.vue"
+    ]
+  },
+  {
+    "key": "buyUpText",
+    "value": "上昇を予想",
+    "files": [
+      "exchange-frontend\\src\\views\\Orders.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\Orders.vue"
+    ]
+  },
+  {
+    "key": "orderSuccess",
+    "value": "注文を受け付けました",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "sellSuccess",
+    "value": "売り注文を受け付けました",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "sellText",
+    "value": "売り",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "recordText",
+    "value": "履歴",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "alreadySignedText",
+    "value": "署名済み",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "effectiveText",
+    "value": "発効日",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "signByPartiesText3",
+    "value": "以下の当事者による署名",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "voucherUploadSuccess",
+    "value": "入金確認書類をアップロードしました",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "depositSubmitWaitReview",
+    "value": "入金申請を受け付けました。審査をお待ちください",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "selectNetworkGetAddress",
+    "value": "入金ネットワークを選択すると、入金先アドレスが表示されます",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "selectNetworkText",
+    "value": "ネットワークの選択",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "digitalText",
+    "value": "暗号資産",
+    "files": []
+  },
+  {
+    "key": "depositAddressText",
+    "value": "入金先アドレス",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "onlySupportVia",
+    "value": "対応ネットワーク：",
+    "files": []
+  },
+  {
+    "key": "networkDepositText",
+    "value": "ネットワーク経由の入金",
+    "files": []
+  },
+  {
+    "key": "bankCardDeposit",
+    "value": "銀行振込による入金",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "cryptoDeposit",
+    "value": "暗号資産の入金",
+    "files": []
+  },
+  {
+    "key": "withdrawAddressText",
+    "value": "出金アドレス",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "pleaseSelectPayeeAccount",
+    "value": "受取人口座を選択してください",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "bankCardWithdrawArrival",
+    "value": "銀行口座への出金・着金額",
+    "files": []
+  },
+  {
+    "key": "rejectedText",
+    "value": "不承認",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "reviewingText",
+    "value": "審査中",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "rejectReasonText",
+    "value": "不承認理由",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "cryptoWithdrawArrival",
+    "value": "暗号資産の出金・着金数量",
+    "files": []
+  },
+  {
+    "key": "availableText",
+    "value": "利用可能",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "contractToFund",
+    "value": "証拠金取引口座から資金口座へ",
+    "files": []
+  },
+  {
+    "key": "openingBankText",
+    "value": "銀行名",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "bankCardNoText",
+    "value": "口座番号",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "accountNameText",
+    "value": "口座名義",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "optionalText",
+    "value": "任意",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "enterSwiftCode",
+    "value": "銀行の SWIFT コードを入力してください",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "intlTransferRequired",
+    "value": "国際送金の場合は必須",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "kycPassedFeatureNormal",
+    "value": "本人確認が完了しました。各機能をご利用いただけます",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "nameText",
+    "value": "氏名",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "authText",
+    "value": "認証",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "inviteFriendsJoin",
+    "value": "友達を招待して参加する",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "inviteFriendsRegister",
+    "value": "友達を招待して登録してください",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "getMoreRewards",
+    "value": "より多くの報酬と特権を獲得しましょう",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "yourExclusiveInviteCode",
+    "value": "あなた専用の招待コード",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "hoursOnlineService",
+    "value": "時間オンラインで対応",
+    "files": []
+  },
+  {
+    "key": "customerServiceText",
+    "value": "カスタマーサポート",
+    "files": []
+  },
+  {
+    "key": "clickToContact",
+    "value": "クリックしてお問い合わせください",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "officialEmail",
+    "value": "公式メールアドレス",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "closePositionSuccess",
+    "value": "ポジションを決済しました",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "tpSlSetSuccess",
+    "value": "利確・損切りを設定しました",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "networkError",
+    "value": "通信エラーが発生しました",
+    "files": [
+      "exchange-frontend\\src\\utils\\request.ts",
+      "exchange-pc\\src\\utils\\request.ts",
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "optionBalanceInsufficient",
+    "value": "期限取引口座の残高が不足しています",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "tradingStatus",
+    "value": "取引中",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "contractBalanceInsufficient",
+    "value": "証拠金取引口座の残高が不足しています",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "requiredText",
+    "value": "必要額",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "totalAsset",
+    "value": "総資産相当額",
+    "files": []
+  },
+  {
+    "key": "startEnjoyLoanServices",
+    "value": "借入サービスを利用する",
+    "files": []
+  },
+  {
+    "key": "clickToUploadVoucher",
+    "value": "クリックして入金確認書類をアップロード",
+    "files": []
+  },
+  {
+    "key": "submitTransfer",
+    "value": "振替を実行",
+    "files": [
+      "exchange-frontend\\src\\views\\Transfer.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\Transfer.vue"
+    ]
+  },
+  {
+    "key": "payeeText",
+    "value": "受取人",
+    "files": []
+  },
+  {
+    "key": "swiftCode",
+    "value": "SWIFT Code",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "saveText",
+    "value": "保存する",
+    "files": []
+  },
+  {
+    "key": "exclusiveInviteLink",
+    "value": "専用の招待リンク",
+    "files": []
+  },
+  {
+    "key": "pleaseEnterOldPassword",
+    "value": "現在のパスワードを入力してください",
+    "files": []
+  },
+  {
+    "key": "pleaseEnterNewPasswordAgain",
+    "value": "新しいパスワードをもう一度入力してください",
+    "files": []
+  },
+  {
+    "key": "digital",
+    "value": "暗号資産",
+    "files": [
+      "exchange-frontend\\src\\views\\Deposit.vue",
+      "exchange-frontend\\src\\views\\DepositRecords.vue",
+      "exchange-frontend\\src\\views\\Withdraw.vue",
+      "exchange-pc\\src\\views\\Deposit.vue",
+      "exchange-pc\\src\\views\\DepositRecords.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\Withdraw.vue"
+    ]
+  },
+  {
+    "key": "notConfigured",
+    "value": "未設定",
+    "files": [
+      "exchange-frontend\\src\\views\\LoanContract.vue",
+      "exchange-pc\\src\\views\\DesktopTrade.vue",
+      "exchange-pc\\src\\views\\LoanContract.vue"
+    ]
+  },
+  {
+    "key": "channel",
+    "value": "チャンネル",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "select",
+    "value": "選択してください",
+    "files": []
+  },
+  {
+    "key": "passed",
+    "value": "承認済み",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "noneText2",
+    "value": "なし",
+    "files": []
+  },
+  {
+    "key": "recordText2",
+    "value": "履歴",
+    "files": []
+  },
+  {
+    "key": "forPurpose",
+    "value": "のために",
+    "files": []
+  },
+  {
+    "key": "fundSecurity",
+    "value": "資金の安全性",
+    "files": []
+  },
+  {
+    "key": "completeRealInfoFirst",
+    "value": "先に本人確認情報を入力してください",
+    "files": []
+  },
+  {
+    "key": "successText",
+    "value": "成功",
+    "files": []
+  },
+  {
+    "key": "subscribeFailed2",
+    "value": "申込みに失敗しました",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "getFinancialProductFailed",
+    "value": "運用商品を取得できませんでした",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "realName2",
+    "value": "氏名",
+    "files": []
+  },
+  {
+    "key": "amountText",
+    "value": "金額",
+    "files": []
+  },
+  {
+    "key": "notYet",
+    "value": "まだ",
+    "files": []
+  },
+  {
+    "key": "toCurrentPrice",
+    "value": "現在の価格に",
+    "files": []
+  },
+  {
+    "key": "cannotClosePosition2",
+    "value": "ポジションを決済できません",
+    "files": []
+  },
+  {
+    "key": "deposit2",
+    "value": "入金",
+    "files": [
+      "exchange-pc\\src\\views\\DesktopTrade.vue"
+    ]
+  },
+  {
+    "key": "orText",
+    "value": "または",
+    "files": []
+  },
+  {
+    "key": "pasteText",
+    "value": "ペースト",
+    "files": []
+  },
+  {
+    "key": "lightningWithdraw",
+    "value": "クイック出金",
+    "files": [
+      "exchange-frontend\\src\\views\\Home.vue"
+    ]
+  },
+  {
+    "key": "videoIntro",
+    "value": "ビデオ紹介",
+    "files": [
+      "exchange-frontend\\src\\views\\Home.vue"
+    ]
+  }
+]

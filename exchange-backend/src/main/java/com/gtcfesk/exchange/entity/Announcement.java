@@ -21,6 +21,9 @@ public class Announcement {
     @Column(name = "status", length = 20, nullable = false)
     private String status = "PUBLISHED"; // PUBLISHED, DRAFT, HIDDEN
 
+    @Column(name = "countdown_seconds", nullable = false, columnDefinition = "int default 2")
+    private Integer countdownSeconds = 2;
+
     @Column(name = "priority", nullable = false)
     private Integer priority = 0; // 优先级，数字越大越优先显示
 

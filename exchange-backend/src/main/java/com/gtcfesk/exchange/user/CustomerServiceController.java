@@ -45,9 +45,9 @@ public class CustomerServiceController {
      * 获取系统时区配置
      */
     @GetMapping("/share-templates")
-    public ResponseEntity<?> getShareTemplates() {
+    public ResponseEntity<?> getShareTemplates(@RequestParam(value = "locale", defaultValue = "en") String locale) {
         return ResponseEntity.ok(SystemConfigService.shareTemplates(
-                systemConfigService.getConfigValue(SystemConfigService.SHARE_TEMPLATES_KEY)));
+                systemConfigService.getConfigValue(SystemConfigService.SHARE_TEMPLATES_KEY), locale));
     }
 
     @GetMapping("/system/timezone")

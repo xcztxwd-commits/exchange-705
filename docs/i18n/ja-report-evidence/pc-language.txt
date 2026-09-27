@@ -1,0 +1,42 @@
+言語
+English
+français
+Deutsch
+Русский язык
+Español
+Português
+Italiano
+العربية
+Türkçe
+Bahasa Indonesia
+မြန်မာ
+हिंदी
+čeština
+Polski
+日本語
+✓
+한국어
+繁體中文
+ไทย
+Tiếng Việt
+
+ATTRIBUTES
+English
+français
+Deutsch
+Русский язык
+Español
+Português
+Italiano
+العربية
+Türkçe
+Bahasa Indonesia
+မြန်မာ
+हिंदी
+čeština
+Polski
+日本語
+한국어
+繁體中文
+ไทย
+Tiếng Việt

@@ -75,7 +75,7 @@ public class GlobalExceptionHandler {
         Map<String, Object> result = new HashMap<>();
         result.put("success", false);
         result.put("error", "Internal Server Error");
-        result.put("message", com.gtcfesk.exchange.common.SafeErrors.message(e));
+        result.put("message", "Unable to confirm the result. Check the relevant history or status before submitting again.");
         System.err.println("未处理的异常: " + e.getMessage());
         e.printStackTrace();
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(result);

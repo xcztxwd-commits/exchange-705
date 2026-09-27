@@ -571,28 +571,6 @@ public class ContractOrderService {
         return money(calculateQuoteProfit(order,currentPrice).multiply(conversionRate(order.getQuoteCurrency(),order.getQuoteSource())),RoundingMode.HALF_UP);
     }
     private BigDecimal calculateQuoteProfit(ContractOrder order, BigDecimal currentPrice) {
-        if (order.getOpenPrice() == null || currentPrice == null 
-                || order.getOpenPrice().compareTo(BigDecimal.ZERO) <= 0 
-                || currentPrice.compareTo(BigDecimal.ZERO) <= 0) {
-            return BigDecimal.ZERO;
-        }
-        
-        // 新单按实际持仓数量计盈亏；NULL 快照的历史单继续使用原杠杆乘数。
-        BigDecimal multiplier = order.getLotSize() != null ? order.getLotSize()
-                : (order.getLeverage() != null ? order.getLeverage() : BigDecimal.ONE);
-        
-        // 计算价格差
-        BigDecimal priceDiff;
-        if ("BUY".equals(order.getSide())) {
-            // 买入：价格差 = 当前价 - 开仓价
-            priceDiff = currentPrice.subtract(order.getOpenPrice());
-        } else {
-            // 卖出：价格差 = 开仓价 - 当前价
-            priceDiff = order.getOpenPrice().subtract(currentPrice);
-        }
-        
-        return priceDiff.multiply(order.getQuantity()).multiply(multiplier);
+        return ContractValuation.quoteProfit(order, currentPrice);
     }
 }
-
-

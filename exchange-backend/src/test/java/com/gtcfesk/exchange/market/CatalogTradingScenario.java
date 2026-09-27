@@ -87,6 +87,7 @@ class CatalogTradingScenario {
         categoryLeverage();
         foreignCurrency();
         equal("0",t.accounts.findByUserIdAndCoin(account.getId(),"CONTRACT").get().getFrozen());equal("0",t.accounts.findByUserIdAndCoin(account.getId(),"OPTION").get().getFrozen());
+        verifyOrderHistories();
     }
     void foreignCurrency() throws Exception {
         for(String[] item:new String[][]{{"binance","Crypto","ETHBTC","BTC"},{"yahoo","Forex","USDJPY=X","JPY"}}){
@@ -139,4 +140,33 @@ class CatalogTradingScenario {
         System.out.println("CATEGORY_LEVERAGE PASS: disabled defaults 1x, rejects higher leverage, blocks pending fill, permits cancel/close, restores per-symbol cap");
     }
 
+
+    void verifyOrderHistories() {
+        for (String kind : new String[]{"contract", "option"}) {
+            JsonNode userRows = request(HttpMethod.GET, "/api/trade/" + kind + "/orders", user, null).path("list");
+            JsonNode adminResult = post("/api/admin/orders/" + kind + "/query", admin,
+                CatalogTradingScenario.map("page", 0, "size", 200));
+            JsonNode adminRows = adminResult.path("list");
+            long persisted = "contract".equals(kind) ? t.contracts.count() : t.options.count();
+            assertTrue(persisted > 0);
+            assertEquals(persisted, userRows.size(), "user history must include every persisted fixture");
+            assertEquals(persisted, adminResult.path("total").asLong());
+            assertEquals(persisted, adminRows.size());
+            Map<Long, JsonNode> byId = new HashMap<>();
+            for (JsonNode row : adminRows) byId.put(row.path("id").asLong(), row);
+            int controlled = 0;
+            for (JsonNode row : userRows) {
+                JsonNode admin = byId.get(row.path("id").asLong());
+                assertNotNull(admin);
+                for (String field : new String[]{"symbol", "status", "openPrice", "closePrice", "profit", "createdAt"})
+                    assertEquals(row.get(field), admin.get(field), field);
+                assertFalse(row.path("createdAt").isNull());
+                assertTrue("CLOSED".equals(row.path("status").asText()) || "CANCELLED".equals(row.path("status").asText()));
+                if (row.path("openPrice").decimalValue().compareTo(new java.math.BigDecimal("105")) == 0) controlled++;
+            }
+            assertTrue(controlled >= 6, "six categories must retain controlled-price trade records");
+            System.out.println("RECORDS PASS " + kind + ": database=" + persisted + ", user=" + userRows.size()
+                + ", admin=" + adminRows.size() + ", controlled=" + controlled);
+        }
+    }
 }

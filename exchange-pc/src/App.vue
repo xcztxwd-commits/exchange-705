@@ -1,5 +1,7 @@
 <template>
-  <router-view />
+  <el-config-provider :locale="elementLocales[localeStore.locale]">
+    <router-view />
+  </el-config-provider>
 </template>
 
 <script setup lang="ts">
@@ -7,6 +9,8 @@ import { onMounted, onUnmounted, watch } from 'vue'
 import { useAuthStore } from '@/store/auth'
 import { useLocaleStore } from '@/store/locale'
 import request from '@/utils/request'
+import { ElConfigProvider } from 'element-plus'
+import { elementLocales } from '@/utils/elementLocale'
 
 const auth = useAuthStore()
 const localeStore = useLocaleStore()
@@ -63,12 +67,17 @@ watch(() => auth.token, (newToken) => {
   }
 }, { immediate: true })
 
+const onLocaleStorage = (event: StorageEvent) => {
+  if (event.key === 'locale') localeStore.loadLocale()
+}
 onMounted(() => {
+  window.addEventListener('storage', onLocaleStorage)
   // 加载用户信息
   auth.load()
 })
 
 onUnmounted(() => {
+  window.removeEventListener('storage', onLocaleStorage)
   stopHeartbeat()
 })
 </script>

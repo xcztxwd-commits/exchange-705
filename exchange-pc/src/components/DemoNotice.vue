@@ -7,13 +7,12 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
+import { useLocaleStore } from '@/store/locale'
+const locale = useLocaleStore()
 
 type Language = 'zh' | 'zh-TW' | 'en' | 'ja'
-const browserLanguage = navigator.language.toLowerCase()
-const language = ref<Language>(browserLanguage.startsWith('ja') ? 'ja'
-  : /zh-(tw|hk|mo|hant)/.test(browserLanguage) ? 'zh-TW'
-  : browserLanguage.startsWith('zh') ? 'zh' : 'en')
+const language = computed<Language>(() => locale.locale === 'ja' ? 'ja' : locale.locale === 'zh-TW' ? 'zh-TW' : 'en')
 const messages = {
   zh: {
     title: '模拟演示提示',

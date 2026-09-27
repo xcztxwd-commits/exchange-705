@@ -1,0 +1,6 @@
+# Keep the newly built pruning-free application; revert only this feature's readers/producers.
+services:
+  backend:
+    environment:
+      ASSET_HISTORY_EQUITY_READ_ENABLED: "false"
+      ASSET_HISTORY_EQUITY_COLLECT_ENABLED: "false"

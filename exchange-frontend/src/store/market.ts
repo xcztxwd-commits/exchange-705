@@ -801,8 +801,6 @@ export const useMarketStore = defineStore('market', () => {
     }
     currentSymbol.value = symbol
     subscribeSymbol(symbol, category)
-    // 同时获取K线数据
-    fetchKlines(symbol, category, '1m', 100)
   }
 
   /**

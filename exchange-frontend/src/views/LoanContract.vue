@@ -5,7 +5,7 @@ import request from '@/utils/request'
 import { useAuthStore } from '@/store/auth'
 import { getImageUrl } from '@/utils/imageUrl'
 import { useLocaleStore } from '@/store/locale'
-import { formatDateTime } from '@/utils/dateTime'
+import { formatDateTime, getSystemTimezone } from '@/utils/dateTime'
 
 const router = useRouter()
 const route = useRoute()
@@ -27,7 +27,7 @@ function getSystemTimeZoneLabel(date?: Date): string {
   const targetDate = date || new Date()
   // 使用 Intl.DateTimeFormat 获取英国时区的标识（自动处理夏令时）
   const formatter = new Intl.DateTimeFormat('en-GB', {
-    timeZone: 'Europe/London',
+    timeZone: getSystemTimezone(),
     timeZoneName: 'short'
   })
   const parts = formatter.formatToParts(targetDate)
@@ -41,10 +41,10 @@ function formatMoney(v: number | string | undefined | null) {
   return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
-// 格式化利率（转换为百分比）
+// LoanRecord rates are already percentage points, matching LoanSetting and LoanService.
 function formatRate(v: number | string | undefined | null) {
   const n = Number(v || 0)
-  return (n * 100).toFixed(2)
+  return n.toFixed(2)
 }
 
 // 获取名字（从realName中提取）
@@ -139,33 +139,33 @@ onMounted(() => {
 
     <div class="contract-wrapper" v-if="loan && !loading">
       <div class="contract-box">
-        <div class="contract-title">{{ localeStore.t('loanAgreement') }}("{{ loan.id }}"){{ localeStore.t('date') }}</div>
+        <div class="contract-title">{{ localeStore.t('loanAgreement') }} #{{ loan.id }}</div>
         <div class="contract-date">{{ formatDate(loan.createdAt) }} {{ loan.createdAt ? getSystemTimeZoneLabel(new Date(loan.createdAt)) : '' }}</div>
         <div class="contract-subtitle">(「{{ localeStore.t('effectiveDate') }}」){{ localeStore.t('signedByBothParties') }}:</div>
 
         <div class="contract-section">
           <div class="section-title">{{ localeStore.t('borrower') }}</div>
-          <div class="info-item">
+          <div v-if="localeStore.locale !== 'ja'" class="info-item">
             <span class="info-label">{{ localeStore.t('firstName') }}:</span>
             <span class="info-value">{{ getFirstName(loan.realName) }}</span>
           </div>
-          <div class="info-item">
+          <div v-if="localeStore.locale !== 'ja'" class="info-item">
             <span class="info-label">{{ localeStore.t('lastName') }}:</span>
             <span class="info-value">{{ getLastName(loan.realName) }}</span>
           </div>
           <div class="info-item">
             <span class="info-label">{{ localeStore.t('address') }}:</span>
-            <span class="info-value">{{ loan.address || localeStore.t('defaultAddress') }}</span>
+            <span class="info-value">{{ loan.address || localeStore.t('notConfigured') }}</span>
           </div>
           <div class="info-item">
             <span class="info-label">{{ localeStore.t('phone') }}:</span>
-            <span class="info-value">{{ loan.phone || localeStore.t('defaultPhone') }}</span>
+            <span class="info-value">{{ loan.phone || localeStore.t('notConfigured') }}</span>
           </div>
           <div class="info-item">
             <span class="info-label">{{ localeStore.t('name') }}:</span>
-            <span class="info-value">{{ loan.realName || '1' }}</span>
+            <span class="info-value">{{ loan.realName || localeStore.t('notConfigured') }}</span>
           </div>
-          <div class="section-note">{{ localeStore.t('bothParties') }}.</div>
+          <div class="section-note">{{ localeStore.t('bothParties') }}</div>
         </div>
 
       <div class="contract-section">
@@ -175,7 +175,7 @@ onMounted(() => {
           <span class="info-value highlight">{{ formatMoney(loan.amount) }}</span>
         </div>
         <div class="section-text">
-          {{ localeStore.t('borrowerAgreesToRepay') }}<span class="highlight">{{ formatMoney(loan.amount) }}</span>(「{{ localeStore.t('loan') }}」)。
+          {{ localeStore.text('借款人同意償還借款 {amount}。', 'The borrower agrees to repay {amount} (the loan).', { amount: formatMoney(loan.amount) }) }}
         </div>
       </div>
 
@@ -186,20 +186,20 @@ onMounted(() => {
           <span class="info-value highlight">{{ formatRate(loan.dailyRate) }}%</span>
         </div>
         <div class="section-text">
-          {{ localeStore.t('bothParties') }}{{ localeStore.t('interestRate') }}<span class="highlight">{{ formatRate(loan.dailyRate) }}%</span>({{ localeStore.t('calculatedDaily') }})。
+          {{ localeStore.text('雙方同意日利率為 {rate}%。', 'The agreed daily interest rate is {rate}%.', { rate: formatRate(loan.dailyRate) }) }}
         </div>
         <div class="info-item">
           <span class="info-label">{{ localeStore.t('loanTerm') }}:</span>
-          <span class="info-value highlight">{{ loan.days }}</span>
+          <span class="info-value highlight">{{ loan.days }}{{ localeStore.t('daysUnit') }}</span>
         </div>
         <div class="section-text">
-          {{ localeStore.t('loanTermDays') }}<span class="highlight">{{ loan.days }}</span>{{ localeStore.t('days') }}。
+          {{ localeStore.text('借款期限為 {days} 天。', 'The loan term is {days} days.', { days: loan.days }) }}
         </div>
         <div class="section-text">
           {{ localeStore.t('repaymentMethodDescription') }}
         </div>
         <div class="section-text">
-          {{ localeStore.t('borrowerAgreesToRepayAtMaturity') }}<span class="highlight">{{ formatMoney(loan.amount) }}</span>{{ localeStore.t('principalAnd') }}<span class="highlight">{{ formatMoney(loan.totalInterest) }}</span>{{ localeStore.t('interest') }}
+          {{ localeStore.text('借款人同意到期前償還本金 {principal} 及利息 {interest}。', 'The borrower agrees to repay principal of {principal} and interest of {interest} by maturity.', { principal: formatMoney(loan.amount), interest: formatMoney(loan.totalInterest) }) }}
         </div>
       </div>
 
@@ -207,10 +207,10 @@ onMounted(() => {
         <div class="section-title">{{ localeStore.t('repaymentApplicability') }}</div>
         <div class="info-item">
           <span class="info-label">{{ localeStore.t('overdueFeeLabel') }}</span>
-          <span class="info-value highlight">{{ formatRate(loan.overdueRate || 0.0025) }}%</span>
+          <span class="info-value highlight">{{ formatRate(loan.overdueRate ?? 0.25) }}%</span>
         </div>
         <div class="section-text">
-          {{ localeStore.t('overdueFeeDescription') }}<span class="highlight">{{ formatRate(loan.overdueRate || 0.0025) }}%</span>{{ localeStore.t('overdueFeeDescriptionEnd') }}
+          {{ localeStore.text('逾期還款每天產生 {rate}% 的逾期費用，按日計算；這是逾期費而非罰金。', 'Late repayment incurs a daily late fee of {rate}%, calculated daily. This is a late fee, not a fine.', { rate: formatRate(loan.overdueRate ?? 0.25) }) }}
         </div>
       </div>
 
@@ -276,7 +276,7 @@ onMounted(() => {
         </div>
         <div class="signature-section">
           <div class="signature-info">
-            <div class="signature-label">{{ localeStore.t('name') }}: {{ loan.realName || '1' }}</div>
+            <div class="signature-label">{{ localeStore.t('name') }}: {{ loan.realName || localeStore.t('notConfigured') }}</div>
             <div class="signature-label">{{ localeStore.t('borrower') }}</div>
             <div class="signature-label">{{ localeStore.t('borrower') }}{{ localeStore.t('signature') }}:</div>
           </div>

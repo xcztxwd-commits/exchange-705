@@ -8,6 +8,7 @@ interface Announcement {
   title: string
   content: string
   status: string
+  countdownSeconds: number
   priority: number
   language?: string
   createdAt?: string
@@ -49,6 +50,7 @@ const formData = ref<Announcement>({
   content: '',
   status: 'PUBLISHED',
   priority: 0,
+    countdownSeconds: 2,
   language: 'en',
 })
 
@@ -73,6 +75,7 @@ const openDialog = (announcement?: Announcement) => {
       content: announcement.content,
       status: announcement.status,
       priority: announcement.priority,
+      countdownSeconds: announcement.countdownSeconds ?? 2,
       language: announcement.language || 'en',
     }
   } else {
@@ -83,6 +86,7 @@ const openDialog = (announcement?: Announcement) => {
       content: '',
       status: 'PUBLISHED',
       priority: 0,
+    countdownSeconds: 2,
       language: 'en',
     }
   }
@@ -97,6 +101,7 @@ const closeDialog = () => {
     content: '',
     status: 'PUBLISHED',
     priority: 0,
+    countdownSeconds: 2,
     language: 'en',
   }
 }
@@ -111,6 +116,11 @@ const saveAnnouncement = async () => {
     return
   }
 
+  if (!Number.isInteger(formData.value.countdownSeconds) || formData.value.countdownSeconds < 0 || formData.value.countdownSeconds > 2147483647) {
+    ElMessage.warning('请输入有效的非负整数秒数')
+    return
+  }
+
   loading.value = true
   try {
     if (editingAnnouncement.value?.id) {
@@ -120,6 +130,7 @@ const saveAnnouncement = async () => {
         content: formData.value.content.trim(),
         status: formData.value.status,
         priority: formData.value.priority || 0,
+        countdownSeconds: formData.value.countdownSeconds,
         language: formData.value.language || 'en',
       })
       ElMessage.success('更新成功')
@@ -130,6 +141,7 @@ const saveAnnouncement = async () => {
         content: formData.value.content.trim(),
         status: formData.value.status,
         priority: formData.value.priority || 0,
+        countdownSeconds: formData.value.countdownSeconds,
         language: formData.value.language || 'en',
       })
       ElMessage.success('创建成功')
@@ -232,6 +244,7 @@ onMounted(() => {
             <el-tag>{{ row.language || 'en' }}</el-tag>
           </template>
         </el-table-column>
+        <el-table-column prop="countdownSeconds" label="不可点击倒计时（秒）" width="180" />
         <el-table-column prop="priority" label="优先级" width="100" />
         <el-table-column prop="createdAt" label="创建时间" width="160">
           <template #default="{ row }">{{ formatDate(row.createdAt) }}</template>
@@ -278,6 +291,10 @@ onMounted(() => {
             <el-option label="草稿" value="DRAFT" />
             <el-option label="已隐藏" value="HIDDEN" />
           </el-select>
+        </el-form-item>
+        <el-form-item label="不可点击秒数">
+          <el-input-number v-model="formData.countdownSeconds" :min="0" :max="2147483647" :precision="0" :step="1" step-strictly />
+          <div style="font-size: 12px; color: #999; margin-top: 4px">0 秒可立即点击；倒计时结束后手动点击关闭</div>
         </el-form-item>
         <el-form-item label="优先级">
           <el-input-number v-model="formData.priority" :min="0" :max="999" style="width: 100%" />

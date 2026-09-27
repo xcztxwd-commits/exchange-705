@@ -4,9 +4,8 @@ import { useLocaleStore } from '@/store/locale'
 const props = defineProps<{ percent: number; disabled: boolean; buy: number | null; sell: number | null; precision?: number }>()
 const emit = defineEmits<{ change: [value: number] }>()
 const locale = useLocaleStore()
-const chinese = computed(() => locale.locale === 'zh-TW')
-const title = computed(() => chinese.value ? '倉位比例' : 'Position allocation')
-const format = (value: number | null) => value == null ? '—' : value.toLocaleString('en-US', { minimumFractionDigits: props.precision ?? 2, maximumFractionDigits: props.precision ?? 2 })
+const title = computed(() => locale.text('倉位比例', 'Position allocation'))
+const format = (value: number | null) => value == null ? '—' : value.toLocaleString(locale.locale, { minimumFractionDigits: props.precision ?? 2, maximumFractionDigits: props.precision ?? 2 })
 </script>
 
 <template>
@@ -14,13 +13,13 @@ const format = (value: number | null) => value == null ? '—' : value.toLocaleS
     <div class="allocation-label"><label for="position-allocation">{{ title }}</label><output for="position-allocation">{{ percent }}%</output></div>
     <input id="position-allocation" type="range" min="0" max="100" step="1" :value="percent" :disabled="disabled" :aria-label="title" :aria-valuetext="`${percent}%`" :style="{ '--allocation': `${percent}%` }" @input="emit('change', Number(($event.target as HTMLInputElement).value))" />
     <div class="allocation-presets"><button v-for="value in [0, 25, 50, 75, 100]" :key="value" type="button" :disabled="disabled" :aria-pressed="percent === value" @click="emit('change', value)">{{ value }}%</button></div>
-    <p class="sizing-hint">{{ chinese ? '按可用資金計算，含保證金及手續費' : 'Share of available funds, including margin and fees' }}</p>
+    <p class="sizing-hint">{{ locale.text('按可用資金計算，含保證金及手續費', 'Share of available funds, including margin and fees') }}</p>
     <slot />
     <div class="liquidation-estimates">
-      <div><span>{{ chinese ? '預計強平價（買入）' : 'Est. liquidation (Buy)' }}</span><strong data-testid="liquidation-buy">{{ format(buy) }}</strong></div>
-      <div><span>{{ chinese ? '預計強平價（賣出）' : 'Est. liquidation (Sell)' }}</span><strong data-testid="liquidation-sell">{{ format(sell) }}</strong></div>
+      <div><span>{{ locale.text('預計強平價（買入）', 'Est. liquidation (Buy)') }}</span><strong data-testid="liquidation-buy">{{ format(buy) }}</strong></div>
+      <div><span>{{ locale.text('預計強平價（賣出）', 'Est. liquidation (Sell)') }}</span><strong data-testid="liquidation-sell">{{ format(sell) }}</strong></div>
     </div>
-    <p class="sizing-hint">{{ chinese ? '按帳戶整體權益估算；假設其他品種價格及匯率不變。' : 'Account equity estimate; other markets and FX rates held constant.' }}<br v-if="buy == null || sell == null" /><span v-if="buy == null || sell == null">{{ chinese ? '—：資料不足、數量無效或無正值強平價。' : '—: missing data, invalid size or no positive liquidation price.' }}</span></p>
+    <p class="sizing-hint">{{ locale.text('按帳戶整體權益估算；假設其他品種價格及匯率不變。', 'Account equity estimate; other markets and FX rates held constant.') }}<br v-if="buy == null || sell == null" /><span v-if="buy == null || sell == null">{{ locale.text('—：資料不足、數量無效或無正值強平價。', '—: missing data, invalid size or no positive liquidation price.') }}</span></p>
   </section>
 </template>
 

@@ -1,5 +1,6 @@
 import axios from 'axios'
 import { useAuthStore } from '@/store/auth'
+import { useLocaleStore } from '@/store/locale'
 
 const instance = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
@@ -31,6 +32,7 @@ instance.interceptors.response.use(
   (res) => {
     const key = (res.config as any).transferRetryKey
     if (key) sessionStorage.removeItem(key)
+    if (typeof res.data?.message === 'string') res.data.message = useLocaleStore().backendMessage(res.data.message, res.data?.success === false)
     return res.data
   },
   (err) => {
@@ -53,15 +55,24 @@ instance.interceptors.response.use(
           window.location.replace(`${import.meta.env.BASE_URL}login`)
         }, 100)
       }
-      return Promise.reject(new Error(err?.response?.data?.message || '登录已失效，请重新登录'))
+      return Promise.reject(new Error(useLocaleStore().backendMessage(err?.response?.data?.message || '登录已失效，请重新登录')))
     }
     
+    // A missing write response does not prove that the operation failed.
+    if (!err.response) {
+      const readOnly = ['get', 'head', 'options'].includes(String(err.config?.method || 'get').toLowerCase()) || err.config?.url === '/withdraw/calculate'
+      return Promise.reject(new Error(readOnly ? 'A network error occurred. Please try again later.' : 'Unable to confirm the result. Check the relevant history or status before submitting again.'))
+    }
+    // Unknown transport/server responses use English in every frontend locale.
+    if (!err.response?.data?.message && !err.response?.data?.error && /^Request failed with status code [1-5]\d{2}$/.test(err.message || '')) {
+      return Promise.reject(new Error('Unable to confirm the result. Check the relevant history or status before submitting again.' + ' (HTTP ' + err.response.status + ')'))
+    }
     const msg =
       err?.response?.data?.message ||
       err?.response?.data?.error ||
       err?.message ||
       '请求失败'
-    return Promise.reject(new Error(msg))
+    return Promise.reject(new Error(useLocaleStore().backendMessage(msg, true)))
   }
 )
 

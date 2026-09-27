@@ -1,13 +1,16 @@
 <script setup lang="ts">
-import { currencyOptions } from '@/utils/fiatCurrency'
+import { computed } from 'vue'
+import AppSelect from '@/components/AppSelect.vue'
+import { useLocaleStore } from '@/store/locale'
+import { currencyOptions } from '@/utils/fiatCurrencyOptions'
 defineProps<{ modelValue: string }>()
-defineEmits<{ (event: 'update:modelValue', value: string): void }>()
+const emit = defineEmits<{ (event: 'update:modelValue', value: string): void }>()
+const locale = useLocaleStore()
+const options = computed(() => currencyOptions(locale.locale))
 </script>
 <template>
-  <select aria-label="币种" class="currency-picker" :value="modelValue" @change="$emit('update:modelValue', ($event.target as HTMLSelectElement).value)">
-    <option v-for="item in currencyOptions" :key="item.code" :value="item.code">{{ item.label }}</option>
-  </select>
+  <AppSelect class="currency-picker" :model-value="modelValue" :options="options" :label="locale.t('currency')" :min-menu-width="240" @update:model-value="emit('update:modelValue', String($event))" />
 </template>
 <style scoped>
-.currency-picker { padding: 8px 12px; margin: 8px 0; border: 1px solid #dcdfe6; border-radius: 6px; background: #fff; color: #303133; max-width: 100%; font-size: 14px; }
+.currency-picker { width: min(100%, 248px); margin: 8px 0; }
 </style>

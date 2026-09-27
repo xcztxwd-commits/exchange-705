@@ -5,7 +5,7 @@ import request from '@/utils/request'
 import { useLocaleStore } from '@/store/locale'
 import { formatDateTime, getSystemTimezone, systemTimezoneReady } from '@/utils/dateTime'
 import { displaySymbol } from '@/utils/displaySymbol'
-import { recentShareChart, drawSharePoster, settledShareOrder, shareCopy, shareReturn, shareTemplates, shareNeedsChart, shareBackgrounds,
+import { recentShareChart, drawSharePoster, settledShareOrder, shareCopy, shareLanguage, shareReturn, shareTemplates, shareNeedsChart, shareBackgrounds,
   type ShareChart, type ShareKind, type ShareOptions, type ShareOrder, type ShareTemplate } from '@/utils/orderShare'
 
 const props = defineProps<{ orderId: string | number; kind: ShareKind; brand: string; desktop?: boolean }>()
@@ -64,12 +64,14 @@ function closeOnBackdrop(event: MouseEvent) {
 }
 
 async function loadOrder() {
-  busy.value = true; error.value = ''; order.value = null; chart = undefined
+  busy.value = true; error.value = ''; order.value = null; chart = undefined; blob = null; canShare.value = false
+  if (preview.value) URL.revokeObjectURL(preview.value)
+  preview.value = ''; templates.value = []
   const run = ++generation
   try {
     const [result, , configured] = await Promise.all([
       request.get(`/trade/${props.kind}/orders`, { params: { status: 'CLOSED' } }), systemTimezoneReady,
-      request.get('/user/share-templates'),
+      request.get('/user/share-templates', { params: { locale: shareLanguage(locale.locale) } }),
     ])
     if (disposed || run !== generation) return
     const enabled = configured as unknown
@@ -78,11 +80,12 @@ async function loadOrder() {
     if (!templates.value.length) throw new Error('Templates unavailable')
     let selected = templates.value[0]!
     try {
-      const saved = localStorage.getItem('order-share-template') as ShareTemplate
+      const saved = localStorage.getItem(`order-share-template:${shareLanguage(locale.locale)}`) as ShareTemplate
       if (templates.value.includes(saved)) selected = saved
     } catch { /* Storage is optional. */ }
     options.template = selected
     await nextTick()
+    if (disposed || run !== generation) return
     const response = result as unknown as { list?: Record<string, unknown>[] }
     const rows = Array.isArray(result) ? result : response.list || []
     const raw = rows.find((item: Record<string, unknown>) => String(item.id) === String(props.orderId))
@@ -148,7 +151,7 @@ async function render() {
     if (disposed || run !== generation) return
     blob = result; previewRatio.value = `${canvas.width} / ${canvas.height}`; preview.value = URL.createObjectURL(result)
     canShare.value = !!navigator.canShare?.({ files: [new File([result], 'trade.png', { type: 'image/png' })] })
-    try { localStorage.setItem('order-share-template', settings.template) } catch { /* Storage is optional. */ }
+    try { localStorage.setItem(`order-share-template:${shareLanguage(locale.locale)}`, settings.template) } catch { /* Storage is optional. */ }
   } catch (failure) {
     if (!disposed && run === generation) error.value = failure instanceof Error ? failure.message : copy.value.error
   } finally {
@@ -178,7 +181,8 @@ async function systemShare() {
   }
 }
 function retry() { if (order.value) void render(); else void loadOrder() }
-watch([options, showQr, showAmount, showRate, () => locale.locale], () => { void render() }, { deep: true })
+watch(() => locale.locale, () => { void loadOrder() }, { flush: 'sync' })
+watch([options, showQr, showAmount, showRate], () => { void render() }, { deep: true })
 watch(() => options.template, async () => {
   await nextTick()
   const list = templateList.value, selected = list?.querySelector<HTMLElement>('[aria-pressed="true"]')
