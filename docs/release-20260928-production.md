@@ -25,8 +25,22 @@ Yahoo 部署工作树的改动均已包含；保留主工作区后续的 60 秒�
 目标为 trade.forex-exchange.cc / admin-panel.forex-exchange.cc 对应的现有 exchange-705 项目。
 先将生产一致性备份恢复到隔离 MySQL，重复演练充值及手动订单增量迁移并逐行核对资金字段。
 正式切换前停止后端写入、再次备份数据库和上传文件，仅更新应用镜像及必要代理配置，不重建数据库或 Redis。
-生产保持 `MANUAL_ORDERS_ENABLED=false`；资产历史读取/采集保持现状，新增可选历史缓存不默认启用。
+首次代码发布时保持 `MANUAL_ORDERS_ENABLED=false` 和缓存关闭；后续按本文件记录的明确运营授权启用生产模拟订单与资产历史缓存。资金入账仍受既有人工权限、审批与幂等保护，不因模拟订单开关自动开放。
 不得用旧数据库覆盖上线后产生的业务数据。回退应用时保留增量结构与全部入账凭据；发生资金兼容故障优先保持停写并修复，不恢复旧资金写路径。
 
 本机证据与回滚材料：`C:/workspace/fx/705/rollback/integrate-live-20260928/`。
-本文件记录发布范围和门禁，不代替实际部署成功记录；最终结果以该目录部署日志及线上 revision 校验为准。
+本文件记录发布范围及部署完成状态，线上程序 revision 和运行验证见发布材料。
+
+## 2026-09-28 生产功能启用
+
+用户明确要求开启生产模拟订单与历史缓存。执行前，本地重跑缓存全套隔离验收（14/14，包括 C01–C12、Spring/Redis wiring 和性能项）和手动订单回归（188 单测、MySQL 37 项、普通交易 MySQL 44 项、10 个前端断言、后台/PC/移动端构建均通过）。缓存 100k 行服务级基准保持结果相同；Redis 暂停时 100 次回源全部成功，p95 269.1 ms。此测试不写生产数据库。
+
+发布时停止后端写入，另备份生产 MySQL 与 uploads。数据库压缩备份的 SHA-256 及完整副本在服务器 `/opt/exchange-705-backups/enable-features-20260928/`。生产 MySQL 5.7 增加四个左前缀未覆盖的历史查询索引、版本表及九个事务触发器；设置 5 秒锁等待、`INPLACE/LOCK=NONE`。事务 canary 将修订号依次从 0 改为 1、2，随后回滚。充值金额/状态、余额、合约及资产历史计数迁移前后逐项一致；启用没有生成订单、入金或修改余额。
+
+已在 `/opt/exchange-705-current/compose.release.yaml` 持久启用：`MANUAL_ORDERS_ENABLED=true`、`ASSET_HISTORY_CACHE_ENABLED=true`、`ASSET_HISTORY_CACHE_NAMESPACE=705:production`、独立 Redis 命令超时 200 ms，小时/四小时/日 TTL 分别 7,200/28,800/172,800 秒。历史权益读取与采集保持 true。后端 healthy，Redis `PING` 为 `PONG`；新容器实际环境变量已核对。数据库与 uploads 备份仍保留在服务器备份目录。
+
+启用后 PC/手机/后台浏览器 smoke 通过，三端 revision 与本次程序代码 `e222b3cff5fb594b4bc62f1db0d4e17ba7eb5163` 一致、无页面异常或静态资源失败；WebSocket 收到 BTCUSDT price，币种接口 200，资产历史匿名请求 401。未调用生产模拟下单或给用户加资；模拟订单功能已对现有有权限管理员开放，财务影响由实际订单操作产生。
+
+缓存一致性、故障回源、Redis 恢复/重启、浏览器和 100k 行性能通过隔离 MySQL/Redis/Chromium 测试。生产已核实实际 schema、MySQL 触发器、业务不变量、Redis 连通、启动配置、健康检查与线上页面；未用用户账户调用生产历史曲线，因此不声称已观察到生产 cache hit。首次真实历史请求将按 `705:production` 前缀冷启动填充。
+
+启用日志与本机材料：`C:/workspace/fx/705/rollback/integrate-live-20260928/enable-features-deploy.log`、`post-feature-smoke-retry.log`、`enable-cache-tests.log`、`enable-orders-tests.log`。生产数据库相关证据保存在服务器，不提交 Git。
