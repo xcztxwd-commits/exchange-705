@@ -1,6 +1,9 @@
 # Use with: docker compose -f compose.yaml -f compose.production.yaml up -d --build
 # Only the edge publishes web ports. Application, database and Redis stay internal.
 services:
+  backend:
+    environment:
+      MANUAL_ORDERS_ENABLED: "false"
   admin:
     ports: !reset []
   mobile:
