@@ -23,6 +23,9 @@ export function assetHistoryPoints(data: AssetHistory): AssetPoint[] {
     const time = Number(data.carryIn.time), value = data.carryIn.value == null ? NaN : Number(data.carryIn.value)
     if (!Number.isFinite(time) || time >= data.from || !Number.isFinite(value)) throw new Error('Invalid carry-in')
     points.unshift({ time, value, closeAt: time, quality: 'CARRY_FORWARD', filled: true })
+  } else if (data.schemaVersion === 2 && (points.find(p => p.value !== null)?.time ?? data.from) > data.from) {
+    // No earlier observation exists; show a zero opening without altering API history.
+    points.unshift({ time: data.from, value: 0, quality: 'INFERRED_ZERO', filled: true })
   }
   return points
 }

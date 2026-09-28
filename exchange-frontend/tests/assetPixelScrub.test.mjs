@@ -22,7 +22,7 @@ globalThis.fixture={startPointer,movePointer,endPointer,stopPointer,resetSelecti
   color(range,opening,current){period.value=range;from.value=1000;asOf.value=25000;points.value=[{time:1000,value:opening},{time:25000,value:current}];selected.value=-1;selectedTime.value=null;draw(1);return chartRgb.value},
   tooltip(range,point,zone='UTC'){period.value=range;timezone.value=zone;points.value=point?[point]:[];selected.value=point?0:-1;selectedTime.value=point?.time??asOf.value;return [selectedDate.value,selectedAmount.value]},
   get points(){return points.value},get failed(){return failed.value},get high(){return extrema.value?.high.value},
-  get time(){return selectedTime.value}, get dragging(){return scrubbing},
+  get time(){return selectedTime.value}, get dragging(){return scrubbing}, get inferredZero(){return selectedInferredZero.value},
   initialize(surface){canvas.value=surface;width=360;from.value=1000;asOf.value=25000;points.value=[{time:1000,value:0},{time:13000,value:100},{time:25000,value:200}]}}
 `,{compilerOptions:{target:ts.ScriptTarget.ES2020,module:ts.ModuleKind.None}}).outputText,context)
 const f=context.fixture;f.initialize(surface)
@@ -45,7 +45,8 @@ console.log('PASS: actual component long-press, drag, edge clamping, dimming, sc
 
 const response=(value)=>({schemaVersion:2,basisVersion:'net_equity_v1',points:[{time:13000,value,closeAt:13000}],live:{time:25000,value},total:value,from:1000,asOf:25000,intervalMs:60000,income:'0',incomePercent:null,timezone:'UTC',extrema:{high:{time:12000,value:'400'},low:{time:11000,value:'-500'}}})
 context.request.get=async()=>response('-10')
-await f.load();assert.equal(totals.at(-1),-10);assert.equal(f.high,-10,'extrema must use plotted final values, not server OHLC extrema')
+await f.load();assert.equal(totals.at(-1),-10);assert.equal(f.high,0,'no earlier observation starts the displayed range at zero')
+f.scrubKey({key:'Home',preventDefault(){}});assert.equal(f.inferredZero,true);f.scrubKey({key:'Escape'})
 context.request.get=async()=>response(null)
 await f.load();assert.equal(totals.at(-1),null);assert.equal(f.points[0].value,null);assert.equal(f.failed,false)
 const before=texts.length;props.visible=false;f.draw(1);assert.equal(texts.length,before,'hidden chart must not paint money')
@@ -156,7 +157,7 @@ console.log('PASS: vertical particles cover off-grid spikes, drops and live jump
 
 for (const range of ['1D','1W','1M','1Y']) {
   f.color(range,100,900)
-  context.request.get=async()=>({...response('900'),points:[{time:7000,value:'1000'},{time:19000,value:'100'}],extrema:{high:{time:6000,value:'1100'},low:{time:18000,value:'50'}}})
+  context.request.get=async()=>({...response('900'),carryIn:{time:500,value:'900'},points:[{time:7000,value:'1000'},{time:19000,value:'100'}],extrema:{high:{time:6000,value:'1100'},low:{time:18000,value:'50'}}})
   await f.load();labels.length=0;f.draw(1)
   const high=labels.find(p=>p.text==='最高 $1,000.00'),low=labels.find(p=>p.text==='最低 $100.00')
   assert.ok(high&&low,'labels use period final values instead of intraperiod extremes')
@@ -177,6 +178,10 @@ f.color('1M',100,100);labels.length=0;f.draw(1)
 assert.equal(labels.length,2);assert.ok(labels[0].y<labels[1].y,'flat curve has high above and low below')
 f.color('1M',null,null);labels.length=0;f.draw(1)
 assert.equal(labels.length,0,'unavailable history has no fabricated extrema')
+context.request.get=async()=>({...response('100'),points:[{time:13000,value:'100'}]})
+await f.load();labels.length=0;f.draw(1)
+assert.ok(labels.some(p=>p.text==='最低 $0.00'),'no predecessor shows a zero opening in the plotted range')
+assert.match(source,/<span v-if="selectedInferredZero">.*無更早記錄，按 \$0 顯示/s)
 const annotation=source.slice(source.indexOf('const annotate ='),source.indexOf('if (extrema.value)'))
 assert.doesNotMatch(annotation,/\.(?:moveTo|lineTo|stroke)\(/,'annotations must not draw connector lines')
 console.log('PASS: period-final extrema, label positions, no connector lines, carried opening, flat and missing history')

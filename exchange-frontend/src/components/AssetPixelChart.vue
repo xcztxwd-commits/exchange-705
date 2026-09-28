@@ -31,7 +31,8 @@ const timezone = ref('UTC')
 const incomeLabel = computed(() => [['今日收益', 'Today’s income'], ['本週收益', 'This week’s income'], ['本月收益', 'This month’s income'], ['本年收益', 'This year’s income']].map(([zh, en]) => locale.text(zh!, en!))[periods.indexOf(period.value)])
 const money = (n: number) => n.toLocaleString(locale.locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const selectedPoint = computed(() => points.value[selected.value])
-const selectedCarried = computed(() => !!selectedPoint.value && (selectedPoint.value.filled || (selectedTime.value ?? asOf.value) > selectedPoint.value.time))
+const selectedInferredZero = computed(() => selectedPoint.value?.quality === 'INFERRED_ZERO')
+const selectedCarried = computed(() => !!selectedPoint.value && !selectedInferredZero.value && (selectedPoint.value.filled || (selectedTime.value ?? asOf.value) > selectedPoint.value.time))
 const selectedSourceTime = computed(() => selectedPoint.value ? new Intl.DateTimeFormat(locale.locale, { timeZone: timezone.value, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' }).format(selectedPoint.value.closeAt ?? selectedPoint.value.time) : '')
 const selectedDate = computed(() => {
   const point = selectedPoint.value
@@ -155,7 +156,7 @@ function draw(progress: number, origin = -1) {
   }
   context.globalAlpha = 1
   if (progress < 1) return
-  // No artificial zero drops or backward extension before the first observation.
+  // The only inferred opening is added when no earlier observation exists.
   context.strokeStyle = tint(1); context.lineWidth = 1.1
   const line = new Path2D()
   vertices.forEach((point, index) => {
@@ -279,7 +280,7 @@ onBeforeUnmount(() => { disposed = true; generation++; stopPointer(); canvas.val
     <div class="chart-wrap" :style="{ '--chart-rgb': chartRgb }">
       <canvas ref="canvas" role="img" tabindex="0" :aria-label="locale.text('長按拖動查看金額；方向鍵選擇時間，Esc恢復。', 'Hold and drag to inspect. Arrow keys select time; Escape resets.')" @pointerdown="startPointer" @pointermove="movePointer" @pointercancel="resetSelection" @lostpointercapture="resetSelection" @pointerup="endPointer" @contextmenu.prevent @keydown="scrubKey" @keydown.enter="refreshChart" />
       <div v-if="!visible || !points.length" class="empty">{{ !visible ? (locale.text('資產已隱藏', 'Assets hidden')) : loading ? (locale.text('載入中…', 'Loading…')) : failed ? (locale.text('載入失敗，請點刷新', 'Unable to load. Tap refresh.')) : (locale.text('正在累積真實資產記錄…', 'Recording real history…')) }}</div>
-      <div v-if="visible && selectedTime !== null" class="point-detail" role="status">{{ selectedDate }} · {{ selectedAmount }}<span v-if="selectedCarried"> · {{ locale.text('沿用歷史值，來源：', 'Carried forward, observed: ') }}{{ selectedSourceTime }}</span></div>
+      <div v-if="visible && selectedTime !== null" class="point-detail" role="status">{{ selectedDate }} · {{ selectedAmount }}<span v-if="selectedCarried"> · {{ locale.text('沿用歷史值，來源：', 'Carried forward, observed: ') }}{{ selectedSourceTime }}</span><span v-if="selectedInferredZero"> · {{ locale.text('無更早記錄，按 $0 顯示', 'No earlier record; shown as $0') }}</span></div>
     </div>
     <div class="periods"><button v-for="(item, i) in periods" :key="item" type="button" :aria-pressed="period === item" @click="choose(item)">{{ labels[i] }}</button></div>
     <div v-if="visible && valuationStale" class="status" role="status">{{ locale.text('估值不可用', 'Valuation unavailable') }}</div>
