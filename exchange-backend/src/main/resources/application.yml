@@ -38,6 +38,7 @@ spring:
     password: 
     database: 0
     timeout: 3000
+    connect-timeout: 3000
     lettuce:
       pool:
         max-active: 8

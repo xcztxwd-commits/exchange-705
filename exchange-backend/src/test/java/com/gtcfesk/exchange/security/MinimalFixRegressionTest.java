@@ -51,6 +51,8 @@ class MinimalFixRegressionTest {
     @MockBean MarketOrderProcessor processor;
     @MockBean RedisMarketService redis;
     @MockBean EmailService email;
+    // Business-rule fixture only; real Redis/filter coverage lives in RealRegistrationFlowTest.
+    @MockBean RegistrationSecurity registrationSecurity;
     @MockBean AdminDataInitializer initializer;
     @Autowired MockMvc mvc;
     @Autowired ObjectMapper json;
@@ -123,6 +125,24 @@ class MinimalFixRegressionTest {
     void same(BigDecimal expected,BigDecimal actual){assertEquals(0,expected.compareTo(actual));}
     AdminMenu menu(String code) {return menus.findByMenuCode(code).orElseGet(()->{AdminMenu m=new AdminMenu();m.setMenuCode(code);m.setMenuName(code);m.setMenuType("menu");return menus.saveAndFlush(m);});}
     void grant(UserAccount agent,String code,String... operations){AdminMenu m=menu(code);UserMenu um=new UserMenu();um.setUserId(agent.getId());um.setMenuId(m.getId());userMenus.saveAndFlush(um);for(String operation:operations){UserAction action=new UserAction();action.setUserId(agent.getId());action.setMenuId(m.getId());action.setActionCode(operation);actions.saveAndFlush(action);}}
+    @Test void websiteSecurityIsSuperAdminOnlyAndPersistsValidatedPolicy() throws Exception {
+        String url = "/api/admin/website-security";
+        assertEquals(401, status(request("GET",url,null,null)));
+        assertEquals(403, status(request("GET",url,ta,null)));
+        String ordinary = admin("admin");
+        assertEquals(403, status(request("GET",url,ordinary,null)));
+        assertEquals(403, status(request("PUT",url,ordinary,map("registerIpPerMinute",2))));
+        UserAccount agent = user("securityagent", "agent", null);
+        assertEquals(403, status(request("GET",url,agentLogin(agent),null)));
+        assertEquals(200, status(request("GET",url,superToken,null)));
+        assertEquals(200, status(request("PUT",url,superToken,map("captchaIpPerMinute",41))));
+        assertEquals(41, body(request("GET",url,superToken,null)).path("captchaIpPerMinute").asInt());
+        assertEquals(400, status(request("PUT",url,superToken,map("captchaIpPerMinute",0))));
+        assertEquals(400, status(request("PUT",url,superToken,map("captchaIpPerMinute",1.5))));
+        assertEquals(400, status(request("PUT",url,superToken,map("unexpected",3))));
+        assertEquals(41, body(request("GET",url,superToken,null)).path("captchaIpPerMinute").asInt());
+        assertEquals(200, status(request("PUT",url,superToken,map("captchaIpPerMinute",30))));
+    }
     @Test void anonymousAndUserCannotUseAdminOrCollideWithAdminIdentity() throws Exception {
         BigDecimal before=balance(a,"FUND");
         assertEquals(401,status(request("GET","/api/admin/users",null,null)));
@@ -193,9 +213,11 @@ class MinimalFixRegressionTest {
         assertFalse(users.existsByEmail(address));
     }
 
-    @Test void registrationWithoutInvitationOrCodeCreatesUsableAccount() throws Exception {
+    @Test void registrationWithoutInvitationOrEmailCodeCreatesUsableAccount() throws Exception {
         String address = prefix + "nocode@example.invalid";
         Map<String,Object> req = map("email", address, "password", PASSWORD, "confirmPassword", PASSWORD);
+        req.put("captchaSession", "0123456789abcdef0123456789abcdef");
+        req.put("captchaId", "0123456789abcdef0123456789abcdef"); req.put("captchaCode", "A2B3");
         assertFalse(codes.findAll().stream().anyMatch(code -> address.equals(code.getEmail())));
         MvcResult result = request("POST", "/api/auth/register", null, req);
         assertEquals(200, status(result));
@@ -221,6 +243,8 @@ class MinimalFixRegressionTest {
     @Test void registerRejectsMismatchedConfirmationWithoutCreatingUser()throws Exception{
         UserAccount candidate=new UserAccount();candidate.setEmail(prefix+"new@example.invalid");VerifyCode code=code(candidate,"register");
         Map<String,Object> req=map("email",candidate.getEmail(),"password",PASSWORD,"confirmPassword",PASSWORD+"x","verifyCode",code.getCode());
+        req.put("captchaSession", "0123456789abcdef0123456789abcdef");
+        req.put("captchaId", "0123456789abcdef0123456789abcdef"); req.put("captchaCode", "A2B3");
         assertEquals(400,status(request("POST","/api/auth/register",null,req)));assertFalse(users.existsByEmail(candidate.getEmail()));
         req.put("confirmPassword",PASSWORD);assertEquals(200,status(request("POST","/api/auth/register",null,req)));assertTrue(users.existsByEmail(candidate.getEmail()));
     }

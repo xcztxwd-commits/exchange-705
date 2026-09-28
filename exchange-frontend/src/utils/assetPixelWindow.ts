@@ -4,7 +4,7 @@ export type AssetHistory = {
   schemaVersion?: number; basisVersion?: string; points: Record<string, unknown>[];
   total: string | null; from: number; asOf: number; intervalMs: number;
   income: string; incomePercent?: string | null; timezone: string;
-  live?: Record<string, unknown>; valuationStatus?: string;
+  carryIn?: Record<string, unknown> | null; live?: Record<string, unknown>; valuationStatus?: string;
   extrema?: { high: { time: number; value: string } | null; low: { time: number; value: string } | null };
 }
 
@@ -14,11 +14,17 @@ export function assetHistoryPoints(data: AssetHistory): AssetPoint[] {
       || data.income == null || !Number.isFinite(Number(data.income)) || data.total !== null && !Number.isFinite(Number(data.total))) throw new Error('Invalid history')
   if (data.schemaVersion === 2 && data.basisVersion !== 'net_equity_v1') throw new Error('Unsupported equity basis')
   const raw = [...data.points, ...(data.schemaVersion === 2 && data.live ? [data.live] : [])]
-  return raw.map((p, i) => {
+  const points: AssetPoint[] = raw.map((p, i) => {
     const time = Number(p.time), value = p.value == null ? null : Number(p.value)
     if (!Number.isFinite(time) || value !== null && !Number.isFinite(value) || time < data.from || time > data.asOf || i > 0 && time < Number(raw[i - 1]!.time)) throw new Error('Invalid history point')
     return { time, value, quality: String(p.quality || p.valuationStatus || 'COMPLETE'), closeAt: p.closeAt == null ? null : Number(p.closeAt), bucketStart: p.bucketStart == null ? undefined : Number(p.bucketStart), bucketEnd: p.bucketEnd == null ? undefined : Number(p.bucketEnd) }
   })
+  if (data.schemaVersion === 2 && data.carryIn) {
+    const time = Number(data.carryIn.time), value = data.carryIn.value == null ? NaN : Number(data.carryIn.value)
+    if (!Number.isFinite(time) || time >= data.from || !Number.isFinite(value)) throw new Error('Invalid carry-in')
+    points.unshift({ time, value, closeAt: time, quality: 'CARRY_FORWARD', filled: true })
+  }
+  return points
 }
 
 export function assetScrubTime(clientX: number, left: number, width: number, from: number, to: number): number {
@@ -47,12 +53,32 @@ export function assetColumnTime(from: number, to: number, column: number, count 
   return from + (to - from) * column / (count - 1)
 }
 
-/** Presentation-only zero fill; keep the observation list unchanged. */
-export function assetDisplayValue(points: AssetPoint[], time: number, maxGap: number): number | null {
-  const last = assetPointIndex(points, time, Infinity)
-  if (last >= 0 && points[last]!.value === null) return null
-  const index = assetPointIndex(points, time, maxGap)
-  return index < 0 ? 0 : points[index]!.value
+/** Nearest earlier usable observation, with no age limit; NULL is never a real zero. */
+export function assetDisplayIndex(points: AssetPoint[], time: number): number {
+  let index = assetPointIndex(points, time, Infinity)
+  while (index >= 0 && points[index]!.value === null) index--
+  return index
+}
+
+/** Display-only carry forward. No predecessor means no history, never use a future value. */
+export function assetDisplayValue(points: AssetPoint[], time: number, _maxGap?: number): number | null {
+  const index = assetDisplayIndex(points, time)
+  return index < 0 ? null : points[index]!.value
+}
+
+/** Step vertices share the same carry-forward rule as pixels and tooltips. */
+export function assetDisplayLine(points: AssetPoint[], from: number, to: number): AssetPoint[] {
+  const line: AssetPoint[] = []
+  let value = assetDisplayValue(points, from)
+  if (value !== null) line.push({ time: from, value })
+  for (const point of points) {
+    if (point.time <= from || point.time > to || point.value === null) continue
+    if (value !== null) line.push({ time: point.time, value })
+    line.push({ time: point.time, value: point.value })
+    value = point.value
+  }
+  if (value !== null) line.push({ time: to, value })
+  return line
 }
 
 /** Four evenly spaced money ticks. Positive balances always retain the zero origin. */

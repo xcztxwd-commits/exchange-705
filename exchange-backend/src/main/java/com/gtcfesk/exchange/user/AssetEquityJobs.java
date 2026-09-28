@@ -20,12 +20,14 @@ public class AssetEquityJobs {
     private final ExecutorService collector=Executors.newSingleThreadExecutor(), rollup=Executors.newSingleThreadExecutor();
     private final AtomicBoolean collecting=new AtomicBoolean(),rolling=new AtomicBoolean();
     private static final String BASIS=EquityValuationService.BASIS;
-    @Scheduled(cron="5 * * * * *",zone="UTC") public void minuteTick(){submit(collector,collecting,()->{capture();requestRollup();});}
-    @Scheduled(cron="15 2 * * * *",zone="UTC") public void hourTick(){requestRollup();}
-    @Scheduled(cron="30 4 0/4 * * *",zone="UTC") public void fourHourTick(){requestRollup();}
-    @Scheduled(cron="45 8 0 * * *",zone="UTC") public void dayTick(){requestRollup();}
+    @Scheduled(cron="0 * * * * *",zone="UTC") public void minuteTick(){long boundary=AssetHistoryBucket.floor(System.currentTimeMillis(),60000);submit(collector,collecting,()->captureBoundary(boundary));}
+    @Scheduled(cron="20 1 * * * *",zone="UTC") public void hourTick(){requestRollup(1);}
+    @Scheduled(cron="20 2 0/4 * * *",zone="UTC") public void fourHourTick(){requestRollup(2);}
+    @Scheduled(cron="20 3 0 * * *",zone="UTC") public void dayTick(){requestRollup(3);}
     @Scheduled(cron="0 */5 * * * *",zone="UTC") public void recoveryTick(){requestRollup();}
     void requestRollup(){submit(rollup,rolling,this::aggregate);}
+    void requestRollup(int level){submit(rollup,rolling,()->aggregate(level));}
+    static boolean withinCaptureMinute(long boundary,long observed){return observed>=boundary && observed<boundary+60000;}
     private void submit(ExecutorService executor,AtomicBoolean busy,Runnable work){
         if(!enabled || !busy.compareAndSet(false,true))return;
         executor.submit(()->{try{work.run();}catch(Exception e){
@@ -35,35 +37,44 @@ public class AssetEquityJobs {
     }
     @PreDestroy public void stop(){collector.shutdown();rollup.shutdown();}
 
-    public void capture(){
+    public void capture(){captureBoundary(AssetHistoryBucket.floor(System.currentTimeMillis(),60000));}
+    void captureBoundary(long boundary){
         store.locked("capture",s->{
-            long tick=AssetHistoryBucket.floor(System.currentTimeMillis(),60000);
+            long tick=boundary;
+            if(!withinCaptureMinute(boundary,System.currentTimeMillis()))return;
             long[] progress=store.state(s.db,"capture",tick); long cursor=progress[0]==tick?progress[1]:0;
             s.commit();
             for(int batch=0;batch<1000;batch++) {
+                if(!withinCaptureMinute(boundary,System.currentTimeMillis()))break;
                 List<Long> ids=s.db.query("select id from user_account where id>? order by id limit 100",(rs,n)->rs.getLong(1),cursor);
                 s.commit();if(ids.isEmpty())break;
                 EquityValuationService.Batch quotes=valuation.prepare(ids);
                 long observed=System.currentTimeMillis();
-                // Crossing a minute is a new observation, never a late backfill into the original minute.
+                // Closing snapshot belongs to the previous bucket; actual observation time is never shifted.
+                if(!withinCaptureMinute(boundary,observed))break;
                 Map<Long,EquityValuationService.Value> values=valuation.read(s.db,ids,quotes,observed);
-                store.saveMinutes(s.db,quotes,values.values()); cursor=ids.get(ids.size()-1);
+                if(!withinCaptureMinute(boundary,System.currentTimeMillis()))break;
+                store.saveMinutes(s.db,quotes,values.values(),boundary); cursor=ids.get(ids.size()-1);
                 store.progress(s.db,"capture",tick,cursor,observed);s.commit();
                 if(ids.size()<100 || System.currentTimeMillis()-observed>45000)break;
             }
         });
     }
-    public void aggregate(){
+    public void aggregate(){aggregate(0);}
+    void aggregate(int onlyLevel){
         store.locked("rollup",s->{
+            // Do not seal while a collector may still be committing closing snapshots.
+            if(!Integer.valueOf(1).equals(s.db.queryForObject("select is_free_lock('equity_v1_capture')",Integer.class)))return;
             Long first=s.db.queryForObject("select min(bucket_start) from asset_history_1m where basis_version=?",Long.class,BASIS);
             s.commit();if(first==null)return;
             long now=System.currentTimeMillis();
-            for(int level=1;level<=3;level++)finalizeLevel(s,level,first,now);
-            for(int level=1;level<=3;level++)draftLevel(s,level,now);
+            for(int level=1;level<=3;level++)if(onlyLevel==0 || onlyLevel==level)finalizeLevel(s,level,first,now);
         });
     }
     void finalizeLevel(AssetEquityStore.Session s,int level,long first,long now){
-        long size=AssetEquityStore.INTERVALS[level],limit=AssetHistoryBucket.floor(now,size);
+        // Recovery obeys the same post-boundary delay as the dedicated schedule.
+        long delay=new long[]{0,80000,140000,200000}[level];
+        long size=AssetEquityStore.INTERVALS[level],limit=AssetHistoryBucket.floor(now-delay,size);
         if(level>1)limit=Math.min(limit,store.state(s.db,"rollup_"+(level-1),AssetHistoryBucket.floor(first,AssetEquityStore.INTERVALS[level-1]))[0]);
         long[] state=store.state(s.db,"rollup_"+level,AssetHistoryBucket.floor(first,size));s.commit();
         long start=state[0],cursor=state[1];
@@ -73,14 +84,6 @@ public class AssetEquityJobs {
             if(!ids.isEmpty())reduce(s.db,level,ids,start,start+size,now,true);
             if(ids.size()<100){start+=size;cursor=0;}else cursor=ids.get(ids.size()-1);
             store.progress(s.db,"rollup_"+level,start,cursor,now);s.commit();
-        }
-    }
-    void draftLevel(AssetEquityStore.Session s,int level,long now){
-        long size=AssetEquityStore.INTERVALS[level],start=AssetHistoryBucket.floor(now,size),cursor=0;
-        for(int batches=0;batches<1000;batches++){
-            List<Long> ids=users(s.db,level-1,start,start+size,cursor);if(ids.isEmpty()){s.commit();break;}
-            reduce(s.db,level,ids,start,start+size,now,false);s.commit();
-            if(ids.size()<100)break;cursor=ids.get(ids.size()-1);
         }
     }
     List<Long> users(JdbcTemplate db,int level,long start,long end,long cursor){

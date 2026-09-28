@@ -160,7 +160,11 @@ public class OperationLogInterceptor implements HandlerInterceptor {
         }
 
         // 根据路径判断操作类型
-        if (requestURI.contains("/users")) {
+        if (requestURI.contains("/website-security")) {
+            operationType = "网站安全";
+            operationAction = "更新限流配置";
+            targetType = "注册安全策略";
+        } else if (requestURI.contains("/users")) {
             operationType = "用户管理";
             targetType = "用户";
             if (requestURI.contains("/resetPassword")) {

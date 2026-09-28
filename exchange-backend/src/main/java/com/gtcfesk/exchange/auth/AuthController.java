@@ -20,6 +20,20 @@ import java.util.Map;
 public class AuthController {
 
     private final AuthService authService;
+    private final com.gtcfesk.exchange.security.RegistrationSecurity registrationSecurity;
+
+    @lombok.Data
+    public static class CaptchaRequest {
+        @javax.validation.constraints.NotBlank
+        @javax.validation.constraints.Pattern(regexp = "[a-f0-9]{32}")
+        private String captchaSession;
+    }
+    @PostMapping("/captcha")
+    public ResponseEntity<Map<String, Object>> captcha(@Validated @RequestBody CaptchaRequest req) {
+        return ResponseEntity.ok().header("Cache-Control", "no-store")
+            .body(registrationSecurity.create(req.getCaptchaSession()));
+    }
+
 
     @PostMapping("/login")
     public ResponseEntity<AuthResponse> login(@Validated @RequestBody LoginRequest req) {

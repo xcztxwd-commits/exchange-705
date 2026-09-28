@@ -27,13 +27,26 @@ __pycache__/
 *.pyc
 *.pem
 *.key
+*.bak
+
+# Local CAPTCHA design prototypes and generated previews; production code lives in exchange-backend.
+design/CaptchaPreview.java
+design/CombinedCaptchaPreview.java
+design/check-captcha-preview.cjs
+design/captcha-*-samples.json
+design/captcha-combined-sheet.png
+design/register-hutool-preview.html
+docs/manual-history-order-new-session.txt
 
 # Reviewed manual migration; never run automatically.
 !exchange-backend/src/main/resources/db/manual/705-minimal-fix.sql
 !exchange-backend/src/main/resources/db/manual/705-limit-matching.sql
 !exchange-backend/src/main/resources/db/manual/705-user-leverage.sql
 !exchange-backend/src/main/resources/db/manual/705-price-control.sql
+!exchange-backend/src/main/resources/db/manual/705-manual-history-order.sql
 !exchange-backend/src/main/resources/db/migration/create_control_history.sql
 
 # Reviewed additive net-equity migration.
 !exchange-backend/src/main/resources/db/asset-equity/V001__net_equity_history.sql
+
+!exchange-backend/src/test/resources/manual-order-schema.sql

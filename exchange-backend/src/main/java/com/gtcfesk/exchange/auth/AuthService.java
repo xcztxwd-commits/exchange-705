@@ -31,6 +31,9 @@ public class AuthService {
     @org.springframework.beans.factory.annotation.Autowired
     private com.gtcfesk.exchange.common.JwtUtil jwtUtil;
 
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.gtcfesk.exchange.security.RegistrationSecurity registrationSecurity;
+
     private final VerifyCodeRepository verifyCodeRepository;
     private final EmailService emailService;
     private final UserAccountRepository userAccountRepository;
@@ -113,6 +116,7 @@ public class AuthService {
 
     @org.springframework.transaction.annotation.Transactional(noRollbackFor = BusinessException.class)
     public AuthResponse register(RegisterRequest req) {
+        registrationSecurity.verifyAndConsume(req.getCaptchaSession(), req.getCaptchaId(), req.getCaptchaCode());
         if (!java.util.Objects.equals(req.getPassword(), req.getConfirmPassword())) {
             throw new BusinessException("两次密码不一致");
         }

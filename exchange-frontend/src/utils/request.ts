@@ -36,6 +36,13 @@ instance.interceptors.response.use(
     return res.data
   },
   (err) => {
+    if (['/auth/captcha', '/auth/register'].includes(err.config?.url || '')) {
+      const failure = new Error(useLocaleStore().backendMessage(err.response?.data?.message || 'Unable to confirm the result. Please check before trying again.', true)) as Error & { status?: number; code?: string; retryAfter?: number }
+      failure.status = err.response?.status
+      failure.code = err.response?.data?.code
+      failure.retryAfter = Number(err.response?.headers?.['retry-after'] || err.response?.data?.retryAfter || 0)
+      return Promise.reject(failure)
+    }
     const key = err.config?.transferRetryKey
     if (key && err.response?.status >= 400 && err.response?.status < 500) sessionStorage.removeItem(key)
     // 检测token失效（单设备登录：其他设备登录导致当前设备token失效）

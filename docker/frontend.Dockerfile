@@ -6,6 +6,9 @@ RUN --mount=type=cache,target=/root/.npm \
     sed -i 's|https://registry.npmmirror.com/|https://registry.npmjs.org/|g' package-lock.json \
     && npm ci --no-audit --no-fund
 COPY ${APP}/ ./
+# The PC client reuses mobile chart sources through sibling-relative imports.
+COPY exchange-frontend/src /exchange-frontend/src
+RUN ln -s /app/node_modules /exchange-frontend/node_modules
 COPY docker/device-layout.js /tmp/device-layout.js
 ENV VITE_API_BASE_URL=/api
 ENV VITE_IMAGE_API_BASE_URL=/api

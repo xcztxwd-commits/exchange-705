@@ -24,6 +24,7 @@ public class AssetEquityHistoryService {
             result.put("userId",user);
             result.put("schemaVersion",2);result.put("basisVersion",EquityValuationService.BASIS);result.put("basis","net_equity_option_cost");
             result.put("optionValuationMethod","PRINCIPAL_COST_NOT_FAIR_VALUE");result.put("sourceTable",AssetEquityStore.TABLES[level]);
+            result.put("carryIn",carryIn(db,user,from));
             result.put("points",buckets.stream().map(AssetHistoryBucket::api).collect(Collectors.toList()));
             Map<String,Object> livePoint=live.api();livePoint.put("time",asOf);livePoint.put("value",AssetHistoryBucket.decimal(live.amounts.get("net_equity")));
             result.put("live",livePoint);result.put("components",live.api());result.put("total",livePoint.get("value"));
@@ -50,8 +51,14 @@ public class AssetEquityHistoryService {
             return result;
         });
     }
+    /** Display seed only. Never merge this into OHLC, sample counts, income or missing metadata. */
+    Map<String,Object> carryIn(JdbcTemplate db,long user,long from){
+        List<Map<String,Object>> rows=db.query("select coalesce(effective_at,observed_at),net_equity from asset_history_1m where user_id=? and basis_version=? and bucket_start<=? and coalesce(effective_at,observed_at)<? and net_equity is not null order by bucket_start desc limit 1",
+                (rs,n)->extreme(rs.getLong(1),rs.getBigDecimal(2)),user,EquityValuationService.BASIS,AssetHistoryBucket.floor(from,60000),from);
+        return rows.isEmpty()?null:rows.get(0);
+    }
     Map<String,Object> opening(JdbcTemplate db,long user,long start,long now){
-        List<Map<String,Object>> found=db.query("select net_equity,observed_at from asset_history_1m where user_id=? and basis_version=? and bucket_start>=? and bucket_start<=? and observed_at<=? order by bucket_start desc limit 1",
+        List<Map<String,Object>> found=db.query("select net_equity,coalesce(effective_at,observed_at) from asset_history_1m where user_id=? and basis_version=? and bucket_start>=? and bucket_start<=? and coalesce(effective_at,observed_at)<=? order by bucket_start desc limit 1",
                 (rs,n)->extreme(rs.getLong(2),rs.getBigDecimal(1)),user,EquityValuationService.BASIS,AssetHistoryBucket.floor(start-120000,60000),AssetHistoryBucket.floor(start,60000),Math.min(start,now));
         if(!found.isEmpty() && found.get(0)!=null && new BigDecimal(found.get(0).get("value").toString()).signum()>0){found.get(0).put("source","PERIOD_OPENING");return found.get(0);}
         found=db.query("select first_positive,first_positive_at from asset_history_baseline where user_id=? and basis_version=? and first_positive>0 and first_positive_at<=?",

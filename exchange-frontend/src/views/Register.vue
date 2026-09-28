@@ -3,12 +3,16 @@ import { ref, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useLocaleStore } from '@/store/locale'
 import request from '@/utils/request'
+import RegistrationCaptcha from '@/components/RegistrationCaptcha.vue'
+import { captchaText } from '@/utils/captchaText'
 
 const router = useRouter()
 const route = useRoute()
 const localeStore = useLocaleStore()
 localeStore.loadLocale()
 
+const captcha = ref<InstanceType<typeof RegistrationCaptcha> | null>(null)
+const captchaReady = ref(false)
 const email = ref('')
 const password = ref('')
 const confirmPassword = ref('')
@@ -100,9 +104,12 @@ const onSubmit = async () => {
     showToastMessage(localeStore.t('passwordTooShort'), 'error')
     return
   }
+  const challenge = captcha.value?.submission()
+  if (!challenge) return
   loading.value = true
   try {
     await request.post('/auth/register', {
+      ...challenge,
       email: email.value,
       password: password.value,
       confirmPassword: confirmPassword.value,
@@ -113,6 +120,7 @@ const onSubmit = async () => {
       router.replace('/login')
     }, 500)
   } catch (e: any) {
+    await captcha.value?.registrationFailed(e)
     showToastMessage(e?.message || localeStore.t('registerFail'), 'error')
   } finally {
     loading.value = false
@@ -211,8 +219,10 @@ const onSubmit = async () => {
         </div>
       </div>
 
+      <RegistrationCaptcha ref="captcha" :disabled="loading" @ready="captchaReady = $event" />
+
       <div class="form-group">
-      <div class="form-label">{{ localeStore.t('inviteCode') }}</div>
+      <div class="form-label">{{ localeStore.t('inviteCode') }}（{{ captchaText(localeStore.locale, 'optional') }}）</div>
       <input
         v-model="inviteCode"
         class="input-box"
@@ -221,7 +231,7 @@ const onSubmit = async () => {
       />
       </div>
 
-      <button class="primary-btn" :disabled="loading" @click="onSubmit">
+      <button class="primary-btn" :disabled="loading || !captchaReady" @click="onSubmit">
         {{ loading ? localeStore.t('submitting') : localeStore.t('register') }}
       </button>
 

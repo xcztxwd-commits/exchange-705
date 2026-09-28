@@ -121,7 +121,7 @@ public class BackendAccess extends RequestBodyAdviceAdapter implements HandlerIn
         }
         if (c.equals("NotificationController")) return true; // Controller scopes counts to the signed agent.
         if (c.equals("AdminUserController") && m.equals("getOnlineUserCount")) return true; // Controller filters by menu and agent scope.
-        if (c.equals("AdminManagementController") || c.equals("AdminRoleController") || c.equals("SystemConfigController") ||
+        if (c.equals("AdminManagementController") || c.equals("AdminRoleController") || c.equals("SystemConfigController") || c.equals("WebsiteSecurityController") ||
             m.equals("assignMenus") || m.equals("updateUserType") || m.equals("batchUpdateIpRegions")) { deny(); }
         if (agent == null && (m.equals("updateBalance") || m.startsWith("abnormalDelete"))) deny();
         String code = menu(c, m);

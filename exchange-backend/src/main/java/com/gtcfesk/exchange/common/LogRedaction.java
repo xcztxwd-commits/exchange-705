@@ -9,7 +9,7 @@ public final class LogRedaction {
         String k = key.toLowerCase(Locale.ROOT).replace("_", "").replace("-", "");
         return k.contains("password") || k.contains("passwd") || k.contains("secret") || k.contains("token")
                 || k.contains("authorization") || k.contains("verifycode") || k.contains("verificationcode")
-                || k.contains("apikey") || k.equals("code") || k.contains("credential");
+                || k.contains("captcha") || k.contains("apikey") || k.equals("code") || k.contains("credential");
     }
     private static void clean(JsonNode node) {
         if (node.isObject()) {

@@ -13,6 +13,14 @@ import java.util.Map;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+    @ExceptionHandler(com.gtcfesk.exchange.security.SecurityFailure.class)
+    public ResponseEntity<Map<String, Object>> handleSecurity(com.gtcfesk.exchange.security.SecurityFailure e) {
+        org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
+        headers.setCacheControl("no-store");
+        if (e.retryAfter > 0) headers.set("Retry-After", Long.toString(e.retryAfter));
+        return new ResponseEntity<>(com.gtcfesk.exchange.security.RegistrationSecurityFilter.body(e), headers, HttpStatus.valueOf(e.status));
+    }
+
 
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<Map<String, Object>> handleBusinessException(BusinessException e) {

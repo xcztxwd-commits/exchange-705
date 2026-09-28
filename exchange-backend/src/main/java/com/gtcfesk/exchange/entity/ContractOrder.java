@@ -22,6 +22,25 @@ public class ContractOrder {
     @Column(name = "row_version", nullable = false)
     private long rowVersion;
 
+    @Column(name = "order_source", nullable = false, length = 24)
+    private String orderSource = "USER";
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    @Column(name = "manual_wallet_enabled", nullable = false)
+    private boolean manualWalletEnabled;
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    @Column(name = "manual_equity_enabled", nullable = false)
+    private boolean manualEquityEnabled;
+
+    // Manual timestamps are stored in UTC; legacy local timestamp semantics stay unchanged.
+    @Transient
+    public Long getManualOpenTimeUtc() {
+        return "MANUAL_TEST".equals(orderSource) && openTime != null ? openTime.toInstant(java.time.ZoneOffset.UTC).toEpochMilli() : null;
+    }
+    @Transient
+    public Long getManualCloseTimeUtc() {
+        return "MANUAL_TEST".equals(orderSource) && closeTime != null ? closeTime.toInstant(java.time.ZoneOffset.UTC).toEpochMilli() : null;
+    }
+
     // Existing pending orders stay excluded until their historical handling is explicitly decided.
     @com.fasterxml.jackson.annotation.JsonIgnore
     @Column(name = "limit_match_enabled", nullable = false)

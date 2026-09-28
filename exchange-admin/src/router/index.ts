@@ -60,6 +60,7 @@ const router = createRouter({
         { path: 'agents', component: AgentManagement },
         { path: 'agents/:id/performance', component: () => import('@/views/AgentPerformance.vue') },
         { path: 'admin-list', component: AdminList },
+        { path: 'website-security', component: () => import('@/views/WebsiteSecurity.vue') },
         { path: 'settings', component: Settings },
         { path: 'operation-log', component: OperationLog },
         { path: 'statistics', component: Statistics },
@@ -70,10 +71,13 @@ const router = createRouter({
 
 router.beforeEach((to, _from, next) => {
   const auth = useAuthStore()
-  if (!auth.token) auth.load()
+  if (!auth.token || !auth.user) auth.load()
   if (to.path !== '/login' && !auth.token) {
     next('/login')
     return
+  }
+  if (to.path === '/website-security' && !(auth.user?.isSuperAdmin || auth.user?.role === 'super_admin')) {
+    next('/dashboard'); return
   }
   if (to.path === '/login' && auth.token) {
     next('/dashboard')

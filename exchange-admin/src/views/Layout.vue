@@ -167,6 +167,7 @@ const allMenuConfig: Record<string, any> = {
   '/roles': { path: '/roles', icon: 'Unlock', title: '角色管理', menuCode: 'roles' },
   '/agents': { path: '/agents', icon: 'Avatar', title: '代理管理', menuCode: 'agents' },
   '/admin-list': { path: '/admin-list', icon: 'UserFilled', title: '管理员列表', menuCode: 'admin_list' },
+  '/website-security': { path: '/website-security', icon: 'Lock', title: '网站安全', menuCode: 'website_security' },
   '/settings': { path: '/settings', icon: 'Setting', title: '系统配置', menuCode: 'settings' },
   '/operation-log': { path: '/operation-log', icon: 'Document', title: '操作日志', menuCode: 'operation_log' },
   '/statistics': { path: '/statistics', icon: 'DataAnalysis', title: '数据统计', menuCode: 'statistics' },
@@ -264,6 +265,7 @@ const loadMenus = async () => {
     console.error('加载菜单失败:', error)
     menuItems.value = Object.values(allMenuConfig) // 失败时显示所有菜单
   } finally {
+    if (!(auth.user?.isSuperAdmin || auth.user?.role === 'super_admin')) menuItems.value = menuItems.value.filter(m => m.path !== '/website-security')
     loadingMenus.value = false
   }
 }

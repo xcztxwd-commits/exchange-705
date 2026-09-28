@@ -28,6 +28,7 @@ class AssetEquityMySqlTest {
         source=new DriverManagerDataSource(System.getenv("EQUITY_TEST_JDBC"),"root","equity-fixture-only");db=new JdbcTemplate(source);
         assertTrue(db.queryForObject("select version()",String.class).startsWith("5.7."));assertEquals("equity_test",db.queryForObject("select database()",String.class));
         try(Connection c=source.getConnection()){ScriptUtils.executeSqlScript(c,new ClassPathResource("db/asset-equity/V001__net_equity_history.sql"));ScriptUtils.executeSqlScript(c,new ClassPathResource("db/asset-equity/V001__net_equity_history.sql"));}
+        db.execute("alter table asset_history_1m add column effective_at bigint null");
         store=new AssetEquityStore(source,new ObjectMapper());valuation=new EquityValuationService(db,mock(ForexQuoteMarketService.class));jobs=new AssetEquityJobs(store,valuation);
         db.execute("create table user_account(id bigint primary key)");
         db.execute("create table asset_account(user_id bigint,coin varchar(20),available decimal(32,16),frozen decimal(32,16))");
@@ -54,13 +55,12 @@ class AssetEquityMySqlTest {
         AssetEquityValuationTest.equal("0",db.queryForObject("select net_equity from asset_history_1m where user_id=102",BigDecimal.class));
         String evidence=db.queryForObject("select valuation_evidence from asset_history_1m where user_id=101",String.class);assertTrue(evidence.contains("option_principal_cost_not_fair_value"));
         jobs.aggregate();
-        for(int level=1;level<=3;level++){
-            Map<String,Object> current=db.queryForMap("select * from "+AssetEquityStore.TABLES[level]+" where user_id=101 order by bucket_start desc limit 1");
-            AssetEquityValuationTest.equal("150",(BigDecimal)current.get("close_value"));assertEquals(1,((Number)current.get("valid_sample_count")).intValue());
-        }
+        for(int level=1;level<=3;level++)
+            assertEquals(0,db.queryForObject("select count(*) from "+AssetEquityStore.TABLES[level]+" where user_id=101 and finalized=0",Integer.class));
     }
     @Test @Order(1) void hierarchicalRecoveryNullsIdempotenceAndBoundaryClipping(){
-        long start=AssetHistoryBucket.floor(System.currentTimeMillis(),86400000)-86400000;
+        // A two-day-old UTC bucket is complete even before the 00:03:20 daily run.
+        long start=AssetHistoryBucket.floor(System.currentTimeMillis(),86400000)-2*86400000L;
         store.locked("fixture",s->{
             EquityValuationService.Batch batch=new EquityValuationService.Batch();List<EquityValuationService.Value> values=new ArrayList<>();
             for(int i=0;i<1440;i++){EquityValuationService.Value v=new EquityValuationService.Value(200,start+i*60000+5000);v.add("wallet_balance",BigDecimal.valueOf(i==10?9000:i==11?-900:i));if(i==12)v.missing("contract_unrealized_pnl","QUOTE_STALE");v.finish();values.add(v);}
@@ -76,6 +76,25 @@ class AssetEquityMySqlTest {
         AssetHistoryBucket stale=new AssetHistoryBucket(200,start,start+86400000);stale.merge(AssetHistoryRollupTest.sample(start,"99999"));store.saveBucket(db,3,stale,System.currentTimeMillis());
         AssetEquityValuationTest.equal("9000",db.queryForObject("select high_value from asset_history_1d where user_id=200 and bucket_start=?",BigDecimal.class,start));
         assertEquals(0,db.queryForObject("select count(*) from asset_history_1m where user_id=200 and bucket_start>=?",Integer.class,start+86400000));
+    }
+    @Test void closingSnapshotKeepsActualTimeRejectsLateAndHidesCurrentParents(){
+        long boundary=AssetHistoryBucket.floor(System.currentTimeMillis(),60000);
+        EquityValuationService.Value v=new EquityValuationService.Value(600,boundary+1234);
+        v.add("wallet_balance",new BigDecimal("75"));v.finish();
+        store.saveMinutes(db,new EquityValuationService.Batch(),Collections.singletonList(v),boundary);
+        Map<String,Object> row=db.queryForMap("select bucket_start,observed_at from asset_history_1m where user_id=600");
+        assertEquals(boundary-60000,((Number)row.get("bucket_start")).longValue());
+        assertEquals(boundary+1234,((Number)row.get("observed_at")).longValue());
+        v=new EquityValuationService.Value(600,boundary+60000);v.finish();
+        final EquityValuationService.Value late=v;
+        assertThrows(IllegalArgumentException.class,()->store.saveMinutes(db,new EquityValuationService.Batch(),Collections.singletonList(late),boundary));
+        for(int level=1;level<=3;level++) {
+            long size=AssetEquityStore.INTERVALS[level],start=AssetHistoryBucket.floor(boundary,size);
+            AssetHistoryBucket draft=new AssetHistoryBucket(600,start,start+size);
+            draft.merge(AssetHistoryRollupTest.sample(boundary,"75"));
+            store.saveBucket(db,level,draft,boundary);
+            assertTrue(store.window(db,level,600,start,boundary+2000,boundary+2000).isEmpty());
+        }
     }
     @Test void firstObservationBaselineAndVersionIsolation(){
         long t=AssetHistoryBucket.floor(System.currentTimeMillis(),60000)-600000;

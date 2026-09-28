@@ -66,7 +66,7 @@ export function useOrderSizing(input: {
         ])
         if (version !== requestVersion || auth.token !== token) return
         const available = Number(account?.available ?? account?.balance)
-        if (account?.success === false || !Number.isFinite(available) || available < 0 || !Array.isArray(orders?.list) || orders?.success === false) throw new Error('Invalid account snapshot')
+        if (account?.success === false || !Number.isFinite(available) || !Array.isArray(orders?.list) || orders?.success === false) throw new Error('Invalid account snapshot')
         positions.value = orders.list.filter((order: any) => order.status === 'OPEN')
         input.available.value = available
         loadedAt.value = Date.now()

@@ -133,18 +133,21 @@
                    <td colspan="13" class="text-center py-8 text-gray-400 dark:text-gray-500">{{ localeStore.t('noData') }}</td>
                  </tr>
                  <tr v-for="order in currentOrderList" :key="order.id" class="border-b border-gray-200 dark:border-[#2b3139] hover:bg-gray-50 dark:hover:bg-[#181c27] dark:bg-[#181c27] transition-colors group">
-                    <td class="py-3 px-4 font-bold text-gray-700 dark:text-gray-200">{{ displaySymbol(order) }}</td>
+                    <td class="py-3 px-4 font-bold text-gray-700 dark:text-gray-200">
+                      <span v-if="order.orderSource === 'MANUAL_TEST'" class="block w-fit mb-1 px-1.5 py-0.5 rounded border border-amber-200 bg-amber-50 text-amber-800 text-[11px] font-medium whitespace-nowrap">手动订单</span>
+                      <span>{{ displaySymbol(order) }}</span>
+                    </td>
                     <td class="py-3 px-2 text-gray-500 dark:text-gray-400 dark:text-gray-500">#{{ order.id }}</td>
                     <td class="py-3 px-2"><span :class="['text-white px-2 py-0.5 rounded text-[11px] font-bold', order.type === 'buy' ? 'bg-[#8cc63f]' : 'bg-[#ff4d4f]']">{{ order.type === 'buy' ? localeStore.t('buy') : localeStore.t('sell') }}</span></td>
                     <td class="py-3 px-2">{{ order.lots }} <span class="text-gray-500 text-xs">{{ order.leverage }}×</span></td>
                     <td class="py-3 px-2 font-mono">{{ order.openPrice.toFixed(4) }}</td>
-                    <td class="py-3 px-2 font-mono font-bold text-gray-700 dark:text-gray-200">{{ order.currentPrice.toFixed(4) }}</td>
+                    <td class="py-3 px-2 font-mono font-bold text-gray-700 dark:text-gray-200">{{ (order.orderSource === 'MANUAL_TEST' ? order.closePrice : order.currentPrice).toFixed(4) }}<small v-if="order.orderSource === 'MANUAL_TEST'" class="block text-gray-400">平仓价</small></td>
                     <td class="py-3 px-2 text-gray-400 dark:text-gray-500">{{ order.takeProfit || 0 }}</td>
                     <td class="py-3 px-2 text-gray-400 dark:text-gray-500">{{ order.stopLoss || 0 }}</td>
                     <td class="py-3 px-2">{{ order.fee.toFixed(2) }}</td>
                     <td class="py-3 px-2">{{ order.margin.toFixed(2) }}</td>
                     <td :class="['py-3 px-2 font-bold', order.profit >= 0 ? 'text-[#8cc63f]' : 'text-[#ff4d4f]']">{{ formatMoney(order.profit) }}</td>
-                    <td class="py-3 px-2 text-gray-400 dark:text-gray-500" v-html="order.openTime.replace(' ', '<br/>')"></td>
+                    <td class="py-3 px-2 text-gray-400 dark:text-gray-500" v-html="(order.openTime + (order.orderSource === 'MANUAL_TEST' ? '<br/>平仓 ' + order.manualCloseTime : '')).replace(' ', '<br/>')"></td>
                     <td class="py-3 px-4 text-right space-x-2">
                       <button v-if="order.status === 'CLOSED'" @click="shareOrder = { id: order.id, kind: 'contract' }" class="pnl-share-entry" :aria-label="shareLabel" :title="shareLabel"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 15V3m-4 4 4-4 4 4M6 10H4v11h16V10h-2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" /></svg></button>
                       <button v-if="orderSubTab === 'positions'" @click="openTpSlModal(order)" class="bg-[#8cc63f] text-white px-2 py-1 rounded text-[11px] font-medium hover:bg-[#7ab036] transition-colors">TP/SL</button>
@@ -265,6 +268,7 @@
              </div>
 
              <p v-if="currentSymbolInfo && !Number.isFinite(estimatedMargin)" role="status" class="text-xs text-amber-600 mt-2">{{ localeStore.text('結算匯率暫不可用', 'Settlement rate unavailable') }}</p>
+             <p v-if="auth.token && contractBalance <= 0" role="status" class="text-xs text-amber-600 mt-2">{{ localeStore.t('contractBalanceInsufficient') }}</p>
              <div class="flex space-x-3 pt-4">
                <button :disabled="!currentSymbolInfo || !orderReady" @click="submitContractOrder('BUY')" class="disabled:opacity-50 disabled:cursor-not-allowed flex-1 bg-[#8cc63f] text-white py-3.5 rounded-lg font-bold text-base hover:bg-[#7ab036] transition-colors shadow-sm shadow-green-200">{{ localeStore.t('buy') }}</button>
                <button :disabled="!currentSymbolInfo || !orderReady" @click="submitContractOrder('SELL')" class="disabled:opacity-50 disabled:cursor-not-allowed flex-1 bg-[#ff4d4f] text-white py-3.5 rounded-lg font-bold text-base hover:bg-[#e64042] transition-colors shadow-sm shadow-red-200">{{ localeStore.t('sell') }}</button>
@@ -601,8 +605,9 @@
               <div class="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-[#8cc63f] to-[#aae061]"></div>
               <div class="inline-block bg-white dark:bg-[#131722] px-4 py-1.5 rounded-full text-gray-500 dark:text-gray-400 dark:text-gray-500 text-sm font-medium mb-4 shadow-sm border border-gray-100 dark:border-[#2b3139]">UID:< {{ auth.user?.id || '8959285729' }}</div>
               <div class="text-gray-500 dark:text-gray-400 dark:text-gray-500 font-medium mb-2">{{ localeStore.t('totalAssetsEquivalent') }}</div>
-              <div class="text-4xl text-[#8cc63f] font-bold font-mono tracking-tight">{{ formatAsset(totalAsset) }}</div>
+              <div class="text-4xl text-[#8cc63f] font-bold font-mono tracking-tight">{{ chartTotal === undefined ? formatAsset(totalAsset) : chartTotal === null ? '—' : formatAsset(chartTotal) }}</div>
             </div>
+            <AssetPixelChart v-if="showUserCenter" :visible="true" @total="chartTotal = $event" />
             <div class="space-y-4">
               <div class="border border-gray-200 dark:border-[#2b3139] rounded-xl p-5 flex justify-between items-center cursor-pointer hover:border-[#8cc63f] hover:shadow-md transition-all group bg-white dark:bg-[#131722]">
                 <div>
@@ -1572,8 +1577,9 @@
             </el-icon>
           </div>
         </div>
+        <RegistrationCaptcha v-if="showRegisterModal" ref="registerCaptcha" desktop :disabled="registerLoading" @ready="registerCaptchaReady = $event" />
         <div>
-          <div class="text-gray-600 dark:text-gray-300 font-medium text-sm mb-2">{{ localeStore.t('inviteCode') }}</div>
+          <div class="text-gray-600 dark:text-gray-300 font-medium text-sm mb-2">{{ localeStore.t('inviteCode') }}（{{ captchaText(localeStore.locale, 'optional') }}）</div>
           <input v-model="registerInviteCode" :readonly="registerInviteLocked" type="text" class="w-full bg-gray-50 dark:bg-[#181c27] border border-gray-200 dark:border-[#2b3139]-none rounded-lg px-4 py-3 outline-none focus:ring-1 focus:ring-[#8cc63f]/30 transition-all text-gray-700 dark:text-gray-200" :placeholder="registerInviteLocked ? localeStore.t('inviteCodeFilled') : localeStore.t('inviteCodeEmpty')" />
         </div>
         <div class="text-center text-sm text-gray-500 dark:text-gray-400 dark:text-gray-500 mt-4">
@@ -1583,7 +1589,7 @@
       </div>
       <template #footer>
         <div class="px-2 pb-2">
-          <button @click="onRegisterSubmit" :disabled="registerLoading" class="w-full bg-[#8cc63f] text-white py-3.5 rounded-lg font-bold text-base hover:bg-[#7ab036] transition-colors shadow-md shadow-green-200/50 disabled:opacity-50">
+          <button @click="onRegisterSubmit" :disabled="registerLoading || !registerCaptchaReady" class="w-full bg-[#8cc63f] text-white py-3.5 rounded-lg font-bold text-base hover:bg-[#7ab036] transition-colors shadow-md shadow-green-200/50 disabled:opacity-50">
             {{ registerLoading ? localeStore.t('submitting') : localeStore.t('register') }}
           </button>
         </div>
@@ -1642,6 +1648,7 @@
 <script setup lang="ts">
 import AppSelect from '@/components/AppSelect.vue'
 import CurrencyPicker from '@/components/CurrencyPicker.vue'
+import AssetPixelChart from '../../../exchange-frontend/src/components/AssetPixelChart.vue'
 import LogoGlint from '@/components/LogoGlint.vue'
 import { useFiatCurrency } from '@/utils/fiatCurrency'
 const { currency: displayCurrency, rate: displayRate, formatAsset } = useFiatCurrency()
@@ -1663,6 +1670,8 @@ import PositionSizing from '@/components/PositionSizing.vue';
 import { useOrderSizing } from '@/utils/useOrderSizing';
 import { DEFAULT_LEVERAGE, leverageLimit, contractMargin, calculateContractProfit, contractEquity } from '@/utils/contract';
 import request from '@/utils/request';
+import RegistrationCaptcha from '@/components/RegistrationCaptcha.vue';
+import { captchaText } from '@/utils/captchaText';
 import { formatDateTime } from '@/utils/dateTime';
 import { getImageUrl } from '@/utils/imageUrl';
 import { displaySymbol } from '@/utils/displaySymbol';
@@ -1727,6 +1736,8 @@ const registerConfirmPassword = ref('');
 const registerInviteCode = ref('');
 const registerInviteLocked = ref(false);
 const registerLoading = ref(false);
+const registerCaptcha = ref<InstanceType<typeof RegistrationCaptcha> | null>(null);
+const registerCaptchaReady = ref(false);
 const registerShowPwd = ref(false);
 const registerShowPwd2 = ref(false);
 
@@ -1744,9 +1755,12 @@ const onRegisterSubmit = async () => {
     ElMessage.error(localeStore.t('passwordTooShort'));
     return;
   }
+  const challenge = registerCaptcha.value?.submission();
+  if (!challenge) return;
   registerLoading.value = true;
   try {
     await request.post('/auth/register', {
+      ...challenge,
       email: registerEmail.value,
       password: registerPassword.value,
       confirmPassword: registerConfirmPassword.value,
@@ -1757,6 +1771,7 @@ const onRegisterSubmit = async () => {
     showLoginModal.value = true;
     loginEmail.value = registerEmail.value;
   } catch (e: any) {
+    await registerCaptcha.value?.registrationFailed(e);
     ElMessage.error(e?.message || localeStore.t('registerFail'));
   } finally {
     registerLoading.value = false;
@@ -2682,6 +2697,8 @@ const contractFrozen = ref(0);
 const optionBalance = ref(0);
 const optionFrozen = ref(0);
 const totalAsset = computed(() => walletBalance.value + contractBalance.value + optionBalance.value + walletFrozen.value + contractFrozen.value + optionFrozen.value);
+const chartTotal = ref<number | null | undefined>(undefined);
+watch(() => auth.user?.id, () => { chartTotal.value = undefined });
 const { allocationPercent, setAllocation, canAllocate, orderReady, liquidation, refreshAccount } = useOrderSizing({
   catalog: computed(() => marketStore.symbols),
   quantity, leverage: selectedLeverage, available: contractBalance,
@@ -2729,7 +2746,9 @@ const transformContractOrder = (order: any) => {
     profit: calculatedProfit,
     margin: Number(order.margin || 0),
     fee: Number(order.fee || 0),
-    openTime: formatDateTime(displayTime),
+    orderSource: order.orderSource,
+    manualCloseTime: order.manualCloseTimeUtc != null ? formatDateTime(new Date(order.manualCloseTimeUtc).toISOString()) : '',
+    openTime: formatDateTime(order.manualOpenTimeUtc != null ? new Date(order.manualOpenTimeUtc).toISOString() : displayTime),
     stopLoss: order.stopLoss ? Number(order.stopLoss) : 0,
     takeProfit: order.takeProfit ? Number(order.takeProfit) : 0,
     status: order.status,

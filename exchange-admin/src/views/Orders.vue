@@ -3,6 +3,8 @@ import { ref, onMounted, computed } from 'vue'
 import { ElMessage, ElMessageBox, ElTabs, ElTabPane } from 'element-plus'
 import { Search, Refresh } from '@element-plus/icons-vue'
 import request from '@/utils/request'
+import ManualContractOrder from '@/components/ManualContractOrder.vue'
+const manualForm = ref<InstanceType<typeof ManualContractOrder>>()
 import { useAuthStore } from '@/store/auth'
 import { usePermissions } from '@/composables/usePermissions'
 import { displaySymbol } from '@/utils/displaySymbol'
@@ -333,6 +335,8 @@ onMounted(() => {
     
     <el-tabs v-model="activeTab" @tab-change="() => {}">
       <el-tab-pane label="合约订单" name="contract">
+        <el-button v-if="auth.user?.isSuperAdmin || auth.user?.role === 'super_admin'" type="primary" @click="manualForm?.open()">新建已平仓模拟合约单</el-button>
+        <ManualContractOrder ref="manualForm" @created="loadContractOrders" />
         <div class="toolbar">
           <div class="search-form">
             <!-- 代理筛选（只有管理员能看到） -->

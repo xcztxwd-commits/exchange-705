@@ -104,8 +104,10 @@ function transformContractOrder(order: any) {
     profit: calculatedProfit,
     margin: Number(order.margin || 0),
     fee: Number(order.fee || 0),
-    openTime: formatDateTime(displayTime), // 使用创建时间或开仓时间
-    closeTime: formatDateTime(order.closeTime),
+    orderSource: order.orderSource,
+    manualCloseTime: order.manualCloseTimeUtc != null ? formatDateTime(new Date(order.manualCloseTimeUtc).toISOString()) : '',
+    openTime: formatDateTime(order.manualOpenTimeUtc != null ? new Date(order.manualOpenTimeUtc).toISOString() : displayTime), // 使用创建时间或开仓时间
+    closeTime: formatDateTime(order.manualCloseTimeUtc != null ? new Date(order.manualCloseTimeUtc).toISOString() : order.closeTime),
     status: order.status, // 保留状态
     side: order.side, // 保留原始side用于计算
     quantity: order.quantity, // 保留原始quantity用于计算
@@ -1079,7 +1081,10 @@ function formatPrice(v: number | string | undefined | null) {
         >
           <button type="button" class="order-share-entry" @click="shareOrder = { id: order.id, kind: 'contract' }" :aria-label="shareLabel" :title="shareLabel"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 15V3m-4 4 4-4 4 4M6 10H4v11h16V10h-2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" /></svg></button>
           <div class="order-header">
-            <div class="order-symbol">{{ displaySymbol(order) }}</div>
+            <div>
+              <span v-if="order.orderSource === 'MANUAL_TEST'" class="manual-order-badge">手动订单</span>
+              <div class="order-symbol">{{ displaySymbol(order) }}</div>
+            </div>
             <div class="order-price">
               <span>{{ formatPrice(order.openPrice) }}</span>
               <span class="arrow">→</span>
@@ -1098,6 +1103,12 @@ function formatPrice(v: number | string | undefined | null) {
               <div class="detail-item">
                 <span class="detail-label">{{ localeStore.t('openTime') }}</span>
                 <span class="detail-value">{{ order.openTime }}</span>
+              </div>
+              <div v-if="order.orderSource === 'MANUAL_TEST'" class="detail-item">
+                <span class="detail-label">平仓时间</span><span class="detail-value">{{ order.manualCloseTime }}</span>
+              </div>
+              <div v-if="order.orderSource === 'MANUAL_TEST'" class="detail-item">
+                <span class="detail-label">{{ localeStore.t('fee') }}</span><span class="detail-value">{{ formatMoney(order.fee) }}</span>
               </div>
               <div class="detail-item">
                 <span class="detail-label">{{ localeStore.t('profitLoss') }}</span>
@@ -1392,6 +1403,7 @@ function formatPrice(v: number | string | undefined | null) {
 </template>
 
 <style scoped>
+.manual-order-badge { display: block; width: fit-content; margin-bottom: 6px; padding: 2px 6px; border: 1px solid #f3d19e; border-radius: 4px; background: #fdf6ec; color: #9a5b00; font-size: 11px; font-weight: 500; line-height: 16px; white-space: nowrap; }
 .order-share-entry { display:flex; align-items:center; justify-content:center; margin:0 0 8px auto; width:36px; height:36px; padding:0; border:1px solid #e6e8ed; border-radius:9px; background:transparent; color:#679700; cursor:pointer; }
 .orders-page {
   min-height: 100vh;

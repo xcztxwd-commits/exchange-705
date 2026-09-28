@@ -13,13 +13,15 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 class RegistrationWithoutCodeTest {
-    @Test void registrationAllowsMissingInvitationAndCodeButPreservesOtherChecks() {
+    @Test void registrationAllowsMissingInvitationAndEmailCodeButRequiresCaptcha() {
         VerifyCodeRepository codes = mock(VerifyCodeRepository.class);
         EmailService email = mock(EmailService.class);
         UserAccountRepository users = mock(UserAccountRepository.class);
         PasswordEncoder encoder = mock(PasswordEncoder.class);
         AssetAccountRepository assets = mock(AssetAccountRepository.class);
         AuthService service = new AuthService(codes, email, users, encoder, assets);
+        com.gtcfesk.exchange.security.RegistrationSecurity captcha = mock(com.gtcfesk.exchange.security.RegistrationSecurity.class);
+        ReflectionTestUtils.setField(service, "registrationSecurity", captcha);
         JwtUtil jwt = mock(JwtUtil.class);
         when(jwt.getExpireSeconds()).thenReturn(3600L);
         ReflectionTestUtils.setField(service, "jwtUtil", jwt);
@@ -33,6 +35,9 @@ class RegistrationWithoutCodeTest {
         req.setEmail("registration@example.com");
         req.setPassword("secret123");
         req.setConfirmPassword("secret123");
+        req.setCaptchaSession("0123456789abcdef0123456789abcdef");
+        req.setCaptchaId("0123456789abcdef0123456789abcdef");
+        req.setCaptchaCode("A2B3");
         try (javax.validation.ValidatorFactory factory = Validation.buildDefaultValidatorFactory()) {
             assertTrue(factory.getValidator().validate(req).isEmpty());
             req.setEmail("invalid");
@@ -40,6 +45,12 @@ class RegistrationWithoutCodeTest {
             req.setEmail("registration@example.com");
         }
         assertNotNull(service.register(req));
+        verify(captcha).verifyAndConsume(req.getCaptchaSession(), req.getCaptchaId(), req.getCaptchaCode());
+        doThrow(com.gtcfesk.exchange.security.SecurityFailure.invalid()).when(captcha).verifyAndConsume(any(), any(), any());
+        int saved = mockingDetails(users).getInvocations().size();
+        assertThrows(com.gtcfesk.exchange.security.SecurityFailure.class, () -> service.register(req));
+        assertEquals(saved, mockingDetails(users).getInvocations().size());
+        reset(captcha);
         verifyNoInteractions(codes, email);
         verify(assets, times(3)).save(any());
         req.setConfirmPassword("different");

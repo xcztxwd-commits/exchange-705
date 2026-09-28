@@ -24,7 +24,8 @@ public class AssetHistoryBucket {
     }
     public String quality() {return valid==expected && invalid==0?"COMPLETE":"PARTIAL";}
     public static AssetHistoryBucket minute(ResultSet rs) throws SQLException {
-        long time=rs.getLong("observed_at"),start=rs.getLong("bucket_start");
+        Long effective=nullableLong(rs,"effective_at");
+        long time=effective==null?rs.getLong("observed_at"):effective,start=rs.getLong("bucket_start");
         AssetHistoryBucket b=new AssetHistoryBucket(rs.getLong("user_id"),start,start+60000);
         b.open=b.high=b.low=b.close=rs.getBigDecimal("net_equity");
         b.sourceCount=1; b.through=time;

@@ -110,6 +110,7 @@ public class SystemConfigService {
     }
 
     public void saveConfig(String key, String value, String description) {
+        if (com.gtcfesk.exchange.security.WebsiteSecuritySettings.KEY.equals(key)) com.gtcfesk.exchange.security.WebsiteSecuritySettings.parse(value);
         if (SHARE_TEMPLATES_KEY.equals(key)) {
             if (value == null) throw new com.gtcfesk.exchange.common.BusinessException("请选择分享模板");
             shareTemplates(value);

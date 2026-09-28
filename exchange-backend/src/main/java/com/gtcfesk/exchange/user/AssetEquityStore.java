@@ -51,19 +51,25 @@ public class AssetEquityStore {
     }
     String json(Object o){try{return json.writeValueAsString(o);}catch(Exception e){throw new IllegalArgumentException("Invalid valuation evidence",e);}}
     public void saveMinutes(JdbcTemplate db,EquityValuationService.Batch batch,Collection<EquityValuationService.Value> values) {
+        saveMinutes(db,batch,values,null);
+    }
+    public void saveMinutes(JdbcTemplate db,EquityValuationService.Batch batch,Collection<EquityValuationService.Value> values,Long closingBoundary) {
+        if(closingBoundary!=null && (closingBoundary%60000!=0 || values.stream().anyMatch(v->!AssetEquityJobs.withinCaptureMinute(closingBoundary,v.observedAt))))
+            throw new IllegalArgumentException("Observation outside scheduled closing minute");
         Map<String,Object> evidence=new LinkedHashMap<>();evidence.put("quotes",batch.quotes);evidence.put("rates",batch.rates);
         db.update("insert into asset_history_quote_batch(batch_id,prepared_at,evidence) values(?,?,?)",batch.id,batch.preparedAt,json(evidence));
         for(EquityValuationService.Value v:values) {
-            List<Object> args=new ArrayList<>(Arrays.asList(v.userId,BASIS,AssetHistoryBucket.floor(v.observedAt,60000),v.observedAt));
+            long bucket=closingBoundary==null?AssetHistoryBucket.floor(v.observedAt,60000):closingBoundary-60000;
+            List<Object> args=new ArrayList<>(Arrays.asList(v.userId,BASIS,bucket,v.observedAt));
             args.addAll(v.amounts.values());args.add(v.status());args.add(String.join(",",v.reasons));args.add(batch.id);args.add(json(v.evidence));args.add(v.observedAt);
             String fields=String.join(",",v.amounts.keySet());
             db.update("insert into asset_history_1m(user_id,basis_version,bucket_start,observed_at,"+fields+",valuation_status,reason_code,quote_batch_id,valuation_evidence,created_at) values("+
                     String.join(",",Collections.nCopies(args.size(),"?"))+") on duplicate key update user_id=user_id",args.toArray());
             // Read the fixed observation, not a later duplicate attempt, when establishing the baseline.
             db.update("insert into asset_history_baseline(user_id,basis_version,capture_from,first_positive,first_positive_at) " +
-                    "select user_id,basis_version,observed_at,case when net_equity>0 then net_equity end,case when net_equity>0 then observed_at end from asset_history_1m where user_id=? and basis_version=? and bucket_start=? " +
+                    "select user_id,basis_version,observed_at,case when net_equity>0 then net_equity end,case when net_equity>0 then observed_at end from asset_history_1m where user_id=? and basis_version=? and bucket_start=? and origin='OBSERVED' " +
                     "on duplicate key update capture_from=least(capture_from,values(capture_from)),first_positive=if(values(first_positive_at) is not null and (first_positive_at is null or values(first_positive_at)<first_positive_at),values(first_positive),first_positive),"+
-                    "first_positive_at=if(values(first_positive_at) is not null and (first_positive_at is null or values(first_positive_at)<first_positive_at),values(first_positive_at),first_positive_at)",v.userId,BASIS,AssetHistoryBucket.floor(v.observedAt,60000));
+                    "first_positive_at=if(values(first_positive_at) is not null and (first_positive_at is null or values(first_positive_at)<first_positive_at),values(first_positive_at),first_positive_at)",v.userId,BASIS,bucket);
         }
     }
     public long[] state(JdbcTemplate db,String task,long initial) {
@@ -88,7 +94,7 @@ public class AssetEquityStore {
     public List<AssetHistoryBucket> source(JdbcTemplate db,int level,List<Long> ids,long start,long end,long asOf,boolean finalized) {
         if(level<0 || level>3)throw new IllegalArgumentException("Invalid level");
         return db.query("select * from "+TABLES[level]+" where basis_version=? and bucket_start>=? and bucket_start<? and user_id in ("+EquityValuationService.placeholders(ids)+")"+
-                (level==0?" and observed_at<=?": " and source_through<=?"+(finalized?" and finalized=1":""))+" order by user_id,bucket_start",(rs,n)->level==0?AssetHistoryBucket.minute(rs):AssetHistoryBucket.row(rs),
+                (level==0?" and coalesce(effective_at,observed_at)<=?": " and source_through<=?"+(finalized?" and finalized=1":""))+" order by user_id,bucket_start",(rs,n)->level==0?AssetHistoryBucket.minute(rs):AssetHistoryBucket.row(rs),
                 arguments(ids,start,end,asOf));
     }
     private Object[] arguments(List<Long> ids,long start,long end,long asOf) {
@@ -97,11 +103,13 @@ public class AssetEquityStore {
     /** Primary query uses requested table. Only intersected edge buckets recurse into bounded children. */
     public List<AssetHistoryBucket> window(JdbcTemplate db,int level,long user,long from,long to,long asOf) {
         long size=INTERVALS[level],first=AssetHistoryBucket.floor(from,size),last=AssetHistoryBucket.floor(to-1,size);
-        List<AssetHistoryBucket> rows=source(db,level,Collections.singletonList(user),first,last+size,asOf,false);
+        List<AssetHistoryBucket> rows=source(db,level,Collections.singletonList(user),first,last+size,asOf,true);
         if(level==0) {rows.removeIf(b->b.through<from || b.through>=to);return rows;}
-        Map<Long,AssetHistoryBucket> result=new TreeMap<>();rows.forEach(b->result.put(b.start,b));
+        Map<Long,AssetHistoryBucket> result=new TreeMap<>();rows.stream().filter(b->b.end<=asOf).forEach(b->result.put(b.start,b));
         Set<Long> edges=new LinkedHashSet<>();if(first<from)edges.add(first);if(last+size>to)edges.add(last);
         for(long edge:edges) {
+            // Never synthesize an unfinished or not-yet-finalized parent from finer records.
+            if(!result.containsKey(edge))continue;
             long start=Math.max(edge,from),end=Math.min(edge+size,to);
             AssetHistoryBucket clipped=new AssetHistoryBucket(user,start,end);
             for(AssetHistoryBucket child:window(db,level-1,user,start,end,asOf))clipped.merge(child);

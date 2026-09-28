@@ -26,7 +26,7 @@ public class JwtFilter extends OncePerRequestFilter {
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
-        return java.util.Arrays.asList("/api/auth/login", "/api/auth/register", "/api/auth/sendEmailCode", "/api/auth/resetPassword", "/api/admin/auth/login").contains(request.getRequestURI());
+        return java.util.Arrays.asList("/api/auth/login", "/api/auth/captcha", "/api/auth/register", "/api/auth/sendEmailCode", "/api/auth/resetPassword", "/api/admin/auth/login").contains(request.getRequestURI());
     }
 
     @Override
