@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.http.ResponseEntity;
 import java.net.URI;
+import java.util.Arrays;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
@@ -38,6 +39,23 @@ class ShareHistoryTest {
         source.getKline("USDJPY", "1m", 200, "Forex", end * 1000);
         verify(http).get(argThat(uri -> uri.toString().contains("period1=" + (end - 7 * 86400))
             && uri.toString().contains("period2=" + end)));
+    }
+
+    @Test void minuteHistoryNearRetentionEdgeDoesNotAskYahooForExpiredStart() {
+        MarketQuoteSource source = new MarketQuoteSource();
+        MarketHttp http = mock(MarketHttp.class);
+        ReflectionTestUtils.setField(source, "http", http);
+        ReflectionTestUtils.setField(source, "yahooUrl", "https://example.invalid/v8/finance");
+        when(http.get(any(URI.class))).thenReturn(ResponseEntity.ok("{\"chart\":{\"result\":[]}}"));
+        long now = System.currentTimeMillis() / 1000, end = now - 28 * 86400L;
+        source.getKline("EURUSD=X", "1m", 720, "Forex", end * 1000);
+        verify(http).get(argThat(uri -> {
+            String start = Arrays.stream(uri.getQuery().split("&"))
+                .filter(part -> part.startsWith("period1=")).findFirst().orElse("period1=0").substring(8);
+            long period1 = Long.parseLong(start);
+            return period1 >= now - 30 * 86400L + 60 && period1 < end
+                && uri.getQuery().contains("period2=" + end);
+        }));
     }
 
 }

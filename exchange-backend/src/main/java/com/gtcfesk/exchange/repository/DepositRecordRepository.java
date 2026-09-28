@@ -10,11 +10,13 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 @Repository
-public interface DepositRecordRepository extends JpaRepository<DepositRecord, Long> {
+public interface DepositRecordRepository extends JpaRepository<DepositRecord, Long>, org.springframework.data.jpa.repository.JpaSpecificationExecutor<DepositRecord> {
+    java.util.Optional<DepositRecord> findByCreatedByTypeAndCreatedByIdAndIdempotencyKey(String type, Long id, String key);
+
     List<DepositRecord> findByUserIdOrderByCreatedAtDesc(Long userId);
     List<DepositRecord> findByStatusOrderByCreatedAtDesc(String status);
     
-    @Query("SELECT SUM(d.amount) FROM DepositRecord d WHERE d.status = :status AND d.createdAt >= :start AND d.createdAt <= :end")
+    @Query("SELECT SUM(d.amount) FROM DepositRecord d WHERE (d.source IS NULL OR d.source <> 'ADMIN_MANUAL') AND d.status = :status AND d.createdAt >= :start AND d.createdAt <= :end")
     java.math.BigDecimal sumAmountByStatusAndCreatedAtBetween(
         @Param("status") String status,
         @Param("start") LocalDateTime start,

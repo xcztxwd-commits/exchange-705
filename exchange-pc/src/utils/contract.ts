@@ -1,6 +1,12 @@
 // Estimates use the same position-value model as the server; settlement uses server decimals.
 export const DEFAULT_LEVERAGE = 100
 
+// Settled records must never be presented with a live quote as their settlement price.
+export function contractDisplayPrice(order: { status?: string; closePrice?: unknown; currentPrice?: unknown }): number | null {
+  const price = Number(order.status === 'CLOSED' ? order.closePrice : order.currentPrice)
+  return Number.isFinite(price) && price > 0 ? price : null
+}
+
 export function leverageLimit(value: unknown, enabled = true): number {
   if (!enabled) return 1
   const limit = Number(value ?? DEFAULT_LEVERAGE)

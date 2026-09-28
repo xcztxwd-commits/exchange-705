@@ -16,7 +16,7 @@ class ExecutionQuoteTest {
             Object group = groups.get("Forex");
             Map<String, Map<String, Object>> cache = (Map<String, Map<String, Object>>) ReflectionTestUtils.getField(group, "quotes");
             Map<String, Object> raw = new HashMap<>();
-            raw.put("price", 157d); raw.put("timestamp", System.currentTimeMillis() - 60000);
+            raw.put("price", 157d); raw.put("timestamp", System.currentTimeMillis() - 61000);
             raw.put("fetchedAt", System.currentTimeMillis()); cache.put("JPY=X", raw);
             assertEquals("stale", quotes.getPrice("JPY=X", "Forex").get("status"));
             for (String error : Arrays.asList(null, "partial_response", "invalid_or_missing_quote")) {
@@ -56,7 +56,11 @@ class ExecutionQuoteTest {
             symbol.setControlEnabled(true); symbol.setControlPriceOffset(new BigDecimal("-100"));
             assertNull(quotes.freshPrice("XAUUSD"));
             symbol.setControlPriceOffset(new BigDecimal("5"));
-            raw.put("timestamp", System.currentTimeMillis() - 60000);
+            symbol.setControlEnabled(false);
+            raw.put("timestamp", System.currentTimeMillis() - 59000);
+            assertEquals(0, new BigDecimal("100").compareTo(quotes.freshPrice("XAUUSD")));
+            symbol.setControlEnabled(true);
+            raw.put("timestamp", System.currentTimeMillis() - 61000);
             assertEquals(0, new BigDecimal("105").compareTo(quotes.freshPrice("XAUUSD")));
             assertEquals(raw.get("timestamp"), quotes.internalPrice("XAUUSD").get("timestamp"));
             assertEquals(raw.get("timestamp"), quotes.internalPrice("XAUUSD").get("sourceTimestamp"));

@@ -141,7 +141,7 @@ public class DashboardService {
                 
                 if (!subordinateUserIds.isEmpty()) {
                     // 统计下级用户的充值金额（已审核通过的）
-                    depositAmount = depositRecordRepository.findAll().stream()
+                    depositAmount = depositRecordRepository.findAll().stream().filter(d -> !"ADMIN_MANUAL".equals(d.getSource()))
                             .filter(record -> subordinateUserIds.contains(record.getUserId()))
                             .filter(record -> record.getCreatedAt() != null 
                                     && !record.getCreatedAt().isBefore(startOfDay)
@@ -162,7 +162,7 @@ public class DashboardService {
                 }
             } else {
                 // 管理员：统计所有用户的数据
-                depositAmount = depositRecordRepository.findAll().stream()
+                depositAmount = depositRecordRepository.findAll().stream().filter(d -> !"ADMIN_MANUAL".equals(d.getSource()))
                         .filter(record -> record.getCreatedAt() != null 
                                 && !record.getCreatedAt().isBefore(startOfDay)
                                 && !record.getCreatedAt().isAfter(endOfDay))
@@ -202,7 +202,7 @@ public class DashboardService {
             java.util.Set<Long> allowed = userAccountRepository.findByParentUserId(agent).stream().map(UserAccount::getId).collect(java.util.stream.Collectors.toSet());
             java.util.function.Predicate<LocalDateTime> inRange = time -> time != null && !time.toLocalDate().isBefore(startDate) && !time.toLocalDate().isAfter(endDate);
             stats.put("totalUsers", (long) allowed.size());
-            stats.put("totalDeposit", depositRecordRepository.findAll().stream().filter(d -> allowed.contains(d.getUserId()) && "COMPLETED".equals(d.getStatus()) && inRange.test(d.getCreatedAt())).map(d -> d.getAmount()).reduce(BigDecimal.ZERO, BigDecimal::add));
+            stats.put("totalDeposit", depositRecordRepository.findAll().stream().filter(d -> !"ADMIN_MANUAL".equals(d.getSource())).filter(d -> allowed.contains(d.getUserId()) && "COMPLETED".equals(d.getStatus()) && inRange.test(d.getCreatedAt())).map(d -> d.getAmount()).reduce(BigDecimal.ZERO, BigDecimal::add));
             stats.put("totalWithdraw", withdrawRecordRepository.findAll().stream().filter(d -> allowed.contains(d.getUserId()) && ("APPROVED".equals(d.getStatus()) || "COMPLETED".equals(d.getStatus())) && inRange.test(d.getCreatedAt())).map(d -> d.getAmount()).reduce(BigDecimal.ZERO, BigDecimal::add));
             BigDecimal contract = contractOrderRepository.findAll().stream().filter(d -> allowed.contains(d.getUserId()) && inRange.test(d.getCreatedAt())).map(d -> d.getMargin()).reduce(BigDecimal.ZERO, BigDecimal::add);
             BigDecimal option = optionOrderRepository.findAll().stream().filter(d -> allowed.contains(d.getUserId()) && inRange.test(d.getCreatedAt())).map(d -> d.getAmount()).reduce(BigDecimal.ZERO, BigDecimal::add);
@@ -304,7 +304,7 @@ public class DashboardService {
                 
                 if (!subordinateUserIds.isEmpty()) {
                     // 统计下级用户的充值金额（已完成的）
-                    depositAmount = depositRecordRepository.findAll().stream()
+                    depositAmount = depositRecordRepository.findAll().stream().filter(d -> !"ADMIN_MANUAL".equals(d.getSource()))
                             .filter(record -> subordinateUserIds.contains(record.getUserId()))
                             .filter(record -> record.getCreatedAt() != null 
                                     && !record.getCreatedAt().isBefore(startOfDay)
@@ -325,7 +325,7 @@ public class DashboardService {
                 }
             } else {
                 // 管理员：统计所有用户的数据
-                depositAmount = depositRecordRepository.findAll().stream()
+                depositAmount = depositRecordRepository.findAll().stream().filter(d -> !"ADMIN_MANUAL".equals(d.getSource()))
                         .filter(record -> record.getCreatedAt() != null 
                                 && !record.getCreatedAt().isBefore(startOfDay)
                                 && !record.getCreatedAt().isAfter(endOfDay))

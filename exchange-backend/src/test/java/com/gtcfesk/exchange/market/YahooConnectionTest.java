@@ -52,6 +52,12 @@ class YahooConnectionTest {
             for (Session session : new ArrayList<>(Upstream.sessions)) session.close();
             until(() -> Upstream.connections.get() > connections && ((Number) stream.status().get("messages")).longValue() >= 2);
             assertEquals(0, published.get()); assertTrue(stream.connected());
+            ReflectionTestUtils.setField(stream, "mode", "ws_preferred");
+            stream.subscriptions(Collections.singleton("EURUSD=X"), Collections.singleton("EURUSD=X"), (symbol, quote) -> published.incrementAndGet());
+            byte[] data = PricingData.newBuilder().setId("EURUSD=X").setPrice(1.2f).setTime(System.currentTimeMillis()).build().toByteArray();
+            for (Session session : new ArrayList<>(Upstream.sessions)) session.getBasicRemote().sendText(
+                "{\"type\":\"pricing\",\"message\":\"" + Base64.getEncoder().encodeToString(data) + "\"}");
+            until(() -> published.get() > 0);
         } finally { stream.stop(); server.stop(); server.destroy(); }
     }
 }

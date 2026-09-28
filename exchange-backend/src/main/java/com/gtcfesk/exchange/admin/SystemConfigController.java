@@ -14,6 +14,17 @@ import java.util.Map;
 public class SystemConfigController {
     @Autowired
     private SystemConfigService systemConfigService;
+    @Autowired
+    private com.gtcfesk.exchange.market.ForexQuoteMarketService market;
+
+    private void refreshCurrenciesAfterCommit() {
+        if (org.springframework.transaction.support.TransactionSynchronizationManager.isSynchronizationActive()) {
+            org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
+                new org.springframework.transaction.support.TransactionSynchronization() {
+                    @Override public void afterCommit() { market.requestSymbolRefresh(); }
+                });
+        } else market.requestSymbolRefresh();
+    }
 
     @GetMapping("/list")
     public ResponseEntity<?> getAllConfigs() {
@@ -27,6 +38,7 @@ public class SystemConfigController {
         String value = req.get("value");
         String description = req.get("description");
         systemConfigService.saveConfig(key, value, description);
+        if ("market.conversion.currencies".equals(key)) refreshCurrenciesAfterCommit();
         Map<String, String> result = new HashMap<>();
         result.put("message", "配置保存成功");
         return ResponseEntity.ok(result);
@@ -35,13 +47,16 @@ public class SystemConfigController {
     @org.springframework.transaction.annotation.Transactional
     @PostMapping("/saveBatch")
     public ResponseEntity<?> saveBatchConfig(@RequestBody List<Map<String, String>> configs) {
+        boolean currenciesChanged = false;
         for (Map<String, String> cfg : configs) {
             systemConfigService.saveConfig(
                 cfg.get("key"), 
                 cfg.get("value"), 
                 cfg.get("description")
             );
+            currenciesChanged |= "market.conversion.currencies".equals(cfg.get("key"));
         }
+        if (currenciesChanged) refreshCurrenciesAfterCommit();
         Map<String, String> result = new HashMap<>();
         result.put("message", "批量保存成功");
         return ResponseEntity.ok(result);

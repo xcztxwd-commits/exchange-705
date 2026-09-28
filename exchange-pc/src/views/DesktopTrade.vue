@@ -103,9 +103,9 @@
               <button v-if="tradeMode === 'contract'" @click="orderSubTab = 'pending'" :class="['px-6 py-2 font-bold border-b border-gray-200 dark:border-[#2b3139]-2 transition-colors', orderSubTab === 'pending' ? 'text-[#8cc63f] border-[#8cc63f]' : 'hover:text-gray-800 dark:text-gray-100 border-transparent']">{{ localeStore.t('pendingOrders') }}</button>
               <button @click="orderSubTab = 'history'" :class="['px-6 py-2 font-bold border-b border-gray-200 dark:border-[#2b3139]-2 transition-colors', orderSubTab === 'history' ? 'text-[#8cc63f] border-[#8cc63f]' : 'hover:text-gray-800 dark:text-gray-100 border-transparent']">{{ localeStore.t('historyRecords') }}</button>
               <div v-if="tradeMode === 'contract'" class="flex-1 flex justify-end items-center px-6 space-x-6 text-xs">
-                 <span>{{ localeStore.t('profitAndLoss') }}: <span :class="['font-bold text-sm', totalProfit >= 0 ? 'text-[#8cc63f]' : 'text-[#ff4d4f]']">{{ formatMoney(totalProfit) }}</span></span>
+                 <span>{{ localeStore.text('持倉評估盈虧', 'Open position P&L') }} (USD): <span :class="['font-bold text-sm', totalProfit >= 0 ? 'text-[#8cc63f]' : 'text-[#ff4d4f]']">{{ formatMoney(totalProfit) }}</span></span>
                  <span>{{ localeStore.t('margin') }}: <span class="font-medium text-gray-700 dark:text-gray-200">{{ totalMargin.toFixed(4) }}</span></span>
-                 <span>{{ localeStore.t('riskRate') }}: <span class="font-medium text-gray-700 dark:text-gray-200">{{ formatMoney(riskRate) }}%</span></span>
+                 <span>{{ localeStore.t('riskRate') }}: <span class="font-medium text-gray-700 dark:text-gray-200">{{ totalMargin > 0 ? formatMoney(riskRate) + '%' : '—' }}</span></span>
               </div>
            </div>
            <div class="flex-1 overflow-y-auto custom-scrollbar">
@@ -115,16 +115,16 @@
                  <tr>
                    <th class="py-3 px-4 font-medium whitespace-nowrap">{{ localeStore.t('symbol') }}</th>
                    <th class="py-3 px-2 font-medium whitespace-nowrap">{{ localeStore.t('orderNumber') }}</th>
-                   <th class="py-3 px-2 font-medium whitespace-nowrap">{{ localeStore.t('direction') }}</th>
+                   <th class="py-3 px-2 font-medium whitespace-nowrap">{{ localeStore.text('買賣', 'Buy / Sell') }}</th>
                    <th class="py-3 px-2 font-medium whitespace-nowrap">{{ localeStore.t('lots') }}</th>
-                   <th class="py-3 px-2 font-medium whitespace-nowrap">{{ localeStore.t('openPrice') }}</th>
-                   <th class="py-3 px-2 font-medium whitespace-nowrap">{{ localeStore.t('currentPrice') }}</th>
+                   <th class="py-3 px-2 font-medium whitespace-nowrap">{{ orderSubTab === 'pending' ? localeStore.t('orderPrice') : localeStore.t('openPrice') }}</th>
+                   <th class="py-3 px-2 font-medium whitespace-nowrap">{{ orderSubTab === 'history' ? localeStore.t('settlePrice') : localeStore.t('currentPrice') }}</th>
                    <th class="py-3 px-2 font-medium whitespace-nowrap">{{ localeStore.t('takeProfitPrice') }}</th>
                    <th class="py-3 px-2 font-medium whitespace-nowrap">{{ localeStore.t('stopLossPrice') }}</th>
-                   <th class="py-3 px-2 font-medium whitespace-nowrap">{{ localeStore.t('handlingFee') }}</th>
-                   <th class="py-3 px-2 font-medium whitespace-nowrap">{{ localeStore.t('margin') }}</th>
-                   <th class="py-3 px-2 font-medium whitespace-nowrap">{{ localeStore.t('profitAndLoss') }}</th>
-                   <th class="py-3 px-2 font-medium whitespace-nowrap">{{ localeStore.t('openTimeLabel') }}</th>
+                   <th class="py-3 px-2 font-medium whitespace-nowrap">{{ localeStore.t('handlingFee') }} (USD)</th>
+                   <th class="py-3 px-2 font-medium whitespace-nowrap">{{ localeStore.t('margin') }} (USD)</th>
+                   <th class="py-3 px-2 font-medium whitespace-nowrap">{{ orderSubTab === 'history' ? localeStore.text('已實現盈虧（不含手續費）', 'Realized P&L (excluding fees)') : localeStore.t('profitAndLoss') }} (USD)</th>
+                   <th class="py-3 px-2 font-medium whitespace-nowrap">{{ orderSubTab === 'pending' ? localeStore.t('createTime') : localeStore.t('openTimeLabel') }}</th>
                    <th class="py-3 px-4 font-medium whitespace-nowrap text-right">{{ localeStore.t('action') }}</th>
                  </tr>
                </thead>
@@ -134,20 +134,20 @@
                  </tr>
                  <tr v-for="order in currentOrderList" :key="order.id" class="border-b border-gray-200 dark:border-[#2b3139] hover:bg-gray-50 dark:hover:bg-[#181c27] dark:bg-[#181c27] transition-colors group">
                     <td class="py-3 px-4 font-bold text-gray-700 dark:text-gray-200">
-                      <span v-if="order.orderSource === 'MANUAL_TEST'" class="block w-fit mb-1 px-1.5 py-0.5 rounded border border-amber-200 bg-amber-50 text-amber-800 text-[11px] font-medium whitespace-nowrap">手动订单</span>
+                      <span v-if="order.orderSource === 'MANUAL_TEST'" class="block w-fit mb-1 px-1.5 py-0.5 rounded border border-amber-200 bg-amber-50 text-amber-800 text-[11px] font-medium whitespace-nowrap">{{ localeStore.text('手動訂單', 'Manual order') }}</span>
                       <span>{{ displaySymbol(order) }}</span>
                     </td>
                     <td class="py-3 px-2 text-gray-500 dark:text-gray-400 dark:text-gray-500">#{{ order.id }}</td>
                     <td class="py-3 px-2"><span :class="['text-white px-2 py-0.5 rounded text-[11px] font-bold', order.type === 'buy' ? 'bg-[#8cc63f]' : 'bg-[#ff4d4f]']">{{ order.type === 'buy' ? localeStore.t('buy') : localeStore.t('sell') }}</span></td>
                     <td class="py-3 px-2">{{ order.lots }} <span class="text-gray-500 text-xs">{{ order.leverage }}×</span></td>
-                    <td class="py-3 px-2 font-mono">{{ order.openPrice.toFixed(4) }}</td>
-                    <td class="py-3 px-2 font-mono font-bold text-gray-700 dark:text-gray-200">{{ (order.orderSource === 'MANUAL_TEST' ? order.closePrice : order.currentPrice).toFixed(4) }}<small v-if="order.orderSource === 'MANUAL_TEST'" class="block text-gray-400">平仓价</small></td>
+                    <td class="py-3 px-2 font-mono">{{ (orderSubTab === 'pending' ? order.price : order.openPrice).toFixed(4) }}</td>
+                    <td class="py-3 px-2 font-mono font-bold text-gray-700 dark:text-gray-200">{{ contractDisplayPrice(order)?.toFixed(4) ?? '—' }}</td>
                     <td class="py-3 px-2 text-gray-400 dark:text-gray-500">{{ order.takeProfit || 0 }}</td>
                     <td class="py-3 px-2 text-gray-400 dark:text-gray-500">{{ order.stopLoss || 0 }}</td>
                     <td class="py-3 px-2">{{ order.fee.toFixed(2) }}</td>
                     <td class="py-3 px-2">{{ order.margin.toFixed(2) }}</td>
                     <td :class="['py-3 px-2 font-bold', order.profit >= 0 ? 'text-[#8cc63f]' : 'text-[#ff4d4f]']">{{ formatMoney(order.profit) }}</td>
-                    <td class="py-3 px-2 text-gray-400 dark:text-gray-500" v-html="(order.openTime + (order.orderSource === 'MANUAL_TEST' ? '<br/>平仓 ' + order.manualCloseTime : '')).replace(' ', '<br/>')"></td>
+                    <td class="py-3 px-2 text-gray-400 dark:text-gray-500" v-html="(order.openTime + (order.orderSource === 'MANUAL_TEST' ? '<br/>' + localeStore.t('closeTimeLabel') + ' ' + order.manualCloseTime : '')).replace(' ', '<br/>')"></td>
                     <td class="py-3 px-4 text-right space-x-2">
                       <button v-if="order.status === 'CLOSED'" @click="shareOrder = { id: order.id, kind: 'contract' }" class="pnl-share-entry" :aria-label="shareLabel" :title="shareLabel"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 15V3m-4 4 4-4 4 4M6 10H4v11h16V10h-2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" /></svg></button>
                       <button v-if="orderSubTab === 'positions'" @click="openTpSlModal(order)" class="bg-[#8cc63f] text-white px-2 py-1 rounded text-[11px] font-medium hover:bg-[#7ab036] transition-colors">TP/SL</button>
@@ -240,10 +240,10 @@
 
              <PositionSizing :percent="allocationPercent" :disabled="!canAllocate" :buy="liquidation.buy" :sell="liquidation.sell" :precision="currentSymbolInfo?.pricePrecision ?? 2" @change="setAllocation">
              <div class="bg-gray-50 dark:bg-[#181c27] p-4 rounded-lg text-xs text-gray-500 dark:text-gray-400 dark:text-gray-500 space-y-2 mt-4 border border-gray-100 dark:border-[#2b3139]">
-               <div class="flex justify-between items-center"><span class="font-medium text-gray-600 dark:text-gray-300">{{ localeStore.t('perLot') }}</span><span class="font-mono text-gray-800 dark:text-gray-100 font-medium">1 {{ localeStore.t('lot') }} = {{ lotSize }} {{ currentDisplaySymbol }}</span></div>
-               <div class="flex justify-between items-center"><span class="font-medium text-gray-600 dark:text-gray-300">{{ localeStore.t('estFee') }}</span><span class="font-mono text-gray-800 dark:text-gray-100 font-medium">{{ estimatedFee.toFixed(6) }}</span></div>
-               <div class="flex justify-between items-center"><span class="font-medium text-gray-600 dark:text-gray-300">{{ localeStore.t('estMargin') }}</span><span class="font-mono text-gray-800 dark:text-gray-100 font-medium">{{ Number.isFinite(estimatedMargin) ? estimatedMargin.toFixed(2) : '--' }}</span></div>
-               <div class="flex justify-between items-center"><span class="font-medium text-gray-600 dark:text-gray-300">{{ localeStore.t('balance') }}</span><span class="font-mono text-gray-800 dark:text-gray-100 font-medium">{{ formatMoney(contractBalance) }}</span></div>
+               <div class="flex justify-between items-center"><span class="font-medium text-gray-600 dark:text-gray-300">{{ localeStore.t('perLot') }}</span><span class="font-mono text-gray-800 dark:text-gray-100 font-medium">1 {{ localeStore.t('lot') }} = {{ currentSymbolInfo ? lotSize.toLocaleString(localeStore.locale) : '—' }} {{ forexLotUnit(currentSymbolInfo) === '—' ? currentDisplaySymbol : forexLotUnit(currentSymbolInfo) }}</span></div>
+               <div class="flex justify-between items-center"><span class="font-medium text-gray-600 dark:text-gray-300">{{ localeStore.t('estFee') }}</span><span class="font-mono text-gray-800 dark:text-gray-100 font-medium">{{ estimatedFee.toFixed(6) }} USD</span></div>
+               <div class="flex justify-between items-center"><span class="font-medium text-gray-600 dark:text-gray-300">{{ localeStore.t('estMargin') }}</span><span class="font-mono text-gray-800 dark:text-gray-100 font-medium">{{ Number.isFinite(estimatedMargin) ? estimatedMargin.toFixed(2) : '--' }} USD</span></div>
+               <div class="flex justify-between items-center"><span class="font-medium text-gray-600 dark:text-gray-300">{{ localeStore.t('balance') }}</span><span class="font-mono text-gray-800 dark:text-gray-100 font-medium">{{ formatMoney(contractBalance) }} USD</span></div>
              </div>
 
              </PositionSizing>
@@ -579,7 +579,7 @@
             </div>
           </div>
           <div class="space-y-2 text-sm text-gray-600 dark:text-gray-300">
-            <div class="flex justify-between"><span>{{ localeStore.t('dailyProfit') }}</span><span class="font-bold text-gray-800 dark:text-gray-100">{{ Number(yieldRecord.dailyYield).toFixed(2) }}</span></div>
+            <div class="flex justify-between"><span>{{ localeStore.t('dailyYield') }}</span><span class="font-bold text-gray-800 dark:text-gray-100">{{ Number(yieldRecord.dailyYield).toFixed(2) }}</span></div>
             <div class="flex justify-between"><span>{{ localeStore.t('totalYield') }}</span><span class="font-bold text-gray-800 dark:text-gray-100">{{ Number(yieldRecord.cumulativeYield).toFixed(2) }}</span></div>
             <div class="flex justify-between" v-if="yieldRecord.paidAt"><span>{{ localeStore.t('paidAt') }}</span><span class="text-gray-400 dark:text-gray-500">{{ yieldRecord.paidAt }}</span></div>
           </div>
@@ -1521,7 +1521,7 @@
 
     <!-- 登录弹窗 -->
     <el-dialog v-model="showLoginModal" :title="localeStore.t('emailLogin')" width="400px" class="custom-dialog rounded-xl overflow-hidden">
-      <div class="space-y-4 px-2 py-4">
+      <form id="pc-login-form" class="space-y-4 px-2 py-4" novalidate @submit.prevent="onLoginSubmit" @keydown.enter="($event.isComposing || $event.keyCode === 229 || $event.repeat) && $event.preventDefault()">
         <div>
           <div class="text-gray-600 dark:text-gray-300 font-medium text-sm mb-2">{{ localeStore.t('emailLogin') }} <span class="text-red-500">*</span></div>
           <input v-model="loginEmail" type="email" class="w-full bg-gray-50 dark:bg-[#181c27] border border-gray-200 dark:border-[#2b3139]-none rounded-lg px-4 py-3 outline-none focus:ring-1 focus:ring-[#8cc63f]/30 transition-all text-gray-700 dark:text-gray-200" :placeholder="localeStore.t('emailPlaceholder')" />
@@ -1542,10 +1542,10 @@
           </span>
           <a @click="showLoginModal = false; showForgotModal = true" class="text-gray-400 dark:text-gray-500 hover:text-[#8cc63f] cursor-pointer transition-colors whitespace-nowrap">{{ localeStore.t('forgotPassword') }}</a>
         </div>
-      </div>
+      </form>
       <template #footer>
         <div class="px-2 pb-2">
-          <button @click="onLoginSubmit" :disabled="loginLoading" class="w-full bg-[#8cc63f] text-white py-3.5 rounded-lg font-bold text-base hover:bg-[#7ab036] transition-colors shadow-md shadow-green-200/50 disabled:opacity-50">
+          <button type="submit" form="pc-login-form" :disabled="loginLoading" class="w-full bg-[#8cc63f] text-white py-3.5 rounded-lg font-bold text-base hover:bg-[#7ab036] transition-colors shadow-md shadow-green-200/50 disabled:opacity-50">
             {{ loginLoading ? localeStore.t('pleaseWait') : localeStore.t('login') }}
           </button>
         </div>
@@ -1554,7 +1554,7 @@
 
     <!-- 注册弹窗 -->
     <el-dialog v-model="showRegisterModal" :title="localeStore.t('emailRegister')" width="450px" class="custom-dialog rounded-xl overflow-hidden">
-      <div class="space-y-4 px-2 py-4">
+      <form id="pc-register-form" class="space-y-4 px-2 py-4" novalidate @submit.prevent="onRegisterSubmit" @keydown.enter="($event.isComposing || $event.keyCode === 229 || $event.repeat) && $event.preventDefault()">
         <div>
           <div class="text-gray-600 dark:text-gray-300 font-medium text-sm mb-2">{{ localeStore.t('emailRegister') }} <span class="text-red-500">*</span></div>
           <input v-model="registerEmail" type="email" class="w-full bg-gray-50 dark:bg-[#181c27] border border-gray-200 dark:border-[#2b3139]-none rounded-lg px-4 py-3 outline-none focus:ring-1 focus:ring-[#8cc63f]/30 transition-all text-gray-700 dark:text-gray-200" :placeholder="localeStore.t('emailPlaceholder')" />
@@ -1586,10 +1586,10 @@
           {{ localeStore.t('gotoLogin') }}
           <a @click="showRegisterModal = false; showLoginModal = true" class="text-[#8cc63f] cursor-pointer font-bold hover:underline">{{ localeStore.t('login') }}</a>
         </div>
-      </div>
+      </form>
       <template #footer>
         <div class="px-2 pb-2">
-          <button @click="onRegisterSubmit" :disabled="registerLoading || !registerCaptchaReady" class="w-full bg-[#8cc63f] text-white py-3.5 rounded-lg font-bold text-base hover:bg-[#7ab036] transition-colors shadow-md shadow-green-200/50 disabled:opacity-50">
+          <button type="submit" form="pc-register-form" :disabled="registerLoading || !registerCaptchaReady" class="w-full bg-[#8cc63f] text-white py-3.5 rounded-lg font-bold text-base hover:bg-[#7ab036] transition-colors shadow-md shadow-green-200/50 disabled:opacity-50">
             {{ registerLoading ? localeStore.t('submitting') : localeStore.t('register') }}
           </button>
         </div>
@@ -1668,13 +1668,13 @@ import { ElMessage, ElMessageBox } from 'element-plus';
 import LeverageControl from '@/components/LeverageControl.vue';
 import PositionSizing from '@/components/PositionSizing.vue';
 import { useOrderSizing } from '@/utils/useOrderSizing';
-import { DEFAULT_LEVERAGE, leverageLimit, contractMargin, calculateContractProfit, contractEquity } from '@/utils/contract';
+import { DEFAULT_LEVERAGE, leverageLimit, contractMargin, calculateContractProfit, contractEquity, contractDisplayPrice } from '@/utils/contract';
 import request from '@/utils/request';
 import RegistrationCaptcha from '@/components/RegistrationCaptcha.vue';
 import { captchaText } from '@/utils/captchaText';
 import { formatDateTime } from '@/utils/dateTime';
 import { getImageUrl } from '@/utils/imageUrl';
-import { displaySymbol } from '@/utils/displaySymbol';
+import { displaySymbol, forexLotUnit } from '@/utils/displaySymbol';
 import KlineChart from '@/components/KlineChart.vue';
 import { Money, Coin, Check, ArrowRight, Search, Box, Plus, Camera, UploadFilled, SuccessFilled, WarningFilled, Promotion, Lock, Service, DocumentCopy, Message, Bell, Edit, Moon, Sunny } from '@element-plus/icons-vue';
 import VueQrcode from '@chenfengyuan/vue-qrcode';
@@ -2740,6 +2740,7 @@ const transformContractOrder = (order: any) => {
     displayName: order.displayName,
     type: order.side?.toLowerCase() || 'buy',
     lots: Number(order.quantity || 0),
+    price: Number(order.price || 0),
     openPrice: Number(order.openPrice || 0),
     currentPrice: currentPrice > 0 ? currentPrice : Number(order.currentPrice || order.openPrice || 0),
     closePrice: Number(order.closePrice || 0),

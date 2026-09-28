@@ -96,6 +96,15 @@ public class BackendAccess extends RequestBodyAdviceAdapter implements HandlerIn
             if (!"active".equals(role.getStatus()) || roleMenus.findByRoleId(role.getId()).stream().noneMatch(m -> menu.getId().equals(m.getMenuId()))) deny();
         }
     }
+    public void checkDeposit(String action) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || !auth.isAuthenticated() || auth.getAuthorities().stream().noneMatch(a ->
+                Arrays.asList("ROLE_SUPER_ADMIN", "ROLE_ADMIN", "ROLE_AGENT").contains(a.getAuthority()))) deny();
+        checkMenu("deposit_orders", action);
+        // Admin roles must explicitly hold the button menu, not merely its parent.
+        if (!superAdmin() && agentId() == null) checkMenu(action, null);
+    }
+    public void checkDepositReview(String action) { checkMenu("deposit_review", action); }
     public boolean canReadMenu(String code) {
         try { checkMenu(code, null); return true; }
         catch (AccessDeniedException e) { return false; }
@@ -109,6 +118,8 @@ public class BackendAccess extends RequestBodyAdviceAdapter implements HandlerIn
             if (!m.equals("login") && m.contains("Agent") != (agentId() != null)) deny();
             return true;
         }
+        if (c.equals("DepositOrderController")) return true; // Every method checks explicit module action and scope.
+        if (c.equals("AdminUserController") && m.equals("updateBalance")) return true; // Body selects strict set vs deposit permission.
         if (superAdmin()) return true;
         Long agent = agentId();
         Map<String, String> vars = (Map<String, String>) request.getAttribute(HandlerMapping.URI_TEMPLATE_VARIABLES_ATTRIBUTE);
@@ -191,6 +202,15 @@ public class BackendAccess extends RequestBodyAdviceAdapter implements HandlerIn
     @Override
     public Object afterBodyRead(Object body, HttpInputMessage message, MethodParameter p, Type t, Class<? extends HttpMessageConverter<?>> converter) {
         Long agent = agentId();
+        if (p.getMethod().getName().equals("updateBalance")) {
+            JsonNode input = mapper.valueToTree(body);
+            if (input.hasNonNull("amount")) checkDeposit("manual_deposit");
+            else if (!superAdmin()) {
+                if (agent == null) deny();
+                checkMenu("users", "modify_balance");
+            }
+            if (input.hasNonNull("userId")) checkUser(input.get("userId").asLong());
+        }
         if (agent == null) return body;
         JsonNode node = mapper.valueToTree(body);
         if (node.hasNonNull("filterAgentId") && node.get("filterAgentId").asLong() != agent) deny();

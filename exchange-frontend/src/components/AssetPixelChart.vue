@@ -2,18 +2,18 @@
 import { computed, ref, watch, onMounted, onBeforeUnmount } from 'vue'
 import request from '@/utils/request'
 import { useLocaleStore } from '@/store/locale'
-import { assetDisplayIndex, assetDisplayLine, assetColumnTime, assetPriceTicks, assetDisplayValue, assetScrubTime, assetHighlight, assetHistoryPoints } from '@/utils/assetPixelWindow'
+import { assetDisplayLine, assetColumnTime, assetPriceTicks, assetDisplayValue, assetScrubTime, assetHighlight, assetHistoryPoints } from '@/utils/assetPixelWindow'
 
 const props = defineProps<{ visible: boolean }>()
-const emit = defineEmits<{ total: [value: number | null] }>()
+const emit = defineEmits<{ total: [value: number | null]; inspect: [value: { time: string; amount: number | null } | null] }>()
 const locale = useLocaleStore()
 const en = computed(() => locale.locale !== 'zh-TW')
 type Point = import('@/utils/assetPixelWindow').AssetPoint
 type History = import('@/utils/assetPixelWindow').AssetHistory
 const equityBasis = ref(false), valuationStale = ref(false)
 const canvas = ref<HTMLCanvasElement>()
-const period = ref('1M'), points = ref<Point[]>([]), loading = ref(false), failed = ref(false)
-const selected = ref(-1), asOf = ref(0), refreshTurns = ref(0)
+const period = ref('1W'), points = ref<Point[]>([]), loading = ref(false), failed = ref(false)
+const asOf = ref(0), refreshTurns = ref(0)
 const from = ref(0), intervalMs = ref(60000), selectedTime = ref<number | null>(null)
 const periods = ['1D', '1W', '1M', '1Y']
 const labels = computed(() => locale.locale === 'ja' ? ['1日', '1週間', '1か月', '1年'] : en.value ? ['1D', '1W', '1M', '1Y'] : ['1日', '1週', '1月', '1年'])
@@ -30,26 +30,16 @@ const percentLabel = computed(() => incomePercent.value === null ? '—' : `${in
 const timezone = ref('UTC')
 const incomeLabel = computed(() => [['今日收益', 'Today’s income'], ['本週收益', 'This week’s income'], ['本月收益', 'This month’s income'], ['本年收益', 'This year’s income']].map(([zh, en]) => locale.text(zh!, en!))[periods.indexOf(period.value)])
 const money = (n: number) => n.toLocaleString(locale.locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-const selectedPoint = computed(() => points.value[selected.value])
-const selectedInferredZero = computed(() => selectedPoint.value?.quality === 'INFERRED_ZERO')
-const selectedCarried = computed(() => !!selectedPoint.value && !selectedInferredZero.value && (selectedPoint.value.filled || (selectedTime.value ?? asOf.value) > selectedPoint.value.time))
-const selectedSourceTime = computed(() => selectedPoint.value ? new Intl.DateTimeFormat(locale.locale, { timeZone: timezone.value, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' }).format(selectedPoint.value.closeAt ?? selectedPoint.value.time) : '')
 const selectedDate = computed(() => {
-  const point = selectedPoint.value
-  const dailyBucket = period.value === '1Y' && point?.bucketStart != null
-  const time = dailyBucket ? point.bucketStart! : point?.closeAt ?? point?.time ?? selectedTime.value ?? asOf.value
-  const parts = new Intl.DateTimeFormat('en-GB', { timeZone: dailyBucket ? 'UTC' : timezone.value, month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(time)
+  const parts = new Intl.DateTimeFormat('en-GB', { timeZone: period.value === '1Y' ? 'UTC' : timezone.value, month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(selectedTime.value ?? asOf.value)
   const part = (type: Intl.DateTimeFormatPartTypes) => parts.find(p => p.type === type)!.value
   const day = `${part('month')}/${part('day')}`, hour = part('hour')
   if (period.value === '1D') return `${hour}:${part('minute')}`
   if (period.value === '1Y') return day
-  // Month labels identify the four-hour slot; the observed amount is unchanged.
-  return `${day}-${period.value === '1M' ? String(Math.floor(Number(hour) / 4) * 4).padStart(2, '0') : hour}:00`
+  return `${day} ${hour}:00`
 })
-const selectedAmount = computed(() => {
-  const value = assetDisplayValue(points.value, selectedTime.value ?? asOf.value, intervalMs.value + 120000)
-  return value === null ? '—' : '$' + money(value)
-})
+const selectedAmount = computed(() => assetDisplayValue(points.value, selectedTime.value ?? asOf.value, intervalMs.value + 120000))
+function emitInspection() { emit('inspect', selectedTime.value === null ? null : { time: selectedDate.value, amount: selectedAmount.value }) }
 const displayLine = computed(() => assetDisplayLine(points.value, from.value, asOf.value))
 const extrema = computed(() => {
   const data = displayLine.value.filter((p): p is Point & { value: number } => p.value !== null)
@@ -57,9 +47,9 @@ const extrema = computed(() => {
   return { high: data.reduce((a, b) => b.value > a.value ? b : a), low: data.reduce((a, b) => b.value < a.value ? b : a) }
 })
 const ticks = computed(() => assetPriceTicks(displayLine.value.map(p => p.value).filter((v): v is number => v !== null)))
-let width = 0, animation = 0, observer: ResizeObserver | undefined, timer: ReturnType<typeof setInterval> | undefined
+let width = 0, animation = 0, observer: ResizeObserver | undefined
 let plotRight = 0
-let generation = 0, disposed = false, activeRequest = false
+let generation = 0, disposed = false
 let pointerStart: { x: number; y: number; id: number } | undefined
 let holdTimer: ReturnType<typeof setTimeout> | undefined
 let scrubbing = false
@@ -68,7 +58,7 @@ const height = 180, plotInset = 8
 
 async function load(replay = false) {
   const version = ++generation
-  loading.value = true; activeRequest = true
+  loading.value = true
   try {
     const data = await request.get('/user/asset-history', { params: { range: period.value } }) as unknown as History
     if (disposed || version !== generation) return
@@ -80,16 +70,16 @@ async function load(replay = false) {
     points.value = next; asOf.value = data.asOf; from.value = data.from; intervalMs.value = data.intervalMs; failed.value = false
     if (selectedTime.value !== null) {
       selectedTime.value = Math.max(data.from, Math.min(data.asOf, selectedTime.value))
-      selected.value = assetDisplayIndex(next, selectedTime.value)
     }
     change.value = Number(data.income); timezone.value = data.timezone || 'UTC'
     incomePercent.value = data.incomePercent != null && Number.isFinite(Number(data.incomePercent)) ? Number(data.incomePercent) : null
     emit('total', data.total === null ? null : Number(data.total))
+    if (selectedTime.value !== null) emitInspection()
     if (replay || changed) play(); else draw(1)
   } catch {
     if (!disposed && version === generation) failed.value = true
   } finally {
-    if (version === generation) { loading.value = false; activeRequest = false }
+    if (version === generation) loading.value = false
   }
 }
 
@@ -201,19 +191,19 @@ function play(origin = -1) {
   const frame = (now: number) => { const progress = Math.min(1, (now - start) / 1050); draw(progress, origin); if (progress < 1 && !disposed) animation = requestAnimationFrame(frame) }
   animation = requestAnimationFrame(frame)
 }
-function choose(next: string) { stopPointer(); period.value = next; points.value = []; from.value = 0; change.value = null; selected.value = -1; selectedTime.value = null; draw(1); void load(true) }
+function choose(next: string) { if (next === period.value) return; resetSelection(); period.value = next; points.value = []; from.value = 0; change.value = null; draw(1); void load(true) }
 function selectAt(clientX: number) {
   if (!props.visible || !points.value.length) return
   cancelAnimationFrame(animation)
   const rect = canvas.value!.getBoundingClientRect()
   const time = assetScrubTime(clientX, rect.left + plotInset, rect.width - plotInset * 2, from.value, asOf.value)
   selectedTime.value = time
-  selected.value = assetDisplayIndex(points.value, time)
+  emitInspection()
   draw(1)
 }
 function startPointer(event: PointerEvent) {
   if (!event.isPrimary || event.button !== 0 || !props.visible || !points.value.length) return
-  stopPointer(); pointerStart = { x: event.clientX, y: event.clientY, id: event.pointerId }
+  resetSelection(); pointerStart = { x: event.clientX, y: event.clientY, id: event.pointerId }
   if (event.pointerType === 'mouse') { scrubbing = true; canvas.value?.setPointerCapture(event.pointerId); selectAt(event.clientX); return }
   holdTimer = setTimeout(() => {
     if (!pointerStart) return
@@ -224,9 +214,8 @@ function movePointer(event: PointerEvent) {
   if (!pointerStart || pointerStart.id !== event.pointerId) return
   if (!scrubbing) {
     const dx = Math.abs(event.clientX - pointerStart.x), dy = Math.abs(event.clientY - pointerStart.y)
-    if (dy > 10 && dy > dx) { stopPointer(); return }
-    if (dx < 6) return
-    clearTimeout(holdTimer); scrubbing = true; canvas.value?.setPointerCapture(event.pointerId)
+    if (dx > 10 || dy > 10) stopPointer()
+    return
   }
   selectAt(event.clientX)
 }
@@ -240,7 +229,7 @@ function stopPointer() {
   if (id !== undefined && canvas.value?.hasPointerCapture(id)) canvas.value.releasePointerCapture(id)
 }
 function preventScrubScroll(event: TouchEvent) { if (scrubbing && event.cancelable) event.preventDefault() }
-function resetSelection() { stopPointer(); selected.value = -1; selectedTime.value = null; draw(1) }
+function resetSelection() { stopPointer(); selectedTime.value = null; emitInspection(); draw(1) }
 function refreshChart() { if (loading.value) return; refreshTurns.value++; resetSelection(); void load(true) }
 function scrubKey(event: KeyboardEvent) {
   if (event.key === 'Escape') { resetSelection(); return }
@@ -250,7 +239,6 @@ function scrubKey(event: KeyboardEvent) {
   const rect = canvas.value!.getBoundingClientRect()
   selectAt(rect.left + plotInset + (time - from.value) / (asOf.value - from.value) * (rect.width - plotInset * 2))
 }
-function resume() { if (!document.hidden && !activeRequest && !pointerStart) void load() }
 watch(() => locale.locale, () => draw(1))
 watch(() => props.visible, () => { resetSelection(); play() })
 onMounted(() => {
@@ -264,25 +252,24 @@ onMounted(() => {
   })
   observer.observe(canvas.value!); void load(true)
   canvas.value!.addEventListener('touchmove', preventScrubScroll, { passive: false })
-  timer = setInterval(resume, 10000); document.addEventListener('visibilitychange', resume); window.addEventListener('focus', resume)
 })
-onBeforeUnmount(() => { disposed = true; generation++; stopPointer(); canvas.value?.removeEventListener('touchmove', preventScrubScroll); observer?.disconnect(); clearInterval(timer); cancelAnimationFrame(animation); document.removeEventListener('visibilitychange', resume); window.removeEventListener('focus', resume) })
+onBeforeUnmount(() => { disposed = true; generation++; resetSelection(); canvas.value?.removeEventListener('touchmove', preventScrubScroll); observer?.disconnect(); cancelAnimationFrame(animation) })
 </script>
 
 <template>
   <section class="pixel-history" @click.stop>
     <div class="chart-toolbar">
-      <div class="delta" v-if="visible" aria-live="polite"><span>{{ incomeLabel }}</span><b v-if="change !== null" :class="{ negative: change < 0 }">{{ change >= 0 ? '+' : '−' }}${{ money(Math.abs(change)) }} ({{ percentLabel }})</b><b v-else>—</b></div>
+      <div class="delta" v-if="visible && selectedTime === null" aria-live="polite"><span>{{ incomeLabel }}</span><b v-if="change !== null" :class="{ negative: change < 0 }">{{ change >= 0 ? '+' : '−' }}${{ money(Math.abs(change)) }} ({{ percentLabel }})</b><b v-else>—</b></div>
       <button class="refresh-button" type="button" :disabled="loading" :aria-label="locale.t('update')" @click="refreshChart">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" :style="{ transform: `rotate(${refreshTurns * 360}deg)` }"><path d="M20 7v5h-5M20 12a8 8 0 1 0-2.34 5.66" /></svg>
       </button>
     </div>
     <div class="chart-wrap" :style="{ '--chart-rgb': chartRgb }">
-      <canvas ref="canvas" role="img" tabindex="0" :aria-label="locale.text('長按拖動查看金額；方向鍵選擇時間，Esc恢復。', 'Hold and drag to inspect. Arrow keys select time; Escape resets.')" @pointerdown="startPointer" @pointermove="movePointer" @pointercancel="resetSelection" @lostpointercapture="resetSelection" @pointerup="endPointer" @contextmenu.prevent @keydown="scrubKey" @keydown.enter="refreshChart" />
+      <canvas ref="canvas" role="img" tabindex="0" :aria-label="locale.text('長按拖動查看金額；方向鍵選擇時間，Esc恢復。', 'Hold and drag to inspect. Arrow keys select time; Escape resets.')" @pointerdown="startPointer" @pointermove="movePointer" @pointercancel="resetSelection" @lostpointercapture="resetSelection" @pointerup="endPointer" @contextmenu.prevent @keydown="scrubKey" />
       <div v-if="!visible || !points.length" class="empty">{{ !visible ? (locale.text('資產已隱藏', 'Assets hidden')) : loading ? (locale.text('載入中…', 'Loading…')) : failed ? (locale.text('載入失敗，請點刷新', 'Unable to load. Tap refresh.')) : (locale.text('正在累積真實資產記錄…', 'Recording real history…')) }}</div>
-      <div v-if="visible && selectedTime !== null" class="point-detail" role="status">{{ selectedDate }} · {{ selectedAmount }}<span v-if="selectedCarried"> · {{ locale.text('沿用歷史值，來源：', 'Carried forward, observed: ') }}{{ selectedSourceTime }}</span><span v-if="selectedInferredZero"> · {{ locale.text('無更早記錄，按 $0 顯示', 'No earlier record; shown as $0') }}</span></div>
     </div>
     <div class="periods"><button v-for="(item, i) in periods" :key="item" type="button" :aria-pressed="period === item" @click="choose(item)">{{ labels[i] }}</button></div>
+    <div v-if="asOf && selectedTime === null" class="status">{{ locale.text('更新時間（快照）：', 'Updated (snapshot): ') }}{{ new Date(asOf).toLocaleString(locale.locale) }}</div>
     <div v-if="visible && valuationStale" class="status" role="status">{{ locale.text('估值不可用', 'Valuation unavailable') }}</div>
     <div v-if="failed && points.length" class="status" role="status">{{ locale.text('同步失敗 · 顯示上次資料', 'Sync failed · showing last update') }}</div>
   </section>
@@ -290,9 +277,8 @@ onBeforeUnmount(() => { disposed = true; generation++; stopPointer(); canvas.val
 
 <style scoped>
 canvas{user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
-.point-detail{max-width:95%;white-space:normal!important;text-align:center}
 .pixel-history{margin-top:2px;min-width:0}.chart-toolbar{display:flex;align-items:center;gap:8px}.delta{flex:1;min-width:0}.delta{display:flex;flex-wrap:wrap;gap:7px;font-size:11px;color:#8d988b}.delta b{color:#5c9936;font-weight:600;font-variant-numeric:tabular-nums}.delta b.negative{color:#b65072}
 .refresh-button{display:grid;place-items:center;flex:0 0 32px;width:32px;height:32px;margin-left:auto;padding:6px;border:0;border-radius:8px;background:transparent;color:#6e9e54;cursor:pointer}.refresh-button:disabled{opacity:.5;cursor:default}.refresh-button svg{display:block;width:20px;height:20px;transition:transform .6s ease-in-out}.refresh-button:active{background:#f3f5f1}@media(prefers-reduced-motion:reduce){.refresh-button svg{transition:none}}
-.chart-wrap{position:relative;height:180px}canvas{display:block;width:100%;height:180px;touch-action:pan-y}.empty{position:absolute;inset:0;display:grid;place-items:center;background:#fff;color:#899687;font-size:12px}.point-detail{position:absolute;top:3px;left:50%;transform:translateX(-50%);white-space:nowrap;background:#fff;border:1px solid rgba(var(--chart-rgb),.25);border-radius:8px;padding:6px 9px;font-size:11px;box-shadow:0 5px 15px rgba(var(--chart-rgb),.1);pointer-events:none}
+.chart-wrap{position:relative;height:180px}canvas{display:block;width:100%;height:180px;touch-action:pan-y}.empty{position:absolute;inset:0;display:grid;place-items:center;background:#fff;color:#899687;font-size:12px}
 .periods{display:grid;grid-template-columns:repeat(4,1fr);gap:3px;margin-top:2px}.periods button{min-height:36px;border:0;border-radius:9px;background:transparent;color:#7d8a7a;font-size:11px;cursor:pointer}.periods button[aria-pressed=true]{background:#e6f0de;color:#4f852d;font-weight:700}.status{margin-top:10px;color:#929d8e;font-size:10px;line-height:1.5}button:focus-visible,canvas:focus-visible{outline:2px solid #73b100;outline-offset:2px}
 </style>

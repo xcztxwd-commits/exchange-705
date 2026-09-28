@@ -28,13 +28,14 @@ public class ManualOrderService {
     private final ObjectMapper json;
     private final TradingSymbolRepository symbols;
     private final ManualOrderPrices prices;
+    private final YahooHistoryCalendar yahooCalendar;
     private final ManualOrderHistory history;
     @Value("${manual.orders.enabled:false}") private boolean enabled;
     private final Map<String,Preview> previews=new ConcurrentHashMap<>();
     public static class Request {
         public Long userId;
         public String symbol,side,timezone,openLocal,closeLocal,openOffset,closeOffset,driver;
-        public BigDecimal input,leverage;
+        public BigDecimal input,leverage,targetNet;
         public boolean walletEnabled,historyEnabled;
         public String previewToken,idempotencyKey;
         @com.fasterxml.jackson.annotation.JsonAnySetter
@@ -55,11 +56,23 @@ public class ManualOrderService {
         authorize();JdbcTemplate db=new JdbcTemplate(dataSource);Map<String,Object> out=new LinkedHashMap<>();
         String q=search==null?"":search.trim();
         out.put("users",db.queryForList("select id,email from user_account where cast(id as char)=? or email like ? order by id desc limit 30",q,"%"+q.replace("\\","\\\\").replace("%","\\%").replace("_","\\_")+"%"));
-        out.put("symbols",db.queryForList("select symbol,name,lot_size,fee_multiplier from trading_symbol where is_enabled=1 order by sort_order,id"));
+        out.put("symbols",db.queryForList("select symbol,name,category,source_category,lot_size,fee_multiplier from trading_symbol where is_enabled=1 order by sort_order,id"));
         List<String> zones=db.query("select config_value from system_config where config_key='system.timezone'",(r,n)->r.getString(1));
         out.put("timezone",zones.isEmpty()?"Europe/London":zones.get(0));out.put("maxHistoryRows",ManualOrderHistory.MAX_ROWS);
         if(user!=null) {out.put("user",db.queryForMap("select id,email from user_account where id=?",user));out.put("account",account(db,user,false));}
         return out;
+    }
+    public Map<String,Object> minutes(String symbol,String date,String timezone) {
+        authorize();
+        TradingSymbol s=symbols.findBySymbol(symbol).orElseThrow(()->new BusinessException("品种不存在"));
+        if(!Boolean.TRUE.equals(s.getIsEnabled()))throw new BusinessException("品种已停用");
+        return prices.minutes(s,date,timezone);
+    }
+    public Map<String,Object> calendar(String symbol,String month,String timezone,int page) {
+        authorize();
+        TradingSymbol s=symbols.findBySymbol(symbol).orElseThrow(()->new BusinessException("品种不存在"));
+        if(!Boolean.TRUE.equals(s.getIsEnabled()))throw new BusinessException("品种已停用");
+        return yahooCalendar.page(s,month,timezone,page);
     }
     private Map<String,Object> account(JdbcTemplate db,long user,boolean lock) {
         List<Map<String,Object>> rows=db.queryForList("select id,available,frozen,row_version from asset_account where user_id=? and coin='CONTRACT'"+(lock?" for update":""),user);
@@ -85,6 +98,48 @@ public class ManualOrderService {
         if(previews.size()>=1000)throw new BusinessException("预览繁忙，请稍后重试");
         String token=UUID.randomUUID().toString();previews.put(token,p);out.put("previewToken",token);return out;
     }
+    public Map<String,Object> generate(ManualOrderGenerator.Request r) {
+        authorize();
+        if(r==null || r.userId==null || r.userId<=0 || r.symbol==null)throw new BusinessException("请先选择用户与品种");
+        if(r.historyEnabled && !r.walletEnabled)throw new BusinessException("历史开启必须同时开启钱包入账");
+        ZoneId zone;
+        try {zone=ZoneId.of(r.timezone);}catch(DateTimeException | NullPointerException e){throw new BusinessException("请选择有效时区");}
+        long now=System.currentTimeMillis(),end=Math.floorDiv(now,60000)*60000;
+        Long open=r.openLocal==null?null:ManualOrderCalculation.minute(r.openLocal,r.timezone,r.openOffset);
+        Long close=r.closeLocal==null?null:ManualOrderCalculation.minute(r.closeLocal,r.timezone,r.closeOffset);
+        if(open!=null && (open<0 || open>=end) || close!=null && (close<0 || close>=end) || open!=null && close!=null && open>close)
+            throw new BusinessException("生成需使用已结束分钟，且开仓不能晚于平仓");
+        TradingSymbol s=symbols.findBySymbol(r.symbol).orElseThrow(()->new BusinessException("品种不存在"));
+        if(!Boolean.TRUE.equals(s.getIsEnabled()))throw new BusinessException("品种已停用");
+        BigDecimal available=(BigDecimal)account(new JdbcTemplate(dataSource),r.userId,false).get("available");
+        ManualOrderGenerator.validate(r,available);
+        BigDecimal lot=s.getLotSize()==null?new BigDecimal("1000"):s.getLotSize(),fee=s.getFeeMultiplier()==null?new BigDecimal("30"):s.getFeeMultiplier();
+        long from=open!=null?open:Math.max(0,(close==null?end:close)-ManualOrderGenerator.RANGE);
+        long to=close!=null?close+60000:open!=null?Math.min(end,open+ManualOrderGenerator.RANGE+60000):end;
+        NavigableMap<Long,ManualOrderGenerator.Candle> candles;
+        if(open!=null && close!=null) {
+            Map<String,Object> q=prices.quote(s,open,close);candles=new TreeMap<>();
+            candles.put(open,new ManualOrderGenerator.Candle(open,new BigDecimal(q.get("openPrice").toString()),new BigDecimal(q.get("openRate").toString())));
+            candles.put(close,new ManualOrderGenerator.Candle(close,new BigDecimal(q.get("closePrice").toString()),new BigDecimal(q.get("closeRate").toString())));
+        } else candles=prices.generationCandles(s,from,to);
+        ManualOrderGenerator.Candidate best=ManualOrderGenerator.solve(r,candles,open,close,available,lot,fee,UUID.randomUUID().getLeastSignificantBits());
+        Request generated=new Request();generated.userId=r.userId;generated.symbol=r.symbol;generated.timezone=r.timezone;generated.side=best.side;generated.leverage=best.leverage;
+        ZonedDateTime a=Instant.ofEpochMilli(best.open.time).atZone(zone),b=Instant.ofEpochMilli(best.close.time).atZone(zone);
+        generated.openLocal=a.toLocalDateTime().toString();generated.closeLocal=b.toLocalDateTime().toString();generated.openOffset=a.getOffset().toString();generated.closeOffset=b.getOffset().toString();
+        generated.driver="QUANTITY";generated.input=best.calculation.get("quantity");generated.targetNet=r.targetNet;generated.walletEnabled=r.walletEnabled;generated.historyEnabled=r.historyEnabled;
+        Map<String,Object> out=preview(generated);
+        @SuppressWarnings("unchecked") Map<String,BigDecimal> actual=(Map<String,BigDecimal>)out.get("calculation");
+        if(!ManualOrderGenerator.withinTarget(actual.get("net"),r.targetNet) || !ManualOrderGenerator.matches(r,actual,generated.leverage)) {
+            previews.remove(out.get("previewToken").toString());throw new BusinessException("行情或余额已变化，最终预览不满足固定条件或 ±5% 误差，请重新生成");
+        }
+        Map<String,Object> info=new LinkedHashMap<>();info.put("targetNet",r.targetNet);info.put("difference",r.targetNet==null?null:actual.get("net").subtract(r.targetNet));
+        info.put("errorPercent",ManualOrderGenerator.error(actual.get("net"),r.targetNet));info.put("durationMinutes",(best.close.time-best.open.time)/60000);
+        info.put("searchedPairs",best.pairs);info.put("from",Instant.ofEpochMilli(from).toString());info.put("to",Instant.ofEpochMilli(to).toString());
+        String warning=best.close.time-best.open.time<30*60000L?"可行条件限制，当前生成持仓较短；建议取消部分固定条件或换时间":"优先选择小时级持仓、适中仓位与杠杆；模拟订单仍带手动标记";
+        if(actual.get("percent")!=null && actual.get("percent").compareTo(new BigDecimal("100"))>0)warning+="；当前结果超过 100% 仓位，不代表实际资金可承受的交易";
+        info.put("warning",warning);
+        out.put("generation",info);return out;
+    }
     private void validate(Request r,long now) {
         if(r==null || r.userId==null || r.userId<=0 || r.symbol==null || r.symbol.length()>32)throw new BusinessException("用户或品种无效");
         if(r.historyEnabled && !r.walletEnabled)throw new BusinessException("历史开启必须同时开启钱包入账");
@@ -94,7 +149,14 @@ public class ManualOrderService {
     }
     private BigDecimal decimal(Preview p,String name) {return new BigDecimal(p.quotes.get(name).toString());}
     private Map<String,BigDecimal> calculate(Request r,Preview p) {
-        return ManualOrderCalculation.calculate(r.driver,r.input,r.side,p.available,decimal(p,"openPrice"),decimal(p,"closePrice"),p.lot,r.leverage,decimal(p,"openRate"),decimal(p,"closeRate"),p.fee);
+        Map<String,BigDecimal> calculation=ManualOrderCalculation.calculate(r.driver,r.input,r.side,p.available,decimal(p,"openPrice"),decimal(p,"closePrice"),p.lot,r.leverage,decimal(p,"openRate"),decimal(p,"closeRate"),p.fee);
+        BigDecimal target=r.targetNet!=null?r.targetNet:"NET".equals(r.driver)?r.input:null;
+        if(target!=null) {
+            ManualOrderCalculation.number(target,32,16,"目标净收益");
+            if(!ManualOrderGenerator.withinTarget(calculation.get("net"),target))throw new BusinessException("当前条件下实际净收益 "+calculation.get("net").stripTrailingZeros().toPlainString()+" 不满足目标 ±5%（零目标须精确匹配）；请一键生成或调整固定条件");
+            calculation.put("difference",ManualOrderCalculation.money(calculation.get("net").subtract(target)));
+        }
+        return calculation;
     }
     private Map<String,Object> evidence(Request r,Preview p) {
         Map<String,Object> out=new LinkedHashMap<>();out.put("request",json.convertValue(r,Map.class));out.put("quotes",p.quotes);out.put("calculation",p.calculation);
@@ -105,7 +167,7 @@ public class ManualOrderService {
         return out;
     }
     private String hash(Request r,long operator) {
-        Map<String,Object> fields=new TreeMap<>(json.convertValue(r,Map.class));fields.remove("previewToken");fields.remove("idempotencyKey");fields.put("operator",operator);
+        Map<String,Object> fields=new TreeMap<>(json.convertValue(r,Map.class));fields.remove("previewToken");fields.remove("idempotencyKey");if(r.targetNet==null)fields.remove("targetNet");fields.put("operator",operator);
         return digest(encode(fields));
     }
     private String digest(String value) {

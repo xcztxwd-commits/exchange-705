@@ -39,7 +39,7 @@ public class AgentPerformanceController {
         int subordinateCount = subordinateUserIds.size();
 
         // 统计累计充值（状态为COMPLETED的充值记录）
-        BigDecimal totalDeposit = depositRecordRepository.findAll().stream()
+        BigDecimal totalDeposit = depositRecordRepository.findAll().stream().filter(d -> !"ADMIN_MANUAL".equals(d.getSource()))
                 .filter(deposit -> subordinateUserIds.contains(deposit.getUserId()))
                 .filter(deposit -> "COMPLETED".equals(deposit.getStatus()))
                 .map(deposit -> deposit.getAmount() != null ? deposit.getAmount() : BigDecimal.ZERO)
@@ -66,6 +66,15 @@ public class AgentPerformanceController {
 
         Map<String, Object> performance = new HashMap<>();
         performance.put("subordinateCount", subordinateCount);
+        Map<String,BigDecimal> depositGroups=new LinkedHashMap<>();
+        for(com.gtcfesk.exchange.entity.DepositRecord d:depositRecordRepository.findAll()) {
+            if(!subordinateUserIds.contains(d.getUserId()) || !"COMPLETED".equals(d.getStatus()))continue;
+            String source=d.getSource()==null?"LEGACY_UNKNOWN":d.getSource();
+            if("ADMIN_MANUAL".equals(source))source+="_"+d.getManualPurpose();
+            depositGroups.merge(source,d.getAmount(),BigDecimal::add);
+        }
+        performance.put("depositGroupsUsd",depositGroups);
+        performance.put("depositBasis","累计充值含用户提交与历史未知，手动用途独立分组；旧报表保持创建时间口径");
         performance.put("subordinateTotalDeposit", totalDeposit); // 下级用户累计充值
         performance.put("subordinateTotalWithdraw", totalWithdraw); // 下级用户累计提现
         performance.put("totalTrade", totalTrade);

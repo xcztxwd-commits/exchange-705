@@ -53,20 +53,54 @@ public class ExchangeQuoteSource {
     Map<String,Map<String,Object>> prices(List<String> codes, String category) {
         boolean okx = "okx".equals(provider), perpetual = perpetual(category);
         Map<String,Map<String,Object>> result = new HashMap<>();
-        // Bounded by the existing category HTTP deadline; partial valid results survive a missing instrument.
         MarketHttp.Failure lastFailure = null;
-        for (String code : codes) try {
-            String external = symbol(code, category, okx);
-            String url = okx ? okxUrl + "/api/v5/market/ticker?instId=" + external
-                : (perpetual ? futuresUrl + "/fapi/v1" : spotUrl + "/api/v3") + "/ticker/24hr?symbol=" + external;
-            JsonNode row = get(url); if (okx) row = row.path(0);
-            Map<String,Object> quote = ticker(row, okx, false);
-            if (!external.equals(quote.get("symbol"))) throw new MarketHttp.Failure("instrument_mismatch", 0);
-            quote.put("marketType", perpetual ? "perpetual" : "spot"); quote.put("quoteCurrency", "USDT");
-            quote.put("source", name()); result.put(code, quote);
-        } catch (MarketHttp.Failure failure) { lastFailure = failure; }
+        // One spot request for up to 100 instruments avoids exhausting the category's 5s HTTP budget.
+        for (int from = 0; from < codes.size(); from += okx || perpetual ? 1 : 100) {
+            List<String> chunk = codes.subList(from, Math.min(codes.size(), from + (okx || perpetual ? 1 : 100)));
+            if (!okx && !perpetual && chunk.size() > 1) {
+                try { result.putAll(spotPrices(chunk)); continue; }
+                catch (MarketHttp.Failure failure) {
+                    // Binance rejects the whole batch for one bad symbol; isolate it without dropping valid siblings.
+                    if (!"http_400".equals(failure.getMessage()) && !"provider_error".equals(failure.getMessage())
+                            && !"unsupported_instrument".equals(failure.getMessage())) throw failure;
+                    lastFailure = failure;
+                }
+            }
+            for (String code : chunk) try { result.put(code, singlePrice(code, category, okx, perpetual)); }
+                catch (MarketHttp.Failure failure) { lastFailure = failure; }
+        }
         if (result.isEmpty() && lastFailure != null) throw lastFailure;
         return result;
+    }
+    private Map<String,Object> singlePrice(String code, String category, boolean okx, boolean perpetual) {
+        String external = symbol(code, category, okx);
+        String url = okx ? okxUrl + "/api/v5/market/ticker?instId=" + external
+            : (perpetual ? futuresUrl + "/fapi/v1" : spotUrl + "/api/v3") + "/ticker/24hr?symbol=" + external;
+        JsonNode row = get(url); if (okx) row = row.path(0);
+        Map<String,Object> quote = ticker(row, okx, false);
+        if (!external.equals(quote.get("symbol"))) throw new MarketHttp.Failure("instrument_mismatch", 0);
+        quote.put("marketType", perpetual ? "perpetual" : "spot"); quote.put("quoteCurrency", "USDT");
+        quote.put("source", name()); return quote;
+    }
+    private Map<String,Map<String,Object>> spotPrices(List<String> codes) {
+        Map<String,String> externalToCode = new HashMap<>();
+        for (String code : codes) externalToCode.put(symbol(code, "Crypto", false), code);
+        try {
+            String symbols = JSON.writeValueAsString(externalToCode.keySet());
+            JsonNode rows = get(spotUrl + "/api/v3/ticker/24hr?symbols=" + URLEncoder.encode(symbols, "UTF-8"));
+            if (!rows.isArray()) throw new MarketHttp.Failure("invalid_response", 0);
+            Map<String,Map<String,Object>> result = new HashMap<>();
+            for (JsonNode row : rows) {
+                Map<String,Object> quote = ticker(row, false, false);
+                String code = externalToCode.get(quote.get("symbol"));
+                if (code != null) {
+                    quote.put("marketType", "spot"); quote.put("quoteCurrency", "USDT"); quote.put("source", name());
+                    result.put(code, quote);
+                }
+            }
+            return result;
+        } catch (MarketHttp.Failure failure) { throw failure; }
+        catch (Exception failure) { throw new MarketHttp.Failure("invalid_response", 0); }
     }
     static Map<String,Object> ticker(JsonNode row, boolean okx, boolean ws) {
         Map<String,Object> result = new HashMap<>();

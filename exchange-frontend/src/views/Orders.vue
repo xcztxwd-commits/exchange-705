@@ -10,12 +10,18 @@ import { useMarketStore } from '@/store/market'
 import { useLocaleStore } from '@/store/locale'
 import { formatDateTime } from '@/utils/dateTime'
 import { displaySymbol } from '@/utils/displaySymbol'
+import { orderTimestamp, profitRate, withinDays } from '@/utils/orderView'
 
 const marketStore = useMarketStore()
 const localeStore = useLocaleStore()
 localeStore.loadLocale()
 const shareOrder = ref<{ id: string | number; kind: ShareKind } | null>(null)
 const shareLabel = computed(() => shareCopy(localeStore.locale).share)
+const copy = (zh: string, en: string) => localeStore.text(zh, en)
+const formatOrderTime = (value: unknown) => {
+  const timestamp = orderTimestamp(value)
+  return timestamp === null ? '' : formatDateTime(new Date(timestamp).toISOString())
+}
 
 // 主标签：合約 / 期限
 const mainTab = ref<'contract' | 'term'>('contract')
@@ -25,6 +31,10 @@ const subTab = ref<'positions' | 'pending' | 'history'>('positions')
 
 // 期限页面的子标签：交易中 / 已平倉
 const termSubTab = ref<'trading' | 'closed'>('trading')
+const symbolFilter = ref('all')
+const directionFilter = ref('all')
+const periodFilter = ref(30)
+const nowTick = ref(Date.now())
 
 // 加载状态
 const loading = ref(false)
@@ -53,8 +63,8 @@ async function loadDurationOptions() {
     if (res && Array.isArray(res)) {
       durationOptions.value = res.map((item: any) => ({
         value: item.duration,
-        profitRate: Number(item.profitRate || 0.8), // 盈利比例，默认0.8（80%）
-        lossRate: Number(item.lossRate || 1.0), // 亏损比例，默认1.0（100%，全部亏损）
+        profitRate: Number(item.profitRate ?? 0.8),
+        lossRate: Number(item.lossRate ?? 1.0),
       }))
     }
   } catch (e) {
@@ -67,6 +77,7 @@ async function loadDurationOptions() {
 // 订单详情弹窗相关
 const showOrderDetailModal = ref(false) // 显示订单详情弹窗
 const detailOrder = ref<any>(null) // 当前查看的订单
+const editingTPSL = ref(false)
 const closePrice = ref(0) // 平仓价格
 const stopLossEnabled = ref(false) // 止损开关
 const takeProfitEnabled = ref(false) // 止盈开关
@@ -81,24 +92,28 @@ function getCurrentPrice(symbol: string): number {
 // 转换合约订单数据格式
 function transformContractOrder(order: any) {
   const currentPrice = getCurrentPrice(order.symbol)
+  const displayPrice = currentPrice > 0 ? currentPrice : Number(order.currentPrice || 0)
   
   const leverage = Number(order.leverage ?? 1)
-  const calculatedProfit = calculateContractProfit(order, currentPrice, marketStore.getConversionRate(order.symbol, order.quoteCurrency))
+  const calculatedProfit = calculateContractProfit(order, displayPrice, marketStore.getConversionRate(order.symbol, order.quoteCurrency))
 
   // 对于挂单（PENDING），使用 createdAt 作为创建时间；对于持仓（OPEN），使用 openTime
   const displayTime = order.status === 'PENDING' 
     ? (order.createdAt || order.openTime) 
     : (order.openTime || order.createdAt)
+  const rawOpenTime = order.manualOpenTimeUtc != null ? new Date(order.manualOpenTimeUtc).toISOString() : displayTime
+  const rawCloseTime = order.manualCloseTimeUtc != null ? new Date(order.manualCloseTimeUtc).toISOString() : order.closeTime
   
   return {
     id: order.id,
     symbol: order.symbol,
     displayName: order.displayName,
     type: order.side?.toLowerCase() || 'buy', // BUY -> buy, SELL -> sell
+    orderType: order.type,
     lots: Number(order.quantity || 0),
     openPrice: Number(order.openPrice || 0),
     price: Number(order.price || 0), // 限价单价格
-    currentPrice: currentPrice > 0 ? currentPrice : Number(order.currentPrice || order.openPrice || 0),
+    currentPrice: displayPrice,
     closePrice: Number(order.closePrice || 0),
     amount: Number(order.margin || 0),
     profit: calculatedProfit,
@@ -106,8 +121,10 @@ function transformContractOrder(order: any) {
     fee: Number(order.fee || 0),
     orderSource: order.orderSource,
     manualCloseTime: order.manualCloseTimeUtc != null ? formatDateTime(new Date(order.manualCloseTimeUtc).toISOString()) : '',
-    openTime: formatDateTime(order.manualOpenTimeUtc != null ? new Date(order.manualOpenTimeUtc).toISOString() : displayTime), // 使用创建时间或开仓时间
-    closeTime: formatDateTime(order.manualCloseTimeUtc != null ? new Date(order.manualCloseTimeUtc).toISOString() : order.closeTime),
+    openTime: formatOrderTime(rawOpenTime), // 使用创建时间或开仓时间
+    closeTime: formatOrderTime(rawCloseTime),
+    openTimeRaw: rawOpenTime,
+    closeTimeRaw: rawCloseTime,
     status: order.status, // 保留状态
     side: order.side, // 保留原始side用于计算
     quantity: order.quantity, // 保留原始quantity用于计算
@@ -119,46 +136,25 @@ function transformContractOrder(order: any) {
   }
 }
 
-// 计算期限订单盈亏（使用期限设置中的盈利比例和亏损比例）
+// Trading estimates use the same configured payout and preset outcome as settlement.
 function calculateOptionProfit(order: any, currentPrice: number): number {
-  // 如果订单已平仓，使用已计算的盈亏
   if (order.status === 'CLOSED' && order.profit != null) {
-    return Number(order.profit ?? 0)
+    return Number(order.profit)
   }
-  
-  // 如果订单交易中，根据当前价格计算盈亏
-  if (order.status === 'TRADING' && order.openPrice && currentPrice > 0) {
-    const priceDiff = currentPrice - order.openPrice
+  if (order.status === 'TRADING') {
     const amount = Number(order.amount || 0)
-    
-    // 获取订单对应的期限设置的盈利比例和亏损比例（从后端加载的配置中查找）
     const orderDuration = Number(order.duration || 0)
     const durationOption = durationOptions.value.find(opt => opt.value === orderDuration)
-    const profitRate = durationOption?.profitRate || 0.8 // 盈利比例，默认80%（从后端配置获取）
-    const lossRate = durationOption?.lossRate || 1.0 // 亏损比例，默认100%（全部亏损，从后端配置获取）
-    
-    // 买涨：价格上涨盈利，价格下跌亏损
-    // 买跌：价格下跌盈利，价格上涨亏损
-    if (order.direction === 'UP') {
-      if (priceDiff > 0) {
-        // 价格上涨，盈利：使用盈利比例
-        return amount * profitRate
-      } else {
-        // 价格下跌，亏损：使用亏损比例
-        return -(amount * lossRate)
-      }
-    } else if (order.direction === 'DOWN') {
-      if (priceDiff < 0) {
-        // 价格下跌，盈利：使用盈利比例
-        return amount * profitRate
-      } else {
-        // 价格上涨，亏损：使用亏损比例
-        return -(amount * lossRate)
-      }
-    }
+    if (!durationOption) return NaN
+    if (order.presetProfitType === 'PROFIT') return amount * durationOption.profitRate
+    if (order.presetProfitType === 'LOSS') return -amount * durationOption.lossRate
+    if (Number(order.openPrice) <= 0 || currentPrice <= 0) return NaN
+    const priceDiff = currentPrice - Number(order.openPrice)
+    if (order.direction === 'UP') return priceDiff > 0 ? amount * durationOption.profitRate : -amount * durationOption.lossRate
+    if (order.direction === 'DOWN') return priceDiff < 0 ? amount * durationOption.profitRate : -amount * durationOption.lossRate
+    return NaN
   }
-  
-  return Number(order.profit ?? 0)
+  return Number(order.profit ?? NaN)
 }
 
 // 存储所有交易对信息
@@ -228,15 +224,17 @@ function transformOptionOrder(order: any) {
     displayName: order.displayName,
     type: order.direction === 'UP' ? 'buy' : 'sell', // UP -> buy (绿色), DOWN -> sell (红色)
     openPrice: Number(order.openPrice || 0),
-    currentPrice: currentPrice > 0 ? currentPrice : Number(order.closePrice || order.openPrice || 0),
+    currentPrice: currentPrice > 0 ? currentPrice : order.status === 'CLOSED' ? Number(order.closePrice || 0) : 0,
     closePrice: Number(order.closePrice || 0),
     amount: Number(order.amount || 0),
     profit: calculatedProfit,
     duration: order.duration || 0,
-    openTime: formatDateTime(order.openTime),
+    openTime: formatOrderTime(order.openTime),
     openTimeRaw: order.openTime, // 保留原始时间用于计算倒计时
-    closeTime: formatDateTime(order.closeTime),
+    closeTime: formatOrderTime(order.closeTime),
+    closeTimeRaw: order.closeTime,
     direction: order.direction, // 保留原始direction用于计算
+    presetProfitType: order.presetProfitType,
     status: order.status, // 保留状态用于计算
     baseCurrency: symbolInfo.baseCurrency, // 基础货币
     quoteCurrency: symbolInfo.quoteCurrency, // 计价货币
@@ -248,116 +246,67 @@ function calculateCountdown(order: any): number {
   if (!order || order.status !== 'TRADING' || !order.openTimeRaw || !order.duration) {
     return 0
   }
-  
-  try {
-    const openTime = new Date(order.openTimeRaw).getTime()
-    const now = Date.now()
-    const elapsed = Math.floor((now - openTime) / 1000) // 已过秒数
-    const remaining = Math.max(0, order.duration - elapsed)
-    return remaining
-  } catch (e) {
-    console.error(localeStore.t('calculateCountdownFailed'), e)
-    return 0
-  }
-}
-
-// 自动结算倒计时结束的订单
-async function autoCloseExpiredOrders() {
-  if (mainTab.value !== 'term' || termSubTab.value !== 'trading') {
-    return
-  }
-  
-  const expiredOrders = termTradingData.value.filter((order: any) => {
-    if (order.status !== 'TRADING') return false
-    const countdown = calculateCountdown(order)
-    return countdown <= 0
-  })
-  
-  if (expiredOrders.length === 0) {
-    return
-  }
-  
-  console.log('发现过期订单，开始自动结算:', expiredOrders.length)
-  
-  for (const order of expiredOrders) {
-    try {
-      console.log('自动结算过期订单:', order.id)
-      const currentPrice = getCurrentPrice(order.symbol)
-      if (currentPrice <= 0) {
-        console.warn('无法获取当前价格，跳过自动结算:', order.symbol)
-        continue
-      }
-      
-      const res: any = await request.post(`/trade/option/order/${order.id}/close`, {
-        closePrice: currentPrice
-      })
-      
-      if (res.success || res.success === undefined) {
-        console.log('订单自动结算成功:', order.id)
-        // 重新加载订单列表
-        await loadOptionOrders()
-      } else {
-        console.error('订单自动结算失败:', order.id, res.message)
-      }
-    } catch (e: any) {
-      console.error('自动结算订单异常:', order.id, e)
-    }
-  }
+  const openTime = orderTimestamp(order.openTimeRaw)
+  return openTime === null ? 0 : Math.max(0, Number(order.duration) - Math.floor((nowTick.value - openTime) / 1000))
 }
 
 // 加载合约订单
+let loadVersion = 0
 async function loadContractOrders() {
-  if (loading.value) return
+  const version = ++loadVersion
+  const requestedTab = subTab.value
   loading.value = true
   try {
     // 根据子标签加载不同状态的订单
     let status: string | null = null
-    if (subTab.value === 'positions') {
+    if (requestedTab === 'positions') {
       status = 'OPEN' // 持倉
-    } else if (subTab.value === 'pending') {
+    } else if (requestedTab === 'pending') {
       status = 'PENDING' // 掛單
-    } else if (subTab.value === 'history') {
+    } else if (requestedTab === 'history') {
       status = 'CLOSED' // 歷史
     }
 
     const res: any = await request.get('/trade/contract/orders', {
       params: status ? { status } : {},
     })
+    if (version !== loadVersion) return
 
     const orders = (res.list || []).map(transformContractOrder)
 
-    if (subTab.value === 'positions') {
+    if (requestedTab === 'positions') {
       positionsData.value = orders
       // 计算总保证金
       totalMargin.value = orders.reduce((sum: number, item: any) => sum + item.margin, 0)
-    } else if (subTab.value === 'pending') {
+    } else if (requestedTab === 'pending') {
       pendingOrdersData.value = orders
       // 计算总保证金（挂单也需要冻结保证金）
       totalMargin.value = orders.reduce((sum: number, item: any) => sum + item.margin, 0)
       // 同时加载持仓订单，用于统计信息显示
-      await loadPositionsForSummary()
-    } else if (subTab.value === 'history') {
+      await loadPositionsForSummary(version)
+    } else if (requestedTab === 'history') {
       historyData.value = orders
       totalMargin.value = 0
     }
 
     // 加载合约余额
-    await loadContractBalance()
+    if (version === loadVersion) await loadContractBalance()
   } catch (e: any) {
     console.error(localeStore.t('loadContractOrdersFailed'), e)
   } finally {
-    loading.value = false
+    if (version === loadVersion) loading.value = false
   }
 }
 
 // 加载期限订单
 async function loadOptionOrders() {
-  if (loading.value) return
+  const version = ++loadVersion
+  const requestedTab = termSubTab.value
   loading.value = true
   try {
     // 根据子标签加载不同状态的订单
     let status: string | null = null
-    if (termSubTab.value === 'trading') {
+    if (requestedTab === 'trading') {
       status = 'TRADING' // 交易中
     } else if (termSubTab.value === 'closed') {
       status = 'CLOSED' // 已平倉
@@ -366,10 +315,11 @@ async function loadOptionOrders() {
     const res: any = await request.get('/trade/option/orders', {
       params: status ? { status } : {},
     })
+    if (version !== loadVersion) return
 
     const orders = (res.list || []).map(transformOptionOrder)
 
-    if (termSubTab.value === 'trading') {
+    if (requestedTab === 'trading') {
       termTradingData.value = orders
     } else {
       termClosedData.value = orders
@@ -377,7 +327,7 @@ async function loadOptionOrders() {
   } catch (e: any) {
     console.error(localeStore.t('loadOptionOrdersFailed'), e)
   } finally {
-    loading.value = false
+    if (version === loadVersion) loading.value = false
   }
 }
 
@@ -408,13 +358,13 @@ function updateRiskRate() {
 }
 
 // 加载持仓订单用于统计信息（挂单页面使用）
-async function loadPositionsForSummary() {
+async function loadPositionsForSummary(version = loadVersion) {
   try {
     const res: any = await request.get('/trade/contract/orders', {
       params: { status: 'OPEN' },
     })
     const orders = (res.list || []).map(transformContractOrder)
-    positionsData.value = orders
+    if (version === loadVersion) positionsData.value = orders
   } catch (e: any) {
     console.error(localeStore.t('loadPositionsFailed'), e)
   }
@@ -425,24 +375,10 @@ const positionsTotalProfit = computed(() => {
   return positionsData.value.reduce((sum, item) => sum + (item.profit ?? 0), 0)
 })
 
-// 计算持仓订单的总保证金
-const positionsTotalMargin = computed(() => {
-  return positionsData.value.reduce((sum, item) => sum + (item.margin || 0), 0)
-})
-
-// 计算持仓订单的风险率
-const positionsRiskRate = computed(() => {
-  const totalMarginValue = positionsTotalMargin.value
-  if (totalMarginValue > 0) {
-    return (contractEquity(contractBalance.value, positionsData.value) / totalMarginValue) * 100
-  } else {
-    return 0
-  }
-})
-
 // 打开订单详情弹窗
-function openOrderDetailModal(order: any) {
+function openOrderDetailModal(order: any, edit = false) {
   detailOrder.value = order
+  editingTPSL.value = edit
   closePrice.value = order.currentPrice || order.openPrice || 0
   
   // 初始化止盈止损
@@ -466,6 +402,7 @@ function openOrderDetailModal(order: any) {
 function closeOrderDetailModal() {
   showOrderDetailModal.value = false
   detailOrder.value = null
+  editingTPSL.value = false
   closePrice.value = 0
   stopLossEnabled.value = false
   takeProfitEnabled.value = false
@@ -526,6 +463,7 @@ async function handleUpdateTPSL() {
       // 更新当前订单数据
       detailOrder.value.stopLoss = stopLossEnabled.value ? stopLossValue.value : null
       detailOrder.value.takeProfit = takeProfitEnabled.value ? takeProfitValue.value : null
+      editingTPSL.value = false
       
       // 显示成功提示
       showToastMessage(localeStore.t('modifySuccess'), 'success')
@@ -725,6 +663,7 @@ function updateOrdersWithRealTimePrice() {
           profit: order.profit,
           status: 'TRADING',
           duration: order.duration, // 必须包含 duration 字段，用于查找对应的盈利比例和亏损比例
+          presetProfitType: order.presetProfitType,
         }, currentPrice)
         const updatedOrder = {
           ...order,
@@ -743,8 +682,6 @@ function updateOrdersWithRealTimePrice() {
       return order
     })
     
-    // 检查并自动结算倒计时结束的订单
-    autoCloseExpiredOrders()
   }
   
   // 更新风险率（持仓页面）
@@ -754,22 +691,196 @@ function updateOrdersWithRealTimePrice() {
   // 挂单页面的风险率通过 computed 属性自动更新，不需要手动调用
 }
 
-// 计算总盈亏
-const totalProfit = computed(() => {
-  if (mainTab.value === 'contract') {
-    if (subTab.value === 'positions') {
-      return positionsData.value.reduce((sum, item) => sum + (item.profit ?? 0), 0)
-    } else if (subTab.value === 'history') {
-      return historyData.value.reduce((sum, item) => sum + (item.profit ?? 0), 0)
-    }
-  } else {
-    if (termSubTab.value === 'trading') {
-      return termTradingData.value.reduce((sum, item) => sum + (item.profit ?? 0), 0)
-    } else {
-      return termClosedData.value.reduce((sum, item) => sum + (item.profit ?? 0), 0)
-    }
+const currentRows = computed<any[]>(() => mainTab.value === 'contract'
+  ? subTab.value === 'positions' ? positionsData.value : subTab.value === 'pending' ? pendingOrdersData.value : historyData.value
+  : termSubTab.value === 'trading' ? termTradingData.value : termClosedData.value)
+
+const availableSymbols = computed(() => [...new Set(currentRows.value.map(order => order.symbol).filter(Boolean))])
+const isHistory = computed(() => mainTab.value === 'contract' ? subTab.value === 'history' : termSubTab.value === 'closed')
+const visibleRows = computed(() => {
+  const rows = currentRows.value.filter(order =>
+    (symbolFilter.value === 'all' || order.symbol === symbolFilter.value)
+    && (directionFilter.value === 'all' || order.type === directionFilter.value)
+    && (!isHistory.value || withinDays(order.closeTimeRaw || order.openTimeRaw, periodFilter.value, nowTick.value)),
+  )
+  return isHistory.value ? rows.sort((a, b) =>
+    (orderTimestamp(b.closeTimeRaw || b.openTimeRaw) || 0) - (orderTimestamp(a.closeTimeRaw || a.openTimeRaw) || 0)) : rows
+})
+
+function orderUnit(_order: any): string {
+  return 'USD' // Both CONTRACT and OPTION asset accounts settle in USD.
+}
+
+function priceUnit(order: any): string {
+  return String(order?.quoteCurrency || parseSymbol(order?.symbol || '').quoteCurrency || '')
+}
+
+function orderLabel(order: any): string {
+  const symbol = typeof order === 'string' ? order : String(order?.symbol || '')
+  return /^[A-Z0-9]+USDT$/.test(symbol) ? symbol : displaySymbol(order)
+}
+
+const summaryUnit = computed(() => {
+  const units = [...new Set(visibleRows.value.map(orderUnit).filter(Boolean))]
+  return units.length === 1 ? units[0] : ''
+})
+
+function signedMoney(value: number): string {
+  return `${value > 0 ? '+' : ''}${formatMoney(value)}`
+}
+
+function returnRate(value: number, base: number): string {
+  const rate = profitRate(value, base)
+  return rate === null ? '--' : `${rate > 0 ? '+' : ''}${rate.toFixed(2)}%`
+}
+
+function amountColor(value: number): string {
+  return value > 0 ? 'positive' : value < 0 ? 'negative' : ''
+}
+
+function sumProfit(orders: any[]): number {
+  return orders.reduce((sum, order) => sum + Number(order.profit), 0)
+}
+
+function sumAmount(orders: any[], field: string): number {
+  return orders.reduce((sum, order) => sum + Number(order[field] || 0), 0)
+}
+
+const summary = computed(() => {
+  const rows = visibleRows.value
+  const total = sumProfit(rows)
+  const profit = sumProfit(rows.filter(order => Number(order.profit) > 0))
+  const loss = sumProfit(rows.filter(order => Number(order.profit) < 0))
+  if (mainTab.value === 'contract' && subTab.value === 'positions') return {
+    label: copy('未實現盈虧', 'Unrealized P/L'), value: total, count: rows.length,
+    items: [
+      { label: copy('可用餘額', 'Available'), value: formatMoney(contractBalance.value) },
+      { label: localeStore.t('currentMargin'), value: formatMoney(sumAmount(rows, 'margin')) },
+      { label: localeStore.t('riskRate'), value: totalMargin.value > 0 ? `${formatMoney(riskRate.value)}%` : '—' },
+    ],
   }
-  return 0
+  if (mainTab.value === 'contract' && subTab.value === 'pending') return {
+    label: copy('當前委託', 'Open orders'), value: rows.length, count: rows.length,
+    items: [
+      { label: copy('凍結資金', 'Frozen funds'), value: formatMoney(sumAmount(rows, 'margin') + sumAmount(rows, 'fee')) },
+      { label: copy('可用餘額', 'Available'), value: formatMoney(contractBalance.value) },
+      { label: copy('未實現盈虧', 'Unrealized P/L'), value: signedMoney(positionsTotalProfit.value) },
+    ],
+  }
+  if (mainTab.value === 'contract' && subTab.value === 'history') return {
+    label: copy('歷史已實現盈虧', 'Realized P/L'), value: total, count: rows.length,
+    items: [
+      { label: copy('盈利', 'Profit'), value: signedMoney(profit) },
+      { label: copy('虧損', 'Loss'), value: signedMoney(loss) },
+    ],
+  }
+  if (termSubTab.value === 'trading') return {
+    label: copy('交易中的期限訂單', 'Active term orders'), value: rows.length, count: rows.length,
+    items: [
+      { label: copy('總投入', 'Total invested'), value: formatMoney(sumAmount(rows, 'amount')) },
+      { label: localeStore.t('estimatedProfitLoss'), value: signedMoney(total) },
+    ],
+  }
+  return {
+    label: copy('期限已實現盈虧', 'Settled P/L'), value: total, count: rows.length,
+    items: [
+      { label: copy('盈利', 'Profit'), value: signedMoney(profit) },
+      { label: copy('虧損', 'Loss'), value: signedMoney(loss) },
+    ],
+  }
+})
+
+function countdown(order: any): string {
+  void nowTick.value
+  const seconds = calculateCountdown(order)
+  const hours = Math.floor(seconds / 3600)
+  const minutes = Math.floor((seconds % 3600) / 60)
+  const rest = String(seconds % 60).padStart(2, '0')
+  return hours ? `${hours}:${String(minutes).padStart(2, '0')}:${rest}` : `${minutes}:${rest}`
+}
+
+function countdownProgress(order: any): number {
+  void nowTick.value
+  return order.duration > 0 ? Math.max(0, Math.min(100, calculateCountdown(order) / order.duration * 100)) : 0
+}
+
+function displayDuration(seconds: number): string {
+  if (seconds > 0 && seconds % 3600 === 0) return `${seconds / 3600} ${copy('小時', 'h')}`
+  if (seconds > 0 && seconds % 60 === 0) return `${seconds / 60} ${copy('分鐘', 'min')}`
+  return `${seconds || 0} s`
+}
+
+const cardKind = computed(() => mainTab.value === 'contract' ? subTab.value : termSubTab.value)
+const countSummary = computed(() => cardKind.value === 'pending' || cardKind.value === 'trading')
+
+function cardStatus(): string {
+  if (cardKind.value === 'pending') return copy('待成交', 'Pending')
+  if (cardKind.value === 'history') return localeStore.t('closed')
+  if (cardKind.value === 'trading') return localeStore.t('trading')
+  if (cardKind.value === 'closed') return copy('已結算', 'Settled')
+  return ''
+}
+
+function cardRate(order: any): string {
+  return returnRate(order.profit, mainTab.value === 'contract' ? order.margin : order.amount)
+}
+
+function cardTime(order: any): string {
+  return isHistory.value ? order.closeTime || '--' : order.openTime || '--'
+}
+
+function cardTimeLabel(): string {
+  return cardKind.value === 'pending' ? localeStore.t('createTime')
+    : cardKind.value === 'closed' ? copy('結算時間', 'Settlement time')
+      : isHistory.value ? localeStore.t('closeTime') : localeStore.t('openTime')
+}
+
+function cardMetrics(order: any): Array<{ label: string; value: string }> {
+  const unit = orderUnit(order)
+  const withUnit = (label: string, currency = priceUnit(order)) => currency ? `${label}(${currency})` : label
+  if (cardKind.value === 'positions') return [
+    { label: withUnit(copy('開倉價', 'Entry price')), value: formatPrice(order.openPrice) },
+    { label: withUnit(localeStore.t('currentPrice')), value: formatPrice(order.currentPrice) },
+    { label: withUnit(localeStore.t('margin'), unit), value: formatMoney(order.margin) },
+    { label: copy('持倉數量', 'Position size'), value: `${order.lots} ${localeStore.t('lots')}` },
+    { label: copy('止盈價', 'Take profit'), value: order.takeProfit ? formatPrice(order.takeProfit) : '--' },
+    { label: copy('止損價', 'Stop loss'), value: order.stopLoss ? formatPrice(order.stopLoss) : '--' },
+  ]
+  if (cardKind.value === 'pending') return [
+    { label: withUnit(copy('委託價', 'Order price')), value: formatPrice(order.price || order.openPrice) },
+    { label: withUnit(localeStore.t('currentPrice')), value: order.currentPrice > 0 ? formatPrice(order.currentPrice) : '--' },
+    { label: copy('委託數量', 'Order size'), value: `${order.lots} ${localeStore.t('lots')}` },
+    { label: copy('委託保證金', 'Order margin'), value: formatMoney(order.margin) },
+    { label: localeStore.t('orderId'), value: `#${order.id}` },
+    { label: copy('委託類型', 'Order type'), value: order.orderType === 'LIMIT' ? copy('限價', 'Limit') : order.orderType === 'MARKET' ? copy('市價', 'Market') : '--' },
+  ]
+  if (cardKind.value === 'history') return [
+    { label: withUnit(localeStore.t('margin'), unit), value: formatMoney(order.margin) },
+    { label: withUnit(copy('開倉價', 'Entry price')), value: formatPrice(order.openPrice) },
+    { label: withUnit(copy('平倉價', 'Exit price')), value: formatPrice(order.closePrice) },
+    { label: copy('平倉數量', 'Closed size'), value: `${order.lots} ${localeStore.t('lots')}` },
+    { label: withUnit(localeStore.t('fee'), unit), value: formatMoney(order.fee) },
+    { label: localeStore.t('orderId'), value: `#${order.id}` },
+  ]
+  if (cardKind.value === 'trading') return [
+    { label: copy('投入金額', 'Invested'), value: `${formatMoney(order.amount)} ${unit}`.trim() },
+    { label: withUnit(copy('開倉價', 'Entry price')), value: formatPrice(order.openPrice) },
+    { label: withUnit(localeStore.t('currentPrice')), value: order.currentPrice > 0 ? formatPrice(order.currentPrice) : '--' },
+  ]
+  return [
+    { label: copy('投入金額', 'Invested'), value: `${formatMoney(order.amount)} ${unit}`.trim() },
+    { label: withUnit(copy('開倉價', 'Entry price')), value: formatPrice(order.openPrice) },
+    { label: withUnit(copy('結算價', 'Settlement price')), value: formatPrice(order.closePrice) },
+    { label: localeStore.t('duration'), value: displayDuration(Number(order.duration)) },
+    { label: localeStore.t('orderId'), value: `#${order.id}` },
+    { label: copy('結果', 'Result'), value: order.profit >= 0 ? copy('盈利', 'Profit') : copy('虧損', 'Loss') },
+  ]
+}
+
+watch([mainTab, subTab, termSubTab], () => {
+  symbolFilter.value = 'all'
+  directionFilter.value = 'all'
+  periodFilter.value = 30
 })
 
 // 监听标签页切换
@@ -802,6 +913,7 @@ onMounted(async () => {
   
   // 每2秒更新一次实时价格和盈亏
   priceUpdateInterval = window.setInterval(() => {
+    nowTick.value = Date.now()
     updateOrdersWithRealTimePrice()
   }, 2000)
 })
@@ -835,1142 +947,92 @@ function formatPrice(v: number | string | undefined | null) {
 
 <template>
   <div class="orders-page">
-    <!-- 顶部主标签 -->
-    <div class="main-tabs">
-      <div 
-        class="main-tab" 
-        :class="{ active: mainTab === 'contract' }"
-        @click="mainTab = 'contract'"
-      >
-        {{ localeStore.t('contract') }}
+    <header class="orders-header">
+      <div class="orders-titlebar">
+        <h1>{{ localeStore.t('tabbarOrder') }}</h1>
+        <button type="button" class="history-shortcut" :aria-label="copy('歷史倉位', 'Position history')" @click="mainTab = 'contract'; subTab = 'history'">
+          <svg viewBox="0 0 24 24" width="21" height="21" fill="none" aria-hidden="true"><path d="M20 11a8 8 0 1 1-2.3-5.7M20 4v5h-5M12 7v5l3 2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" /></svg>
+        </button>
       </div>
-      <div 
-        class="main-tab" 
-        :class="{ active: mainTab === 'term' }"
-        @click="mainTab = 'term'"
-      >
-        {{ localeStore.t('term') }}
-      </div>
-    </div>
+      <nav class="main-tabs" :aria-label="copy('訂單類型', 'Order type')">
+        <button type="button" class="main-tab" :class="{ active: mainTab === 'contract' }" :aria-current="mainTab === 'contract' ? 'page' : undefined" @click="mainTab = 'contract'">{{ copy('合約', 'Contracts') }}</button>
+        <button type="button" class="main-tab" :class="{ active: mainTab === 'term' }" :aria-current="mainTab === 'term' ? 'page' : undefined" @click="mainTab = 'term'">{{ copy('期限', 'Term') }}</button>
+      </nav>
+      <nav v-if="mainTab === 'contract'" class="sub-tabs" :aria-label="copy('合約訂單分類', 'Contract order tabs')">
+        <button v-for="tab in (['positions', 'pending', 'history'] as const)" :key="tab" type="button" class="sub-tab" :class="{ active: subTab === tab }" :aria-current="subTab === tab ? 'page' : undefined" @click="subTab = tab">{{ tab === 'positions' ? copy('持倉', 'Positions') : tab === 'pending' ? copy('當前委託', 'Open orders') : copy('歷史倉位', 'Position history') }}</button>
+      </nav>
+      <nav v-else class="sub-tabs" :aria-label="copy('期限訂單分類', 'Term order tabs')">
+        <button type="button" class="sub-tab" :class="{ active: termSubTab === 'trading' }" :aria-current="termSubTab === 'trading' ? 'page' : undefined" @click="termSubTab = 'trading'">{{ copy('交易中', 'Active') }}</button>
+        <button type="button" class="sub-tab" :class="{ active: termSubTab === 'closed' }" :aria-current="termSubTab === 'closed' ? 'page' : undefined" @click="termSubTab = 'closed'">{{ copy('已結算', 'Settled') }}</button>
+      </nav>
+    </header>
 
-    <!-- 子标签 -->
-    <div class="sub-tabs" v-if="mainTab === 'contract'">
-      <div 
-        class="sub-tab" 
-        :class="{ active: subTab === 'positions' }"
-        @click="subTab = 'positions'"
-      >
-        {{ localeStore.t('positions') }}
-      </div>
-      <div 
-        class="sub-tab" 
-        :class="{ active: subTab === 'pending' }"
-        @click="subTab = 'pending'"
-      >
-        {{ localeStore.t('pendingOrders') }}
-      </div>
-      <div 
-        class="sub-tab" 
-        :class="{ active: subTab === 'history' }"
-        @click="subTab = 'history'"
-      >
-        {{ localeStore.t('orderHistory') }}
-      </div>
-    </div>
+    <main class="orders-content">
+      <section class="summary-card" :aria-label="summary.label">
+        <div class="summary-heading"><span>{{ summary.label }}</span><span>{{ copy('訂單', 'Orders') }} {{ summary.count }}</span></div>
+        <div class="summary-primary" :class="!countSummary && amountColor(summary.value)">{{ countSummary ? summary.value : signedMoney(summary.value) }}<small v-if="countSummary">{{ copy('筆', 'orders') }}</small><small v-else-if="summaryUnit">{{ summaryUnit }}</small></div>
+        <div class="summary-stats" :class="{ 'two-stats': summary.items.length === 2 }"><div v-for="item in summary.items" :key="item.label"><span>{{ item.label }}</span><strong>{{ item.value }}</strong></div></div>
+      </section>
 
-    <div class="sub-tabs" v-else>
-      <div 
-        class="sub-tab" 
-        :class="{ active: termSubTab === 'trading' }"
-        @click="termSubTab = 'trading'"
-      >
-        {{ localeStore.t('trading') }}
-      </div>
-      <div 
-        class="sub-tab" 
-        :class="{ active: termSubTab === 'closed' }"
-        @click="termSubTab = 'closed'"
-      >
-        {{ localeStore.t('closed') }}
-      </div>
-    </div>
-
-    <!-- 合約 - 持倉 -->
-    <template v-if="mainTab === 'contract' && subTab === 'positions'">
-      <!-- 统计信息 -->
-      <div class="summary-card">
-        <div class="summary-item">
-          <div class="summary-label">{{ localeStore.t('profitLoss') }}</div>
-          <div class="summary-value" :class="{ 
-            negative: totalProfit < 0, 
-            positive: totalProfit > 0 
-          }">
-            {{ formatMoney(totalProfit) }}
-          </div>
-        </div>
-        <div class="summary-item">
-          <div class="summary-label">{{ localeStore.t('balance') }}</div>
-          <div class="summary-value">{{ formatMoney(contractBalance) }}</div>
-        </div>
-        <div class="summary-item">
-          <div class="summary-label">{{ localeStore.t('currentMargin') }}</div>
-          <div class="summary-value">{{ formatMoney(totalMargin) }}</div>
-        </div>
-        <div class="summary-item">
-          <div class="summary-label">{{ localeStore.t('riskRate') }}</div>
-          <div class="summary-value">{{ formatMoney(riskRate) }}%</div>
-        </div>
+      <div class="orders-filters">
+        <label class="filter-select"><span class="sr-only">{{ copy('幣種', 'Symbol') }}</span><select v-model="symbolFilter"><option value="all">{{ copy('全部幣種', 'All symbols') }}</option><option v-for="symbol in availableSymbols" :key="symbol" :value="symbol">{{ orderLabel(symbol) }}</option></select></label>
+        <label v-if="isHistory" class="filter-select"><span class="sr-only">{{ copy('時間範圍', 'Period') }}</span><select v-model.number="periodFilter"><option :value="30">{{ copy('近30天', 'Last 30 days') }}</option><option :value="7">{{ copy('近7天', 'Last 7 days') }}</option><option :value="90">{{ copy('近90天', 'Last 90 days') }}</option><option :value="0">{{ copy('全部時間', 'All time') }}</option></select></label>
+        <label v-else class="filter-select"><span class="sr-only">{{ copy('方向', 'Direction') }}</span><select v-model="directionFilter"><option value="all">{{ copy('全部方向', 'All directions') }}</option><option value="buy">{{ mainTab === 'term' ? copy('看漲', 'Up') : copy('買入 / 多', 'Buy / Long') }}</option><option value="sell">{{ mainTab === 'term' ? copy('看跌', 'Down') : copy('賣出 / 空', 'Sell / Short') }}</option></select></label>
+        <span class="filter-count">{{ copy('共', 'Total') }} {{ visibleRows.length }}</span>
       </div>
 
-      <!-- 订单列表 -->
-      <div class="orders-list" v-if="!loading">
-        <div 
-          v-for="order in positionsData" 
-          :key="order.id"
-          class="order-card"
-          @click="openOrderDetailModal(order)"
-        >
-          <div class="order-header">
-            <div class="order-symbol">{{ displaySymbol(order) }}</div>
-            <div class="order-price">
-              <span>{{ formatPrice(order.openPrice) }}</span>
-              <span class="arrow">→</span>
-              <span :class="{ 
-                positive: order.currentPrice > order.openPrice, 
-                negative: order.currentPrice < order.openPrice 
-              }">
-                {{ formatPrice(order.currentPrice) }}
-              </span>
-            </div>
+      <div v-if="loading" class="list-state" role="status">{{ copy('載入中…', 'Loading…') }}</div>
+      <div v-else-if="visibleRows.length === 0" class="list-state" role="status"><span class="empty-icon">◎</span>{{ copy('暫無訂單', 'No orders') }}</div>
+      <div v-else class="orders-list">
+        <article v-for="order in visibleRows" :key="`${mainTab}-${order.id}`" class="order-card">
+          <div class="card-heading">
+            <div class="card-identity"><h2>{{ orderLabel(order) }}</h2><div class="card-tags">
+              <span class="direction-tag" :class="order.type === 'buy' ? 'long' : 'short'">{{ mainTab === 'term' ? order.type === 'buy' ? copy('看漲', 'Up') : copy('看跌', 'Down') : order.type === 'buy' ? copy('多', 'Long') : copy('空', 'Short') }}</span>
+              <span v-if="mainTab === 'contract' && order.leverage" class="neutral-tag">{{ order.leverage }}×</span>
+              <span v-if="order.orderType === 'LIMIT' && cardKind === 'pending'" class="pending-tag">{{ copy('限價委託', 'Limit') }}</span>
+              <span v-if="cardStatus()" class="status-tag" :class="cardKind === 'pending' ? 'pending-tag' : cardKind === 'trading' ? 'live-tag' : ''">{{ cardStatus() }}</span>
+              <span v-if="order.orderSource === 'MANUAL_TEST' || order.orderSource === 'MANUAL'" class="manual-order-badge">{{ copy('手動', 'Manual') }}</span>
+            </div></div>
+            <div v-if="cardKind === 'pending'" class="card-pnl card-pending">{{ copy('待成交', 'Pending') }}</div>
+            <div v-else class="card-pnl" :class="amountColor(order.profit)"><strong>{{ signedMoney(order.profit) }}</strong><small>{{ cardRate(order) }}</small></div>
           </div>
-          <div class="order-body">
-            <div class="order-type-badge" :class="order.type === 'buy' ? 'buy' : 'sell'">
-              {{ order.type === 'buy' ? localeStore.t('buy') : localeStore.t('sell') }} {{ order.lots }}{{ localeStore.t('lots') }} · {{ order.leverage }}×
-            </div>
-            <div class="order-details">
-              <div class="detail-item">
-                <span class="detail-label">{{ localeStore.t('orderId') }}</span>
-                <span class="detail-value">#{{ order.id }}</span>
-              </div>
-              <div class="detail-item">
-                <span class="detail-label">{{ localeStore.t('openTime') }}</span>
-                <span class="detail-value">{{ order.openTime }}</span>
-              </div>
-              <div class="detail-item">
-                <span class="detail-label">{{ localeStore.t('profitLoss') }}</span>
-                <span class="detail-value" :class="{ 
-                  negative: order.profit < 0, 
-                  positive: order.profit > 0 
-                }">
-                  {{ formatMoney(order.profit) }}
-                </span>
-              </div>
-            </div>
+          <div v-if="cardKind === 'trading'" class="countdown-block"><div class="countdown-caption"><span>{{ copy('距離結算', 'To settlement') }}</span><strong>{{ countdown(order) }}</strong></div><div class="countdown-track"><span :style="{ width: `${countdownProgress(order)}%` }"></span></div></div>
+          <div class="card-metrics"><div v-for="(metric, index) in cardMetrics(order)" :key="index" class="metric" :class="{ right: index % 3 === 2 }"><span>{{ metric.label }}</span><strong>{{ metric.value }}</strong></div></div>
+          <div class="card-footer"><span>{{ cardTimeLabel() }}</span><div><time>{{ cardTime(order) }}</time><button v-if="isHistory" type="button" class="order-share-entry" :aria-label="shareLabel" :title="shareLabel" @click="shareOrder = { id: order.id, kind: mainTab === 'contract' ? 'contract' : 'option' }"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 16V3m-4 4 4-4 4 4M5 13v7h14v-7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" /></svg></button></div></div>
+          <div v-if="cardKind === 'positions' || cardKind === 'pending'" class="card-actions">
+            <template v-if="cardKind === 'positions'"><button type="button" class="subtle-action" @click="openOrderDetailModal(order, true)">{{ copy('止盈止損', 'TP / SL') }}</button><button type="button" class="primary-action" @click="openOrderDetailModal(order)">{{ copy('平倉', 'Close') }}</button></template>
+            <template v-else><button type="button" class="subtle-action" @click="openOrderDetailModal(order)">{{ copy('查看詳情', 'Details') }}</button><button type="button" class="quiet-action" @click="openOrderDetailModal(order)">{{ copy('撤單', 'Cancel') }}</button></template>
           </div>
-        </div>
+        </article>
       </div>
-    </template>
+    </main>
 
-    <!-- 合約 - 掛單 -->
-    <template v-if="mainTab === 'contract' && subTab === 'pending'">
-      <!-- 统计信息（使用持仓页面的数据） -->
-      <div class="summary-card">
-        <div class="summary-item">
-          <div class="summary-label">{{ localeStore.t('profitLoss') }}</div>
-          <div class="summary-value" :class="{ 
-            negative: positionsTotalProfit < 0, 
-            positive: positionsTotalProfit > 0 
-          }">
-            {{ formatMoney(positionsTotalProfit) }}
-          </div>
-        </div>
-        <div class="summary-item">
-          <div class="summary-label">{{ localeStore.t('balance') }}</div>
-          <div class="summary-value">{{ formatMoney(contractBalance) }}</div>
-        </div>
-        <div class="summary-item">
-          <div class="summary-label">{{ localeStore.t('currentMargin') }}</div>
-          <div class="summary-value">{{ formatMoney(positionsTotalMargin) }}</div>
-        </div>
-        <div class="summary-item">
-          <div class="summary-label">{{ localeStore.t('riskRate') }}</div>
-          <div class="summary-value">{{ formatMoney(positionsRiskRate) }}%</div>
-        </div>
+    <div v-if="showOrderDetailModal && detailOrder" class="order-detail-modal-overlay" @click.self="closeOrderDetailModal"><section class="order-detail-modal" role="dialog" aria-modal="true" :aria-label="detailOrder.status === 'PENDING' ? copy('委託詳情', 'Order details') : copy('持倉詳情', 'Position details')">
+      <div class="sheet-handle"></div><header class="detail-header"><h2>{{ detailOrder.status === 'PENDING' ? copy('委託詳情', 'Order details') : copy('持倉詳情', 'Position details') }}</h2><button type="button" class="order-detail-modal-close" :aria-label="copy('關閉', 'Close')" @click="closeOrderDetailModal">×</button></header>
+      <div class="detail-body"><div class="detail-identity"><h3>{{ orderLabel(detailOrder) }}</h3><div class="card-tags"><span class="direction-tag" :class="detailOrder.type === 'buy' ? 'long' : 'short'">{{ detailOrder.type === 'buy' ? copy('多', 'Long') : copy('空', 'Short') }}</span><span class="neutral-tag">{{ detailOrder.leverage }}×</span><span :class="detailOrder.status === 'PENDING' ? 'pending-tag' : 'live-tag'" class="status-tag">{{ detailOrder.status === 'PENDING' ? copy('待成交', 'Pending') : copy('持倉中', 'Open') }}</span></div></div>
+        <div class="detail-focus"><span>{{ detailOrder.status === 'PENDING' ? copy('委託價格', 'Order price') : copy('未實現盈虧', 'Unrealized P/L') }}</span><strong :class="detailOrder.status === 'OPEN' && amountColor(detailOrder.profit)">{{ detailOrder.status === 'PENDING' ? formatPrice(detailOrder.price || detailOrder.openPrice) : signedMoney(detailOrder.profit) }}</strong><small>{{ detailOrder.status === 'PENDING' ? priceUnit(detailOrder) : `${orderUnit(detailOrder)} · ${returnRate(detailOrder.profit, detailOrder.margin)}` }}</small></div>
+        <div class="detail-grid"><div v-for="(metric, index) in cardMetrics(detailOrder)" :key="index"><span>{{ metric.label }}</span><strong>{{ metric.value }}</strong></div><div><span>{{ localeStore.t('fee') }}</span><strong>{{ formatMoney(detailOrder.fee) }} {{ orderUnit(detailOrder) }}</strong></div><div><span>{{ detailOrder.status === 'OPEN' ? localeStore.t('orderId') : localeStore.t('createTime') }}</span><strong>{{ detailOrder.status === 'OPEN' ? `#${detailOrder.id}` : detailOrder.openTime }}</strong></div></div>
+        <div v-if="detailOrder.status === 'OPEN'" class="tpsl-section"><h4>{{ copy('止盈止損', 'TP / SL') }}</h4><template v-if="editingTPSL"><label class="tpsl-row"><span>{{ copy('止盈價', 'Take profit') }}</span><input v-model="takeProfitEnabled" type="checkbox" /></label><div v-if="takeProfitEnabled" class="stepper"><button type="button" @click="adjustTakeProfit(-1)">−</button><input v-model.number="takeProfitValue" type="number" min="0" step="0.01" :aria-label="copy('止盈價', 'Take profit')" /><button type="button" @click="adjustTakeProfit(1)">+</button></div><label class="tpsl-row"><span>{{ copy('止損價', 'Stop loss') }}</span><input v-model="stopLossEnabled" type="checkbox" /></label><div v-if="stopLossEnabled" class="stepper"><button type="button" @click="adjustStopLoss(-1)">−</button><input v-model.number="stopLossValue" type="number" min="0" step="0.01" :aria-label="copy('止損價', 'Stop loss')" /><button type="button" @click="adjustStopLoss(1)">+</button></div></template><template v-else><div class="tpsl-row"><span>{{ copy('止盈價', 'Take profit') }}</span><strong>{{ detailOrder.takeProfit ? formatPrice(detailOrder.takeProfit) : '--' }}</strong></div><div class="tpsl-row"><span>{{ copy('止損價', 'Stop loss') }}</span><strong>{{ detailOrder.stopLoss ? formatPrice(detailOrder.stopLoss) : '--' }}</strong></div></template></div>
+        <div v-else class="tpsl-section"><h4>{{ copy('訂單狀態', 'Order status') }}</h4><div class="tpsl-row"><span>{{ copy('成交情況', 'Filled') }}</span><strong>{{ copy('未成交', 'Not filled') }}</strong></div><div class="tpsl-row"><span>{{ copy('委託數量', 'Order size') }}</span><strong>{{ detailOrder.lots }} {{ localeStore.t('lots') }}</strong></div></div>
       </div>
-
-      <!-- 加载状态 -->
-      <div class="empty-state" v-if="loading">
-        <div class="empty-icon">⏳</div>
-        <div class="empty-text">{{ localeStore.t('loading') }}</div>
-      </div>
-      <!-- 空状态 -->
-      <div class="empty-state" v-else-if="pendingOrdersData.length === 0">
-        <div class="empty-icon">📄</div>
-        <div class="empty-text">{{ localeStore.t('noData') }}</div>
-      </div>
-      <!-- 订单列表 -->
-      <div class="orders-list" v-else>
-        <div 
-          v-for="order in pendingOrdersData" 
-          :key="order.id"
-          class="order-card"
-          @click="openOrderDetailModal(order)"
-        >
-          <div class="order-header">
-            <div class="order-symbol">{{ displaySymbol(order) }}</div>
-            <div class="order-price">
-              <span>{{ formatPrice(order.price || order.openPrice) }}</span>
-              <span class="arrow">→</span>
-              <span :class="{ 
-                positive: order.currentPrice > (order.price || order.openPrice), 
-                negative: order.currentPrice < (order.price || order.openPrice) 
-              }">
-                {{ formatPrice(order.currentPrice) }}
-              </span>
-            </div>
-          </div>
-          <div class="order-body">
-            <div class="order-type-badge" :class="order.type === 'buy' ? 'buy' : 'sell'">
-              {{ order.type === 'buy' ? localeStore.t('buy') : localeStore.t('sell') }} {{ order.lots }}{{ localeStore.t('lots') }} · {{ order.leverage }}×
-            </div>
-            <div class="order-details">
-              <div class="detail-item">
-                <span class="detail-label">{{ localeStore.t('orderId') }}</span>
-                <span class="detail-value">#{{ order.id }}</span>
-              </div>
-              <div class="detail-item">
-                <span class="detail-label">{{ localeStore.t('createTime') }}</span>
-                <span class="detail-value">{{ order.openTime }}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </template>
-
-    <!-- 合約 - 歷史 -->
-    <template v-if="mainTab === 'contract' && subTab === 'history'">
-      <!-- 统计信息 -->
-      <div class="summary-card">
-        <div class="summary-item">
-          <div class="summary-label">{{ localeStore.t('totalProfitLoss') }}</div>
-          <div class="summary-value" :class="{ 
-            negative: totalProfit < 0, 
-            positive: totalProfit > 0 
-          }">
-            {{ formatMoney(totalProfit) }}
-          </div>
-        </div>
-        <div class="summary-item">
-          <div class="summary-label">{{ localeStore.t('balance') }}</div>
-          <div class="summary-value">{{ formatMoney(contractBalance) }}</div>
-        </div>
-      </div>
-
-      <!-- 加载状态 -->
-      <div class="empty-state" v-if="loading">
-        <div class="empty-icon">⏳</div>
-        <div class="empty-text">{{ localeStore.t('loading') }}</div>
-      </div>
-      <!-- 订单列表 -->
-      <div class="orders-list" v-else>
-        <div 
-          v-for="order in historyData" 
-          :key="order.id"
-          class="order-card"
-        >
-          <button type="button" class="order-share-entry" @click="shareOrder = { id: order.id, kind: 'contract' }" :aria-label="shareLabel" :title="shareLabel"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 15V3m-4 4 4-4 4 4M6 10H4v11h16V10h-2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" /></svg></button>
-          <div class="order-header">
-            <div>
-              <span v-if="order.orderSource === 'MANUAL_TEST'" class="manual-order-badge">手动订单</span>
-              <div class="order-symbol">{{ displaySymbol(order) }}</div>
-            </div>
-            <div class="order-price">
-              <span>{{ formatPrice(order.openPrice) }}</span>
-              <span class="arrow">→</span>
-              <span>{{ formatPrice(order.closePrice) }}</span>
-            </div>
-          </div>
-          <div class="order-body">
-            <div class="order-type-badge" :class="order.type === 'buy' ? 'buy' : 'sell'">
-              {{ order.type === 'buy' ? localeStore.t('buy') : localeStore.t('sell') }} {{ order.lots }} {{ localeStore.t('lots') }} · {{ order.leverage }}×
-            </div>
-            <div class="order-details">
-              <div class="detail-item">
-                <span class="detail-label">{{ localeStore.t('orderId') }}</span>
-                <span class="detail-value">#{{ order.id }}</span>
-              </div>
-              <div class="detail-item">
-                <span class="detail-label">{{ localeStore.t('openTime') }}</span>
-                <span class="detail-value">{{ order.openTime }}</span>
-              </div>
-              <div v-if="order.orderSource === 'MANUAL_TEST'" class="detail-item">
-                <span class="detail-label">平仓时间</span><span class="detail-value">{{ order.manualCloseTime }}</span>
-              </div>
-              <div v-if="order.orderSource === 'MANUAL_TEST'" class="detail-item">
-                <span class="detail-label">{{ localeStore.t('fee') }}</span><span class="detail-value">{{ formatMoney(order.fee) }}</span>
-              </div>
-              <div class="detail-item">
-                <span class="detail-label">{{ localeStore.t('profitLoss') }}</span>
-                <span class="detail-value" :class="{ 
-                  negative: order.profit < 0, 
-                  positive: order.profit > 0 
-                }">
-                  {{ formatMoney(order.profit) }}
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </template>
-
-    <!-- 期限 - 交易中 -->
-    <template v-if="mainTab === 'term' && termSubTab === 'trading'">
-      <!-- 加载状态 -->
-      <div class="empty-state" v-if="loading">
-        <div class="empty-icon">⏳</div>
-        <div class="empty-text">{{ localeStore.t('loading') }}</div>
-      </div>
-      <!-- 订单列表 -->
-      <div class="orders-list" v-else>
-        <div 
-          v-for="order in termTradingData" 
-          :key="order.id"
-          class="order-card"
-        >
-          <div class="order-header">
-            <div class="order-symbol">{{ displaySymbol(order) }}</div>
-            <div class="order-price">
-              <span>{{ formatPrice(order.openPrice) }}</span>
-              <span class="arrow">→</span>
-              <span :class="{ 
-                positive: order.currentPrice > order.openPrice, 
-                negative: order.currentPrice < order.openPrice 
-              }">
-                {{ formatPrice(order.currentPrice) }}
-              </span>
-            </div>
-          </div>
-          <div class="order-body">
-            <div class="order-type-badge" :class="order.type === 'buy' ? 'buy' : 'sell'">
-              {{ localeStore.t('lookUp') }}{{ order.direction === 'UP' ? (order.baseCurrency || '') : (order.quoteCurrency || '') }}
-            </div>
-            <div class="order-details">
-              <div class="detail-item">
-                <span class="detail-label">{{ localeStore.t('amount') }}</span>
-                <span class="detail-value">{{ formatMoney(order.amount) }}</span>
-              </div>
-              <div class="detail-item">
-                <span class="detail-label">{{ localeStore.t('estimatedProfitLoss') }}</span>
-                <span class="detail-value" :class="{ 
-                  negative: order.profit < 0, 
-                  positive: order.profit > 0 
-                }">
-                  {{ formatMoney(order.profit) }}
-                </span>
-              </div>
-              <div class="detail-item">
-                <span class="detail-label">{{ localeStore.t('duration') }}</span>
-                <span class="detail-value" :class="{ 'countdown-warning': order.status === 'TRADING' && calculateCountdown(order) <= 10 }">
-                  <template v-if="order.status === 'TRADING'">
-                    {{ calculateCountdown(order) }}s / {{ order.duration }}s
-                  </template>
-                  <template v-else>
-                    {{ order.duration }}s
-                  </template>
-                </span>
-              </div>
-              <div class="detail-item">
-                <span class="detail-label">{{ localeStore.t('openTime') }}</span>
-                <span class="detail-value">{{ order.openTime }}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </template>
-
-    <!-- 期限 - 已平倉 -->
-    <template v-if="mainTab === 'term' && termSubTab === 'closed'">
-      <!-- 加载状态 -->
-      <div class="empty-state" v-if="loading">
-        <div class="empty-icon">⏳</div>
-        <div class="empty-text">{{ localeStore.t('loading') }}</div>
-      </div>
-      <!-- 订单列表 -->
-      <div class="orders-list" v-else>
-        <div 
-          v-for="order in termClosedData" 
-          :key="order.id"
-          class="order-card"
-        >
-          <button type="button" class="order-share-entry" @click="shareOrder = { id: order.id, kind: 'option' }" :aria-label="shareLabel" :title="shareLabel"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 15V3m-4 4 4-4 4 4M6 10H4v11h16V10h-2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" /></svg></button>
-          <div class="order-header">
-            <div class="order-symbol">{{ displaySymbol(order) }}</div>
-            <div class="order-price">
-              <span>{{ formatPrice(order.openPrice) }}</span>
-              <span class="arrow">→</span>
-              <span>{{ formatPrice(order.closePrice) }}</span>
-            </div>
-          </div>
-          <div class="order-body">
-            <div class="order-type-badge" :class="order.type === 'buy' ? 'buy' : 'sell'">
-              {{ localeStore.t(order.direction === 'UP' ? 'buyUpText' : 'buyDownText') }}
-            </div>
-            <div class="order-details">
-              <div class="detail-item">
-                <span class="detail-label">{{ localeStore.t('amount') }}</span>
-                <span class="detail-value">{{ formatMoney(order.amount) }}</span>
-              </div>
-              <div class="detail-item">
-                <span class="detail-label">{{ localeStore.t('profitLoss') }}</span>
-                <span class="detail-value" :class="{ 
-                  negative: order.profit < 0, 
-                  positive: order.profit > 0 
-                }">
-                  {{ formatMoney(order.profit) }}
-                </span>
-              </div>
-              <div class="detail-item">
-                <span class="detail-label">{{ localeStore.t('duration') }}</span>
-                <span class="detail-value">{{ order.duration }}</span>
-              </div>
-              <div class="detail-item">
-                <span class="detail-label">{{ localeStore.t('openTime') }}</span>
-                <span class="detail-value">{{ order.openTime }}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </template>
-
-    <!-- 订单详情弹窗 -->
-    <div 
-      v-if="showOrderDetailModal" 
-      class="order-detail-modal-overlay"
-      @click.self="closeOrderDetailModal"
-    >
-      <div class="order-detail-modal">
-        <button class="order-detail-modal-close" @click="closeOrderDetailModal">×</button>
-        <div class="order-detail-header">{{ localeStore.t('orderDetails') }}</div>
-        
-        <div class="order-detail-content">
-          <!-- 订单基本信息 -->
-          <div class="order-detail-basic">
-            <div class="order-detail-symbol">{{ displaySymbol(detailOrder) }}</div>
-            <div class="order-detail-id-time">
-              <span>{{ localeStore.t('orderId') }} #{{ detailOrder?.id }}</span>
-              <span>{{ detailOrder?.openTime }}</span>
-            </div>
-          </div>
-
-          <!-- 价格信息 -->
-          <div class="order-detail-price">
-            <!-- 挂单：显示限价 → 当前价 -->
-            <template v-if="detailOrder?.status === 'PENDING'">
-              <span>{{ formatPrice(detailOrder?.price || detailOrder?.openPrice) }}</span>
-              <span class="arrow">→</span>
-              <span class="positive">{{ formatPrice(detailOrder?.currentPrice) }}</span>
-            </template>
-            <!-- 持仓：显示开仓价 → 当前价 -->
-            <template v-else>
-              <span>{{ formatPrice(detailOrder?.openPrice) }}</span>
-              <span class="arrow">→</span>
-              <span :class="{ 
-                positive: detailOrder?.currentPrice > detailOrder?.openPrice, 
-                negative: detailOrder?.currentPrice < detailOrder?.openPrice 
-              }">
-                {{ formatPrice(detailOrder?.currentPrice) }}
-              </span>
-            </template>
-          </div>
-
-          <!-- 订单类型和数量 -->
-          <div class="order-detail-type">
-            <!-- 期限订单显示看涨基础货币或计价货币 -->
-            <span 
-              v-if="detailOrder?.direction" 
-              class="order-type-badge pending-badge" 
-              :class="detailOrder?.direction === 'UP' ? 'buy' : 'sell'"
-            >
-              {{ localeStore.t(detailOrder?.direction === 'UP' ? 'buyUpText' : 'buyDownText') }}
-            </span>
-            <!-- 合约订单显示买入/卖出 -->
-            <span 
-              v-else
-              class="order-type-badge pending-badge" 
-              :class="detailOrder?.type === 'buy' ? 'buy' : 'sell'"
-            >
-              {{ detailOrder?.type === 'buy' ? localeStore.t('buy') : localeStore.t('sell') }} {{ detailOrder?.lots }} {{ localeStore.t('lots') }}
-            </span>
-          </div>
-          
-          <!-- 挂单显示当前价格（大字体，绿色） -->
-          <div class="order-detail-current-price" v-if="detailOrder?.status === 'PENDING'">
-            {{ formatPrice(detailOrder?.currentPrice) }}
-          </div>
-
-          <!-- 保证金、手续费、盈亏 -->
-          <div class="order-detail-finance">
-            <div class="finance-item">
-              <span>{{ localeStore.t('margin') }}:</span>
-              <span>{{ formatMoney(detailOrder?.margin || 0) }}</span>
-            </div>
-            <div class="finance-item">
-              <span>{{ localeStore.t('fee') }}:</span>
-              <span>{{ formatMoney(detailOrder?.fee || 0) }}</span>
-            </div>
-            <!-- 持仓订单显示盈亏 -->
-            <div class="finance-item profit-item" v-if="detailOrder?.status === 'OPEN'">
-              <span>{{ localeStore.t('profitLoss') }}:</span>
-              <span :class="{ 
-                negative: detailOrder?.profit < 0, 
-                positive: detailOrder?.profit > 0 
-              }">
-                {{ formatMoney(detailOrder?.profit ?? 0) }}
-              </span>
-            </div>
-          </div>
-
-          <!-- 止盈止损设置（仅持仓订单显示） -->
-          <div class="order-detail-tpsl" v-if="detailOrder?.status === 'OPEN'">
-            <!-- 止损 -->
-            <div class="tpsl-item">
-              <div class="tpsl-label-row">
-                <span class="tpsl-label">{{ localeStore.t('stopLoss') }}</span>
-                <label class="tpsl-toggle">
-                  <input type="checkbox" v-model="stopLossEnabled" />
-                  <span class="tpsl-slider"></span>
-                </label>
-              </div>
-              <div class="tpsl-input-wrapper" v-if="stopLossEnabled">
-                <button class="tpsl-btn" @click="adjustStopLoss(-1)">-</button>
-                <input 
-                  type="number" 
-                  v-model.number="stopLossValue" 
-                  class="tpsl-input" 
-                  step="0.01"
-                  min="0"
-                />
-                <button class="tpsl-btn" @click="adjustStopLoss(1)">+</button>
-              </div>
-            </div>
-
-            <!-- 止盈 -->
-            <div class="tpsl-item">
-              <div class="tpsl-label-row">
-                <span class="tpsl-label">{{ localeStore.t('takeProfit') }}</span>
-                <label class="tpsl-toggle">
-                  <input type="checkbox" v-model="takeProfitEnabled" />
-                  <span class="tpsl-slider"></span>
-                </label>
-              </div>
-              <div class="tpsl-input-wrapper" v-if="takeProfitEnabled">
-                <button class="tpsl-btn" @click="adjustTakeProfit(-1)">-</button>
-                <input 
-                  type="number" 
-                  v-model.number="takeProfitValue" 
-                  class="tpsl-input" 
-                  step="0.01"
-                  min="0"
-                />
-                <button class="tpsl-btn" @click="adjustTakeProfit(1)">+</button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- 操作按钮 -->
-        <div class="order-detail-actions">
-          <!-- 持仓订单：显示修改TP/SL和平仓按钮 -->
-          <template v-if="detailOrder?.status === 'OPEN'">
-            <button class="order-detail-btn modify-btn" @click="handleUpdateTPSL">{{ localeStore.t('modifyTPSL') }}</button>
-            <button class="order-detail-btn close-btn" @click="handleCloseOrder">{{ localeStore.t('closeOrder') }}</button>
-          </template>
-          <!-- 挂单：显示撤单按钮 -->
-          <template v-else-if="detailOrder?.status === 'PENDING'">
-            <button class="order-detail-btn cancel-btn" @click="handleCancelOrder">{{ localeStore.t('cancelOrder') }}</button>
-          </template>
-        </div>
-      </div>
-    </div>
-
+      <footer class="detail-actions"><template v-if="detailOrder.status === 'OPEN'"><button v-if="editingTPSL" type="button" class="subtle-action" @click="editingTPSL = false">{{ copy('返回', 'Back') }}</button><button v-else type="button" class="subtle-action" @click="editingTPSL = true">{{ copy('修改止盈止損', 'Edit TP / SL') }}</button><button type="button" class="primary-action" @click="editingTPSL ? handleUpdateTPSL() : handleCloseOrder()">{{ editingTPSL ? copy('儲存', 'Save') : copy('平倉', 'Close') }}</button></template><template v-else><button type="button" class="subtle-action" @click="closeOrderDetailModal">{{ copy('返回列表', 'Back') }}</button><button type="button" class="primary-action" @click="handleCancelOrder">{{ copy('撤單', 'Cancel order') }}</button></template></footer>
+    </section></div>
     <OrderShareModal v-if="shareOrder" :order-id="shareOrder.id" :kind="shareOrder.kind" brand="DEMO" @close="shareOrder = null" />
     <Tabbar />
   </div>
 </template>
 
 <style scoped>
-.manual-order-badge { display: block; width: fit-content; margin-bottom: 6px; padding: 2px 6px; border: 1px solid #f3d19e; border-radius: 4px; background: #fdf6ec; color: #9a5b00; font-size: 11px; font-weight: 500; line-height: 16px; white-space: nowrap; }
-.order-share-entry { display:flex; align-items:center; justify-content:center; margin:0 0 8px auto; width:36px; height:36px; padding:0; border:1px solid #e6e8ed; border-radius:9px; background:transparent; color:#679700; cursor:pointer; }
-.orders-page {
-  min-height: 100vh;
-  background: #f5f7fb;
-  padding-bottom: 80px;
-}
-
-/* 主标签 */
-.main-tabs {
-  display: flex;
-  background: #fff;
-  padding: 12px;
-  gap: 8px;
-}
-
-.main-tab {
-  flex: 1;
-  text-align: center;
-  padding: 10px 0;
-  border-radius: 8px;
-  background: #f0f0f0;
-  color: #666;
-  font-size: 16px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.3s;
-}
-
-.main-tab.active {
-  background: #73b100;
-  color: #fff;
-}
-
-/* 子标签 */
-.sub-tabs {
-  display: flex;
-  background: #fff;
-  padding: 8px 12px;
-  gap: 8px;
-  border-top: 1px solid #f0f0f0;
-}
-
-.sub-tab {
-  flex: 1;
-  text-align: center;
-  padding: 8px 0;
-  border-radius: 6px;
-  background: #f0f0f0;
-  color: #666;
-  font-size: 14px;
-  cursor: pointer;
-  transition: all 0.3s;
-}
-
-.sub-tab.active {
-  background: #73b100;
-  color: #fff;
-}
-
-/* 统计卡片 */
-.summary-card {
-  background: #fff;
-  margin: 12px;
-  padding: 16px;
-  border-radius: 12px;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
-}
-
-.summary-item {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.summary-label {
-  font-size: 12px;
-  color: #999;
-}
-
-.summary-value {
-  font-size: 16px;
-  font-weight: 600;
-  color: #000;
-}
-
-.summary-value.negative {
-  color: #ff4444;
-}
-
-.summary-value.positive {
-  color: #73b100;
-}
-
-/* 订单列表 */
-.orders-list {
-  padding: 0 12px 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.order-card {
-  background: #fff;
-  border-radius: 12px;
-  padding: 16px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
-}
-
-.order-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 12px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid #f0f0f0;
-}
-
-.order-symbol {
-  font-size: 16px;
-  font-weight: 600;
-  color: #000;
-}
-
-.order-price {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 14px;
-  color: #666;
-}
-
-.order-price .arrow {
-  color: #999;
-}
-
-.order-price .positive {
-  color: #73b100;
-}
-
-.order-price .negative {
-  color: #ff4444;
-}
-
-.order-price .negative {
-  color: #ff4444;
-}
-
-.order-body {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.order-type-badge {
-  display: inline-block;
-  padding: 4px 12px;
-  border-radius: 4px;
-  font-size: 12px;
-  font-weight: 600;
-  width: fit-content;
-}
-
-.order-type-badge.buy {
-  background: #73b100;
-  color: #fff;
-}
-
-.order-type-badge.sell {
-  background: #ff4444;
-  color: #fff;
-}
-
-.order-details {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.detail-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 13px;
-}
-
-.detail-label {
-  color: #999;
-}
-
-.detail-value {
-  color: #000;
-  font-weight: 500;
-}
-
-.detail-value.negative {
-  color: #ff4444;
-}
-
-.detail-value.positive {
-  color: #73b100;
-}
-
-/* 空状态 */
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 60px 20px;
-  text-align: center;
-}
-
-.empty-icon {
-  font-size: 64px;
-  margin-bottom: 16px;
-  opacity: 0.3;
-}
-
-.empty-text {
-  font-size: 14px;
-  color: #999;
-}
-
-/* 订单详情弹窗 */
-.order-detail-modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-}
-
-.order-detail-modal {
-  background: #fff;
-  border-radius: 16px;
-  padding: 24px;
-  width: 90%;
-  max-width: 420px;
-  position: relative;
-  max-height: 90vh;
-  overflow-y: auto;
-  padding-top: 50px; /* 为关闭按钮留出空间 */
-}
-
-.order-detail-modal-close {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  background: rgba(0, 0, 0, 0.05);
-  border: none;
-  font-size: 24px;
-  color: #666;
-  cursor: pointer;
-  padding: 0;
-  width: 36px;
-  height: 36px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  line-height: 1;
-  border-radius: 50%;
-  z-index: 10;
-  transition: all 0.2s;
-}
-
-.order-detail-modal-close:hover {
-  background: rgba(0, 0, 0, 0.1);
-  color: #000;
-}
-
-.order-detail-header {
-  font-size: 18px;
-  font-weight: 600;
-  margin-bottom: 20px;
-  text-align: center;
-  padding-right: 0; /* 移除右边距，因为关闭按钮已经不在标题区域 */
-  margin-top: -26px; /* 向上移动，因为 padding-top 增加了 */
-}
-
-.order-detail-content {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-
-.order-detail-basic {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.order-detail-symbol {
-  font-size: 24px;
-  font-weight: 600;
-  color: #000;
-}
-
-.order-detail-id-time {
-  display: flex;
-  justify-content: space-between;
-  font-size: 13px;
-  color: #666;
-}
-
-.order-detail-price {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  font-size: 20px;
-  font-weight: 600;
-  padding: 12px 0;
-  padding-right: 50px; /* 为关闭按钮留出空间，避免遮挡 */
-  word-break: break-all; /* 如果数字太长，允许换行 */
-  flex-wrap: wrap; /* 允许换行 */
-}
-
-.order-detail-price .arrow {
-  color: #999;
-}
-
-.order-detail-price .positive {
-  color: #73b100;
-}
-
-.order-detail-price .negative {
-  color: #ff4444;
-}
-
-.order-detail-type {
-  display: flex;
-  justify-content: center;
-}
-
-.order-detail-finance {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 16px;
-  background: #f8f9fa;
-  border-radius: 8px;
-}
-
-.finance-item {
-  display: flex;
-  justify-content: space-between;
-  font-size: 14px;
-}
-
-.finance-item span:first-child {
-  color: #666;
-}
-
-.finance-item span:last-child {
-  font-weight: 600;
-  color: #000;
-}
-
-.finance-item.profit-item span:last-child.positive {
-  color: #73b100;
-}
-
-.finance-item.profit-item span:last-child.negative {
-  color: #ff4444;
-}
-
-.order-detail-tpsl {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-  padding: 16px;
-  background: #f8f9fa;
-  border-radius: 8px;
-}
-
-.tpsl-item {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.tpsl-label-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.tpsl-label {
-  font-size: 14px;
-  font-weight: 500;
-  color: #333;
-}
-
-.tpsl-toggle {
-  position: relative;
-  display: inline-block;
-  width: 44px;
-  height: 24px;
-}
-
-.tpsl-toggle input {
-  opacity: 0;
-  width: 0;
-  height: 0;
-}
-
-.tpsl-slider {
-  position: absolute;
-  cursor: pointer;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: #ccc;
-  transition: 0.3s;
-  border-radius: 24px;
-}
-
-.tpsl-slider:before {
-  position: absolute;
-  content: "";
-  height: 18px;
-  width: 18px;
-  left: 3px;
-  bottom: 3px;
-  background-color: white;
-  transition: 0.3s;
-  border-radius: 50%;
-}
-
-.tpsl-toggle input:checked + .tpsl-slider {
-  background-color: #73b100;
-}
-
-.tpsl-toggle input:checked + .tpsl-slider:before {
-  transform: translateX(20px);
-}
-
-.tpsl-input-wrapper {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background: #fff;
-  border-radius: 8px;
-  padding: 4px;
-}
-
-.tpsl-btn {
-  width: 32px;
-  height: 32px;
-  border: 1px solid #ddd;
-  background: #fff;
-  border-radius: 4px;
-  font-size: 18px;
-  color: #666;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-}
-
-.tpsl-btn:active {
-  background: #f0f0f0;
-}
-
-.tpsl-input {
-  flex: 1;
-  border: none;
-  padding: 8px;
-  font-size: 14px;
-  text-align: center;
-  background: transparent;
-}
-
-.tpsl-input:focus {
-  outline: none;
-}
-
-.order-detail-actions {
-  display: flex;
-  gap: 12px;
-  margin-top: 20px;
-}
-
-.order-detail-btn {
-  flex: 1;
-  padding: 12px;
-  border: none;
-  border-radius: 8px;
-  font-size: 16px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.order-detail-btn.modify-btn {
-  background: #e8f5e9;
-  color: #73b100;
-  border: 1px solid #73b100;
-}
-
-.order-detail-btn.close-btn {
-  background: #73b100;
-  color: #fff;
-}
-
-.order-detail-btn.cancel-btn {
-  background: #73b100;
-  color: #fff;
-  width: 100%;
-}
-
-.order-detail-btn:active {
-  opacity: 0.8;
-}
-
-
-/* Toast消息 */
-.toast-message {
-  position: fixed;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  padding: 18px 36px;
-  border-radius: 12px;
-  font-size: 18px;
-  font-weight: 600;
-  z-index: 9999;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
-  pointer-events: none;
-  white-space: nowrap;
-  min-width: 200px;
-  text-align: center;
-  animation: toastFadeIn 0.3s ease-out;
-}
-
-@keyframes toastFadeIn {
-  from {
-    opacity: 0;
-    transform: translate(-50%, -50%) scale(0.9);
-  }
-  to {
-    opacity: 1;
-    transform: translate(-50%, -50%) scale(1);
-  }
-}
-
-/* 倒计时警告样式 */
-.countdown-warning {
-  color: #ff4444 !important;
-  font-weight: 600 !important;
-}
-
-.toast-message.success {
-  background: #73b100;
-  color: #fff;
-}
-
-.toast-message.error {
-  background: #ff4444;
-  color: #fff;
-}
+.orders-page{min-height:100vh;background:#f4f6f9;color:#17212d;padding-bottom:84px;font-family:inherit}
+.orders-header{background:#fff}.orders-titlebar{height:58px;display:flex;justify-content:center;align-items:center;position:relative}.orders-titlebar h1{margin:0;font-size:19px;font-weight:700}.history-shortcut{position:absolute;right:13px;top:9px;width:40px;height:40px;display:grid;place-items:center;border:0;background:none;color:#5f6b79;cursor:pointer}
+.main-tabs,.sub-tabs{display:flex;align-items:stretch;gap:34px;padding:0 25px;border-bottom:1px solid #eef0f2}.main-tabs{height:45px}.sub-tabs{height:44px;gap:28px;overflow-x:auto;scrollbar-width:none}.sub-tabs::-webkit-scrollbar{display:none}.main-tab,.sub-tab{position:relative;flex:none;padding:0;border:0;background:none;color:#8995a3;white-space:nowrap;cursor:pointer}.main-tab{font-size:17px;font-weight:700}.sub-tab{font-size:14px;font-weight:600}.main-tab.active,.sub-tab.active{color:#101b28}.main-tab.active:after,.sub-tab.active:after{content:'';position:absolute;left:0;right:0;bottom:-1px;height:3px;border-radius:3px 3px 0 0;background:#73b100}
+.orders-content{max-width:650px;margin:auto;padding:12px 12px 24px}.summary-card,.order-card{background:#fff;border:1px solid #e8ecf0;border-radius:15px;box-shadow:0 2px 12px #17212d05}.summary-card{padding:16px 15px 14px}.summary-heading{display:flex;justify-content:space-between;gap:12px;color:#8491a0;font-size:12px}.summary-primary{margin-top:8px;font-size:30px;line-height:1.15;font-weight:700;letter-spacing:-.6px;font-variant-numeric:tabular-nums}.summary-primary small{margin-left:5px;color:#758395;font-size:12px;font-weight:600;letter-spacing:0}.positive{color:#66aa00!important}.negative{color:#ee5264!important}.summary-stats{display:flex;justify-content:space-between;gap:12px;border-top:1px solid #e9edf1;margin-top:14px;padding-top:12px}.summary-stats>div{min-width:0}.summary-stats>div:last-child{text-align:right}.summary-stats span,.metric span,.detail-grid span{display:block;color:#8a96a4;font-size:11px;line-height:1.35}.summary-stats strong{display:block;margin-top:3px;font-size:12px;font-weight:650;white-space:nowrap;font-variant-numeric:tabular-nums}
+.orders-filters{display:flex;align-items:center;gap:6px;padding:14px 0 9px}.filter-select{position:relative;display:block}.filter-select:after{content:'';position:absolute;right:11px;top:14px;width:6px;height:6px;border-right:1.5px solid #394655;border-bottom:1.5px solid #394655;transform:rotate(45deg);pointer-events:none}.filter-select select{appearance:none;max-width:150px;height:35px;padding:0 26px 0 10px;border:1px solid #e1e6eb;border-radius:8px;background:#fff;color:#253444;font-family:inherit;font-size:12px;font-weight:600;cursor:pointer}.filter-count{margin-left:auto;color:#95a0ac;font-size:11px}.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+.orders-list{display:flex;flex-direction:column;gap:9px}.order-card{padding:15px 14px 0}.card-heading{display:flex;justify-content:space-between;gap:8px}.card-identity{min-width:0}.card-identity h2,.detail-identity h3{margin:0;font-size:17px;line-height:1.25;font-weight:750;letter-spacing:-.2px;white-space:nowrap}.card-tags{display:flex;align-items:center;flex-wrap:wrap;gap:4px;margin-top:5px}.card-tags span{display:inline-flex;align-items:center;min-height:18px;padding:1px 5px;border-radius:4px;font-size:10px;font-weight:700;line-height:1.2;white-space:nowrap}.direction-tag.long{background:#ecf7e8;color:#4da537}.direction-tag.short{background:#fff0f2;color:#e94c62}.card-tags .neutral-tag,.card-tags .status-tag{background:#f0f3f5;color:#637182}.card-tags .pending-tag,.card-tags .status-tag.pending-tag{background:#fff7e8;color:#bd8a1b}.card-tags .live-tag,.card-tags .status-tag.live-tag{background:#eff8e8;color:#63a500}.card-tags .manual-order-badge{background:#f2f4f7;color:#657586}.card-pnl{text-align:right;min-width:95px;font-variant-numeric:tabular-nums}.card-pnl strong{display:block;font-size:19px;line-height:1.1;font-weight:750}.card-pnl small{display:block;margin-top:3px;font-size:11px;font-weight:700}.card-pending{padding-top:2px;color:#bd8a1b;font-size:11px;font-weight:700}
+.card-metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px 6px;border-top:1px solid #edf0f2;margin-top:12px;padding:12px 0}.metric{min-width:0}.metric.right{text-align:right}.metric strong{display:block;margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;font-weight:650;font-variant-numeric:tabular-nums}.countdown-block{margin-top:12px}.countdown-caption{display:flex;justify-content:space-between;font-size:11px;color:#8793a0}.countdown-caption strong{color:#6ca900;font-variant-numeric:tabular-nums}.countdown-track{height:3px;margin-top:5px;border-radius:3px;background:#edf1e8;overflow:hidden}.countdown-track span{display:block;height:100%;background:#78b500}.card-footer{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:39px;border-top:1px solid #edf0f2;color:#8793a0;font-size:11px}.card-footer>div{display:flex;align-items:center;gap:7px}.card-footer time{color:#506071;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}.order-share-entry{display:grid;place-items:center;width:28px;height:30px;padding:0;border:0;background:none;color:#8695a5;cursor:pointer}.card-actions{display:flex;gap:6px;border-top:1px solid #edf0f2;padding:8px 0 10px}.card-actions button,.detail-actions button{flex:1;height:33px;border-radius:7px;font:600 11px inherit;cursor:pointer}.subtle-action{border:1px solid #e1e6e9;background:#fff;color:#253341}.primary-action{border:1px solid #73b100;background:#73b100;color:#fff}.quiet-action{border:1px solid transparent;background:#f3f5f6;color:#4f5c69}.list-state{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:180px;color:#8d9aa6;font-size:13px}.empty-icon{font-size:30px;margin-bottom:8px;color:#c6cfd6}
+.order-detail-modal-overlay{position:fixed;z-index:1100;inset:0;display:flex;align-items:flex-end;justify-content:center;background:#141d26a6}.order-detail-modal{display:flex;flex-direction:column;width:100%;max-width:650px;max-height:88dvh;overflow:hidden;border-radius:20px 20px 0 0;background:#fff;box-shadow:0 -10px 35px #10182024}.sheet-handle{width:34px;height:4px;margin:8px auto 0;border-radius:3px;background:#dce2e5}.detail-header{position:relative;display:flex;align-items:center;justify-content:space-between;min-height:45px;padding:0 18px}.detail-header h2{font-size:15px;margin:0}.order-detail-modal-close{display:grid;place-items:center;width:28px;height:28px;border:0;border-radius:50%;background:#f2f4f6;color:#798694;font-size:21px;cursor:pointer}.detail-body{overflow:auto;padding:6px 18px 18px}.detail-identity{padding:4px 0 13px}.detail-focus{border-bottom:1px solid #edf0f2;padding-bottom:13px}.detail-focus>span{display:block;color:#8793a0;font-size:11px}.detail-focus strong{display:inline-block;margin-top:4px;font-size:27px;font-weight:750;font-variant-numeric:tabular-nums}.detail-focus small{margin-left:6px;font-size:11px;color:#82909c}.detail-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px 10px;padding:14px 0}.detail-grid strong{display:block;margin-top:3px;font-size:12px;font-weight:650;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.tpsl-section{border-top:1px solid #edf0f2;padding-top:13px}.tpsl-section h4{margin:0 0 8px;font-size:12px}.tpsl-row{display:flex;align-items:center;justify-content:space-between;min-height:32px;color:#8995a0;font-size:11px}.tpsl-row strong{color:#243240;font-size:12px}.tpsl-row input{accent-color:#73b100}.stepper{display:flex;align-items:center;margin:3px 0 7px;border:1px solid #e1e7e9;border-radius:7px;overflow:hidden}.stepper button{width:32px;height:32px;border:0;background:#f6f8f9;color:#61707d;font-size:17px}.stepper input{flex:1;min-width:0;height:32px;border:0;text-align:center;font-size:12px;outline:none}.detail-actions{display:flex;gap:6px;padding:11px 18px max(17px,env(safe-area-inset-bottom));border-top:1px solid #edf0f2}.detail-actions button{height:38px;font-size:12px}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid #73b100;outline-offset:2px}
+.summary-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));column-gap:10px}.summary-stats.two-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.summary-stats>div:nth-child(2):not(:last-child){text-align:center}.summary-stats strong{font-size:11px;overflow:hidden;text-overflow:ellipsis}
+.card-actions button,.detail-actions button{font-family:inherit;font-weight:600;font-size:11px}.detail-actions button{font-size:12px}
+@media(max-width:360px){.sub-tabs{gap:20px;padding:0 16px}.orders-content{padding-left:9px;padding-right:9px}.order-card{padding-left:11px;padding-right:11px}.metric strong{font-size:11px}.summary-stats{gap:6px}.summary-stats strong{font-size:11px}}
 </style>

@@ -55,12 +55,17 @@ class ManualOrderMySqlIT {
         symbol=new TradingSymbol();symbol.setId(1L);symbol.setSymbol("FIXTUREUSD");symbol.setIsEnabled(true);symbol.setLotSize(n("1"));symbol.setFeeMultiplier(n("2"));symbol.setMarketSource("yahoo");symbol.setQuoteCurrency("USD");symbol.setRowVersion(0);
         repo=mock(TradingSymbolRepository.class);when(repo.findBySymbol("FIXTUREUSD")).thenReturn(Optional.of(symbol));
         market=mock(ForexQuoteMarketService.class);
-        when(market.historicalKline(eq("FIXTUREUSD"),eq("1m"),eq(2),anyLong())).thenAnswer(inv->{long minute=inv.<Long>getArgument(3)-59999;Map<String,Object> candle=new HashMap<>();candle.put("timestamp",minute);candle.put("open_price",minute==t-60000?"100":"110");return Collections.singletonMap("data",Collections.singletonMap("kline_list",Collections.singletonList(candle)));});
+        // The production picker now requests a shared 720-minute window. Keep exact-minute prices and every assertion unchanged.
+        when(market.historicalKline(eq("FIXTUREUSD"),eq("1m"),anyInt(),anyLong())).thenAnswer(inv->{
+            long last=inv.<Long>getArgument(3)-59999;int count=inv.getArgument(2);List<Map<String,Object>> candles=new ArrayList<>();
+            for(int i=count-1;i>=0;i--){long minute=last-i*60000;Map<String,Object> candle=new HashMap<>();candle.put("timestamp",minute);candle.put("open_price",minute==t-60000?"100":"110");candles.add(candle);}
+            return Collections.singletonMap("data",Collections.singletonMap("kline_list",candles));
+        });
         service=newService(null);
         for(int level=1;level<=3;level++)store.progress(db,"rollup_"+level,day+86400000,0,System.currentTimeMillis());
     }
     ManualOrderService newService(String failure) {
-        ManualOrderService s=new ManualOrderService(source,new ObjectMapper(),repo,new ManualOrderPrices(market),new ManualOrderHistory(store)) {
+        ManualOrderService s=new ManualOrderService(source,new ObjectMapper(),repo,new ManualOrderPrices(market),null,new ManualOrderHistory(store)) {
             @Override protected void checkpoint(String stage) {if(stage.equals(failure))throw new IllegalStateException("injected "+stage);}
         };
         ReflectionTestUtils.setField(s,"enabled",true);return s;
@@ -74,7 +79,96 @@ class ManualOrderMySqlIT {
     void point(long user,long at,String amount){db.update("insert into asset_history_1m(user_id,basis_version,bucket_start,observed_at,net_equity,valuation_status,reason_code,quote_batch_id,valuation_evidence,created_at) values(?,'net_equity_v1',?,?,?,'INCOMPLETE','OLD_EVIDENCE','fixture','{}',?)",user,at,at+60000,amount==null?null:n(amount),at+60000);}
     BigDecimal wallet(){return db.queryForObject("select available from asset_account where user_id=1",BigDecimal.class);}
     BigDecimal value(long at){return db.queryForObject("select net_equity from asset_history_1m where user_id=1 and basis_version='net_equity_v1' and bucket_start=?",BigDecimal.class,at);}
+    @Test void generationOnlyPreviewsAndThenUsesExistingAtomicCreate() {
+        ManualOrderGenerator.Request r=new ManualOrderGenerator.Request();r.userId=1L;r.symbol="FIXTUREUSD";r.timezone="UTC";r.targetNet=n("100");r.openLocal=local(t-60000);r.walletEnabled=true;r.historyEnabled=true;
+        Map<String,Object> out=service.generate(r);
+        assertEquals(0,count("contract_order"));assertEquals(0,count("manual_order_record"));equal("1000",wallet());
+        ManualOrderService.Request generated=new ObjectMapper().convertValue(out.get("request"),ManualOrderService.Request.class);
+        assertEquals(r.openLocal,generated.openLocal);
+        equal("100",generated.targetNet);
+        long close=ManualOrderCalculation.minute(generated.closeLocal,generated.timezone,generated.closeOffset);
+        assertTrue(close-(t-60000)>=60*60000L);
+        generated.previewToken=out.get("previewToken").toString();generated.idempotencyKey=UUID.randomUUID().toString();
+        service.create(generated);service.create(generated);
+        equal("1100",wallet());assertEquals(1,count("contract_order"));assertEquals(1,count("manual_order_record"));
+    }
+    @Test void netOnlyGenerationAndImpossibleConstraintsNeverWriteMoney() {
+        ManualOrderGenerator.Request r=new ManualOrderGenerator.Request();r.userId=1L;r.symbol="FIXTUREUSD";r.timezone="UTC";r.targetNet=n("-100");
+        Map<String,Object> out=service.generate(r);
+        assertTrue(ManualOrderGenerator.withinTarget(new BigDecimal(((Map<?,?>)out.get("calculation")).get("net").toString()),r.targetNet));
+        assertEquals(0,count("contract_order"));equal("1000",wallet());
+        r.targetNet=n("10000");r.quantity=n("0.01");r.openLocal=local(t-60000);r.closeLocal=local(t);r.side="BUY";
+        assertThrows(BusinessException.class,()->service.generate(r));assertEquals(0,count("contract_order"));equal("1000",wallet());
+        r.historyEnabled=true;assertThrows(BusinessException.class,()->service.generate(r));
+        SecurityContextHolder.clearContext();assertThrows(org.springframework.security.access.AccessDeniedException.class,()->service.generate(r));
+    }
+    @Test void targetConstraintSurvivesNormalPreviewAndCannotBeSilentlyMissed() {
+        ManualOrderService.Request r=request(false,false);r.driver="QUANTITY";r.input=n("0.01");r.targetNet=n("100");
+        assertThrows(BusinessException.class,()->service.preview(r));assertEquals(0,count("contract_order"));
+        r.input=n("12.50");Map<String,Object> p=service.preview(r);equal("0",(BigDecimal)((Map<?,?>)p.get("calculation")).get("difference"));
+        r.targetNet=n("0");assertThrows(BusinessException.class,()->service.preview(r));
+    }
     int count(String table){return db.queryForObject("select count(*) from "+table,Integer.class);}
+    @Test void generation128MasksThroughServiceAreReadOnly() throws Exception {
+        long opening=Math.floorDiv(System.currentTimeMillis(),60000)*60000-6*3600000,closing=opening+4*3600000;
+        when(market.historicalKline(anyString(),eq("1m"),anyInt(),anyLong())).thenAnswer(inv->{
+            long end=inv.getArgument(3);int size=inv.getArgument(2);List<Map<String,Object>> rows=new ArrayList<>();
+            for(long time:new long[]{opening,closing})if(time<=end && time>end-size*60000L){Map<String,Object> row=new HashMap<>();row.put("timestamp",time);row.put("open_price",time==opening?"100":"110");rows.add(row);}
+            return Collections.singletonMap("data",Collections.singletonMap("kline_list",rows));
+        });
+        List<String> rows=new ArrayList<>();rows.add("mask,status,milliseconds,market_calls,pairs,net,quantity,leverage,percent");
+        for(int mask=0;mask<128;mask++){
+            ManualOrderGenerator.Request r=ManualOrderGenerationMatrixTest.request(mask);r.userId=1L;r.symbol="FIXTUREUSD";r.timezone="UTC";
+            if((mask&2)!=0)r.openLocal=local(opening);if((mask&4)!=0)r.closeLocal=local(closing);
+            clearInvocations(market);long started=System.nanoTime();Map<String,Object> out=service.generate(r);
+            Map<?,?> calc=(Map<?,?>)out.get("calculation"),request=(Map<?,?>)out.get("request"),quotes=(Map<?,?>)out.get("quotes"),info=(Map<?,?>)out.get("generation");
+            BigDecimal q=n(calc.get("quantity").toString()),l=n(request.get("leverage").toString()),p0=n(quotes.get("openPrice").toString()),p1=n(quotes.get("closePrice").toString());
+            BigDecimal fee=q.multiply(n("2")),margin=q.multiply(p0).divide(l,16,java.math.RoundingMode.CEILING),net=p1.subtract(p0).multiply(q).multiply("BUY".equals(request.get("side"))?BigDecimal.ONE:BigDecimal.ONE.negate()).subtract(fee);
+            equal(net.toString(),calc.get("net"));equal(fee.toString(),calc.get("fee"));equal(margin.toString(),calc.get("margin"));
+            if(r.targetNet!=null)assertTrue(net.subtract(r.targetNet).abs().compareTo(r.targetNet.abs().multiply(n("0.05")))<=0);
+            if(r.quantity!=null)equal(r.quantity.toString(),q);if(r.leverage!=null)equal(r.leverage.toString(),l);
+            if(r.percent!=null)assertTrue(n(calc.get("percent").toString()).subtract(r.percent).abs().compareTo(n("0.01"))<=0);
+            if(r.side!=null)assertEquals(r.side,request.get("side"));if(r.openLocal!=null)assertEquals(r.openLocal,request.get("openLocal"));if(r.closeLocal!=null)assertEquals(r.closeLocal,request.get("closeLocal"));
+            assertEquals(0,count("contract_order"));assertEquals(0,count("manual_order_record"));equal("1000",wallet());
+            for(String table:Arrays.asList("asset_history_1m","asset_history_1h","asset_history_4h","asset_history_1d"))assertEquals(0,count(table));
+            int calls=mockingDetails(market).getInvocations().size();assertTrue(calls<=18,"bounded seven-day windows plus preview");
+            rows.add(mask+",PASS,"+(System.nanoTime()-started)/1000000.0+","+calls+","+info.get("searchedPairs")+","+net+","+q+","+l+","+calc.get("percent"));
+        }
+        java.nio.file.Path dir=java.nio.file.Paths.get("target/manual-generation-matrix");java.nio.file.Files.createDirectories(dir);java.nio.file.Files.write(dir.resolve("service-matrix-128.csv"),rows,java.nio.charset.StandardCharsets.UTF_8);
+    }
+    @Test void generationSecurityUnknownInputsAndTimeBoundaries() throws Exception {
+        ManualOrderGenerator.Request r=new ManualOrderGenerator.Request();r.userId=1L;r.symbol="FIXTUREUSD";r.timezone="UTC";r.targetNet=n("-100");
+        for(String role:Arrays.asList("USER","AGENT","ADMIN")){auth(role);assertThrows(org.springframework.security.access.AccessDeniedException.class,()->service.generate(r));}
+        SecurityContextHolder.clearContext();assertThrows(org.springframework.security.access.AccessDeniedException.class,()->service.generate(r));auth("SUPER_ADMIN");
+        ReflectionTestUtils.setField(service,"enabled",false);assertThrows(BusinessException.class,()->service.generate(r));ReflectionTestUtils.setField(service,"enabled",true);
+        for(String extra:Arrays.asList("openPrice","profit","orderSource","unknown"))assertThrows(Exception.class,()->new ObjectMapper().readValue("{\""+extra+"\":1}",ManualOrderGenerator.Request.class));
+        long current=Math.floorDiv(System.currentTimeMillis(),60000)*60000;
+        for(long time:new long[]{current,current+60000}){r.openLocal=local(time);assertThrows(BusinessException.class,()->service.generate(r));}
+        r.openLocal=local(t);r.closeLocal=local(t-60000);assertThrows(BusinessException.class,()->service.generate(r));
+        ManualOrderService.Request p=request(true,false);p.previewToken=service.preview(p).get("previewToken").toString();
+        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken("2","unused",Collections.singletonList(new SimpleGrantedAuthority("ROLE_SUPER_ADMIN"))));
+        assertThrows(BusinessException.class,()->service.create(p));assertEquals(0,count("contract_order"));equal("1000",wallet());
+    }
+    @Test void exactlySevenDaysFromFixedOpenIsIncluded() {
+        long opening=Math.floorDiv(System.currentTimeMillis(),60000)*60000-8*86400000L,closing=opening+7*86400000L;
+        when(market.historicalKline(anyString(),eq("1m"),anyInt(),anyLong())).thenAnswer(inv->{
+            long end=inv.getArgument(3);int size=inv.getArgument(2);List<Map<String,Object>> rows=new ArrayList<>();
+            for(long time:new long[]{opening,closing})if(time<=end && time>end-size*60000L){Map<String,Object> row=new HashMap<>();row.put("timestamp",time);row.put("open_price",time==opening?"100":"110");rows.add(row);}
+            return Collections.singletonMap("data",Collections.singletonMap("kline_list",rows));
+        });
+        ManualOrderGenerator.Request r=ManualOrderGenerationMatrixTest.request(1|8|16|32);r.userId=1L;r.symbol="FIXTUREUSD";r.timezone="UTC";r.openLocal=local(opening);
+        Map<String,Object> out=service.generate(r);assertEquals(local(closing),((Map<?,?>)out.get("request")).get("closeLocal"));equal("80",((Map<?,?>)out.get("calculation")).get("net"));assertEquals(0,count("contract_order"));
+    }
+    @Test void differentKeysConcurrentRejectStaleThenRetryAndSurviveServiceRestart() throws Exception {
+        ManualOrderService.Request a=request(true,true),b=request(true,true);a.previewToken=service.preview(a).get("previewToken").toString();b.previewToken=service.preview(b).get("previewToken").toString();
+        ExecutorService pool=Executors.newFixedThreadPool(2);
+        try {
+            List<Future<Boolean>> futures=new ArrayList<>();for(ManualOrderService.Request r:Arrays.asList(a,b))futures.add(pool.submit(()->{auth("SUPER_ADMIN");try{service.create(r);return true;}catch(BusinessException e){assertTrue(e.getMessage().contains("钱包已变化"));return false;}finally{SecurityContextHolder.clearContext();}}));
+            boolean first=futures.get(0).get(10,TimeUnit.SECONDS),second=futures.get(1).get(10,TimeUnit.SECONDS);assertNotEquals(first,second);
+            equal("1100",wallet());assertEquals(1,count("contract_order"));create(first?b:a);equal("1200",wallet());equal("200",value(t));
+            service=newService(null);service.create(a);service.create(b);equal("1200",wallet());assertEquals(2,count("contract_order"));
+        }finally{pool.shutdownNow();}
+    }
     @Test void threeLegalCombinationsAndDefaults() {
         point(1,t,"1000");create(request(false,false));equal("1000",wallet());equal("1000",value(t));
         create(request(true,false));equal("1100",wallet());equal("1000",value(t));
@@ -179,7 +273,7 @@ class ManualOrderMySqlIT {
     }
     @Test void concurrentCaptureRollupAndWalletCannotSeeHalfCommit() throws Exception {
         CountDownLatch walletWritten=new CountDownLatch(1),release=new CountDownLatch(1);
-        service=new ManualOrderService(source,new ObjectMapper(),repo,new ManualOrderPrices(market),new ManualOrderHistory(store)) {
+        service=new ManualOrderService(source,new ObjectMapper(),repo,new ManualOrderPrices(market),null,new ManualOrderHistory(store)) {
             @Override protected void checkpoint(String stage) {
                 if(!stage.equals("wallet"))return;
                 walletWritten.countDown();try{if(!release.await(10,TimeUnit.SECONDS))throw new IllegalStateException("test timeout");}catch(InterruptedException e){throw new IllegalStateException(e);}

@@ -48,7 +48,13 @@
       </template>
 
       <el-table :data="recordsList" style="width: 100%" v-loading="loading">
-        <el-table-column prop="id" label="ID" width="80" />
+        <el-table-column prop="currency" label="原币货币" width="100" />
+          <el-table-column prop="originalAmount" label="原币数量" width="150" />
+          <el-table-column prop="source" label="充值来源（空为历史未知）" width="180" />
+          <el-table-column prop="reviewRemark" label="审核备注" width="150" />
+          <el-table-column prop="reviewedAt" label="审核时间" width="180" />
+          <el-table-column prop="creditedAt" label="入账时间" width="180" />
+          <el-table-column prop="id" label="ID" width="80" />
         <el-table-column prop="userId" label="用户ID" width="200">
           <template #default="{ row }">
             <span v-if="row.agentInfo">{{ row.userId }}({{ row.agentInfo }})</span>

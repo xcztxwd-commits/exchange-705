@@ -148,8 +148,8 @@ onMounted(() => {
               <el-icon :size="30"><Coin /></el-icon>
             </div>
             <div class="stat-content">
-              <div class="stat-label">下级用户累计充值</div>
-              <div class="stat-value">{{ formatNumber(performance.subordinateTotalDeposit) }} USDT</div>
+              <div class="stat-label">下级用户累计充值（含历史未知，不含手动）</div>
+              <div class="stat-value">{{ performance.subordinateTotalDeposit ?? '0' }} USD</div>
             </div>
           </el-card>
         </el-col>
@@ -179,6 +179,10 @@ onMounted(() => {
         </el-col>
       </el-row>
 
+      <el-alert :title="performance.depositBasis || '累计充值保留历史未知部分；手动充值独立分组'" :closable="false" />
+      <el-descriptions title="充值来源分组（USD）" border :column="2">
+        <el-descriptions-item v-for="(amount, source) in performance.depositGroupsUsd" :key="source" :label="({ USER_SUBMITTED: '用户充值业绩', LEGACY_UNKNOWN: '历史充值（来源未记录）', ADMIN_MANUAL_RECEIPT: '手动实收补录', ADMIN_MANUAL_BONUS: '手动赠送', ADMIN_MANUAL_ADJUSTMENT: '手动补款' } as Record<string,string>)[source] || source">{{ amount }} USD</el-descriptions-item>
+      </el-descriptions>
       <!-- 下级用户列表 -->
       <el-divider />
       <h3 style="margin-bottom: 20px;">下级用户列表</h3>

@@ -50,3 +50,12 @@ docs/manual-history-order-new-session.txt
 !exchange-backend/src/main/resources/db/asset-equity/V001__net_equity_history.sql
 
 !exchange-backend/src/test/resources/manual-order-schema.sql
+!exchange-backend/src/main/resources/db/asset-equity/V002__history_cache.sql
+!exchange-backend/src/test/resources/asset-cache-performance.sql
+
+# Reviewed deposit migration and disposable test fixture.
+!exchange-backend/src/main/resources/db/migration/add_deposit_order_details.sql
+!scripts/deposit-orders/legacy-fixture.sql
+
+# Local design screenshots, not release source.
+design/order-module-preview-20260928/

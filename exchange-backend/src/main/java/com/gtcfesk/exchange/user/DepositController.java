@@ -22,6 +22,7 @@ public class DepositController {
     private final DepositSettingRepository depositSettingRepository;
     private final DepositRecordRepository depositRecordRepository;
     private final FiatCurrencyService fiatCurrencyService;
+    private final DepositOrderService orders;
 
     @GetMapping("/settings/list")
     public ResponseEntity<?> getSettingsList(@RequestParam(required = false) String type) {
@@ -121,41 +122,19 @@ public class DepositController {
                 return ResponseEntity.status(401).body(resp);
             }
 
-            Long userId = Long.parseLong(auth.getName());
-            String type = (String) req.get("type");
-            String network = (String) req.get("network");
-            BigDecimal amount = new BigDecimal(req.get("amount").toString());
-            com.gtcfesk.exchange.common.TradeValidation.positive(amount, "充值金额");
-            String address = (String) req.get("address");
-            String proofImage = (String) req.get("proofImage");
-
-            if (type == null || network == null || amount == null || address == null) {
-                Map<String, Object> resp = new HashMap<>();
-                resp.put("success", false);
-                resp.put("message", "参数不完整");
-                return ResponseEntity.badRequest().body(resp);
-            }
-
-            DepositRecord record = new DepositRecord();
-            record.setUserId(userId);
-            record.setType(type);
-            record.setNetwork(network);
-            String currency = fiatCurrencyService.currency((String) req.get("currency"));
-            BigDecimal rate = fiatCurrencyService.rate(currency);
-            record.setCurrency(currency);
-            record.setOriginalAmount(amount);
-            record.setExchangeRate(rate);
-            record.setAmount(fiatCurrencyService.toUsd(amount, rate));
-            record.setAddress(address);
-            record.setProofImage(proofImage);
-            record.setStatus("PENDING");
-
-            depositRecordRepository.save(record);
+            DepositOrderRequest input=new DepositOrderRequest();
+            input.type=(String)req.get("type");input.network=(String)req.get("network");input.address=(String)req.get("address");
+            input.currency=(String)req.get("currency");input.amount=new BigDecimal(req.get("amount").toString());
+            input.proofImage=(String)req.get("proofImage");input.remark=(String)req.get("remark");input.idempotencyKey=(String)req.get("requestId");
+            DepositRecord record=orders.submit(Long.parseLong(auth.getName()),input);
 
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", true);
             resp.put("message", "充值申请已提交");
+            resp.put("order", DepositOrderService.publicDto(record));
             return ResponseEntity.ok(resp);
+        } catch (org.springframework.web.server.ResponseStatusException e) {
+            throw e;
         } catch (Exception e) {
             e.printStackTrace();
             Map<String, Object> resp = new HashMap<>();
@@ -180,7 +159,7 @@ public class DepositController {
 
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", true);
-            resp.put("list", records);
+            resp.put("list", records.stream().map(DepositOrderService::publicDto).collect(java.util.stream.Collectors.toList()));
             return ResponseEntity.ok(resp);
         } catch (Exception e) {
             Map<String, Object> resp = new HashMap<>();

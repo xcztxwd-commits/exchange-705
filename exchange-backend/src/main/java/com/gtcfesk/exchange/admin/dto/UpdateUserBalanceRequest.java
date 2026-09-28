@@ -10,6 +10,8 @@ public class UpdateUserBalanceRequest {
     private String currency;
     private String account;
     private BigDecimal amount;
+    private String idempotencyKey;
+    private String remark;
 
     /** 资金账户余额 */
     private BigDecimal fundBalance;

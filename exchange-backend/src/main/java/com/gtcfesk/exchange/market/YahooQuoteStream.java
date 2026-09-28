@@ -30,6 +30,7 @@ public class YahooQuoteStream {
     private final Map<String, Map<String,Object>> observations = new ConcurrentHashMap<>();
     private final AtomicLong generation = new AtomicLong(), messages = new AtomicLong(), rejected = new AtomicLong(), gaps = new AtomicLong();
     private volatile Set<String> desired = Collections.emptySet();
+    private volatile Set<String> preferred = Collections.emptySet();
     private Set<String> subscribed = new HashSet<>();
     private volatile WebSocketSession session;
     private volatile BiConsumer<String, Map<String,Object>> consumer;
@@ -44,11 +45,16 @@ public class YahooQuoteStream {
         lifecycle.scheduleWithFixedDelay(this::tick, 0, 1, TimeUnit.SECONDS);
     }
     public void subscriptions(Set<String> symbols, BiConsumer<String, Map<String,Object>> callback) {
+        subscriptions(symbols, Collections.emptySet(), callback);
+    }
+    public void subscriptions(Set<String> symbols, Set<String> preferredSymbols, BiConsumer<String, Map<String,Object>> callback) {
         desired = Collections.unmodifiableSet(new HashSet<>(symbols)); consumer = callback;
+        preferred = Collections.unmodifiableSet(new HashSet<>(preferredSymbols));
         observations.keySet().retainAll(symbols);
     }
     boolean enabled(String symbol) {
-        return "ws_preferred".equals(mode) && Arrays.asList(enabledSymbols.split("\\s*,\\s*")).contains(symbol);
+        return "ws_preferred".equals(mode) && (preferred.contains(symbol)
+            || Arrays.asList(enabledSymbols.split("\\s*,\\s*")).contains(symbol));
     }
     public boolean healthy(String symbol) {
         Map<String,Object> quote = observations.get(symbol);
@@ -155,7 +161,7 @@ public class YahooQuoteStream {
     }
     public Map<String,Object> status() {
         Map<String,Object> result = new LinkedHashMap<>();
-        result.put("mode", mode); result.put("enabledSymbols", enabledSymbols); result.put("connected", connected());
+        result.put("mode", mode); result.put("enabledSymbols", enabledSymbols); result.put("preferredSymbols", preferred); result.put("connected", connected());
         result.put("connectedAt", connectedAt); result.put("lastFrame", lastFrame); result.put("retryAt", nextConnect);
         result.put("error", error); result.put("messages", messages.get()); result.put("rejected", rejected.get());
         result.put("gaps", gaps.get()); result.put("queueDepth", receiver.getQueue().size()); result.put("subscriptions", desired);

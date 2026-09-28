@@ -36,7 +36,7 @@ public class ForexQuoteMarketService {
     @Autowired private PersistentPriceControl controls;
     @Autowired private ControlHistoryStore controlHistory;
     @Autowired private ControlledKlineMerger klineMerger;
-    @Value("${market.quote.max-age-ms:15000}") private long maxAgeMs = 15000;
+    @Value("${market.quote.max-age-ms:60000}") private long maxAgeMs = 60000;
     @Value("${market.quote.poll-ms:3000}") private long pollMs = 3000;
     private final Map<String, Group> groups = new LinkedHashMap<>();
     private volatile Map<String, TradingSymbol> registry = Collections.emptyMap();
@@ -104,6 +104,7 @@ public class ForexQuoteMarketService {
         for (String category : Arrays.asList("Crypto", "CryptoPerpetual", "Metal", "Forex", "US", "CFD", "Oil", "Other"))
             groups.put(category, new Group(category));
     }
+    public void requestSymbolRefresh() { metadata.execute(this::refreshSymbols); }
     private Group group(String category) {
         for (Group group : groups.values()) if (group.category.equalsIgnoreCase(category)) return group;
         return groups.get(category == null ? "Crypto" : "Other");
@@ -164,9 +165,14 @@ public class ForexQuoteMarketService {
             published.keySet().retainAll(updated.keySet()); publishedAt.keySet().retainAll(updated.keySet());
             if (yahoo != null) {
                 Set<String> subscribed = new HashSet<>();
+                Set<String> preferred = new HashSet<>();
                 for (Group item : groups.values()) if ("Yahoo".equals(provider(item.category)))
-                    for (String code : item.codes) subscribed.add(MarketQuoteSource.mapSymbolToYahoo(code, item.category));
-                yahoo.subscriptions(subscribed, this::receiveYahoo);
+                    for (String code : item.codes) {
+                        String external = MarketQuoteSource.mapSymbolToYahoo(code, item.category);
+                        subscribed.add(external);
+                        preferred.add(external);
+                    }
+                yahoo.subscriptions(subscribed, preferred, this::receiveYahoo);
             }
         } catch (Exception failure) { log.warn("Market symbol refresh failed ({})", failure.getClass().getSimpleName()); }
     }
@@ -945,4 +951,3 @@ public class ForexQuoteMarketService {
     }
     @PreDestroy public void stop() { if (yahoo != null) yahoo.stop(); if (exchangeStream != null) exchangeStream.stop(); metadata.shutdownNow(); for (Group group : groups.values()) group.executor.shutdownNow(); }
 }
-

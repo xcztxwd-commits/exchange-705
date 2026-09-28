@@ -22,7 +22,7 @@ import java.util.stream.Stream;
 public class DepositReviewService {
 
     private final DepositRecordRepository depositRecordRepository;
-    private final AssetAccountRepository assetAccountRepository;
+    private final com.gtcfesk.exchange.user.DepositOrderService orders;
     private final UserAccountRepository userAccountRepository;
 
     public List<DepositRecord> getDepositRecords(String status, Long userId, String userEmail, Long agentId) {
@@ -121,57 +121,6 @@ public class DepositReviewService {
         }
     }
 
-    @Transactional
-    public void approveDeposit(Long recordId) {
-        DepositRecord record = depositRecordRepository.findById(recordId)
-                .orElseThrow(() -> new IllegalArgumentException("充值记录不存在"));
-
-        if (!"PENDING".equals(record.getStatus())) {
-            throw new IllegalArgumentException("该充值记录已处理，无法重复审核");
-        }
-
-        // 更新记录状态为已完成
-        record.setStatus("COMPLETED");
-        depositRecordRepository.save(record);
-
-        // 充值到用户的FUND账户
-        Long userId = record.getUserId();
-        BigDecimal amount = record.getAmount();
-
-        AssetAccount fundAccount = assetAccountRepository
-                .findByUserIdAndCoin(userId, "FUND")
-                .orElseGet(() -> {
-                    AssetAccount newAccount = new AssetAccount();
-                    newAccount.setUserId(userId);
-                    newAccount.setCoin("FUND");
-                    newAccount.setAvailable(BigDecimal.ZERO);
-                    newAccount.setFrozen(BigDecimal.ZERO);
-                    return assetAccountRepository.save(newAccount);
-                });
-
-        // 增加可用余额
-        BigDecimal currentAvailable = fundAccount.getAvailable() != null 
-                ? fundAccount.getAvailable() 
-                : BigDecimal.ZERO;
-        fundAccount.setAvailable(currentAvailable.add(amount));
-        assetAccountRepository.save(fundAccount);
-    }
-
-    @Transactional
-    public void rejectDeposit(Long recordId, String remark) {
-        DepositRecord record = depositRecordRepository.findById(recordId)
-                .orElseThrow(() -> new IllegalArgumentException("充值记录不存在"));
-
-        if (!"PENDING".equals(record.getStatus())) {
-            throw new IllegalArgumentException("该充值记录已处理，无法重复审核");
-        }
-
-        // 更新记录状态为已拒绝
-        record.setStatus("REJECTED");
-        if (remark != null && !remark.isEmpty()) {
-            record.setRemark(remark);
-        }
-        depositRecordRepository.save(record);
-    }
+    public void approveDeposit(Long recordId) { orders.review(recordId,true,null); }
+    public void rejectDeposit(Long recordId,String remark) { orders.review(recordId,false,remark); }
 }
-

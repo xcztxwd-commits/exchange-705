@@ -78,6 +78,11 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(409).body(result);
     }
 
+    @ExceptionHandler(org.springframework.web.server.ResponseStatusException.class)
+    public ResponseEntity<Map<String,Object>> handleStatus(org.springframework.web.server.ResponseStatusException e) {
+        Map<String,Object> result=new HashMap<>(); result.put("success",false); result.put("message",e.getReason());
+        return ResponseEntity.status(e.getStatus()).body(result);
+    }
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, Object>> handleException(Exception e) {
         Map<String, Object> result = new HashMap<>();

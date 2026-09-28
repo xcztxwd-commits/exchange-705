@@ -1,4 +1,4 @@
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import request from '@/utils/request'
 import { useLocaleStore } from '@/store/locale'
 
@@ -14,16 +14,23 @@ export function useFiatCurrency() {
     return quote?.conversionAvailable && quote.conversionExpiresAt > now.value && Number.isFinite(value) && value > 0 ? value : null
   })
   let nextRefresh = 0
+  let pending: Promise<void> | null = null
   async function refreshRates() {
-    nextRefresh = Date.now() + 30000
-    try {
-      const response: any = await request.get('/market/currencies')
-      rates.value = response.rates || {}
-    } catch {
-      rates.value = {}
-    }
-    now.value = Date.now()
+    if (pending) return pending
+    pending = (async () => {
+      try {
+        const response: any = await request.get('/market/currencies')
+        if (response.rates) rates.value = response.rates
+        nextRefresh = Date.now() + 30000
+      } catch {
+        nextRefresh = Date.now() + 5000
+      } finally {
+        now.value = Date.now()
+      }
+    })()
+    try { await pending } finally { pending = null }
   }
+  watch(currency, () => { if (rate.value === null) void refreshRates() })
   const formatAsset = (amount: number | string | undefined | null) => rate.value === null ? '—' :
     new Intl.NumberFormat(locale.locale, { style: 'currency', currency: currency.value, currencyDisplay: 'code', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(amount || 0) / rate.value)
   const usdPreview = (amount: number | string | null) => rate.value === null ? locale.text('匯率暫不可用，請稍後重試', 'Exchange rate unavailable; please retry later') :

@@ -34,7 +34,7 @@
         <el-col :span="6">
           <el-card shadow="hover">
             <div style="text-align: center;">
-              <div style="font-size: 14px; color: #909399; margin-bottom: 10px;">充值总额</div>
+              <div style="font-size: 14px; color: #909399; margin-bottom: 10px;">充值总额（用户及历史未知，不含手动；创建时间口径）</div>
               <div style="font-size: 32px; font-weight: 600; color: #67c23a;">{{ formatMoney(stats.totalDeposit) }}</div>
             </div>
           </el-card>

@@ -7,6 +7,7 @@ import Durations from '@/views/Durations.vue'
 import Orders from '@/views/Orders.vue'
 import DepositSettings from '@/views/DepositSettings.vue'
 import DepositReview from '@/views/DepositReview.vue'
+import DepositOrders from '@/views/DepositOrders.vue'
 import WithdrawReview from '@/views/WithdrawReview.vue'
 import LoanSettings from '@/views/LoanSettings.vue'
 import LoanReview from '@/views/LoanReview.vue'
@@ -48,6 +49,7 @@ const router = createRouter({
         { path: 'orders', component: Orders },
         { path: 'deposit-settings', component: DepositSettings },
         { path: 'deposit-review', component: DepositReview },
+        { path: 'deposit-orders', component: DepositOrders },
         { path: 'withdraw-review', component: WithdrawReview },
         { path: 'loan-settings', component: LoanSettings },
         { path: 'loan-review', component: LoanReview },

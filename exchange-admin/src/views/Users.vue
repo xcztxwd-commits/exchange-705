@@ -3,7 +3,10 @@ import { ref, onMounted, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search, Refresh, Lock, Edit, Wallet, User, Delete, Document, ArrowDown } from '@element-plus/icons-vue'
 import request from '@/utils/request'
-import CurrencyPicker from '@/components/CurrencyPicker.vue'
+import ManualDepositDialog from '@/components/ManualDepositDialog.vue'
+const manualDepositVisible = ref(false)
+const depositPermissions = ref<Record<string,boolean>>({})
+onMounted(async () => { depositPermissions.value = await request.get('/admin/deposit/orders/permissions') as any })
 import { useFiatCurrency } from '@/utils/fiatCurrency'
 import { displaySymbol } from '@/utils/displaySymbol'
 const { currency: balanceCurrency, rate: balanceRate, usdPreview, refreshRates } = useFiatCurrency()
@@ -40,6 +43,7 @@ const hasPermission = (menuCode: string, actionCode: string): boolean => {
   const actions = userPermissions.value.get(menuCode) || []
   return actions.includes(actionCode)
 }
+const canSetBalance = computed(() => auth.user?.isSuperAdmin || auth.user?.role === 'super_admin' || (isAgent.value && hasPermission('users', 'modify_balance')))
 
 const users = ref<any[]>([])
 const total = ref(0)
@@ -312,7 +316,7 @@ const handleSaveRemark = async () => {
 }
 
 const openBalanceDialog = (row: any) => {
-  balanceMode.value = 'deposit'
+  balanceMode.value = depositPermissions.value.manual_deposit ? 'deposit' : 'balance'
   balanceCurrency.value = 'USD'
   rechargeAccount.value = 'FUND'
   rechargeAmount.value = undefined
@@ -329,18 +333,11 @@ const openBalanceDialog = (row: any) => {
 
 const submitBalance = async () => {
   if (balanceSaving.value) return
-  if (balanceMode.value === 'deposit' && (balanceRate.value === null || !rechargeAmount.value || rechargeAmount.value <= 0)) {
-    ElMessage.error(balanceRate.value === null ? '汇率暂不可用，请稍后重试' : '请输入有效充值金额')
-    return
-  }
+  if (balanceMode.value === 'deposit') { manualDepositVisible.value = true; return }
+  if (!canSetBalance.value) { ElMessage.error('没有设置余额权限'); return }
   balanceSaving.value = true
   try {
-    await request.post('/admin/users/updateBalance', balanceMode.value === 'deposit' ? {
-      userId: balanceForm.value.userId,
-      currency: balanceCurrency.value,
-      account: rechargeAccount.value,
-      amount: rechargeAmount.value,
-    } : {
+    await request.post('/admin/users/updateBalance', {
       userId: balanceForm.value.userId,
       fundBalance: balanceForm.value.fundBalance,
       contractBalance: balanceForm.value.contractBalance,
@@ -1244,7 +1241,7 @@ onMounted(() => {
                     <el-icon style="margin-right: 8px;"><Edit /></el-icon>修改备注
                   </el-dropdown-item>
                   <el-dropdown-item 
-                    v-if="hasPermission('users', 'modify_balance')"
+                    v-if="canSetBalance || depositPermissions.manual_deposit"
                     :command="'modify_balance'"
                   >
                     <el-icon style="margin-right: 8px;"><Edit /></el-icon>修改余额
@@ -1300,24 +1297,13 @@ onMounted(() => {
           </el-form-item>
           <el-form-item label="操作方式">
             <el-radio-group v-model="balanceMode">
-              <el-radio-button label="deposit">充值</el-radio-button>
-              <el-radio-button label="balance">设置余额（USD）</el-radio-button>
+              <el-radio-button v-if="depositPermissions.manual_deposit" label="deposit">充值</el-radio-button>
+              <el-radio-button v-if="canSetBalance" label="balance">设置余额（USD）</el-radio-button>
             </el-radio-group>
           </el-form-item>
           <template v-if="balanceMode === 'deposit'">
-            <el-form-item label="充值账户">
-              <el-select v-model="rechargeAccount" aria-label="充值账户">
-                <el-option label="资金账户" value="FUND" />
-                <el-option label="合约资产" value="CONTRACT" />
-                <el-option label="期权账户" value="OPTION" />
-              </el-select>
-            </el-form-item>
-            <el-form-item label="充值币种"><CurrencyPicker v-model="balanceCurrency" /></el-form-item>
-            <el-form-item label="充值金额">
-              <el-input-number v-model="rechargeAmount" :min="0" :step="1" aria-label="充值金额" style="width: 260px" />
-              <div aria-live="polite">{{ usdPreview(rechargeAmount ?? null) }}</div>
-            </el-form-item>
-            <el-alert title="充值折合 USD 后增加到账户余额。" type="info" :closable="false" />
+            <el-button v-if="depositPermissions.manual_deposit" type="primary" @click="manualDepositVisible = true">打开手动充值</el-button>
+            <el-alert v-else title="没有手动充值权限" type="warning" :closable="false" />
           </template>
           <template v-else>
           <el-form-item label="资金账户">
@@ -1349,11 +1335,12 @@ onMounted(() => {
         <template #footer>
           <span class="dialog-footer">
             <el-button @click="balanceDialogVisible = false">取消</el-button>
-            <el-button type="primary" :loading="balanceSaving" :disabled="balanceMode === 'deposit' && balanceRate === null" @click="submitBalance">保存</el-button>
+            <el-button v-if="balanceMode === 'balance' && canSetBalance" type="primary" :loading="balanceSaving" @click="submitBalance">保存</el-button>
           </span>
         </template>
       </el-dialog>
 
+      <ManualDepositDialog v-model="manualDepositVisible" :user-id="balanceForm.userId" @success="loadUsers(); balanceDialogVisible = false" />
       <!-- 收款管理对话框 -->
       <el-dialog v-model="walletDialogVisible" title="收款管理" width="900px">
         <div style="margin-bottom: 16px; color: #666;">
@@ -1756,9 +1743,12 @@ onMounted(() => {
               <el-table-column prop="id" label="ID" width="100" />
               <el-table-column prop="type" label="类型" width="100">
                 <template #default="{ row }">
-                  {{ row.type === 'digital' ? '数字货币' : '银行卡' }}
+                  {{ row.type === 'manual' ? '后台加款' : row.type === 'digital' ? '数字货币' : '银行卡' }}
                 </template>
               </el-table-column>
+              <el-table-column prop="source" label="来源（空为历史未知）" width="170" />
+              <el-table-column prop="manualPurpose" label="手动用途" width="130" />
+              <el-table-column prop="currency" label="原币货币" width="100" />
               <el-table-column prop="network" label="网络/币种" width="120" />
               <el-table-column prop="amount" label="提现金额" width="120">
                 <template #default="{ row }">
@@ -1798,9 +1788,12 @@ onMounted(() => {
               <el-table-column prop="id" label="ID" width="100" />
               <el-table-column prop="type" label="类型" width="100">
                 <template #default="{ row }">
-                  {{ row.type === 'digital' ? '数字货币' : '银行卡' }}
+                  {{ row.type === 'manual' ? '后台加款' : row.type === 'digital' ? '数字货币' : '银行卡' }}
                 </template>
               </el-table-column>
+              <el-table-column prop="source" label="来源（空为历史未知）" width="170" />
+              <el-table-column prop="manualPurpose" label="手动用途" width="130" />
+              <el-table-column prop="currency" label="原币货币" width="100" />
               <el-table-column prop="network" label="网络/币种" width="120" />
               <el-table-column prop="amount" label="充值金额" width="120">
                 <template #default="{ row }">

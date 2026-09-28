@@ -155,6 +155,7 @@ const allMenuConfig: Record<string, any> = {
   '/durations': { path: '/durations', icon: 'Timer', title: '期限设置', menuCode: 'durations' },
   '/orders': { path: '/orders', icon: 'Document', title: '订单管理', menuCode: 'orders' },
   '/deposit-settings': { path: '/deposit-settings', icon: 'Wallet', title: '充值设置', menuCode: 'deposit_settings' },
+  '/deposit-orders': { path: '/deposit-orders', icon: 'Wallet', title: '充值详情', menuCode: 'deposit_orders' },
   '/deposit-review': { path: '/deposit-review', icon: 'Check', title: '充值审核', menuCode: 'deposit_review' },
   '/withdraw-review': { path: '/withdraw-review', icon: 'Money', title: '提现审核', menuCode: 'withdraw_review' },
   '/loan-settings': { path: '/loan-settings', icon: 'Wallet', title: '贷款设置', menuCode: 'loan_settings' },

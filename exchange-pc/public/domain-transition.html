@@ -9,14 +9,12 @@
   </head>
   <body>
     <p>正在跳转…</p>
-    <script src="/forex-transition.js" data-hold></script>
     <script>
       const requested = location.search.startsWith('?next=') ? location.search.slice(6) : '/'
       let next
       try { next = new URL(requested, location.origin) } catch { next = new URL('/', location.origin) }
       const safe = next.origin === location.origin && next.pathname !== '/domain-transition.html'
-      Promise.resolve(window.forexTransitionFinished).catch(() => {})
-        .then(() => location.replace(safe ? next.href : `${location.origin}/`))
+      location.replace(safe ? next.href : `${location.origin}/`)
     </script>
   </body>
 </html>

@@ -4,6 +4,7 @@ import QRCode from 'qrcode'
 import request from '@/utils/request'
 import { useLocaleStore } from '@/store/locale'
 import { formatDateTime, getSystemTimezone, systemTimezoneReady } from '@/utils/dateTime'
+import { orderTimestamp } from '@/utils/orderView'
 import { displaySymbol } from '@/utils/displaySymbol'
 import { recentShareChart, drawSharePoster, settledShareOrder, shareCopy, shareLanguage, shareReturn, shareTemplates, shareNeedsChart, shareBackgrounds,
   type ShareChart, type ShareKind, type ShareOptions, type ShareOrder, type ShareTemplate } from '@/utils/orderShare'
@@ -144,7 +145,11 @@ async function render() {
       } catch { throw new Error(copy.value.chartError) }
     }
     if (disposed || run !== generation) return
-    const display = { ...value, symbol: displaySymbol(value), openTime: formatDateTime(value.openTime), closeTime: formatDateTime(value.closeTime) }
+    const displayTime = (raw: string) => {
+      const timestamp = orderTimestamp(raw)
+      return timestamp === null ? '' : formatDateTime(new Date(timestamp).toISOString())
+    }
+    const display = { ...value, symbol: displaySymbol(value), openTime: displayTime(value.openTime), closeTime: displayTime(value.closeTime) }
     const canvas = document.createElement('canvas')
     drawSharePoster(canvas, display, settings, copy.value, props.brand, timezone, showQr.value ? qrImage : undefined, chart, background)
     const result = await new Promise<Blob>((resolve, reject) => canvas.toBlob(data => data ? resolve(data) : reject(new Error(copy.value.error)), 'image/png'))
@@ -265,6 +270,8 @@ onBeforeUnmount(() => {
 .pnl-toggles{height:44px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;align-items:center}.pnl-toggles label{display:flex;align-items:center;justify-content:center;gap:5px;min-height:38px;font-size:12px;cursor:pointer;min-width:0}.pnl-toggles input{accent-color:#709f00;width:16px;height:16px;margin:0;flex-shrink:0}.pnl-toggles span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.unavailable{opacity:.4}
 .pnl-actions{position:relative;flex:none;display:flex;gap:10px;padding:12px 18px max(14px,env(safe-area-inset-bottom));border-top:1px solid #e6e8ed;background:#fff}.pnl-actions button{display:flex;justify-content:center;align-items:center;gap:8px;flex:1;min-width:0;height:44px;padding:0 10px;border:1px solid #dfe4eb;border-radius:12px;background:#fff;color:#17202c;font-weight:600}.pnl-actions .pnl-share{background:#85bd00;border-color:#85bd00;color:#132300}.pnl-notice{position:absolute;bottom:100%;left:12px;right:12px;margin:0 0 8px;padding:10px 12px;border-radius:10px;background:#17202cee;color:#fff;font-size:12px;line-height:1.4;box-shadow:0 3px 12px #0002;pointer-events:none}.pnl-spinner{width:24px;height:24px;border:3px solid #dde5cc;border-top-color:#85bd00;border-radius:50%;animation:pnl-spin .9s linear infinite}@keyframes pnl-spin{to{transform:rotate(360deg)}}
 @media(max-width:680px){.order-share{width:min(400px,calc(100vw - 24px));height:min(720px,calc(100dvh - 40px));border-radius:22px}.pnl-header{height:52px;min-height:52px;padding-left:18px}.pnl-header h2{font-size:16px}.order-share .pnl-close{top:4px;right:6px}.pnl-preview{padding:10px 14px}.pnl-controls{padding:2px 12px 4px}.pnl-template{font-size:11px!important;gap:4px;height:36px}.pnl-actions{padding:10px 12px max(12px,env(safe-area-inset-bottom))}}
+@media(max-width:680px){.order-share{position:fixed;inset:auto 0 0;width:100%;height:min(700px,calc(100dvh - 24px));max-width:none;margin:0;border:0;border-radius:22px 22px 0 0;background:#f4f6f9}.pnl-header{height:64px;min-height:64px;padding-top:10px;background:#f4f6f9}.pnl-header:before{content:'';position:absolute;top:8px;left:50%;width:38px;height:4px;border-radius:4px;background:#d8dee4;transform:translateX(-50%)}.order-share .pnl-close{top:17px}.pnl-actions{border-top:0;background:#f4f6f9}.pnl-actions .pnl-share{background:#73b100;border-color:#73b100;color:#fff}}
 @media(max-height:460px) and (orientation:landscape){.order-share{width:min(700px,calc(100vw - 32px));height:calc(100dvh - 24px)}.pnl-content{flex-direction:row}.pnl-preview{width:45%;flex:1}.pnl-controls{width:48%;align-self:center}.pnl-header{height:48px;min-height:48px}.order-share .pnl-close{top:2px}.pnl-actions{padding:8px 18px}.pnl-actions button{height:40px}}
+@media(max-width:680px){.order-share .pnl-close{top:21px;right:15px;width:30px;height:30px;border:0;background:#eef1f4}}
 @media(prefers-reduced-motion:reduce){.pnl-spinner{animation:none}}
 </style>

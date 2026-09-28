@@ -33,7 +33,7 @@ client.interceptors.response.use(
     }
     // 简单错误提示
     if (err.response?.data?.message) {
-      return Promise.reject(new Error(err.response.data.message))
+      return Promise.reject(Object.assign(new Error(err.response.data.message), { response: err.response }))
     }
     return Promise.reject(err)
   }

@@ -1,0 +1,5 @@
+services:
+  backend:
+    image: exchange-705-backend:pre-market-ws-20260928
+    environment:
+      YAHOO_STREAM_MODE: shadow

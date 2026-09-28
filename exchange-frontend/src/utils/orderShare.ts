@@ -135,7 +135,7 @@ export function settledShareOrder(raw: Record<string, unknown>, kind: ShareKind)
     profit, openPrice, closePrice, leverage: optionalNumber(raw.leverage), quantity: optionalNumber(raw.quantity), margin: optionalNumber(raw.margin),
     fee: optionalNumber(raw.fee), amount: optionalNumber(raw.amount),
     openTime: String(raw.openTime || raw.createdAt || ''), closeTime: String(raw.closeTime),
-    currency: typeof raw.settlementCurrency === 'string' ? raw.settlementCurrency : '',
+    currency: typeof raw.settlementCurrency === 'string' ? raw.settlementCurrency : 'USD',
   }
 }
 export function shareReturn(order: ShareOrder): number | null {
@@ -155,7 +155,7 @@ export interface ShareCandle { timestamp: number; open: number; high: number; lo
 export interface ShareChart { candles: ShareCandle[]; start: number; end: number; step: number; interval: string; source: string; recent?: boolean }
 export function orderTimestamp(value: string): number {
   const normalized = value.trim().replace(' ', 'T')
-  return Date.parse(/[zZ]|[+-]\d{2}:?\d{2}$/.test(normalized) ? normalized : `${normalized}+08:00`)
+  return Date.parse(/(?:Z|[+-]\d{2}:?\d{2})$/i.test(normalized) ? normalized : `${normalized}Z`)
 }
 export function historyWindow(order: ShareOrder, now = Date.now()) {
   const start = orderTimestamp(order.openTime), end = orderTimestamp(order.closeTime)

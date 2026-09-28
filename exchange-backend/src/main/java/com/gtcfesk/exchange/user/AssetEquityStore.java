@@ -14,6 +14,8 @@ import java.util.function.Consumer;
 public class AssetEquityStore {
     private final DataSource dataSource;
     private final ObjectMapper json;
+    @org.springframework.beans.factory.annotation.Autowired(required=false)
+    AssetHistoryCache cache;
     public static final String[] TABLES={"asset_history_1m","asset_history_1h","asset_history_4h","asset_history_1d"};
     public static final long[] INTERVALS={60000,3600000,14400000,86400000};
     private static final String BASIS=EquityValuationService.BASIS;
@@ -93,7 +95,9 @@ public class AssetEquityStore {
     }
     public List<AssetHistoryBucket> source(JdbcTemplate db,int level,List<Long> ids,long start,long end,long asOf,boolean finalized) {
         if(level<0 || level>3)throw new IllegalArgumentException("Invalid level");
-        return db.query("select * from "+TABLES[level]+" where basis_version=? and bucket_start>=? and bucket_start<? and user_id in ("+EquityValuationService.placeholders(ids)+")"+
+        String columns=level==0?"user_id,bucket_start,observed_at,effective_at,net_equity":
+                "user_id,bucket_start,bucket_end,open_value,high_value,low_value,close_value,open_at,high_at,low_at,close_at,source_count,valid_sample_count,invalid_sample_count,expected_sample_count,finalized,source_through";
+        return db.query("select "+columns+" from "+TABLES[level]+" where basis_version=? and bucket_start>=? and bucket_start<? and user_id in ("+EquityValuationService.placeholders(ids)+")"+
                 (level==0?" and coalesce(effective_at,observed_at)<=?": " and source_through<=?"+(finalized?" and finalized=1":""))+" order by user_id,bucket_start",(rs,n)->level==0?AssetHistoryBucket.minute(rs):AssetHistoryBucket.row(rs),
                 arguments(ids,start,end,asOf));
     }
@@ -103,7 +107,12 @@ public class AssetEquityStore {
     /** Primary query uses requested table. Only intersected edge buckets recurse into bounded children. */
     public List<AssetHistoryBucket> window(JdbcTemplate db,int level,long user,long from,long to,long asOf) {
         long size=INTERVALS[level],first=AssetHistoryBucket.floor(from,size),last=AssetHistoryBucket.floor(to-1,size);
-        List<AssetHistoryBucket> rows=source(db,level,Collections.singletonList(user),first,last+size,asOf,true);
+        long closedEnd=Math.min(last+size,AssetHistoryBucket.floor(asOf,size));
+        List<AssetHistoryBucket> rows;
+        if(level>0 && cache!=null && cache.enabled) {
+            rows=cache.read(db,level,user,first,closedEnd,()->source(db,level,Collections.singletonList(user),first,closedEnd,Long.MAX_VALUE,true));
+            rows.removeIf(b->b.through>asOf);
+        } else rows=source(db,level,Collections.singletonList(user),first,last+size,asOf,true);
         if(level==0) {rows.removeIf(b->b.through<from || b.through>=to);return rows;}
         Map<Long,AssetHistoryBucket> result=new TreeMap<>();rows.stream().filter(b->b.end<=asOf).forEach(b->result.put(b.start,b));
         Set<Long> edges=new LinkedHashSet<>();if(first<from)edges.add(first);if(last+size>to)edges.add(last);

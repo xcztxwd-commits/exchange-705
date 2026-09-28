@@ -201,7 +201,7 @@ onMounted(() => {
       <el-col :span="24">
         <el-card>
           <template #header>
-            <span>充值与提现统计</span>
+            <span>充值与提现统计</span><small>充值含用户审核及历史未知，不含后台手动；按创建时间统计</small>
           </template>
           <div ref="chartContainer" style="width: 100%; height: 400px;"></div>
         </el-card>

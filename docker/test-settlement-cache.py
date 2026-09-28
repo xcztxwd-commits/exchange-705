@@ -1,5 +1,6 @@
 """Run Redis settlement-cache checks against the disposable isolation Redis."""
 import json
+import os
 import re
 import subprocess
 import time
@@ -10,7 +11,7 @@ source = (Path(__file__).resolve().parents[1] / 'exchange-backend/src/main/java/
 block = source.split('new org.springframework.data.redis.core.script.DefaultRedisScript<>(', 1)[1].split('String.class);', 1)[0]
 script = ''.join(json.loads(value) for value in re.findall(r'"(?:[^"\\]|\\.)*"', block))
 key = 'test:settlement:' + str(uuid.uuid4())
-base = ['docker', 'exec', 'exchange-705-isolation-redis-test-1', 'redis-cli', '--raw']
+base = ['docker', 'exec', os.environ.get('REDIS_CONTAINER', 'exchange-705-isolation-redis-test-1'), 'redis-cli', '--raw']
 
 def run(*args):
     return subprocess.check_output(base + list(map(str, args)), text=True).strip()
@@ -35,6 +36,10 @@ try:
     refreshed = read(now + 4000, 3600000, sample(0.007, now + 4000))
     assert refreshed['price'] == 0.007
     assert read(now + 3604001, 3600000, sample(0.007, now + 4000)) is None
-    print('PASS: Redis freeze, TTL, outage/restart reuse, duration change, refresh, stale rejection')
+    run('SET', key, 'broken-json')
+    assert read(now + 5000, 3600000, sample(0.008, now + 5000))['price'] == 0.008
+    run('SET', key, '{"price":1.25}')
+    assert read(now + 6000, 3600000, sample(0.009, now + 6000))['price'] == 0.009
+    print('PASS: Redis freeze, TTL, outage/restart reuse, duration change, refresh, stale rejection, corrupt entry recovery')
 finally:
     run('DEL', key)

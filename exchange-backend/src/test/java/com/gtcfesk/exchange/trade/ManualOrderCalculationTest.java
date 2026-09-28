@@ -48,5 +48,6 @@ class ManualOrderCalculationTest {
         equal("123",ManualOrderPrices.exact(response,1700000040000L));
         assertThrows(BusinessException.class,()->ManualOrderPrices.exact(response,1699999980000L));
         row.put("open","0");assertThrows(BusinessException.class,()->ManualOrderPrices.exact(response,1700000040000L));
+        row.put("open","0.006345179164260625839");equal("0.0063451791642606",ManualOrderPrices.exact(response,1700000040000L));
     }
 }

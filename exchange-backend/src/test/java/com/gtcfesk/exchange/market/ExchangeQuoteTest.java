@@ -36,6 +36,26 @@ class ExchangeQuoteTest {
         assertEquals("perpetual",source.prices(Arrays.asList("XAUUSD"),"Metal").get("XAUUSD").get("marketType"));
         verify(source.http,never()).get(argThat(u->u.getHost().contains("okx")));
     }
+    @Test void spotHttpFallbackGetsManyPricesInOneRequest() {
+        ExchangeQuoteSource source=new ExchangeQuoteSource();source.http=mock(MarketHttp.class);
+        long now=System.currentTimeMillis();
+        when(source.http.get(any(URI.class))).thenReturn(ResponseEntity.ok("[{\"symbol\":\"BTCUSDT\",\"lastPrice\":\"100\",\"closeTime\":"+now+"},"
+            +"{\"symbol\":\"ETHUSDT\",\"lastPrice\":\"20\",\"closeTime\":"+now+"}]"));
+        Map<String,Map<String,Object>> prices=source.prices(Arrays.asList("BTCUSDT","ETHUSDT"),"Crypto");
+        assertEquals(2,prices.size());assertEquals(20d,prices.get("ETHUSDT").get("price"));
+        verify(source.http,times(1)).get(argThat(u->u.toString().contains("/api/v3/ticker/24hr?symbols=")));
+    }
+    @Test void badSpotSymbolDoesNotBlockValidSibling() {
+        ExchangeQuoteSource source=new ExchangeQuoteSource();source.http=mock(MarketHttp.class);
+        long now=System.currentTimeMillis();
+        when(source.http.get(any(URI.class))).thenAnswer(call->{String url=call.getArgument(0).toString();
+            if(url.contains("?symbols="))throw new MarketHttp.Failure("http_400",0);
+            if(url.contains("BADUSDT"))throw new MarketHttp.Failure("http_400",0);
+            return ResponseEntity.ok("{\"symbol\":\"BTCUSDT\",\"lastPrice\":\"100\",\"closeTime\":"+now+"}");});
+        Map<String,Map<String,Object>> prices=source.prices(Arrays.asList("BTCUSDT","BADUSDT"),"Crypto");
+        assertEquals(Collections.singleton("BTCUSDT"),prices.keySet());
+        verify(source.http,times(3)).get(any(URI.class));
+    }
     @Test void okxExplicitSelectionNormalizesTickerAndHistoricalCandles() {
         ExchangeQuoteSource source=new ExchangeQuoteSource();source.provider="okx";source.http=mock(MarketHttp.class);
         long now=System.currentTimeMillis();

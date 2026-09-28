@@ -24,6 +24,14 @@ class QuoteStateTest {
         quote.put("price", Double.POSITIVE_INFINITY); assertFalse(QuoteState.valid(quote));
         quote.put("price", 100d); quote.remove("timestamp"); assertFalse(QuoteState.valid(quote));
     }
+    @Test void oneMinuteSourceWindowRejectsOlderPrices() {
+        long now = System.currentTimeMillis();
+        Map<String, Object> quote = new HashMap<>(); quote.put("price", 100d);
+        quote.put("timestamp", now - 59000); quote.put("fetchedAt", now); quote.put("sourceAvailable", true);
+        assertEquals("available", QuoteState.view(quote, 60000).get("status"));
+        quote.put("timestamp", now - 61000);
+        assertEquals("stale", QuoteState.view(quote, 60000).get("status"));
+    }
     @Test void retryAfterSupportsSecondsAndHttpDate() {
         assertEquals(8000, MarketHttp.retryAfter("8"));
         long wait = MarketHttp.retryAfter(ZonedDateTime.now(java.time.ZoneOffset.UTC).plusSeconds(60).format(DateTimeFormatter.RFC_1123_DATE_TIME));

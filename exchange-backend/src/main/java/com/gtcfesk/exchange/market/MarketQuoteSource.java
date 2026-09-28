@@ -129,8 +129,11 @@ public class MarketQuoteSource {
                             : Long.parseLong(interval.substring(0, interval.length() - 1)) * 60;
                     long end = endTime / 1000;
                     // Extra calendar time covers market closures; the client validates actual coverage.
+                    long start = Math.max(0, end - Math.max(7 * 86400L, seconds * requiredLimit * 3));
+                    // Yahoo rejects the whole 1m request if even its start falls outside 30 days.
+                    if ("1m".equals(yahooInterval)) start = Math.max(start, System.currentTimeMillis() / 1000 - 30 * 86400L + 60);
                     urlStr = yahooUrl + "/chart/" + urlEncode(yahooSymbol) + "?period1="
-                            + Math.max(0, end - Math.max(7 * 86400L, seconds * requiredLimit * 3)) + "&period2=" + end + "&interval=" + yahooInterval;
+                            + start + "&period2=" + end + "&interval=" + yahooInterval;
                 }
                 URI uri = URI.create(urlStr);
 

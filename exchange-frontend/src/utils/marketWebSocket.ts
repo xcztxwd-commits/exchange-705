@@ -46,14 +46,14 @@ export function showSourceConnectionWarning(quote?: { sourceConnectionFailed?: b
     && quote.controlState !== 'RUNNING' && quote.controlState !== 'HOLDING'
 }
 
-// Match the server's 15-second freshness window even for legacy payloads.
+// Match the server's 60-second freshness window even for legacy payloads.
 export function normalizeQuote(quote: PriceUpdate[string], now = Date.now()) {
   const milliseconds = (value: unknown) => { const n = Number(value); return n < 10_000_000_000 ? n * 1000 : n }
   const timestamp = milliseconds(quote.timestamp)
   if (!Number.isFinite(quote.price) || quote.price <= 0 || !Number.isFinite(timestamp) || timestamp <= 0 || timestamp > now + 5000) return null
   const fetchedAt = quote.fetchedAt == null ? timestamp : milliseconds(quote.fetchedAt)
   const expiresAt = quote.executionExpiresAt == null
-    ? Math.min(timestamp + 15_000, fetchedAt + 15_000, quote.expiresAt == null ? Infinity : milliseconds(quote.expiresAt))
+    ? Math.min(timestamp + 60_000, fetchedAt + 60_000, quote.expiresAt == null ? Infinity : milliseconds(quote.expiresAt))
     : milliseconds(quote.executionExpiresAt)
   if (!Number.isFinite(fetchedAt) || !Number.isFinite(expiresAt)) return null
   const status = quote.status === 'unavailable' ? 'unavailable'

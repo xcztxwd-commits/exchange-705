@@ -25,6 +25,8 @@ const fundBalance = ref(0)
 const contractBalance = ref(0)
 const optionBalance = ref(0)
 const balanceVisible = ref(true)
+const inspectedAsset = ref<{ time: string; amount: number | null } | null>(null)
+const displayedAssets = computed(() => inspectedAsset.value ? inspectedAsset.value.amount : totalAssets.value)
 
 // 功能列表
 const menuItems = computed(() => [
@@ -52,6 +54,7 @@ function formatMoney(v: number | string | undefined | null) {
 // 切换余额显示/隐藏
 function toggleBalance() {
   balanceVisible.value = !balanceVisible.value
+  if (!balanceVisible.value) inspectedAsset.value = null
 }
 
 // 处理菜单点击
@@ -127,11 +130,12 @@ onMounted(() => {
     <div class="assets-card">
       <div class="assets-header">
         <div class="assets-title" @click="router.push('/assets')">{{ localeStore.t('myAssets') }} ›</div>
+        <div v-if="inspectedAsset" class="inspection-time" role="status">{{ inspectedAsset.time }}</div>
       </div>
       <div class="assets-value-row">
         <div class="assets-value">
           <!-- 不再使用硬编码的默认资产数值，只显示真实资产（默认为 0） -->
-          <span v-if="balanceVisible">{{ totalAssets === null ? '—' : '$' + formatMoney(totalAssets) }}</span>
+          <span v-if="balanceVisible">{{ displayedAssets === null ? '—' : '$' + formatMoney(displayedAssets) }}</span>
           <span v-else class="hidden-balance">****</span>
         </div>
         <div 
@@ -149,7 +153,7 @@ onMounted(() => {
           </svg>
         </div>
       </div>
-      <AssetPixelChart :visible="balanceVisible" @total="totalAssets = $event" />
+      <AssetPixelChart :visible="balanceVisible" @total="totalAssets = $event" @inspect="inspectedAsset = $event" />
     </div>
 
     <!-- 入金和出金按钮 -->
@@ -287,6 +291,13 @@ onMounted(() => {
   font-size: 18px;
   font-weight: 600;
   color: #000;
+}
+
+.inspection-time {
+  color: #7d8a7a;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 

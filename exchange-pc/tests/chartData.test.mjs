@@ -36,7 +36,8 @@ for (const app of ['exchange-pc', 'exchange-frontend']) {
   test(app + ': legacy freshness uses source time; invalid or delayed prices never become live', () => {
     const now = 1_800_000_000_000
     assert.equal(normalizeQuote({ price: 10, timestamp: now / 1000 }, now).status, 'available')
-    assert.equal(normalizeQuote({ price: 10, timestamp: now - 16000, fetchedAt: now }, now).status, 'stale')
+    assert.equal(normalizeQuote({ price: 10, timestamp: now - 59000, fetchedAt: now }, now).status, 'available')
+    assert.equal(normalizeQuote({ price: 10, timestamp: now - 61000, fetchedAt: now }, now).status, 'stale')
     assert.equal(normalizeQuote({ price: 10, timestamp: now, status: 'stale' }, now).status, 'stale')
     assert.equal(normalizeQuote({ price: 10, timestamp: now, expiresAt: now - 1 }, now).status, 'stale')
     assert.equal(normalizeQuote({ price: -1, timestamp: now, status: 'available' }, now), null)

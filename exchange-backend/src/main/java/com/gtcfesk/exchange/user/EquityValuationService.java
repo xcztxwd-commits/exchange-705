@@ -18,7 +18,7 @@ import java.util.*;
 public class EquityValuationService {
     private final JdbcTemplate jdbc;
     private final ForexQuoteMarketService market;
-    @org.springframework.beans.factory.annotation.Value("${market.quote.max-age-ms:15000}") private long maxAgeMs = 15000;
+    @org.springframework.beans.factory.annotation.Value("${market.quote.max-age-ms:60000}") private long maxAgeMs = 60000;
     public static final String BASIS = "net_equity_v1";
     public static final List<String> COMPONENTS = Collections.unmodifiableList(Arrays.asList(
             "wallet_balance", "contract_unrealized_pnl", "option_unrealized_pnl", "receivables",

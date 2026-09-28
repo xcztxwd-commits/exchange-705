@@ -278,7 +278,7 @@ class PriceControlTest {
 
     @Test void expiredSourceCanExecuteControlButImmediateRestoreRequiresLiveSourceAgain() {
         market.startControl(1L, 10, new BigDecimal("100"), 10, true); elapsed(10);
-        Map<String, Object> quote = source.get("SOURCE"); quote.put("timestamp", System.currentTimeMillis() - 60000);
+        Map<String, Object> quote = source.get("SOURCE"); quote.put("timestamp", System.currentTimeMillis() - 61000);
         long timestamp = QuoteState.time(quote.get("timestamp"));
         assertNotNull(market.freshPrice("TEST")); market.completeControls(); assertTrue(PriceControlPath.running(saved.get()));
         assertEquals(timestamp, QuoteState.time(market.internalPrice("TEST").get("timestamp")));

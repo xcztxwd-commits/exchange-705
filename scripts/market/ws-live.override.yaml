@@ -1,0 +1,5 @@
+services:
+  backend:
+    image: exchange-705-backend:market-ws-20260928
+    environment:
+      YAHOO_STREAM_MODE: ws_preferred

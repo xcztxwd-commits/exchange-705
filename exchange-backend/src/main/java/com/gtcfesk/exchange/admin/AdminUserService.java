@@ -309,6 +309,9 @@ public class AdminUserService {
         return user;
     }
 
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.gtcfesk.exchange.user.DepositOrderService depositOrders;
+
     @Transactional
     public void updateBalance(UpdateUserBalanceRequest req) {
         Long userId = req.getUserId();
@@ -317,21 +320,11 @@ public class AdminUserService {
         }
 
         if (req.getAmount() != null) {
-            if (!java.util.Arrays.asList("FUND", "CONTRACT", "OPTION").contains(req.getAccount())) {
-                throw new IllegalArgumentException("无效账户");
-            }
-            if (!userAccountRepository.existsById(userId)) throw new IllegalArgumentException("用户不存在");
-            BigDecimal usd = fiatCurrencyService.toUsd(req.getAmount(), fiatCurrencyService.rate(req.getCurrency()));
-            AssetAccount account = assetAccountRepository.findByUserIdAndCoin(userId, req.getAccount())
-                    .orElseGet(() -> {
-                        AssetAccount created = new AssetAccount();
-                        created.setUserId(userId);
-                        created.setCoin(req.getAccount());
-                        return created;
-                    });
-            account.setAvailable((account.getAvailable() == null ? BigDecimal.ZERO : account.getAvailable()).add(usd));
-            assetAccountRepository.save(account);
-            return;
+            if(req.getFundBalance()!=null || req.getContractBalance()!=null || req.getOptionBalance()!=null)
+                throw new IllegalArgumentException("充值与设置余额不能混合");
+            com.gtcfesk.exchange.user.DepositOrderRequest input=new com.gtcfesk.exchange.user.DepositOrderRequest();
+            input.userId=userId;input.account=req.getAccount();input.currency=req.getCurrency();input.amount=req.getAmount();
+            input.idempotencyKey=req.getIdempotencyKey();input.remark=req.getRemark();depositOrders.manual(input);return;
         }
         updateSingleBalance(userId, "FUND", req.getFundBalance());
         updateSingleBalance(userId, "CONTRACT", req.getContractBalance());

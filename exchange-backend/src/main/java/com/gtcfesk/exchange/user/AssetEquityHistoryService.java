@@ -13,10 +13,14 @@ public class AssetEquityHistoryService {
     private final AssetEquityStore store;
     private final EquityValuationService valuation;
     public Map<String,Object> history(Long user,String range){
-        long duration=AssetHistoryService.rangeMillis(range);
-        int level=Arrays.asList("1D","1W","1M","1Y").indexOf(range);
+        AssetHistoryService.rangeMillis(range); // Validate before quote/database work.
         EquityValuationService.Batch quotes=valuation.prepare(Collections.singletonList(user));
-        long asOf=System.currentTimeMillis(),from=asOf-duration;
+        return history(user,range,quotes,System.currentTimeMillis());
+    }
+    // Fixed clock/quote seam for real-database acceptance; not an HTTP parameter.
+    Map<String,Object> history(Long user,String range,EquityValuationService.Batch quotes,long asOf){
+        long from=asOf-AssetHistoryService.rangeMillis(range);
+        int level=Arrays.asList("1D","1W","1M","1Y").indexOf(range);
         return store.read(db->{
             EquityValuationService.Value live=valuation.read(db,Collections.singletonList(user),quotes,asOf).get(user);
             List<AssetHistoryBucket> buckets=store.window(db,level,user,from,asOf+1,asOf);

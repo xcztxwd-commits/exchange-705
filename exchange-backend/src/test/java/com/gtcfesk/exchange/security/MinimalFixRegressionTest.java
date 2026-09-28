@@ -369,13 +369,19 @@ class MinimalFixRegressionTest {
         JsonNode list=body(request("GET","/api/admin/financial/orders",token,null)).path("list");assertEquals(0,list.size());
         assertEquals(a.getId(),financialOrders.findById(o.getId()).get().getUserId());
     }
+    void approveAsAdmin(Long id) {
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+            new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(jwt.parse(superToken).getSubject().substring(6),null,
+                Collections.singletonList(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_SUPER_ADMIN"))));
+        try { depositReview.approveDeposit(id); } finally { org.springframework.security.core.context.SecurityContextHolder.clearContext(); }
+    }
     DepositRecord deposit(UserAccount u,int amount){DepositRecord d=new DepositRecord();d.setUserId(u.getId());d.setType("digital");d.setNetwork("USDT-TRC20");d.setAddress("test");d.setAmount(new BigDecimal(amount));d.setStatus("PENDING");return deposits.saveAndFlush(d);}
     @Test void repeatedApprovalAndMixedTransferCompetitionNeverDoubleCredit()throws Exception {
         DepositRecord d=deposit(a,10);BigDecimal start=balance(a,"FUND");
-        List<Boolean> outcomes=race(()->{depositReview.approveDeposit(d.getId());return true;},()->{depositReview.approveDeposit(d.getId());return true;});
+        List<Boolean> outcomes=race(()->{approveAsAdmin(d.getId());return true;},()->{approveAsAdmin(d.getId());return true;});
         assertEquals(1,outcomes.stream().filter(Boolean.TRUE::equals).count());same(start.add(BigDecimal.TEN),balance(a,"FUND"));assertEquals("COMPLETED",deposits.findById(d.getId()).get().getStatus());
         DepositRecord mixed=deposit(a,11);BigDecimal initial=balance(a,"FUND"),target=balance(a,"CONTRACT");
-        outcomes=race(()->{depositReview.approveDeposit(mixed.getId());return true;},()->transfer("FUND","CONTRACT",7,"mixed"));
+        outcomes=race(()->{approveAsAdmin(mixed.getId());return true;},()->transfer("FUND","CONTRACT",7,"mixed"));
         BigDecimal expected=initial.add(outcomes.get(0)?new BigDecimal("11"):BigDecimal.ZERO).subtract(outcomes.get(1)?new BigDecimal("7"):BigDecimal.ZERO);
         same(expected,balance(a,"FUND"));same(target.add(outcomes.get(1)?new BigDecimal("7"):BigDecimal.ZERO),balance(a,"CONTRACT"));
         assertEquals(outcomes.get(0)?"COMPLETED":"PENDING",deposits.findById(mixed.getId()).get().getStatus());
@@ -693,4 +699,63 @@ class MinimalFixRegressionTest {
         assertTrue(status(request("POST","/api/admin/symbols/create",superToken,map("symbol","FAKE")))>=400);
     }
 
+
+    @Test void depositOrdersApiScopeLegacyEntryAndSafeDto() throws Exception {
+        org.mockito.Mockito.when(quotes.requireConversionRate("USD","yahoo")).thenReturn(BigDecimal.ONE);
+        String url="/api/admin/deposit/orders";BigDecimal before=balance(a,"FUND");
+        Map<String,Object> input=map("userId",a.getId(),"amount","100","remark","internal fixture reason","idempotencyKey",UUID.randomUUID().toString());
+        assertEquals(403,status(request("POST",url+"/manual",ta,input)));
+        String ordinary=admin("admin");assertEquals(403,status(request("POST",url+"/manual",ordinary,input)));
+        MvcResult created=request("POST",url+"/manual",superToken,input);assertEquals(200,status(created));long id=body(created).path("id").asLong();
+        assertEquals(200,status(request("POST",url+"/manual",superToken,input)));same(before.add(new BigDecimal("100")),balance(a,"FUND"));
+        input.put("amount","101");assertEquals(409,status(request("POST",url+"/manual",superToken,input)));
+        JsonNode userRecords=body(request("GET","/api/deposit/records",ta,null)).path("list");JsonNode d=userRecords.get(0);
+        assertTrue(d.path("remark").isNull());assertFalse(d.has("createdById"));assertFalse(d.has("reviewRemark"));assertFalse(d.has("credit"));
+        String query="?userId="+a.getId()+"&source=ADMIN_MANUAL";
+        assertEquals(1,body(request("GET",url+"/list"+query,superToken,null)).path("total").asInt());
+        assertEquals("100.0000000000000000",body(request("GET",url+"/summary"+query,superToken,null)).path("creditedUsd").asText());
+        assertEquals(200,status(request("GET",url+"/export"+query,superToken,null)));
+        assertEquals(400,status(request("GET",url+"/list?source=INVALID",superToken,null)));
+        UserAccount agent=user("depositAgent","agent",null);grant(agent,"deposit_orders","view_deposit_orders");String token=agentLogin(agent);
+        assertEquals(0,body(request("GET",url+"/list",token,null)).path("total").asInt());
+        assertEquals(404,status(request("GET",url+"/"+id,token,null)));
+        assertEquals(403,status(request("GET",url+"/export",token,null)));
+        assertEquals(403,status(request("GET",url+"/recipient/"+a.getId(),token,null)));
+        assertEquals(403,status(request("POST",url+"/manual",token,input)));
+        assertEquals(400,status(request("POST","/api/admin/users/updateBalance",superToken,map("userId",a.getId(),"account","FUND","amount","2","remark","missing key"))));
+        assertEquals(200,status(request("POST","/api/admin/users/updateBalance",superToken,map("userId",a.getId(),"account","FUND","amount","2","remark","legacy adapter","idempotencyKey",UUID.randomUUID().toString()))));
+        same(before.add(new BigDecimal("102")),balance(a,"FUND"));assertEquals(2,deposits.findByUserIdOrderByCreatedAtDesc(a.getId()).size());
+        assertEquals(200,status(request("POST","/api/admin/users/updateBalance",superToken,map("userId",a.getId(),"fundBalance",0))));
+        assertEquals(2,deposits.findByUserIdOrderByCreatedAtDesc(a.getId()).size());
+        for(AssetAccount account:assets.findByUserId(a.getId())){account.setAvailable(BigDecimal.ZERO);account.setFrozen(BigDecimal.ZERO);assets.saveAndFlush(account);}
+        assertTrue(assertThrows(BusinessException.class,()->adminUsers.deleteUser(a.getId())).getMessage().contains("业务历史"));assertTrue(deposits.existsById(id));
+    }
+    @Test void detailReviewCannotBypassOldReviewPermission() throws Exception {
+        UserAccount agent=user("depositReviewAgent","agent",null);a=users.findById(a.getId()).get();a.setParentUserId(agent.getId());a=users.saveAndFlush(a);
+        grant(agent,"deposit_orders","view_deposit_orders");String token=agentLogin(agent);DepositRecord d=deposit(a,10);
+        assertEquals(403,status(request("POST","/api/admin/deposit/orders/"+d.getId()+"/approve",token,null)));
+        assertEquals("PENDING",deposits.findById(d.getId()).get().getStatus());
+        grant(agent,"deposit_review","approve_deposit","reject_deposit");
+        assertEquals(200,status(request("POST","/api/admin/deposit/orders/"+d.getId()+"/approve",token,null)));
+        assertEquals(409,status(request("POST","/api/admin/deposit/orders/"+d.getId()+"/reject",token,map("remark","no"))));
+    }
+
+    @Test void depositSummarySeparatesManualPurposesUserAndLegacyAndPaginates() throws Exception {
+        org.mockito.Mockito.when(quotes.requireConversionRate("USD","yahoo")).thenReturn(BigDecimal.ONE);
+        String url="/api/admin/deposit/orders",query="?userId="+a.getId();
+        for(String purpose:Arrays.asList("BONUS","ADJUSTMENT","RECEIPT")) {
+            Map<String,Object> input=map("userId",a.getId(),"amount","100","manualPurpose",purpose,"type",purpose.equals("RECEIPT")?"bank":"manual","proofImage","/fixture.png","remark","=SUM(1)","idempotencyKey",UUID.randomUUID().toString());
+            assertEquals(200,status(request("POST",url+"/manual",superToken,input)));
+        }
+        assertEquals(200,status(request("POST","/api/deposit/submit",ta,map("type","bank","network","BANK","address","fixture","amount","100"))));
+        DepositRecord submitted=deposits.findByUserIdOrderByCreatedAtDesc(a.getId()).get(0);approveAsAdmin(submitted.getId());
+        DepositRecord legacy=deposit(a,10);approveAsAdmin(legacy.getId());
+        JsonNode totals=body(request("GET",url+"/summary"+query,superToken,null));
+        assertEquals("410.0000000000000000",totals.path("creditedUsd").asText());
+        assertEquals(5,totals.path("groups").size());
+        assertEquals(5,body(request("GET",url+"/list"+query+"&size=2&page=2",superToken,null)).path("total").asInt());
+        assertEquals(2,body(request("GET",url+"/list"+query+"&size=2&page=2",superToken,null)).path("list").size());
+        String exported=request("GET",url+"/export"+query,superToken,null).getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
+        assertTrue(exported.startsWith("\ufeff"));assertTrue(exported.contains("'=SUM(1)"));
+    }
 }

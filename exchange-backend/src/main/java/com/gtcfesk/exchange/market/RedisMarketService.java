@@ -22,11 +22,12 @@ public class RedisMarketService {
     @Autowired
     private StringRedisTemplate redisTemplate;
     
-    @org.springframework.beans.factory.annotation.Value("${market.quote.max-age-ms:15000}") private long maxAgeMs = 15000;
+    @org.springframework.beans.factory.annotation.Value("${market.quote.max-age-ms:60000}") private long maxAgeMs = 60000;
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final ConcurrentMap<String, Map<String,Object>> pendingPrices = new ConcurrentHashMap<>();
     private final ScheduledExecutorService priceWriter = Executors.newSingleThreadScheduledExecutor(r -> new Thread(r, "market-redis"));
     private volatile long lastPriceWriteError;
+    private volatile long lastConversionError;
     @PostConstruct public void startPriceWriter() { priceWriter.scheduleWithFixedDelay(this::flushPrices, 250, 250, TimeUnit.MILLISECONDS); }
     void flushPrices() {
         pendingPrices.forEach((symbol, quote) -> {
@@ -152,9 +153,11 @@ public class RedisMarketService {
         new org.springframework.data.redis.core.script.DefaultRedisScript<>(
             "local now=tonumber(ARGV[1]); local duration=tonumber(ARGV[2]); " +
             "local old=redis.call('GET',KEYS[1]); " +
-            "if old then local rate=cjson.decode(old); local expires=tonumber(rate.timestamp)+duration; " +
+            "if old then local ok,rate=pcall(cjson.decode,old); " +
+            "if ok and type(rate)=='table' and type(rate.timestamp)=='number' and rate.timestamp<=now+5000 " +
+            "and type(rate.price)=='number' and rate.price>0 then local expires=rate.timestamp+duration; " +
             "if expires>now then rate.expiresAt=expires; local value=cjson.encode(rate); " +
-            "redis.call('SET',KEYS[1],value,'PX',expires-now); return value; end; " +
+            "redis.call('SET',KEYS[1],value,'PX',expires-now); return value; end; end; " +
             "redis.call('DEL',KEYS[1]); end; " +
             "if ARGV[3]~='' then local rate=cjson.decode(ARGV[3]); local expires=tonumber(rate.timestamp)+duration; " +
             "if expires>now then rate.expiresAt=expires; local value=cjson.encode(rate); " +
@@ -179,6 +182,12 @@ public class RedisMarketService {
             Map<String,Object> cached = objectMapper.readValue(json, new TypeReference<Map<String,Object>>() {});
             return QuoteState.valid(cached) && QuoteState.time(cached.get("expiresAt")) > System.currentTimeMillis() ? cached : null;
         } catch (Exception failure) {
+            long now = System.currentTimeMillis();
+            if (now - lastConversionError > 30000) {
+                lastConversionError = now;
+                org.slf4j.LoggerFactory.getLogger(RedisMarketService.class)
+                    .warn("Settlement rate cache unavailable ({}): {}", code, failure.getClass().getSimpleName());
+            }
             return null; // Never silently use a different settlement rate when Redis is unavailable.
         }
     }

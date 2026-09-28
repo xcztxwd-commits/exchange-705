@@ -18,8 +18,11 @@ class YahooQuoteStreamTest {
         market = new ForexQuoteMarketService(); stream = new YahooQuoteStream();
         controls = mock(PersistentPriceControl.class);
         TradingSymbol symbol = new TradingSymbol(); symbol.setId(1L); symbol.setSymbol("EURUSD"); symbol.setCategory("Forex"); symbol.setSourceCategory("Forex"); symbol.setMarketSource(com.gtcfesk.exchange.market.MarketInstrumentCatalog.inferredSource("Forex"));
+        TradingSymbol stock = new TradingSymbol(); stock.setId(2L); stock.setSymbol("AAPL"); stock.setCategory("US"); stock.setSourceCategory("US"); stock.setMarketSource(MarketInstrumentCatalog.inferredSource("US"));
+        TradingSymbol index = new TradingSymbol(); index.setId(3L); index.setSymbol("^GSPC"); index.setCategory("CFD"); index.setSourceCategory("CFD"); index.setMarketSource(MarketInstrumentCatalog.inferredSource("CFD"));
+        TradingSymbol oil = new TradingSymbol(); oil.setId(4L); oil.setSymbol("CL=F"); oil.setCategory("Oil"); oil.setSourceCategory("Oil"); oil.setMarketSource(MarketInstrumentCatalog.inferredSource("Oil"));
         TradingSymbolRepository repository = mock(TradingSymbolRepository.class);
-        when(repository.findAll()).thenReturn(Collections.singletonList(symbol));
+        when(repository.findAll()).thenReturn(Arrays.asList(symbol, stock, index, oil));
         ReflectionTestUtils.setField(market, "symbols", repository);
         ReflectionTestUtils.setField(market, "redis", mock(RedisMarketService.class));
         ReflectionTestUtils.setField(market, "controls", controls);
@@ -63,7 +66,7 @@ class YahooQuoteStreamTest {
     }
     @Test void oldDataRemainsStaleAndHistoryFailureCannotPublishNewPrice() {
         long now = System.currentTimeMillis();
-        market.acceptQuote("EURUSD", "Forex", quote(now - 20000, 1.1), "http", now);
+        market.acceptQuote("EURUSD", "Forex", quote(now - 61000, 1.1), "http", now);
         assertEquals("stale", market.getPrice("EURUSD", "Forex").get("status"));
         doThrow(new IllegalStateException("db unavailable")).when(controls).sourceQuotes(anyList(), anyMap(), anyLong());
         assertThrows(IllegalStateException.class, () -> market.acceptQuote("EURUSD", "Forex", quote(now, 1.3), "http", now));
@@ -82,5 +85,13 @@ class YahooQuoteStreamTest {
         assertTrue(stream.healthy("EURUSD=X")); assertFalse(stream.healthy("USDJPY=X"));
         q.put("timestamp", now - 20000); q.put("symbol", "USDJPY=X"); stream.observe(q);
         assertFalse(stream.healthy("USDJPY=X"));
+    }
+    @Test void allYahooCategoriesArePreferredAutomatically() {
+        ReflectionTestUtils.setField(stream, "mode", "ws_preferred");
+        Set<?> preferred = (Set<?>) stream.status().get("preferredSymbols");
+        for (String symbol : Arrays.asList("EURUSD=X", "AAPL", "^GSPC", "CL=F")) {
+            assertTrue(preferred.contains(symbol), symbol);
+            assertTrue(stream.enabled(symbol), symbol);
+        }
     }
 }

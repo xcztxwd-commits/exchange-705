@@ -186,6 +186,9 @@ public class OperationLogInterceptor implements HandlerInterceptor {
             } else if (method.equals("DELETE")) {
                 operationAction = "删除用户";
             }
+        } else if (requestURI.contains("/deposit/orders") || requestURI.contains("/deposit/review")) {
+            operationType = "充值详情"; targetType = "充值记录";
+            operationAction = requestURI.contains("/manual") ? "手动充值" : requestURI.contains("/approve") ? "审核通过" : requestURI.contains("/reject") ? "审核拒绝" : "查询充值";
         } else if (requestURI.contains("/orders")) {
             operationType = "订单管理";
             targetType = "订单";

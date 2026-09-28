@@ -9,7 +9,7 @@
   </head>
   <body>
     <p>正在跳转…</p>
-    <script src="/forex-transition.js" data-hold></script>
+    <script defer src="/forex-transition.js" data-hold></script>
     <script>
       const fallback = 'https://www.forex-exchange.co.jp/'
       let token
@@ -27,8 +27,7 @@
           .catch(() => fallback)
           .finally(() => clearTimeout(timeout))
       })() : Promise.resolve(fallback)
-      Promise.all([Promise.resolve(window.forexTransitionFinished).catch(() => {}), destination])
-        .then(([, target]) => location.replace(target))
+      Promise.resolve(destination).then(target => location.replace(target))
     </script>
   </body>
 </html>

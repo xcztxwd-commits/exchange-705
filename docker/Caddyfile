@@ -36,11 +36,6 @@ admin-panel.forex-exchange.cc {
 
 fx.forex-exchange.cc {
 	import no_index
-	@document header Accept *text/html*
-	handle @document {
-		header Cache-Control "no-store"
-		redir https://trade.forex-exchange.cc/domain-transition.html?next={uri} 302
-	}
 	handle {
 		header Cache-Control "no-store"
 		redir https://trade.forex-exchange.cc{uri} 302
@@ -60,11 +55,6 @@ http://forex-exchange.net, https://forex-exchange.net, http://www.forex-exchange
 trade.forex-exchange.net {
 	import no_index
 	import block_crawlers
-	@document header Accept *text/html*
-	handle @document {
-		header Cache-Control "no-store"
-		redir https://trade.forex-exchange.cc/domain-transition.html?next={uri} 302
-	}
 	handle {
 		header Cache-Control "no-store"
 		redir https://trade.forex-exchange.cc{uri} 302

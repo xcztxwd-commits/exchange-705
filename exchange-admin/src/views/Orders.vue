@@ -335,7 +335,7 @@ onMounted(() => {
     
     <el-tabs v-model="activeTab" @tab-change="() => {}">
       <el-tab-pane label="合约订单" name="contract">
-        <el-button v-if="auth.user?.isSuperAdmin || auth.user?.role === 'super_admin'" type="primary" @click="manualForm?.open()">新建已平仓模拟合约单</el-button>
+        <el-button v-if="auth.user?.isSuperAdmin || auth.user?.role === 'super_admin'" type="primary" @click="manualForm?.open()">生成订单</el-button>
         <ManualContractOrder ref="manualForm" @created="loadContractOrders" />
         <div class="toolbar">
           <div class="search-form">

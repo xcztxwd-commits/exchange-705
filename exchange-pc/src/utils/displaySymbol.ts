@@ -9,6 +9,12 @@ type Instrument = {
 }
 const currencies = new Set(['USD', 'EUR', 'GBP', 'JPY', 'CHF', 'AUD', 'NZD', 'CAD', 'HKD', 'CNY', 'SGD', 'SEK', 'NOK', 'DKK', 'MXN', 'ZAR', 'TRY', 'INR', 'KRW', 'TWD', 'THB', 'RUB', 'BRL', 'PLN', 'CZK', 'HUF', 'ILS', 'AED', 'SAR', 'IDR', 'MYR', 'PHP'])
 
+// FX lot quantities are denominated in the first currency, not the pair itself.
+export function forexLotUnit(instrument: Instrument | null | undefined): string {
+  const pair = displaySymbol(instrument).split('/')
+  return pair.length === 2 && pair.every(code => currencies.has(code)) ? pair[0]! : '—'
+}
+
 // Keep provider codes in API calls and orders; format only text shown to people.
 export function displaySymbol(value: string | Instrument | null | undefined): string {
   if (!value) return ''

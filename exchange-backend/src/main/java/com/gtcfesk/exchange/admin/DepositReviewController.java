@@ -50,6 +50,11 @@ public class DepositReviewController {
                 recordMap.put("remark", record.getRemark());
                 recordMap.put("createdAt", record.getCreatedAt());
                 recordMap.put("agentInfo", record.getAgentInfo());
+                recordMap.put("currency",record.getCurrency());recordMap.put("originalAmount",com.gtcfesk.exchange.user.DepositOrderService.decimal(record.getOriginalAmount()));
+                recordMap.put("exchangeRate",com.gtcfesk.exchange.user.DepositOrderService.decimal(record.getExchangeRate()));
+                recordMap.put("source",record.getSource()==null?"LEGACY_UNKNOWN":record.getSource());recordMap.put("orderNo",record.getOrderNo());
+                recordMap.put("reviewRemark",record.getReviewRemark());recordMap.put("reviewedAt",record.getReviewedAt());recordMap.put("creditedAt",record.getCreditedAt());
+                recordMap.put("reviewedByName",record.getReviewedByName());recordMap.put("accountType",record.getAccountType());
                 
                 // 添加用户备注
                 if (record.getUserId() != null) {
@@ -66,6 +71,8 @@ public class DepositReviewController {
             resp.put("success", true);
             resp.put("list", resultList);
             return ResponseEntity.ok(resp);
+        } catch (org.springframework.web.server.ResponseStatusException | org.springframework.security.access.AccessDeniedException e) { throw e;
+        } catch (org.springframework.dao.OptimisticLockingFailureException | org.springframework.dao.PessimisticLockingFailureException e) { throw e;
         } catch (Exception e) {
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", false);
@@ -84,6 +91,8 @@ public class DepositReviewController {
             resp.put("success", true);
             resp.put("message", "审核通过，已充值到用户账户");
             return ResponseEntity.ok(resp);
+        } catch (org.springframework.web.server.ResponseStatusException | org.springframework.security.access.AccessDeniedException e) { throw e;
+        } catch (org.springframework.dao.OptimisticLockingFailureException | org.springframework.dao.PessimisticLockingFailureException e) { throw e;
         } catch (Exception e) {
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", false);
@@ -104,6 +113,8 @@ public class DepositReviewController {
             resp.put("success", true);
             resp.put("message", "已拒绝该充值申请");
             return ResponseEntity.ok(resp);
+        } catch (org.springframework.web.server.ResponseStatusException | org.springframework.security.access.AccessDeniedException e) { throw e;
+        } catch (org.springframework.dao.OptimisticLockingFailureException | org.springframework.dao.PessimisticLockingFailureException e) { throw e;
         } catch (Exception e) {
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", false);
@@ -115,53 +126,5 @@ public class DepositReviewController {
     /**
      * 从请求头中提取代理ID
      */
-    private Long extractAgentId(String authHeader) {
-        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-            return null;
-        }
-        
-        try {
-            String token = authHeader.substring(7);
-            
-            // 如果是mock token
-            if (token.startsWith("mock-")) {
-                String userIdStr = token.substring(5);
-                if (userIdStr.startsWith("agent-")) {
-                    return Long.parseLong(userIdStr.substring(6));
-                }
-                return null;
-            }
-            
-            // 解析JWT token
-            try {
-                Claims claims = jwtUtil.parse(token);
-                String currentUserType = (String) claims.get("userType");
-                Object userIdObj = claims.get("id");
-                
-                if ("agent".equals(currentUserType) && userIdObj != null) {
-                    if (userIdObj instanceof Number) {
-                        return ((Number) userIdObj).longValue();
-                    } else {
-                        return Long.parseLong(userIdObj.toString());
-                    }
-                }
-            } catch (Exception e) {
-                // JWT解析失败，尝试从subject中提取
-                try {
-                    Claims claims = jwtUtil.parse(token);
-                    String subject = claims.getSubject();
-                    if (subject != null && subject.startsWith("agent-")) {
-                        return Long.parseLong(subject.substring(6));
-                    }
-                } catch (Exception ignored) {
-                    // 解析失败，忽略
-                }
-            }
-        } catch (Exception e) {
-            // 解析失败，忽略
-        }
-        
-        return null;
-    }
+    private Long extractAgentId(String ignored) { return com.gtcfesk.exchange.config.BackendAccess.agentId(); }
 }
-

@@ -84,7 +84,7 @@ market:
     futures-ws: wss://fstream.binance.com/market/ws
     okx-ws: wss://ws.okx.com:8443/ws/v5/public
   yahoo:
-    mode: ${YAHOO_STREAM_MODE:shadow}
+    mode: ${YAHOO_STREAM_MODE:ws_preferred}
     enabled-symbols: ${YAHOO_STREAM_SYMBOLS:}
     stable-ms: 30000
     silence-ms: 10000
@@ -98,6 +98,6 @@ market:
     read-timeout-ms: 3000
     batch-budget-ms: 5000
     poll-ms: 3000
-    max-age-ms: 15000
+    max-age-ms: 60000
     # token 不再在这里固定配置，改由后台管理系统「系统设置-行情配置」中维护
 
