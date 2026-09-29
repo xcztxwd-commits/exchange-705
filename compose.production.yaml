@@ -2,6 +2,8 @@
 # Only the edge publishes web ports. Application, database and Redis stay internal.
 services:
   backend:
+    # Keep the verified production heap override when rebuilding the shared image.
+    entrypoint: ["java", "-Xmx4g", "-jar", "app.jar"]
     environment:
       MANUAL_ORDERS_ENABLED: "true"
       ASSET_HISTORY_EQUITY_READ_ENABLED: "true"

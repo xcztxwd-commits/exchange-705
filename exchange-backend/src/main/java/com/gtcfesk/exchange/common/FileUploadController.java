@@ -190,11 +190,14 @@ public class FileUploadController {
             if (originalFilename != null && originalFilename.contains(".")) {
                 extension = originalFilename.substring(originalFilename.lastIndexOf("."));
             }
+            extension=extension.toLowerCase(java.util.Locale.ROOT);
+            byte[] audio=file.getBytes();
+            if(!validAudio(extension,audio))return ResponseEntity.badRequest().body(java.util.Collections.singletonMap("message","仅支持有效 MP3、WAV 或 OGG 音频"));
             String filename = UUID.randomUUID().toString() + extension;
 
             // 保存文件（使用绝对路径）
             Path filePath = AUDIO_DIR_PATH.resolve(filename);
-            Files.write(filePath, file.getBytes());
+            Files.write(filePath, audio);
             
             // 验证文件是否真的保存成功
             boolean fileExists = Files.exists(filePath);
@@ -219,5 +222,10 @@ public class FileUploadController {
             return ResponseEntity.badRequest().body(resp);
         }
     }
+    static boolean validAudio(String extension,byte[] audio){
+        if(audio==null||audio.length<12)return false;
+        if(".wav".equals(extension))return audio[0]=='R'&&audio[1]=='I'&&audio[2]=='F'&&audio[3]=='F'&&audio[8]=='W'&&audio[9]=='A'&&audio[10]=='V'&&audio[11]=='E';
+        if(".ogg".equals(extension))return audio[0]=='O'&&audio[1]=='g'&&audio[2]=='g'&&audio[3]=='S';
+        return ".mp3".equals(extension)&&((audio[0]=='I'&&audio[1]=='D'&&audio[2]=='3')||((audio[0]&255)==255&&(audio[1]&224)==224));
+    }
 }
-

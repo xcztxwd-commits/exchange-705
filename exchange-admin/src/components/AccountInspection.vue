@@ -35,7 +35,7 @@ function changeKind() { status.value = ''; load() }
 </script>
 
 <template>
-  <el-button v-if="enabled" @click="open">账户筛选查看</el-button>
+  <el-button v-permission="'users:view'" v-if="enabled" @click="open">账户筛选查看</el-button>
   <el-dialog v-model="visible" title="账户数据查看" fullscreen @closed="generation++; rows = []; columns = []">
     <el-alert :closable="false" :type="mode === 'DEMO' ? 'warning' : 'info'" :title="mode === 'DEMO' ? '模拟账户 · 独立数据库 · 全部为虚拟资金 · 只读查看' : '真实账户 · 真实资金数据 · 只读查看'" />
     <el-form inline style="margin-top:20px" @submit.prevent="load()">
@@ -43,7 +43,7 @@ function changeKind() { status.value = ''; load() }
       <el-form-item label="数据分类"><el-select v-model="kind" style="width:160px" @change="changeKind"><el-option v-for="item in allowed" :key="item[0]" :label="item[1]" :value="item[0]"/></el-select></el-form-item>
       <el-form-item label="用户 UID"><el-input v-model="userId" placeholder="留空查看全部" clearable /></el-form-item>
       <el-form-item v-if="hasStatus" label="状态"><el-input v-model="status" placeholder="例如 OPEN / COMPLETED" clearable /></el-form-item>
-      <el-form-item><el-button native-type="submit" :loading="loading">查询 / 刷新</el-button></el-form-item>
+      <el-form-item><el-button v-permission="'users:view'" native-type="submit" :loading="loading">查询 / 刷新</el-button></el-form-item>
     </el-form>
     <el-alert v-if="error" :title="error" type="error" :closable="false" role="alert" />
     <admin-table :table-key="`AccountInspection.${mode}.${kind}`" v-loading="loading" :data="rows" border stripe empty-text="当前筛选下没有记录" style="width:100%" height="60vh">

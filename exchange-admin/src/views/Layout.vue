@@ -5,6 +5,7 @@ import { useAuthStore } from '@/store/auth'
 import { Expand, Fold, User, SwitchButton, Bell, Setting } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import request from '@/utils/request'
+import { startReadPolling } from '@/utils/readPolling'
 import { access, can, canRoute, loadAccess } from '@/utils/access'
 import { getAudioUrl } from '@/utils/audioUrl'
 import AdminSettings from './AdminSettings.vue'
@@ -42,13 +43,17 @@ const soundConfig = ref({
 })
 
 // 实时更新定时器
-let updateTimer: number | null = null
+let pollingActive = false
+let stopPendingPolling: (() => void) | undefined
+let stopOnlinePolling: (() => void) | undefined
 let lastCounts = { deposit: 0, withdraw: 0, kyc: 0, order: 0 }
 
 // 加载待处理消息数量
 const loadPendingCounts = async () => {
+  const token = auth.token
   try {
     const res: any = await request.get('/admin/notification/pending-counts')
+    if (!pollingActive || token !== auth.token) return false
     if (res && res.success && res.data) {
       const newCounts = res.data
       
@@ -69,22 +74,28 @@ const loadPendingCounts = async () => {
       
       lastCounts = { ...newCounts }
       pendingCounts.value = newCounts
+      return true
     }
   } catch (e: any) {
     console.error('加载待处理消息数量失败:', e)
   }
+  return false
 }
 
 // 加载在线用户数
 const loadOnlineUserCount = async () => {
+  const token = auth.token
   try {
     const res: any = await request.get('/admin/users/online-count')
+    if (!pollingActive || token !== auth.token) return false
     if (res && res.success) {
       onlineUserCount.value = res.count || 0
+      return true
     }
   } catch (e: any) {
     console.error('加载在线用户数失败:', e)
   }
+  return false
 }
 
 // 播放提示音
@@ -163,23 +174,22 @@ onMounted(() => {
     if (!canRoute(route.path)) router.replace(access.menus[0]?.path || '/forbidden')
   }, 30000)
   loadSoundConfig()
-  loadPendingCounts()
-  loadOnlineUserCount()
-  // 每5秒更新一次消息数量和在线用户数
-  updateTimer = window.setInterval(() => {
-    loadPendingCounts()
-    loadOnlineUserCount()
-  }, 5000)
+  pollingActive = true
+  stopPendingPolling = startReadPolling(loadPendingCounts)
+  stopOnlinePolling = startReadPolling(loadOnlineUserCount)
 })
 
 onUnmounted(() => {
   if (permissionTimer !== null) clearInterval(permissionTimer)
-  if (updateTimer !== null) {
-    clearInterval(updateTimer)
-  }
+  pollingActive = false
+  stopPendingPolling?.()
+  stopOnlinePolling?.()
 })
 
 const onLogout = () => {
+  pollingActive = false
+  stopPendingPolling?.()
+  stopOnlinePolling?.()
   auth.logout()
   router.replace('/login')
 }

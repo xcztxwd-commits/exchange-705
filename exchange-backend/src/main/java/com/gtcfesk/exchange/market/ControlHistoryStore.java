@@ -132,11 +132,20 @@ public class ControlHistoryStore {
     }
     public void sourceCandles(long symbol, String period, List<Map<String, Object>> rows, long now) {
         locked(symbol, () -> {
-            for (Map<String, Object> row : rows) {
-                Map<String, Object> copy = new LinkedHashMap<>(row); copy.put("timestamp", time(row));
-                db.update("INSERT INTO market_source_candle(symbol_id,period,candle_at,body,received_at) VALUES(?,?,?,?,?) "
-                    + "ON DUPLICATE KEY UPDATE body=VALUES(body),received_at=VALUES(received_at)",
-                    symbol, period, time(row), encode(copy), now);
+            // Keep every confirmation timestamp and input order; all chunks share the symbol lock/transaction.
+            for (int offset = 0; offset < rows.size(); offset += 500) {
+                int count = Math.min(500, rows.size() - offset);
+                Object[] arguments = new Object[count * 5];
+                for (int i = 0; i < count; i++) {
+                    Map<String, Object> row = rows.get(offset + i);
+                    long at = time(row);
+                    Map<String, Object> copy = new LinkedHashMap<>(row); copy.put("timestamp", at);
+                    arguments[i * 5] = symbol; arguments[i * 5 + 1] = period;
+                    arguments[i * 5 + 2] = at; arguments[i * 5 + 3] = encode(copy); arguments[i * 5 + 4] = now;
+                }
+                db.update("INSERT INTO market_source_candle(symbol_id,period,candle_at,body,received_at) VALUES "
+                    + String.join(",", Collections.nCopies(count, "(?,?,?,?,?)"))
+                    + " ON DUPLICATE KEY UPDATE body=VALUES(body),received_at=VALUES(received_at)", arguments);
             }
             return null;
         });

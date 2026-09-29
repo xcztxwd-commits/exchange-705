@@ -20,7 +20,7 @@ const getApiBase = () => {
   if (import.meta.env.DEV) {
     return ''
   }
-  const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://api1.m.ydgggd.com'
+  const baseUrl = import.meta.env.VITE_API_BASE_URL || '/api'
   // 确保不包含 /api 后缀，因为路径中会添加 /api
   return baseUrl.replace(/\/api\/?$/, '')
 }

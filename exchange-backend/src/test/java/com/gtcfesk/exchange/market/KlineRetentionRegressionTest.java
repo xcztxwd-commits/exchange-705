@@ -45,6 +45,30 @@ class KlineRetentionRegressionTest {
         assertEquals(10,rows.size());
         System.out.println("RETENTION visible="+rows.size()+" implementation="+rows.getClass().getName());
     }
+    @Test
+    @org.junit.jupiter.api.condition.EnabledIfSystemProperty(named="performance.soak.seconds",matches="[1-9][0-9]*")
+    void boundedSyntheticRetentionRun() throws Exception {
+        int seconds=Integer.getInteger("performance.soak.seconds");
+        Map<String,Object> fixture=raw(7200,7);
+        for(boolean original:new boolean[]{true,false}) {
+            List<Map<String,Object>> cache=new ArrayList<>(Collections.nCopies(32,null));
+            long start=System.nanoTime(), next=0;int requests=0;
+            while((System.nanoTime()-start)/1_000_000_000L<seconds) {
+                cache.set(requests++%32, original?before.normalizeYahooKlineResponse(fixture,"TEST","1m",10):actual(fixture,10));
+                long elapsed=(System.nanoTime()-start)/1_000_000_000L;
+                if(elapsed>=next) {
+                    System.gc(); // Isolated test JVM only; never run against a server.
+                    long live=Runtime.getRuntime().totalMemory()-Runtime.getRuntime().freeMemory();
+                    long gc=0,pause=0;for(java.lang.management.GarbageCollectorMXBean b:java.lang.management.ManagementFactory.getGarbageCollectorMXBeans()){gc+=b.getCollectionCount();pause+=b.getCollectionTime();}
+                    System.out.println("SYNTHETIC_RETENTION phase="+(original?"before":"after")+" elapsed_s="+elapsed+" requests="+requests+" live_bytes="+live+" gc_count_cumulative="+gc+" gc_ms_cumulative="+pause);
+                    next=elapsed+10;
+                }
+                Thread.sleep(50);
+            }
+            for(Map<String,Object> value:cache)assertEquals(10,ControlHistoryStore.rows(value).size());
+            System.out.println("SYNTHETIC_RETENTION phase="+(original?"before":"after")+" duration_s="+seconds+" requests="+requests+" slots=32; NOT full-service soak or production GC evidence");
+        }
+    }
     private static class Before {
     private Map<String, Object> normalizeYahooKlineResponse(Map<String, Object> raw, String code, String interval, int requiredLimit) {
         Map<String, Object> result = new HashMap<>();

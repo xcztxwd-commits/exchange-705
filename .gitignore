@@ -66,3 +66,9 @@ design/order-module-preview-20260928/
 
 # Additive activity-credit migration; contains no customer data or secrets.
 !exchange-backend/src/main/resources/db/migration/create_activity_bonus.sql
+
+# Explicit opt-in performance fixtures; never application startup migrations.
+!exchange-backend/src/test/resources/performance/*.sql
+# Local E2E and multitenant build output is not release source.
+dist-e2e/
+dist-multitenant/

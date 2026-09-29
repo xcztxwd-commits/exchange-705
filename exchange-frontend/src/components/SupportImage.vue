@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { ref, watch, onUnmounted } from 'vue'
 import request from '@/utils/request'
+import { useAuthStore } from '@/store/auth'
+const auth = useAuthStore()
 const props = defineProps<{ endpoint: string; label: string }>()
 const src = ref(''),
   failed = ref(false)
@@ -10,13 +12,13 @@ function clear() {
   src.value = ''
 }
 watch(
-  () => props.endpoint,
-  async (endpoint) => {
+  () => [props.endpoint, auth.token],
+  async ([endpoint]) => {
     const version = ++generation
     clear()
     failed.value = false
     try {
-      const blob: any = await request.get(endpoint, { responseType: 'blob' })
+      const blob: any = await request.get(endpoint || '', { responseType: 'blob' })
       if (version === generation) src.value = URL.createObjectURL(blob)
     } catch {
       if (version === generation) failed.value = true

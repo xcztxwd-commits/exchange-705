@@ -1,0 +1,5 @@
+-- Deliberately not auto-executable. Never drop an index that existed before this change.
+-- Compare the saved preflight inventory and migration log; only uncomment indexes actually ADDED.
+-- Code rollback does not require index removal. Production DDL needs separate approval.
+-- ALTER TABLE market_source_event DROP INDEX idx_source_event_received, ALGORITHM=INPLACE, LOCK=NONE;
+-- ALTER TABLE market_source_tick DROP INDEX idx_source_tick_received, ALGORITHM=INPLACE, LOCK=NONE;
