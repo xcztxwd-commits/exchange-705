@@ -31,6 +31,8 @@ class ActivitySecurityTest {
  static class Config {
   @Bean JwtUtil jwt(){return mock(JwtUtil.class);}
   @Bean KycIdentityService identity(){return ActivitySecurityTest.identity;}
+  @Bean SystemConfigService configs(){return mock(SystemConfigService.class);}
+  @Bean SystemConfigRepository configRepository(){return mock(SystemConfigRepository.class);}
   @Bean UserAccountRepository users(){return mock(UserAccountRepository.class);}
   @Bean AdminUserRepository admins(){return mock(AdminUserRepository.class);}
   @Bean ActivityController activity(){return new ActivityController(service,funds,mock(TrialLedgerRepository.class));}
@@ -47,6 +49,7 @@ class ActivitySecurityTest {
  }
  @Test void anonymousCannotReadOrClaim() throws Exception {mvc.perform(get("/api/activity/inbox")).andExpect(status().isUnauthorized());mvc.perform(post("/api/activity/messages/1/claim")).andExpect(status().isUnauthorized());verifyNoInteractions(service);}
  @Test void userAndAgentCannotControlCampaigns() throws Exception {for(String token:Arrays.asList("user","agent")){mvc.perform(post("/api/admin/activities/1/send").header("Authorization","Bearer "+token).contentType("application/json").content("[7]")).andExpect(status().isForbidden());}verifyNoInteractions(service);}
+ @Test void usersAndAgentsCannotReadOrWriteMaterialLibrary()throws Exception{for(String token:Arrays.asList("user","agent")){mvc.perform(get("/api/admin/activity-materials").header("Authorization","Bearer "+token)).andExpect(status().isForbidden());mvc.perform(post("/api/admin/activity-materials").header("Authorization","Bearer "+token).contentType("application/json").content("{}" )).andExpect(status().isForbidden());}}
  @Test void claimAlwaysUsesAuthenticatedOwnerNotBody() throws Exception {when(service.claim(7L,1L)).thenReturn(new TrialAccount());mvc.perform(post("/api/activity/messages/1/claim").header("Authorization","Bearer user").contentType("application/json").content("{\"userId\":99,\"amount\":999999}")).andExpect(status().isOk()).andExpect(header().string("Cache-Control","no-store"));verify(service).claim(7L,1L);}
  @Test void demoCannotClaimRealPromotionalCredit() throws Exception {mvc.perform(post("/api/activity/messages/1/claim").header("Authorization","Bearer user").header("X-Account-Mode","DEMO")).andExpect(status().isConflict());verifyNoInteractions(service);}
  @Test void trialCreditNeverBypassesWithdrawalKyc() throws Exception {doThrow(new KycRequiredException("NOT_VERIFIED")).when(identity).requireApproved(7L);mvc.perform(post("/api/withdraw/submit").header("Authorization","Bearer user").contentType("application/json").content("{\"amount\":10,\"type\":\"digital\"}")).andExpect(status().isForbidden()).andExpect(jsonPath("$.errorCode").value("KYC_REQUIRED"));verifyNoInteractions(assets,funds);}

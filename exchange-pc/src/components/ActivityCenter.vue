@@ -17,7 +17,16 @@ const now = ref(Date.now())
 const unread = computed(() => items.value.filter(x => !x.delivery.openedAt && (!x.delivery.closedAt || x.campaign.repeatUnread)).length)
 const designDialog = computed(()=>{const d=parseDesign(selected.value?.campaign.layoutJson)?.dialog;return d?{'--design-width':`${d.width}px`,'--design-radius':`${d.radius}px`,'--design-backdrop':d.backdrop,'--design-blur':`${d.blur}px`}:undefined})
 const customDesign = computed(()=>!!parseDesign(selected.value?.campaign.layoutJson))
-async function designAction(action:string,target?:string){if(action==='close')close();else if(action==='claim')await claim();else if(action==='opened'&&selected.value){try{await event(selected.value,'OPENED')}catch(e){error.value=message(e)}}else if(action==='link'&&target&&/^\/(?!\/)[a-zA-Z0-9/_?=&%.-]*$/.test(target)){close();void router.push(target)}}
+async function designAction(action:string,target?:string){
+ const item=selected.value,token=auth.token,run=generation
+ if(!item)throw Error('公告已关闭')
+ if(action==='read'||action==='opened')await event(item,'OPENED')
+ else if(action==='claim')await claim(false)
+ else if(action==='close'){close();return}
+ else if(action==='link'&&target&&/^\/(?!\/)[a-zA-Z0-9/_?=&%.-]*$/.test(target)){await router.push(target);close();return}
+ if(token!==auth.token||run!==generation||disposed||selected.value!==item)throw Error('会话或公告已变更，操作已停止')
+}
+
 const copy = computed(() => selected.value ? activityContent(selected.value, locale.locale) : {})
 const eligible = computed(() => { const c = selected.value?.campaign; return !!selected.value?.active && !!c && c.hasQuota && (!c.endsAt || new Date(c.endsAt+'Z').getTime() > now.value) })
 let timer: ReturnType<typeof setInterval> | undefined, generation = 0, disposed = false
@@ -56,15 +65,15 @@ function close() {
  if (item && mode.value !== 'inbox') void event(item, 'CLOSED').catch(() => { /* Closing stays responsive; the server retains the last successful receipt. */ })
  dialog.value?.close(); selected.value = null; page.value = 0
 }
-async function claim() {
- if (!selected.value || busy.value || !eligible.value) return
+async function claim(advance = true) {
+ if (!selected.value || busy.value || !eligible.value) {if(!advance)throw Error('当前不可领取体验金');return}
  busy.value = true; error.value = ''; const item = selected.value, run = generation
  try {
   await request.post(`/activity/messages/${item.delivery.id}/claim`)
-  if (run !== generation || disposed) return
-  item.delivery.claimedAt = new Date().toISOString(); mode.value = 'success'
+  if (run !== generation || disposed || selected.value!==item) {if(!advance)throw Error('会话或公告已变更');return}
+  item.delivery.claimedAt = new Date().toISOString(); if(advance)mode.value = 'success'
   window.dispatchEvent(new Event('trial-account-changed'))
- } catch(e) { if (run === generation) error.value = message(e) } finally { if(run === generation) busy.value = false }
+ } catch(e) { if(!advance)throw e;if (run === generation) error.value = message(e) } finally { if(run === generation) busy.value = false }
 }
 async function turn(delta: number) { page.value += delta; await load() }
 function trade() { close(); void router.push('/trade') }
@@ -97,7 +106,7 @@ onUnmounted(() => { disposed=true; generation++; clearInterval(timer); dialog.va
     <div v-if="pages>1" class="activity-pages"><button :disabled="!page || loading" @click="turn(-1)">{{ t(18) }}</button><span>{{ page+1 }} / {{ pages }}</span><button :disabled="page+1>=pages || loading" @click="turn(1)">{{ t(19) }}</button></div>
    </template>
    <template v-else-if="selected">
-    <ActivityDesignView v-if="customDesign" :key="selected.delivery.id" :design="selected.campaign.layoutJson!" :locale="locale.locale" :fallback="selected.campaign.defaultLocale" :stage="mode" :amount="selected.campaign.amount" :days="selected.campaign.recentLoginDays" :busy="busy" :eligible="eligible" @action="designAction"/>
+    <ActivityDesignView v-if="customDesign" :key="selected.delivery.id" :design="selected.campaign.layoutJson!" :locale="locale.locale" :fallback="selected.campaign.defaultLocale" :stage="mode" :amount="selected.campaign.amount" :days="selected.campaign.recentLoginDays" :busy="busy" :eligible="eligible" :claimed="!!selected.delivery.claimedAt" :run-action="designAction" @action="designAction"/>
     <template v-else>
     <div :key="`${selected.delivery.id}-${mode === 'success'}`" class="activity-hero" :class="{ 'gift-open': mode!=='gift', 'no-animation': selected.campaign.animation==='NONE', 'confetti-only': selected.campaign.animation==='CONFETTI' }">
      <div class="activity-orbit orbit-one"></div><div class="activity-orbit orbit-two"></div>
@@ -118,7 +127,7 @@ onUnmounted(() => { disposed=true; generation++; clearInterval(timer); dialog.va
      </template>
      <div v-if="mode==='gift'" class="activity-actions"><button class="activity-secondary" @click="close">{{ copy.close || t(3) }}</button><button class="activity-primary" @click="open(selected)">{{ copy.open || t(2) }} <span aria-hidden="true">↗</span></button></div>
      <button v-else-if="mode==='success'" class="activity-primary wide" @click="trade">{{ t(11) }} <span aria-hidden="true">↗</span></button>
-     <button v-else class="activity-primary wide" :disabled="busy || !eligible" @click="claim">{{ busy ? t(16) : eligible ? (copy.claim || t(4)) : t(14) }}</button>
+     <button v-else class="activity-primary wide" :disabled="busy || !eligible" @click="claim()">{{ busy ? t(16) : eligible ? (copy.claim || t(4)) : t(14) }}</button>
      <p class="activity-footnote">{{ t(6) }} · U</p>
     </section>
     </template>

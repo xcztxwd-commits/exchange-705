@@ -38,7 +38,7 @@ public class OptionOrderService {
     @Transactional
     public OptionOrder createOrder(Long userId, CreateOptionOrderRequest req) {
         if (trialFunds != null) { trialFunds.lock(userId); trialFunds.requireTrade(userId); }
-        else identityService.requireApproved(userId);
+        else identityService.requireTradingApproved(userId);
         if (req == null || req.getSymbol() == null || !("UP".equals(req.getDirection()) || "DOWN".equals(req.getDirection()))
                 || req.getDuration() == null || req.getDuration() <= 0) throw new BusinessException("交易参数无效");
         com.gtcfesk.exchange.common.TradeValidation.positive(req.getAmount(), "金额");

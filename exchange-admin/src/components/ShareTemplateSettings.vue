@@ -5,7 +5,7 @@ import request from '@/utils/request'
 import ShareTemplatePreview from './ShareTemplatePreview.vue'
 
 const catalog = [
-  ['light', '清爽白'], ['dark', '专业黑'], ['chart', '行情图'], ['gold', '黑金'],
+  ['light', '极简方刊'], ['dark', '专业黑'], ['chart', '行情图'], ['gold', '黑金横幅'],
   ['globe', '环球'], ['architecture', '建筑'], ['city', '城市'], ['referenceGold', '黑金原版'],
   ['referenceWhite', '白色原版'], ['referenceTerminal', '行情原版'], ['launch', '启航'],
   ['aurora', '青绿星环'], ['racing', '斜切竞速'], ['receipt', '纸感票据'], ['journal', '行情终端'], ['voyage', '旅程'],

@@ -1,5 +1,6 @@
 import { computed, onMounted, onScopeDispose, ref, watch } from 'vue'
 import request from '@/utils/request'
+import { redirectTradeKyc } from './tradeKycRedirect'
 import { useAuthStore } from '@/store/auth'
 import { useLocaleStore } from '@/store/locale'
 
@@ -43,7 +44,7 @@ export function useTradeKyc(login: () => void, notify: (message: string) => void
     if (disposed || token !== auth.token) return false
     if (allowed) return true
     if (lastError) notify(copy('實名認證狀態檢查失敗，請稍後重試。', 'Unable to check identity verification. Please try again.', '本人確認状態を確認できませんでした。再試行してください。'))
-    else promptOpen.value = true
+    else void redirectTradeKyc()
     return false
   }
   function handleError(error: any): boolean {

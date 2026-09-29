@@ -48,7 +48,7 @@ public class ContractOrderService {
     @Transactional
     public ContractOrder createOrder(Long userId, CreateContractOrderRequest req) {
         if (trialFunds != null) { trialFunds.lock(userId); trialFunds.requireTrade(userId); }
-        else identityService.requireApproved(userId);
+        else identityService.requireTradingApproved(userId);
         if (req == null || req.getSymbol() == null || req.getSymbol().trim().isEmpty()
                 || !("BUY".equals(req.getSide()) || "SELL".equals(req.getSide()))
                 || !("MARKET".equals(req.getType()) || "LIMIT".equals(req.getType()))) {
@@ -162,7 +162,7 @@ public class ContractOrderService {
         TransactionTemplate transaction = new TransactionTemplate(transactionManager);
         for (ContractOrder order : contractOrderRepository.findByStatusAndTypeAndLimitMatchEnabledTrue("PENDING", "LIMIT")) {
             try {
-                if (!identityService.canUseTradingFunds(order.getUserId()) && trial(order.getTrialReserved()).signum() == 0) continue;
+                if (!identityService.canUseTradingFunds(order.getUserId())) continue;
                 if (order.getLotSize() != null) {
                     filled += transaction.execute(status -> matchPendingLimitOrder(order.getId()));
                 } else {
@@ -181,7 +181,7 @@ public class ContractOrderService {
     private int matchPendingLimitOrder(Long id) {
         ContractOrder order = contractOrderRepository.findById(id).orElse(null);
         if (order == null || !"PENDING".equals(order.getStatus()) || !order.isLimitMatchEnabled()) return 0;
-        if (!identityService.canUseTradingFunds(order.getUserId()) && trial(order.getTrialReserved()).signum() == 0) return 0;
+        if (!identityService.canUseTradingFunds(order.getUserId())) return 0;
         if (trialFunds != null) trialFunds.lock(order.getUserId());
         TradingSymbol symbol = tradingSymbolRepository.findBySymbol(order.getSymbol()).orElse(null);
         if (symbol == null || (!categories.leverageEnabled(symbol.getCategory()) && order.getLeverage().compareTo(BigDecimal.ONE)>0)) return 0;

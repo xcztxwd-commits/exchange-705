@@ -52,7 +52,7 @@ const todayPct = ref(0)
 const hotSymbols = ref<any[]>([])
 const categorySymbols = ref<any[]>([])
 const allSymbols = ref<any[]>([]) // 存储所有币种数据
-const activeCategory = ref('US')
+const activeCategory = ref('All')
 
 // 使用 computed 确保响应式更新
  const quickList = computed(() => [
@@ -334,7 +334,7 @@ async function loadAllSymbols(forceRefresh = false) {
     const currentCategoryHasSymbols = symbols.some((s: any) => 
       s.category === activeCategory.value && (s.isEnabled !== false)
     )
-    if (!currentCategoryHasSymbols) {
+    if (activeCategory.value !== 'All' && !currentCategoryHasSymbols) {
       // 找到第一个有可用币种的分类
       const list = Array.isArray(categories.value) ? categories.value : []
       const firstAvailableCategory = list.find((cat) => {
@@ -443,7 +443,7 @@ async function loadAllSymbols(forceRefresh = false) {
 // 更新当前分类的币种列表（前端过滤，不调用接口）
 function updateCategorySymbols() {
   categorySymbols.value = allSymbols.value.filter((s: any) => {
-    return s.category === activeCategory.value && (s.isEnabled !== false) // 过滤掉未启用的币种
+    return (activeCategory.value === 'All' || s.category === activeCategory.value) && (s.isEnabled !== false) // 过滤掉未启用的币种
   })
   void marketStore.subscribeSymbols([...hotSymbols.value, ...categorySymbols.value], 'home')
   console.log(`[Home] Filtered ${categorySymbols.value.length} symbols for category ${activeCategory.value}`)
@@ -453,13 +453,13 @@ function updateCategorySymbols() {
 const availableCategories = computed(() => {
   // categories 是 ref，需要使用 .value
   const list = Array.isArray(categories.value) ? categories.value : []
-  return list.filter((cat) => {
+  return [{ key: 'All', label: 'All' }, ...list.filter((cat) => {
     // 检查该分类下是否有启用的币种
     const hasEnabledSymbols = allSymbols.value.some((s: any) => {
       return s.category === cat.key && (s.isEnabled !== false)
     })
     return hasEnabledSymbols
-  })
+  })]
 })
 
 // 选择分类（只在前端过滤，不调用接口）
@@ -473,7 +473,7 @@ function selectCategory(cat: string) {
 // 点击币种，跳转到交易页面（默认跳转到合约页面）
 function goToTrade(symbol: any) {
   const symbolName = symbol.symbol || symbol.alltickSymbol
-  const category = symbol.category || activeCategory.value
+  const category = symbol.category || (activeCategory.value === 'All' ? 'Crypto' : activeCategory.value)
   // 跳转到交易页面，并传递币种参数
   router.push({
     path: '/trade',
@@ -904,7 +904,7 @@ const logoUrl = '/img/logo.svg'
             :class="{ active: activeCategory === cat.key }"
             @click="selectCategory(cat.key)"
           >
-            {{ localeStore.categoryLabel(cat.key, cat.label) }}
+            {{ cat.key === 'All' ? localeStore.t('all') : localeStore.categoryLabel(cat.key, cat.label) }}
           </span>
         </div>
       </div>

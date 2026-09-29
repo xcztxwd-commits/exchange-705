@@ -249,7 +249,7 @@
              <div class="bg-gray-50 dark:bg-[#181c27] p-4 rounded-lg text-xs text-gray-500 dark:text-gray-400 dark:text-gray-500 space-y-2 mt-4 border border-gray-100 dark:border-[#2b3139]">
                <div class="flex justify-between items-center"><span class="font-medium text-gray-600 dark:text-gray-300">{{ currentSymbolInfo?.quantityUnitType ? localeStore.text('每输入单位', 'Per input unit') : localeStore.t('perLot') }}</span><span class="font-mono text-gray-800 dark:text-gray-100 font-medium">1 {{ unitLabel }} = {{ currentSymbolInfo ? lotSize.toLocaleString(localeStore.locale) : '—' }} {{ currentSymbolInfo?.baseCurrency || forexLotUnit(currentSymbolInfo) }}</span></div>
                <div class="flex justify-between items-center"><span class="font-medium text-gray-600 dark:text-gray-300">{{ localeStore.text('預留往返手續費', 'Reserved round-trip fee') }}</span><span class="font-mono text-gray-800 dark:text-gray-100 font-medium">{{ displayFee(estimatedFee) }} USD</span></div>
-               <p v-if="currentSymbolInfo?.quantityUnitType === 'BASE_ASSET'" class="text-xs">每1 {{ unitLabel }} 固定往返佣金 {{ feeMultiplier }} USD</p>
+               <p v-if="currentSymbolInfo?.quantityUnitType === 'BASE_ASSET'" class="text-xs">{{ localeStore.locale === 'ja' ? `1 ${unitLabel}あたりの往復手数料：${feeMultiplier} USD（固定）` : `每1 ${unitLabel} 固定往返佣金 ${feeMultiplier} USD` }}</p>
                <p v-if="currentSymbolInfo?.sourceCategory === 'Forex'" class="text-xs text-gray-500">{{ localeStore.text('開倉 / 平倉各', 'Open / close each') }} {{ (estimatedFee / 2).toFixed(3) }} USD · {{ localeStore.text('往返佣金預留，平倉結算；撤單退還', 'Round-trip reserved; settled on close, refunded on cancellation') }}</p>
                <div class="flex justify-between items-center"><span class="font-medium text-gray-600 dark:text-gray-300">{{ localeStore.t('estMargin') }}</span><span class="font-mono text-gray-800 dark:text-gray-100 font-medium">{{ Number.isFinite(estimatedMargin) ? estimatedMargin.toFixed(2) : '--' }} USD</span></div>
                <div class="flex justify-between items-center"><span class="font-medium text-gray-600 dark:text-gray-300">{{ localeStore.t('balance') }}</span><span class="font-mono text-gray-800 dark:text-gray-100 font-medium">{{ formatMoney(tradingAvailable) }} USD</span></div>
@@ -722,8 +722,9 @@
                 </div>
               </div>
               <div v-else class="text-center py-10 bg-gray-50 dark:bg-[#181c27] rounded-xl border border-gray-100 dark:border-[#2b3139]">
-                <el-icon class="text-4xl text-gray-300 mb-2"><Box /></el-icon>
-                <div class="text-gray-500 dark:text-gray-400 dark:text-gray-500">{{ localeStore.t('notConfigured') }}{{ localeStore.t('bankCardDeposit') }}{{ localeStore.t('channel') }}</div>
+                <el-icon class="text-4xl text-[#8cc63f] mb-3" aria-hidden="true"><Service /></el-icon>
+                <div class="text-gray-500 dark:text-gray-400" role="status">{{ localeStore.text('银行卡充值请联系客服', 'Please contact customer service for bank card deposits') }}</div>
+                <button type="button" class="mt-5 px-6 py-3 rounded-lg bg-[#8cc63f] text-white font-medium hover:bg-[#7ab036] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#8cc63f]" @click="router.push('/customer-service')">{{ localeStore.text('请咨询客服', 'Please contact customer service') }}</button>
               </div>
             </div>
 
@@ -1407,8 +1408,8 @@
     </el-dialog>
 
     <!-- 登录弹窗 -->
-    <el-dialog v-model="showLoginModal" :title="localeStore.t('emailLogin')" width="400px" class="custom-dialog rounded-xl overflow-hidden">
-      <form id="pc-login-form" class="space-y-4 px-2 py-4" novalidate @submit.prevent="onLoginSubmit" @keydown.enter="($event.isComposing || $event.keyCode === 229 || $event.repeat) && $event.preventDefault()">
+    <el-dialog v-model="showLoginModal" :z-index="4100" :title="localeStore.t('emailLogin')" width="440px" class="custom-dialog login-dialog rounded-xl">
+      <form id="pc-login-form" class="space-y-4" novalidate @submit.prevent="onLoginSubmit" @keydown.enter="($event.isComposing || $event.keyCode === 229 || $event.repeat) && $event.preventDefault()">
         <div>
           <div class="text-gray-600 dark:text-gray-300 font-medium text-sm mb-2">{{ localeStore.t('emailLogin') }} <span class="text-red-500">*</span></div>
           <input v-model="loginEmail" type="email" class="w-full bg-gray-50 dark:bg-[#181c27] border border-gray-200 dark:border-[#2b3139]-none rounded-lg px-4 py-3 outline-none focus:ring-1 focus:ring-[#8cc63f]/30 transition-all text-gray-700 dark:text-gray-200" :placeholder="localeStore.t('emailPlaceholder')" />
@@ -1422,16 +1423,16 @@
             </el-icon>
           </div>
         </div>
-        <div class="flex justify-between items-center text-sm mt-1">
-          <span class="text-gray-500 dark:text-gray-400 dark:text-gray-500 whitespace-nowrap">
+        <div class="login-links text-sm">
+          <span class="login-register text-gray-500 dark:text-gray-400">
             {{ localeStore.t('newUserJoin') }}
-            <a @click="showLoginModal = false; showRegisterModal = true" class="text-[#8cc63f] cursor-pointer font-bold hover:underline ml-1">{{ localeStore.t('register') }}</a>
+            <button type="button" @click="showLoginModal = false; showRegisterModal = true" class="text-[#8cc63f] cursor-pointer font-bold hover:underline ml-1">{{ localeStore.t('register') }}</button>
           </span>
-          <a @click="showLoginModal = false; showForgotModal = true" class="text-gray-400 dark:text-gray-500 hover:text-[#8cc63f] cursor-pointer transition-colors whitespace-nowrap">{{ localeStore.t('forgotPassword') }}</a>
+          <button type="button" @click="showLoginModal = false; showForgotModal = true" class="text-gray-400 dark:text-gray-500 hover:text-[#8cc63f] cursor-pointer transition-colors login-forgot">{{ localeStore.t('forgotPassword') }}</button>
         </div>
       </form>
       <template #footer>
-        <div class="px-2 pb-2">
+        <div>
           <button type="submit" form="pc-login-form" :disabled="loginLoading" class="w-full bg-[#8cc63f] text-white py-3.5 rounded-lg font-bold text-base hover:bg-[#7ab036] transition-colors shadow-md shadow-green-200/50 disabled:opacity-50">
             {{ loginLoading ? localeStore.t('pleaseWait') : localeStore.t('login') }}
           </button>
@@ -1751,7 +1752,12 @@ const checkRouteQuery = () => {
   
   let shouldClearQuery = false;
   
-  if (qInvite || isRegister) {
+  if (query.kyc === '1') {
+    activeUserMenu.value = 'kyc';
+    showUserCenter.value = true;
+    void loadKycStatus();
+    shouldClearQuery = true;
+  } else if (qInvite || isRegister) {
     if (qInvite) {
       registerInviteCode.value = qInvite as string;
       registerInviteLocked.value = true;
@@ -3749,6 +3755,51 @@ const darkLogoUrl = `${import.meta.env.BASE_URL}img/logo-dark.svg`
 .custom-dialog .el-dialog__body {
   padding: 20px 24px;
 }
+/* Keep translated login actions inside the dialog and share one content gutter. */
+.custom-dialog.login-dialog {
+  max-width: calc(100vw - 24px);
+  padding: 0;
+}
+.custom-dialog.login-dialog .el-dialog__header {
+  padding: 24px 48px 20px 24px;
+}
+.custom-dialog.login-dialog .el-dialog__title {
+  display: block;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.trade-page .custom-dialog.login-dialog .el-dialog__body {
+  padding: 24px;
+  overflow: visible;
+}
+.custom-dialog.login-dialog .el-dialog__footer {
+  padding: 0 24px 24px;
+}
+.login-dialog .login-links {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  line-height: 1.6;
+}
+.login-dialog .login-register {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+.login-dialog .login-register button {
+  margin-left: 0;
+}
+.login-dialog .login-forgot {
+  align-self: flex-end;
+  max-width: 100%;
+  text-align: end;
+  overflow-wrap: anywhere;
+}
+
 .el-tabs__item.is-active {
   color: #8cc63f !important;
   font-weight: bold;

@@ -119,6 +119,8 @@ public class SystemConfigService {
     }
 
     public void saveConfig(String key, String value, String description) {
+        if (com.gtcfesk.exchange.user.KycIdentityService.TRADE_KYC_KEY.equals(key) && !"true".equals(value) && !"false".equals(value))
+            throw new com.gtcfesk.exchange.common.BusinessException("未实名不可交易开关必须为 true 或 false");
         if ("support.settings".equals(key)) com.gtcfesk.exchange.support.SupportSettings.parse(value);
         if (com.gtcfesk.exchange.security.WebsiteSecuritySettings.KEY.equals(key)) com.gtcfesk.exchange.security.WebsiteSecuritySettings.parse(value);
         if (SHARE_TEMPLATES_KEY.equals(key)) {

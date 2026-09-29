@@ -185,8 +185,7 @@ function copyBankAccount() {
 
 // 联系客服
 function contactService() {
-  showToast(localeStore.t('pleaseContactUsThroughService'), 'success')
-  // 这里可以跳转到客服页面或打开客服对话框
+  router.push('/customer-service')
 }
 
 // 选择文件
@@ -564,9 +563,15 @@ onMounted(() => {
       
       <!-- 如果后台没有设置银行卡，显示提示信息 -->
       <div v-else-if="!loadingBankInfo" class="bank-no-setting">
-        <div class="no-setting-icon">🏦</div>
-        <div class="no-setting-text">{{ localeStore.t('contactServiceForBankCard') }}</div>
-        <button class="contact-button" @click="contactService">{{ localeStore.t('contactService') }}</button>
+        <div class="no-setting-icon" aria-hidden="true">
+          <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 13v-1a8 8 0 0 1 16 0v1M20 17v1a3 3 0 0 1-3 3h-5" />
+            <rect x="2" y="11" width="4" height="7" rx="2" />
+            <rect x="18" y="11" width="4" height="7" rx="2" />
+          </svg>
+        </div>
+        <div class="no-setting-text">{{ localeStore.text('银行卡充值请联系客服', 'Please contact customer service for bank card deposits') }}</div>
+        <button type="button" class="contact-button" @click="contactService">{{ localeStore.text('请咨询客服', 'Please contact customer service') }}</button>
       </div>
       
       <!-- 加载中 -->
@@ -946,7 +951,7 @@ onMounted(() => {
 }
 
 .no-setting-icon {
-  font-size: 64px;
+  color: #73b100;
   margin-bottom: 20px;
 }
 

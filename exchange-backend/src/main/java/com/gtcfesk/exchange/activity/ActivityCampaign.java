@@ -14,6 +14,7 @@ public class ActivityCampaign {
  private boolean autoPopup=true;
  private boolean autoSendEnabled;
  private boolean repeatUnread;
+ private boolean allowRepeatSend;
  private boolean deleted;
  @Column(nullable=false,length=16) private String animation="GIFT";
  @Column(nullable=false,length=16) private String defaultLocale="zh-CN";

@@ -34,7 +34,7 @@ public class ActivityService {
   if(id!=null&&deliveries.countByCampaignId(id)>0&&(c.getAmount().compareTo(amount)!=0||c.isTemplate()!=input.isTemplate()))throw new BusinessException("已发送活动的金额、资格和模板属性不可修改，请复制为新活动");
   validateTranslations(input);
   c.setLayoutJson(ActivityDesignValidator.validate(input.getLayoutJson(),input.getDefaultLocale(),mapper));
-  c.setAutoSendEnabled(!input.isTemplate() && input.isAutoSendEnabled());c.setRepeatUnread(input.isRepeatUnread());
+  c.setAutoSendEnabled(!input.isTemplate() && input.isAutoSendEnabled());c.setRepeatUnread(input.isRepeatUnread());c.setAllowRepeatSend(input.isAllowRepeatSend());
   c.setName(input.getName().trim());c.setStatus(input.isTemplate()?"DRAFT":input.getStatus());c.setTemplate(input.isTemplate());c.setAutoPopup(input.isAutoPopup());c.setAnimation(input.getAnimation());c.setDefaultLocale(input.getDefaultLocale());c.setTranslations(input.getTranslations());
   c.setAmount(amount);c.setBudget(budget);c.setMaxClaims(input.getMaxClaims());c.setRecentLoginDays(input.getRecentLoginDays());c.setStartsAt(input.getStartsAt());c.setEndsAt(input.getEndsAt());return campaigns.save(c);
  }
@@ -111,7 +111,14 @@ public class ActivityService {
   int sent=0,duplicate=0,skipped=0;
   for(UserAccount u:recipients){
    if(!eligible(c,u)){skipped++;continue;}
-   if(deliveries.findByCampaignIdAndUserId(id,u.getId()).isPresent()){duplicate++;continue;}
+   ActivityDelivery existing=deliveries.findByCampaignIdAndUserId(id,u.getId()).orElse(null);
+   if(existing!=null){
+    if(!c.isAllowRepeatSend()){duplicate++;continue;}
+    // Reuse the receipt so a resend never grants trial principal twice.
+    existing.setSentAt(LocalDateTime.now());existing.setSentBy(admin);
+    existing.setReceivedAt(null);existing.setOpenedAt(null);existing.setClosedAt(null);
+    deliveries.save(existing);sent++;continue;
+   }
    ActivityDelivery d=new ActivityDelivery();d.setCampaignId(id);d.setUserId(u.getId());d.setSentBy(admin);deliveries.save(d);sent++;
   }
   Map<String,Object> r=new LinkedHashMap<>();r.put("sent",sent);r.put("duplicates",duplicate);r.put("ineligible",skipped);return r;

@@ -106,7 +106,7 @@ public class KycController {
         Map<String, Object> result = new HashMap<>();
         boolean approved = latestRecord.map(record -> "APPROVED".equals(record.getStatus())).orElse(false);
         result.put("kycStatus", approved ? "VERIFIED" : "NOT_VERIFIED");
-        result.put("simulationExempt", identityService != null && identityService.simulationExempt()); result.put("canTrade", (identityService != null && identityService.simulationExempt()) || approved || (trialFunds != null && trialFunds.available(userId).signum() > 0));
+        result.put("simulationExempt", identityService != null && identityService.simulationExempt()); result.put("canTrade", identityService != null ? identityService.canUseTradingFunds(userId) : approved);
         
         if (latestRecord.isPresent()) {
             KycRecord record = latestRecord.get();

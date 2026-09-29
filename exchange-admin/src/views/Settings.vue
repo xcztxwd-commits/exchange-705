@@ -35,6 +35,7 @@ const marketConfig = ref<ConfigItem[]>([
   // API基础地址：由后端使用 Forex 行情接口统一配置
 ])
 
+const tradeKycRequired = ref(true)
 const conversionHours = ref(8)
 const defaultConversionCurrencies = ['USD', 'EUR', 'JPY', 'GBP', 'CNY', 'CHF', 'AUD', 'CAD', 'HKD', 'SGD']
 const conversionCurrencies = ref([...defaultConversionCurrencies])
@@ -80,6 +81,7 @@ const loadConfigs = async () => {
     const res: any = await request.get('/admin/config/list')
     if (Array.isArray(res)) {
       res.forEach((item: any) => {
+        if (item.configKey === 'trade.kyc.required') tradeKycRequired.value = item.configValue !== 'false'
         if (item.configKey === 'market.conversion.currencies') conversionCurrencies.value = [...new Set(['USD', ...String(item.configValue || '').split(',').filter(Boolean)])]
         if (item.configKey === 'market.conversion.cache-hours') conversionHours.value = Number(item.configValue) || 8
         const mailItem = mailConfig.value.find((c) => c.key === item.configKey)
@@ -209,6 +211,7 @@ const saveConfigs = async () => {
   try {
     // 过滤掉ws_url配置（前端会自动根据分类选择WebSocket地址）
     const allConfigs = [
+      { key: 'trade.kyc.required', value: String(tradeKycRequired.value), description: '未实名不可交易' },
       { key: 'market.conversion.currencies', value: conversionCurrencies.value.join(','), description: '预缓存币种（兑美元）' },
       { key: 'market.conversion.cache-hours', value: String(conversionHours.value), description: '结算汇率更新间隔（小时）' },
       ...mailConfig.value, 
@@ -311,6 +314,12 @@ onMounted(() => {
         </el-tab-pane>
 
         <el-tab-pane label="风控配置" name="risk">
+          <el-form label-width="200px">
+            <el-form-item label="未实名不可交易">
+              <el-switch v-model="tradeKycRequired" :disabled="loading" active-text="开启" inactive-text="关闭" />
+            </el-form-item>
+            <el-alert type="info" :closable="false" title="开启后真实账户须通过实名审核才能交易，体验金不豁免；关闭仅取消交易实名门槛，不影响提现和贷款实名要求。保存后生效。" />
+          </el-form>
           <el-form label-width="150px">
             <el-form-item
               v-for="cfg in riskConfig"

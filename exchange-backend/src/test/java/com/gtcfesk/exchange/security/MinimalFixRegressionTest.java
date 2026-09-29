@@ -460,6 +460,7 @@ class MinimalFixRegressionTest {
     }
 
     @Test void forgedContractPricesCannotCreateProfitAndOldClientsStillWork() throws Exception {
+        identity(b,"APPROVED"); // Keep this test focused on order ownership rather than the new KYC gate.
         TradingSymbol s=symbol();s.setLeverage(new BigDecimal("100"));symbols.saveAndFlush(s);
         for(String side:Arrays.asList("BUY","SELL")) {
             quote(s,"105");

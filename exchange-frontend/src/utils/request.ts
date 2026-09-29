@@ -3,6 +3,7 @@ import axios from 'axios'
 import { trackAccountWrite, finishAccountWrite } from './accountRequests'
 import { useAuthStore } from '@/store/auth'
 import { useLocaleStore } from '@/store/locale'
+import { redirectTradeKyc } from './tradeKycRedirect'
 
 const instance = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
@@ -46,6 +47,7 @@ instance.interceptors.response.use(
   (err) => {
     finishAccountWrite(err.config)
     if (err.response?.status === 403 && err.response?.data?.errorCode === 'KYC_REQUIRED') {
+      void redirectTradeKyc()
       return Promise.reject(Object.assign(new Error(err.response.data.message || 'Identity verification required'), {
         errorCode: 'KYC_REQUIRED', kycStatus: err.response.data.kycStatus, status: 403,
       }))

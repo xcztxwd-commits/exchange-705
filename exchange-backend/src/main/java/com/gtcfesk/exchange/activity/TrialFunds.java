@@ -17,8 +17,8 @@ public class TrialFunds {
  private final AssetAccountRepository assets;
  private final KycIdentityService identity;
  public BigDecimal available(Long user){return trials.findById(user).map(TrialAccount::getAvailable).orElse(BigDecimal.ZERO);}
- public boolean canTrade(Long user){return identity.canUseTradingFunds(user)||available(user).signum()>0;}
- public void requireTrade(Long user){if(!canTrade(user))identity.requireApproved(user);}
+ public boolean canTrade(Long user){return identity.canUseTradingFunds(user);}
+ public void requireTrade(Long user){identity.requireTradingApproved(user);}
  // Parent-user lock serializes first-account creation, claims, reservations and settlement.
  public void lock(Long user){users.lockById(user).orElseThrow(()->new BusinessException("用户不存在"));assets.lockByUserId(user);}
  private TrialAccount account(Long user){return trials.lock(user).orElseGet(()->{TrialAccount a=new TrialAccount();a.setUserId(user);return trials.save(a);});}
