@@ -53,10 +53,23 @@ class ExchangeConnectionTest {
                     // Exercise the same rotation branch as the 23-hour production limit without waiting a day.
                     final int previous=received.get();ReflectionTestUtils.setField(lane,"connectedAt",System.currentTimeMillis()-stream.rotationMs-1000);
                     until(()->received.get()>previous);
-                    if("okx".equals(provider)){int pings=Upstream.textPings.get();ReflectionTestUtils.setField(lane,"lastPing",0L);until(()->Upstream.textPings.get()>pings);}
-                    // Force a missing-pong deadline and prove recovery.
-                    final int last=received.get();ReflectionTestUtils.setField(lane,"lastPong",System.currentTimeMillis()-30000);
-                    ReflectionTestUtils.setField(lane,"lastPing",System.currentTimeMillis()-11000);until(()->received.get()>last);
+                    // Wait for the real pong, not just the server observing the ping. Otherwise an
+                    // in-flight pong can overwrite the synthetic deadline and cancel the failure.
+                    until(()->(Long)ReflectionTestUtils.getField(lane,"lastPing")>0
+                        && (Long)ReflectionTestUtils.getField(lane,"lastPong")>=(Long)ReflectionTestUtils.getField(lane,"lastPing"));
+                    if("okx".equals(provider))assertTrue(Upstream.textPings.get()>0);
+                    final int last=received.get();
+                    ScheduledExecutorService timer=(ScheduledExecutorService)ReflectionTestUtils.getField(lane,"timer");
+                    timer.submit(()->{
+                        long now=System.currentTimeMillis();
+                        ReflectionTestUtils.setField(lane,"lastPong",now-30000);
+                        ReflectionTestUtils.setField(lane,"lastPing",now-11000);
+                        ReflectionTestUtils.invokeMethod(lane,"tick");
+                        assertEquals("heartbeat_timeout",stream.status("Crypto").get("error"));
+                        assertFalse(stream.connected("Crypto"));
+                    }).get(10,TimeUnit.SECONDS);
+                    until(()->received.get()>last);
+                    assertTrue(stream.connected("Crypto"));
                 }finally{stream.stop();}
             }
         }finally{server.stop();server.destroy();}

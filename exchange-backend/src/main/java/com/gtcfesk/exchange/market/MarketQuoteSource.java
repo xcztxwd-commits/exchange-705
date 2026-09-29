@@ -326,7 +326,7 @@ public class MarketQuoteSource {
         
         // 截取需要的 limit
         if (normalizedList.size() > requiredLimit) {
-            normalizedList = normalizedList.subList(normalizedList.size() - requiredLimit, normalizedList.size());
+            normalizedList = new ArrayList<>(normalizedList.subList(normalizedList.size() - requiredLimit, normalizedList.size()));
         }
         
         dataOut.put("kline_list", normalizedList);
