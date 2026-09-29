@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, watch, onMounted, onBeforeUnmount } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { can } from '@/utils/access'
 import { useAccountTable } from '@/utils/useAccountTable'
@@ -8,7 +8,8 @@ import AccountTypeFilter from '@/components/AccountTypeFilter.vue'
 const accountTable = useAccountTable(), accountModes = accountTable.modes
 const request = accountTableRequest(accountTable)
 import { requestId, supportDate } from '@/utils/support'
-const recipients = ref(''),
+type Recipient = { id: number; email: string }
+const recipients = ref<Recipient[]>([]),
   title = ref(''),
   content = ref(''),
   rows = ref<any[]>([]),
@@ -16,6 +17,35 @@ const recipients = ref(''),
   busy = ref(false),
   enabled = ref(false),
   error = ref('')
+const recipientQuery = ref(''), matches = ref<Recipient[]>([]), searching = ref(false), searchError = ref('')
+let searchTimer: ReturnType<typeof setTimeout> | undefined, searchVersion = 0
+watch(recipientQuery, (value) => {
+  clearTimeout(searchTimer)
+  const version = ++searchVersion, query = value.trim()
+  matches.value = []
+  searchError.value = ''
+  searching.value = !!query
+  if (!query) return
+  searchTimer = setTimeout(async () => {
+    try {
+      const data: Recipient[] = await request.get('/admin/support/inbox/recipients', { params: { query } })
+      if (version === searchVersion) matches.value = data
+    } catch (e: any) {
+      if (version === searchVersion) searchError.value = e.message || '搜索失败，请重新输入重试'
+    } finally {
+      if (version === searchVersion) searching.value = false
+    }
+  }, 300)
+}, { flush: 'sync' })
+function addRecipient(user: Recipient) {
+  if (busy.value || !enabled.value || recipients.value.some(item => item.id === user.id)) return
+  if (recipients.value.length >= 200) { ElMessage.warning('最多添加 200 位收件人'); return }
+  recipients.value.push(user)
+}
+function removeRecipient(id: number) {
+  if (!busy.value && enabled.value) recipients.value = recipients.value.filter(user => user.id !== id)
+}
+onBeforeUnmount(() => { clearTimeout(searchTimer); ++searchVersion })
 let retryId = '',
   signature = ''
 async function load() {
@@ -32,16 +62,9 @@ async function load() {
 }
 async function send() {
   if (busy.value) return
-  const parts = recipients.value.trim().split(/[\s,，]+/)
-  if (
-    parts.some((value) => !/^\d+$/.test(value) || !Number.isSafeInteger(Number(value)) || Number(value) < 1)
-  ) {
-    ElMessage.warning('请输入有效用户 ID')
-    return
-  }
-  const users = [...new Set(parts.map(Number))]
+  const users = recipients.value.map(user => user.id)
   if (!users.length || users.length > 200 || !title.value.trim() || !content.value.trim()) {
-    ElMessage.warning('请填写标题、内容及 1–200 个用户 ID')
+    ElMessage.warning('请填写标题、内容并选择 1–200 位收件人')
     return
   }
   const body = { users, title: title.value, content: content.value }
@@ -64,7 +87,8 @@ async function send() {
     ElMessage.success('站内信已发送')
     title.value = ''
     content.value = ''
-    recipients.value = ''
+    recipients.value = []
+    recipientQuery.value = ''
     signature = ''
     retryId = ''
     page.value = 0
@@ -98,12 +122,30 @@ function changePage(delta: number) {
       <el-card v-if="can('inbox:send')" shadow="never" class="compose-card"
         ><template #header><strong>发送新消息</strong></template
         ><el-form label-position="top" :disabled="!enabled || busy" @submit.prevent="send"
-          ><el-form-item label="收件用户 ID"
-            ><el-input
-              v-model="recipients"
-              type="textarea"
-              :rows="2"
-              placeholder="多个 ID 用逗号或换行分隔，最多 200 位" /></el-form-item
+          ><el-form-item label="收件用户"
+            ><el-input v-model="recipientQuery" clearable maxlength="128" aria-label="搜索收件用户 ID 或邮箱"
+              placeholder="输入用户 ID 或邮箱实时搜索" @keydown.enter.prevent />
+            <div class="recipient-status" role="status" aria-live="polite">
+              <span v-if="searching">搜索中…</span>
+              <span v-else-if="searchError">{{ searchError }}</span>
+              <span v-else-if="recipientQuery.trim() && !matches.length">未找到匹配用户</span>
+              <span v-else-if="matches.length">最多显示 20 位，输入更完整的邮箱可缩小范围</span>
+            </div>
+            <ul v-if="matches.length" class="recipient-results" aria-label="搜索结果">
+              <li v-for="user in matches" :key="user.id">
+                <span class="recipient-identity">ID {{ user.id }}<small>{{ user.email || '未设置邮箱' }}</small></span>
+                <el-button v-permission="'inbox:send'" size="small" :disabled="recipients.length >= 200 || recipients.some(item => item.id === user.id)"
+                  :aria-label="`添加用户 ${user.id}`" @click="addRecipient(user)">
+                  {{ recipients.some(item => item.id === user.id) ? '已添加' : '添加' }}
+                </el-button>
+              </li>
+            </ul>
+            <div class="recipient-selected" aria-label="已选收件人">
+              <span class="hint">已选 {{ recipients.length }} / 200 位，可继续搜索添加；× 仅移除收件人。</span>
+              <el-tag v-for="user in recipients" :key="user.id" :closable="enabled && !busy"
+                @close="removeRecipient(user.id)">ID {{ user.id }} · {{ user.email || '未设置邮箱' }}</el-tag>
+            </div>
+          </el-form-item
           ><el-form-item label="标题"
             ><el-input v-model="title" maxlength="120" show-word-limit /></el-form-item
           ><el-form-item label="正文"
@@ -203,6 +245,15 @@ function changePage(delta: number) {
   font-size: 11px;
   line-height: 1.8;
 }
+.recipient-status { width: 100%; color: #8391a4; font-size: 12px; line-height: 1.6; margin-top: 6px; }
+.recipient-results { width: 100%; max-height: 240px; overflow-y: auto; padding: 0; margin: 6px 0; list-style: none; }
+.recipient-results li { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid #e7edf4; }
+.recipient-identity { flex: 1; min-width: 0; line-height: 1.5; overflow-wrap: anywhere; }
+.recipient-identity small { display: block; color: #8391a4; }
+.recipient-selected { display: flex; flex-wrap: wrap; gap: 6px; width: 100%; max-height: 220px; overflow-y: auto; }
+.recipient-selected .hint { width: 100%; }
+.recipient-selected :deep(.el-tag) { max-width: 100%; height: auto; min-height: 24px; }
+.recipient-selected :deep(.el-tag__content) { white-space: normal; overflow-wrap: anywhere; min-width: 0; }
 .history-heading {
   display: flex;
   justify-content: space-between;

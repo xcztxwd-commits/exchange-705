@@ -50,6 +50,8 @@ public class AdminSupportController {
     public ResponseEntity<?> export(@PathVariable long id) {
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).header("Content-Disposition", "attachment; filename=conversation-"+id+".json").body(service.export(id));
     }
+    @GetMapping("/inbox/recipients") @AdminPermission(menu="inbox", action="send")
+    public List<Map<String,Object>> recipients(@RequestParam String query) { return service.searchRecipients(query); }
     @GetMapping("/inbox") @AdminPermission(menu="inbox", action="")
     public List<InboxLetter> inbox(@RequestParam(defaultValue="0") int page) { return service.inbox(true, page); }
     @PostMapping("/inbox") @AdminPermission(menu="inbox", action="send")

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import AccountModeSwitch from '@/components/AccountModeSwitch.vue'
 import Tabbar from '@/components/Tabbar.vue'
 import AssetPixelChart from '@/components/AssetPixelChart.vue'
 import request from '@/utils/request'
@@ -181,16 +182,17 @@ onMounted(() => {
 
     <!-- 所有功能列表 -->
     <div class="menu-section">
-      <div 
-        v-for="item in menuItems" 
-        :key="item.label"
-        class="menu-item-card"
-        @click="handleMenuClick(item)"
-      >
-        <div class="menu-indicator"></div>
-        <div class="menu-label">{{ item.label }}</div>
-        <div class="menu-arrow ui-chevron" aria-hidden="true"></div>
-      </div>
+      <template v-for="item in menuItems" :key="item.label">
+        <div
+          class="menu-item-card"
+          @click="handleMenuClick(item)"
+        >
+          <div class="menu-indicator"></div>
+          <div class="menu-label">{{ item.label }}</div>
+          <div class="menu-arrow ui-chevron" aria-hidden="true"></div>
+        </div>
+        <AccountModeSwitch v-if="auth.token && item.route === '/transfer'" placement="menu" real-path="/trade" />
+      </template>
     </div>
 
     <!-- 设置部分 -->

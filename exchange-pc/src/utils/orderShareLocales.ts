@@ -6,7 +6,13 @@ export const posterLocales: Record<string, Record<string, string>> = {
     "basis": "Recorded settlement P&L",
     "units": "Account units",
     "subtitle": "Every trade deserves a record.",
-    "lots": "Lots"
+    "lots": "Lots",
+    "light": "Editorial square",
+    "gold": "Gold broadcast",
+    "racing": "Diagonal split",
+    "aurora": "Orbital halo",
+    "receipt": "Paper receipt",
+    "journal": "Market terminal"
   },
   "zh-TW": {
     "record": "交易記錄",
@@ -14,7 +20,13 @@ export const posterLocales: Record<string, Record<string, string>> = {
     "basis": "依訂單結算記錄",
     "units": "帳戶計價單位",
     "subtitle": "每一筆交易，都值得記錄。",
-    "lots": "手"
+    "lots": "手",
+    "light": "極簡方刊",
+    "gold": "黑金橫幅",
+    "racing": "斜切競速",
+    "aurora": "青綠星環",
+    "receipt": "紙感票據",
+    "journal": "行情終端"
   },
   "ja": {
     "record": "取引記録",
@@ -22,7 +34,13 @@ export const posterLocales: Record<string, Record<string, string>> = {
     "basis": "決済記録に基づく損益",
     "units": "口座単位",
     "subtitle": "すべての取引に、記録を。",
-    "lots": "ロット"
+    "lots": "ロット",
+    "light": "ミニマルスクエア",
+    "gold": "ゴールドバナー",
+    "racing": "斜線レイアウト",
+    "aurora": "オービット",
+    "receipt": "取引明細票",
+    "journal": "マーケット端末"
   },
   "fr": {
     "record": "REGISTRE DE TRADING",

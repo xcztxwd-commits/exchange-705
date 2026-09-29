@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, watch, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import request from '@/utils/request'
 import SupportThread from '@/components/SupportThread.vue'
 import { supportText as t, supportDate, type Conversation, type SupportConfig } from '@/utils/support'
+import { useLocaleStore } from '@/store/locale'
+const localeStore = useLocaleStore()
 const router = useRouter(),
   config = ref<SupportConfig>(),
   sessions = ref<Conversation[]>([]),
@@ -14,13 +16,15 @@ const busy = ref(false),
 let timer: ReturnType<typeof setTimeout> | undefined,
   disposed = false
 async function refreshConfig() {
+  clearTimeout(timer)
+  const locale = localeStore.locale
   try {
-    const result: any = await request.get('/user/support/config')
-    if (!disposed) config.value = result
+    const result: any = await request.get('/user/support/config', { params: { locale } })
+    if (!disposed && locale === localeStore.locale) config.value = result
   } catch (e: any) {
-    if (!disposed) error.value = e.message
+    if (!disposed && locale === localeStore.locale) error.value = e.message
   } finally {
-    if (!disposed) timer = setTimeout(refreshConfig, 10000)
+    if (!disposed && locale === localeStore.locale) timer = setTimeout(refreshConfig, 10000)
   }
 }
 async function history() {
@@ -37,7 +41,7 @@ async function start() {
   busy.value = true
   error.value = ''
   try {
-    const row: any = await request.post('/user/support/sessions')
+    const row: any = await request.post('/user/support/sessions', null, { params: { locale: localeStore.locale } })
     current.value = row
     historyPage.value = 0
     await history()
@@ -72,6 +76,10 @@ function updated(row: Conversation) {
   const index = sessions.value.findIndex((s) => s.id === row.id)
   if (index >= 0) sessions.value[index] = row
 }
+watch(() => localeStore.locale, () => {
+  if (config.value) config.value.offline = ''
+  void refreshConfig()
+})
 onMounted(() => {
   void refreshConfig()
   void history()

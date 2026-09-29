@@ -87,4 +87,57 @@ class ActivityIntegrationTest {
  @Test void concurrentCloseCannotCreditProfitTwice() throws Exception {grant();ContractOrder o=contracts.createOrder(user,request("MARKET"));when(quotes.freshPrice(symbol)).thenReturn(d("110"));ExecutorService pool=Executors.newFixedThreadPool(2);try{Callable<Boolean> close=()->{try{contracts.closeOrder(user,o.getId(),null);return true;}catch(BusinessException|org.springframework.dao.OptimisticLockingFailureException e){return false;}};Future<Boolean>x=pool.submit(close),y=pool.submit(close);assertNotEquals(x.get(20,TimeUnit.SECONDS),y.get(20,TimeUnit.SECONDS));money("300",funds.available(user));money("109",cash("CONTRACT"));}finally{pool.shutdownNow();}}
  @Test void principalCannotTransferAndPublicPayloadHasNoBudget(){grant();com.gtcfesk.exchange.user.TransferController c=new com.gtcfesk.exchange.user.TransferController(users,assets,mock(TransferRecordRepository.class));com.gtcfesk.exchange.user.TransferController.TransferRequest r=new com.gtcfesk.exchange.user.TransferController.TransferRequest();r.setFromAccount("TRIAL");r.setToAccount("FUND");r.setAmount(BigDecimal.ONE);org.springframework.security.core.Authentication auth=new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(user.toString(),null);assertThrows(BusinessException.class,()->c.transfer(auth,r));Map<?,?> payload=(Map<?,?>)service.inbox(user,0).getContent().get(0).get("campaign");assertFalse(payload.containsKey("budget"));assertFalse(payload.containsKey("granted"));assertFalse(payload.containsKey("name"));money("300",funds.available(user));}
 
+ static <T> Callable<T> scoped(Callable<T> work){return work;}
+ @Test void automaticDeliveryRulesToggleAndConcurrency() throws Exception {
+  ActivityCampaign c=campaign();
+  assertFalse(c.isAutoSendEnabled());service.inbox(user,0);
+  assertFalse(deliveries.findByCampaignIdAndUserId(c.getId(),user).isPresent());
+  c.setAutoSendEnabled(true);c.setStartsAt(LocalDateTime.now().plusDays(1));service.saveAutoSend(c.getId(),c);service.inbox(user,0);
+  assertFalse(deliveries.findByCampaignIdAndUserId(c.getId(),user).isPresent());
+  c.setStartsAt(null);service.saveAutoSend(c.getId(),c);
+  ExecutorService pool=Executors.newFixedThreadPool(2);
+  try {List<Future<Object>> jobs=pool.invokeAll(Arrays.asList(scoped(()->service.inbox(user,0)),scoped(()->service.inbox(user,0))));for(Future<Object> job:jobs)job.get();}finally{pool.shutdownNow();}
+  assertEquals(1L,deliveries.countByCampaignId(c.getId()));
+  assertEquals("AUTO",deliveries.findByCampaignIdAndUserId(c.getId(),user).get().getSentBy());money("0",funds.available(user));
+  c.setAutoSendEnabled(false);service.saveAutoSend(c.getId(),c);service.inbox(other,0);
+  assertFalse(deliveries.findByCampaignIdAndUserId(c.getId(),other).isPresent());
+ }
+ @Test void automaticDeliveryRejectsIneligibleExpiredAndExhaustedCampaigns(){
+  ActivityCampaign c=campaign();c.setAutoSendEnabled(true);service.saveAutoSend(c.getId(),c);
+  UserAccount u=users.findById(user).get();u.setLastLoginAt(LocalDateTime.now().minusDays(8));users.saveAndFlush(u);service.inbox(user,0);
+  assertFalse(deliveries.findByCampaignIdAndUserId(c.getId(),user).isPresent());
+  c.setEndsAt(LocalDateTime.now().minusSeconds(1));service.saveAutoSend(c.getId(),c);service.inbox(other,0);
+  assertEquals(0L,deliveries.countByCampaignId(c.getId()));
+  c.setEndsAt(null);c.setBudget(d("300"));c.setMaxClaims(1);service.saveAutoSend(c.getId(),c);
+  ActivityDelivery delivered=send(c,other);service.claim(other,delivered.getId());
+  c.setRecentLoginDays(0);service.saveAutoSend(c.getId(),c);service.inbox(user,0);
+  assertEquals(1L,deliveries.countByCampaignId(c.getId()));service.delete(c.getId());
+ }
+ @Test void deleteRetainsFundsAndReceiptsAndPreventsFurtherOperations(){
+  ActivityCampaign c=campaign();ActivityDelivery one=send(c,user),two=send(c,other);service.claim(user,one.getId());
+  service.delete(c.getId());assertTrue(service.get(c.getId()).isDeleted());assertFalse(service.get(c.getId()).active());
+  money("300",funds.available(user));assertEquals(2L,deliveries.countByCampaignId(c.getId()));
+  assertThrows(BusinessException.class,()->service.claim(other,two.getId()));assertThrows(BusinessException.class,()->service.send(c.getId(),Arrays.asList(other),"admin"));assertThrows(BusinessException.class,()->service.save(c.getId(),c));
+  assertEquals(false,service.message(other,two.getId()).get("active"));
+ }
+ @Test void templatesRepeatUnreadAndSearch(){
+  ActivityCampaign c=campaign();c.setRepeatUnread(true);service.save(c.getId(),c);ActivityDelivery delivery=send(c,user);service.event(user,delivery.getId(),"CLOSED");
+  Map<?,?> view=(Map<?,?>)service.message(user,delivery.getId()).get("campaign");assertEquals(true,view.get("repeatUnread"));assertNull(deliveries.findById(delivery.getId()).get().getOpenedAt());
+  String email=users.findById(user).get().getEmail();assertEquals(user,service.searchRecipients(email).get(0).get("id"));assertTrue(service.searchRecipients(String.valueOf(user)).stream().anyMatch(x->user.equals(x.get("id"))));assertTrue(service.searchRecipients("%").isEmpty());
+  ActivityCampaign template=campaign();template.setTemplate(true);template.setAutoSendEnabled(true);template=service.save(template.getId(),template);assertFalse(template.isAutoSendEnabled());assertEquals("DRAFT",template.getStatus());
+  final ActivityCampaign t=template;assertThrows(BusinessException.class,()->service.saveAutoSend(t.getId(),t));assertThrows(BusinessException.class,()->service.delete(t.getId()));
+  ActivityCampaign copy=new ActivityCampaign();copy.setName(t.getName());copy.setTranslations(t.getTranslations());ActivityCampaign saved=service.save(null,copy);assertNotEquals(t.getId(),saved.getId());assertTrue(service.get(t.getId()).isTemplate());assertFalse(saved.isTemplate());
+ }
+ @Test void scheduledDeliveryReachesOfflineEligibleUsersAndIsIdempotent(){
+  ActivityCampaign c=campaign();c.setAutoSendEnabled(true);service.saveAutoSend(c.getId(),c);
+  UserAccount inactive=users.findById(other).get();inactive.setLastLoginAt(LocalDateTime.now().minusDays(9));users.saveAndFlush(inactive);
+  service.autoSendDue();assertTrue(deliveries.findByCampaignIdAndUserId(c.getId(),user).isPresent());assertFalse(deliveries.findByCampaignIdAndUserId(c.getId(),other).isPresent());
+  long count=deliveries.countByCampaignId(c.getId());service.autoSendDue();assertEquals(count,deliveries.countByCampaignId(c.getId()));money("0",funds.available(user));
+  c.setAutoSendEnabled(false);service.saveAutoSend(c.getId(),c);Long later=user();service.autoSendDue();assertFalse(deliveries.findByCampaignIdAndUserId(c.getId(),later).isPresent());
+ }
+ @Test void visualDesignPersistsAndIsReturnedToRecipients(){
+  ActivityCampaign c=campaign();String node="{\"type\":\"text\",\"text\":\"Custom design\"}";
+  c.setLayoutJson("{\"version\":1,\"locales\":{\"zh-CN\":{\"pages\":[{\"id\":\"gift\",\"nodes\":["+node+"]},{\"id\":\"detail\",\"nodes\":["+node+"]},{\"id\":\"success\",\"nodes\":["+node+"]}]}}}");
+  c=service.save(c.getId(),c);ActivityDelivery delivery=send(c,user);Map<?,?> publicView=(Map<?,?>)service.message(user,delivery.getId()).get("campaign");assertEquals(c.getLayoutJson(),publicView.get("layoutJson"));assertTrue(service.get(c.getId()).getLayoutJson().contains("Custom design"));
+ }
 }

@@ -45,7 +45,7 @@ for (const template of shareTemplates) {
     assert.equal(printed.includes('-50.00'), mode === 'amount' || mode === 'both', `${template} amount visibility`)
     assert.equal(printed.some(text => text.includes('-5.00%')), mode === 'rate' || mode === 'both', `${template} return visibility`)
     assert.equal(canvas.width, 1080)
-    assert.equal(canvas.height, 1440)
+    assert.equal(canvas.height, ({ light: 1080, gold: 675, racing: 785, aurora: 1350, receipt: 1665, journal: 720 })[template] || 1440)
     if (mode === 'rate' || mode === 'none') for (const privateValue of ['78.00ロット', '78.00 ロット', '1000.00', '3.00']) assert.ok(!printed.includes(privateValue), `${template} must hide ${privateValue}`)
   }
 }
@@ -142,7 +142,7 @@ for (const template of shareTemplates) for (const focus of ['amount', 'rate']) f
 for (const template of shareTemplates) {
   draws.length = 0
   drawSharePoster(canvas, { ...order, margin: 0 }, { ...options, template, mode: 'both', focus: 'rate' }, shareCopy('en'), 'DEMO', 'UTC', undefined, recent, {})
-  assert.equal(draws.find(d => d.y === 327)?.text, '-50.00', 'Unavailable return falls back to P&L')
+  assert.ok(draws.find(d => d.text === '-50.00').y < draws.find(d => d.text === '—').y, 'Unavailable return falls back to P&L')
   assert.ok(draws.some(d => d.text === '—' && ['#546571', '#b2c1ce'].includes(d.color)))
 }
 assert.equal(shareCopy('ja').entry, '新規約定価格')

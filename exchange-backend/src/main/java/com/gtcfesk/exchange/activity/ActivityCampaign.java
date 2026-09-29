@@ -12,9 +12,13 @@ public class ActivityCampaign {
  @Column(nullable=false,length=16) private String status="DRAFT";
  private boolean template;
  private boolean autoPopup=true;
+ private boolean autoSendEnabled;
+ private boolean repeatUnread;
+ private boolean deleted;
  @Column(nullable=false,length=16) private String animation="GIFT";
  @Column(nullable=false,length=16) private String defaultLocale="zh-CN";
  @Column(nullable=false,columnDefinition="LONGTEXT") private String translations="{}";
+ @Column(columnDefinition="LONGTEXT") private String layoutJson;
  @Column(nullable=false,precision=32,scale=16) private BigDecimal amount=new BigDecimal("300");
  private int recentLoginDays=3;
  private int maxClaims=1000;
@@ -26,5 +30,5 @@ public class ActivityCampaign {
  private LocalDateTime createdAt=LocalDateTime.now();
  private LocalDateTime updatedAt=LocalDateTime.now();
  @PreUpdate void update(){updatedAt=LocalDateTime.now();}
- public boolean active(){LocalDateTime now=LocalDateTime.now();return !template && "ACTIVE".equals(status) && (startsAt==null || !now.isBefore(startsAt)) && (endsAt==null || now.isBefore(endsAt));}
+ public boolean active(){LocalDateTime now=LocalDateTime.now();return !deleted && !template && "ACTIVE".equals(status) && (startsAt==null || !now.isBefore(startsAt)) && (endsAt==null || now.isBefore(endsAt));}
 }

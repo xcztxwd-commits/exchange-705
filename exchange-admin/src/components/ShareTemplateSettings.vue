@@ -8,7 +8,7 @@ const catalog = [
   ['light', '清爽白'], ['dark', '专业黑'], ['chart', '行情图'], ['gold', '黑金'],
   ['globe', '环球'], ['architecture', '建筑'], ['city', '城市'], ['referenceGold', '黑金原版'],
   ['referenceWhite', '白色原版'], ['referenceTerminal', '行情原版'], ['launch', '启航'],
-  ['aurora', '极光'], ['racing', '竞速'], ['receipt', '交易票据'], ['journal', '交易日志'], ['voyage', '旅程'],
+  ['aurora', '青绿星环'], ['racing', '斜切竞速'], ['receipt', '纸感票据'], ['journal', '行情终端'], ['voyage', '旅程'],
 ] as const
 const languages = [
   ['zh-TW', '中文（繁体）'], ['en', '英语'], ['fr', '法语'], ['de', '德语'], ['ru', '俄语'],

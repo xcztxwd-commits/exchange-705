@@ -13,6 +13,7 @@
     "axios": "^1.7.9",
     "echarts": "^6.0.0",
     "element-plus": "^2.13.0",
+    "grapesjs": "0.23.6",
     "pinia": "^2.2.6",
     "vue": "^3.5.24",
     "vue-router": "^4.4.5"
@@ -21,10 +22,10 @@
     "@types/node": "^24.10.1",
     "@vitejs/plugin-vue": "^4.4.0",
     "@vue/tsconfig": "^0.8.1",
+    "esbuild": "^0.18.20",
     "sass-embedded": "^1.79.4",
     "typescript": "~5.9.3",
     "vite": "^4.5.0",
-    "esbuild": "^0.18.20",
     "vue-tsc": "^3.1.4"
   }
 }

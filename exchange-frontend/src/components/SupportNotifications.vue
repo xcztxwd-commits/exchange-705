@@ -4,7 +4,7 @@ import { useAuthStore } from '@/store/auth'
 import { useRoute, useRouter } from 'vue-router'
 import request from '@/utils/request'
 import { supportText, supportUrl } from '@/utils/support'
-const props = withDefaults(defineProps<{ admin?: boolean; enabled?: boolean }>(), {
+const props = withDefaults(defineProps<{ admin?: boolean; enabled?: boolean; inboxTarget?: string }>(), {
   admin: false,
   enabled: true,
 })
@@ -83,6 +83,12 @@ onUnmounted(() => {
 })
 </script>
 <template>
+  <Teleport v-if="auth.token && !admin && inboxTarget" :to="inboxTarget" defer>
+    <button class="header-inbox-button" type="button" :aria-label="t('站内信', 'Inbox')" :title="t('站内信', 'Inbox')" @click="router.push('/inbox')">
+      <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="m4 7 8 6 8-6"/></svg>
+      <b v-if="state.inboxUnread">{{ state.inboxUnread > 99 ? '99+' : state.inboxUnread }}</b>
+    </button>
+  </Teleport>
   <nav
     v-if="
       auth.token && enabled && route.path !== '/inbox' && (state.mode === 'internal' || state.inboxEnabled)
@@ -102,7 +108,7 @@ onUnmounted(() => {
       }}<b v-if="state.waiting + state.chatUnread">{{ state.waiting + state.chatUnread }}</b>
     </button>
     <button
-      v-if="!admin && state.inboxEnabled && !['/customer-service', '/inbox'].includes(route.path)"
+      v-if="!admin && !inboxTarget && state.inboxEnabled && !['/customer-service', '/inbox'].includes(route.path)"
       @click="router.push('/inbox')"
     >
       {{ t('站内信', 'Inbox') }}<b v-if="state.inboxUnread">{{ state.inboxUnread }}</b>
@@ -125,6 +131,8 @@ onUnmounted(() => {
   </nav>
 </template>
 <style scoped>
+.header-inbox-button{position:relative;display:flex;align-items:center;justify-content:center;width:36px;height:36px;padding:6px;border:0;background:transparent;color:inherit;cursor:pointer;border-radius:6px}.header-inbox-button:hover{color:#73b100}.header-inbox-button:focus-visible{outline:2px solid #73b100;outline-offset:2px}.header-inbox-button b{position:absolute;top:-3px;right:-5px;min-width:16px;padding:0 4px;border-radius:10px;background:#739f32;color:white;font:11px/16px sans-serif}
+
 .support-notifications {
   display: flex;
   align-items: center;

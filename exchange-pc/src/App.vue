@@ -2,7 +2,8 @@
   <el-config-provider :locale="elementLocales[localeStore.locale]">
     <AccountModeSwitch v-if="auth.token" real-path="/" />
     <router-view :key="auth.user?.id" />
-    <SupportNotifications />
+    <SupportNotifications :key="auth.user?.id" :inbox-target="route.path === '/' ? '#header-inbox' : undefined" />
+    <ActivityCenter v-if="auth.token" hide-trigger />
   </el-config-provider>
 </template>
 
@@ -11,6 +12,9 @@ import { onMounted, onUnmounted, watch } from 'vue'
 import { useAuthStore } from '@/store/auth'
 import { useLocaleStore } from '@/store/locale'
 import request from '@/utils/request'
+import { useRoute } from 'vue-router'
+const route = useRoute()
+import ActivityCenter from '@/components/ActivityCenter.vue'
 import SupportNotifications from '@/components/SupportNotifications.vue'
 import AccountModeSwitch from '@/components/AccountModeSwitch.vue'
 import { ElConfigProvider } from 'element-plus'
@@ -89,5 +93,15 @@ onUnmounted(() => {
 
 
 <style>
-body:has(.account-mode-bar) .trade-page.h-screen { height: calc(100dvh - 56px); }
+/* Let the actual banner height determine the desktop workspace, not a fixed offset. */
+@media (min-width: 1200px) {
+  #app:has(> .trade-page) {
+    display: flex;
+    flex-direction: column;
+    height: 100dvh;
+    min-height: 0;
+  }
+  #app > .account-mode-bar { flex-shrink: 0; }
+  #app > .trade-page { flex: 1; min-height: 0; height: auto; }
+}
 </style>

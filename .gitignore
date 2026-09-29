@@ -74,3 +74,8 @@ dist-e2e/
 dist-multitenant/
 
 !exchange-backend/src/main/resources/db/migration/widen_admin_menu_code.sql
+
+# Reviewed non-tenant activity and support release migrations.
+!exchange-backend/src/main/resources/db/migration/V2026092903__activity_delivery_settings.sql
+!exchange-backend/src/main/resources/db/migration/V2026092904__activity_template_design.sql
+!exchange-backend/src/main/resources/db/manual/705-support-utf8mb4.sql

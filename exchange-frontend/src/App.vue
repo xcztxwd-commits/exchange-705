@@ -1,7 +1,8 @@
 <template>
   <AccountModeSwitch v-if="auth.token" real-path="/trade" />
     <router-view :key="auth.user?.id" />
-    <SupportNotifications />
+    <SupportNotifications :key="auth.user?.id" :inbox-target="route.path === '/home' ? '#header-inbox' : undefined" />
+    <ActivityCenter v-if="auth.token" hide-trigger />
 </template>
 
 <script setup lang="ts">
@@ -9,6 +10,9 @@ import { onMounted, onUnmounted, watch } from 'vue'
 import { useAuthStore } from '@/store/auth'
 import { useLocaleStore } from '@/store/locale'
 import request from '@/utils/request'
+import { useRoute } from 'vue-router'
+const route = useRoute()
+import ActivityCenter from '@/components/ActivityCenter.vue'
 import SupportNotifications from '@/components/SupportNotifications.vue'
 import AccountModeSwitch from '@/components/AccountModeSwitch.vue'
 

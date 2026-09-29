@@ -840,7 +840,7 @@ function cardMetrics(order: any): Array<{ label: string; value: string }> {
   const unit = orderUnit(order)
   const withUnit = (label: string, currency = priceUnit(order)) => currency ? `${label}(${currency})` : label
   if (cardKind.value === 'positions') return [
-    { label: withUnit(copy('開倉價', 'Entry price')), value: formatPrice(order.openPrice) },
+    { label: withUnit(localeStore.t('openPrice')), value: formatPrice(order.openPrice) },
     { label: withUnit(localeStore.t('currentPrice')), value: formatPrice(order.currentPrice) },
     { label: withUnit(localeStore.t('margin'), unit), value: formatMoney(order.margin) },
     { label: copy('持倉數量', 'Position size'), value: `${order.lots} ${quantityUnit(order, localeStore.t('lots'))}` },
@@ -857,7 +857,7 @@ function cardMetrics(order: any): Array<{ label: string; value: string }> {
   ]
   if (cardKind.value === 'history') return [
     { label: withUnit(localeStore.t('margin'), unit), value: formatMoney(order.margin) },
-    { label: withUnit(copy('開倉價', 'Entry price')), value: formatPrice(order.openPrice) },
+    { label: withUnit(localeStore.t('openPrice')), value: formatPrice(order.openPrice) },
     { label: withUnit(copy('平倉價', 'Exit price')), value: formatPrice(order.closePrice) },
     { label: copy('平倉數量', 'Closed size'), value: `${order.lots} ${quantityUnit(order, localeStore.t('lots'))}` },
     { label: withUnit(localeStore.t('fee'), unit), value: displayFee(order.fee) },

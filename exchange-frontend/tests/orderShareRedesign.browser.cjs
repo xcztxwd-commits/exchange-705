@@ -1,6 +1,6 @@
 const { chromium } = require(process.env.PLAYWRIGHT_PATH || 'C:/Users/徐乾妖/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright')
 const assert = require('node:assert/strict'), fs = require('node:fs'), path = require('node:path')
-const out = path.resolve('reports/share-redesign-20260928')
+const out = path.resolve(process.env.SHARE_QA_OUTPUT || 'reports/share-redesign-20260928')
 fs.mkdirSync(out,{recursive:true})
 const all = ['light','dark','chart','gold','globe','architecture','city','referenceGold','referenceWhite','referenceTerminal','launch','aurora','racing','receipt','journal','voyage']
 const raw = { id: 3391, symbol: 'USDJPY', status: 'CLOSED', side: 'SELL', profit: -50, openPrice: 161.24, closePrice: 161.305, margin: 1000, quantity: 78, fee: 3, openTime: '2026-09-27T12:00:00+08:00', closeTime: '2026-09-27T12:53:00+08:00' }
@@ -8,8 +8,9 @@ const raw = { id: 3391, symbol: 'USDJPY', status: 'CLOSED', side: 'SELL', profit
 const browser = await chromium.launch({executablePath:process.env.CHROME_PATH || 'C:/Program Files/Google/Chrome/Application/chrome.exe',headless:true})
 const results=[]
 try {
-for (const port of [5193,5195]) {
- const page=await browser.newPage({viewport:{width:port===5193?390:1440,height:900}}), errors=[]
+const ports=(process.env.SHARE_QA_PORTS || "5193,5195").split(",").map(Number)
+for (const port of ports) {
+ const page=await browser.newPage({viewport:{width:port===ports[0]?390:1440,height:900}}), errors=[]
  page.on('pageerror', e=>errors.push(e.message))
  await page.route('**/__qa',r=>r.fulfill({contentType:'text/html',body:'<!doctype html><html><body style="margin:0"><div id="app"></div></body></html>'}))
  const requested=[]
@@ -33,18 +34,18 @@ for (const port of [5193,5195]) {
   const {useLocaleStore}=await import('/src/store/locale.ts'),{default:Modal}=await import('/src/components/OrderShareModal.vue')
   const pinia=createPinia();setActivePinia(pinia);window.locale=useLocaleStore();window.locale.setLocale('zh-TW')
   createApp({render:()=>h(Modal,{orderId:3391,kind:'contract',brand:'DEMO',desktop})}).use(pinia).mount('#app')
- },{desktop:port===5195})
+ },{desktop:port===ports[1]})
  await page.locator('.poster-preview').waitFor();await page.waitForFunction(()=>!document.querySelector('.pnl-save').disabled)
  assert.equal(await page.locator('.pnl-template').count(),2)
- assert.ok(await page.evaluate(()=>window.draws.some(d=>d.text==='-5.00%'&&d.y===327)), 'Admin focus reaches actual modal')
- assert.equal(await page.locator('.pnl-template[aria-pressed="true"]').innerText(),'黑金山巒')
+ assert.ok(await page.evaluate(()=>window.draws.some(d=>d.text==='-5.00%'&&d.y===254)), 'Admin focus reaches actual modal')
+ assert.equal(await page.locator('.pnl-template[aria-pressed="true"]').innerText(),'黑金橫幅')
  await page.screenshot({path:path.join(out,`modal-${port}-zh.png`)})
  await page.evaluate(()=>window.locale.setLocale('ja'))
  await page.waitForFunction(()=>document.querySelector('.pnl-template[aria-pressed="true"]')?.textContent.includes('ホワイトチャート')&&!document.querySelector('.pnl-save').disabled)
  assert.equal(await page.locator('.pnl-template').count(),2)
  await page.screenshot({path:path.join(out,`modal-${port}-ja.png`)})
  await page.evaluate(()=>{window.locale.setLocale('en');window.locale.setLocale('zh-TW')})
- await page.waitForFunction(()=>document.querySelector('.pnl-template[aria-pressed="true"]')?.textContent.includes('黑金山巒')&&!document.querySelector('.pnl-save').disabled)
+ await page.waitForFunction(()=>document.querySelector('.pnl-template[aria-pressed="true"]')?.textContent.includes('黑金橫幅')&&!document.querySelector('.pnl-save').disabled)
  assert.equal(await page.locator('.pnl-template').count(),2)
  assert.ok(requested.includes('ja')&&requested.includes('zh-TW'))
  await page.evaluate(()=>{window.locale.setLocale('en')})
@@ -62,7 +63,7 @@ for (const port of [5193,5195]) {
    return count
  },{raw})
  assert.equal(count,608)
- if(port===5193){
+ if(port===ports[0]){
   await page.setViewportSize({width:1200,height:1600})
   for(const locale of ['zh-TW','ja','en','ar','de','my'])for(const focus of ['amount','rate']){
    await page.evaluate(({locale,focus})=>{document.querySelector('dialog')?.close();document.body.style.overflow='auto';document.body.innerHTML='<main style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;background:#d6dce0;padding:12px"></main>';const main=document.querySelector('main');for(const [key,src]of Object.entries(window.gallery).filter(([k])=>k.startsWith(locale+'-')&&k.endsWith('-'+focus))){const div=document.createElement('div');div.innerHTML=`<div style="font:15px Arial;padding:8px">${key}</div><img style="width:100%;display:block" src="${src}">`;main.append(div)}},{locale,focus})

@@ -64,7 +64,8 @@ public class SupportService {
         if (admin && (!subject(true).equals(c.getAdminId()) || !"ACTIVE".equals(c.getStatus()))) deny();
         if (admin) permission("support", "reply");
     }
-    public SupportConversation start(String ip) {
+    public SupportConversation start(String ip) { return start(ip, null); }
+    public SupportConversation start(String ip, String locale) {
         Long user = subject(false);
         if (em.find(UserAccount.class, user, LockModeType.PESSIMISTIC_WRITE) == null) deny();
         enabled(false);
@@ -75,7 +76,7 @@ public class SupportService {
         if (recent >= 10) throw failure(HttpStatus.TOO_MANY_REQUESTS, "会话创建过于频繁，请稍后重试");
         SupportConversation c = new SupportConversation(); c.setUserId(user); c.setActiveUserId(user); c.setClientIp(ip);
         em.persist(c);
-        append(c, "SYSTEM", 0L, UUID.randomUUID().toString(), settings.welcome(settings.get(), ip), null);
+        append(c, "SYSTEM", 0L, UUID.randomUUID().toString(), settings.welcome(settings.get(), ip, locale), null);
         return c;
     }
     public List<SupportConversation> sessions(boolean admin, String scope, int page) {
@@ -283,6 +284,25 @@ public class SupportService {
         return out;
     }
     static void token(String id) { if (id == null || !id.matches("[a-zA-Z0-9_-]{16,64}")) throw new IllegalArgumentException(); }
+    @Transactional(readOnly = true)
+    public List<Map<String,Object>> searchRecipients(String query) {
+        permission("inbox", "send"); enabled(true);
+        String text = query == null ? "" : query.trim();
+        if (text.isEmpty()) return Collections.emptyList();
+        if (text.length() > 128) throw failure(HttpStatus.BAD_REQUEST, "搜索内容不能超过 128 字符");
+        long id = -1;
+        if (text.matches("[0-9]+")) {
+            try { id = Long.parseLong(text); } catch (NumberFormatException ignored) { /* Still search numeric email text. */ }
+        }
+        String email = "%" + text.toLowerCase(Locale.ROOT).replace("!", "!!").replace("%", "!%").replace("_", "!_") + "%";
+        List<Object[]> rows = em.createQuery("select u.id, u.email from UserAccount u where (u.id=:id or lower(u.email) like :email escape '!') order by u.id", Object[].class)
+            .setParameter("id", id).setParameter("email", email).setMaxResults(20).getResultList();
+        List<Map<String,Object>> result = new ArrayList<>();
+        for (Object[] row : rows) {
+            Map<String,Object> user = new LinkedHashMap<>(); user.put("id", row[0]); user.put("email", row[1]); result.add(user);
+        }
+        return result;
+    }
     public List<InboxLetter> inbox(boolean admin, int page) {
         Long id = subject(admin); if (page < 0 || page > 100000) throw new IllegalArgumentException();
         if (admin) permission("inbox", ""); else enabled(true);

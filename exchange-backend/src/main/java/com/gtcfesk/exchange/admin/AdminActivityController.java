@@ -11,7 +11,10 @@ import java.util.*;
 @RestController @RequestMapping("/api/admin/activities") @RequiredArgsConstructor
 public class AdminActivityController {
  private final ActivityService service;private final ActivityCampaignRepository campaigns;private final ActivityDeliveryRepository deliveries;private final TrialFunds funds;private final TrialLedgerRepository ledger;
- @GetMapping @AdminPermission(menu="announcement",action="") public Object list(@RequestParam(defaultValue="0") int page){return campaigns.findAll(PageRequest.of(Math.max(0,page),50,Sort.by(Sort.Direction.DESC,"id")));}
+ @GetMapping @AdminPermission(menu="announcement",action="") public Object list(@RequestParam(defaultValue="0") int page,@RequestParam(defaultValue="false") boolean template){return campaigns.findAll((root,q,cb)->cb.and(cb.isFalse(root.get("deleted")),cb.equal(root.get("template"),template)), PageRequest.of(Math.max(0,page),50,Sort.by(Sort.Direction.DESC,"id")));}
+ @GetMapping("/recipients/search") @AdminPermission(menu="announcement",action="edit") public Object search(@RequestParam String query){return service.searchRecipients(query);}
+ @PutMapping("/{id}/auto-send") @AdminPermission(menu="announcement",action="edit") public Object autoSend(@PathVariable Long id,@RequestBody ActivityCampaign input){return service.saveAutoSend(id,input);}
+ @DeleteMapping("/{id}") @AdminPermission(menu="announcement",action="delete") public Object delete(@PathVariable Long id){service.delete(id);return Collections.singletonMap("deleted",true);}
  @PostMapping @AdminPermission(menu="announcement",action="create") public Object create(@RequestBody ActivityCampaign input){return service.save(null,input);}
  @PutMapping("/{id}") @AdminPermission(menu="announcement",action="edit") public Object edit(@PathVariable Long id,@RequestBody ActivityCampaign input){return service.save(id,input);}
  @PostMapping("/{id}/send") @AdminPermission(menu="announcement",action="edit") public Object send(@PathVariable Long id,@RequestBody List<Long> ids,Authentication a){return service.send(id,ids,a.getName());}

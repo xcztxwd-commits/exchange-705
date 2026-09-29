@@ -1,5 +1,5 @@
 <template>
-  <div :style="{ height: auth.token ? 'calc(100dvh - 56px)' : '100dvh' }" class="trade-page h-screen w-screen flex flex-col bg-white dark:bg-[#131722] text-gray-800 dark:text-gray-100 text-sm overflow-hidden font-sans">
+  <div class="trade-page h-screen w-full flex flex-col bg-white dark:bg-[#131722] text-gray-800 dark:text-gray-100 text-sm overflow-hidden font-sans">
     <OrderShareModal v-if="shareOrder" :order-id="shareOrder.id" :kind="shareOrder.kind" brand="GTCFX" desktop @close="shareOrder = null" />
     <el-dialog v-model="kycPromptOpen" :title="localeStore.t('verification')" width="min(440px, 94vw)">
       <p role="alert">{{ kycPromptMessage }}</p>
@@ -30,6 +30,7 @@
         <button @click="showWealth = true" class="hover:text-[#8cc63f] flex items-center transition-colors"><el-icon class="mr-1 text-lg"><Coin /></el-icon> {{ localeStore.t('financialManagement') }}</button>
         <AppSelect style="width: 150px" :model-value="localeStore.locale" :options="languageOptions" :label="localeStore.t('language')" :compact="true" :min-menu-width="190" @update:model-value="handleLangChange(String($event))" />
         
+        <span id="header-inbox" class="header-inbox"></span>
         <el-switch v-model="isDarkMode" @change="toggleDarkMode" class="ml-2" style="--el-switch-on-color: #2c2c2c; --el-switch-off-color: #e5e7eb">
           <template #active-action>
             <el-icon><Moon /></el-icon>
@@ -172,7 +173,7 @@
                    <th class="py-3 px-2 font-medium whitespace-nowrap">{{ localeStore.t('direction') }}</th>
                    <th class="py-3 px-2 font-medium whitespace-nowrap">{{ localeStore.t('amountShort') }}</th>
                    <th class="py-3 px-2 font-medium whitespace-nowrap">{{ localeStore.t('buyPrice') }}</th>
-                   <th class="py-3 px-2 font-medium whitespace-nowrap">{{ localeStore.t('settlePrice') }}</th>
+                   <th class="py-3 px-2 font-medium whitespace-nowrap">{{ localeStore.text('結算價', 'Settlement price') }}</th>
                    <th class="py-3 px-2 font-medium whitespace-nowrap">{{ localeStore.t('periodSec') }}</th>
                    <th class="py-3 px-2 font-medium whitespace-nowrap">{{ localeStore.t('estProfit') }}</th>
                    <th class="py-3 px-2 font-medium whitespace-nowrap">{{ localeStore.t('actualProfit') }}</th>
@@ -598,6 +599,7 @@
     <el-dialog v-model="showUserCenter" :title="localeStore.t('tabbarPersonalCenter')" width="900px" class="custom-dialog rounded-xl p-0 overflow-hidden">
       <div class="flex h-[550px] -mx-4 -mb-4 -mt-2">
         <div class="w-56 border-r border-gray-200 dark:border-[#2b3139] overflow-y-auto bg-gray-50 dark:bg-[#181c27]/50 py-4 custom-scrollbar">
+          <AccountModeSwitch v-if="auth.token" placement="menu" real-path="/" class="user-demo-entry" />
           <div v-for="item in userMenus" :key="item.id" 
                @click="activeUserMenu = item.id"
                :class="['px-6 py-3.5 cursor-pointer text-sm font-medium transition-colors relative', activeUserMenu === item.id ? 'bg-white dark:bg-[#131722] text-[#8cc63f] shadow-[0_2px_8px_rgba(0,0,0,0.04)] z-10' : 'hover:bg-gray-100 dark:hover:bg-[#2b3139] dark:bg-[#2b3139] text-gray-600 dark:text-gray-300']">
@@ -1531,6 +1533,8 @@
 </template>
 
 <script setup lang="ts">
+
+import AccountModeSwitch from '@/components/AccountModeSwitch.vue';
 import { accountMode } from "@/utils/accountMode";
 const simulation = accountMode() === "DEMO";
 import TrialAccountCard from '@/components/TrialAccountCard.vue'

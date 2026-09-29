@@ -206,7 +206,7 @@ public class FileUploadController {
             System.out.println("[FileUploadController] 文件存在: " + fileExists + ", 大小: " + fileSize + " bytes");
 
             // 返回文件URL
-            String fileUrl = "/api/uploads/audio/" + filename;
+            String fileUrl = (simulation != null && simulation.enabled() ? "/demo-uploads/audio/" : "/api/uploads/audio/") + filename;
 
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", true);

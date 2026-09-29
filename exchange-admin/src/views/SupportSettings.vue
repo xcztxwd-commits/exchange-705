@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import request from '@/utils/request'
 import { can } from '@/utils/access'
@@ -7,6 +7,29 @@ import { supportUrl } from '@/utils/support'
 const settings = ref<any>(),
   busy = ref(false),
   error = ref('')
+const replyLocale = ref('')
+const languages = [
+  ['zh-CN', '简体中文'], ['zh-TW', '繁體中文'], ['en', 'English'], ['ja', '日本語'],
+  ['ko', '한국어'], ['fr', 'Français'], ['de', 'Deutsch'], ['ru', 'Русский'],
+  ['es', 'Español'], ['pt', 'Português'], ['it', 'Italiano'], ['ar', 'العربية'],
+  ['tr', 'Türkçe'], ['id', 'Bahasa Indonesia'], ['my', 'မြန်မာ'], ['hi', 'हिंदी'],
+  ['cs', 'Čeština'], ['pl', 'Polski'], ['th', 'ไทย'], ['vi', 'Tiếng Việt'],
+]
+function replyField(field: 'welcome' | 'offline') {
+  return computed({
+    get: () => replyLocale.value
+      ? settings.value?.replies?.[replyLocale.value]?.[field] || ''
+      : settings.value?.[field] || '',
+    set: (value: string) => {
+      if (!replyLocale.value) settings.value[field] = value
+      else {
+        settings.value.replies[replyLocale.value] ||= { welcome: '', offline: '' }
+        settings.value.replies[replyLocale.value][field] = value
+      }
+    },
+  })
+}
+const welcome = replyField('welcome'), offline = replyField('offline')
 const sounds = [
   { label: '清脆三音 · 新客户', value: '/api/user/support/tones/arrival.wav' },
   { label: '柔和双音 · 新回复', value: '/api/user/support/tones/reply.wav' },
@@ -15,6 +38,8 @@ const sounds = [
 async function load() {
   try {
     settings.value = await request.get('/admin/support/settings')
+    settings.value.replies ||= {}
+    settings.value.fallbackLocale ||= ''
   } catch (e: any) {
     error.value = e.message
   }
@@ -80,18 +105,31 @@ onMounted(load)
       </div>
       <div class="setting-card">
         <h2>02 / 欢迎与离线回复</h2>
-        <el-form-item label="默认初始回复语"
+        <el-form-item label="编辑回复语言">
+          <el-select v-model="replyLocale" :empty-values="[null, undefined]" aria-label="编辑回复语言">
+            <el-option label="默认回复（兼容原配置）" value="" />
+            <el-option v-for="[value, label] in languages" :key="value" :label="label" :value="value" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="未选择或未配置语言时的回退语言">
+          <el-select v-model="settings.fallbackLocale" :empty-values="[null, undefined]" aria-label="回退语言">
+            <el-option label="默认回复" value="" />
+            <el-option v-for="[value, label] in languages" :key="value" :label="label" :value="value" />
+          </el-select>
+        </el-form-item>
+        <p class="hint">按用户当前页面语言发送欢迎语和显示离线提示。对应内容留空时，依次使用回退语言、默认回复。切换编辑语言不会丢失草稿，全部语言统一保存；已发送的历史消息不变。</p>
+        <el-form-item label="欢迎回复"
           ><el-input
-            v-model="settings.welcome"
+            v-model="welcome"
             type="textarea"
             :rows="3"
             maxlength="2000"
             show-word-limit /></el-form-item
         ><el-form-item label="离线提示"
-          ><el-input v-model="settings.offline" type="textarea" :rows="2" maxlength="2000" show-word-limit
+          ><el-input v-model="offline" type="textarea" :rows="2" maxlength="2000" show-word-limit
         /></el-form-item>
         <p class="hint">
-          IP 规则按顺序匹配，首条命中生效；未命中使用默认回复。支持 IPv4、IPv6 及 CIDR
+          IP 规则优先于语言匹配，按顺序首条命中生效（仅覆盖欢迎语）；未命中按页面语言回复。支持 IPv4、IPv6 及 CIDR
           网段，不依赖不可靠的国家猜测。
         </p>
         <div v-for="(rule, index) in settings.rules" :key="index" class="ip-rule">

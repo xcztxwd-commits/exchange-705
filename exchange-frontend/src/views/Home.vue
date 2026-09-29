@@ -795,6 +795,7 @@ const logoUrl = '/img/logo.svg'
           <button class="icon-btn" @click="router.push('/customer-service')">
             <img src="/img/kf.png" :alt="localeStore.t('customerService')" />
           </button>
+          <span id="header-inbox" class="header-inbox"></span>
           <button class="icon-btn" @click="router.push('/language')">
             <img src="/img/yy.png" :alt="localeStore.t('language')" />
           </button>

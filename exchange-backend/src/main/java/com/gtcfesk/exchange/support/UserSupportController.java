@@ -16,13 +16,13 @@ public class UserSupportController {
     private String trustedProxies = "";
     public static class Send { public String requestId; public String text; }
     public static class Read { public long through; }
-    @GetMapping("/config") public Map<String,Object> config() { return settings.publicConfig(); }
+    @GetMapping("/config") public Map<String,Object> config(@RequestParam(required = false) String locale) { return settings.publicConfig(locale); }
     @GetMapping("/tones/{name}") public ResponseEntity<?> tone(@PathVariable String name) {
         if (!Arrays.asList("arrival.wav", "reply.wav").contains(name)) return ResponseEntity.notFound().build();
         return ResponseEntity.ok().contentType(MediaType.parseMediaType("audio/wav")).cacheControl(CacheControl.maxAge(1, java.util.concurrent.TimeUnit.DAYS))
             .body(new ClassPathResource("support-tones/" + name));
     }
-    @PostMapping("/sessions") public SupportConversation start(HttpServletRequest request) {
+    @PostMapping("/sessions") public SupportConversation start(HttpServletRequest request, @RequestParam(required = false) String locale) {
         // Only trust a forwarded address when the immediate peer belongs to an explicitly configured proxy CIDR.
         String ip = request.getRemoteAddr();
         for (String cidr : trustedProxies.split(",")) {
@@ -35,7 +35,7 @@ public class UserSupportController {
                 break;
             }
         }
-        return service.start(ip);
+        return service.start(ip, locale);
     }
     @GetMapping("/sessions") public List<SupportConversation> sessions(@RequestParam(defaultValue = "0") int page) { return service.sessions(false, "mine", page); }
     @GetMapping("/sessions/{id}") public Map<String,Object> detail(@PathVariable long id, @RequestParam(defaultValue = "0") long after) { return service.detail(id, false, after); }
