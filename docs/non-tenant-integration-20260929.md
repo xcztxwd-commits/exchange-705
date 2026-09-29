@@ -1,0 +1,540 @@
+# 非多租户代码合并清单（2026-09-29）
+
+基线：`06571b8`。从独立工作树提取修改，未直接提交正在开发的多租户工作区。未部署，未连接生产数据库。
+
+## 已合并范围
+
+- 修复行情返回 List 类型、WebSocket 心跳测试时序。
+- 恢复行情 K 线每 500 条批量落库和等价性/回滚/并发测试；保留原事务和业务语义。
+- 后台轮询改为完成后调度，失败退避，注销/卸载清理；保留权限刷新。
+- production compose 独立保留 4 GB JVM 堆配置；没有运行部署。
+- 账户查看权限按钮、同源 API 默认地址、音频格式验证、日志敏感字段脱敏、登录调试输出移除、SQL 日志关闭、客服链接复用、登录态变化刷新客服图片。
+- 修复三份旧后台测试的请求注入和表格 key 解析；不改生产页面来迎合测试。
+- 从被忽略的性能报告中恢复候选索引及回滚 SQL，移入测试资源；仅显式测试使用，不是启动迁移。
+
+## 暂缓范围及理由
+
+租户实体/仓储/SQL 范围、控制台、租户身份和策略、资金控制审计、租户文件/音频路径、租户出站 SMTP/客服策略、在线活动隔离、强制初始密码、迁移脚本与文档均为同一多租户功能链，不拆散提交。`ddl-auto: validate` 和 Vite Host 转发调整也随租户改造暂缓。混合文件只提取独立片段，其余原样保留本地。
+
+旧 yahoo-ws-deploy 和 mobile-transition-deploy 工作树的有效修改已包含在基线；未拿旧文件覆盖新代码。restore-2024-integration 的旧恢复计划不属于最新运行代码，未合并。
+
+## 验证
+
+初轮后端 Docker/Maven：2279 项，失败 0、错误 0、跳过 27（包含需显式环境的 MySQL/长时间 soak 测试）；最终配置变更另行重跑。三端 Docker 构建均通过。Node：后台 20、移动端 9、PC 58、订单分享 1，全部通过。没有把跳过测试当作通过，也没有声称完成生产压测。
+
+完整原始快照、差异、哈希及构建日志保留于本机 `C:/workspace/fx/new/non-tenant-merge-20260929`，不提交可能包含本地环境信息的原始日志。工作区仍在并行产生租户变更；清单为本次捕获时点。
+
+## 逐文件提交范围
+
+- `.gitignore`
+- `compose.production.yaml`
+- `exchange-admin/src/components/AccountInspection.vue`
+- `exchange-admin/src/utils/readPolling.ts`
+- `exchange-admin/src/views/AgentManagement.vue`
+- `exchange-admin/src/views/AgentPerformance.vue`
+- `exchange-admin/src/views/Layout.vue`
+- `exchange-admin/src/views/Login.vue`
+- `exchange-admin/src/views/Roles.vue`
+- `exchange-admin/tests/depositCustomerSearch.test.mjs`
+- `exchange-admin/tests/orderSoftDelete.test.mjs`
+- `exchange-admin/tests/readPolling.test.mjs`
+- `exchange-admin/tests/tablePreferences.test.mjs`
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/common/FileUploadController.java`
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/common/LogRedaction.java`
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/market/ControlHistoryStore.java`
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/market/MarketQuoteSource.java`
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/user/CustomerServiceController.java`
+- `exchange-backend/src/main/resources/application.yml`
+- `exchange-backend/src/test/java/com/gtcfesk/exchange/common/AudioValidationTest.java`
+- `exchange-backend/src/test/java/com/gtcfesk/exchange/market/ExchangeConnectionTest.java`
+- `exchange-backend/src/test/java/com/gtcfesk/exchange/market/KlineRetentionRegressionTest.java`
+- `exchange-backend/src/test/java/com/gtcfesk/exchange/market/ReceivedIndexRegressionTest.java`
+- `exchange-backend/src/test/java/com/gtcfesk/exchange/market/SourceCandlesBatchRegressionTest.java`
+- `exchange-backend/src/test/resources/performance/candidate-received-indexes.sql`
+- `exchange-backend/src/test/resources/performance/rollback-received-indexes.sql`
+- `exchange-frontend/src/components/SupportImage.vue`
+
+## 未提交及混合文件清单
+
+- `compose.multitenant-test.yaml` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `compose.production.yaml` — 独立修改已合入；同文件租户改动保留本地
+- `docs/multi-tenant-execution-order-20260929.md` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `docs/multitenant-funds-outbound-readiness-20260929.md` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `docs/multitenant-identity-control-implementation-20260929.md` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `docs/multitenant-migration-runbook-20260929.md` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `docs/multitenant-private-files-20260929.md` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `docs/multitenant-schema-inventory-20260929.md` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `docs/multitenant-source-isolation-20260929.md` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-admin/control/index.html` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-admin/control/main.ts` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-admin/MULTITENANT.md` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-admin/package.json` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-admin/src/components/AccountInspection.vue` — 独立修改已合入；同文件租户改动保留本地
+- `exchange-admin/src/components/BackendAccounts.vue` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-admin/src/components/ManualDepositDialog.vue` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-admin/src/components/OnlineUsers.vue` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-admin/src/components/ProtectedElementImage.vue` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-admin/src/components/ShareTemplateSettings.vue` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-admin/src/components/SymbolCatalogDialog.vue` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-admin/src/components/TenantPolicyNotice.vue` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-admin/src/composables/useTenantPolicies.ts` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-admin/src/control/api.ts` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-admin/src/control/App.vue` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-admin/src/control/AuditSecurity.vue` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-admin/src/control/BusinessSupervision.vue` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-admin/src/control/ChatSupervision.vue` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-admin/src/control/ControlAccounts.vue` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-admin/src/control/ControlAttachment.vue` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-admin/src/control/openTenant.ts` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-admin/src/control/StatisticsSupervision.vue` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-admin/src/control/SupervisionRecords.vue` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-admin/src/control/TenantManager.vue` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-admin/src/router/index.ts` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-admin/src/store/auth.ts` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-admin/src/utils/adminSession.ts` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-admin/src/utils/audioUrl.ts` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-admin/src/utils/imageUrl.ts` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-admin/src/utils/readPolling.ts` — 独立修改已合入；同文件租户改动保留本地
+- `exchange-admin/src/utils/request.ts` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-admin/src/utils/support.ts` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-admin/src/utils/tenantPolicies.ts` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-admin/src/views/AccessEnded.vue` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-admin/src/views/AgentManagement.vue` — 独立修改已合入；同文件租户改动保留本地
+- `exchange-admin/src/views/AgentPerformance.vue` — 独立修改已合入；同文件租户改动保留本地
+- `exchange-admin/src/views/ControlExchange.vue` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-admin/src/views/DepositOrders.vue` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-admin/src/views/DepositReview.vue` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-admin/src/views/DepositSettings.vue` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-admin/src/views/FinancialProducts.vue` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-admin/src/views/KycReview.vue` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-admin/src/views/Layout.vue` — 独立修改已合入；同文件租户改动保留本地
+- `exchange-admin/src/views/LoanPersonalInfoReview.vue` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-admin/src/views/LoanReview.vue` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-admin/src/views/Login.vue` — 独立修改已合入；同文件租户改动保留本地
+- `exchange-admin/src/views/Roles.vue` — 独立修改已合入；同文件租户改动保留本地
+- `exchange-admin/src/views/Settings.vue` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-admin/src/views/SupportSettings.vue` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-admin/src/views/Symbols.vue` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-admin/src/views/Users.vue` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-admin/src/views/WebsiteSecurity.vue` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-admin/tests/controlSupervision.test.mjs` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-admin/tests/readPolling.test.mjs` — 独立修改已合入；同文件租户改动保留本地
+- `exchange-admin/tests/tenantSession.test.mjs` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-admin/vite.config.js` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-admin/vite.config.ts` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-admin/vite.control.config.ts` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/activity/ActivityCampaign.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/activity/ActivityCampaignRepository.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/activity/ActivityController.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/activity/ActivityDelivery.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/activity/ActivityDeliveryRepository.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/activity/ActivityService.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/activity/TrialAccount.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/activity/TrialAccountRepository.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/activity/TrialFunds.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/activity/TrialLedger.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/activity/TrialLedgerRepository.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/admin/AdminAccountInspectionController.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/admin/AdminAccountQueryController.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/admin/AdminActivityController.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/admin/AdminAnnouncementController.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/admin/AdminAuthService.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/admin/AdminDataInitializer.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/admin/AdminDurationController.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/admin/AdminFinancialController.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/admin/AdminFinancialService.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/admin/AdminFinancialYieldController.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/admin/AdminFinancialYieldService.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/admin/AdminManagementController.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/admin/AdminMenuController.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/admin/AdminOrderController.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/admin/AdminPermissionService.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/admin/AdminRoleService.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/admin/AdminSymbolService.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/admin/AdminTablePreferenceController.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/admin/AdminTenantPolicyController.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/admin/AdminUser.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/admin/AdminUserRepository.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/admin/AdminUserService.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/admin/AdminWalletController.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/admin/AgentActionService.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/admin/AgentMenuService.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/admin/AgentPerformanceController.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/admin/DashboardService.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/admin/DepositOrderController.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/admin/DepositReviewController.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/admin/DepositReviewService.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/admin/DepositSettingService.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/admin/dto/UpdateUserBalanceRequest.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/admin/KycReviewController.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/admin/LoanPersonalInfoReviewController.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/admin/LoanReviewController.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/admin/LoanReviewService.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/admin/LoanSettingService.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/admin/NotificationController.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/admin/SystemConfigController.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/admin/SystemConfigService.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/admin/WithdrawReviewController.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/auth/AuthService.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/common/FileUploadController.java` — 独立修改已合入；同文件租户改动保留本地
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/common/ImageController.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/common/JwtUtil.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/common/LogRedaction.java` — 独立修改已合入；同文件租户改动保留本地
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/common/PublishedTenantFiles.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/config/BackendAccess.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/config/CorsConfig.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/config/JwtFilter.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/config/OperationLogInterceptor.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/config/SecurityConfig.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/config/WebSocketConfig.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/control/BackendAccountController.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/control/BackendAccountService.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/control/BackendLogin.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/control/BackendLoginRegistry.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/control/BackendLoginRepository.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/control/ChatRetentionController.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/control/ChatRetentionJob.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/control/ChatRetentionService.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/control/ControlAccessSession.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/control/ControlAccessSessionRepository.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/control/ControlAccountController.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/control/ControlAccountService.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/control/ControlAdmin.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/control/ControlAdminRepository.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/control/ControlAuditLog.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/control/ControlAuditLogRepository.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/control/ControlAuditService.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/control/ControlBootstrap.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/control/ControlController.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/control/ControlExchangeController.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/control/ControlIdentity.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/control/ControlLoginRateLimit.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/control/ControlMfa.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/control/ControlReadController.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/control/ControlReadQueryService.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/control/ControlSecurityController.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/control/ControlSecurityService.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/control/ControlService.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/control/Tenant.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/control/TenantDomainHistory.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/control/TenantDomainHistoryRepository.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/control/TenantDomainVerification.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/control/TenantFeatureController.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/control/TenantHostService.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/control/TenantManagementService.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/control/TenantPolicy.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/control/TenantPolicyRepository.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/control/TenantPolicyService.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/control/TenantReadinessService.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/control/TenantRepository.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/control/TenantRequestFilter.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/control/TenantSafeTemplate.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/demo/DemoAccount.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/demo/DemoAccountRepository.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/demo/DemoLedger.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/demo/DemoLedgerRepository.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/demo/DemoOrder.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/demo/DemoOrderRepository.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/demo/DemoTradingService.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/entity/AdminRole.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/entity/AdminRoleMenu.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/entity/AdminTablePreference.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/entity/Announcement.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/entity/AssetAccount.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/entity/AssetSnapshot.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/entity/BalanceAdjustment.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/entity/ContractOrder.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/entity/DepositCreditRecord.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/entity/DepositRecord.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/entity/DepositSetting.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/entity/FinancialOrder.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/entity/FinancialProduct.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/entity/FinancialYieldRecord.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/entity/KycRecord.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/entity/LoanPersonalInfo.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/entity/LoanRecord.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/entity/LoanSetting.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/entity/OperationLog.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/entity/OptionDuration.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/entity/OptionOrder.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/entity/SystemConfig.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/entity/TradingSymbol.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/entity/TransferRecord.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/entity/UserAccount.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/entity/UserAction.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/entity/UserBankCard.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/entity/UserDigitalAddress.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/entity/UserMenu.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/entity/VerifyCode.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/entity/WithdrawRecord.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/ExchangeBackendApplication.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/market/ControlHistoryStore.java` — 独立修改已合入；同文件租户改动保留本地
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/market/ControlHoldService.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/market/ControlledKlineMerger.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/market/ControlRecoveryFlow.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/market/ForexQuoteMarketService.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/market/MarketController.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/market/MarketInstrumentCatalog.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/market/MarketOrderProcessor.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/market/MarketQuoteSource.java` — 独立修改已合入；同文件租户改动保留本地
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/market/MarketWebSocketHandler.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/market/PersistentPriceControl.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/market/RedisMarketService.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/market/SimulationControlPath.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/repository/AdminRoleMenuRepository.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/repository/AdminRoleRepository.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/repository/AdminTablePreferenceRepository.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/repository/AnnouncementRepository.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/repository/AssetAccountRepository.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/repository/AssetSnapshotRepository.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/repository/BalanceAdjustmentRepository.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/repository/ContractOrderRepository.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/repository/DepositCreditRecordRepository.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/repository/DepositRecordRepository.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/repository/DepositSettingRepository.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/repository/FinancialOrderRepository.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/repository/FinancialProductRepository.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/repository/FinancialYieldRecordRepository.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/repository/KycRecordRepository.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/repository/LoanPersonalInfoRepository.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/repository/LoanRecordRepository.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/repository/LoanSettingRepository.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/repository/OperationLogRepository.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/repository/OptionDurationRepository.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/repository/OptionOrderRepository.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/repository/SystemConfigRepository.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/repository/TradingSymbolRepository.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/repository/TransferRecordRepository.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/repository/UserAccountRepository.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/repository/UserActionRepository.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/repository/UserBankCardRepository.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/repository/UserDigitalAddressRepository.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/repository/UserMenuRepository.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/repository/VerifyCodeRepository.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/repository/WithdrawRecordRepository.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/security/OutboundEndpointPolicy.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/security/RegistrationSecurity.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/service/EmailService.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/simulation/AccountInspection.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/simulation/SimulationAdminQueryBoundary.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/simulation/SimulationCatalogController.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/simulation/SimulationGateway.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/simulation/SimulationIdentityBoundary.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/simulation/SimulationInspectionBoundary.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/simulation/SimulationProvisioner.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/simulation/SimulationSeed.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/support/InboxLetter.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/support/SupportAttachment.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/support/SupportConversation.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/support/SupportMessage.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/support/SupportPresence.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/support/SupportService.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/support/SupportSettings.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/tenant/TenantContext.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/tenant/TenantEntities.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/tenant/TenantEntityPersister.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/tenant/TenantFiles.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/tenant/TenantJobRunner.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/tenant/TenantOwnedEntity.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/tenant/TenantRepository.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/tenant/TenantRepositoryFactoryBean.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/tenant/TenantRepositoryImpl.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/tenant/TenantSecrets.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/trade/ContractOrderService.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/trade/ManualOrderService.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/trade/OptionDurationService.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/trade/OptionOrderController.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/trade/OptionOrderService.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/user/AnnouncementController.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/user/AssetEquityHistoryService.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/user/AssetEquityJobs.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/user/AssetEquityStore.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/user/AssetHistoryCache.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/user/AssetHistoryService.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/user/BalanceAdjustmentService.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/user/ChangePasswordController.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/user/CustomerServiceController.java` — 独立修改已合入；同文件租户改动保留本地
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/user/DepositController.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/user/DepositOrderService.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/user/EquityValuationService.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/user/FileUploadService.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/user/FinancialService.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/user/FinancialYieldService.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/user/InviteController.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/user/KycController.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/user/KycIdentityService.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/user/LoanPersonalInfoService.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/user/LoanService.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/user/ManualOrderHistory.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/user/TransferController.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/user/UserActivityController.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/user/UserActivityService.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/user/UserDashboardService.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/user/UserInfoController.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/user/WalletController.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/java/com/gtcfesk/exchange/user/WithdrawController.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/resources/application.yml` — 独立修改已合入；同文件租户改动保留本地
+- `exchange-backend/src/main/resources/db/migration/.gitignore` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/resources/db/migration/V2026092900__legacy_feature_prerequisites.sql` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/resources/db/migration/V2026092901__multitenant_control.sql` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/main/resources/db/migration/V2026092902__multitenant_isolation.sql` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/test/java/com/gtcfesk/exchange/activity/ActivityIntegrationTest.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/test/java/com/gtcfesk/exchange/activity/ActivitySecurityTest.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/test/java/com/gtcfesk/exchange/admin/AdminTablePreferenceTest.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/test/java/com/gtcfesk/exchange/admin/AgentProvisioningPolicyTest.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/test/java/com/gtcfesk/exchange/admin/AnnouncementCountdownTest.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/test/java/com/gtcfesk/exchange/admin/DepositRecipientTest.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/test/java/com/gtcfesk/exchange/auth/RegistrationWithoutCodeTest.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/test/java/com/gtcfesk/exchange/common/AudioValidationTest.java` — 独立修改已合入；同文件租户改动保留本地
+- `exchange-backend/src/test/java/com/gtcfesk/exchange/common/ImageAuthorizationTest.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/test/java/com/gtcfesk/exchange/control/ControlAccountSecurityTest.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/test/java/com/gtcfesk/exchange/control/ControlFundsTransactionTest.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/test/java/com/gtcfesk/exchange/control/ControlReadQueryTest.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/test/java/com/gtcfesk/exchange/control/ControlSecurityTest.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/test/java/com/gtcfesk/exchange/control/ControlSupportIsolationTest.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/test/java/com/gtcfesk/exchange/control/SimulationTenantIsolationTest.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/test/java/com/gtcfesk/exchange/control/TenantJwtBoundaryTest.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/test/java/com/gtcfesk/exchange/control/TenantReadinessTest.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/test/java/com/gtcfesk/exchange/demo/DemoPersistenceTest.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/test/java/com/gtcfesk/exchange/demo/DemoSecurityTest.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/test/java/com/gtcfesk/exchange/demo/DemoTradingTest.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/test/java/com/gtcfesk/exchange/market/CatalogLiveTest.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/test/java/com/gtcfesk/exchange/market/CatalogTradingScenario.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/test/java/com/gtcfesk/exchange/market/ContractCloseConcurrencyTest.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/test/java/com/gtcfesk/exchange/market/ContractConversionTest.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/test/java/com/gtcfesk/exchange/market/ControlFlowMarketIntegrationTest.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/test/java/com/gtcfesk/exchange/market/ControlRecoveryFlowTest.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/test/java/com/gtcfesk/exchange/market/CryptoPerpetualTest.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/test/java/com/gtcfesk/exchange/market/ExchangeFallbackTest.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/test/java/com/gtcfesk/exchange/market/ExecutionQuoteTest.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/test/java/com/gtcfesk/exchange/market/KlineRetentionRegressionTest.java` — 独立修改已合入；同文件租户改动保留本地
+- `exchange-backend/src/test/java/com/gtcfesk/exchange/market/KlineSchedulingTest.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/test/java/com/gtcfesk/exchange/market/MarketForexSearchTest.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/test/java/com/gtcfesk/exchange/market/MarketInstrumentCatalogTest.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/test/java/com/gtcfesk/exchange/market/MarketIsolationTest.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/test/java/com/gtcfesk/exchange/market/MarketPushTest.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/test/java/com/gtcfesk/exchange/market/MarketSqlFixture.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/test/java/com/gtcfesk/exchange/market/PersistentPriceControlTest.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/test/java/com/gtcfesk/exchange/market/PriceControlTest.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/test/java/com/gtcfesk/exchange/market/QuoteCurrencyConversionTest.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/test/java/com/gtcfesk/exchange/market/RandomMarketPathTest.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/test/java/com/gtcfesk/exchange/market/ReceivedIndexRegressionTest.java` — 独立修改已合入；同文件租户改动保留本地
+- `exchange-backend/src/test/java/com/gtcfesk/exchange/market/SimulationControlPathTest.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/test/java/com/gtcfesk/exchange/market/SimulationControlTenantTest.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/test/java/com/gtcfesk/exchange/market/SourceCandlesBatchRegressionTest.java` — 独立修改已合入；同文件租户改动保留本地
+- `exchange-backend/src/test/java/com/gtcfesk/exchange/market/TenantMarketIsolationTest.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/test/java/com/gtcfesk/exchange/market/TenantMarketTestContext.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/test/java/com/gtcfesk/exchange/market/YahooQuoteStreamTest.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/test/java/com/gtcfesk/exchange/security/AdminPermissionIntegrationTest.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/test/java/com/gtcfesk/exchange/security/AdminPermissionLoginAuditTest.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/test/java/com/gtcfesk/exchange/security/EmailRateLimitTest.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/test/java/com/gtcfesk/exchange/security/MinimalFixRegressionTest.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/test/java/com/gtcfesk/exchange/security/OutboundEndpointPolicyTest.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/test/java/com/gtcfesk/exchange/security/PermissionGrantRepairTest.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/test/java/com/gtcfesk/exchange/security/RealRegistrationFlowTest.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/test/java/com/gtcfesk/exchange/security/RegistrationSecurityTest.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/test/java/com/gtcfesk/exchange/service/EmailOutboundTest.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/test/java/com/gtcfesk/exchange/simulation/SimulationSecurityTest.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/test/java/com/gtcfesk/exchange/support/SupportAuditLogTest.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/test/java/com/gtcfesk/exchange/support/SupportServiceTest.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/test/java/com/gtcfesk/exchange/tenant/TenantBoundaryTest.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/test/java/com/gtcfesk/exchange/tenant/TenantCorsBoundaryTest.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/test/java/com/gtcfesk/exchange/tenant/TenantSourceGateTest.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/test/java/com/gtcfesk/exchange/trade/CryptoQuantityLifecycleTest.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/test/java/com/gtcfesk/exchange/trade/CryptoQuantityPersistenceTest.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/test/java/com/gtcfesk/exchange/trade/FeeCalculationAuditTest.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/test/java/com/gtcfesk/exchange/trade/ManualControlJdbcMySqlTest.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/test/java/com/gtcfesk/exchange/trade/ManualOrderHashTest.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/test/java/com/gtcfesk/exchange/trade/ManualOrderMySqlIT.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/test/java/com/gtcfesk/exchange/user/DepositOrderAccessTest.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/test/java/com/gtcfesk/exchange/user/DepositOrderMySqlIT.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/test/java/com/gtcfesk/exchange/user/DepositOrderServiceTest.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/test/java/com/gtcfesk/exchange/user/FiatWithdrawTest.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/test/java/com/gtcfesk/exchange/user/IdentityLoanFlowTest.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/test/java/com/gtcfesk/exchange/user/OrderSoftDeleteTest.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/test/resources/.gitignore` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-backend/src/test/resources/multitenant-market-test.sql` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-frontend/src/App.vue` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-frontend/src/components/AccountModeSwitch.vue` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-frontend/src/components/AppSelect.vue` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-frontend/src/components/ProtectedImage.vue` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-frontend/src/components/SupportImage.vue` — 独立修改已合入；同文件租户改动保留本地
+- `exchange-frontend/src/components/SupportThread.vue` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-frontend/src/components/TenantStatus.vue` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-frontend/src/utils/accountMode.ts` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-frontend/src/utils/accountRequests.ts` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-frontend/src/utils/imageLocation.ts` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-frontend/src/utils/imageUrl.ts` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-frontend/src/utils/pageActivity.ts` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-frontend/src/utils/request.ts` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-frontend/src/utils/support.ts` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-frontend/src/utils/tenantCapabilities.ts` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-frontend/src/utils/tenantFeatures.ts` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-frontend/src/utils/useProtectedImages.ts` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-frontend/src/views/CreditLoan.vue` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-frontend/src/views/Deposit.vue` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-frontend/src/views/FinancialManagement.vue` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-frontend/src/views/FinancialPurchase.vue` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-frontend/src/views/Home.vue` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-frontend/src/views/Invite.vue` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-frontend/src/views/LanguageSelect.vue` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-frontend/src/views/LoanContract.vue` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-frontend/src/views/LoanPersonalInfo.vue` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-frontend/src/views/Register.vue` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-frontend/src/views/Trade.vue` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-frontend/src/views/Verification.vue` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-frontend/vite.config.ts` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-pc/src/App.vue` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-pc/src/components/AccountModeSwitch.vue` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-pc/src/components/AppSelect.vue` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-pc/src/components/TenantStatus.vue` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-pc/src/utils/accountMode.ts` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-pc/src/utils/accountRequests.ts` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-pc/src/utils/imageUrl.ts` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-pc/src/utils/pageActivity.ts` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-pc/src/utils/request.ts` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-pc/src/utils/support.ts` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-pc/src/utils/tenantFeatures.ts` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-pc/src/views/CreditLoan.vue` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-pc/src/views/Deposit.vue` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-pc/src/views/DesktopTrade.vue` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-pc/src/views/FinancialManagement.vue` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-pc/src/views/FinancialPurchase.vue` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-pc/src/views/Home.vue` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-pc/src/views/Invite.vue` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-pc/src/views/LanguageSelect.vue` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-pc/src/views/LoanContract.vue` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-pc/src/views/LoanPersonalInfo.vue` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-pc/src/views/Register.vue` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-pc/src/views/Trade.vue` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-pc/src/views/Verification.vue` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `exchange-pc/vite.config.ts` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `scripts/multitenant/.gitignore` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `scripts/multitenant/build_manifest.py` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `scripts/multitenant/ChatRetentionMySqlProbe.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `scripts/multitenant/e2e_api.py` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `scripts/multitenant/e2e_proxy.cjs` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `scripts/multitenant/isolation_gate.py` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `scripts/multitenant/isolation-finalize.sql` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `scripts/multitenant/isolation-procedures.sql` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `scripts/multitenant/JpaTenantProbe.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `scripts/multitenant/legacy-feature-tables.sql` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `scripts/multitenant/legacy-schema.sql` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `scripts/multitenant/load_e2e.py` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `scripts/multitenant/MarketTenantProbe.java` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `scripts/multitenant/mysql_migration.py` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `scripts/multitenant/orphan_quarantine.py` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `scripts/multitenant/prepare_e2e.py` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `scripts/multitenant/private_files.py` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `scripts/multitenant/retention_archive.py` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `scripts/multitenant/source_isolation_registry.json` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `scripts/multitenant/table_manifest.json` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `scripts/multitenant/test_isolation_gate.py` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `scripts/multitenant/test_orphan_quarantine.py` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `scripts/multitenant/test_private_files.py` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `scripts/multitenant/verify-build.ps1` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `scripts/tenant-native-convert.py` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `scripts/tenant-source-convert.py` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+- `scripts/tenant-test-api-convert.py` — 多租户及配套控制台/隔离/迁移改动，暂缓提交
+
+生成产物共 540 个，均不作为源代码提交。每个文件 SHA-256 见本机 final-inventory.json。
