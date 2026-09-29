@@ -72,3 +72,5 @@ design/order-module-preview-20260928/
 # Local E2E and multitenant build output is not release source.
 dist-e2e/
 dist-multitenant/
+
+!exchange-backend/src/main/resources/db/migration/widen_admin_menu_code.sql

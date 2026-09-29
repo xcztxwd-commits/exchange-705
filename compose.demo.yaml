@@ -11,6 +11,7 @@ services:
   demo-mysql:
     networks: [demo-data]
     image: mysql:5.7
+    command: ["--character-set-server=utf8mb4", "--collation-server=utf8mb4_unicode_ci"]
     environment:
       MYSQL_ROOT_PASSWORD: ${DEMO_MYSQL_ROOT_PASSWORD:?Set DEMO_MYSQL_ROOT_PASSWORD}
       MYSQL_DATABASE: exchange_demo

@@ -1,5 +1,36 @@
 # Docker 本地部署
 
+## 发布前数据库兼容迁移（2026-09-29）
+
+旧库升级必须在**备份已验证、后端停止写入的维护窗口**，并在启动新版后端前执行
+`exchange-backend/src/main/resources/db/migration/widen_admin_menu_code.sql`。
+JPA `ddl-auto=update` 不能代替此迁移。新库无 `admin_menu` 时脚本跳过，JPA 创建的实体列为 150。
+脚本仅把短于 150 的 `menu_code` 扩为 `VARCHAR(150) NOT NULL`，保留字符集、排序规则、注释和唯一索引；重复执行安全，已更宽的列不缩短。
+发现非预期列定义会报错停止，不能带 `mysql --force` 忽略错误继续发布。MySQL DDL 隐式提交，失败时检查实际结构再重试；不要尝试缩回 50。
+需 `ALTER`、`CREATE ROUTINE`、`ALTER ROUTINE`、`EXECUTE` 权限。元数据锁等待最多 10 秒；扩列可能重建表，应先在备份恢复库验证耗时和磁盘余量。
+
+发布人员在选定环境中显式执行（以下是 Bash 模板，数据库名必须核实；本修复不会自动操作运行中的发布）：
+
+```bash
+docker compose exec -T mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroot --default-character-set=utf8mb4 "$MYSQL_DATABASE"' \
+  < exchange-backend/src/main/resources/db/migration/widen_admin_menu_code.sql
+# 上一步非零退出即停止发布；成功后核对 SHOW CREATE TABLE admin_menu，再启动新版后端。
+```
+
+demo 独立旧库需对 `demo-mysql` 同样执行。`compose.demo.yaml` 为全新 demo 库显式设置
+`utf8mb4/utf8mb4_unicode_ci`，使不带字符集声明的中文初始化 SQL 可导入。
+**修改 MySQL 服务启动参数不会转换已有 latin1 数据库或表，也不能覆盖 SQL 内显式 latin1 定义。**
+已有此类库须先备份、核查编码与索引长度，再制定单独转换方案；不要删除卷重建来“修复”历史数据。
+
+隔离回归（仅新建一次性 MySQL 容器，无宿主端口、无生产卷）：
+
+```powershell
+python scripts/admin-permissions/test-startup-migration.py
+```
+
+该检查覆盖新库中文和长权限码写入、旧 50 字符列升级、重复执行、已有数据/字符集/注释/唯一性保留、拒绝缩列和非预期结构。
+它验证 MySQL 兼容路径，不替代完整应用启动或生产备份验收。
+
 所有 Java、Maven、Node.js、npm 依赖均在 Docker 镜像内安装和编译，无需在宿主机安装运行环境。宿主机已有的 node_modules、dist、target 不参与构建。
 
 ## 启动
