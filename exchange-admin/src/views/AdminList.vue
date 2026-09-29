@@ -11,7 +11,7 @@ const total = ref(0)
 
 // 分页
 const currentPage = ref(1)
-const pageSize = ref(20)
+const pageSize = ref(10)
 
 // 搜索条件
 const searchForm = ref({
@@ -127,12 +127,6 @@ const handleReset = () => {
     enabled: null
   }
   currentPage.value = 1
-  fetchAdmins()
-}
-
-// 分页变化
-const handlePageChange = (page: number) => {
-  currentPage.value = page
   fetchAdmins()
 }
 
@@ -267,7 +261,10 @@ const formatDate = (date: string | Date | null) => {
 }
 
 // 获取角色显示名称
+const roleOptions = ref<any[]>([])
 const getRoleName = (role: string) => {
+  const match = roleOptions.value.find(r => r.roleCode === role)
+  if (match) return match.roleName
   const roleMap: Record<string, string> = {
     'super_admin': '超级管理员',
     'admin': '管理员',
@@ -278,6 +275,7 @@ const getRoleName = (role: string) => {
 
 onMounted(() => {
   fetchAdmins()
+  request.get('/admin/menus/roles').then((r: any) => { roleOptions.value = r.list || [] })
 })
 </script>
 
@@ -287,7 +285,7 @@ onMounted(() => {
       <template #header>
         <div class="card-header">
           <span class="card-title">管理员列表</span>
-          <el-button type="primary" :icon="Plus" @click="handleAdd">
+          <el-button v-permission="'admin_list:create'" type="primary" :icon="Plus" @click="handleAdd">
             添加管理员
           </el-button>
         </div>
@@ -305,9 +303,7 @@ onMounted(() => {
         </el-form-item>
         <el-form-item label="角色">
           <el-select v-model="searchForm.role" placeholder="全部" clearable style="width: 120px">
-            <el-option label="超级管理员" value="super_admin" />
-            <el-option label="管理员" value="admin" />
-            <el-option label="运营" value="ops" />
+            <el-option v-for="role in roleOptions" :key="role.roleCode" :label="role.roleName" :value="role.roleCode" />
           </el-select>
         </el-form-item>
         <el-form-item label="状态">
@@ -317,13 +313,13 @@ onMounted(() => {
           </el-select>
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" :icon="Search" @click="handleSearch">搜索</el-button>
-          <el-button :icon="Refresh" @click="handleReset">重置</el-button>
+          <el-button v-permission="'admin_list:view'" type="primary" :icon="Search" @click="handleSearch">搜索</el-button>
+          <el-button v-permission="'admin_list:view'" :icon="Refresh" @click="handleReset">重置</el-button>
         </el-form-item>
       </el-form>
 
       <!-- 表格 -->
-      <el-table :data="admins" stripe border v-loading="loading">
+      <admin-table table-key="AdminList.1" :data="admins" stripe border v-loading="loading">
         <el-table-column prop="id" label="ID" width="80" />
         <el-table-column prop="account" label="登录账号" width="150" />
         <el-table-column prop="email" label="邮箱" width="200" />
@@ -353,7 +349,7 @@ onMounted(() => {
         </el-table-column>
         <el-table-column label="操作" width="200" fixed="right">
           <template #default="{ row }">
-            <el-button 
+            <el-button v-permission="'admin_list:edit'"
               type="primary" 
               size="small" 
               :icon="Edit"
@@ -361,7 +357,7 @@ onMounted(() => {
             >
               编辑
             </el-button>
-            <el-button 
+            <el-button v-permission="'admin_list:status'"
               :type="row.enabled ? 'warning' : 'success'"
               size="small" 
               :icon="row.enabled ? Lock : Unlock"
@@ -369,7 +365,7 @@ onMounted(() => {
             >
               {{ row.enabled ? '禁用' : '启用' }}
             </el-button>
-            <el-button 
+            <el-button v-permission="'admin_list:delete'"
               type="danger" 
               size="small" 
               :icon="Delete"
@@ -379,16 +375,17 @@ onMounted(() => {
             </el-button>
           </template>
         </el-table-column>
-      </el-table>
+      </admin-table>
 
       <!-- 分页 -->
       <div class="pagination" style="margin-top: 16px">
         <el-pagination
           v-model:current-page="currentPage"
-          :page-size="pageSize"
+          v-model:page-size="pageSize"
           :total="total"
-          layout="total, prev, pager, next"
-          @current-change="handlePageChange"
+          :page-sizes="[10, 20, 50, 100]"
+          layout="total, sizes, prev, pager, next"
+          @change="fetchAdmins"
         />
       </div>
     </el-card>
@@ -430,13 +427,11 @@ onMounted(() => {
         </el-form-item>
         <el-form-item label="角色" prop="role">
           <el-select v-model="formData.role" placeholder="请选择角色" style="width: 100%">
-            <el-option label="超级管理员" value="super_admin" />
-            <el-option label="管理员" value="admin" />
-            <el-option label="运营" value="ops" />
+            <el-option v-for="role in roleOptions" :key="role.roleCode" :label="role.roleName" :value="role.roleCode" />
           </el-select>
         </el-form-item>
         <el-form-item label="状态">
-          <el-switch
+          <el-switch v-permission="'admin_list:view'"
             v-model="formData.enabled"
             active-text="启用"
             inactive-text="禁用"
@@ -444,8 +439,8 @@ onMounted(() => {
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleSave">确定</el-button>
+        <el-button v-permission="'session:close'" @click="dialogVisible = false">取消</el-button>
+        <el-button v-permission="formData.id ? 'admin_list:edit' : 'admin_list:create'" type="primary" @click="handleSave">确定</el-button>
       </template>
     </el-dialog>
   </div>

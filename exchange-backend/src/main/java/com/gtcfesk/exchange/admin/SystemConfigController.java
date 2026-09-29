@@ -27,6 +27,7 @@ public class SystemConfigController {
     }
 
     @GetMapping("/list")
+    @com.gtcfesk.exchange.config.AdminPermission(menu = "settings", action = "")
     public ResponseEntity<?> getAllConfigs() {
         List<SystemConfig> configs = systemConfigService.getAllConfigs();
         return ResponseEntity.ok(configs);

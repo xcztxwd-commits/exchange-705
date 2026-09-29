@@ -1,3 +1,4 @@
+import { getAccountApiBase } from '@/utils/accountMode'
 /**
  * 阿里云市场行情服务（HTTP轮询）
  * 替换 Alltick WebSocket
@@ -18,7 +19,7 @@ class AliyunMarketService {
   private batchPollingTimer: number | null = null // 批量轮询定时器
   private priceCallbacks = new Map<string, (data: PriceData) => void>()
   private subscribedSymbols = new Set<string>() // 已订阅的symbol列表
-  private apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '/api'
+  private apiBaseUrl = getAccountApiBase()
   
   /**
    * 订阅实时价格（添加到订阅列表，使用批量轮询）

@@ -3,6 +3,7 @@ import { test } from 'node:test'
 
 for (const app of ['exchange-pc', 'exchange-frontend']) {
   const { normalizeCandles, candleFromQuote, chartPeriod } = await import('../../' + app + '/src/utils/chartData.ts')
+  const { convertIntervalToKlineType } = await import('../../' + app + '/src/utils/kline.ts')
   const { normalizeQuote } = await import('../../' + app + '/src/utils/marketWebSocket.ts')
   test(app + ': candles are validated, sorted, deduplicated, and strictly older than the cursor', () => {
     const row = { kline_timestamp: 1_800_000_000, open_price: '10', high_price: '12', low_price: '9', close_price: '11', volume: '3' }
@@ -20,7 +21,14 @@ for (const app of ['exchange-pc', 'exchange-frontend']) {
     const sessionBar = { ...last, timestamp: last.timestamp + 21 * 3_600_000 }
     assert.equal(candleFromQuote(sessionBar, 12, sessionBar.timestamp + 3_600_000, '1d').timestamp, sessionBar.timestamp)
     assert.deepEqual(chartPeriod('1M'), { span: 1, type: 'month' })
+    assert.deepEqual(chartPeriod('1w'), { span: 1, type: 'week' })
     assert.deepEqual(chartPeriod('15m'), { span: 15, type: 'minute' })
+    assert.equal(convertIntervalToKlineType('1m'), 1)
+    assert.equal(convertIntervalToKlineType('1w'), 9)
+    assert.equal(convertIntervalToKlineType('1M'), 10)
+    const february = { ...last, timestamp: Date.parse('2026-02-01T00:00:00Z') }
+    assert.deepEqual(candleFromQuote(february, 13, Date.parse('2026-02-28T23:59:59Z'), '1M'), { ...february, high: 13, close: 13 })
+    assert.equal(candleFromQuote(february, 13, Date.parse('2026-03-01T00:00:00Z'), '1M'), null)
   })
   test(app + ': intraday snapshots cannot change the period grid; sessions remain intact', () => {
     const bar = { timestamp: 1_800_000_000_000, open: 10, high: 12, low: 9, close: 11, volume: 3 }

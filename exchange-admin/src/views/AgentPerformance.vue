@@ -1,11 +1,19 @@
 <script setup lang="ts">
+import { useAccountTable } from '@/utils/useAccountTable'
+import { accountTableRequest, accountTableRawRequest } from '@/utils/accountTableRequest'
+import AccountTypeFilter from '@/components/AccountTypeFilter.vue'
+const accountTable = useAccountTable(), accountModes = accountTable.modes
+const request = accountTableRequest(accountTable)
+const axios = accountTableRawRequest(accountTable)
+
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { rawRequest as axios } from '@/utils/request'
+
 import { ArrowLeft, User, Coin, Money, TrendCharts } from '@element-plus/icons-vue'
 
 const route = useRoute()
+if (route.query.accountMode === 'DEMO') { accountModes.value = ['DEMO']; accountTable.selectRow({accountMode: 'DEMO'}) }
 const router = useRouter()
 // 开发环境使用空字符串，让Vite代理处理；生产环境使用生产API域名（不包含/api后缀）
 const getApiBase = () => {
@@ -41,6 +49,7 @@ const fetchAgentInfo = async () => {
 
 // 获取业绩数据
 const fetchPerformance = async () => {
+  performance.value={}
   loading.value = true
   try {
     const response = await axios.get(`${API_BASE}/api/admin/agents/${agentId.value}/performance`)
@@ -65,9 +74,10 @@ const fetchPerformance = async () => {
 
 // 获取下级用户列表
 const fetchSubordinates = async () => {
+  subordinates.value=[]
   subordinatesLoading.value = true
   try {
-    const response = await axios.get(`${API_BASE}/api/admin/users/${agentId.value}/subordinates`)
+    const response = await Promise.resolve({data: await accountTable.query(`/admin/users/${agentId.value}/subordinates`)})
     if (response.data && response.data.list) {
       subordinates.value = response.data.list
     } else if (Array.isArray(response.data)) {
@@ -107,7 +117,7 @@ onMounted(() => {
     <el-card shadow="never">
       <template #header>
         <div class="card-header">
-          <el-button :icon="ArrowLeft" @click="goBack">返回</el-button>
+          <el-button v-permission="'agents:view'" :icon="ArrowLeft" @click="goBack">返回</el-button>
           <span class="card-title">代理业绩 - {{ agentInfo.email }}</span>
         </div>
       </template>
@@ -187,7 +197,9 @@ onMounted(() => {
       <el-divider />
       <h3 style="margin-bottom: 20px;">下级用户列表</h3>
       
-      <el-table :data="subordinates" v-loading="subordinatesLoading" stripe border>
+      <AccountTypeFilter v-model="accountModes" @change="fetchPerformance();fetchSubordinates()" />
+<admin-table :row-key="(row: any) => `${row.accountMode || 'REAL'}:${row.id ?? row.userId}:${row.type || ''}`" table-key="AgentPerformance.1" :data="subordinates" v-loading="subordinatesLoading" stripe border>
+<el-table-column prop="accountModeLabel" label="账户类型" width="110" />
         <el-table-column prop="id" label="ID" width="80" />
         <el-table-column prop="email" label="邮箱" min-width="180" />
         <el-table-column prop="nickname" label="昵称" width="120">
@@ -208,7 +220,7 @@ onMounted(() => {
           </template>
         </el-table-column>
         <el-table-column prop="createdAt" label="注册时间" width="180" />
-      </el-table>
+      </admin-table>
       
       <el-empty v-if="!subordinatesLoading && subordinates.length === 0" description="暂无下级用户" />
     </el-card>

@@ -25,6 +25,7 @@ class ControlFlowMarketIntegrationTest {
         ReflectionTestUtils.setField(market, "controlHistory", database.store);
         ReflectionTestUtils.setField(market, "klineMerger", database.merger);
         ReflectionTestUtils.setField(market, "virtualTrading", true);
+        ReflectionTestUtils.setField(market, "v3Enabled", false); // Existing one-second V2 recovery fixture.
         market.refreshSymbols();
     }
     @Test void backendTimerRestoresRandomBaseWithoutChangingSwitch() throws Exception {
@@ -47,5 +48,25 @@ class ControlFlowMarketIntegrationTest {
         assertEquals("SOURCE", market.internalPrice("TEST").get("controlState"));
         assertEquals(1, database.count("market_control_task"));
         assertEquals(0, database.store.db.queryForObject("SELECT COUNT(*) FROM market_control_flow WHERE recovery_started_at IS NOT NULL", Integer.class));
+    }
+    @Test void virtualV3QuoteExecutionAndHistoryUseCommittedPlan() {
+        ReflectionTestUtils.setField(market, "v3Enabled", true);
+        saved.get().setPricePrecision(8);
+        market.refreshSymbols();
+        market.randomMarket(1L, true, null);
+        BigDecimal start = RandomMarketPath.basePrice(saved.get(), System.currentTimeMillis());
+        BigDecimal target = start.add(new BigDecimal("0.05400000"));
+        RecoveryOptions options = new RecoveryOptions(); options.setAutoRestore(false);
+        market.startControl(1L, 60, target, 10, true, "virtual-v3", options);
+        PersistentPriceControl.Task task = database.controls.latest(1);
+        assertEquals(3, task.algorithmVersion);
+        assertEquals(1, database.count("market_control_plan"));
+        assertEquals(task.id, SimulationControlPath.events(saved.get()).get(SimulationControlPath.events(saved.get()).size() - 1).planId);
+        Map<String, Object> quote = market.internalPrice("TEST");
+        assertEquals(0, task.price(task.sampledUntil).compareTo(ControlHistoryStore.number(quote.get("price"))));
+        assertEquals(0, task.price(task.sampledUntil).compareTo(market.freshPrice("TEST")));
+        List<Map<String, Object>> candles = ControlHistoryStore.rows(market.internalKline("TEST", "1m", 2));
+        assertFalse(candles.isEmpty());
+        assertEquals(0, task.price(task.sampledUntil).compareTo(ControlHistoryStore.number(candles.get(candles.size() - 1).get("close_price"))));
     }
 }

@@ -136,7 +136,7 @@ class PriceControlTest {
         when(orders.findById(1L)).thenReturn(Optional.of(order));
         when(orders.save(any())).thenAnswer(call -> call.getArgument(0));
         when(accounts.findByUserIdAndCoin(2L, "OPTION")).thenReturn(Optional.of(account));
-        com.gtcfesk.exchange.trade.OptionOrderService service = new com.gtcfesk.exchange.trade.OptionOrderService(orders, accounts, repository, durations, market);
+        com.gtcfesk.exchange.trade.OptionOrderService service = new com.gtcfesk.exchange.trade.OptionOrderService(mock(com.gtcfesk.exchange.user.KycIdentityService.class), orders, accounts, repository, durations, market);
         BigDecimal before = market.freshPrice("TEST");
         service.closeOrder(2L, 1L, new BigDecimal("999999"));
         BigDecimal after = market.freshPrice("TEST");

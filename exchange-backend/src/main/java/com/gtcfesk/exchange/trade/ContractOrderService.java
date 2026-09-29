@@ -25,6 +25,11 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 public class ContractOrderService {
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.gtcfesk.exchange.activity.TrialFunds trialFunds;
+    private static BigDecimal trial(BigDecimal value) { return value == null ? BigDecimal.ZERO : value; }
+
+    private final com.gtcfesk.exchange.user.KycIdentityService identityService;
 
     private final ContractOrderRepository contractOrderRepository;
     private final AssetAccountRepository assetAccountRepository;
@@ -33,18 +38,23 @@ public class ContractOrderService {
     private final PlatformTransactionManager transactionManager;
     private final com.gtcfesk.exchange.market.MarketCategoryService categories;
 
+    @javax.persistence.PersistenceContext
+    private javax.persistence.EntityManager entityManager;
+
     /**
      * 创建合约订单
      * 合约交易使用合约资产（CONTRACT）
      */
     @Transactional
     public ContractOrder createOrder(Long userId, CreateContractOrderRequest req) {
+        if (trialFunds != null) { trialFunds.lock(userId); trialFunds.requireTrade(userId); }
+        else identityService.requireApproved(userId);
         if (req == null || req.getSymbol() == null || req.getSymbol().trim().isEmpty()
                 || !("BUY".equals(req.getSide()) || "SELL".equals(req.getSide()))
                 || !("MARKET".equals(req.getType()) || "LIMIT".equals(req.getType()))) {
             throw new BusinessException("交易品种、方向或订单类型无效");
         }
-        com.gtcfesk.exchange.common.TradeValidation.positive(req.getQuantity(), "数量");
+        TradeValidation.positive(req.getQuantity(), "数量");
         if ("LIMIT".equals(req.getType())) com.gtcfesk.exchange.common.TradeValidation.positive(req.getPrice(), "限价");
         com.gtcfesk.exchange.common.TradeValidation.optionalPositive(req.getStopLoss(), "止损价格");
         com.gtcfesk.exchange.common.TradeValidation.optionalPositive(req.getTakeProfit(), "止盈价格");
@@ -52,7 +62,12 @@ public class ContractOrderService {
         TradingSymbol symbol = tradingSymbolRepository.findBySymbol(req.getSymbol())
                 .orElseThrow(() -> new BusinessException("交易对不存在"));
         
+        if (entityManager != null) entityManager.refresh(symbol, javax.persistence.LockModeType.PESSIMISTIC_READ);
+        QuantityRules.protocol(symbol, req.getSpecVersion(), req.getQuantityUnitType());
+        QuantityRules.quantity(symbol, req.getQuantity());
         if (!Boolean.TRUE.equals(symbol.getIsEnabled())) throw new BusinessException("交易品种已停用");
+        boolean forex = FxContractRules.isForex(symbol);
+        FxContractRules.validate(symbol);
         // 成交价只取服务端行情（含后台偏移）；限价单可在缺少行情时等待撮合。
         BigDecimal currentPrice = "MARKET".equals(req.getType())
                 ? requireFreshPrice(req.getSymbol()) : quotes.freshPrice(req.getSymbol());
@@ -82,8 +97,10 @@ public class ContractOrderService {
 
         // 挂单按限价预留，成交时按实际成交价补足或退还差额。
         BigDecimal marginPrice = "LIMIT".equals(req.getType()) ? req.getPrice() : currentPrice;
-        BigDecimal conversionRate=conversionRate(symbol.getQuoteCurrency(),symbol.getMarketSource());
-        BigDecimal requiredMargin = calculateMargin(req.getQuantity(), lotSize, marginPrice, leverage, conversionRate);
+        BigDecimal conversionRate=forex ? quotes.fxMarginRate(symbol.getBaseCurrency(), symbol.getQuoteCurrency(), marginPrice)
+                : conversionRate(symbol.getQuoteCurrency(),symbol.getMarketSource());
+        QuantityRules.notional(req.getQuantity(), lotSize, marginPrice, conversionRate(symbol.getQuoteCurrency(), symbol.getMarketSource()), symbol.getMinOrderNotional());
+        BigDecimal requiredMargin = calculateMargin(req.getQuantity(), lotSize, forex ? BigDecimal.ONE : marginPrice, leverage, conversionRate);
         
         // 计算预计手续费 = 买入数量 × 手续费倍数
         BigDecimal fee = money(req.getQuantity().multiply(feeMultiplier), RoundingMode.HALF_UP);
@@ -91,21 +108,20 @@ public class ContractOrderService {
         // 总费用 = 预计保证金 + 预计手续费
         BigDecimal totalCost = money(requiredMargin.add(fee), RoundingMode.UNNECESSARY);
 
-        // 检查余额是否足够
-        BigDecimal available = contractAccount.getAvailable() != null ? contractAccount.getAvailable() : BigDecimal.ZERO;
-        if (available.compareTo(totalCost) < 0) {
-            throw new BusinessException("合约资产余额不足，需要: " + totalCost + "，可用: " + available);
+        BigDecimal trialReserved = BigDecimal.ZERO;
+        if (trialFunds != null) trialReserved = trialFunds.reserve(userId, contractAccount, totalCost, "CONTRACT_RESERVE");
+        else {
+            BigDecimal available = contractAccount.getAvailable();
+            if (available.compareTo(totalCost) < 0) throw new BusinessException("合约资产余额不足");
+            contractAccount.setAvailable(available.subtract(totalCost));
+            contractAccount.setFrozen(contractAccount.getFrozen().add(totalCost));
+            assetAccountRepository.save(contractAccount);
         }
-
-        // 冻结总费用（保证金 + 手续费）
-        contractAccount.setAvailable(available.subtract(totalCost));
-        BigDecimal frozen = contractAccount.getFrozen() != null ? contractAccount.getFrozen() : BigDecimal.ZERO;
-        contractAccount.setFrozen(frozen.add(totalCost));
-        assetAccountRepository.save(contractAccount);
 
         // 创建订单
         ContractOrder order = new ContractOrder();
         order.setUserId(userId);
+        order.setTrialReserved(trialReserved);
         order.setSymbol(req.getSymbol());
         order.setSide(req.getSide()); // BUY or SELL
         order.setType(req.getType()); // MARKET or LIMIT
@@ -118,6 +134,8 @@ public class ContractOrderService {
         order.setFee(fee); // 手续费
         order.setLeverage(leverage); // 杠杆倍数
         order.setLotSize(lotSize);
+        QuantityRules.snapshot(symbol, order);
+        order.setFxBaseCurrency(forex ? symbol.getBaseCurrency() : null);
         order.setQuoteCurrency(symbol.getQuoteCurrency());
         order.setQuoteSource(symbol.getMarketSource());
         order.setMarginConversionRate(conversionRate);
@@ -144,6 +162,7 @@ public class ContractOrderService {
         TransactionTemplate transaction = new TransactionTemplate(transactionManager);
         for (ContractOrder order : contractOrderRepository.findByStatusAndTypeAndLimitMatchEnabledTrue("PENDING", "LIMIT")) {
             try {
+                if (!identityService.canUseTradingFunds(order.getUserId()) && trial(order.getTrialReserved()).signum() == 0) continue;
                 if (order.getLotSize() != null) {
                     filled += transaction.execute(status -> matchPendingLimitOrder(order.getId()));
                 } else {
@@ -162,21 +181,35 @@ public class ContractOrderService {
     private int matchPendingLimitOrder(Long id) {
         ContractOrder order = contractOrderRepository.findById(id).orElse(null);
         if (order == null || !"PENDING".equals(order.getStatus()) || !order.isLimitMatchEnabled()) return 0;
+        if (!identityService.canUseTradingFunds(order.getUserId()) && trial(order.getTrialReserved()).signum() == 0) return 0;
+        if (trialFunds != null) trialFunds.lock(order.getUserId());
         TradingSymbol symbol = tradingSymbolRepository.findBySymbol(order.getSymbol()).orElse(null);
         if (symbol == null || (!categories.leverageEnabled(symbol.getCategory()) && order.getLeverage().compareTo(BigDecimal.ONE)>0)) return 0;
         BigDecimal price = quotes.freshPrice(order.getSymbol());
         if (price == null || price.signum() <= 0
                 || ("BUY".equals(order.getSide()) && price.compareTo(order.getPrice()) > 0)
                 || ("SELL".equals(order.getSide()) && price.compareTo(order.getPrice()) < 0)) return 0;
-        BigDecimal conversionRate=conversionRate(order.getQuoteCurrency(),order.getQuoteSource());
-        BigDecimal margin = calculateMargin(order.getQuantity(), order.getLotSize(), price, order.getLeverage(),conversionRate);
+        boolean forex = order.getFxBaseCurrency() != null;
+        BigDecimal conversionRate=forex ? quotes.fxMarginRate(order.getFxBaseCurrency(),order.getQuoteCurrency(),price)
+                : conversionRate(order.getQuoteCurrency(),order.getQuoteSource());
+        QuantityRules.notional(order.getQuantity(), order.getLotSize(), price, conversionRate(order.getQuoteCurrency(), order.getQuoteSource()), order.getMinOrderNotional());
+        BigDecimal margin = calculateMargin(order.getQuantity(), order.getLotSize(), forex ? BigDecimal.ONE : price, order.getLeverage(),conversionRate);
         BigDecimal difference = margin.subtract(order.getMargin());
+        if (trialFunds != null) trialFunds.lock(order.getUserId());
         AssetAccount account = assetAccountRepository.findByUserIdAndCoin(order.getUserId(), "CONTRACT")
                 .orElseThrow(() -> new BusinessException("合约资产账户不存在"));
-        if (difference.signum() > 0 && account.getAvailable().compareTo(difference) < 0) return 0;
-        account.setAvailable(account.getAvailable().subtract(difference));
-        account.setFrozen(account.getFrozen().add(difference));
-        assetAccountRepository.save(account);
+        if (trialFunds != null) {
+            BigDecimal balance = trialFunds.tradingBalance(order.getUserId(), account.getAvailable());
+            if (difference.signum() > 0 && balance.compareTo(difference) < 0) return 0;
+            BigDecimal oldCost = order.getMargin().add(order.getFee());
+            trialFunds.settle(order.getUserId(), account, oldCost, trial(order.getTrialReserved()), BigDecimal.ZERO, "CONTRACT_RESIZE:"+id);
+            order.setTrialReserved(trialFunds.reserve(order.getUserId(), account, margin.add(order.getFee()), "CONTRACT_RESERVE:"+id));
+        } else {
+            if (difference.signum() > 0 && account.getAvailable().compareTo(difference) < 0) return 0;
+            account.setAvailable(account.getAvailable().subtract(difference));
+            account.setFrozen(account.getFrozen().add(difference));
+            assetAccountRepository.save(account);
+        }
         order.setMargin(margin);
         order.setMarginConversionRate(conversionRate);
         order.setStatus("OPEN");
@@ -192,9 +225,9 @@ public class ContractOrderService {
      */
     public List<ContractOrder> getUserOrders(Long userId, String status) {
         if (status != null && !status.isEmpty()) {
-            return contractOrderRepository.findByUserIdAndStatusOrderByCreatedAtDesc(userId, status);
+            return contractOrderRepository.findByUserIdAndStatusAndDeletedAtIsNullOrderByCreatedAtDesc(userId, status);
         }
-        return contractOrderRepository.findByUserIdOrderByCreatedAtDesc(userId);
+        return contractOrderRepository.findByUserIdAndDeletedAtIsNullOrderByCreatedAtDesc(userId);
     }
 
     /**
@@ -212,7 +245,8 @@ public class ContractOrderService {
                     newAccount.setFrozen(BigDecimal.ZERO);
                     return assetAccountRepository.save(newAccount);
                 });
-        return contractAccount.getAvailable() != null ? contractAccount.getAvailable() : BigDecimal.ZERO;
+        BigDecimal real = contractAccount.getAvailable() != null ? contractAccount.getAvailable() : BigDecimal.ZERO;
+        return trialFunds == null ? real : trialFunds.tradingBalance(userId, real);
     }
 
     /** 平仓始终使用服务端新鲜行情。 */
@@ -234,10 +268,18 @@ public class ContractOrderService {
         if (!"OPEN".equals(order.getStatus())) throw new BusinessException("只能平仓持仓中的订单");
         BigDecimal closePrice = requireFreshPrice(order.getSymbol());
         BigDecimal settlementRate=conversionRate(order.getQuoteCurrency(),order.getQuoteSource());
+        if (trialFunds != null) trialFunds.lock(order.getUserId());
+        // Reload after quote/account locks: a concurrent price refresh may have advanced the version.
+        if (entityManager != null) entityManager.refresh(order, javax.persistence.LockModeType.PESSIMISTIC_WRITE);
+        if (!"OPEN".equals(order.getStatus())) throw new BusinessException("只能平仓持仓中的订单");
         BigDecimal profit = money(calculateQuoteProfit(order,closePrice).multiply(settlementRate),RoundingMode.HALF_UP);
         AssetAccount account = assetAccountRepository.findByUserIdAndCoin(order.getUserId(), "CONTRACT")
                 .orElseThrow(() -> new BusinessException("合约资产账户不存在"));
         BigDecimal totalFrozen = order.getMargin().add(order.getFee());
+        if (trialFunds != null) {
+            BigDecimal net = order.getLotSize() == null ? profit : profit.subtract(order.getFee());
+            trialFunds.settle(order.getUserId(), account, totalFrozen, trial(order.getTrialReserved()), net, "CONTRACT_SETTLE:"+order.getId());
+        } else {
         BigDecimal frozen = account.getFrozen() != null ? account.getFrozen() : BigDecimal.ZERO;
         if (frozen.compareTo(totalFrozen) < 0) throw new BusinessException("冻结金额不足");
         account.setFrozen(frozen.subtract(totalFrozen));
@@ -246,6 +288,7 @@ public class ContractOrderService {
         BigDecimal available = account.getAvailable() != null ? account.getAvailable() : BigDecimal.ZERO;
         account.setAvailable(available.add(refund).add(profit));
         assetAccountRepository.save(account);
+        }
         order.setStatus("CLOSED");
         order.setClosePrice(closePrice);
         order.setSettlementConversionRate(settlementRate);
@@ -277,12 +320,15 @@ public class ContractOrderService {
         order.setStatus("CANCELLED");
 
         // 获取合约资产账户
+        if (trialFunds != null) trialFunds.lock(userId);
         AssetAccount contractAccount = assetAccountRepository
                 .findByUserIdAndCoin(userId, "CONTRACT")
                 .orElseThrow(() -> new BusinessException("合约资产账户不存在"));
 
         // 解冻保证金和手续费
         BigDecimal totalFrozen = order.getMargin().add(order.getFee());
+        if (trialFunds != null) trialFunds.settle(userId, contractAccount, totalFrozen, trial(order.getTrialReserved()), BigDecimal.ZERO, "CONTRACT_CANCEL:"+order.getId());
+        else {
         BigDecimal frozen = contractAccount.getFrozen() != null ? contractAccount.getFrozen() : BigDecimal.ZERO;
         if (frozen.compareTo(totalFrozen) < 0) {
             throw new BusinessException("冻结金额不足");
@@ -293,6 +339,8 @@ public class ContractOrderService {
         BigDecimal available = contractAccount.getAvailable() != null ? contractAccount.getAvailable() : BigDecimal.ZERO;
         contractAccount.setAvailable(available.add(totalFrozen));
         assetAccountRepository.save(contractAccount);
+
+        }
 
         return contractOrderRepository.save(order);
     }
@@ -316,12 +364,15 @@ public class ContractOrderService {
         order.setStatus("CANCELLED");
 
         // 获取合约资产账户
+        if (trialFunds != null) trialFunds.lock(userId);
         AssetAccount contractAccount = assetAccountRepository
                 .findByUserIdAndCoin(userId, "CONTRACT")
                 .orElseThrow(() -> new BusinessException("合约资产账户不存在"));
 
         // 解冻保证金和手续费
         BigDecimal totalFrozen = order.getMargin().add(order.getFee());
+        if (trialFunds != null) trialFunds.settle(userId, contractAccount, totalFrozen, trial(order.getTrialReserved()), BigDecimal.ZERO, "CONTRACT_CANCEL:"+order.getId());
+        else {
         BigDecimal frozen = contractAccount.getFrozen() != null ? contractAccount.getFrozen() : BigDecimal.ZERO;
         if (frozen.compareTo(totalFrozen) < 0) {
             throw new BusinessException("冻结金额不足");
@@ -332,6 +383,8 @@ public class ContractOrderService {
         BigDecimal available = contractAccount.getAvailable() != null ? contractAccount.getAvailable() : BigDecimal.ZERO;
         contractAccount.setAvailable(available.add(totalFrozen));
         assetAccountRepository.save(contractAccount);
+
+        }
 
         return contractOrderRepository.save(order);
     }
@@ -511,7 +564,7 @@ public class ContractOrderService {
                 // 总亏损 = -totalProfit（如果totalProfit为负数）
                 if (totalProfit.compareTo(BigDecimal.ZERO) < 0) {
                     BigDecimal totalLoss = totalProfit.negate(); // 转换为正数（亏损金额）
-                    BigDecimal availablePlusMargin = available.add(totalMarginAndFee);
+                    BigDecimal availablePlusMargin = (trialFunds == null ? available : trialFunds.tradingBalance(userId, available)).add(totalMarginAndFee);
                     
                     // 如果总亏损 >= (余额 + 保证金)，强制平仓所有订单
                     if (totalLoss.compareTo(availablePlusMargin) >= 0) {
@@ -565,7 +618,7 @@ public class ContractOrderService {
 
     /** 计算订单的实时盈亏。 */
     private BigDecimal conversionRate(String currency,String source) {
-        return com.gtcfesk.exchange.market.QuoteCurrencyConversion.fixed(currency)?BigDecimal.ONE:quotes.requireConversionRate(currency,source);
+        return com.gtcfesk.exchange.market.QuoteCurrencyConversion.fixed(currency)?BigDecimal.ONE:quotes.requireContractConversionRate(currency,source);
     }
     private BigDecimal calculateProfit(ContractOrder order, BigDecimal currentPrice) {
         return money(calculateQuoteProfit(order,currentPrice).multiply(conversionRate(order.getQuoteCurrency(),order.getQuoteSource())),RoundingMode.HALF_UP);

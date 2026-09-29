@@ -45,7 +45,7 @@ for (const template of shareTemplates) {
     assert.equal(printed.includes('-50.00'), mode === 'amount' || mode === 'both', `${template} amount visibility`)
     assert.equal(printed.some(text => text.includes('-5.00%')), mode === 'rate' || mode === 'both', `${template} return visibility`)
     assert.equal(canvas.width, 1080)
-    assert.equal(canvas.height, template === 'referenceTerminal' ? Math.round(1080 * 484 / 285) : template.startsWith('reference') ? Math.round(1080 * 1200 / 654) : 1440)
+    assert.equal(canvas.height, 1440)
     if (mode === 'rate' || mode === 'none') for (const privateValue of ['78.00ロット', '78.00 ロット', '1000.00', '3.00']) assert.ok(!printed.includes(privateValue), `${template} must hide ${privateValue}`)
   }
 }
@@ -53,7 +53,7 @@ for (const template of ['referenceGold', 'referenceWhite', 'referenceTerminal'])
   assert.throws(() => drawSharePoster(canvas, order, { ...options, template }, shareCopy('en'), 'DEMO', 'UTC', undefined, undefined, {}))
   printed.length = 0
   drawSharePoster(canvas, { ...order, kind: 'option', amount: 200, closePrice: 1e-8 }, { ...options, template, mode: 'both' }, shareCopy('en'), 'DEMO', 'UTC', undefined, chart, {})
-  assert.ok(printed.includes(shareCopy('en').investment))
+  assert.ok(!printed.includes(shareCopy('en').investment))
   assert.ok(printed.some(value => value.includes('-25.00%')))
   assert.ok(printed.some(value => value.includes('0.00000001')))
 }
@@ -116,3 +116,37 @@ for (const locale of Object.keys(posterLocales)) {
 assert.equal(readFileSync(new URL('./orderShareLocales.ts', import.meta.url), 'utf8'), readFileSync(new URL('../../../exchange-pc/src/utils/orderShareLocales.ts', import.meta.url), 'utf8'))
 assert.equal(shareBackgrounds.referenceWhite, 'reference-white-neutral.png')
 console.log('Localization: 19 locales × 16 templates × 4 display modes passed')
+
+// Privacy cannot be re-enabled by old clients; emphasis and sign colors are consistent in all templates.
+const draws = []
+context.fillText = (text, x, y) => { printed.push(text); draws.push({ text, x, y, font: context.font, color: context.fillStyle }) }
+for (const template of shareTemplates) for (const focus of ['amount', 'rate']) for (const profit of [125.5, -125.5, 0, 123456789012345.67, -123456789012345.67]) {
+  draws.length = 0
+  const specimen = { ...order, id: 'PRIVATE-ORDER-987654', profit, margin: 1234, fee: 9.87 }
+  const copy = shareCopy('ja')
+  drawSharePoster(canvas, specimen, { ...options, template, mode: 'both', focus, orderId: true }, copy, 'DEMO', 'UTC', undefined, recent, {})
+  const amount = draws.find(d => d.text === shareNumber(profit, 2, true))
+  const rate = draws.find(d => d.text === `${shareNumber(shareReturn(specimen), 2, true)}%`)
+  assert.ok(amount && rate, `${template}/${focus}: both metrics present`)
+  const primary = focus === 'rate' ? rate : amount, secondary = focus === 'rate' ? amount : rate
+  assert.ok(primary.y < secondary.y, `${template}/${focus}: primary above secondary`)
+  assert.ok(parseFloat(primary.font.split(' ')[1]) > parseFloat(secondary.font.split(' ')[1]), `${template}/${focus}: larger primary`)
+  for (const metric of [amount, rate]) {
+    assert.ok((profit > 0 ? ['#17804c', '#69d8a3'] : profit < 0 ? ['#c43d4b', '#ff828b'] : ['#546571', '#b2c1ce']).includes(metric.color), `${template}: signed color`)
+  }
+  for (const forbidden of [specimen.id, copy.margin, copy.investment, copy.fee, copy.orderId, copy.orderNumber, '1,234.00', '1234.00', '9.87', '世界', '集中', '実行'])
+    assert.ok(!draws.some(d => d.text.includes(forbidden)), `${template}: must never print ${forbidden}`)
+  assert.equal(copy.contractRate, copy.rate)
+  assert.equal(copy.optionRate, copy.rate)
+}
+for (const template of shareTemplates) {
+  draws.length = 0
+  drawSharePoster(canvas, { ...order, margin: 0 }, { ...options, template, mode: 'both', focus: 'rate' }, shareCopy('en'), 'DEMO', 'UTC', undefined, recent, {})
+  assert.equal(draws.find(d => d.y === 327)?.text, '-50.00', 'Unavailable return falls back to P&L')
+  assert.ok(draws.some(d => d.text === '—' && ['#546571', '#b2c1ce'].includes(d.color)))
+}
+assert.equal(shareCopy('ja').entry, '新規約定価格')
+assert.equal(shareCopy('ja').exit, '決済約定価格')
+assert.equal(shareCopy('ja').pnl, '実現損益')
+assert.equal(readFileSync(new URL('./orderShare.ts', import.meta.url), 'utf8'), readFileSync(new URL('../../../exchange-admin/src/utils/orderShare.ts', import.meta.url), 'utf8'))
+console.log('Redesign: all 16 templates, both emphasis modes, positive/negative/zero, privacy and Japanese terminology passed')

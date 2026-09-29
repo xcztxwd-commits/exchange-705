@@ -151,6 +151,7 @@ public class MarketInstrumentCatalog {
             if("Forex".equals(category)){String[] pair=symbol.getDisplayName().split("/");if(pair.length==2)base=pair[0];}
             symbol.setBaseCurrency(truncate(base,16));symbol.setQuoteCurrency(currency);symbol.setPricePrecision("Forex".equals(category)?5:meta.path("priceHint").asInt(2));
         }
+        com.gtcfesk.exchange.trade.FxContractRules.defaults(symbol);
         symbol.setIconUrl(MarketIconController.url(symbol));
         symbol.setMarketInstrumentKey(identity(symbol));return symbol;
     }

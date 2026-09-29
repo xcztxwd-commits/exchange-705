@@ -21,6 +21,10 @@ public interface UserAccountRepository extends JpaRepository<UserAccount, Long> 
     Optional<UserAccount> lockById(@Param("id") Long id);
 
     Optional<UserAccount> findByEmail(String email);
+    @Query("SELECT u FROM UserAccount u WHERE (:agent IS NULL OR u.parentUserId = :agent) " +
+           "AND (str(u.id) LIKE :idPrefix ESCAPE '!' OR lower(u.email) LIKE :emailPattern ESCAPE '!') ORDER BY u.id")
+    Page<UserAccount> findDepositCustomers(@Param("agent") Long agent, @Param("idPrefix") String idPrefix,
+                                          @Param("emailPattern") String emailPattern, Pageable pageable);
     Optional<UserAccount> findByPhone(String phone);
     Optional<UserAccount> findByMyInviteCode(String myInviteCode);
     boolean existsByEmail(String email);

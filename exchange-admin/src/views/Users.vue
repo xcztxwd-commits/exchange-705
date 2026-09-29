@@ -2,7 +2,17 @@
 import { ref, onMounted, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search, Refresh, Lock, Edit, Wallet, User, Delete, Document, ArrowDown } from '@element-plus/icons-vue'
-import request from '@/utils/request'
+import { useAccountTable } from '@/utils/useAccountTable'
+import { accountTableRequest } from '@/utils/accountTableRequest'
+import AccountTypeFilter from '@/components/AccountTypeFilter.vue'
+const accountTable = useAccountTable()
+const accountModes = accountTable.modes
+const walletTable = useAccountTable(), walletModes = walletTable.modes
+const fundsTable = useAccountTable(), fundsModes = fundsTable.modes
+const subTable = useAccountTable(), subModes = subTable.modes
+const request = accountTableRequest(accountTable, () => walletDialogVisible.value && walletModes.value.join(",") !== "REAL")
+function accountFilterChanged() { users.value=[];total.value=0;queryParams.value.page=0;loadUsers() }
+import { can, loadAccess } from '@/utils/access'
 import ManualDepositDialog from '@/components/ManualDepositDialog.vue'
 const manualDepositVisible = ref(false)
 const depositPermissions = ref<Record<string,boolean>>({})
@@ -26,24 +36,8 @@ const usersMenuId = ref<number | null>(null) // 用户管理菜单的ID
 const permissionsLoaded = ref(false) // 权限是否已加载
 
 // 检查是否有操作权限（使用函数，内部使用响应式数据）
-const hasPermission = (menuCode: string, actionCode: string): boolean => {
-  // 超级管理员拥有所有权限
-  if (auth.user?.isSuperAdmin || auth.user?.role === 'super_admin') {
-    return true
-  }
-  // 如果不是代理，默认有所有权限
-  if (!isAgent.value) {
-    return true
-  }
-  // 如果权限还未加载，返回false（避免显示所有按钮）
-  if (!permissionsLoaded.value) {
-    return false
-  }
-  // 代理需要检查权限
-  const actions = userPermissions.value.get(menuCode) || []
-  return actions.includes(actionCode)
-}
-const canSetBalance = computed(() => auth.user?.isSuperAdmin || auth.user?.role === 'super_admin' || (isAgent.value && hasPermission('users', 'modify_balance')))
+const hasPermission = (menuCode: string, actionCode: string): boolean => can(`${menuCode}:${actionCode}`)
+const canSetBalance = computed(() => can('users:modify_balance'))
 
 const users = ref<any[]>([])
 const total = ref(0)
@@ -130,7 +124,7 @@ const queryParams = ref({
   userType: '',
   filterAgentId: null as number | null,
   page: 0,
-  size: 20,
+  size: 10,
 })
 
 const agentList = ref<any[]>([])
@@ -179,10 +173,10 @@ const handleReset = () => {
 
 const handlePageChange = (page: number) => {
   queryParams.value.page = page - 1
-  loadUsers()
 }
 
 const handleResetPassword = async (row: any) => {
+  accountTable.selectRow(row)
   try {
     const { value } = await ElMessageBox.prompt('请输入新密码（至少6位）', '重置密码', {
       confirmButtonText: '确定',
@@ -205,6 +199,7 @@ const handleResetPassword = async (row: any) => {
 }
 
 const handleUpdateStatus = async (row: any, newStatus: string) => {
+  accountTable.selectRow(row)
   const statusText = { normal: '正常', frozen: '冻结', banned: '禁用' }[newStatus] || newStatus
   
   try {
@@ -227,6 +222,7 @@ const handleUpdateStatus = async (row: any, newStatus: string) => {
 }
 
 const handleSetUserType = async (row: any, userType: string) => {
+  accountTable.selectRow(row)
   const typeText = userType === 'agent' ? '代理' : '正常用户'
   
   try {
@@ -293,6 +289,7 @@ const handleCommand = (command: string, row: any) => {
 }
 
 const openRemarkDialog = (row: any) => {
+  accountTable.selectRow(row)
   remarkForm.value = {
     userId: row.id,
     email: row.email,
@@ -316,6 +313,7 @@ const handleSaveRemark = async () => {
 }
 
 const openBalanceDialog = (row: any) => {
+  accountTable.selectRow(row)
   balanceMode.value = depositPermissions.value.manual_deposit ? 'deposit' : 'balance'
   balanceCurrency.value = 'USD'
   rechargeAccount.value = 'FUND'
@@ -390,6 +388,8 @@ const isUserOnline = (row: any): boolean => {
 
 // 打开账户余额查看对话框（代理账号使用）
 const openBalanceViewDialog = async (row: any) => {
+  accountTable.selectRow(row)
+  balanceViewData.value = null
   loadingBalanceView.value = true
   balanceViewDialogVisible.value = true
   try {
@@ -410,6 +410,8 @@ const openBalanceViewDialog = async (row: any) => {
 
 // 打开收款管理对话框
 const openWalletDialog = async (row: any) => {
+  accountTable.selectRow(row)
+  walletModes.value = [row.accountMode || "REAL"]
   currentUserId.value = row.id
   currentUserEmail.value = row.email
   walletDialogVisible.value = true
@@ -419,11 +421,13 @@ const openWalletDialog = async (row: any) => {
 
 // 加载收款数据
 const loadWalletData = async () => {
-  loadingWallet.value = true
+  editingBankCard.value = null; editingAddress.value = null
+  bankCardForm.value.currency = ''; addressForm.value.currency = ''
+  bankCards.value = []; digitalAddresses.value = []; loadingWallet.value = true
   try {
     const [bankRes, addressRes]: any[] = await Promise.all([
-      request.get(`/admin/wallet/${currentUserId.value}/bank-cards`),
-      request.get(`/admin/wallet/${currentUserId.value}/digital-addresses`)
+      walletTable.query(`/admin/wallet/${currentUserId.value}/bank-cards`),
+      walletTable.query(`/admin/wallet/${currentUserId.value}/digital-addresses`)
     ])
     
     if (bankRes && bankRes.success !== false) {
@@ -454,6 +458,7 @@ const handleAddBankCard = () => {
 }
 
 const handleEditBankCard = (card: any) => {
+  accountTable.selectRow(card)
   editingBankCard.value = card
   bankCardForm.value = {
     currency: card.currency || '',
@@ -529,6 +534,7 @@ const handleAddAddress = () => {
 }
 
 const handleEditAddress = (address: any) => {
+  accountTable.selectRow(address)
   editingAddress.value = address
   addressForm.value = {
     currency: address.currency || '',
@@ -591,7 +597,8 @@ const handleDeleteAddress = async (id: number) => {
 
 // 打开用户详细对话框
 const openUserDetailDialog = async (row: any) => {
-  loadingUserDetail.value = true
+  accountTable.selectRow(row)
+  userDetail.value = null; loadingUserDetail.value = true
   userDetailDialogVisible.value = true
   try {
     const res: any = await request.get(`/admin/users/${row.id}`)
@@ -606,6 +613,8 @@ const openUserDetailDialog = async (row: any) => {
 
 // 打开下级用户对话框
 const openSubordinatesDialog = async (row: any) => {
+  accountTable.selectRow(row)
+  subModes.value = [row.accountMode || "REAL"]
   currentSubordinateUserId.value = row.id
   subordinatesDialogVisible.value = true
   await loadSubordinates()
@@ -613,9 +622,9 @@ const openSubordinatesDialog = async (row: any) => {
 
 // 加载下级用户列表
 const loadSubordinates = async () => {
-  loadingSubordinates.value = true
+  subordinates.value = []; loadingSubordinates.value = true
   try {
-    const res: any = await request.get(`/admin/users/${currentSubordinateUserId.value}/subordinates`)
+    const res: any = await subTable.query(`/admin/users/${currentSubordinateUserId.value}/subordinates`)
     subordinates.value = res.list || []
   } catch (e: any) {
     ElMessage.error(e?.message || '加载失败')
@@ -626,6 +635,8 @@ const loadSubordinates = async () => {
 
 // 打开资金明细对话框
 const openFundDetailsDialog = async (row: any) => {
+  accountTable.selectRow(row)
+  fundsModes.value = [row.accountMode || "REAL"]
   currentFundDetailsUserId.value = row.id
   currentFundDetailsUserEmail.value = row.email
   fundDetailsDialogVisible.value = true
@@ -635,9 +646,9 @@ const openFundDetailsDialog = async (row: any) => {
 
 // 加载资金明细
 const loadFundDetails = async () => {
-  loadingFundDetails.value = true
+  fundDetailsData.value = null; loadingFundDetails.value = true
   try {
-    const res: any = await request.get(`/admin/users/${currentFundDetailsUserId.value}/fund-details`)
+    const res: any = await fundsTable.fundDetails(`/admin/users/${currentFundDetailsUserId.value}/fund-details`)
     if (res && res.success && res.data) {
       fundDetailsData.value = res.data
     } else {
@@ -780,7 +791,7 @@ const allFundDetails = computed(() => {
       all.push({
         type: 'contract',
         typeText: '合约订单',
-        id: order.id,
+        id: order.id, accountMode: order.accountMode, accountModeLabel: order.accountModeLabel,
         amount: order.margin || 0,
         profit: order.profit || 0,
         status: order.status,
@@ -800,7 +811,7 @@ const allFundDetails = computed(() => {
       all.push({
         type: 'option',
         typeText: '期权订单',
-        id: order.id,
+        id: order.id, accountMode: order.accountMode, accountModeLabel: order.accountModeLabel,
         amount: order.amount || 0,
         profit: order.profit || 0,
         status: order.status,
@@ -820,7 +831,7 @@ const allFundDetails = computed(() => {
       all.push({
         type: 'deposit',
         typeText: '入金',
-        id: record.id,
+        id: record.id, accountMode: record.accountMode, accountModeLabel: record.accountModeLabel,
         amount: record.amount || 0,
         status: record.status,
         typeDetail: record.type,
@@ -837,7 +848,7 @@ const allFundDetails = computed(() => {
       all.push({
         type: 'withdraw',
         typeText: '出金',
-        id: record.id,
+        id: record.id, accountMode: record.accountMode, accountModeLabel: record.accountModeLabel,
         amount: record.amount || 0,
         actualAmount: record.actualAmount || 0,
         fee: record.fee || 0,
@@ -856,7 +867,7 @@ const allFundDetails = computed(() => {
       all.push({
         type: 'loan',
         typeText: '贷款',
-        id: record.id,
+        id: record.id, accountMode: record.accountMode, accountModeLabel: record.accountModeLabel,
         amount: record.amount || 0,
         repaymentAmount: record.repaymentAmount || 0,
         totalInterest: record.totalInterest || 0,
@@ -873,7 +884,7 @@ const allFundDetails = computed(() => {
       all.push({
         type: 'financial',
         typeText: '理财',
-        id: order.id,
+        id: order.id, accountMode: order.accountMode, accountModeLabel: order.accountModeLabel,
         amount: order.amount || 0,
         status: order.status,
         productName: order.productName,
@@ -890,7 +901,7 @@ const allFundDetails = computed(() => {
       all.push({
         type: 'transfer',
         typeText: '转账',
-        id: record.id,
+        id: record.id, accountMode: record.accountMode, accountModeLabel: record.accountModeLabel,
         amount: record.amount || 0,
         fromAccount: record.fromAccount,
         toAccount: record.toAccount,
@@ -909,6 +920,7 @@ const allFundDetails = computed(() => {
 
 // 打开修改邀请码对话框
 const handleEditInviteCode = (row: any) => {
+  accountTable.selectRow(row)
   inviteCodeForm.value = {
     userId: row.id,
     email: row.email,
@@ -939,6 +951,7 @@ const handleSaveInviteCode = async () => {
 
 // 删除用户
 const handleDeleteUser = async (row: any) => {
+  accountTable.selectRow(row)
   try {
     await ElMessageBox.confirm(
       `确定要删除用户 "${row.email}" 吗？删除后将无法恢复，且会删除该用户的所有关联数据（资产账户、订单等）。`,
@@ -963,74 +976,7 @@ const handleDeleteUser = async (row: any) => {
 }
 
 // 加载权限信息
-const loadPermissions = async () => {
-  if (!isAgent.value) return // 非代理用户不需要加载权限
-  
-  try {
-    // 获取用户管理菜单ID
-    const menusResponse: any = await request.get('/admin/menus/list')
-    if (menusResponse.success) {
-      const usersMenu = menusResponse.list.find((m: any) => m.menuCode === 'users')
-      if (usersMenu) {
-        usersMenuId.value = usersMenu.id
-      }
-    }
-    
-    // 获取当前用户的权限
-    const userId = auth.user?.id
-    if (userId) {
-      const permissionsResponse: any = await request.get(`/admin/users/${userId}/menus`)
-      console.log('权限API响应:', permissionsResponse)
-      
-      if (permissionsResponse.success) {
-        // 获取所有菜单信息
-        const allMenus: any = await request.get('/admin/menus/list')
-        console.log('所有菜单列表:', allMenus)
-        
-        if (allMenus.success) {
-          const menuMap = new Map<number, string>()
-          allMenus.list.forEach((m: any) => {
-            menuMap.set(m.id, m.menuCode)
-          })
-          console.log('菜单映射表:', menuMap)
-          
-          // 构建权限Map (menuCode -> [actionCode1, actionCode2, ...])
-          const actions = permissionsResponse.actions || {}
-          console.log('[Users] 操作权限数据:', actions, '类型:', typeof actions)
-          
-          userPermissions.value = new Map()
-          // 处理actions对象，key可能是字符串或数字
-          for (const [menuIdKey, actionCodes] of Object.entries(actions)) {
-            // 尝试将key转换为数字（可能是字符串形式的数字）
-            let menuId: number
-            if (typeof menuIdKey === 'string') {
-              menuId = parseInt(menuIdKey, 10)
-            } else {
-              menuId = Number(menuIdKey)
-            }
-            
-            const menuCode = menuMap.get(menuId)
-            console.log(`[Users] 菜单ID ${menuId} (原始key: ${menuIdKey}) -> 菜单代码 ${menuCode}, 操作:`, actionCodes)
-            
-            if (menuCode && Array.isArray(actionCodes)) {
-              userPermissions.value.set(menuCode, actionCodes as string[])
-            }
-          }
-          
-          console.log('[Users] 最终权限Map:', Array.from(userPermissions.value.entries()))
-          console.log('[Users] users菜单权限:', userPermissions.value.get('users'))
-          permissionsLoaded.value = true
-        }
-      } else {
-        console.warn('权限API返回失败:', permissionsResponse)
-        permissionsLoaded.value = true
-      }
-    }
-  } catch (error: any) {
-    console.error('加载权限失败:', error)
-    permissionsLoaded.value = true // 即使失败也标记为已加载，避免一直显示false
-  }
-}
+const loadPermissions = async () => { await loadAccess() }
 
 onMounted(() => {
   loadAgents()
@@ -1091,19 +1037,21 @@ onMounted(() => {
           </el-select>
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" :icon="Search" @click="handleSearch">搜索</el-button>
-          <el-button :icon="Refresh" @click="handleReset">重置</el-button>
+          <el-button v-permission="'users:view'" type="primary" :icon="Search" @click="handleSearch">搜索</el-button>
+          <el-button v-permission="'users:view'" :icon="Refresh" @click="handleReset">重置</el-button>
         </el-form-item>
       </el-form>
 
       <!-- 表格 -->
-      <el-table
+      <AccountTypeFilter v-model="accountModes" @change="accountFilterChanged" />
+<admin-table :row-key="(row: any) => `${row.accountMode || 'REAL'}:${row.id ?? row.userId}:${row.type || ''}`" table-key="Users.1"
         :data="users"
         v-loading="loading"
         stripe
         border
         style="margin-top: 16px"
       >
+<el-table-column prop="accountModeLabel" label="账户类型" width="110" fixed="left" />
         <el-table-column prop="id" label="ID" width="80" />
         <el-table-column prop="remark" label="备注" width="150">
           <template #default="{ row }">
@@ -1134,13 +1082,13 @@ onMounted(() => {
           <template #default="{ row }">
             <div style="display: flex; align-items: center; gap: 8px;">
               <span>{{ row.myInviteCode || '-' }}</span>
-              <el-button 
+              <el-button v-permission="'users:modify_invite_code'"
                 v-if="hasPermission('users', 'modify_invite_code')"
                 link 
                 type="primary" 
                 size="small" 
                 @click="handleEditInviteCode(row)"
-              >
+               :disabled="accountModes.includes('DEMO') || !accountModes.length">
                 修改
               </el-button>
             </div>
@@ -1185,89 +1133,89 @@ onMounted(() => {
         <el-table-column label="操作" width="120" fixed="right">
           <template #default="{ row }">
             <el-dropdown trigger="click" @command="(cmd: string) => handleCommand(cmd, row)">
-              <el-button type="primary" link>
+              <el-button v-permission="'users:view'" type="primary" link>
                 操作 <el-icon class="el-icon--right"><ArrowDown /></el-icon>
               </el-button>
               <template #dropdown>
                 <el-dropdown-menu>
-                  <el-dropdown-item 
+                  <el-dropdown-item v-permission="'users:reset_password'"
                     v-if="hasPermission('users', 'reset_password')"
                     :command="'reset_password'"
-                  >
+                   :disabled="accountModes.includes('DEMO') || !accountModes.length">
                     <el-icon style="margin-right: 8px;"><Lock /></el-icon>重置密码
                   </el-dropdown-item>
-                  <el-dropdown-item
+                  <el-dropdown-item v-permission="'users:freeze_user'"
                     v-if="hasPermission('users', 'freeze_user') && row.status === 'normal'"
                     :command="'freeze'"
                     divided
-                  >
+                   :disabled="accountModes.includes('DEMO') || !accountModes.length">
                     冻结
                   </el-dropdown-item>
-                  <el-dropdown-item
+                  <el-dropdown-item v-permission="'users:unfreeze_user'"
                     v-if="hasPermission('users', 'unfreeze_user') && row.status === 'frozen'"
                     :command="'unfreeze'"
-                  >
+                   :disabled="accountModes.includes('DEMO') || !accountModes.length">
                     解冻
                   </el-dropdown-item>
-                  <el-dropdown-item
+                  <el-dropdown-item v-permission="'users:ban_user'"
                     v-if="hasPermission('users', 'ban_user') && row.status !== 'banned'"
                     :command="'ban'"
-                  >
+                   :disabled="accountModes.includes('DEMO') || !accountModes.length">
                     禁用
                   </el-dropdown-item>
-                  <el-dropdown-item
-                    v-if="hasPermission('users', 'ban_user') && row.status === 'banned'"
+                  <el-dropdown-item v-permission="'users:unban_user'"
+                    v-if="hasPermission('users', 'unban_user') && row.status === 'banned'"
                     :command="'unban'"
-                  >
+                   :disabled="accountModes.includes('DEMO') || !accountModes.length">
                     取消禁用
                   </el-dropdown-item>
-                  <el-dropdown-item
+                  <el-dropdown-item v-permission="'users:set_agent'"
                     v-if="hasPermission('users', 'set_agent') && row.userType !== 'agent'"
                     :command="'set_agent'"
                     divided
-                  >
+                   :disabled="accountModes.includes('DEMO') || !accountModes.length">
                     设为代理
                   </el-dropdown-item>
-                  <el-dropdown-item
+                  <el-dropdown-item v-permission="'users:unset_agent'"
                     v-if="hasPermission('users', 'unset_agent') && row.userType === 'agent'"
                     :command="'unset_agent'"
-                  >
+                   :disabled="accountModes.includes('DEMO') || !accountModes.length">
                     取消代理
                   </el-dropdown-item>
-                  <el-dropdown-item 
+                  <el-dropdown-item v-permission="'users:modify_remark'"
                     :command="'edit_remark'"
                     divided
-                  >
+                   :disabled="accountModes.includes('DEMO') || !accountModes.length">
                     <el-icon style="margin-right: 8px;"><Edit /></el-icon>修改备注
                   </el-dropdown-item>
-                  <el-dropdown-item 
+                  <el-dropdown-item v-permission="canSetBalance ? 'users:modify_balance' : 'deposit_orders:manual_deposit'"
                     v-if="canSetBalance || depositPermissions.manual_deposit"
-                    :command="'modify_balance'"
+                    :command="'modify_balance'" :disabled="accountModes.includes('DEMO') || !accountModes.length"
                   >
                     <el-icon style="margin-right: 8px;"><Edit /></el-icon>修改余额
                   </el-dropdown-item>
-                  <el-dropdown-item 
+                  <el-dropdown-item v-permission="'users:wallet_management'"
                     v-if="hasPermission('users', 'wallet_management')"
                     :command="'wallet_management'"
                   >
                     <el-icon style="margin-right: 8px;"><Wallet /></el-icon>收款管理
                   </el-dropdown-item>
-                  <el-dropdown-item 
+                  <el-dropdown-item v-permission="'users:view_subordinates'"
                     v-if="hasPermission('users', 'view_subordinates')"
                     :command="'subordinates'"
                   >
                     <el-icon style="margin-right: 8px;"><User /></el-icon>下级用户
                   </el-dropdown-item>
-                  <el-dropdown-item 
+                  <el-dropdown-item v-permission="'users:fund_details'"
                     :command="'fund_details'"
                   >
                     <el-icon style="margin-right: 8px;"><Document /></el-icon>资金明细
                   </el-dropdown-item>
-                  <el-dropdown-item 
+                  <el-dropdown-item v-permission="'users:delete_user'"
                     v-if="hasPermission('users', 'delete_user')"
                     :command="'delete'"
                     divided
-                  >
+                   :disabled="accountModes.includes('DEMO') || !accountModes.length">
                     <el-icon style="margin-right: 8px;"><Delete /></el-icon>删除
                   </el-dropdown-item>
                 </el-dropdown-menu>
@@ -1275,7 +1223,7 @@ onMounted(() => {
             </el-dropdown>
           </template>
         </el-table-column>
-      </el-table>
+      </admin-table>
 
       <!-- 分页 -->
       <el-pagination
@@ -1284,8 +1232,11 @@ onMounted(() => {
         :current-page="queryParams.page + 1"
         :page-size="queryParams.size"
         :total="total"
-        layout="total, prev, pager, next, jumper"
+        :page-sizes="[10, 20, 50, 100]"
+        layout="total, sizes, prev, pager, next, jumper"
         @current-change="handlePageChange"
+        @size-change="(size: number) => queryParams.size = size"
+        @change="loadUsers"
       />
 
       <el-empty v-if="!loading && users.length === 0" description="暂无数据" />
@@ -1302,7 +1253,7 @@ onMounted(() => {
             </el-radio-group>
           </el-form-item>
           <template v-if="balanceMode === 'deposit'">
-            <el-button v-if="depositPermissions.manual_deposit" type="primary" @click="manualDepositVisible = true">打开手动充值</el-button>
+            <el-button v-permission="'deposit_orders:manual_deposit'" v-if="depositPermissions.manual_deposit" type="primary" @click="manualDepositVisible = true" :disabled="accountModes.includes('DEMO') || !accountModes.length">打开手动充值</el-button>
             <el-alert v-else title="没有手动充值权限" type="warning" :closable="false" />
           </template>
           <template v-else>
@@ -1334,13 +1285,13 @@ onMounted(() => {
         </el-form>
         <template #footer>
           <span class="dialog-footer">
-            <el-button @click="balanceDialogVisible = false">取消</el-button>
-            <el-button v-if="balanceMode === 'balance' && canSetBalance" type="primary" :loading="balanceSaving" @click="submitBalance">保存</el-button>
+            <el-button v-permission="'session:close'" @click="balanceDialogVisible = false">取消</el-button>
+            <el-button v-permission="'users:modify_balance'" v-if="balanceMode === 'balance' && canSetBalance" type="primary" :loading="balanceSaving" @click="submitBalance" :disabled="accountModes.includes('DEMO') || !accountModes.length">保存</el-button>
           </span>
         </template>
       </el-dialog>
 
-      <ManualDepositDialog v-model="manualDepositVisible" :user-id="balanceForm.userId" @success="loadUsers(); balanceDialogVisible = false" />
+      <ManualDepositDialog v-if="accountModes.length === 1 && accountModes[0] === 'REAL' && accountTable.rowMode.value === 'REAL'" v-model="manualDepositVisible" :user-id="balanceForm.userId" @success="loadUsers(); balanceDialogVisible = false" />
       <!-- 收款管理对话框 -->
       <el-dialog v-model="walletDialogVisible" title="收款管理" width="900px">
         <div style="margin-bottom: 16px; color: #666;">
@@ -1351,10 +1302,12 @@ onMounted(() => {
           <!-- 银行卡标签页 -->
           <el-tab-pane label="银行卡" name="bank">
             <div style="margin-bottom: 16px;">
-              <el-button type="primary" size="small" @click="handleAddBankCard">添加银行卡</el-button>
+              <el-button v-permission="'users:bank_create'" type="primary" size="small" @click="handleAddBankCard" :disabled="accountModes.includes('DEMO') || !accountModes.length">添加银行卡</el-button>
             </div>
             
-            <el-table :data="bankCards" v-loading="loadingWallet" border stripe>
+            <AccountTypeFilter v-model="walletModes" @change="loadWalletData" />
+<admin-table :row-key="(row: any) => `${row.accountMode || 'REAL'}:${row.id ?? row.userId}:${row.type || ''}`" table-key="Users.2" :data="bankCards" v-loading="loadingWallet" border stripe>
+<el-table-column prop="accountModeLabel" label="账户类型" width="110" />
               <el-table-column prop="currency" label="货币" width="100" />
               <el-table-column prop="bankName" label="银行名称" width="150" />
               <el-table-column prop="bankAddress" label="银行地址" min-width="150" />
@@ -1363,11 +1316,11 @@ onMounted(() => {
               <el-table-column prop="recipientAccount" label="收款账户" min-width="150" />
               <el-table-column label="操作" width="150" fixed="right">
                 <template #default="{ row }">
-                  <el-button link type="primary" size="small" @click="handleEditBankCard(row)">编辑</el-button>
-                  <el-button link type="danger" size="small" @click="handleDeleteBankCard(row.id)">删除</el-button>
+                  <el-button v-permission="'users:bank_edit'" link type="primary" size="small" @click="handleEditBankCard(row)" :disabled="accountModes.includes('DEMO') || !accountModes.length">编辑</el-button>
+                  <el-button v-permission="'users:bank_delete'" link type="danger" size="small" @click="handleDeleteBankCard(row.id)" :disabled="accountModes.includes('DEMO') || !accountModes.length">删除</el-button>
                 </template>
               </el-table-column>
-            </el-table>
+            </admin-table>
             
             <!-- 添加/编辑银行卡表单 -->
             <el-card v-if="bankCardForm.currency || editingBankCard" style="margin-top: 16px;" shadow="never">
@@ -1394,8 +1347,8 @@ onMounted(() => {
                   <el-input v-model="bankCardForm.recipientAccount" />
                 </el-form-item>
                 <el-form-item>
-                  <el-button type="primary" @click="handleSaveBankCard">保存</el-button>
-                  <el-button @click="handleAddBankCard">取消</el-button>
+                  <el-button v-permission="editingBankCard ? 'users:bank_edit' : 'users:bank_create'" type="primary" @click="handleSaveBankCard">保存</el-button>
+                  <el-button v-permission="'session:close'" @click="handleAddBankCard">取消</el-button>
                 </el-form-item>
               </el-form>
             </el-card>
@@ -1404,20 +1357,22 @@ onMounted(() => {
           <!-- 数字货币地址标签页 -->
           <el-tab-pane label="数字货币地址" name="digital">
             <div style="margin-bottom: 16px;">
-              <el-button type="primary" size="small" @click="handleAddAddress">添加地址</el-button>
+              <el-button v-permission="'users:address_create'" type="primary" size="small" @click="handleAddAddress" :disabled="accountModes.includes('DEMO') || !accountModes.length">添加地址</el-button>
             </div>
             
-            <el-table :data="digitalAddresses" v-loading="loadingWallet" border stripe>
+            <AccountTypeFilter v-model="walletModes" @change="loadWalletData" />
+<admin-table :row-key="(row: any) => `${row.accountMode || 'REAL'}:${row.id ?? row.userId}:${row.type || ''}`" table-key="Users.3" :data="digitalAddresses" v-loading="loadingWallet" border stripe>
+<el-table-column prop="accountModeLabel" label="账户类型" width="110" />
               <el-table-column prop="currency" label="货币" width="100" />
               <el-table-column prop="network" label="网络" width="120" />
               <el-table-column prop="address" label="地址" min-width="300" />
               <el-table-column label="操作" width="150" fixed="right">
                 <template #default="{ row }">
-                  <el-button link type="primary" size="small" @click="handleEditAddress(row)">编辑</el-button>
-                  <el-button link type="danger" size="small" @click="handleDeleteAddress(row.id)">删除</el-button>
+                  <el-button v-permission="'users:address_edit'" link type="primary" size="small" @click="handleEditAddress(row)" :disabled="accountModes.includes('DEMO') || !accountModes.length">编辑</el-button>
+                  <el-button v-permission="'users:address_delete'" link type="danger" size="small" @click="handleDeleteAddress(row.id)" :disabled="accountModes.includes('DEMO') || !accountModes.length">删除</el-button>
                 </template>
               </el-table-column>
-            </el-table>
+            </admin-table>
             
             <!-- 添加/编辑地址表单 -->
             <el-card v-if="addressForm.currency || editingAddress" style="margin-top: 16px;" shadow="never">
@@ -1435,8 +1390,8 @@ onMounted(() => {
                   <el-input v-model="addressForm.address" type="textarea" :rows="2" />
                 </el-form-item>
                 <el-form-item>
-                  <el-button type="primary" @click="handleSaveAddress">保存</el-button>
-                  <el-button @click="handleAddAddress">取消</el-button>
+                  <el-button v-permission="editingAddress ? 'users:address_edit' : 'users:address_create'" type="primary" @click="handleSaveAddress">保存</el-button>
+                  <el-button v-permission="'session:close'" @click="handleAddAddress">取消</el-button>
                 </el-form-item>
               </el-form>
             </el-card>
@@ -1446,12 +1401,14 @@ onMounted(() => {
 
       <!-- 下级用户对话框 -->
       <el-dialog v-model="subordinatesDialogVisible" title="下级用户列表" width="900px">
-        <el-table
+        <AccountTypeFilter v-model="subModes" @change="loadSubordinates" />
+<admin-table :row-key="(row: any) => `${row.accountMode || 'REAL'}:${row.id ?? row.userId}:${row.type || ''}`" table-key="Users.4"
           :data="subordinates"
           v-loading="loadingSubordinates"
           stripe
           border
         >
+<el-table-column prop="accountModeLabel" label="账户类型" width="110" />
           <el-table-column prop="id" label="ID" width="80" />
           <el-table-column prop="email" label="邮箱" min-width="180" />
           <el-table-column prop="nickname" label="昵称" width="120">
@@ -1467,7 +1424,7 @@ onMounted(() => {
             </template>
           </el-table-column>
           <el-table-column prop="createdAt" label="注册时间" width="180" />
-        </el-table>
+        </admin-table>
         <el-empty v-if="!loadingSubordinates && subordinates.length === 0" description="暂无下级用户" />
       </el-dialog>
 
@@ -1496,7 +1453,7 @@ onMounted(() => {
           </el-descriptions>
         </div>
         <template #footer>
-          <el-button @click="balanceViewDialogVisible = false">关闭</el-button>
+          <el-button v-permission="'session:close'" @click="balanceViewDialogVisible = false">关闭</el-button>
         </template>
       </el-dialog>
 
@@ -1509,7 +1466,9 @@ onMounted(() => {
         <el-tabs v-model="fundDetailsActiveTab">
           <!-- 全部 -->
           <el-tab-pane label="全部" name="all">
-            <el-table :data="allFundDetails" border stripe max-height="500">
+            <AccountTypeFilter v-model="fundsModes" @change="loadFundDetails" />
+<admin-table :row-key="(row: any) => `${row.accountMode || 'REAL'}:${row.id ?? row.userId}:${row.type || ''}`" table-key="Users.5" :data="allFundDetails" border stripe max-height="500">
+<el-table-column prop="accountModeLabel" label="账户类型" width="110" />
               <el-table-column prop="typeText" label="类型" width="100" />
               <el-table-column prop="id" label="ID" width="80" />
               <el-table-column label="金额" width="120">
@@ -1585,7 +1544,7 @@ onMounted(() => {
                   {{ formatDateTime(row.createdAt || row.purchaseTime) }}
                 </template>
               </el-table-column>
-            </el-table>
+            </admin-table>
             <el-empty v-if="!loadingFundDetails && allFundDetails.length === 0" description="暂无资金明细" />
           </el-tab-pane>
           
@@ -1593,7 +1552,9 @@ onMounted(() => {
           <el-tab-pane label="下单" name="orders">
             <el-tabs>
               <el-tab-pane label="合约订单">
-                <el-table :data="fundDetailsData?.contractOrders || []" border stripe max-height="500">
+                <AccountTypeFilter v-model="fundsModes" @change="loadFundDetails" />
+<admin-table :row-key="(row: any) => `${row.accountMode || 'REAL'}:${row.id ?? row.userId}:${row.type || ''}`" table-key="Users.6" :data="fundDetailsData?.contractOrders || []" border stripe max-height="500">
+<el-table-column prop="accountModeLabel" label="账户类型" width="110" />
                   <el-table-column prop="id" label="订单ID" width="100" />
                   <el-table-column prop="symbol" label="交易对" width="120"><template #default="{ row }">{{ displaySymbol(row) }}</template></el-table-column>
                   <el-table-column prop="side" label="方向" width="80">
@@ -1626,12 +1587,14 @@ onMounted(() => {
                       {{ formatDateTime(row.createdAt) }}
                     </template>
                   </el-table-column>
-                </el-table>
+                </admin-table>
                 <el-empty v-if="!loadingFundDetails && (!fundDetailsData?.contractOrders || fundDetailsData.contractOrders.length === 0)" description="暂无合约订单" />
               </el-tab-pane>
               
               <el-tab-pane label="期权订单">
-                <el-table :data="fundDetailsData?.optionOrders || []" border stripe max-height="500">
+                <AccountTypeFilter v-model="fundsModes" @change="loadFundDetails" />
+<admin-table :row-key="(row: any) => `${row.accountMode || 'REAL'}:${row.id ?? row.userId}:${row.type || ''}`" table-key="Users.7" :data="fundDetailsData?.optionOrders || []" border stripe max-height="500">
+<el-table-column prop="accountModeLabel" label="账户类型" width="110" />
                   <el-table-column prop="id" label="订单ID" width="100" />
                   <el-table-column prop="symbol" label="交易对" width="120"><template #default="{ row }">{{ displaySymbol(row) }}</template></el-table-column>
                   <el-table-column prop="direction" label="方向" width="80">
@@ -1664,7 +1627,7 @@ onMounted(() => {
                       {{ formatDateTime(row.createdAt) }}
                     </template>
                   </el-table-column>
-                </el-table>
+                </admin-table>
                 <el-empty v-if="!loadingFundDetails && (!fundDetailsData?.optionOrders || fundDetailsData.optionOrders.length === 0)" description="暂无期权订单" />
               </el-tab-pane>
             </el-tabs>
@@ -1672,7 +1635,9 @@ onMounted(() => {
           
           <!-- 贷款 -->
           <el-tab-pane label="贷款" name="loans">
-            <el-table :data="fundDetailsData?.loans || []" border stripe max-height="500">
+            <AccountTypeFilter v-model="fundsModes" @change="loadFundDetails" />
+<admin-table :row-key="(row: any) => `${row.accountMode || 'REAL'}:${row.id ?? row.userId}:${row.type || ''}`" table-key="Users.8" :data="fundDetailsData?.loans || []" border stripe max-height="500">
+<el-table-column prop="accountModeLabel" label="账户类型" width="110" />
               <el-table-column prop="id" label="ID" width="100" />
               <el-table-column prop="amount" label="贷款金额" width="120">
                 <template #default="{ row }">
@@ -1702,13 +1667,15 @@ onMounted(() => {
                   {{ formatDateTime(row.createdAt) }}
                 </template>
               </el-table-column>
-            </el-table>
+            </admin-table>
             <el-empty v-if="!loadingFundDetails && (!fundDetailsData?.loans || fundDetailsData.loans.length === 0)" description="暂无贷款记录" />
           </el-tab-pane>
           
           <!-- 理财 -->
           <el-tab-pane label="理财" name="financial">
-            <el-table :data="fundDetailsData?.financialOrders || []" border stripe max-height="500">
+            <AccountTypeFilter v-model="fundsModes" @change="loadFundDetails" />
+<admin-table :row-key="(row: any) => `${row.accountMode || 'REAL'}:${row.id ?? row.userId}:${row.type || ''}`" table-key="Users.9" :data="fundDetailsData?.financialOrders || []" border stripe max-height="500">
+<el-table-column prop="accountModeLabel" label="账户类型" width="110" />
               <el-table-column prop="id" label="订单ID" width="100" />
               <el-table-column prop="productName" label="产品名称" width="150" />
               <el-table-column prop="amount" label="购买金额" width="120">
@@ -1733,13 +1700,15 @@ onMounted(() => {
                   {{ formatDateTime(row.maturityTime) }}
                 </template>
               </el-table-column>
-            </el-table>
+            </admin-table>
             <el-empty v-if="!loadingFundDetails && (!fundDetailsData?.financialOrders || fundDetailsData.financialOrders.length === 0)" description="暂无理财订单" />
           </el-tab-pane>
           
           <!-- 出金 -->
           <el-tab-pane label="出金" name="withdraws">
-            <el-table :data="fundDetailsData?.withdraws || []" border stripe max-height="500">
+            <AccountTypeFilter v-model="fundsModes" @change="loadFundDetails" />
+<admin-table :row-key="(row: any) => `${row.accountMode || 'REAL'}:${row.id ?? row.userId}:${row.type || ''}`" table-key="Users.10" :data="fundDetailsData?.withdraws || []" border stripe max-height="500">
+<el-table-column prop="accountModeLabel" label="账户类型" width="110" />
               <el-table-column prop="id" label="ID" width="100" />
               <el-table-column prop="type" label="类型" width="100">
                 <template #default="{ row }">
@@ -1778,13 +1747,15 @@ onMounted(() => {
                   {{ formatDateTime(row.createdAt) }}
                 </template>
               </el-table-column>
-            </el-table>
+            </admin-table>
             <el-empty v-if="!loadingFundDetails && (!fundDetailsData?.withdraws || fundDetailsData.withdraws.length === 0)" description="暂无提现记录" />
           </el-tab-pane>
           
           <!-- 入金 -->
           <el-tab-pane label="入金" name="deposits">
-            <el-table :data="fundDetailsData?.deposits || []" border stripe max-height="500">
+            <AccountTypeFilter v-model="fundsModes" @change="loadFundDetails" />
+<admin-table :row-key="(row: any) => `${row.accountMode || 'REAL'}:${row.id ?? row.userId}:${row.type || ''}`" table-key="Users.11" :data="fundDetailsData?.deposits || []" border stripe max-height="500">
+<el-table-column prop="accountModeLabel" label="账户类型" width="110" />
               <el-table-column prop="id" label="ID" width="100" />
               <el-table-column prop="type" label="类型" width="100">
                 <template #default="{ row }">
@@ -1813,13 +1784,13 @@ onMounted(() => {
                   {{ formatDateTime(row.createdAt) }}
                 </template>
               </el-table-column>
-            </el-table>
+            </admin-table>
             <el-empty v-if="!loadingFundDetails && (!fundDetailsData?.deposits || fundDetailsData.deposits.length === 0)" description="暂无充值记录" />
           </el-tab-pane>
         </el-tabs>
         
         <template #footer>
-          <el-button @click="fundDetailsDialogVisible = false">关闭</el-button>
+          <el-button v-permission="'session:close'" @click="fundDetailsDialogVisible = false">关闭</el-button>
         </template>
       </el-dialog>
 
@@ -1843,8 +1814,8 @@ onMounted(() => {
         </el-form>
         <template #footer>
           <span class="dialog-footer">
-            <el-button @click="inviteCodeDialogVisible = false">取消</el-button>
-            <el-button type="primary" @click="handleSaveInviteCode">保存</el-button>
+            <el-button v-permission="'session:close'" @click="inviteCodeDialogVisible = false">取消</el-button>
+            <el-button v-permission="'users:modify_invite_code'" type="primary" @click="handleSaveInviteCode" :disabled="accountModes.includes('DEMO') || !accountModes.length">保存</el-button>
           </span>
         </template>
       </el-dialog>
@@ -1871,8 +1842,8 @@ onMounted(() => {
         </el-form>
         <template #footer>
           <span class="dialog-footer">
-            <el-button @click="remarkDialogVisible = false">取消</el-button>
-            <el-button type="primary" @click="handleSaveRemark">保存</el-button>
+            <el-button v-permission="'session:close'" @click="remarkDialogVisible = false">取消</el-button>
+            <el-button v-permission="'users:modify_remark'" type="primary" @click="handleSaveRemark" :disabled="accountModes.includes('DEMO') || !accountModes.length">保存</el-button>
           </span>
         </template>
       </el-dialog>
@@ -1906,7 +1877,7 @@ onMounted(() => {
           <el-descriptions-item label="更新时间">{{ userDetail.updatedAt }}</el-descriptions-item>
         </el-descriptions>
         <template #footer>
-          <el-button @click="userDetailDialogVisible = false">关闭</el-button>
+          <el-button v-permission="'session:close'" @click="userDetailDialogVisible = false">关闭</el-button>
         </template>
       </el-dialog>
     </el-card>

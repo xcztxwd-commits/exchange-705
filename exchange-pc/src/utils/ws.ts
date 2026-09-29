@@ -1,3 +1,4 @@
+import { getAccountApiBase } from '@/utils/accountMode'
 /**
  * Alltick WebSocket 行情连接管理
  * 参考文档: https://github.com/alltick/alltick-realtime-forex-crypto-stock-tick-finance-websocket-api
@@ -118,7 +119,7 @@ class AlltickWebSocket {
 
     try {
       // 使用环境变量配置的 API base URL
-      const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '/api'
+      const apiBaseUrl = getAccountApiBase()
       const response = await fetch(`${apiBaseUrl}/market/config/alltick`)
       const data = await response.json()
       

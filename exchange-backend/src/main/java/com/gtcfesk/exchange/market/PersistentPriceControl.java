@@ -1,11 +1,14 @@
 package com.gtcfesk.exchange.market;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.gtcfesk.exchange.common.BusinessException;
 import com.gtcfesk.exchange.entity.TradingSymbol;
 import lombok.Getter;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.stereotype.Service;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.security.SecureRandom;
 import java.util.*;
 
 /** Target lifecycle is independent of provider availability and the mutable TradingSymbol settings. */
@@ -24,6 +27,8 @@ public class PersistentPriceControl {
         BigDecimal startPrice, targetPrice;
         int durationSeconds, intensity, pricePrecision, algorithmVersion;
         boolean oscillation;
+        @JsonIgnore transient ControlHistoryStore store;
+        @JsonIgnore transient BalancedControlPlan plan;
         boolean running() { return "RUNNING".equals(status); }
         TradingSymbol path() {
             if (algorithmVersion != 1 && algorithmVersion != 2) throw new IllegalStateException("Unsupported control algorithm " + algorithmVersion);
@@ -32,7 +37,13 @@ public class PersistentPriceControl {
             p.setControlDurationSeconds(durationSeconds); p.setControlIntensity(intensity); p.setControlRandomOscillation(oscillation);
             return p;
         }
-        BigDecimal price(long time) { return PriceControlPath.price(path(), time, algorithmVersion); }
+        BigDecimal price(long time) {
+            if (algorithmVersion == BalancedControlPlan.VERSION) {
+                if (plan == null) plan = store.plan(id);
+                return plan.price(startedAt, time);
+            }
+            return PriceControlPath.price(path(), time, algorithmVersion);
+        }
     }
     private static final String TASK_SELECT = "SELECT t.*,h.activated_at,h.released_at,p.published_at FROM market_control_task t "
         + "LEFT JOIN market_control_hold h ON h.task_id=t.id LEFT JOIN market_control_publication p ON p.task_id=t.id ";
@@ -74,7 +85,8 @@ public class PersistentPriceControl {
     }
     public Task latest(long symbol) {
         List<Task> rows = store.db.query(TASK_SELECT + "WHERE t.symbol_id=? ORDER BY t.started_at DESC,t.id DESC LIMIT 1", TASK, symbol);
-        return rows.isEmpty() ? null : rows.get(0);
+        if (rows.isEmpty()) return null;
+        rows.get(0).store = store; return rows.get(0);
     }
     public List<Task> history(long symbol, Long before) {
         return store.db.query(TASK_SELECT + "WHERE t.symbol_id=? AND t.started_at<? ORDER BY t.started_at DESC LIMIT 100", TASK,
@@ -118,12 +130,11 @@ public class PersistentPriceControl {
     public void advance(long symbol, long now) { store.locked(symbol, () -> { advance(latest(symbol), now); return null; }); }
     private void advance(Task task, long now) {
         if (task == null || !task.running()) return;
-        TradingSymbol path = task.path();
         long until = Math.min(now, task.plannedEnd);
         List<ControlHistoryStore.PricePoint> points = new ArrayList<>();
         // Include both endpoints. Samples follow start+n seconds, not wall-clock rounding.
         for (long time = task.sampledUntil < task.startedAt ? task.startedAt : task.sampledUntil + 1000; time <= until; time += 1000) {
-            BigDecimal price = PriceControlPath.price(path, time, task.algorithmVersion);
+            BigDecimal price = task.price(time);
             points.add(new ControlHistoryStore.PricePoint(time, price));
             task.sampledUntil = time;
         }
@@ -142,10 +153,10 @@ public class PersistentPriceControl {
             List<Map<String, Object>> mixed = store.db.query("SELECT body FROM market_mixed_minute WHERE symbol_id=? AND minute_at+60000<=? ORDER BY minute_at DESC LIMIT 1",
                 (rs, n) -> store.decode(rs.getString(1)), config.getId(), now);
             if (!mixed.isEmpty() && (candle.isEmpty() || ControlHistoryStore.time(mixed.get(0)) + 60000
-                    >= ControlHistoryStore.time(candle) + RandomMarketPath.duration(String.valueOf(candle.get("period"))))) candle = mixed.get(0);
+                    >= RandomMarketPath.periodEnd(String.valueOf(candle.get("period")), ControlHistoryStore.time(candle)))) candle = mixed.get(0);
             if (!candle.isEmpty()) {
                 basis.put("price", candle.get("close_price")); basis.put("source", "COMPLETED_CANDLE");
-                basis.put("timestamp", ControlHistoryStore.time(candle) + RandomMarketPath.duration(String.valueOf(candle.getOrDefault("period", "1m"))));
+                basis.put("timestamp", RandomMarketPath.periodEnd(String.valueOf(candle.getOrDefault("period", "1m")), ControlHistoryStore.time(candle)));
             } else {
                 Map<String, Object> saved = store.lastQuote(config.getId());
                 if (QuoteState.valid(raw) && QuoteState.time(raw.get("timestamp")) >= QuoteState.time(saved.get("timestamp"))) saved = raw;
@@ -155,6 +166,73 @@ public class PersistentPriceControl {
             }
         }
         return basis;
+    }
+    public Task existingTarget(long symbol, String requestKey, int duration, BigDecimal target, int intensity,
+            boolean oscillation, RecoveryOptions options) {
+        if (requestKey == null) return null;
+        List<Task> rows = store.db.query(TASK_SELECT + "WHERE t.symbol_id=? AND t.request_key=?", TASK, symbol, requestKey);
+        if (rows.isEmpty()) return null;
+        Task task = rows.get(0); task.store = store;
+        if (!"TARGET".equals(task.kind) || task.durationSeconds != duration || task.intensity != intensity
+                || task.oscillation != oscillation || task.targetPrice.compareTo(target) != 0)
+            throw new BusinessException("任务请求标识已用于不同参数");
+        Map<String, Object> flow = flows.get(task.id);
+        RecoveryOptions effective = options == null ? new RecoveryOptions() : options;
+        if (options == null) effective.setAutoReplaceHistory(false);
+        if ((task.algorithmVersion == BalancedControlPlan.VERSION || options != null)
+                && (flow.isEmpty() || !store.decode((String) flow.get("options_json")).equals(effective.snapshot())))
+            throw new BusinessException("任务请求标识已用于不同恢复参数");
+        return task;
+    }
+    public static final class Prepared {
+        final BalancedControlPlan plan;
+        final long seed;
+        final String previousTaskId;
+        final BigDecimal start;
+        Prepared(BalancedControlPlan plan, long seed, String previousTaskId, BigDecimal start) {
+            this.plan = plan; this.seed = seed; this.previousTaskId = previousTaskId; this.start = start;
+        }
+        public Map<String, Object> preview() {
+            Map<String, Object> result = new LinkedHashMap<>(BalancedControlPlan.feasibility(plan.parameters()));
+            result.put("summary", plan.summary()); result.put("checksum", plan.checksum()); result.put("algorithmVersion", 3);
+            return result;
+        }
+    }
+    /** Generate outside the symbol lock and the write transaction. */
+    public BigDecimal previewStart(TradingSymbol config, Map<String, Object> raw, BigDecimal displayed) {
+        Task previous = latest(config.getId());
+        Map<String, Object> basis = startBasis(config, raw, displayed, System.currentTimeMillis());
+        if (previous != null && previous.holding) {
+            List<BigDecimal> held = store.db.queryForList("SELECT last_price FROM market_control_hold WHERE task_id=? AND released_at IS NULL", BigDecimal.class, previous.id);
+            if (!held.isEmpty()) basis.put("price", held.get(0));
+        }
+        if (basis.get("price") == null) throw new BalancedControlPlan.Failure("INVALID_PARAMETERS", "没有有效起点价格");
+        return ControlHistoryStore.number(basis.get("price")).setScale(PriceControlPath.precision(config), RoundingMode.HALF_UP);
+    }
+    public Prepared prepare(TradingSymbol config, Map<String, Object> raw, BigDecimal displayed,
+            int duration, BigDecimal target, int intensity, boolean oscillation) {
+        Task previous = latest(config.getId());
+        int precision = PriceControlPath.precision(config);
+        BigDecimal start = previewStart(config, raw, displayed);
+        BalancedControlPlan.Parameters p = new BalancedControlPlan.Parameters(start, target, duration, precision, intensity,
+                BalancedControlPlan.DEFAULT_RATIO);
+        long seed = oscillation ? new SecureRandom().nextLong() : Objects.hash(p.snapshot());
+        return new Prepared(BalancedControlPlan.generate(p, seed), seed, previous == null ? null : previous.id, start);
+    }
+    public Task startPrepared(TradingSymbol config, Map<String, Object> raw, BigDecimal displayed, int duration,
+            BigDecimal target, int intensity, boolean oscillation, String requestKey, RecoveryOptions options, Prepared prepared) {
+        return store.locked(config.getId(), () -> {
+            if (options != null && requestKey != null && store.db.queryForObject("SELECT COUNT(*) FROM market_control_task t LEFT JOIN market_control_flow f ON f.task_id=t.id WHERE t.symbol_id=? AND t.request_key=? AND f.task_id IS NULL", Integer.class, config.getId(), requestKey) > 0)
+                throw new BusinessException("旧任务请求标识不可追加自动恢复配置");
+            Task task = startLocked(config, raw, displayed, duration, target, intensity, oscillation, false, requestKey, prepared);
+            RecoveryOptions effective = options == null ? new RecoveryOptions() : options;
+            if (options == null) effective.setAutoReplaceHistory(false);
+            Map<String,Object> flow = flows.get(task.id);
+            if (flow.isEmpty()) flows.create(task, effective);
+            else if (!store.decode((String)flow.get("options_json")).equals(effective.snapshot()))
+                throw new BusinessException("任务请求标识已用于不同恢复参数");
+            return task;
+        });
     }
     public Task start(TradingSymbol config, Map<String, Object> raw, BigDecimal displayed, int duration, BigDecimal target,
             int intensity, boolean oscillation, boolean restore, String requestKey, RecoveryOptions options) {
@@ -171,7 +249,10 @@ public class PersistentPriceControl {
     }
     public Task start(TradingSymbol config, Map<String, Object> raw, BigDecimal displayed, int duration, BigDecimal target,
             int intensity, boolean oscillation, boolean restore, String requestKey) {
-        return store.locked(config.getId(), () -> {
+        return store.locked(config.getId(), () -> startLocked(config, raw, displayed, duration, target, intensity, oscillation, restore, requestKey, null));
+    }
+    private Task startLocked(TradingSymbol config, Map<String, Object> raw, BigDecimal displayed, int duration, BigDecimal target,
+            int intensity, boolean oscillation, boolean restore, String requestKey, Prepared prepared) {
             if (requestKey != null) {
                 if (requestKey.length() > 64 || requestKey.trim().isEmpty()) throw new BusinessException("任务请求标识无效");
                 List<Task> previous = store.db.query(TASK_SELECT + "WHERE t.symbol_id=? AND t.request_key=?", TASK, config.getId(), requestKey);
@@ -180,11 +261,16 @@ public class PersistentPriceControl {
                     if (task.durationSeconds != duration || task.intensity != intensity || task.oscillation != oscillation
                             || !task.kind.equals(restore ? "RESTORE" : "TARGET") || !restore && task.targetPrice.compareTo(target) != 0)
                         throw new BusinessException("任务请求标识已用于不同参数");
+                    task.store = store;
                     return task;
                 }
             }
             long now = System.currentTimeMillis();
-            Task old = latest(config.getId()); advance(old, now);
+            Task old = latest(config.getId());
+            if (prepared != null && (!Objects.equals(prepared.previousTaskId, old == null ? null : old.id)
+                    || PriceControlPath.precision(config) != prepared.plan.parameters().precision))
+                throw new BalancedControlPlan.Failure("START_BASIS_CHANGED", "预计算后起点或任务状态已变化，请刷新预览");
+            advance(old, now);
             if (old != null) now = Math.max(now, Math.max(old.startedAt, old.sampledUntil) + 1);
             if (old != null && !restore && (old.running() || Arrays.asList("RECOVERING", "WAITING_SOURCE").contains(flows.get(old.id).get("state")))) throw new BusinessException("自动控盘正在运行，请先停止任务");
             BigDecimal startingDisplay = displayed;
@@ -207,17 +293,22 @@ public class PersistentPriceControl {
             }
             if (basis.get("price") == null || ControlHistoryStore.number(basis.get("price")).signum() <= 0)
                 throw new BusinessException("没有有效历史价格，无法启动目标控盘");
+            if (prepared != null && (!Objects.equals(prepared.previousTaskId, old == null ? null : old.id)
+                    || ControlHistoryStore.number(basis.get("price")).setScale(prepared.plan.parameters().precision, RoundingMode.HALF_UP).compareTo(prepared.start) != 0))
+                throw new BalancedControlPlan.Failure("START_BASIS_CHANGED", "预计算后起点或任务状态已变化，请刷新预览");
             String id = UUID.randomUUID().toString();
             if (old != null) { flows.cancel(old, now, false); holds.release(old.id, now); }
             store.captureLegacyMinute(config.getId(), now);
             store.freeze(config.getId(), now);
-            store.db.update("INSERT INTO market_control_task(id,symbol_id,symbol,algorithm_version,kind,status,start_price,target_price,duration_seconds,intensity,oscillation,price_precision,start_source,source_time,started_at,planned_end,sampled_until,request_key) VALUES(?,?,?,2,?,'RUNNING',?,?,?,?,?,?,?,?,?,?,?,?)",
-                id, config.getId(), config.getSymbol(), restore ? "RESTORE" : "TARGET", basis.get("price"), target, duration, intensity, oscillation,
+            int algorithm = prepared == null ? 2 : BalancedControlPlan.VERSION;
+            store.db.update("INSERT INTO market_control_task(id,symbol_id,symbol,algorithm_version,kind,status,start_price,target_price,duration_seconds,intensity,oscillation,price_precision,start_source,source_time,started_at,planned_end,sampled_until,request_key) VALUES(?,?,?,? ,?,'RUNNING',?,?,?,?,?,?,?,?,?,?,?,?)",
+                id, config.getId(), config.getSymbol(), algorithm, restore ? "RESTORE" : "TARGET", prepared == null ? basis.get("price") : prepared.start, target, duration, intensity, oscillation,
                 PriceControlPath.precision(config), basis.get("source"), QuoteState.time(basis.get("timestamp")), now, now + duration * 1000L, now - 1000, requestKey);
+            if (prepared != null) store.savePlan(id, prepared.seed, prepared.plan);
             Task task = latest(config.getId());
+            if (prepared != null) task.plan = prepared.plan;
             if (!restore) holds.prepare(task, raw);
             advance(task, now); return task;
-        });
     }
     public void stop(long symbol, long now) { store.locked(symbol, () -> { stopLocked(latest(symbol), now); return null; }); }
     /** Stop movement without restoring the source price; only an explicit restore releases the offset. */
@@ -376,6 +467,13 @@ public class PersistentPriceControl {
         if (display.get("controlOffset") != null) result.put("offset", display.get("controlOffset"));
         result.put("startPrice", task.startPrice); result.put("targetPrice", task.targetPrice);
         result.put("durationSeconds", task.durationSeconds); result.put("intensity", task.intensity); result.put("randomOscillation", task.oscillation);
+        result.put("algorithmVersion", task.algorithmVersion);
+        if (task.algorithmVersion == BalancedControlPlan.VERSION) {
+            BalancedControlPlan plan = store.plan(task.id);
+            result.put("minStepAmount", plan.parameters().amount(plan.parameters().minStep).toPlainString());
+            result.put("maxStepAmount", plan.parameters().amount(plan.parameters().maxStep).toPlainString());
+            result.put("planSummary", plan.summary());
+        }
         result.put("startedAt", task.startedAt); result.put("completedAt", task.endedAt);
         result.put("startSource", task.startSource); result.put("sourceTime", task.sourceTime);
         result.put("remainingSeconds", task.running() ? Math.max(0, (task.plannedEnd - now + 999) / 1000) : 0);

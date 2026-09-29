@@ -47,13 +47,15 @@
               <el-option label="已驳回" value="REJECTED" />
               <el-option label="已完成" value="COMPLETED" />
             </el-select>
-            <el-button type="primary" :icon="Search" @click="handleSearch">搜索</el-button>
-            <el-button :icon="Refresh" @click="handleReset">重置</el-button>
+            <el-button v-permission="'withdraw_review:view'" type="primary" :icon="Search" @click="handleSearch">搜索</el-button>
+            <el-button v-permission="'withdraw_review:view'" :icon="Refresh" @click="handleReset">重置</el-button>
           </div>
         </div>
       </template>
 
-      <el-table :data="recordsList" style="width: 100%" v-loading="loading">
+      <AccountTypeFilter v-model="accountModes" @change="accountFilterChanged" />
+<admin-table :row-key="(row: any) => `${row.accountMode || 'REAL'}:${row.id ?? row.userId}:${row.type || ''}`" table-key="WithdrawReview.1" :data="recordsList" style="width: 100%" v-loading="loading">
+<el-table-column prop="accountModeLabel" label="账户类型" width="110" fixed="left" />
         <el-table-column prop="id" label="ID" width="80" />
         <el-table-column prop="userId" label="用户ID" width="200">
           <template #default="{ row }">
@@ -91,7 +93,7 @@
           <template #default="{ row }">
             <div class="address-cell">
               <span class="address-text" :title="row.address">{{ row.address }}</span>
-              <el-button
+              <el-button v-permission="'withdraw_review:detail'"
                 size="small"
                 type="primary"
                 link
@@ -100,7 +102,7 @@
               >
                 复制
               </el-button>
-              <el-button
+              <el-button v-permission="'withdraw_review:detail'"
                 v-if="row.type === 'bank' && row.bankInfo"
                 size="small"
                 type="success"
@@ -129,31 +131,31 @@
         </el-table-column>
         <el-table-column label="操作" width="340" fixed="right">
           <template #default="{ row }">
-            <el-button
+            <el-button v-permission="'withdraw_review:approve_withdraw'"
               v-if="row.status === 'PENDING' && hasPermission('withdraw_review', 'approve_withdraw')"
               size="small"
               type="success"
               @click="handleApprove(row)"
-            >
+             :disabled="accountModes.includes('DEMO') || !accountModes.length">
               审核通过
             </el-button>
-            <el-button
+            <el-button v-permission="'withdraw_review:reject_withdraw'"
               v-if="row.status === 'PENDING' && hasPermission('withdraw_review', 'reject_withdraw')"
               size="small"
               type="danger"
               @click="handleReject(row)"
-            >
+             :disabled="accountModes.includes('DEMO') || !accountModes.length">
               驳回
             </el-button>
-            <el-button
+            <el-button v-permission="'withdraw_review:complete_withdraw'"
               v-if="row.status === 'APPROVED' && hasPermission('withdraw_review', 'complete_withdraw')"
               size="small"
               type="warning"
               @click="handleComplete(row)"
-            >
+             :disabled="accountModes.includes('DEMO') || !accountModes.length">
               标记完成
             </el-button>
-            <el-button
+            <el-button v-permission="'withdraw_review:detail'"
               size="small"
               type="primary"
               plain
@@ -163,7 +165,7 @@
             </el-button>
           </template>
         </el-table-column>
-      </el-table>
+      </admin-table>
     </el-card>
 
     <!-- 拒绝对话框 -->
@@ -183,8 +185,8 @@
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="rejectDialogVisible = false">取消</el-button>
-        <el-button type="danger" @click="confirmReject">确认驳回</el-button>
+        <el-button v-permission="'session:close'" @click="rejectDialogVisible = false">取消</el-button>
+        <el-button v-permission="'withdraw_review:reject_withdraw'" type="danger" @click="confirmReject" :disabled="accountModes.includes('DEMO') || !accountModes.length">确认驳回</el-button>
       </template>
     </el-dialog>
 
@@ -211,8 +213,8 @@
         </el-form>
       </div>
       <template #footer>
-        <el-button @click="approveDialogVisible = false">取消</el-button>
-        <el-button type="success" @click="confirmApprove">确认通过</el-button>
+        <el-button v-permission="'session:close'" @click="approveDialogVisible = false">取消</el-button>
+        <el-button v-permission="'withdraw_review:approve_withdraw'" type="success" @click="confirmApprove" :disabled="accountModes.includes('DEMO') || !accountModes.length">确认通过</el-button>
       </template>
     </el-dialog>
 
@@ -228,8 +230,8 @@
         <p><strong>提现金额:</strong> {{ formatMoney(currentRecord?.amount) }} {{ currentRecord?.currency ? 'USD' : currentRecord?.network }}</p>
       </div>
       <template #footer>
-        <el-button @click="completeDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="confirmComplete">确认完成</el-button>
+        <el-button v-permission="'session:close'" @click="completeDialogVisible = false">取消</el-button>
+        <el-button v-permission="'withdraw_review:complete_withdraw'" type="primary" @click="confirmComplete" :disabled="accountModes.includes('DEMO') || !accountModes.length">确认完成</el-button>
       </template>
     </el-dialog>
 
@@ -287,7 +289,7 @@
         </el-descriptions-item>
       </el-descriptions>
       <template #footer>
-        <el-button @click="detailDialogVisible = false">关闭</el-button>
+        <el-button v-permission="'session:close'" @click="detailDialogVisible = false">关闭</el-button>
       </template>
     </el-dialog>
   </div>
@@ -297,7 +299,14 @@
 import { ref, onMounted, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Search, Refresh } from '@element-plus/icons-vue'
-import request from '@/utils/request'
+import { useAccountTable } from '@/utils/useAccountTable'
+import { accountTableRequest } from '@/utils/accountTableRequest'
+import AccountTypeFilter from '@/components/AccountTypeFilter.vue'
+const accountTable = useAccountTable()
+const accountModes = accountTable.modes
+const request = accountTableRequest(accountTable)
+function accountFilterChanged() { recordsList.value=[];loadRecords() }
+import { can, loadAccess } from '@/utils/access'
 import { useAuthStore } from '@/store/auth'
 
 const auth = useAuthStore()
@@ -309,80 +318,10 @@ const userPermissions = ref<Map<string, string[]>>(new Map())
 const permissionsLoaded = ref(false)
 
 // 检查是否有操作权限
-const hasPermission = (menuCode: string, actionCode: string): boolean => {
-  if (auth.user?.isSuperAdmin || auth.user?.role === 'super_admin') {
-    return true
-  }
-  if (!isAgent.value) {
-    return true
-  }
-  if (!permissionsLoaded.value) {
-    return false
-  }
-  const actions = userPermissions.value.get(menuCode) || []
-  return actions.includes(actionCode)
-}
+const hasPermission = (menuCode: string, actionCode: string): boolean => can(`${menuCode}:${actionCode}`)
 
 // 加载权限信息
-const loadPermissions = async () => {
-  if (!isAgent.value) return
-  try {
-    const userId = auth.user?.id
-    if (userId) {
-      const permissionsResponse: any = await request.get(`/admin/users/${userId}/menus`)
-      console.log('[WithdrawReview] 权限API响应:', permissionsResponse)
-      
-      if (permissionsResponse.success) {
-        const allMenus: any = await request.get('/admin/menus/list')
-        console.log('[WithdrawReview] 所有菜单列表:', allMenus)
-        
-        if (allMenus.success) {
-          const menuMap = new Map<number, string>()
-          allMenus.list.forEach((m: any) => {
-            menuMap.set(m.id, m.menuCode)
-          })
-          console.log('[WithdrawReview] 菜单映射表:', menuMap)
-          
-          const actions = permissionsResponse.actions || {}
-          console.log('[WithdrawReview] 操作权限数据:', actions)
-          
-          userPermissions.value = new Map()
-          // 处理actions对象，key可能是字符串或数字
-          for (const [menuIdKey, actionCodes] of Object.entries(actions)) {
-            let menuId: number
-            if (typeof menuIdKey === 'string') {
-              menuId = parseInt(menuIdKey, 10)
-            } else {
-              menuId = Number(menuIdKey)
-            }
-            
-            const menuCode = menuMap.get(menuId)
-            console.log(`[WithdrawReview] 菜单ID ${menuId} -> 菜单代码 ${menuCode}, 操作:`, actionCodes)
-            
-            if (menuCode && Array.isArray(actionCodes)) {
-              // 同时支持两种菜单代码格式
-              userPermissions.value.set(menuCode, actionCodes as string[])
-              // 如果是 withdraw-review，也添加到 withdraw_review
-              if (menuCode === 'withdraw-review') {
-                userPermissions.value.set('withdraw_review', actionCodes as string[])
-              }
-              // 如果是 withdraw_review，也添加到 withdraw-review
-              if (menuCode === 'withdraw_review') {
-                userPermissions.value.set('withdraw-review', actionCodes as string[])
-              }
-            }
-          }
-          
-          console.log('[WithdrawReview] 最终权限Map:', Array.from(userPermissions.value.entries()))
-          permissionsLoaded.value = true
-        }
-      }
-    }
-  } catch (error: any) {
-    console.error('[WithdrawReview] 加载权限失败:', error)
-    permissionsLoaded.value = true
-  }
-}
+const loadPermissions = async () => { await loadAccess() }
 
 interface BankInfo {
   recipientName: string
@@ -469,7 +408,7 @@ const loadRecords = async () => {
     }
     
     const res: any = await request.get('/admin/withdraw/list', { params })
-    recordsList.value = res || []
+    recordsList.value = Array.isArray(res) ? res : res?.list || []
   } catch (e: any) {
     ElMessage.error(e?.message || '加载失败')
   } finally {

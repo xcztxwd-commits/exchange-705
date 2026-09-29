@@ -17,6 +17,7 @@ import java.util.UUID;
 
 @Service
 public class FileUploadService {
+    @org.springframework.beans.factory.annotation.Autowired(required=false) private com.gtcfesk.exchange.simulation.SimulationEnvironment simulation;
     
     private static final String IMAGE_DIR = "uploads/images/";
     private static final Path IMAGE_DIR_PATH;
@@ -123,7 +124,7 @@ public class FileUploadService {
             String filename = filePath.getFileName().toString();
 
             // 返回文件URL，使用 /api/uploads/images/ 确保通过后端Controller处理
-            return "/api/uploads/images/" + filename;
+            return (simulation != null && simulation.enabled() ? "/demo-uploads/images/" : "/api/uploads/images/") + filename;
         } catch (IOException e) {
             throw new BusinessException("图片保存失败，请稍后重试");
         }

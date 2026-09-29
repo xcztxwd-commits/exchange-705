@@ -172,7 +172,7 @@ function clearSearch() {
   }
 }
 
-// 跳转到交易页面（默认跳转到期限页面）
+// 跳转到交易页面（默认跳转到合约页面）
 function goToTrade(symbol: any) {
   const symbolName = symbol.symbol || symbol.alltickSymbol
   const category = symbol.category || 'Crypto'
@@ -181,7 +181,6 @@ function goToTrade(symbol: any) {
     query: {
       symbol: symbolName,
       category: category,
-      tab: 'term', // 默认跳转到期限页面
     },
   })
 }

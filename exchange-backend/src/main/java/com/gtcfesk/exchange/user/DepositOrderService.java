@@ -22,6 +22,7 @@ import java.security.MessageDigest;
 
 @Service
 public class DepositOrderService {
+ @org.springframework.beans.factory.annotation.Autowired(required=false) private com.gtcfesk.exchange.simulation.SimulationEnvironment simulation;
  private final DepositRecordRepository records;
  private final DepositCreditRecordRepository credits;
  private final AssetAccountRepository assets;
@@ -102,7 +103,7 @@ public class DepositOrderService {
     d.setCreatedByType(actor[0]);d.setCreatedById(Long.valueOf(actor[1]));d.setCreatedByName("USER".equals(actor[0])?customer.getEmail():actor[2]);
     d.setIdempotencyKey(r.idempotencyKey);d.setRequestHash(hash);
     records.saveAndFlush(d); checkpoint("order");
-    if(manual) credit(d,actor);
+    if(manual || (simulation != null && simulation.enabled())) credit(d, simulation != null && simulation.enabled() ? new String[]{"SIMULATION","0","Virtual credit; no real payment"} : actor);
     records.flush(); checkpoint("flush");return d;
    });
   }catch(org.springframework.dao.DataIntegrityViolationException e){

@@ -14,6 +14,7 @@ import java.util.Map;
 public class CustomerServiceController {
     
     private final SystemConfigService systemConfigService;
+    private final com.gtcfesk.exchange.support.SupportSettings supportSettings;
     
     /**
      * 获取客服链接
@@ -24,7 +25,11 @@ public class CustomerServiceController {
         
         Map<String, Object> result = new HashMap<>();
         result.put("link", link != null ? link : "");
-        result.put("available", link != null && !link.isEmpty());
+        String mode = supportSettings.get().mode;
+        result.put("mode", mode);
+        result.put("link", supportSettings.externalLink());
+        result.put("inboxEnabled", supportSettings.get().inboxEnabled);
+        result.put("available", "internal".equals(mode) || ("external".equals(mode) && !supportSettings.externalLink().isEmpty()));
         return ResponseEntity.ok(result);
     }
     
@@ -45,9 +50,15 @@ public class CustomerServiceController {
      * 获取系统时区配置
      */
     @GetMapping("/share-templates")
-    public ResponseEntity<?> getShareTemplates(@RequestParam(value = "locale", defaultValue = "en") String locale) {
-        return ResponseEntity.ok(SystemConfigService.shareTemplates(
-                systemConfigService.getConfigValue(SystemConfigService.SHARE_TEMPLATES_KEY), locale));
+    public ResponseEntity<?> getShareTemplates(@RequestParam(value = "locale", defaultValue = "en") String locale,
+            @RequestParam(value = "details", defaultValue = "false") boolean details) {
+        String value = systemConfigService.getConfigValue(SystemConfigService.SHARE_TEMPLATES_KEY);
+        java.util.List<String> templates = SystemConfigService.shareTemplates(value, locale);
+        if (!details) return ResponseEntity.ok(templates); // Preserve the legacy array response.
+        Map<String, Object> result = new HashMap<>();
+        result.put("templates", templates);
+        result.put("focus", SystemConfigService.shareFocus(value));
+        return ResponseEntity.ok(result);
     }
 
     @GetMapping("/system/timezone")

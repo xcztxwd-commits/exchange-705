@@ -39,6 +39,7 @@ public class BackendAccess extends RequestBodyAdviceAdapter implements HandlerIn
     private final OptionOrderRepository options;
     private final FinancialOrderRepository financialOrders;
     private final ObjectMapper mapper;
+    private final AdminPermissionService permissions;
 
     public static Long agentId() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
@@ -54,57 +55,15 @@ public class BackendAccess extends RequestBodyAdviceAdapter implements HandlerIn
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         return auth != null && auth.getAuthorities().stream().anyMatch(a -> a.getAuthority().equals("ROLE_SUPER_ADMIN"));
     }
-    private String menu(String controller, String method) {
-        switch (controller) {
-            case "AdminUserController": case "AdminWalletController": return "users";
-            case "AdminOrderController": return "orders";
-            case "AdminSymbolController": return "symbols";
-            case "AdminAiControlController": return "ai_control";
-            case "AdminDurationController": return "durations";
-            case "DepositReviewController": return "deposit_review";
-            case "WithdrawReviewController": return "withdraw_review";
-            case "LoanReviewController": return "loan_review";
-            case "LoanPersonalInfoReviewController": return "loan_personal_info_review";
-            case "KycReviewController": return "kyc_review";
-            case "DepositSettingController": return "deposit_settings";
-            case "LoanSettingController": return "loan_settings";
-            case "AdminFinancialController": return method.equals("getOrders") ? "financial_orders" : "financial_products";
-            case "AdminFinancialYieldController": return "financial_orders";
-            case "AdminAnnouncementController": return "announcement";
-            case "DashboardController": return "dashboard";
-            case "AgentPerformanceController": return "agents";
-            case "StatisticsController": return "statistics";
-            case "OperationLogController": return "operation_log";
-            case "AdminRoleController": return "roles";
-            case "AdminManagementController": return "admin_list";
-            case "SystemConfigController": return "settings";
-            default: return null;
-        }
-    }
-    private void checkMenu(String code, String action) {
-        if (superAdmin()) return;
-        AdminMenu menu = menus.findByMenuCode(code).orElseGet(() -> menus.findByMenuCode(code.replace('_', '-')).orElse(null));
-        if (menu == null || !"active".equals(menu.getStatus())) { deny(); return; }
-        Long agent = agentId();
-        if (agent != null) {
-            if (!userMenus.existsByUserIdAndMenuId(agent, menu.getId()) ||
-                (action != null && !actions.existsByUserIdAndMenuIdAndActionCode(agent, menu.getId(), action))) deny();
-        } else {
-            Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-            AdminUser admin = admins.findById(Long.valueOf(auth.getName())).orElseThrow(() -> new AccessDeniedException("无权访问"));
-            AdminRole role = roles.findByRoleCode(admin.getRole()).orElseThrow(() -> new AccessDeniedException("角色未授权"));
-            if (!"active".equals(role.getStatus()) || roleMenus.findByRoleId(role.getId()).stream().noneMatch(m -> menu.getId().equals(m.getMenuId()))) deny();
-        }
-    }
+    private void checkMenu(String code, String action) { permissions.require(code, action); }
     public void checkDeposit(String action) {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth == null || !auth.isAuthenticated() || auth.getAuthorities().stream().noneMatch(a ->
                 Arrays.asList("ROLE_SUPER_ADMIN", "ROLE_ADMIN", "ROLE_AGENT").contains(a.getAuthority()))) deny();
         checkMenu("deposit_orders", action);
-        // Admin roles must explicitly hold the button menu, not merely its parent.
-        if (!superAdmin() && agentId() == null) checkMenu(action, null);
+
     }
-    public void checkDepositReview(String action) { checkMenu("deposit_review", action); }
+    public void checkDepositReview(String action) { permissions.requireAny("deposit_review:" + action, "deposit_orders:" + action); }
     public boolean canReadMenu(String code) {
         try { checkMenu(code, null); return true; }
         catch (AccessDeniedException e) { return false; }
@@ -118,59 +77,57 @@ public class BackendAccess extends RequestBodyAdviceAdapter implements HandlerIn
             if (!m.equals("login") && m.contains("Agent") != (agentId() != null)) deny();
             return true;
         }
+        if (c.equals("AdminTablePreferenceController")) return true; // Controller restricts preferences to the authenticated backend account.
+        if (c.equals("AdminAccountQueryController")) return true; // Controller checks each allowlisted read against live module permissions.
         if (c.equals("DepositOrderController")) return true; // Every method checks explicit module action and scope.
         if (c.equals("AdminUserController") && m.equals("updateBalance")) return true; // Body selects strict set vs deposit permission.
         if (superAdmin()) return true;
+        // Deleting/restoring trade history is restricted to administrators, never agents.
+        if (c.equals("AdminOrderController") && (m.startsWith("softDelete") || m.startsWith("restore")) && agentId() != null) deny();
+        // Campaigns are global and lack agent-scoped delivery queries.
         Long agent = agentId();
+        if (agent != null && c.equals("AdminActivityController")) deny();
         Map<String, String> vars = (Map<String, String>) request.getAttribute(HandlerMapping.URI_TEMPLATE_VARIABLES_ATTRIBUTE);
         if (vars == null) vars = Collections.emptyMap();
-        if (c.equals("AdminMenuController")) return true;
+        if (c.equals("AdminMenuController")) return true; // Catalog and signed-in subject's own snapshot only.
         if (c.equals("AgentMenuController") || (c.equals("AdminUserController") && m.equals("getAgentMenus"))) {
             String id = vars.getOrDefault("agentId", vars.get("userId"));
-            if (agent == null || (id != null && !agent.toString().equals(id))) deny();
+            if (agent != null && (id == null || agent.toString().equals(id))) return true;
+            permissions.require("agents", "assign_permission");
             return true;
         }
-        if (c.equals("NotificationController")) return true; // Controller scopes counts to the signed agent.
-        if (c.equals("AdminUserController") && m.equals("getOnlineUserCount")) return true; // Controller filters by menu and agent scope.
-        if (c.equals("AdminManagementController") || c.equals("AdminRoleController") || c.equals("SystemConfigController") || c.equals("WebsiteSecurityController") ||
-            m.equals("assignMenus") || m.equals("updateUserType") || m.equals("batchUpdateIpRegions")) { deny(); }
-        if (agent == null && (m.equals("updateBalance") || m.startsWith("abnormalDelete"))) deny();
-        String code = menu(c, m);
-        if (code == null) { deny(); return false; }
-        String action = null;
-        boolean read = request.getMethod().equals("GET") || m.startsWith("query");
-        if (!read && agent != null) {
-            switch (m) {
-                case "updateSymbol": case "toggleHot": case "batchSetLeverage": action = "edit_symbol"; break;
-                case "deleteSymbol": action = "delete_symbol"; break;
-                case "resetPassword": action = "reset_password"; break;
-                case "updateBalance": action = "modify_balance"; break;
-                case "updateStatus": case "updateUserStatus": break; // Check destination status after body conversion.
-                case "updateInviteCode": action = "modify_invite_code"; break;
-                case "updateRemark": action = "modify_remark"; break;
-                case "deleteUser": action = "delete_user"; break;
-                case "approveDeposit": action = "approve_deposit"; break;
-                case "rejectDeposit": action = "reject_deposit"; break;
-                case "approveWithdraw": action = "approve_withdraw"; break;
-                case "rejectWithdraw": action = "reject_withdraw"; break;
-                case "completeWithdraw": action = "complete_withdraw"; break;
-                case "approveLoan": action = "approve_loan"; break;
-                case "rejectLoan": action = "reject_loan"; break;
-                case "setPresetProfitType": break;
-                case "startControl": case "manualControl": case "stopControl": case "restoreControl": break;
-                case "approvePersonalInfo": action = "approve_loan_personal_info"; break;
-                case "rejectPersonalInfo": action = "reject_loan_personal_info"; break;
-                case "approveKyc": action = "approve_kyc"; break;
-                case "rejectKyc": action = "reject_kyc"; break;
-                case "adminCloseOrder": action = "close_order"; break;
-                case "adminCancelOrder": action = "cancel_order"; break;
-                case "clearPresetProfitType": action = "clear_preset"; break;
-                default:
-                    if (c.equals("AdminWalletController")) action = "wallet_management";
-                    else { deny(); }
+        if (c.equals("NotificationController") || (c.equals("AdminUserController") && m.equals("getOnlineUserCount"))) return true;
+        if (c.equals("AdminUserController") && m.equals("getMenuActions")) return true;
+        if (c.equals("AdminUserController") && m.equals("getAgentsSimple")) {
+            permissions.requireAny("users", "orders", "statistics", "deposit_review", "withdraw_review", "loan_review", "kyc_review", "loan_personal_info_review", "deposit_orders");
+            return true;
+        }
+        if (c.equals("SystemConfigController")) {
+            if (m.equals("getConfig")) {
+                String key = request.getParameter("key");
+                if ("agent.default.permissions".equals(key)) permissions.require("agents", "defaults");
+                else if ("share.templates".equals(key)) permissions.requireAny("settings", "orders");
+                else permissions.require("settings", "");
+            } else if (m.equals("getAllConfigs")) permissions.require("settings", "");
+            // Every write key is checked after body conversion, before the transactional controller runs.
+            else if (!m.equals("saveConfig") && !m.equals("saveBatchConfig")) deny();
+            return true;
+        }
+        AdminPermission permission = h.getMethodAnnotation(AdminPermission.class);
+        if (permission == null) { deny(); return false; }
+        boolean special = false;
+        if (c.equals("AdminUserController")) {
+            if (m.equals("getUsersWithParams") && "agent".equals(request.getParameter("userType"))) {
+                permissions.require("agents", ""); special = true;
+            }
+            if (Arrays.asList("getSubordinates", "updateRemark", "updateUserStatus").contains(m) && vars.containsKey("userId") &&
+                users.findById(Long.valueOf(vars.get("userId"))).map(u -> "agent".equals(u.getUserType())).orElse(false)) {
+                permissions.requireAny("users:" + permission.action(), "agents:" + (m.equals("getSubordinates") ? "view_subordinates" : m.equals("updateRemark") ? "modify_remark" : "status")); special = true;
             }
         }
-        checkMenu(code, action);
+        if (!special) permissions.require(permission.menu(), permission.action());
+        if (agent != null && Arrays.asList("AdminManagementController", "AdminRoleController").contains(c)) deny();
+        if (c.equals("WebsiteSecurityController") || m.equals("updateUserType") || m.equals("batchUpdateIpRegions")) deny();
         if (agent != null) {
             String filter = request.getParameter("filterAgentId");
             if (filter != null && !agent.toString().equals(filter)) deny();
@@ -206,17 +163,24 @@ public class BackendAccess extends RequestBodyAdviceAdapter implements HandlerIn
             JsonNode input = mapper.valueToTree(body);
             if (input.hasNonNull("amount")) checkDeposit("manual_deposit");
             else if (!superAdmin()) {
-                if (agent == null) deny();
                 checkMenu("users", "modify_balance");
             }
             if (input.hasNonNull("userId")) checkUser(input.get("userId").asLong());
         }
-        if (agent == null) return body;
         JsonNode node = mapper.valueToTree(body);
-        if (node.hasNonNull("filterAgentId") && node.get("filterAgentId").asLong() != agent) deny();
-        if (node.hasNonNull("agentId") && node.get("agentId").asLong() != agent) deny();
+        if (agent != null && node.hasNonNull("filterAgentId") && node.get("filterAgentId").asLong() != agent) deny();
+        if (agent != null && node.hasNonNull("agentId") && node.get("agentId").asLong() != agent) deny();
         if (node.hasNonNull("userId")) checkUser(node.get("userId").asLong());
         String method = p.getMethod().getName();
+        if (p.getContainingClass().getSimpleName().equals("SystemConfigController") && (method.equals("saveConfig") || method.equals("saveBatchConfig"))) {
+            Iterable<JsonNode> configs = node.isArray() ? node : Collections.singletonList(node);
+            for (JsonNode cfg : configs) {
+                String key = cfg.path("key").asText();
+                if ("agent.default.permissions".equals(key)) { if (!superAdmin()) deny(); }
+                else if ("support.settings".equals(key)) { if (agent != null) deny(); permissions.require("support_settings", "save"); }
+                else permissions.require("settings", "share.templates".equals(key) ? "share_templates" : "save");
+            }
+        }
         if (method.equals("setPresetProfitType")) {
             String preset = node.path("presetType").asText();
             if (!"PROFIT".equals(preset) && !"LOSS".equals(preset)) deny();
@@ -226,10 +190,22 @@ public class BackendAccess extends RequestBodyAdviceAdapter implements HandlerIn
             String status = node.path("status").asText();
             String action;
             if (status.equals("frozen")) action = "freeze_user";
-            else if (status.equals("normal") || status.equals("active")) action = "unfreeze_user";
+            else if (status.equals("normal") || status.equals("active")) {
+                Long target = node.hasNonNull("userId") ? node.get("userId").asLong() : null;
+                org.springframework.web.context.request.ServletRequestAttributes attributes = (org.springframework.web.context.request.ServletRequestAttributes)org.springframework.web.context.request.RequestContextHolder.getRequestAttributes();
+                if (target == null && attributes != null) {
+                    Map<?,?> vars = (Map<?,?>)attributes.getRequest().getAttribute(HandlerMapping.URI_TEMPLATE_VARIABLES_ATTRIBUTE);
+                    if (vars != null && vars.get("userId") != null) target = Long.valueOf(vars.get("userId").toString());
+                }
+                action = target != null && users.findById(target).map(u -> Arrays.asList("banned", "disabled").contains(u.getStatus())).orElse(false) ? "unban_user" : "unfreeze_user";
+            }
             else if (status.equals("banned") || status.equals("disabled")) action = "ban_user";
             else { deny(); return body; }
-            checkMenu("users", action);
+            org.springframework.web.context.request.ServletRequestAttributes attrs = (org.springframework.web.context.request.ServletRequestAttributes)org.springframework.web.context.request.RequestContextHolder.getRequestAttributes();
+            Map<?,?> path = attrs == null ? null : (Map<?,?>)attrs.getRequest().getAttribute(HandlerMapping.URI_TEMPLATE_VARIABLES_ATTRIBUTE);
+            Long target = node.hasNonNull("userId") ? node.get("userId").asLong() : path != null && path.get("userId") != null ? Long.valueOf(path.get("userId").toString()) : null;
+            if (target != null && users.findById(target).map(u -> "agent".equals(u.getUserType())).orElse(false)) permissions.requireAny("users:" + action, "agents:status");
+            else checkMenu("users", action);
         }
         return body;
     }

@@ -22,6 +22,7 @@ public class AdminDurationController {
      * 获取所有期限选项列表
      */
     @GetMapping
+    @com.gtcfesk.exchange.config.AdminPermission(menu = "durations", action = "")
     public ResponseEntity<?> getAllDurations() {
         List<OptionDuration> durations = optionDurationRepository.findAllByOrderBySortOrderAsc();
         Map<String, Object> result = new HashMap<>();
@@ -33,6 +34,7 @@ public class AdminDurationController {
      * 创建期限选项
      */
     @PostMapping
+    @com.gtcfesk.exchange.config.AdminPermission(menu = "durations", action = "create")
     public ResponseEntity<?> createDuration(@RequestBody OptionDuration duration) {
         if (duration.getDuration() == null || duration.getDuration() <= 0) {
             throw new BusinessException("期限必须大于0");
@@ -89,6 +91,7 @@ public class AdminDurationController {
      * 更新期限选项
      */
     @PutMapping("/{id}")
+    @com.gtcfesk.exchange.config.AdminPermission(menu = "durations", action = "edit")
     public ResponseEntity<?> updateDuration(@PathVariable Long id, @RequestBody OptionDuration duration) {
         OptionDuration existing = optionDurationRepository.findById(id)
             .orElseThrow(() -> new BusinessException("期限选项不存在"));
@@ -144,6 +147,7 @@ public class AdminDurationController {
      * 删除期限选项
      */
     @DeleteMapping("/{id}")
+    @com.gtcfesk.exchange.config.AdminPermission(menu = "durations", action = "delete")
     public ResponseEntity<?> deleteDuration(@PathVariable Long id) {
         OptionDuration duration = optionDurationRepository.findById(id)
             .orElseThrow(() -> new BusinessException("期限选项不存在"));

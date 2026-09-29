@@ -1,5 +1,7 @@
 <template>
-  <router-view />
+  <AccountModeSwitch v-if="auth.token" real-path="/trade" />
+    <router-view :key="auth.user?.id" />
+    <SupportNotifications />
 </template>
 
 <script setup lang="ts">
@@ -7,6 +9,8 @@ import { onMounted, onUnmounted, watch } from 'vue'
 import { useAuthStore } from '@/store/auth'
 import { useLocaleStore } from '@/store/locale'
 import request from '@/utils/request'
+import SupportNotifications from '@/components/SupportNotifications.vue'
+import AccountModeSwitch from '@/components/AccountModeSwitch.vue'
 
 const auth = useAuthStore()
 const localeStore = useLocaleStore()
@@ -64,6 +68,7 @@ watch(() => auth.token, (newToken) => {
 }, { immediate: true })
 
 const onLocaleStorage = (event: StorageEvent) => {
+  if (event.key === 'token' || event.key === 'user') { window.location.reload(); return }
   if (event.key === 'locale') localeStore.loadLocale()
 }
 onMounted(() => {

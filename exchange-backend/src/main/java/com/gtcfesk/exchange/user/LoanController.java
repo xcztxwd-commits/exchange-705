@@ -49,12 +49,7 @@ public class LoanController {
             BigDecimal amount = new BigDecimal(request.get("amount").toString());
             Long settingId = Long.parseLong(request.get("settingId").toString());
             
-            String realName = request.get("realName") != null ? request.get("realName").toString() : null;
-            String idNumber = request.get("idNumber") != null ? request.get("idNumber").toString() : null;
-            String phone = request.get("phone") != null ? request.get("phone").toString() : null;
-            String address = request.get("address") != null ? request.get("address").toString() : null;
-
-            LoanRecord record = loanService.createLoan(userId, amount, settingId, realName, idNumber, phone, address);
+            LoanRecord record = loanService.createLoan(userId, amount, settingId);
 
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", true);

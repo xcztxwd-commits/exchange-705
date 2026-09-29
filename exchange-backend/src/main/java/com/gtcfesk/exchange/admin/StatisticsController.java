@@ -22,6 +22,7 @@ public class StatisticsController {
      * 获取数据统计
      */
     @GetMapping
+    @com.gtcfesk.exchange.config.AdminPermission(menu = "statistics", action = "")
     public ResponseEntity<?> getStatistics(
             @RequestParam(required = false) String startDate,
             @RequestParam(required = false) String endDate) {

@@ -12,7 +12,7 @@ public class MarketKlineController {
     @GetMapping("/history/{symbol}")
     public ResponseEntity<?> history(@PathVariable String symbol, @RequestParam String interval,
             @RequestParam long endTime, @RequestParam(defaultValue = "160") int limit) {
-        if (!Arrays.asList("1m", "5m", "15m", "30m", "1h", "1d").contains(interval)
+        if (!Arrays.asList("1m", "5m", "15m", "30m", "1h", "1d", "1w", "1M").contains(interval)
                 || limit < 2 || limit > 200 || endTime < 946684800000L
                 || endTime > System.currentTimeMillis() + 86400000L)
             return ResponseEntity.badRequest().body(Collections.singletonMap("error", "Invalid history window"));

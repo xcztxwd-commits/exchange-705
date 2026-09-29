@@ -24,6 +24,7 @@ public class DepositReviewController {
     private final UserAccountRepository userAccountRepository;
 
     @GetMapping("/list")
+    @com.gtcfesk.exchange.config.AdminPermission(menu = "deposit_review", action = "")
     public ResponseEntity<?> getDepositRecords(
             @RequestParam(required = false) String status,
             @RequestParam(required = false) Long userId,
@@ -82,6 +83,7 @@ public class DepositReviewController {
     }
 
     @PostMapping("/approve/{id}")
+    @com.gtcfesk.exchange.config.AdminPermission(menu = "deposit_review", action = "approve_deposit")
     public ResponseEntity<?> approveDeposit(
             @PathVariable Long id,
             @RequestHeader(value = "Authorization", required = false) String authHeader) {
@@ -102,6 +104,7 @@ public class DepositReviewController {
     }
 
     @PostMapping("/reject/{id}")
+    @com.gtcfesk.exchange.config.AdminPermission(menu = "deposit_review", action = "reject_deposit")
     public ResponseEntity<?> rejectDeposit(
             @PathVariable Long id,
             @RequestBody(required = false) Map<String, String> req,

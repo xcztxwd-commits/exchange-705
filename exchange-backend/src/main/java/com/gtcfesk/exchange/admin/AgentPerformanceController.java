@@ -29,6 +29,7 @@ public class AgentPerformanceController {
      * 获取代理业绩数据
      */
     @GetMapping("/{agentId}/performance")
+    @com.gtcfesk.exchange.config.AdminPermission(menu = "agents", action = "performance")
     public ResponseEntity<?> getAgentPerformance(@PathVariable Long agentId) {
         // 验证代理是否存在
         userAccountRepository.findById(agentId)

@@ -25,6 +25,7 @@ public class AdminFinancialController {
      * 获取所有理财产品
      */
     @GetMapping("/products")
+    @com.gtcfesk.exchange.config.AdminPermission(menu = "financial_products", action = "")
     public ResponseEntity<?> getProducts() {
         try {
             List<FinancialProduct> products = adminFinancialService.getAllProducts();
@@ -44,6 +45,7 @@ public class AdminFinancialController {
      * 创建理财产品
      */
     @PostMapping("/products")
+    @com.gtcfesk.exchange.config.AdminPermission(menu = "financial_products", action = "create")
     public ResponseEntity<?> createProduct(@RequestBody FinancialProduct product) {
         try {
             FinancialProduct created = adminFinancialService.createProduct(product);
@@ -63,6 +65,7 @@ public class AdminFinancialController {
      * 更新理财产品
      */
     @PutMapping("/products/{id}")
+    @com.gtcfesk.exchange.config.AdminPermission(menu = "financial_products", action = "edit")
     public ResponseEntity<?> updateProduct(@PathVariable Long id, @RequestBody FinancialProduct product) {
         try {
             product.setId(id);
@@ -83,6 +86,7 @@ public class AdminFinancialController {
      * 删除理财产品
      */
     @DeleteMapping("/products/{id}")
+    @com.gtcfesk.exchange.config.AdminPermission(menu = "financial_products", action = "delete")
     public ResponseEntity<?> deleteProduct(@PathVariable Long id) {
         try {
             adminFinancialService.deleteProduct(id);
@@ -101,6 +105,7 @@ public class AdminFinancialController {
      * 获取所有理财订单
      */
     @GetMapping("/orders")
+    @com.gtcfesk.exchange.config.AdminPermission(menu = "financial_orders", action = "")
     public ResponseEntity<?> getOrders(
             @RequestParam(required = false) String status,
             @RequestParam(required = false) Long userId,

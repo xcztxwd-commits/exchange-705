@@ -13,6 +13,22 @@ import java.util.Map;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+    @ExceptionHandler(com.gtcfesk.exchange.common.KycRequiredException.class)
+    public ResponseEntity<Map<String, Object>> handleKycRequired(com.gtcfesk.exchange.common.KycRequiredException e) {
+        Map<String, Object> result = new HashMap<>();
+        result.put("success", false);
+        result.put("errorCode", "KYC_REQUIRED");
+        result.put("kycStatus", e.getKycStatus());
+        result.put("message", e.getMessage());
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).header("Cache-Control", "no-store").body(result);
+    }
+
+    @ExceptionHandler(com.gtcfesk.exchange.market.BalancedControlPlan.Failure.class)
+    public ResponseEntity<Map<String, Object>> handleControlPlan(com.gtcfesk.exchange.market.BalancedControlPlan.Failure e) {
+        Map<String, Object> result = new HashMap<>();
+        result.put("success", false); result.put("errorCode", e.code); result.put("message", e.getMessage());
+        return ResponseEntity.status("PLAN_CORRUPTED".equals(e.code) ? HttpStatus.SERVICE_UNAVAILABLE : HttpStatus.BAD_REQUEST).body(result);
+    }
     @ExceptionHandler(com.gtcfesk.exchange.security.SecurityFailure.class)
     public ResponseEntity<Map<String, Object>> handleSecurity(com.gtcfesk.exchange.security.SecurityFailure e) {
         org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();

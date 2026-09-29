@@ -4,6 +4,7 @@
  */
 export function getImageUrl(url: string | null | undefined): string {
   if (!url) return ''
+  if (url.startsWith('/demo-uploads/')) return url
   
   // 如果是完整 URL（http://或https://开头），直接返回
   if (url.startsWith('http://') || url.startsWith('https://')) {

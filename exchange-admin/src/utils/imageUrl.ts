@@ -2,8 +2,16 @@
  * 获取图片完整 URL
  * 使用生产环境的 API 域名
  */
-export function getImageUrl(url: string | null | undefined): string {
+export function getImageUrl(url: string | null | undefined, accountMode?: string): string {
   if (!url) return ''
+  if (accountMode === 'DEMO') {
+    const base = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/api\/?$/, '').replace(/\/$/, '')
+    const path = url.replace(/^https?:\/\/[^/]+/, '').replace(/^\/api/, '')
+    if (path.startsWith('/uploads/')) return base + path.replace('/uploads/', '/demo-uploads/')
+    if (!url.startsWith('/') && !/^https?:/.test(url)) return base + '/demo-uploads/images/' + url
+    // External image URLs remain explicit; never substitute a real upload directory.
+    return url
+  }
   
   // 如果是完整 URL（http://或https://开头），直接返回
   if (url.startsWith('http://') || url.startsWith('https://')) {

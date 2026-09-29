@@ -1,3 +1,4 @@
+import { visitorRegion } from '../utils/visitorRegion'
 import { japaneseServerMessage } from '../utils/serverJapanese'
 import { defineStore } from 'pinia'
 import { computed, ref, watch } from 'vue'
@@ -20335,115 +20336,18 @@ export const useLocaleStore = defineStore('locale', () => {
     console.log('[LocaleStore] Language changed to:', val)
   }
 
-  // 检测浏览器语言并映射到支持的语言代码
   const detectBrowserLocale = (): LocaleKey => {
-    // 获取浏览器语言设置
-    const browserLang = navigator.language || (navigator as any).userLanguage || 'en'
-    
-    // 语言代码映射表（浏览器语言 -> 我们的语言代码）
-    const langMap: Record<string, LocaleKey> = {
-      // 简体中文
-      'zh-CN': 'zh-TW', // 如果没有简体，使用繁体
-      'zh': 'zh-TW',
-      // 繁体中文
-      'zh-TW': 'zh-TW',
-      'zh-HK': 'zh-TW',
-      // 英语
-      'en': 'en',
-      'en-US': 'en',
-      'en-GB': 'en',
-      'en-CA': 'en',
-      'en-AU': 'en',
-      // 法语
-      'fr': 'fr',
-      'fr-FR': 'fr',
-      'fr-CA': 'fr',
-      // 德语
-      'de': 'de',
-      'de-DE': 'de',
-      'de-AT': 'de',
-      'de-CH': 'de',
-      // 俄语
-      'ru': 'ru',
-      'ru-RU': 'ru',
-      // 西班牙语
-      'es': 'es',
-      'es-ES': 'es',
-      'es-MX': 'es',
-      'es-AR': 'es',
-      // 葡萄牙语
-      'pt': 'pt',
-      'pt-BR': 'pt',
-      'pt-PT': 'pt',
-      // 意大利语
-      'it': 'it',
-      'it-IT': 'it',
-      // 阿拉伯语
-      'ar': 'ar',
-      'ar-SA': 'ar',
-      'ar-EG': 'ar',
-      // 土耳其语
-      'tr': 'tr',
-      'tr-TR': 'tr',
-      // 印尼语
-      'id': 'id',
-      'id-ID': 'id',
-      // 缅甸语
-      'my': 'my',
-      'my-MM': 'my',
-      // 印地语
-      'hi': 'hi',
-      'hi-IN': 'hi',
-      // 捷克语
-      'cs': 'cs',
-      'cs-CZ': 'cs',
-      // 波兰语
-      'pl': 'pl',
-      'pl-PL': 'pl',
-      // 日语
-      'ja': 'ja',
-      'ja-JP': 'ja',
-      // 韩语
-      'ko': 'ko',
-      'ko-KR': 'ko',
-      // 泰语
-      'th': 'th',
-      'th-TH': 'th',
-      // 越南语
-      'vi': 'vi',
-      'vi-VN': 'vi',
-    }
-    
-    // 尝试完整匹配（例如：zh-CN）
-    if (langMap[browserLang]) {
-      return langMap[browserLang]
-    }
-    
-    // 尝试只匹配语言代码（例如：zh）
-    const langCode = browserLang.split('-')[0].toLowerCase()
-    if (langMap[langCode]) {
-      return langMap[langCode]
-    }
-    
-    // 默认返回英语
-    return 'en'
+    const language = (navigator.language.split('-')[0] || 'en').toLowerCase()
+    if (language === 'zh') return 'zh-TW'
+    return Object.prototype.hasOwnProperty.call(messages, language) ? language as LocaleKey : 'en'
   }
 
   const loadLocale = () => {
     const saved = localStorage.getItem('locale') as LocaleKey | null
-    if (saved && Object.prototype.hasOwnProperty.call(messages, saved)) {
-      // 如果用户之前手动选择过语言，使用保存的语言
-      locale.value = saved
-      console.log('[LocaleStore] Language loaded from localStorage:', saved)
-    } else {
-      // 如果没有保存的语言，强制默认使用英语 (不再根据浏览器语言自动检测)
-      const defaultLang = 'en'
-      locale.value = defaultLang
-      // 自动保存默认语言，以便下次使用
-      localStorage.setItem('locale', defaultLang)
-      console.log('[LocaleStore] No saved language, forced default language:', defaultLang)
-    
-}
+    const detected = visitorRegion.value.locale || detectBrowserLocale()
+    locale.value = saved && Object.prototype.hasOwnProperty.call(messages, saved)
+      ? saved : Object.prototype.hasOwnProperty.call(messages, detected) ? detected as LocaleKey : 'en'
+    // Only setLocale persists an explicit choice; automatic defaults follow the next visit's IP.
   }
 
   return {

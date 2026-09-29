@@ -9,6 +9,12 @@ CREATE TABLE IF NOT EXISTS market_control_task (
  sampled_until BIGINT NOT NULL, request_key VARCHAR(64) NULL,
  UNIQUE KEY control_request (symbol_id, request_key), INDEX control_symbol (symbol_id, started_at)
 );
+-- Future V3 prices are private plan data, never market samples until their logical second arrives.
+CREATE TABLE IF NOT EXISTS market_control_plan (
+ task_id VARCHAR(36) PRIMARY KEY, seed BIGINT NOT NULL,
+ parameters_json TEXT NOT NULL, prices_json MEDIUMTEXT NOT NULL,
+ summary_json TEXT NOT NULL, checksum VARCHAR(64) NOT NULL
+);
 CREATE TABLE IF NOT EXISTS market_control_sample (
  task_id VARCHAR(36) NOT NULL, generated_at BIGINT NOT NULL, price DECIMAL(32,16) NOT NULL,
  PRIMARY KEY (task_id, generated_at)

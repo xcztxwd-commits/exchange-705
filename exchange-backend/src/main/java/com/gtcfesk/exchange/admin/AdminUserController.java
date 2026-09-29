@@ -30,10 +30,16 @@ public class AdminUserController {
     @Autowired
     private AgentActionService agentActionService;
 
+    @Autowired private AdminPermissionService permissions;
+    @Autowired private com.gtcfesk.exchange.repository.AdminMenuRepository permissionMenus;
+    @Autowired private com.gtcfesk.exchange.repository.UserActionRepository assignedActions;
+    @Autowired private com.gtcfesk.exchange.repository.MenuActionRepository registeredActions;
+    @Autowired private javax.persistence.EntityManager entityManager;
     @Autowired
     private JwtUtil jwtUtil;
 
     @PostMapping("/query")
+    @com.gtcfesk.exchange.config.AdminPermission(menu = "users", action = "")
     public ResponseEntity<?> queryUsers(
             @RequestBody UserQueryRequest req,
             @RequestHeader(value = "Authorization", required = false) String authHeader
@@ -106,6 +112,7 @@ public class AdminUserController {
     }
 
     @GetMapping
+    @com.gtcfesk.exchange.config.AdminPermission(menu = "users", action = "")
     public ResponseEntity<?> getUsersWithParams(
             @RequestParam(required = false) Integer page,
             @RequestParam(required = false) Integer size,
@@ -188,6 +195,7 @@ public class AdminUserController {
 
 
     @GetMapping("/{userId}")
+    @com.gtcfesk.exchange.config.AdminPermission(menu = "users", action = "detail")
     public ResponseEntity<?> getUserDetail(
             @PathVariable Long userId,
             @RequestHeader(value = "Authorization", required = false) String authHeader
@@ -261,6 +269,7 @@ public class AdminUserController {
     }
 
     @PostMapping("/resetPassword")
+    @com.gtcfesk.exchange.config.AdminPermission(menu = "users", action = "reset_password")
     public ResponseEntity<?> resetPassword(@RequestBody ResetPasswordRequest req) {
         adminUserService.resetPassword(req);
         Map<String, String> result = new HashMap<>();
@@ -269,6 +278,7 @@ public class AdminUserController {
     }
 
     @PostMapping("/updateStatus")
+    @com.gtcfesk.exchange.config.AdminPermission(menu = "users", action = "")
     public ResponseEntity<?> updateStatus(@RequestBody UpdateUserStatusRequest req) {
         adminUserService.updateStatus(req);
         Map<String, String> result = new HashMap<>();
@@ -277,6 +287,7 @@ public class AdminUserController {
     }
 
     @PutMapping("/{userId}/status")
+    @com.gtcfesk.exchange.config.AdminPermission(menu = "users", action = "")
     public ResponseEntity<?> updateUserStatus(@PathVariable Long userId, @RequestBody Map<String, String> request) {
         UpdateUserStatusRequest req = new UpdateUserStatusRequest();
         req.setUserId(userId);
@@ -289,6 +300,7 @@ public class AdminUserController {
     }
 
     @PostMapping("/updateUserType")
+    @com.gtcfesk.exchange.config.AdminPermission(menu = "users", action = "")
     public ResponseEntity<?> updateUserType(@RequestBody com.gtcfesk.exchange.admin.dto.UpdateUserTypeRequest req) {
         adminUserService.updateUserType(req);
         Map<String, String> result = new HashMap<>();
@@ -308,6 +320,7 @@ public class AdminUserController {
      * 获取指定用户的下级用户列表
      */
     @GetMapping("/{userId}/subordinates")
+    @com.gtcfesk.exchange.config.AdminPermission(menu = "users", action = "view_subordinates")
     public ResponseEntity<?> getSubordinates(
             @PathVariable Long userId,
             @RequestHeader(value = "Authorization", required = false) String authHeader
@@ -331,6 +344,7 @@ public class AdminUserController {
      * 删除用户（包括所有关联数据）
      */
     @DeleteMapping("/{userId}")
+    @com.gtcfesk.exchange.config.AdminPermission(menu = "users", action = "delete_user")
     public ResponseEntity<?> deleteUser(@PathVariable Long userId) {
         try {
             adminUserService.deleteUser(userId);
@@ -361,6 +375,8 @@ public class AdminUserController {
      * 为代理分配菜单权限和操作权限
      */
     @PostMapping("/{userId}/menus")
+    @com.gtcfesk.exchange.config.AdminPermission(menu = "agents", action = "assign_permission")
+    @org.springframework.transaction.annotation.Transactional
     public ResponseEntity<?> assignMenus(@PathVariable Long userId, @RequestBody Map<String, Object> request) {
         // 验证用户是否为代理
         UserAccount user = adminUserService.getUserDetail(userId);
@@ -370,44 +386,28 @@ public class AdminUserController {
             return ResponseEntity.badRequest().body(result);
         }
 
-        // 获取菜单ID列表
-        List<?> rawMenuIds = (List<?>) request.get("menuIds");
-        List<Long> menuIds = new ArrayList<>();
-        if (rawMenuIds != null) {
-            for (Object obj : rawMenuIds) {
-                if (obj instanceof Number) {
-                    menuIds.add(((Number) obj).longValue());
-                }
+        List<Long> menuIds = PermissionGrantInput.menuIds(request);
+        Map<Long, List<String>> requestedActions = PermissionGrantInput.actions(request);
+        List<Long> validatedIds = new ArrayList<>(menuIds);
+        // Validate the complete replacement before touching either table.
+        for (Map.Entry<Long, List<String>> entry : requestedActions.entrySet()) {
+            Long menuId = entry.getKey();
+            if (!menuIds.contains(menuId)) throw new IllegalArgumentException("按钮必须属于已选菜单");
+            com.gtcfesk.exchange.entity.AdminMenu menu = permissionMenus.findById(menuId).orElseThrow(IllegalArgumentException::new);
+            for (String action : entry.getValue()) {
+                if (registeredActions.findByMenuIdAndActionCode(menuId, action) == null) throw new IllegalArgumentException("未知操作权限");
+                com.gtcfesk.exchange.entity.AdminMenu button = permissionMenus.findByMenuCode(menu.getMenuCode() + ":" + action)
+                    .filter(b -> "button".equals(b.getMenuType()) && menuId.equals(b.getParentId()))
+                    .orElseThrow(() -> new IllegalArgumentException("操作权限未登记"));
+                validatedIds.add(button.getId());
             }
         }
-
-        // 分配菜单权限
+        permissions.validateGrant(validatedIds);
+        assignedActions.deleteByUserId(userId);
+        entityManager.flush();
         adminUserService.assignAgentMenus(userId, menuIds);
-
-        // 分配操作权限（格式：{menuId: [actionCode1, actionCode2, ...]})
-        Map<?, ?> rawActions = (Map<?, ?>) request.get("actions");
-        if (rawActions != null) {
-            for (Map.Entry<?, ?> entry : rawActions.entrySet()) {
-                Long menuId;
-                if (entry.getKey() instanceof Number) {
-                    menuId = ((Number) entry.getKey()).longValue();
-                } else {
-                    menuId = Long.parseLong(entry.getKey().toString());
-                }
-                
-                List<String> actionCodes = new ArrayList<>();
-                if (entry.getValue() instanceof List) {
-                    List<?> rawActionCodes = (List<?>) entry.getValue();
-                    for (Object actionCode : rawActionCodes) {
-                        if (actionCode != null) {
-                            actionCodes.add(actionCode.toString());
-                        }
-                    }
-                }
-                
-                agentActionService.assignActions(userId, menuId, actionCodes);
-            }
-        }
+        for (Map.Entry<Long, List<String>> entry : requestedActions.entrySet())
+            agentActionService.assignActions(userId, entry.getKey(), entry.getValue());
 
         Map<String, Object> result = new HashMap<>();
         result.put("success", true);
@@ -467,6 +467,7 @@ public class AdminUserController {
      * 获取用户资金明细
      */
     @GetMapping("/{userId}/fund-details")
+    @com.gtcfesk.exchange.config.AdminPermission(menu = "users", action = "fund_details")
     public ResponseEntity<?> getUserFundDetails(
             @PathVariable Long userId,
             @RequestHeader(value = "Authorization", required = false) String authHeader
@@ -516,6 +517,7 @@ public class AdminUserController {
      * 修改用户邀请码
      */
     @PostMapping("/{userId}/update-invite-code")
+    @com.gtcfesk.exchange.config.AdminPermission(menu = "users", action = "modify_invite_code")
     public ResponseEntity<?> updateInviteCode(
             @PathVariable Long userId,
             @RequestBody Map<String, String> request,
@@ -559,6 +561,7 @@ public class AdminUserController {
      * 更新代理备注
      */
     @PostMapping("/{userId}/update-remark")
+    @com.gtcfesk.exchange.config.AdminPermission(menu = "users", action = "modify_remark")
     public ResponseEntity<?> updateRemark(
             @PathVariable Long userId,
             @RequestBody Map<String, String> request
@@ -584,6 +587,7 @@ public class AdminUserController {
      * 用于更新旧数据，将"中国大陆"、"中国"等简化信息更新为详细的省市信息
      */
     @PostMapping("/batch-update-ip-regions")
+    @com.gtcfesk.exchange.config.AdminPermission(menu = "users", action = "batch_ip")
     public ResponseEntity<?> batchUpdateIpRegions(@RequestHeader(value = "Authorization", required = false) String authHeader) {
         try {
             int updatedCount = adminUserService.batchUpdateIpRegions();

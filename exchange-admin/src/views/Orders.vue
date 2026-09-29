@@ -2,7 +2,13 @@
 import { ref, onMounted, computed } from 'vue'
 import { ElMessage, ElMessageBox, ElTabs, ElTabPane } from 'element-plus'
 import { Search, Refresh } from '@element-plus/icons-vue'
-import request from '@/utils/request'
+import { useAccountTable } from '@/utils/useAccountTable'
+import { accountTableRequest } from '@/utils/accountTableRequest'
+import AccountTypeFilter from '@/components/AccountTypeFilter.vue'
+const accountTable = useAccountTable()
+const accountModes = accountTable.modes
+const request = accountTableRequest(accountTable)
+function accountFilterChanged() { contractOrders.value=[];optionOrders.value=[];contractTotal.value=0;optionTotal.value=0;contractQueryParams.value.page=0;optionQueryParams.value.page=0;loadContractOrders();loadOptionOrders() }
 import ManualContractOrder from '@/components/ManualContractOrder.vue'
 const manualForm = ref<InstanceType<typeof ManualContractOrder>>()
 import { useAuthStore } from '@/store/auth'
@@ -18,9 +24,13 @@ const canCancelOrder = ref(true)
 const canSetProfit = ref(true)
 const canSetLoss = ref(true)
 const canClearPreset = ref(true)
+const canDeleteOrder = ref(false)
+const canRestoreOrder = ref(false)
 
 // 加载权限
 const loadPermissions = async () => {
+  canDeleteOrder.value = !isAgent.value && await hasPermission('orders', 'delete_order')
+  canRestoreOrder.value = !isAgent.value && await hasPermission('orders', 'restore_order')
   if (!isAgent.value) return
   canCloseOrder.value = await hasPermission('orders', 'close_order')
   canCancelOrder.value = await hasPermission('orders', 'cancel_order')
@@ -29,7 +39,7 @@ const loadPermissions = async () => {
   canClearPreset.value = await hasPermission('orders', 'clear_preset')
 }
 
-const activeTab = ref('option')
+const activeTab = ref('contract')
 const contractOrders = ref<any[]>([])
 const optionOrders = ref<any[]>([])
 const contractTotal = ref(0)
@@ -41,18 +51,20 @@ const contractQueryParams = ref({
   userId: '',
   userEmail: '',
   status: '',
+  deletion: '',
   filterAgentId: null as number | null,
   page: 0,
-  size: 20,
+  size: 10,
 })
 
 const optionQueryParams = ref({
   userId: '',
   userEmail: '',
   status: '',
+  deletion: '',
   filterAgentId: null as number | null,
   page: 0,
-  size: 20,
+  size: 10,
 })
 
 // 加载代理列表（只有管理员需要）
@@ -124,6 +136,7 @@ const handleReset = () => {
     contractQueryParams.value.userId = ''
     contractQueryParams.value.userEmail = ''
     contractQueryParams.value.status = ''
+    contractQueryParams.value.deletion = ''
     contractQueryParams.value.filterAgentId = null
     contractQueryParams.value.page = 0
     loadContractOrders()
@@ -131,6 +144,7 @@ const handleReset = () => {
     optionQueryParams.value.userId = ''
     optionQueryParams.value.userEmail = ''
     optionQueryParams.value.status = ''
+    optionQueryParams.value.deletion = ''
     optionQueryParams.value.filterAgentId = null
     optionQueryParams.value.page = 0
     loadOptionOrders()
@@ -170,6 +184,7 @@ function parseSymbol(symbol: string): { baseCurrency: string; quoteCurrency: str
 }
 
 const handleSetPresetProfit = async (row: any, presetType: string) => {
+  accountTable.selectRow(row)
   try {
     await ElMessageBox.confirm(
       `确定要将订单 ${row.id} 设置为${presetType === 'PROFIT' ? '盈利' : '亏损'}吗？倒计时结束后将按此设置自动平仓。`,
@@ -191,6 +206,7 @@ const handleSetPresetProfit = async (row: any, presetType: string) => {
 }
 
 const handleClearPreset = async (row: any) => {
+  accountTable.selectRow(row)
   try {
     await ElMessageBox.confirm(
       `确定要清除订单 ${row.id} 的预设盈亏设置吗？`,
@@ -220,6 +236,7 @@ const formatDate = (date: string | null) => {
 }
 
 const handleCloseOrder = async (row: any) => {
+  accountTable.selectRow(row)
   try {
     const closePrice = await ElMessageBox.prompt('请输入平仓价格', '平仓', {
       confirmButtonText: '确定',
@@ -249,6 +266,7 @@ const handleCloseOrder = async (row: any) => {
 }
 
 const handleCancelOrder = async (row: any) => {
+  accountTable.selectRow(row)
   try {
     await ElMessageBox.confirm('确定要撤单吗？', '撤单', {
       confirmButtonText: '确定',
@@ -271,53 +289,24 @@ const handleCancelOrder = async (row: any) => {
   }
 }
 
-// 判断是否是异常订单（未正常平仓的订单）
-function isAbnormalOrder(row: any, type: 'contract' | 'option'): boolean {
-  if (type === 'contract') {
-    // 合约订单：状态为 OPEN（持仓中）但可能已经异常
-    // 可以根据业务需求添加更多判断条件，比如创建时间超过一定期限等
-    return row.status === 'OPEN'
-  } else {
-    // 期货订单：状态为 TRADING（交易中）但可能已经异常
-    // 可以根据业务需求添加更多判断条件，比如创建时间超过一定期限等
-    return row.status === 'TRADING'
+// Soft deletion only changes visibility; no settlement or balance mutation.
+async function handleDeletion(row: any, type: 'contract' | 'option') {
+  const action = row.deleted ? '恢复' : '删除'
+  if (!row.deleted && !['CLOSED', 'CANCELLED'].includes(row.status)) {
+    ElMessage.warning('请先平仓或撤单，再删除订单；删除不会结算或退还资金')
+    return
   }
-}
-
-// 异常处理删除订单
-async function handleAbnormalDelete(row: any, type: 'contract' | 'option') {
   try {
-    await ElMessageBox.confirm(
-      `确定要删除该异常订单吗？\n订单ID: ${row.id}\n用户ID: ${row.userId}\n\n此操作将删除订单记录和用户的订单记录，且无法恢复！`,
-      '异常处理 - 确认删除',
-      {
-        confirmButtonText: '确定删除',
-        cancelButtonText: '取消',
-        type: 'warning',
-        dangerouslyUseHTMLString: false
-      }
-    )
-    
-    const endpoint = type === 'contract' 
-      ? `/admin/orders/contract/${row.id}/abnormal-delete`
-      : `/admin/orders/option/${row.id}/abnormal-delete`
-    
-    const res: any = await request.delete(endpoint)
-    
-    if (res && res.success !== false) {
-      ElMessage.success('订单删除成功')
-      if (type === 'contract') {
-        loadContractOrders()
-      } else {
-        loadOptionOrders()
-      }
-    } else {
-      ElMessage.error(res?.message || '删除失败')
-    }
+    await ElMessageBox.confirm(row.deleted
+      ? `恢复订单 ${row.id}？恢复后用户可重新查看，资金及原交易状态不变。`
+      : `删除订单 ${row.id}？用户端将隐藏，后台保留并可恢复，资金及原交易状态不变。`, `${action}订单`, { type: 'warning' })
+    const endpoint = `/admin/orders/${type}/${row.id}`
+    const res: any = row.deleted ? await request.post(`${endpoint}/restore`) : await request.delete(endpoint)
+    if (res?.success === false) throw new Error(res.message || `${action}失败`)
+    ElMessage.success(`${action}成功`)
+    await (type === 'contract' ? loadContractOrders() : loadOptionOrders())
   } catch (e: any) {
-    if (e !== 'cancel') {
-      ElMessage.error(e?.response?.data?.message || e?.message || '删除失败')
-    }
+    if (e !== 'cancel' && e !== 'close') ElMessage.error(e?.response?.data?.message || e?.message || `${action}失败`)
   }
 }
 
@@ -335,8 +324,8 @@ onMounted(() => {
     
     <el-tabs v-model="activeTab" @tab-change="() => {}">
       <el-tab-pane label="合约订单" name="contract">
-        <el-button v-if="auth.user?.isSuperAdmin || auth.user?.role === 'super_admin'" type="primary" @click="manualForm?.open()">生成订单</el-button>
-        <ManualContractOrder ref="manualForm" @created="loadContractOrders" />
+        <el-button v-permission="'orders:manual_order'" v-if="auth.user?.isSuperAdmin || auth.user?.role === 'super_admin'" type="primary" @click="manualForm?.open()" :disabled="accountModes.includes('DEMO') || !accountModes.length">生成订单</el-button>
+        <ManualContractOrder v-if="accountModes.length === 1 && accountModes[0] === 'REAL'" ref="manualForm" @created="loadContractOrders" />
         <div class="toolbar">
           <div class="search-form">
             <!-- 代理筛选（只有管理员能看到） -->
@@ -368,6 +357,11 @@ onMounted(() => {
               style="width: 200px; margin-right: 12px;"
               clearable
             />
+            <el-select v-model="contractQueryParams.deletion" placeholder="删除状态" style="width: 150px; margin-right: 12px;" @change="handleSearch">
+              <el-option label="全部记录" value="" />
+              <el-option label="未删除" value="active" />
+              <el-option label="已删除" value="deleted" />
+            </el-select>
             <el-select
               v-model="contractQueryParams.status"
               placeholder="订单状态"
@@ -380,12 +374,14 @@ onMounted(() => {
               <el-option label="已平仓" value="CLOSED" />
               <el-option label="已取消" value="CANCELLED" />
             </el-select>
-            <el-button type="primary" :icon="Search" @click="handleSearch">搜索</el-button>
-            <el-button :icon="Refresh" @click="handleReset">重置</el-button>
+            <el-button v-permission="'orders:view'" type="primary" :icon="Search" @click="handleSearch">搜索</el-button>
+            <el-button v-permission="'orders:view'" :icon="Refresh" @click="handleReset">重置</el-button>
           </div>
         </div>
 
-        <el-table :data="contractOrders" v-loading="loading" border>
+<AccountTypeFilter v-model="accountModes" @change="accountFilterChanged" />
+        <admin-table :row-key="(row: any) => `${row.accountMode || 'REAL'}:${row.id ?? row.userId}:${row.type || ''}`" table-key="Orders.1" :row-class-name="({ row }: { row: any }) => row.deleted ? 'deleted-order' : ''" :data="contractOrders" v-loading="loading" border>
+<el-table-column prop="accountModeLabel" label="账户类型" width="110" fixed="left" />
           <el-table-column prop="id" label="订单ID" width="100" />
           <el-table-column prop="userId" label="用户ID" width="200">
             <template #default="{ row }">
@@ -413,7 +409,7 @@ onMounted(() => {
           </el-table-column>
           <el-table-column prop="quantity" label="数量" width="120">
             <template #default="{ row }">
-              {{ formatMoney(row.quantity) }}
+              {{ row.quantity }} {{ row.quantityUnitType === 'BASE_ASSET' ? row.quantityAsset : row.quantityUnitType === 'SHARE' ? '股' : '手' }}
             </template>
           </el-table-column>
           <el-table-column prop="openPrice" label="开仓价" width="120">
@@ -447,7 +443,8 @@ onMounted(() => {
           </el-table-column>
           <el-table-column prop="status" label="状态" width="100">
             <template #default="{ row }">
-              <el-tag :type="row.status === 'OPEN' ? 'success' : row.status === 'CLOSED' ? 'info' : 'warning'">
+              <el-tag v-if="row.deleted" type="info">已删除</el-tag>
+              <el-tag v-else :type="row.status === 'OPEN' ? 'success' : row.status === 'CLOSED' ? 'info' : 'warning'">
                 {{ row.status === 'PENDING' ? '挂单中' : row.status === 'OPEN' ? '持仓中' : row.status === 'CLOSED' ? '已平仓' : '已取消' }}
               </el-tag>
             </template>
@@ -460,45 +457,45 @@ onMounted(() => {
           <el-table-column label="操作" width="200" fixed="right">
             <template #default="{ row }">
               <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-                <el-button 
-                  v-if="row.status === 'OPEN' && canCloseOrder" 
+                <el-button v-permission="'orders:close_order'"
+                  v-if="!row.deleted && row.status === 'OPEN'"
                   type="success" 
                   size="small" 
                   @click="handleCloseOrder(row)"
-                >
+                 :disabled="accountModes.includes('DEMO') || !accountModes.length">
                   平仓
                 </el-button>
-                <el-button 
-                  v-if="row.status === 'PENDING' && canCancelOrder" 
+                <el-button v-permission="'orders:cancel_order'"
+                  v-if="!row.deleted && row.status === 'PENDING'"
                   type="warning" 
                   size="small" 
                   @click="handleCancelOrder(row)"
-                >
+                 :disabled="accountModes.includes('DEMO') || !accountModes.length">
                   撤单
                 </el-button>
-                <el-button 
-                  v-if="isAbnormalOrder(row, 'contract')" 
+                <el-button v-permission="row.deleted ? 'orders:restore_order' : 'orders:delete_order'"
+                  v-if="!isAgent"
                   type="danger" 
                   size="small" 
-                  @click="handleAbnormalDelete(row, 'contract')"
+                  @click="handleDeletion(row, 'contract')"
                 >
-                  异常处理
+                  {{ row.deleted ? '恢复订单' : '删除订单' }}
                 </el-button>
-                <span v-if="row.status !== 'OPEN' && row.status !== 'PENDING' && !isAbnormalOrder(row, 'contract')" style="color: #999; font-size: 12px;">
-                  -
-                </span>
               </div>
             </template>
           </el-table-column>
-        </el-table>
+        </admin-table>
 
         <div class="pagination">
           <el-pagination
-            v-model:current-page="contractQueryParams.page"
+            :current-page="contractQueryParams.page + 1"
             :page-size="contractQueryParams.size"
             :total="contractTotal"
-            layout="total, prev, pager, next"
-            @current-change="loadContractOrders"
+            :page-sizes="[10, 20, 50, 100]"
+            layout="total, sizes, prev, pager, next"
+            @current-change="(page: number) => contractQueryParams.page = page - 1"
+            @size-change="(size: number) => contractQueryParams.size = size"
+            @change="loadContractOrders"
           />
         </div>
       </el-tab-pane>
@@ -535,6 +532,11 @@ onMounted(() => {
               style="width: 200px; margin-right: 12px;"
               clearable
             />
+            <el-select v-model="optionQueryParams.deletion" placeholder="删除状态" style="width: 150px; margin-right: 12px;" @change="handleSearch">
+              <el-option label="全部记录" value="" />
+              <el-option label="未删除" value="active" />
+              <el-option label="已删除" value="deleted" />
+            </el-select>
             <el-select
               v-model="optionQueryParams.status"
               placeholder="订单状态"
@@ -546,12 +548,14 @@ onMounted(() => {
               <el-option label="已平仓" value="CLOSED" />
               <el-option label="已取消" value="CANCELLED" />
             </el-select>
-            <el-button type="primary" :icon="Search" @click="handleSearch">搜索</el-button>
-            <el-button :icon="Refresh" @click="handleReset">重置</el-button>
+            <el-button v-permission="'orders:view'" type="primary" :icon="Search" @click="handleSearch">搜索</el-button>
+            <el-button v-permission="'orders:view'" :icon="Refresh" @click="handleReset">重置</el-button>
           </div>
         </div>
 
-        <el-table :data="optionOrders" v-loading="loading" border>
+<AccountTypeFilter v-model="accountModes" @change="accountFilterChanged" />
+        <admin-table :row-key="(row: any) => `${row.accountMode || 'REAL'}:${row.id ?? row.userId}:${row.type || ''}`" table-key="Orders.2" :row-class-name="({ row }: { row: any }) => row.deleted ? 'deleted-order' : ''" :data="optionOrders" v-loading="loading" border>
+<el-table-column prop="accountModeLabel" label="账户类型" width="110" fixed="left" />
           <el-table-column prop="id" label="订单ID" width="100" />
           <el-table-column prop="userId" label="用户ID" width="200">
             <template #default="{ row }">
@@ -601,7 +605,8 @@ onMounted(() => {
           </el-table-column>
           <el-table-column prop="status" label="状态" width="100">
             <template #default="{ row }">
-              <el-tag :type="row.status === 'TRADING' ? 'success' : row.status === 'CLOSED' ? 'info' : 'warning'">
+              <el-tag v-if="row.deleted" type="info">已删除</el-tag>
+              <el-tag v-else :type="row.status === 'TRADING' ? 'success' : row.status === 'CLOSED' ? 'info' : 'warning'">
                 {{ row.status === 'TRADING' ? '交易中' : row.status === 'CLOSED' ? '已平仓' : '已取消' }}
               </el-tag>
             </template>
@@ -621,50 +626,53 @@ onMounted(() => {
           <el-table-column label="操作" width="300" fixed="right">
             <template #default="{ row }">
               <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-                <el-button 
-                  v-if="row.status === 'TRADING' && canSetProfit"
+                <el-button v-permission="'orders:set_profit'"
+                  v-if="!row.deleted && row.status === 'TRADING'"
                   type="success" 
                   size="small" 
                   @click="handleSetPresetProfit(row, 'PROFIT')"
-                >
+                 :disabled="accountModes.includes('DEMO') || !accountModes.length">
                   设为盈利
                 </el-button>
-                <el-button 
-                  v-if="row.status === 'TRADING' && canSetLoss"
+                <el-button v-permission="'orders:set_loss'"
+                  v-if="!row.deleted && row.status === 'TRADING'"
                   type="danger" 
                   size="small" 
                   @click="handleSetPresetProfit(row, 'LOSS')"
-                >
+                 :disabled="accountModes.includes('DEMO') || !accountModes.length">
                   设为亏损
                 </el-button>
-                <el-button 
-                  v-if="row.status === 'TRADING' && row.presetProfitType && canClearPreset"
+                <el-button v-permission="'orders:clear_preset'"
+                  v-if="!row.deleted && row.status === 'TRADING' && row.presetProfitType"
                   type="info" 
                   size="small" 
                   @click="handleClearPreset(row)"
-                >
+                 :disabled="accountModes.includes('DEMO') || !accountModes.length">
                   清除预设
                 </el-button>
-                <el-button 
-                  v-if="isAbnormalOrder(row, 'option')" 
+                <el-button v-permission="row.deleted ? 'orders:restore_order' : 'orders:delete_order'"
+                  v-if="!isAgent"
                   type="danger" 
                   size="small" 
-                  @click="handleAbnormalDelete(row, 'option')"
+                  @click="handleDeletion(row, 'option')"
                 >
-                  异常处理
+                  {{ row.deleted ? '恢复订单' : '删除订单' }}
                 </el-button>
               </div>
             </template>
           </el-table-column>
-        </el-table>
+        </admin-table>
 
         <div class="pagination">
           <el-pagination
-            v-model:current-page="optionQueryParams.page"
+            :current-page="optionQueryParams.page + 1"
             :page-size="optionQueryParams.size"
             :total="optionTotal"
-            layout="total, prev, pager, next"
-            @current-change="loadOptionOrders"
+            :page-sizes="[10, 20, 50, 100]"
+            layout="total, sizes, prev, pager, next"
+            @current-change="(page: number) => optionQueryParams.page = page - 1"
+            @size-change="(size: number) => optionQueryParams.size = size"
+            @change="loadOptionOrders"
           />
         </div>
       </el-tab-pane>
@@ -673,6 +681,9 @@ onMounted(() => {
 </template>
 
 <style scoped>
+.orders-page :deep(.deleted-order) { --el-table-tr-bg-color: #f2f3f5; color: #909399; }
+.orders-page :deep(.deleted-order .cell) { filter: grayscale(1); }
+
 .orders-page {
   padding: 20px;
 }

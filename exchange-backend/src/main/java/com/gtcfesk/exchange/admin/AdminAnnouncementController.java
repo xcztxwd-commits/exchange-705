@@ -24,6 +24,7 @@ public class AdminAnnouncementController {
      * 获取所有公告列表（包括草稿和隐藏的）
      */
     @GetMapping("/list")
+    @com.gtcfesk.exchange.config.AdminPermission(menu = "announcement", action = "")
     public ResponseEntity<?> getAllAnnouncements() {
         List<Announcement> announcements = announcementRepository.findAllByOrderByCreatedAtDesc();
         return ResponseEntity.ok(announcements);
@@ -33,6 +34,7 @@ public class AdminAnnouncementController {
      * 根据ID获取公告详情
      */
     @GetMapping("/{id}")
+    @com.gtcfesk.exchange.config.AdminPermission(menu = "announcement", action = "detail")
     public ResponseEntity<?> getAnnouncement(@PathVariable Long id) {
         return announcementRepository.findById(id)
                 .map(ResponseEntity::ok)
@@ -43,6 +45,7 @@ public class AdminAnnouncementController {
      * 创建公告
      */
     @PostMapping("/create")
+    @com.gtcfesk.exchange.config.AdminPermission(menu = "announcement", action = "create")
     public ResponseEntity<?> createAnnouncement(@Valid @RequestBody AnnouncementRequest req) {
         Announcement announcement = new Announcement();
         announcement.setTitle(req.getTitle());
@@ -65,6 +68,7 @@ public class AdminAnnouncementController {
      * 更新公告
      */
     @PutMapping("/{id}")
+    @com.gtcfesk.exchange.config.AdminPermission(menu = "announcement", action = "edit")
     public ResponseEntity<?> updateAnnouncement(
             @PathVariable Long id,
             @Valid @RequestBody AnnouncementRequest req) {
@@ -103,6 +107,7 @@ public class AdminAnnouncementController {
      * 删除公告
      */
     @DeleteMapping("/{id}")
+    @com.gtcfesk.exchange.config.AdminPermission(menu = "announcement", action = "delete")
     public ResponseEntity<?> deleteAnnouncement(@PathVariable Long id) {
         if (announcementRepository.existsById(id)) {
             announcementRepository.deleteById(id);

@@ -2,10 +2,10 @@
   <div class="durations-page">
     <div class="page-header">
       <h2>期限设置</h2>
-      <el-button type="primary" :icon="Plus" @click="handleAdd">新增期限</el-button>
+      <el-button v-permission="'durations:create'" type="primary" :icon="Plus" @click="handleAdd">新增期限</el-button>
     </div>
 
-    <el-table :data="durations" v-loading="loading" border>
+    <admin-table table-key="Durations.1" :data="durations" v-loading="loading" border>
       <el-table-column prop="id" label="ID" width="80" />
       <el-table-column prop="duration" label="时长（秒）" width="120" />
       <el-table-column prop="label" label="显示标签" width="120" />
@@ -39,11 +39,11 @@
       </el-table-column>
       <el-table-column label="操作" width="200" fixed="right">
         <template #default="{ row }">
-          <el-button type="primary" size="small" :icon="Edit" @click="handleEdit(row)">编辑</el-button>
-          <el-button type="danger" size="small" :icon="Delete" @click="handleDelete(row)">删除</el-button>
+          <el-button v-permission="'durations:edit'" type="primary" size="small" :icon="Edit" @click="handleEdit(row)">编辑</el-button>
+          <el-button v-permission="'durations:delete'" type="danger" size="small" :icon="Delete" @click="handleDelete(row)">删除</el-button>
         </template>
       </el-table-column>
-    </el-table>
+    </admin-table>
 
     <!-- 新增/编辑对话框 -->
     <el-dialog
@@ -114,12 +114,12 @@
           />
         </el-form-item>
         <el-form-item label="状态">
-          <el-switch v-model="formData.enabled" />
+          <el-switch v-permission="'durations:view'" v-model="formData.enabled" />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleSave">保存</el-button>
+        <el-button v-permission="'session:close'" @click="dialogVisible = false">取消</el-button>
+        <el-button v-permission="formData.id ? 'durations:edit' : 'durations:create'" type="primary" @click="handleSave">保存</el-button>
       </template>
     </el-dialog>
   </div>

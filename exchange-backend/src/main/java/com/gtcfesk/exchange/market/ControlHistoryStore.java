@@ -22,6 +22,9 @@ public class ControlHistoryStore {
     final JdbcTemplate db;
     private final TransactionTemplate transactions;
     private final ObjectMapper json = new ObjectMapper().enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS);
+    private final Map<String, BalancedControlPlan> plans = Collections.synchronizedMap(new LinkedHashMap<String, BalancedControlPlan>(16, .75f, true) {
+        @Override protected boolean removeEldestEntry(Map.Entry<String, BalancedControlPlan> oldest) { return size() > 8; }
+    });
     public ControlHistoryStore(JdbcTemplate db, PlatformTransactionManager manager) {
         this.db = db; transactions = new TransactionTemplate(manager);
     }
@@ -36,6 +39,33 @@ public class ControlHistoryStore {
         });
     }
     <T> T transaction(Supplier<T> operation) { return transactions.execute(status -> operation.get()); }
+    void savePlan(String taskId, long seed, BalancedControlPlan plan) {
+        try {
+            db.update("INSERT INTO market_control_plan(task_id,seed,parameters_json,prices_json,summary_json,checksum) VALUES(?,?,?,?,?,?)",
+                    taskId, seed, json.writeValueAsString(plan.parameters().snapshot()), json.writeValueAsString(plan.prices()),
+                    json.writeValueAsString(plan.summary()), plan.checksum());
+        } catch (com.fasterxml.jackson.core.JsonProcessingException invalid) { throw new IllegalStateException("Cannot serialize control plan", invalid); }
+    }
+    BalancedControlPlan plan(String taskId) {
+        BalancedControlPlan cached = plans.get(taskId);
+        if (cached != null) return cached;
+        List<Map<String, Object>> rows = db.queryForList("SELECT parameters_json,prices_json,checksum FROM market_control_plan WHERE task_id=?", taskId);
+        if (rows.size() != 1) throw new BalancedControlPlan.Failure("PLAN_CORRUPTED", "V3 计划缺失");
+        try {
+            Map<String, Object> row = rows.get(0), parameters = decode((String) row.get("parameters_json"));
+            int precision = ((Number) parameters.get("precision")).intValue();
+            BalancedControlPlan.Parameters p = new BalancedControlPlan.Parameters(
+                    new BigDecimal((String) parameters.get("start")).movePointLeft(precision),
+                    new BigDecimal((String) parameters.get("target")).movePointLeft(precision),
+                    ((Number) parameters.get("duration")).intValue(), precision,
+                    ((Number) parameters.get("intensity")).intValue(), new BigDecimal((String) parameters.get("ratio")));
+            if (!p.snapshot().equals(parameters)) throw new IllegalStateException("Parameter snapshot mismatch");
+            List<String> prices = json.readValue((String) row.get("prices_json"), new TypeReference<List<String>>() {});
+            BalancedControlPlan plan = BalancedControlPlan.restore(p, prices);
+            if (!plan.checksum().equals(row.get("checksum"))) throw new IllegalStateException("Checksum mismatch");
+            plans.put(taskId, plan); return plan;
+        } catch (Exception invalid) { throw new BalancedControlPlan.Failure("PLAN_CORRUPTED", "V3 计划损坏：" + invalid.getMessage()); }
+    }
     String encode(Map<String, Object> row) {
         try { return json.writeValueAsString(row); }
         catch (Exception e) { throw new IllegalStateException("Cannot serialize market history", e); }
@@ -234,7 +264,7 @@ public class ControlHistoryStore {
         long latestClose = 0;
         for (Map<String, Object> row : rows) {
             if (!periodCandle(row, String.valueOf(row.get("period")))) continue;
-            long close = time(row) + RandomMarketPath.duration(String.valueOf(row.get("period")));
+            long close = RandomMarketPath.periodEnd(String.valueOf(row.get("period")), time(row));
             // A snapshot fetched while the candle was open does not become a confirmed close merely because time passed.
             if (close <= now && QuoteState.time(row.get("receivedAt")) >= close && close > latestClose) { latest = row; latestClose = close; }
         }

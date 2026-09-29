@@ -32,6 +32,7 @@ import FinancialYieldList from '@/views/FinancialYieldList.vue'
 import Search from '@/views/Search.vue'
 import Invite from '@/views/Invite.vue'
 import { useAuthStore } from '@/store/auth'
+import request from '@/utils/request'
 
 const legacyRoute = location.hash.startsWith('#/') ? new URL(location.hash.slice(1), location.origin) : null
 if (location.hash) {
@@ -42,6 +43,7 @@ if (location.hash) {
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
+    { path: '/demo', redirect: '/' },
     { path: '/', redirect: '/home' },
     { path: '/home', component: Home },
     { path: '/trade', component: Trade },
@@ -57,6 +59,7 @@ const router = createRouter({
     { path: '/transfer', component: Transfer },
     { path: '/change-password', component: ChangePassword },
     { path: '/customer-service', component: CustomerService },
+    { path: '/inbox', component: () => import('@/views/Inbox.vue') },
     { path: '/complaint', component: Complaint },
     { path: '/announcements', component: Announcements },
     { path: '/withdraw', component: Withdraw },
@@ -80,6 +83,14 @@ const router = createRouter({
   scrollBehavior() {
     return { top: 0 }
   },
+})
+
+router.beforeEach(async (to) => {
+  if (to.path !== '/withdraw') return true
+  const auth = useAuthStore()
+  if (!auth.token) return '/login'
+  try { const status: any = await request.get('/kyc/status'); return status.simulationExempt === true || (status.kycStatus === 'VERIFIED' && status.latestRecord?.status === 'APPROVED') ? true : { path: '/verification', query: { reason: 'withdraw' } } }
+  catch { return { path: '/verification', query: { reason: 'withdraw' } } }
 })
 
 router.beforeEach((to, _from, next) => {

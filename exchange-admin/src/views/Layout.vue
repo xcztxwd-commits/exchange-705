@@ -5,9 +5,12 @@ import { useAuthStore } from '@/store/auth'
 import { Expand, Fold, User, SwitchButton, Bell, Setting } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import request from '@/utils/request'
+import { access, can, canRoute, loadAccess } from '@/utils/access'
 import { getAudioUrl } from '@/utils/audioUrl'
 import AdminSettings from './AdminSettings.vue'
 import AgentSettings from './AgentSettings.vue'
+import SupportNotifications from '@/components/SupportNotifications.vue'
+
 
 const router = useRouter()
 const route = useRoute()
@@ -15,7 +18,8 @@ const auth = useAuthStore()
 auth.load()
 
 const isCollapse = ref(false)
-const menuItems = ref<any[]>([])
+const menuItems = computed(() => access.menus.map(m => ({ ...m, title: m.menuName })))
+const menuGroups = computed(() => access.groups.map(g => ({ ...g, children: menuItems.value.filter(m => m.parentId === g.id) })).filter(g => g.children.length))
 const loadingMenus = ref(false)
 
 // 待处理消息数量
@@ -135,6 +139,7 @@ const loadSoundConfig = async () => {
 
 // 跳转到对应页面
 const goToPage = (type: string) => {
+  if (!canRoute(({ deposit: "/deposit-review", withdraw: "/withdraw-review", kyc: "/kyc-review", order: "/orders" } as Record<string,string>)[type] || "")) return
   if (type === 'deposit') {
     router.push('/deposit-review')
   } else if (type === 'withdraw') {
@@ -146,133 +151,17 @@ const goToPage = (type: string) => {
   }
 }
 
-// 所有菜单配置（用于映射）
-const allMenuConfig: Record<string, any> = {
-  '/dashboard': { path: '/dashboard', icon: 'DataLine', title: '仪表盘', menuCode: 'dashboard' },
-  '/users': { path: '/users', icon: 'User', title: '用户管理', menuCode: 'users' },
-  '/symbols': { path: '/symbols', icon: 'Coin', title: '币种管理', menuCode: 'symbols' },
-  '/ai-control': { path: '/ai-control', icon: 'Setting', title: 'AI控盘', menuCode: 'ai_control' },
-  '/durations': { path: '/durations', icon: 'Timer', title: '期限设置', menuCode: 'durations' },
-  '/orders': { path: '/orders', icon: 'Document', title: '订单管理', menuCode: 'orders' },
-  '/deposit-settings': { path: '/deposit-settings', icon: 'Wallet', title: '充值设置', menuCode: 'deposit_settings' },
-  '/deposit-orders': { path: '/deposit-orders', icon: 'Wallet', title: '充值详情', menuCode: 'deposit_orders' },
-  '/deposit-review': { path: '/deposit-review', icon: 'Check', title: '充值审核', menuCode: 'deposit_review' },
-  '/withdraw-review': { path: '/withdraw-review', icon: 'Money', title: '提现审核', menuCode: 'withdraw_review' },
-  '/loan-settings': { path: '/loan-settings', icon: 'Wallet', title: '贷款设置', menuCode: 'loan_settings' },
-  '/loan-review': { path: '/loan-review', icon: 'Document', title: '贷款审核', menuCode: 'loan_review' },
-  '/loan-personal-info-review': { path: '/loan-personal-info-review', icon: 'UserFilled', title: '个人信息审核', menuCode: 'loan_personal_info_review' },
-  '/kyc-review': { path: '/kyc-review', icon: 'DocumentChecked', title: '实名审核', menuCode: 'kyc_review' },
-  '/financial-products': { path: '/financial-products', icon: 'Coin', title: '理财产品', menuCode: 'financial_products' },
-  '/financial-orders': { path: '/financial-orders', icon: 'Document', title: '理财订单', menuCode: 'financial_orders' },
-  '/announcement': { path: '/announcement', icon: 'Bell', title: '公告管理', menuCode: 'announcement' },
-  '/roles': { path: '/roles', icon: 'Unlock', title: '角色管理', menuCode: 'roles' },
-  '/agents': { path: '/agents', icon: 'Avatar', title: '代理管理', menuCode: 'agents' },
-  '/admin-list': { path: '/admin-list', icon: 'UserFilled', title: '管理员列表', menuCode: 'admin_list' },
-  '/website-security': { path: '/website-security', icon: 'Lock', title: '网站安全', menuCode: 'website_security' },
-  '/settings': { path: '/settings', icon: 'Setting', title: '系统配置', menuCode: 'settings' },
-  '/operation-log': { path: '/operation-log', icon: 'Document', title: '操作日志', menuCode: 'operation_log' },
-  '/statistics': { path: '/statistics', icon: 'DataAnalysis', title: '数据统计', menuCode: 'statistics' },
-}
-
-// 加载菜单
 const loadMenus = async () => {
   loadingMenus.value = true
-  try {
-    const user = auth.user
-    console.log('当前登录用户信息:', user)
-    const isSuperAdmin = user?.isSuperAdmin || user?.role === 'super_admin'
-    const isAgent = user?.userType === 'agent'
-    console.log('用户类型判断 - isSuperAdmin:', isSuperAdmin, 'isAgent:', isAgent)
-
-    if (isSuperAdmin) {
-      // 超级管理员显示所有菜单
-      console.log('加载超级管理员菜单，菜单数量:', Object.values(allMenuConfig).length)
-      menuItems.value = Object.values(allMenuConfig)
-    } else if (isAgent) {
-      // 代理用户：获取分配的菜单
-      console.log('开始加载代理菜单...')
-      try {
-        const response: any = await request.get('/admin/agent-menus/current')
-        console.log('代理菜单API响应:', response)
-        if (response && response.success) {
-          const agentMenus = response.list || []
-          console.log('代理菜单数据（原始）:', agentMenus, '菜单数量:', agentMenus.length)
-          // 将菜单树转换为扁平列表，并匹配配置
-          const flattenMenus = (menus: any[]): any[] => {
-            const result: any[] = []
-            menus.forEach((menu: any) => {
-              // 只处理类型为 menu 的菜单项
-              if (menu.menuType === 'menu' && menu.path) {
-                // 先尝试通过路径精确匹配
-                let config = Object.values(allMenuConfig).find((m: any) => 
-                  m.path === menu.path
-                )
-                // 如果路径不匹配，尝试通过 menuCode 匹配（处理下划线和连字符的差异）
-                if (!config && menu.menuCode) {
-                  config = Object.values(allMenuConfig).find((m: any) => {
-                    const menuCode = menu.menuCode || ''
-                    const mCode = m.menuCode || ''
-                    // 支持下划线和连字符互转匹配
-                    return mCode === menuCode || 
-                           mCode.replace(/_/g, '-') === menuCode || 
-                           mCode === menuCode.replace(/_/g, '-') ||
-                           mCode.replace(/-/g, '_') === menuCode ||
-                           mCode === menuCode.replace(/-/g, '_')
-                  })
-                }
-                if (config) {
-                  result.push(config)
-                } else {
-                  // 如果没有找到配置，使用菜单自身的数据，并确保路径正确
-                  result.push({
-                    path: menu.path,
-                    icon: menu.icon || 'Menu',
-                    title: menu.menuName || menu.menu_name || '未知菜单',
-                    menuCode: menu.menuCode || menu.menu_code
-                  })
-                }
-              }
-              // 递归处理子菜单
-              if (menu.children && menu.children.length > 0) {
-                result.push(...flattenMenus(menu.children))
-              }
-            })
-            return result
-          }
-          const flatMenus = flattenMenus(agentMenus)
-          console.log('处理后的菜单（扁平化）:', flatMenus, '菜单数量:', flatMenus.length)
-          menuItems.value = flatMenus.length > 0 ? flatMenus : []
-          if (flatMenus.length === 0) {
-            console.warn('⚠️ 代理菜单处理后的数量为0，可能是菜单匹配失败')
-            ElMessage.warning('代理用户没有分配的菜单权限，请联系管理员分配菜单')
-          }
-        } else {
-          console.warn('⚠️ API响应中没有菜单数据 - response:', response)
-          // 如果没有菜单权限，显示空列表
-          menuItems.value = []
-          ElMessage.warning('代理用户没有分配的菜单权限，请联系管理员分配菜单')
-        }
-      } catch (error: any) {
-        console.error('❌ 获取代理菜单失败:', error)
-        console.error('错误详情:', error?.response || error)
-        ElMessage.error('获取菜单失败: ' + (error?.message || error?.response?.data?.message || '未知错误'))
-        menuItems.value = []
-      }
-    } else {
-      // 普通管理员：显示默认菜单
-      menuItems.value = Object.values(allMenuConfig)
-    }
-  } catch (error) {
-    console.error('加载菜单失败:', error)
-    menuItems.value = Object.values(allMenuConfig) // 失败时显示所有菜单
-  } finally {
-    if (!(auth.user?.isSuperAdmin || auth.user?.role === 'super_admin')) menuItems.value = menuItems.value.filter(m => m.path !== '/website-security')
-    loadingMenus.value = false
-  }
+  try { await loadAccess(true) } finally { loadingMenus.value = false }
 }
-
+let permissionTimer: number | null = null
 onMounted(() => {
-  loadMenus()
+  loadMenus().catch(() => router.replace('/forbidden'))
+  permissionTimer = window.setInterval(async () => {
+    try { await loadAccess(true) } catch { /* Failed refresh closes access rather than granting defaults. */ }
+    if (!canRoute(route.path)) router.replace(access.menus[0]?.path || '/forbidden')
+  }, 30000)
   loadSoundConfig()
   loadPendingCounts()
   loadOnlineUserCount()
@@ -284,25 +173,9 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  if (permissionTimer !== null) clearInterval(permissionTimer)
   if (updateTimer !== null) {
     clearInterval(updateTimer)
-  }
-})
-
-// 监听用户变化，重新加载菜单（例如登录后）
-watch(() => auth.user, (newUser, oldUser) => {
-  console.log('[Layout] 用户信息变化:', { old: oldUser, new: newUser })
-  if (newUser && newUser !== oldUser) {
-    loadMenus()
-  }
-}, { deep: true, immediate: false })
-
-// 监听路由变化，确保菜单加载
-watch(() => route.path, () => {
-  // 如果是代理用户且菜单为空，重新加载
-  if (auth.user?.userType === 'agent' && menuItems.value.length === 0) {
-    console.log('[Layout] 路由变化，重新加载菜单')
-    loadMenus()
   }
 })
 
@@ -338,7 +211,7 @@ const handleSettingsUpdated = () => {
 <template>
   <el-container class="layout-container">
     <!-- 侧边栏 -->
-    <el-aside :width="isCollapse ? '64px' : '200px'" class="layout-aside">
+    <el-aside :width="isCollapse ? '64px' : '228px'" class="layout-aside">
       <div class="logo-box">
         <div class="logo-circle">
           <el-icon><DataLine /></el-icon>
@@ -348,18 +221,17 @@ const handleSettingsUpdated = () => {
       
       <el-menu
         :default-active="route.path"
+        :default-openeds="menuGroups.filter(g => g.children.some((m: any) => m.path === route.path)).map(g => g.menuCode)"
         :collapse="isCollapse"
         :router="true"
         class="menu"
       >
-        <el-menu-item
-          v-for="item in menuItems"
-          :key="item.path"
-          :index="item.path"
-        >
-          <el-icon><component :is="item.icon" /></el-icon>
-          <template #title>{{ item.title }}</template>
-        </el-menu-item>
+        <el-sub-menu v-for="group in menuGroups" :key="group.id" :index="group.menuCode">
+          <template #title><el-icon><component :is="group.icon || 'Folder'" /></el-icon><span>{{ group.menuName }}</span></template>
+          <el-menu-item v-for="item in group.children" :key="item.path" :index="item.path">
+            <span>{{ item.title }}</span>
+          </el-menu-item>
+        </el-sub-menu>
       </el-menu>
     </el-aside>
 
@@ -375,6 +247,8 @@ const handleSettingsUpdated = () => {
         </div>
         
         <div class="header-right">
+            
+          <SupportNotifications admin :enabled="can('support:view')" />
           <!-- 在线用户数 -->
           <div class="online-count-area">
             <span class="online-text">在线({{ onlineUserCount }})</span>
@@ -421,21 +295,21 @@ const handleSettingsUpdated = () => {
             </div>
             <template #dropdown>
               <el-dropdown-menu>
-                <el-dropdown-item 
+                <el-dropdown-item v-permission="'session:self'"
                   v-if="auth.user?.userType === 'admin' || auth.user?.isSuperAdmin"
                   @click="openAdminSettings"
                 >
                   <el-icon><Setting /></el-icon>
                   管理员设置
                 </el-dropdown-item>
-                <el-dropdown-item 
+                <el-dropdown-item v-permission="'session:self'"
                   v-if="auth.user?.userType === 'agent'"
                   @click="openAgentSettings"
                 >
                   <el-icon><Setting /></el-icon>
                   代理设置
                 </el-dropdown-item>
-                <el-dropdown-item @click="onLogout" divided>
+                <el-dropdown-item v-permission="'session:self'" @click="onLogout" divided>
                   <el-icon><SwitchButton /></el-icon>
                   退出登录
                 </el-dropdown-item>
@@ -511,6 +385,10 @@ const handleSettingsUpdated = () => {
   border: none;
   background: #304156;
 }
+
+.menu :deep(.el-sub-menu__title) { color: #d6e0ec; }
+.menu :deep(.el-menu) { background: #263445; }
+.menu :deep(.el-sub-menu__title:hover) { background: #263445; color: #fff; }
 
 .menu :deep(.el-menu-item) {
   color: #bfcbd9;

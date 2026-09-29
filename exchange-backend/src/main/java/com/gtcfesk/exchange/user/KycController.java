@@ -2,7 +2,6 @@ package com.gtcfesk.exchange.user;
 
 import com.gtcfesk.exchange.common.BusinessException;
 import com.gtcfesk.exchange.entity.KycRecord;
-import com.gtcfesk.exchange.entity.UserAccount;
 import com.gtcfesk.exchange.repository.KycRecordRepository;
 import com.gtcfesk.exchange.repository.UserAccountRepository;
 import lombok.RequiredArgsConstructor;
@@ -19,6 +18,8 @@ import java.util.Optional;
 @RequestMapping("/api/kyc")
 @RequiredArgsConstructor
 public class KycController {
+    @org.springframework.beans.factory.annotation.Autowired private com.gtcfesk.exchange.activity.TrialFunds trialFunds;
+    @org.springframework.beans.factory.annotation.Autowired(required=false) private KycIdentityService identityService;
     private final KycRecordRepository kycRecordRepository;
     private final UserAccountRepository userAccountRepository;
     private final FileUploadService fileUploadService;
@@ -52,6 +53,10 @@ public class KycController {
             }
         }
         
+        if (realName.trim().isEmpty() || realName.trim().length() > 100 || idNumber.trim().isEmpty() || idNumber.trim().length() > 50) {
+            throw new BusinessException("请填写有效姓名和证件号码");
+        }
+
         // 上传图片 (支持传文件或传URL字符串)
         String frontImageUrl = idFrontImageStr;
         String backImageUrl = idBackImageStr;
@@ -63,15 +68,15 @@ public class KycController {
             backImageUrl = fileUploadService.uploadImage(idBackImage);
         }
         
-        if (frontImageUrl == null || backImageUrl == null) {
+        if (frontImageUrl == null || frontImageUrl.trim().isEmpty() || backImageUrl == null || backImageUrl.trim().isEmpty()) {
             throw new BusinessException("请上传完整的证件照片");
         }
         
         // 创建实名认证记录
         KycRecord kycRecord = new KycRecord();
         kycRecord.setUserId(userId);
-        kycRecord.setRealName(realName);
-        kycRecord.setIdNumber(idNumber);
+        kycRecord.setRealName(realName.trim());
+        kycRecord.setIdNumber(idNumber.trim());
         kycRecord.setIdFrontImage(frontImageUrl);
         kycRecord.setIdBackImage(backImageUrl);
         kycRecord.setStatus("PENDING");
@@ -93,26 +98,31 @@ public class KycController {
         
         Long userId = Long.parseLong(auth.getName());
         
-        UserAccount user = userAccountRepository.findById(userId)
+        userAccountRepository.findById(userId)
                 .orElseThrow(() -> new BusinessException("用户不存在"));
         
         Optional<KycRecord> latestRecord = kycRecordRepository.findFirstByUserIdOrderByCreatedAtDesc(userId);
         
         Map<String, Object> result = new HashMap<>();
-        result.put("kycStatus", user.getKycStatus() != null ? user.getKycStatus() : "NOT_VERIFIED");
+        boolean approved = latestRecord.map(record -> "APPROVED".equals(record.getStatus())).orElse(false);
+        result.put("kycStatus", approved ? "VERIFIED" : "NOT_VERIFIED");
+        result.put("simulationExempt", identityService != null && identityService.simulationExempt()); result.put("canTrade", (identityService != null && identityService.simulationExempt()) || approved || (trialFunds != null && trialFunds.available(userId).signum() > 0));
         
         if (latestRecord.isPresent()) {
             KycRecord record = latestRecord.get();
             Map<String, Object> recordInfo = new HashMap<>();
             recordInfo.put("status", record.getStatus());
             recordInfo.put("realName", record.getRealName());
+            recordInfo.put("idNumber", record.getIdNumber());
+            recordInfo.put("idFrontImage", record.getIdFrontImage());
+            recordInfo.put("idBackImage", record.getIdBackImage());
             recordInfo.put("reviewRemark", record.getReviewRemark());
             recordInfo.put("createdAt", record.getCreatedAt());
             recordInfo.put("reviewedAt", record.getReviewedAt());
             result.put("latestRecord", recordInfo);
         }
         
-        return ResponseEntity.ok(result);
+        return ResponseEntity.ok().header("Cache-Control", "no-store").body(result);
     }
 }
 

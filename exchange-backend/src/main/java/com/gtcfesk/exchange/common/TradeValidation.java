@@ -7,6 +7,11 @@ public final class TradeValidation {
             throw new BusinessException(name + "必须为有效正数（最多16位整数和16位小数）");
         }
     }
+    public static void contractLots(BigDecimal value) {
+        positive(value,"合约手数");
+        if(value.compareTo(new BigDecimal("0.01"))<0 || value.stripTrailingZeros().scale()>2)
+            throw new BusinessException("合约数量必须不小于0.01手，且为0.01手的整数倍");
+    }
     public static void optionalPositive(BigDecimal value, String name) {
         if (value != null) positive(value, name);
     }

@@ -274,8 +274,8 @@ const handleClose = () => {
     
     <template #footer>
       <span class="dialog-footer">
-        <el-button @click="handleClose">取消</el-button>
-        <el-button
+        <el-button v-permission="'session:self'" @click="handleClose">取消</el-button>
+        <el-button v-permission="'session:self'"
           v-if="activeTab === 'account'"
           type="primary"
           :loading="accountLoading"
@@ -283,7 +283,7 @@ const handleClose = () => {
         >
           保存
         </el-button>
-        <el-button
+        <el-button v-permission="'session:self'"
           v-if="activeTab === 'password'"
           type="primary"
           :loading="passwordLoading"

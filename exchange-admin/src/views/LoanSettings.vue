@@ -4,11 +4,11 @@
       <template #header>
         <div class="card-header">
           <span>贷款设置</span>
-          <el-button type="primary" @click="handleAdd">添加贷款设置</el-button>
+          <el-button v-permission="'loan_settings:create'" type="primary" @click="handleAdd">添加贷款设置</el-button>
         </div>
       </template>
 
-      <el-table :data="settingsList" style="width: 100%">
+      <admin-table table-key="LoanSettings.1" :data="settingsList" style="width: 100%">
         <el-table-column prop="days" label="贷款期限(天)" width="120" />
         <el-table-column prop="dailyRate" label="日利率(%)" width="120">
           <template #default="{ row }">
@@ -33,7 +33,7 @@
         </el-table-column>
         <el-table-column prop="enabled" label="启用状态" width="100">
           <template #default="{ row }">
-            <el-switch
+            <el-switch v-permission="'loan_settings:edit'"
               v-model="row.enabled"
               @change="handleUpdate(row)"
             />
@@ -41,11 +41,11 @@
         </el-table-column>
         <el-table-column label="操作" width="200" fixed="right">
           <template #default="{ row }">
-            <el-button size="small" type="primary" @click="handleEdit(row)">编辑</el-button>
-            <el-button size="small" type="danger" @click="handleDelete(row)">删除</el-button>
+            <el-button v-permission="'loan_settings:edit'" size="small" type="primary" @click="handleEdit(row)">编辑</el-button>
+            <el-button v-permission="'loan_settings:delete'" size="small" type="danger" @click="handleDelete(row)">删除</el-button>
           </template>
         </el-table-column>
-      </el-table>
+      </admin-table>
     </el-card>
 
     <!-- 添加/编辑对话框 -->
@@ -102,13 +102,13 @@
         </el-form-item>
 
         <el-form-item label="启用状态">
-          <el-switch v-model="formData.enabled" />
+          <el-switch v-permission="editingItem ? 'loan_settings:edit' : 'loan_settings:create'" v-model="formData.enabled" />
         </el-form-item>
       </el-form>
 
       <template #footer>
-        <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleSubmit">确定</el-button>
+        <el-button v-permission="'session:close'" @click="dialogVisible = false">取消</el-button>
+        <el-button v-permission="editingItem ? 'loan_settings:edit' : 'loan_settings:create'" type="primary" @click="handleSubmit">确定</el-button>
       </template>
     </el-dialog>
   </div>

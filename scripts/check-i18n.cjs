@@ -7,6 +7,8 @@ const { createRequire } = require('node:module')
 const root = path.resolve(__dirname, '..')
 const ts = require('../exchange-frontend/node_modules/typescript')
 const storage = new Map()
+// Pin the browser language: Node 24 otherwise inherits the host OS language.
+Object.defineProperty(globalThis, 'navigator', { configurable: true, value: { language: 'en-US' } })
 global.localStorage = { getItem: key => storage.get(key) ?? null, setItem: (key, value) => storage.set(key, String(value)) }
 global.document = { createElement: () => ({}), documentElement: { lang: '', dir: '' } }
 function load(file) {
@@ -39,6 +41,19 @@ function sourceFiles(dir) {
   return fs.readdirSync(dir, { withFileTypes: true }).flatMap(entry => entry.isDirectory() ? sourceFiles(path.join(dir, entry.name)) : /\.(vue|ts)$/.test(entry.name) ? [path.join(dir, entry.name)] : [])
 }
 const projects = ['exchange-frontend', 'exchange-pc']
+// Report all missing literals across both clients in one run, not only the first hit.
+const missingUiTranslations = []
+for (const project of projects) {
+  const { uiMessages, uiAliases } = load(path.join(root, project, 'src/store/uiMessages.ts'))
+  for (const file of sourceFiles(path.join(root, project, 'src'))) {
+    if (file.endsWith('uiMessages.ts')) continue
+    const source = fs.readFileSync(file, 'utf8')
+    for (const match of source.matchAll(/\btext\(\s*'([^']*)'\s*,\s*'([^']*)'/g)) {
+      if (!Object.hasOwn(uiMessages.ja, match[2]) && !Object.hasOwn(uiAliases, match[2])) missingUiTranslations.push(file + ': ' + match[2])
+    }
+  }
+}
+assert.deepEqual([...new Set(missingUiTranslations)], [], 'Missing Japanese UI translations')
 const results = {}, dictionaries = {}
 for (const project of projects) {
   const req = createRequire(path.join(root, project, 'package.json'))
@@ -76,13 +91,6 @@ for (const project of projects) {
     store.loadLocale()
     assert.equal(store.locale, lang)
     assert.equal(store.text('', 'Close'), uiMessages[lang].Close, 'Dialog close must use its UI context')
-  }
-  for (const file of sourceFiles(path.join(root, project, 'src'))) {
-    if (file.endsWith('uiMessages.ts')) continue
-    const source = fs.readFileSync(file, 'utf8')
-    for (const match of source.matchAll(/\btext\(\s*'([^']*)'\s*,\s*'([^']*)'/g)) {
-      assert.ok(Object.hasOwn(uiMessages.ja, match[2]) || Object.hasOwn(uiAliases, match[2]), 'Missing Japanese UI translation: ' + file + ': ' + match[2])
-    }
   }
   for (const key of Object.values(uiAliases)) assert.ok(Object.hasOwn(all.en, key), 'Invalid alias ' + key)
   store.setLocale('ja')
@@ -140,6 +148,10 @@ for (const project of projects) {
   storage.set('locale', '__proto__')
   store.loadLocale()
   assert.equal(store.locale, 'en')
+  navigator.language = 'zh-CN'
+  store.loadLocale()
+  assert.equal(store.locale, 'zh-TW', 'Invalid saved locale must fall back to browser language')
+  navigator.language = 'en-US'
   results[project] = { locales: 19, dictionaryLookups: lookups, messagesPerLocale: Object.keys(all.en).length, japaneseUiEntries: Object.keys(uiMessages.ja).length }
 }
 for (const [lang, values] of Object.entries(dictionaries['exchange-frontend'])) {

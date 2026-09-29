@@ -78,8 +78,9 @@ public class SystemConfigService {
         }
         try {
             com.fasterxml.jackson.databind.JsonNode root = new com.fasterxml.jackson.databind.ObjectMapper().readTree(value);
-            if (root.size() != 2 || !root.path("version").isIntegralNumber() || root.path("version").intValue() != 2
+            if (!root.isObject() || root.size() != (root.has("focus") ? 3 : 2) || !root.path("version").isIntegralNumber() || root.path("version").intValue() != 2
                     || !root.path("templates").isArray() || root.path("templates").size() == 0) throw invalidShareTemplates();
+            if (root.has("focus") && (!root.path("focus").isTextual() || !java.util.Arrays.asList("amount", "rate").contains(root.path("focus").asText()))) throw invalidShareTemplates();
             java.util.Set<String> ids = new java.util.HashSet<>(), covered = new java.util.HashSet<>();
             List<String> selected = new java.util.ArrayList<>();
             for (com.fasterxml.jackson.databind.JsonNode row : root.path("templates")) {
@@ -105,11 +106,20 @@ public class SystemConfigService {
         } catch (java.io.IOException invalid) { throw invalidShareTemplates(); }
     }
 
+    public static String shareFocus(String value) {
+        shareTemplates(value); // Validate the same atomic template configuration before reading it.
+        if (value == null || !value.trim().startsWith("{")) return "amount";
+        try {
+            return new com.fasterxml.jackson.databind.ObjectMapper().readTree(value).path("focus").asText("amount");
+        } catch (java.io.IOException invalid) { throw invalidShareTemplates(); }
+    }
+
     private static com.gtcfesk.exchange.common.BusinessException invalidShareTemplates() {
         return new com.gtcfesk.exchange.common.BusinessException("分享模板配置无效：请检查模板编号、语言范围及重复项");
     }
 
     public void saveConfig(String key, String value, String description) {
+        if ("support.settings".equals(key)) com.gtcfesk.exchange.support.SupportSettings.parse(value);
         if (com.gtcfesk.exchange.security.WebsiteSecuritySettings.KEY.equals(key)) com.gtcfesk.exchange.security.WebsiteSecuritySettings.parse(value);
         if (SHARE_TEMPLATES_KEY.equals(key)) {
             if (value == null) throw new com.gtcfesk.exchange.common.BusinessException("请选择分享模板");

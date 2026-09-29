@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { accountMode } from "@/utils/accountMode"
+const simulation = accountMode() === "DEMO"
 import { ref, onMounted } from 'vue'
 import CurrencyPicker from '@/components/CurrencyPicker.vue'
 import { useFiatCurrency } from '@/utils/fiatCurrency'
@@ -237,7 +239,7 @@ async function submitDeposit() {
     return
   }
   
-  if (!proofFile.value) {
+  if (!simulation && !proofFile.value) {
     showToast(localeStore.t('pleaseUploadDepositProof'), 'error')
     return
   }
@@ -247,9 +249,9 @@ async function submitDeposit() {
   try {
     // 先上传图片
     const formData = new FormData()
-    formData.append('file', proofFile.value)
+    if (proofFile.value) formData.append('file', proofFile.value)
     
-    const uploadRes: any = await request.post('/upload/image', formData, {
+    const uploadRes: any = simulation ? { url: 'SIMULATION-NO-PAYMENT' } : await request.post('/upload/image', formData, {
       headers: {
         'Content-Type': 'multipart/form-data'
       }
@@ -350,6 +352,7 @@ onMounted(() => {
 </script>
 
 <template>
+  <p v-if="simulation" role="status" style="padding:12px;background:#eef2ff;color:#3730a3">{{ localeStore.text('模拟充值即时增加虚拟资金，无需付款、无需上传凭证。请勿汇款。', 'Virtual deposits are credited instantly. No payment or receipt needed. Do not send real money.') }}</p>
   <div class="deposit-page">
     <!-- 顶部导航 -->
     <div class="deposit-header">
@@ -387,7 +390,7 @@ onMounted(() => {
         <div class="form-label">{{ localeStore.t('selectNetwork') }}</div>
         <div class="network-selector" @click="showNetworkModal = true" v-if="!loadingNetworks">
           <span>{{ selectedNetwork || localeStore.t('pleaseSelectNetwork') }}</span>
-          <span class="arrow">›</span>
+          <span class="arrow ui-chevron" aria-hidden="true"></span>
         </div>
         <div class="network-selector" v-else>
           <span>{{ localeStore.t('loading') }}</span>
@@ -472,7 +475,7 @@ onMounted(() => {
       <button 
         class="submit-button" 
         @click="submitDeposit"
-        :disabled="uploading || rate === null || !depositAmount || !proofFile"
+        :disabled="uploading || rate === null || !depositAmount || (!simulation && !proofFile)"
       >
         {{ uploading ? localeStore.t('submitting') : localeStore.t('submit') }}
       </button>
@@ -553,7 +556,7 @@ onMounted(() => {
         <button 
           class="submit-button" 
           @click="submitDeposit"
-          :disabled="uploading || rate === null || !depositAmount || !proofFile"
+          :disabled="uploading || rate === null || !depositAmount || (!simulation && !proofFile)"
         >
           {{ uploading ? localeStore.t('submitting') : localeStore.t('submit') }}
         </button>

@@ -78,6 +78,8 @@ public class OptionOrderController {
             resp.put("message", "订单创建成功");
             
             return ResponseEntity.ok(resp);
+        } catch (com.gtcfesk.exchange.common.KycRequiredException e) {
+            throw e; // Preserve structured denial in GlobalExceptionHandler.
         } catch (BusinessException e) {
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", false);

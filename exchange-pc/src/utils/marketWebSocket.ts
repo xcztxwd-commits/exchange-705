@@ -1,3 +1,4 @@
+import { getAccountApiBase } from './accountMode.ts'
 /**
  * 市场数据 WebSocket 客户端
  * 连接到后端 WebSocket 服务器，接收实时价格推送
@@ -83,7 +84,7 @@ class MarketWebSocket {
   private generation = 0
   private lastMessage = 0
   private listening = false
-  private apiBase = import.meta.env?.VITE_API_BASE_URL || '/api'
+  private apiBase = getAccountApiBase()
 
   private symbols(): string[] { return [...new Set([...this.owners.values()].flatMap(set => [...set]))] }
   get isConnected(): boolean { return this.ws?.readyState === WebSocket.OPEN }
@@ -115,7 +116,7 @@ class MarketWebSocket {
     const attempt = new Promise<void>((resolve, reject) => {
       try {
         const url = this.apiBase.startsWith('/')
-          ? `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${import.meta.env?.DEV ? `${location.hostname}:8080` : location.host}${this.apiBase}/ws/market`
+          ? `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}${this.apiBase}/ws/market`
           : this.apiBase.replace(/^http/, 'ws') + '/ws/market'
         socket = new WebSocket(url); this.ws = socket
         const timeout = setTimeout(() => { socket.close(); reject(new Error('Market WebSocket timeout')) }, 10000)

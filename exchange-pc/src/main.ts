@@ -1,4 +1,5 @@
 import { createApp } from 'vue'
+import { initVisitorRegion } from './utils/visitorRegion'
 import { createPinia } from 'pinia'
 import App from './App.vue'
 import router from './router'
@@ -15,5 +16,7 @@ const app = createApp(App)
 app.use(createPinia())
 app.use(router)
 app.use(ElementPlus)
-app.mount('#app')
-window.dispatchEvent(new Event('forex-app-ready'))
+void initVisitorRegion().then(() => {
+  app.mount('#app')
+  window.dispatchEvent(new Event('forex-app-ready'))
+})

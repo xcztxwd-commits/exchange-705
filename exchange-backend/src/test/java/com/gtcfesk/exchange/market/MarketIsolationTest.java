@@ -54,6 +54,8 @@ class MarketIsolationTest {
         registry.add("market.quote.yahoo-url", MarketIsolationTest::base);
         registry.add("market.quote.alltick-url", MarketIsolationTest::base);
         registry.add("market.catalog.yahoo-url", MarketIsolationTest::base);
+        // This fixture exercises expiry after 16 seconds, independently of the production TTL.
+        registry.add("market.quote.max-age-ms", () -> "15000");
         registry.add("spring.jpa.show-sql", () -> "false");
         registry.add("spring.jpa.hibernate.ddl-auto", () -> "create-drop");
     }

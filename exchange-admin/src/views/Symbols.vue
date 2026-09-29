@@ -20,6 +20,7 @@ const loadPermissions = async () => {
 const symbols = ref<any[]>([])
 const total = ref(0)
 const loading = ref(false)
+const originalSpec = ref<any>(null)
 const dialogVisible = ref(false)
 const dialogTitle = ref('新增币种')
 const formData = ref<any>({
@@ -38,6 +39,7 @@ const formData = ref<any>({
   volumePrecision: 2,
   minTradeAmount: 0,
   alltickSymbol: '',
+  quantityUnitType: null, specVersion: null, minOrderQuantity: null, quantityStep: null, minOrderNotional: null,
   lotSize: 1000, // 每手数量
   feeMultiplier: 30, // 手续费倍数
   maxLeverage: 100, // 用户可选杠杆上限
@@ -46,7 +48,7 @@ const formData = ref<any>({
 const queryParams = ref({
   category: '',
   page: 0,
-  size: 20,
+  size: 10,
 })
 
 const categories = computed(() => [{ label: '全部', value: '' }, ...categoryList.value.map(c => ({label: c.label, value: c.key}))])
@@ -168,7 +170,6 @@ const saveCategoryConfig = async () => {
 
 const handlePageChange = (page: number) => {
   queryParams.value.page = page - 1
-  loadSymbols()
 }
 
 const handleAdd = async () => {
@@ -180,6 +181,7 @@ const handleEdit = (row: any) => {
   dialogTitle.value = '编辑币种'
   const name = row.category === 'Forex' || row.sourceCategory === 'Forex' ? displaySymbol(row) : row.name
   const nameEn = row.category === 'Forex' || row.sourceCategory === 'Forex' ? displaySymbol(row) : row.nameEn
+  originalSpec.value = { ...row }
   formData.value = { ...row, name, nameEn, maxLeverage: row.maxLeverage ?? 100 }
   dialogVisible.value = true
 }
@@ -299,16 +301,16 @@ onUnmounted(() => {
           </el-select>
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" :icon="Search" @click="handleSearch">搜索</el-button>
-          <el-button :icon="Refresh" @click="handleReset">重置</el-button>
-          <el-button type="success" :icon="Plus" :disabled="!canEditSymbol" @click="handleAdd">新增币种</el-button>
-          <el-button type="warning" :icon="List" @click="openCategoryDialog">分类管理</el-button>
-          <el-button type="info" @click="openLeverageDialog">合约杠杆上限</el-button>
+          <el-button v-permission="'symbols:view'" type="primary" :icon="Search" @click="handleSearch">搜索</el-button>
+          <el-button v-permission="'symbols:view'" :icon="Refresh" @click="handleReset">重置</el-button>
+          <el-button v-permission="'symbols:create'" type="success" :icon="Plus" :disabled="!canEditSymbol" @click="handleAdd">新增币种</el-button>
+          <el-button v-permission="'symbols:categories'" type="warning" :icon="List" @click="openCategoryDialog">分类管理</el-button>
+          <el-button v-permission="'symbols:leverage'" type="info" @click="openLeverageDialog">合约杠杆上限</el-button>
         </el-form-item>
       </el-form>
 
       <!-- 表格 -->
-      <el-table
+      <admin-table table-key="Symbols.1"
         :data="symbols"
         v-loading="loading"
         stripe
@@ -335,7 +337,7 @@ onUnmounted(() => {
         </el-table-column>
         <el-table-column prop="isHot" label="热门" width="80">
           <template #default="{ row }">
-            <el-button
+            <el-button v-permission="'symbols:toggle_hot'"
               link
               :icon="row.isHot ? StarFilled : Star"
               :type="row.isHot ? 'warning' : 'info'"
@@ -360,8 +362,7 @@ onUnmounted(() => {
         </el-table-column>
         <el-table-column label="操作" width="200" fixed="right">
           <template #default="{ row }">
-            <el-button 
-              v-if="canEditSymbol"
+            <el-button v-permission="'symbols:edit_symbol'"
               link 
               type="primary" 
               :icon="Edit" 
@@ -369,8 +370,7 @@ onUnmounted(() => {
             >
               编辑
             </el-button>
-            <el-button 
-              v-if="canDeleteSymbol"
+            <el-button v-permission="'symbols:delete_symbol'"
               link 
               type="danger" 
               :icon="Delete" 
@@ -380,7 +380,7 @@ onUnmounted(() => {
             </el-button>
           </template>
         </el-table-column>
-      </el-table>
+      </admin-table>
 
       <!-- 分页 -->
       <el-pagination
@@ -389,8 +389,11 @@ onUnmounted(() => {
         :current-page="queryParams.page + 1"
         :page-size="queryParams.size"
         :total="total"
-        layout="total, prev, pager, next, jumper"
+        :page-sizes="[10, 20, 50, 100]"
+        layout="total, sizes, prev, pager, next, jumper"
         @current-change="handlePageChange"
+        @size-change="(size: number) => queryParams.size = size"
+        @change="loadSymbols"
       />
 
       <el-empty v-if="!loading && symbols.length === 0" description="暂无数据" />
@@ -421,17 +424,17 @@ onUnmounted(() => {
         </el-form-item>
         <el-form-item label="币种图标">
           <div style="display: flex; gap: 12px; align-items: flex-start;">
-            <el-upload
+            <el-upload v-permission="'symbols:edit_symbol'"
               :http-request="(options: any) => handleIconUpload(options)"
               :show-file-list="false"
               :before-upload="beforeUpload"
               accept="image/*"
             >
-              <el-button size="small" type="primary">上传图标</el-button>
+              <el-button v-permission="'symbols:edit_symbol'" size="small" type="primary">上传图标</el-button>
             </el-upload>
             <div v-if="formData.iconUrl" style="display: flex; align-items: center; gap: 8px;">
               <img :src="getImageUrl(formData.iconUrl)" style="width: 40px; height: 40px; border-radius: 4px; object-fit: cover;" />
-              <el-button size="small" type="danger" @click="formData.iconUrl = ''">删除</el-button>
+              <el-button v-permission="'symbols:edit_symbol'" size="small" type="danger" @click="formData.iconUrl = ''">删除</el-button>
             </div>
           </div>
           <el-input
@@ -456,19 +459,27 @@ onUnmounted(() => {
           <el-input-number v-model="formData.sortOrder" />
         </el-form-item>
         <el-form-item label="是否热门">
-          <el-switch v-model="formData.isHot" />
+          <el-switch v-permission="'symbols:view'" v-model="formData.isHot" />
         </el-form-item>
         <el-form-item label="是否启用">
-          <el-switch v-model="formData.isEnabled" />
+          <el-switch v-permission="'symbols:view'" v-model="formData.isEnabled" />
         </el-form-item>
         <el-divider>合约设置</el-divider>
-        <el-form-item label="每手数量">
-          <el-input-number v-model="formData.lotSize" :min="1" :precision="0" style="width: 100%" />
-          <div style="font-size: 12px; color: #999; margin-top: 4px">每手数量；保证金 = 手数 × 每手数量 × 价格 ÷ 杠杆</div>
+        <p style="font-size: 12px; color: #666">旧协议下单单位为“手”，最小及步长均为 0.01 手。新协议使用以下品种配置。非外汇导入的数量精度/最小数量是行情源基础单位元数据，不代表本平台合约手数，也不代表交易所订单实际已执行。</p>
+        <el-divider>数量规格（仅影响新订单，历史快照不变）</el-divider>
+        <el-form-item label="数量单位"><el-select v-model="formData.quantityUnitType" @change="(v: string) => { if(v !== 'LOT') formData.lotSize = 1 }"><el-option label="标准手" value="LOT"/><el-option :label="'数量（' + formData.baseCurrency + '）'" value="BASE_ASSET"/><el-option label="股" value="SHARE"/></el-select></el-form-item>
+        <el-form-item label="最小数量"><el-input v-model="formData.minOrderQuantity" /></el-form-item>
+        <el-form-item label="数量步长"><el-input v-model="formData.quantityStep" /></el-form-item>
+        <el-form-item label="最低名义金额 USD"><el-input v-model="formData.minOrderNotional" /></el-form-item>
+        <p v-if="originalSpec">变更前：每输入1单位对应 {{ originalSpec.lotSize }} 资产，往返费 {{ originalSpec.feeMultiplier }} USD。变更后：{{ formData.lotSize }} 资产，{{ formData.feeMultiplier }} USD；相同资产敞口的收费请对照确认。</p>
+        <p>规格版本：{{ formData.specVersion ?? '旧协议' }}；保存交易规格后由服务端递增。旧页面须刷新。</p>
+        <el-form-item label="每输入单位资产数量">
+          <el-input-number v-model="formData.lotSize" :disabled="formData.sourceCategory === 'Forex' || ['BASE_ASSET','SHARE'].includes(formData.quantityUnitType)" :min="1" :precision="0" style="width: 100%" />
+          <div style="font-size: 12px; color: #999; margin-top: 4px">外汇标准手=100000基础单位；保证金=手数×每手单位÷杠杆×基础币兑USD。非外汇按成交名义价值计算。</div>
         </el-form-item>
-        <el-form-item label="手续费倍数">
-          <el-input-number v-model="formData.feeMultiplier" :min="0" :precision="2" style="width: 100%" />
-          <div style="font-size: 12px; color: #999; margin-top: 4px">手续费倍数，用于计算预估手续费（买入数量 × 手续费倍数）</div>
+        <el-form-item :label="formData.sourceCategory === 'Forex' ? '单边佣金（USD/标准手）' : '每1 ' + (formData.quantityUnitType === 'BASE_ASSET' ? formData.baseCurrency : formData.quantityUnitType === 'SHARE' ? '股' : '手') + ' 固定往返佣金（USD）'">
+          <el-input-number :model-value="formData.sourceCategory === 'Forex' ? formData.feeMultiplier / 2 : formData.feeMultiplier" @update:model-value="(value: number | undefined) => formData.feeMultiplier = Number(value ?? 0) * (formData.sourceCategory === 'Forex' ? 2 : 1)" :min="0" :precision="16" style="width: 100%" />
+          <div style="font-size: 12px; color: #999; margin-top: 4px">外汇开平各收单边佣金；下单预留两边费用，平仓统一结算。未成交撤单全额退还。</div>
         </el-form-item>
         <el-form-item label="杠杆上限">
           <el-input-number :disabled="!categoryAllowsLeverage(formData.category)" v-model="formData.maxLeverage" :min="1" :max="100" :precision="0" style="width: 100%" />
@@ -476,8 +487,8 @@ onUnmounted(() => {
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleSave">保存</el-button>
+        <el-button v-permission="'session:close'" @click="dialogVisible = false">取消</el-button>
+        <el-button v-permission="'symbols:edit_symbol'" type="primary" @click="handleSave">保存</el-button>
       </template>
     </el-dialog>
   </div>
@@ -508,15 +519,15 @@ onUnmounted(() => {
       </el-form-item>
     </el-form>
     <template #footer>
-      <el-button @click="leverageDialogVisible = false">取消</el-button>
-      <el-button type="primary" @click="saveLeverageSettings" :loading="leverageLoading">保存</el-button>
+      <el-button v-permission="'session:close'" @click="leverageDialogVisible = false">取消</el-button>
+      <el-button v-permission="'symbols:leverage'" type="primary" @click="saveLeverageSettings" :loading="leverageLoading">保存</el-button>
     </template>
   </el-dialog>
 
   <!-- 分类管理对话框 -->
   <el-dialog v-model="categoryDialogVisible" title="项目分类与源分类绑定" width="min(1000px, 96vw)">
     <el-alert title="绑定用于新增交易对时自动选择项目分类；手动选择可覆盖。修改绑定不迁移已添加交易对的行情源。关闭杠杆后新单固定1倍，已有持仓不变，高杠杆挂单暂停成交、仍可撤单。" type="info" :closable="false" style="margin-bottom: 16px" />
-    <el-table :data="categoryList" v-loading="categoryLoading" border stripe>
+    <admin-table table-key="Symbols.2" :data="categoryList" v-loading="categoryLoading" border stripe>
       <el-table-column prop="key" label="分类Key" width="120" />
       <el-table-column prop="label" label="显示名称" min-width="140">
         <template #default="{ row }">
@@ -544,19 +555,19 @@ onUnmounted(() => {
       </el-table-column>
       <el-table-column label="允许杠杆" width="110">
         <template #default="{ row }">
-          <el-switch v-model="row.leverageEnabled" :aria-label="`${row.key}允许杠杆`" />
+          <el-switch v-permission="'symbols:view'" v-model="row.leverageEnabled" :aria-label="`${row.key}允许杠杆`" />
         </template>
       </el-table-column>
       <el-table-column prop="enabled" label="首页显示" width="100">
         <template #default="{ row }">
-          <el-switch v-model="row.enabled" />
+          <el-switch v-permission="'symbols:view'" v-model="row.enabled" />
         </template>
       </el-table-column>
-    </el-table>
+    </admin-table>
     <template #footer>
       <span class="dialog-footer">
-        <el-button @click="categoryDialogVisible = false">取 消</el-button>
-        <el-button type="primary" @click="saveCategoryConfig" :loading="categoryLoading">保 存</el-button>
+        <el-button v-permission="'session:close'" @click="categoryDialogVisible = false">取 消</el-button>
+        <el-button v-permission="'symbols:categories'" type="primary" @click="saveCategoryConfig" :loading="categoryLoading">保 存</el-button>
       </span>
     </template>
   </el-dialog>

@@ -1,5 +1,6 @@
 <template>
   <div class="statistics-page">
+<AccountTypeFilter v-model="accountModes" @change="loadStatistics" />
     <el-card shadow="never">
       <template #header>
         <div style="display: flex; justify-content: space-between; align-items: center;">
@@ -16,7 +17,7 @@
               @change="handleDateChange"
               style="width: 300px; margin-right: 10px;"
             />
-            <el-button type="primary" @click="loadStatistics">查询</el-button>
+            <el-button v-permission="'statistics:view'" type="primary" @click="loadStatistics">查询</el-button>
           </div>
         </div>
       </template>
@@ -69,10 +70,17 @@
 </template>
 
 <script setup lang="ts">
+import { useAccountTable } from '@/utils/useAccountTable'
+import { accountTableRequest, accountTableRawRequest } from '@/utils/accountTableRequest'
+import AccountTypeFilter from '@/components/AccountTypeFilter.vue'
+const accountTable = useAccountTable(), accountModes = accountTable.modes
+const request = accountTableRequest(accountTable)
+const axios = accountTableRawRequest(accountTable)
+
 import { ref, onMounted, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
 import * as echarts from 'echarts'
-import request from '@/utils/request'
+
 
 const dateRange = ref<[string, string] | null>(null)
 const stats = ref<any>({})
@@ -91,6 +99,8 @@ const formatMoney = (amount: number | string | null | undefined) => {
 
 // 加载统计数据
 const loadStatistics = async () => {
+  stats.value = {}
+  chartInstance?.clear()
   loading.value = true
   try {
     const params: any = {}

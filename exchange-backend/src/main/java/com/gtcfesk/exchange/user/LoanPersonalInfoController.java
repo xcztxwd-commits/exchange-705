@@ -21,15 +21,9 @@ public class LoanPersonalInfoController {
     @PostMapping("/submit")
     public ResponseEntity<?> submitPersonalInfo(
             Authentication auth,
-            @RequestParam("realName") String realName,
-            @RequestParam("idNumber") String idNumber,
             @RequestParam("phone") String phone,
             @RequestParam("address") String address,
-            @RequestParam(value = "idFrontImage", required = false) String idFrontImageStr,
-            @RequestParam(value = "idBackImage", required = false) String idBackImageStr,
             @RequestParam(value = "handheldImage", required = false) String handheldImageStr,
-            @RequestParam(value = "idFrontImageFile", required = false) MultipartFile idFrontImageFile,
-            @RequestParam(value = "idBackImageFile", required = false) MultipartFile idBackImageFile,
             @RequestParam(value = "handheldImageFile", required = false) MultipartFile handheldImageFile) {
         try {
             if (auth == null || auth.getName() == null) {
@@ -38,24 +32,13 @@ public class LoanPersonalInfoController {
             
             Long userId = Long.parseLong(auth.getName());
             
-            // 处理身份证图片 (兼容传文件或者传URL字符串两种方式)
-            String frontImageUrl = idFrontImageStr;
-            String backImageUrl = idBackImageStr;
             String handheldImageUrl = handheldImageStr;
-            
-            if (idFrontImageFile != null && !idFrontImageFile.isEmpty()) {
-                frontImageUrl = fileUploadService.uploadImage(idFrontImageFile);
-            }
-            if (idBackImageFile != null && !idBackImageFile.isEmpty()) {
-                backImageUrl = fileUploadService.uploadImage(idBackImageFile);
-            }
             if (handheldImageFile != null && !handheldImageFile.isEmpty()) {
                 handheldImageUrl = fileUploadService.uploadImage(handheldImageFile);
             }
             
             LoanPersonalInfo info = loanPersonalInfoService.submitPersonalInfo(
-                    userId, realName, idNumber, phone, address, 
-                    frontImageUrl, backImageUrl, handheldImageUrl);
+                    userId, phone, address, handheldImageUrl);
             
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", true);

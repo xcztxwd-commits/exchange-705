@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { rawRequest as axios } from '@/utils/request'
 import { usePermissions } from '@/composables/usePermissions'
@@ -21,9 +21,9 @@ const canAssignPermission = ref(true)
 const canDeleteRole = ref(true)
 
 const loadPermissions = async () => {
-  canEditRole.value = await hasPermission('roles', 'edit_role')
+  canEditRole.value = await hasPermission('roles', 'edit')
   canAssignPermission.value = await hasPermission('roles', 'assign_permission')
-  canDeleteRole.value = await hasPermission('roles', 'delete_role')
+  canDeleteRole.value = await hasPermission('roles', 'delete')
 }
 
 // 角色列表
@@ -50,6 +50,30 @@ const currentRoleId = ref<number | null>(null)
 const currentRoleName = ref('')
 const allMenus = ref<any[]>([])
 const checkedMenuIds = ref<number[]>([])
+const permissionTree = ref<any>()
+const permissionFilter = ref('')
+const treeData = computed(() => {
+  const nodes = new Map(allMenus.value.map(m => [m.id, { ...m, children: [] as any[] }]))
+  const roots: any[] = []
+  nodes.forEach(m => { const parent = nodes.get(m.parentId); parent ? parent.children.push(m) : roots.push(m) })
+  return roots
+})
+const onPermissionCheck = (node: any, state: any) => {
+  const ids = new Set<number>(state.checkedKeys)
+  if (!ids.has(node.id)) {
+    const remove = (id: number) => { ids.delete(id); allMenus.value.filter(m => m.parentId === id).forEach(m => remove(m.id)) }
+    remove(node.id)
+  } else if (node.menuType === 'button') {
+    ids.add(node.parentId)
+  }
+  permissionTree.value?.setCheckedKeys([...ids])
+}
+const collectPermissionIds = () => {
+  const ids = new Set<number>(permissionTree.value?.getCheckedKeys() || [])
+  const byId = new Map(allMenus.value.map(m => [m.id, m]))
+  for (const id of [...ids]) { let parent = byId.get(id)?.parentId; while (parent && byId.has(parent)) { ids.add(parent); parent = byId.get(parent)?.parentId } }
+  return [...ids]
+}
 
 // 获取角色列表
 const fetchRoles = async () => {
@@ -214,7 +238,7 @@ const handleSavePermission = async () => {
   try {
     const response = await axios.post(
       `${API_BASE}/api/admin/roles/${currentRoleId.value}/menus`,
-      { menuIds: checkedMenuIds.value }
+      { menuIds: collectPermissionIds() }
     )
     
     if (response.data.success) {
@@ -245,12 +269,12 @@ onMounted(() => {
       <template #header>
         <div class="card-header">
           <span class="card-title">角色管理</span>
-          <el-button type="primary" @click="handleAdd">新增角色</el-button>
+          <el-button v-permission="'roles:create'" type="primary" @click="handleAdd">新增角色</el-button>
         </div>
       </template>
 
       <!-- 表格 -->
-      <el-table :data="roles" stripe border v-loading="loading">
+      <admin-table table-key="Roles.1" :data="roles" stripe border v-loading="loading">
         <el-table-column prop="id" label="ID" width="80" />
         <el-table-column prop="roleName" label="角色名称" width="150" />
         <el-table-column prop="roleCode" label="角色代码" width="150" />
@@ -274,8 +298,7 @@ onMounted(() => {
         </el-table-column>
         <el-table-column label="操作" width="280" fixed="right">
           <template #default="{ row }">
-            <el-button 
-              v-if="canEditRole"
+            <el-button v-permission="'roles:edit'"
               link 
               type="primary" 
               size="small" 
@@ -283,8 +306,7 @@ onMounted(() => {
             >
               编辑
             </el-button>
-            <el-button 
-              v-if="canAssignPermission"
+            <el-button v-permission="'roles:assign_permission'"
               link 
               type="warning" 
               size="small" 
@@ -292,8 +314,7 @@ onMounted(() => {
             >
               分配权限
             </el-button>
-            <el-button 
-              v-if="canDeleteRole"
+            <el-button v-permission="'roles:delete'"
               link 
               type="danger" 
               size="small" 
@@ -304,14 +325,14 @@ onMounted(() => {
             </el-button>
           </template>
         </el-table-column>
-      </el-table>
+      </admin-table>
     </el-card>
 
     <!-- 新增/编辑对话框 -->
     <el-dialog 
       v-model="dialogVisible" 
       :title="dialogTitle" 
-      width="500px"
+      width="min(680px, 94vw)" top="5vh"
     >
       <el-form :model="formData" label-width="100px">
         <el-form-item label="角色名称" required>
@@ -340,32 +361,32 @@ onMounted(() => {
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleSave" :loading="loading">保存</el-button>
+        <el-button v-permission="'session:close'" @click="dialogVisible = false">取消</el-button>
+        <el-button v-permission="isEdit ? 'roles:edit' : 'roles:create'" type="primary" @click="handleSave" :loading="loading">保存</el-button>
       </template>
     </el-dialog>
 
     <!-- 权限分配对话框 -->
     <el-dialog 
       v-model="permissionDialogVisible" 
-      title="分配菜单权限" 
-      width="500px"
+      title="分配菜单与按钮权限"
+      width="min(680px, 94vw)" top="5vh"
     >
       <div style="margin-bottom: 15px; color: #606266;">
         为角色 <strong>{{ currentRoleName }}</strong> 分配菜单权限：
       </div>
       
-      <el-checkbox-group v-model="checkedMenuIds">
-        <div v-for="menu in allMenus" :key="menu.id" style="margin-bottom: 10px;">
-          <el-checkbox :label="menu.id">
-            {{ menu.menuName }} <span style="color: #909399;">({{ menu.menuCode }})</span>
-          </el-checkbox>
-        </div>
-      </el-checkbox-group>
+      <el-alert title="菜单仅授予查看权限；按钮需单独勾选。保存后立即生效，不会自动授予新增按钮。" type="info" :closable="false" />
+      <el-input v-model="permissionFilter" placeholder="搜索菜单或操作" clearable @input="permissionTree?.filter(permissionFilter)" style="margin:12px 0" />
+      <el-tree style="max-height:55vh;overflow:auto" :key="currentRoleId + ':' + permissionDialogVisible" ref="permissionTree" :data="treeData" node-key="id" @check="onPermissionCheck" show-checkbox check-strictly default-expand-all
+        :props="{ label: 'menuName', children: 'children' }" :default-checked-keys="checkedMenuIds"
+        :filter-node-method="(value: string, node: any) => !value || (node.menuName + node.menuCode).includes(value)">
+        <template #default="{ data }"><span>{{ data.menuName }} <small style="color:#909399">{{ data.menuType === 'button' ? '操作' : data.menuType === 'directory' ? '分组' : '菜单' }}</small></span></template>
+      </el-tree>
       
       <template #footer>
-        <el-button @click="permissionDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleSavePermission" :loading="loading">保存</el-button>
+        <el-button v-permission="'session:close'" @click="permissionDialogVisible = false">取消</el-button>
+        <el-button v-permission="'roles:assign_permission'" type="primary" @click="handleSavePermission" :loading="loading">保存</el-button>
       </template>
     </el-dialog>
   </div>

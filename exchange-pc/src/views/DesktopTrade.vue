@@ -1,6 +1,13 @@
 <template>
-  <div class="trade-page h-screen w-screen flex flex-col bg-white dark:bg-[#131722] text-gray-800 dark:text-gray-100 text-sm overflow-hidden font-sans">
+  <div :style="{ height: auth.token ? 'calc(100dvh - 56px)' : '100dvh' }" class="trade-page h-screen w-screen flex flex-col bg-white dark:bg-[#131722] text-gray-800 dark:text-gray-100 text-sm overflow-hidden font-sans">
     <OrderShareModal v-if="shareOrder" :order-id="shareOrder.id" :kind="shareOrder.kind" brand="GTCFX" desktop @close="shareOrder = null" />
+    <el-dialog v-model="kycPromptOpen" :title="localeStore.t('verification')" width="min(440px, 94vw)">
+      <p role="alert">{{ kycPromptMessage }}</p>
+      <template #footer>
+        <el-button @click="kycPromptOpen = false">{{ localeStore.t('cancel') }}</el-button>
+        <el-button type="primary" @click="goToTradeVerification">{{ localeStore.text('確認', 'Confirm') }}</el-button>
+      </template>
+    </el-dialog>
     <!-- Top Nav -->
     <header class="h-14 border-b border-gray-200 dark:border-[#2b3139] flex justify-between items-center shrink-0 shadow-sm bg-white dark:bg-[#131722] z-10 relative">
       <div class="flex items-center px-4 absolute left-0 h-full w-[300px]">
@@ -11,10 +18,10 @@
       </div>
       
       <div class="flex items-center space-x-1 absolute left-[300px] h-full px-4 border-l border-gray-200 dark:border-[#2b3139]">
-        <button v-for="i in ['1m', '5m', '15m', '30m', '1h', '1d']" :key="i"
+        <button v-for="i in ['1m', '5m', '15m', '30m', '1h', '1d', '1w', '1M']" :key="i"
                 @click="currentInterval = i"
-                :class="['px-3 py-1.5 rounded text-sm font-medium transition-colors uppercase', currentInterval === i ? 'bg-[#8cc63f] text-white shadow-sm' : 'hover:bg-gray-100 dark:hover:bg-[#2b3139] dark:bg-[#2b3139] text-gray-600 dark:text-gray-300']">
-          {{ localeStore.text(i, i) }}
+                :class="['px-2 py-1.5 rounded text-sm font-medium transition-colors uppercase', currentInterval === i ? 'bg-[#8cc63f] text-white shadow-sm' : 'hover:bg-gray-100 dark:hover:bg-[#2b3139] dark:bg-[#2b3139] text-gray-600 dark:text-gray-300']">
+          {{ i === '1w' ? localeStore.text('1週', '1W') : i === '1M' ? localeStore.text('1月', '1MO') : localeStore.text(i, i) }}
         </button>
       </div>
       
@@ -116,7 +123,7 @@
                    <th class="py-3 px-4 font-medium whitespace-nowrap">{{ localeStore.t('symbol') }}</th>
                    <th class="py-3 px-2 font-medium whitespace-nowrap">{{ localeStore.t('orderNumber') }}</th>
                    <th class="py-3 px-2 font-medium whitespace-nowrap">{{ localeStore.text('買賣', 'Buy / Sell') }}</th>
-                   <th class="py-3 px-2 font-medium whitespace-nowrap">{{ localeStore.t('lots') }}</th>
+                   <th class="py-3 px-2 font-medium whitespace-nowrap">{{ localeStore.t('quantity') }}</th>
                    <th class="py-3 px-2 font-medium whitespace-nowrap">{{ orderSubTab === 'pending' ? localeStore.t('orderPrice') : localeStore.t('openPrice') }}</th>
                    <th class="py-3 px-2 font-medium whitespace-nowrap">{{ orderSubTab === 'history' ? localeStore.t('settlePrice') : localeStore.t('currentPrice') }}</th>
                    <th class="py-3 px-2 font-medium whitespace-nowrap">{{ localeStore.t('takeProfitPrice') }}</th>
@@ -134,17 +141,16 @@
                  </tr>
                  <tr v-for="order in currentOrderList" :key="order.id" class="border-b border-gray-200 dark:border-[#2b3139] hover:bg-gray-50 dark:hover:bg-[#181c27] dark:bg-[#181c27] transition-colors group">
                     <td class="py-3 px-4 font-bold text-gray-700 dark:text-gray-200">
-                      <span v-if="order.orderSource === 'MANUAL_TEST'" class="block w-fit mb-1 px-1.5 py-0.5 rounded border border-amber-200 bg-amber-50 text-amber-800 text-[11px] font-medium whitespace-nowrap">{{ localeStore.text('手動訂單', 'Manual order') }}</span>
                       <span>{{ displaySymbol(order) }}</span>
                     </td>
                     <td class="py-3 px-2 text-gray-500 dark:text-gray-400 dark:text-gray-500">#{{ order.id }}</td>
                     <td class="py-3 px-2"><span :class="['text-white px-2 py-0.5 rounded text-[11px] font-bold', order.type === 'buy' ? 'bg-[#8cc63f]' : 'bg-[#ff4d4f]']">{{ order.type === 'buy' ? localeStore.t('buy') : localeStore.t('sell') }}</span></td>
-                    <td class="py-3 px-2">{{ order.lots }} <span class="text-gray-500 text-xs">{{ order.leverage }}×</span></td>
+                    <td class="py-3 px-2">{{ order.lots }} {{ quantityUnit(order, localeStore.t('lots')) }} <span class="text-gray-500 text-xs">{{ order.leverage }}×</span></td>
                     <td class="py-3 px-2 font-mono">{{ (orderSubTab === 'pending' ? order.price : order.openPrice).toFixed(4) }}</td>
                     <td class="py-3 px-2 font-mono font-bold text-gray-700 dark:text-gray-200">{{ contractDisplayPrice(order)?.toFixed(4) ?? '—' }}</td>
                     <td class="py-3 px-2 text-gray-400 dark:text-gray-500">{{ order.takeProfit || 0 }}</td>
                     <td class="py-3 px-2 text-gray-400 dark:text-gray-500">{{ order.stopLoss || 0 }}</td>
-                    <td class="py-3 px-2">{{ order.fee.toFixed(2) }}</td>
+                    <td class="py-3 px-2">{{ displayFee(order.fee) }}</td>
                     <td class="py-3 px-2">{{ order.margin.toFixed(2) }}</td>
                     <td :class="['py-3 px-2 font-bold', order.profit >= 0 ? 'text-[#8cc63f]' : 'text-[#ff4d4f]']">{{ formatMoney(order.profit) }}</td>
                     <td class="py-3 px-2 text-gray-400 dark:text-gray-500" v-html="(order.openTime + (order.orderSource === 'MANUAL_TEST' ? '<br/>' + localeStore.t('closeTimeLabel') + ' ' + order.manualCloseTime : '')).replace(' ', '<br/>')"></td>
@@ -206,7 +212,7 @@
         <div class="p-4 bg-[#8cc63f] text-white mx-4 mt-4 rounded-lg shadow-md bg-gradient-to-r from-[#8cc63f] to-[#9cd64f]">
           <div class="text-sm opacity-90 font-medium">{{ localeStore.t('availableFund') }}</div>
           <div class="text-2xl font-bold mt-1 mb-0 font-mono tracking-tight">
-            ${{ tradeMode === 'contract' ? contractBalance.toFixed(2) : optionBalance.toFixed(2) }}
+            ${{ tradeMode === 'contract' ? tradingAvailable.toFixed(2) : optionTradingAvailable.toFixed(2) }}
           </div>
         </div>
         
@@ -234,16 +240,18 @@
 
            <div class="space-y-5">
              <div class="pt-2">
-               <div class="text-gray-600 dark:text-gray-300 mb-2 font-medium text-sm">{{ localeStore.text('數量（手）', 'Quantity (lots)') }} · {{ localeStore.text('最小變動', 'Step') }}: 0.01</div>
-               <el-input-number v-model="quantity" :min="0" :step="0.01" class="w-full custom-input-number" />
+               <div class="text-gray-600 dark:text-gray-300 mb-2 font-medium text-sm">{{ `${localeStore.text('数量', 'Quantity')}（${unitLabel}）` }} · {{ localeStore.text('最小變動', 'Step') }}: {{ quantityStep }}</div>
+               <el-input-number v-model="quantity" :min="Number(currentSymbolInfo?.minOrderQuantity ?? 0.01)" :step="quantityStep" class="w-full custom-input-number" />
              </div>
 
              <PositionSizing :percent="allocationPercent" :disabled="!canAllocate" :buy="liquidation.buy" :sell="liquidation.sell" :precision="currentSymbolInfo?.pricePrecision ?? 2" @change="setAllocation">
              <div class="bg-gray-50 dark:bg-[#181c27] p-4 rounded-lg text-xs text-gray-500 dark:text-gray-400 dark:text-gray-500 space-y-2 mt-4 border border-gray-100 dark:border-[#2b3139]">
-               <div class="flex justify-between items-center"><span class="font-medium text-gray-600 dark:text-gray-300">{{ localeStore.t('perLot') }}</span><span class="font-mono text-gray-800 dark:text-gray-100 font-medium">1 {{ localeStore.t('lot') }} = {{ currentSymbolInfo ? lotSize.toLocaleString(localeStore.locale) : '—' }} {{ forexLotUnit(currentSymbolInfo) === '—' ? currentDisplaySymbol : forexLotUnit(currentSymbolInfo) }}</span></div>
-               <div class="flex justify-between items-center"><span class="font-medium text-gray-600 dark:text-gray-300">{{ localeStore.t('estFee') }}</span><span class="font-mono text-gray-800 dark:text-gray-100 font-medium">{{ estimatedFee.toFixed(6) }} USD</span></div>
+               <div class="flex justify-between items-center"><span class="font-medium text-gray-600 dark:text-gray-300">{{ currentSymbolInfo?.quantityUnitType ? localeStore.text('每输入单位', 'Per input unit') : localeStore.t('perLot') }}</span><span class="font-mono text-gray-800 dark:text-gray-100 font-medium">1 {{ unitLabel }} = {{ currentSymbolInfo ? lotSize.toLocaleString(localeStore.locale) : '—' }} {{ currentSymbolInfo?.baseCurrency || forexLotUnit(currentSymbolInfo) }}</span></div>
+               <div class="flex justify-between items-center"><span class="font-medium text-gray-600 dark:text-gray-300">{{ localeStore.text('預留往返手續費', 'Reserved round-trip fee') }}</span><span class="font-mono text-gray-800 dark:text-gray-100 font-medium">{{ displayFee(estimatedFee) }} USD</span></div>
+               <p v-if="currentSymbolInfo?.quantityUnitType === 'BASE_ASSET'" class="text-xs">每1 {{ unitLabel }} 固定往返佣金 {{ feeMultiplier }} USD</p>
+               <p v-if="currentSymbolInfo?.sourceCategory === 'Forex'" class="text-xs text-gray-500">{{ localeStore.text('開倉 / 平倉各', 'Open / close each') }} {{ (estimatedFee / 2).toFixed(3) }} USD · {{ localeStore.text('往返佣金預留，平倉結算；撤單退還', 'Round-trip reserved; settled on close, refunded on cancellation') }}</p>
                <div class="flex justify-between items-center"><span class="font-medium text-gray-600 dark:text-gray-300">{{ localeStore.t('estMargin') }}</span><span class="font-mono text-gray-800 dark:text-gray-100 font-medium">{{ Number.isFinite(estimatedMargin) ? estimatedMargin.toFixed(2) : '--' }} USD</span></div>
-               <div class="flex justify-between items-center"><span class="font-medium text-gray-600 dark:text-gray-300">{{ localeStore.t('balance') }}</span><span class="font-mono text-gray-800 dark:text-gray-100 font-medium">{{ formatMoney(contractBalance) }} USD</span></div>
+               <div class="flex justify-between items-center"><span class="font-medium text-gray-600 dark:text-gray-300">{{ localeStore.t('balance') }}</span><span class="font-mono text-gray-800 dark:text-gray-100 font-medium">{{ formatMoney(tradingAvailable) }} USD</span></div>
              </div>
 
              </PositionSizing>
@@ -268,10 +276,10 @@
              </div>
 
              <p v-if="currentSymbolInfo && !Number.isFinite(estimatedMargin)" role="status" class="text-xs text-amber-600 mt-2">{{ localeStore.text('結算匯率暫不可用', 'Settlement rate unavailable') }}</p>
-             <p v-if="auth.token && contractBalance <= 0" role="status" class="text-xs text-amber-600 mt-2">{{ localeStore.t('contractBalanceInsufficient') }}</p>
+             <p v-if="auth.token && tradingAvailable <= 0" role="status" class="text-xs text-amber-600 mt-2">{{ localeStore.t('contractBalanceInsufficient') }}</p>
              <div class="flex space-x-3 pt-4">
-               <button :disabled="!currentSymbolInfo || !orderReady" @click="submitContractOrder('BUY')" class="disabled:opacity-50 disabled:cursor-not-allowed flex-1 bg-[#8cc63f] text-white py-3.5 rounded-lg font-bold text-base hover:bg-[#7ab036] transition-colors shadow-sm shadow-green-200">{{ localeStore.t('buy') }}</button>
-               <button :disabled="!currentSymbolInfo || !orderReady" @click="submitContractOrder('SELL')" class="disabled:opacity-50 disabled:cursor-not-allowed flex-1 bg-[#ff4d4f] text-white py-3.5 rounded-lg font-bold text-base hover:bg-[#e64042] transition-colors shadow-sm shadow-red-200">{{ localeStore.t('sell') }}</button>
+               <button :disabled="tradeSubmitting || kycChecking || (tradeVerified && (!currentSymbolInfo || !orderReady))" @click="submitContractOrder('BUY')" class="disabled:opacity-50 disabled:cursor-not-allowed flex-1 bg-[#8cc63f] text-white py-3.5 rounded-lg font-bold text-base hover:bg-[#7ab036] transition-colors shadow-sm shadow-green-200">{{ localeStore.t('buy') }}</button>
+               <button :disabled="tradeSubmitting || kycChecking || (tradeVerified && (!currentSymbolInfo || !orderReady))" @click="submitContractOrder('SELL')" class="disabled:opacity-50 disabled:cursor-not-allowed flex-1 bg-[#ff4d4f] text-white py-3.5 rounded-lg font-bold text-base hover:bg-[#e64042] transition-colors shadow-sm shadow-red-200">{{ localeStore.t('sell') }}</button>
              </div>
            </div>
         </div>
@@ -310,8 +318,8 @@
            </div>
 
            <div class="flex space-x-3">
-             <button :disabled="!currentSymbolInfo" @click="submitOptionOrder('UP')" class="flex-1 bg-[#8cc63f] text-white py-3.5 rounded-lg font-bold text-base hover:bg-[#7ab036] transition-colors shadow-sm shadow-green-200">{{ localeStore.t('buyUp') }}</button>
-             <button :disabled="!currentSymbolInfo" @click="submitOptionOrder('DOWN')" class="flex-1 bg-[#ff4d4f] text-white py-3.5 rounded-lg font-bold text-base hover:bg-[#e64042] transition-colors shadow-sm shadow-red-200">{{ localeStore.t('buyDown') }}</button>
+             <button :disabled="tradeSubmitting || kycChecking || (tradeVerified && !currentSymbolInfo)" @click="submitOptionOrder('UP')" class="flex-1 bg-[#8cc63f] text-white py-3.5 rounded-lg font-bold text-base hover:bg-[#7ab036] transition-colors shadow-sm shadow-green-200">{{ localeStore.t('buyUp') }}</button>
+             <button :disabled="tradeSubmitting || kycChecking || (tradeVerified && !currentSymbolInfo)" @click="submitOptionOrder('DOWN')" class="flex-1 bg-[#ff4d4f] text-white py-3.5 rounded-lg font-bold text-base hover:bg-[#e64042] transition-colors shadow-sm shadow-red-200">{{ localeStore.t('buyDown') }}</button>
            </div>
         </div>
       </aside>
@@ -424,16 +432,16 @@
         <div class="absolute inset-0 bg-gradient-to-br from-white to-transparent opacity-50"></div>
         <div class="relative z-10">
           <div class="flex justify-between items-center mb-3">
-            <div class="text-gray-600 dark:text-gray-300 font-medium text-base">{{ localeStore.t('enjoyLoanService') }}</div>
+            <div class="text-gray-600 dark:text-gray-300 font-medium text-base">{{ localeStore.text('貸款資料審核', 'Loan details review') }}</div>
             <button @click="openLoanRecords" class="text-sm text-[#8cc63f] hover:underline font-medium">{{ localeStore.t('loanRecords') }}</button>
           </div>
           <button 
-            @click="!isKycVerified && (showPersonalInfoModal = true)"
+            @click="openLoanPersonalInfo"
             class="inline-flex items-center px-4 py-1.5 rounded-full text-sm font-bold shadow-sm transition-colors cursor-pointer"
-            :class="isKycVerified ? 'text-[#8cc63f] bg-green-100' : 'text-gray-500 dark:text-gray-400 dark:text-gray-500 bg-gray-200 dark:bg-[#363c4e] hover:bg-gray-300'"
+            :class="isLoanInfoVerified ? 'text-[#8cc63f] bg-green-100' : 'text-gray-500 dark:text-gray-400 dark:text-gray-500 bg-gray-200 dark:bg-[#363c4e] hover:bg-gray-300'"
           >
-            <el-icon v-if="isKycVerified" class="mr-1 text-lg"><Check /></el-icon>
-            {{ isKycVerified ? localeStore.t('verifiedStatus') : localeStore.t('unverifiedStatus') }}
+            <el-icon v-if="isLoanInfoVerified" class="mr-1 text-lg"><Check /></el-icon>
+            {{ simulation ? localeStore.text('模拟贷款 · 无需实名', 'Virtual loan · No KYC') : isLoanInfoVerified ? localeStore.text('貸款資料已通過', 'Loan details approved') : localeStore.text('補充或查看貸款資料', 'Submit or view loan details') }}
           </button>
         </div>
       </div>
@@ -655,6 +663,7 @@
                 </div>
               </div>
             </div>
+            <TrialAccountCard v-if="showUserCenter" />
           </div>
 
           <div v-else-if="activeUserMenu === 'deposit'" class="max-w-2xl mx-auto pb-6">
@@ -1075,41 +1084,42 @@
                 <div>
                   <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-1">{{ localeStore.t('kyc') }}</h2>
                   <p class="text-gray-500 dark:text-gray-400 dark:text-gray-500 text-sm">
-                    <span v-if="isKycVerified" class="text-[#8cc63f] font-medium">{{ localeStore.t('kycPassedFeatureNormal') }}。</span>
+                    <span v-if="isKycVerified" class="text-[#8cc63f] font-medium">{{ localeStore.t('verificationCompleted') }}。</span>
                     <span v-else-if="kycStatus === 'PENDING'" class="text-orange-500 font-medium">{{ localeStore.t('verificationPending') }}</span>
                     <span v-else>{{ localeStore.t('completeAuthToUnlockFeatures') }}</span>
                   </p>
                 </div>
               </div>
               
+              <p v-if="kycRemark" class="text-red-500 mb-3" role="alert">{{ kycRemark }}</p>
               <div v-if="isKycVerified || kycStatus === 'PENDING'" class="space-y-4">
                 <div class="bg-gray-50 dark:bg-[#181c27] p-4 rounded-lg flex justify-between items-center">
                   <span class="text-gray-500 dark:text-gray-400 dark:text-gray-500">{{ localeStore.t('nameText') }}</span>
-                  <span class="font-bold text-gray-800 dark:text-gray-100">{{ personalInfoForm.realName || '***' }}</span>
+                  <span class="font-bold text-gray-800 dark:text-gray-100">{{ kycForm.realName || '***' }}</span>
                 </div>
                 <div class="bg-gray-50 dark:bg-[#181c27] p-4 rounded-lg flex justify-between items-center">
                   <span class="text-gray-500 dark:text-gray-400 dark:text-gray-500">{{ localeStore.t('idNumber') }}</span>
-                  <span class="font-bold text-gray-800 dark:text-gray-100 font-mono">{{ personalInfoForm.idNumber ? personalInfoForm.idNumber.replace(/^(.{4})(.*)(.{4})$/, '$1******$3') : '***' }}</span>
+                  <span class="font-bold text-gray-800 dark:text-gray-100 font-mono">{{ kycForm.idNumber ? kycForm.idNumber.replace(/^(.{4})(.*)(.{4})$/, '$1******$3') : '***' }}</span>
                 </div>
                 <div class="bg-gray-50 dark:bg-[#181c27] p-4 rounded-lg flex justify-between items-center">
                   <span class="text-gray-500 dark:text-gray-400 dark:text-gray-500">{{ localeStore.t('authText') }}{{ localeStore.t('timeText') }}</span>
-                  <span class="text-gray-800 dark:text-gray-100">{{ (personalInfoForm as any).updatedAt || (personalInfoForm as any).createdAt || '***' }}</span>
+                  <span class="text-gray-800 dark:text-gray-100">{{ (kycForm as any).updatedAt || (kycForm as any).createdAt || '***' }}</span>
                 </div>
               </div>
               
               <div v-else class="space-y-5">
                 <div>
                   <div class="text-gray-600 dark:text-gray-300 font-medium text-sm mb-2">{{ localeStore.t('realName') }}<span class="text-red-500">*</span></div>
-                  <input v-model="personalInfoForm.realName" type="text" class="w-full bg-gray-50 dark:bg-[#181c27] border border-gray-200 dark:border-[#2b3139]-none rounded-lg px-4 py-3 outline-none focus:ring-1 focus:ring-[#8cc63f]/30 transition-all text-gray-700 dark:text-gray-200" :placeholder="localeStore.t('enterRealName')" />
+                  <input v-model="kycForm.realName" type="text" class="w-full bg-gray-50 dark:bg-[#181c27] border border-gray-200 dark:border-[#2b3139]-none rounded-lg px-4 py-3 outline-none focus:ring-1 focus:ring-[#8cc63f]/30 transition-all text-gray-700 dark:text-gray-200" :placeholder="localeStore.t('enterRealName')" />
                 </div>
                 <div>
                   <div class="text-gray-600 dark:text-gray-300 font-medium text-sm mb-2">{{ localeStore.t('idNumber') }}<span class="text-red-500">*</span></div>
-                  <input v-model="personalInfoForm.idNumber" type="text" class="w-full bg-gray-50 dark:bg-[#181c27] border border-gray-200 dark:border-[#2b3139]-none rounded-lg px-4 py-3 outline-none focus:ring-1 focus:ring-[#8cc63f]/30 transition-all text-gray-700 dark:text-gray-200" :placeholder="localeStore.t('enterIdNumber')" />
+                  <input v-model="kycForm.idNumber" type="text" class="w-full bg-gray-50 dark:bg-[#181c27] border border-gray-200 dark:border-[#2b3139]-none rounded-lg px-4 py-3 outline-none focus:ring-1 focus:ring-[#8cc63f]/30 transition-all text-gray-700 dark:text-gray-200" :placeholder="localeStore.t('enterIdNumber')" />
                 </div>
                 
                 <div>
                   <div class="text-gray-600 dark:text-gray-300 font-medium text-sm mb-2">{{ localeStore.t('uploadIdPhoto') }} <span class="text-red-500">*</span></div>
-                  <div class="grid grid-cols-3 gap-4">
+                  <div class="grid grid-cols-2 gap-4">
                     <!-- 身份证正面 -->
                     <div class="border-2 border-dashed border-gray-200 dark:border-[#2b3139] rounded-lg hover:border-[#8cc63f] transition-colors cursor-pointer overflow-hidden aspect-[4/3] bg-gray-50 dark:bg-[#181c27] relative">
                       <input 
@@ -1120,11 +1130,11 @@
                         class="hidden"
                       />
                       <div 
-                        v-if="personalInfoForm.idCardFront" 
+                        v-if="kycForm.idCardFront"
                         class="w-full h-full p-1 relative group"
                         @click="triggerKycFrontUpload"
                       >
-                        <img :src="getImageUrl(personalInfoForm.idCardFront)" class="w-full h-full object-contain rounded" />
+                        <img :src="getImageUrl(kycForm.idCardFront)" class="w-full h-full object-contain rounded" />
                         <div class="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                           <el-icon class="text-white text-2xl"><Camera /></el-icon>
                         </div>
@@ -1149,11 +1159,11 @@
                         class="hidden"
                       />
                       <div 
-                        v-if="personalInfoForm.idCardBack" 
+                        v-if="kycForm.idCardBack"
                         class="w-full h-full p-1 relative group"
                         @click="triggerKycBackUpload"
                       >
-                        <img :src="getImageUrl(personalInfoForm.idCardBack)" class="w-full h-full object-contain rounded" />
+                        <img :src="getImageUrl(kycForm.idCardBack)" class="w-full h-full object-contain rounded" />
                         <div class="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                           <el-icon class="text-white text-2xl"><Camera /></el-icon>
                         </div>
@@ -1168,40 +1178,12 @@
                       </div>
                     </div>
 
-                    <!-- 手持身份证 -->
-                    <div class="border-2 border-dashed border-gray-200 dark:border-[#2b3139] rounded-lg hover:border-[#8cc63f] transition-colors cursor-pointer overflow-hidden aspect-[4/3] bg-gray-50 dark:bg-[#181c27] relative">
-                      <input 
-                        ref="kycHandInput"
-                        type="file" 
-                        accept="image/*" 
-                        @change="(e) => handleImageUpload(e, 'kycHand')"
-                        class="hidden"
-                      />
-                      <div 
-                        v-if="personalInfoForm.idCardHand" 
-                        class="w-full h-full p-1 relative group"
-                        @click="triggerKycHandUpload"
-                      >
-                        <img :src="getImageUrl(personalInfoForm.idCardHand)" class="w-full h-full object-contain rounded" />
-                        <div class="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                          <el-icon class="text-white text-2xl"><Camera /></el-icon>
-                        </div>
-                      </div>
-                      <div 
-                        v-else 
-                        class="w-full h-full flex flex-col items-center justify-center text-gray-400 dark:text-gray-500 hover:text-[#8cc63f] p-4 transition-colors"
-                        @click="triggerKycHandUpload"
-                      >
-                        <el-icon class="text-3xl mb-2"><Plus /></el-icon>
-                        <div class="text-xs text-center leading-tight">{{ localeStore.t('clickToUpload') }}<br/>{{ localeStore.t('remaining1') }}</div>
-                      </div>
-                    </div>
                   </div>
                   <div class="text-xs text-gray-400 dark:text-gray-500 mt-2">{{ localeStore.t('ensurePhotoClearSizeLimit') }}</div>
                 </div>
                 
                 <div class="pt-4">
-                  <button @click="submitPersonalInfoFromKyc" class="w-full bg-[#8cc63f] text-white py-3.5 rounded-lg font-bold text-base hover:bg-[#7ab036] transition-colors shadow-md shadow-green-200/50 tracking-wider">{{ localeStore.t('submitReview') }}</button>
+                  <button @click="submitPersonalInfoFromKyc" :disabled="identitySubmitting" class="w-full bg-[#8cc63f] text-white py-3.5 rounded-lg font-bold text-base hover:bg-[#7ab036] transition-colors shadow-md shadow-green-200/50 tracking-wider">{{ localeStore.t('submitReview') }}</button>
                 </div>
               </div>
             </div>
@@ -1325,7 +1307,7 @@
       <div v-if="activeOrder" class="space-y-4 px-2 py-4">
         <div class="flex justify-between items-center mb-2">
           <span class="text-gray-600 dark:text-gray-300 font-bold">{{ displaySymbol(activeOrder) }}</span>
-          <span :class="activeOrder.type === 'buy' ? 'text-[#8cc63f]' : 'text-[#ff4d4f]'">{{ activeOrder.type === 'buy' ? localeStore.t('buyIn') : localeStore.t('sellText') }} {{ activeOrder.lots }}{{ localeStore.t('lot') }}</span>
+          <span :class="activeOrder.type === 'buy' ? 'text-[#8cc63f]' : 'text-[#ff4d4f]'">{{ activeOrder.type === 'buy' ? localeStore.t('buyIn') : localeStore.t('sellText') }} {{ activeOrder.lots }} {{ quantityUnit(activeOrder, localeStore.t('lot')) }}</span>
         </div>
         
         <div>
@@ -1346,119 +1328,22 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="showPersonalInfoModal" :title="localeStore.t('personalInfoVerification')" width="450px" class="custom-dialog rounded-xl overflow-hidden">
-      <div class="space-y-4 px-2 py-2 max-h-[60vh] overflow-y-auto custom-scrollbar">
-        <div class="bg-blue-50 text-blue-600 p-3 rounded-lg text-sm mb-4">
-          {{ localeStore.text('為保障資金安全，請填寫本人確認資料並提交審核。', 'Complete your identity information and submit it for review to protect your funds.') }}
-        </div>
-        <div>
-          <div class="text-gray-600 dark:text-gray-300 font-medium text-sm mb-2">{{ localeStore.t('realName') }}<span class="text-red-500">*</span></div>
-          <input v-model="personalInfoForm.realName" type="text" class="w-full border border-gray-200 dark:border-[#2b3139] rounded-lg px-4 py-2.5 outline-none focus:border border-gray-200 dark:border-[#2b3139]-[#8cc63f] focus:ring-1 focus:ring-[#8cc63f]/20 transition-all bg-white dark:bg-[#131722]" :placeholder="localeStore.t('enterRealName')" />
-        </div>
-        <div>
-          <div class="text-gray-600 dark:text-gray-300 font-medium text-sm mb-2">{{ localeStore.t('idNumber') }}<span class="text-red-500">*</span></div>
-          <input v-model="personalInfoForm.idNumber" type="text" class="w-full border border-gray-200 dark:border-[#2b3139] rounded-lg px-4 py-2.5 outline-none focus:border border-gray-200 dark:border-[#2b3139]-[#8cc63f] focus:ring-1 focus:ring-[#8cc63f]/20 transition-all bg-white dark:bg-[#131722]" :placeholder="localeStore.t('enterIdNumber')" />
-        </div>
-        <div>
-          <div class="text-gray-600 dark:text-gray-300 font-medium text-sm mb-2">{{ localeStore.t('contactPhone') }}<span class="text-red-500">*</span></div>
-          <input v-model="personalInfoForm.phone" type="text" class="w-full border border-gray-200 dark:border-[#2b3139] rounded-lg px-4 py-2.5 outline-none focus:border border-gray-200 dark:border-[#2b3139]-[#8cc63f] focus:ring-1 focus:ring-[#8cc63f]/20 transition-all bg-white dark:bg-[#131722]" :placeholder="localeStore.t('pleaseEnterContactPhone')" />
-        </div>
-        <div>
-          <div class="text-gray-600 dark:text-gray-300 font-medium text-sm mb-2">{{ localeStore.t('homeAddress2') }} <span class="text-red-500">*</span></div>
-          <textarea v-model="personalInfoForm.address" class="w-full border border-gray-200 dark:border-[#2b3139] rounded-lg px-4 py-2.5 outline-none focus:border border-gray-200 dark:border-[#2b3139]-[#8cc63f] focus:ring-1 focus:ring-[#8cc63f]/20 transition-all bg-white dark:bg-[#131722] resize-none h-20" :placeholder="localeStore.t('pleaseEnterDetailedHomeAddress')"></textarea>
-        </div>
-        
-        <div class="space-y-4 pt-2 border-t border-gray-200 dark:border-[#2b3139] mt-4">
-          <div class="text-gray-600 dark:text-gray-300 font-medium text-sm">{{ localeStore.t('uploadIdPhoto') }} <span class="text-red-500">*</span></div>
-          <div class="grid grid-cols-3 gap-4">
-            <div class="flex flex-col items-center">
-              <div class="w-full h-24 border border-gray-200 dark:border-[#2b3139]-2 border border-gray-200 dark:border-[#2b3139]-dashed border border-gray-200 dark:border-[#2b3139]-gray-300 rounded-lg hover:border border-gray-200 dark:border-[#2b3139]-[#8cc63f] transition-colors cursor-pointer overflow-hidden bg-gray-50 dark:bg-[#181c27] relative">
-                <input 
-                  ref="loanKycFrontInput"
-                  type="file" 
-                  accept="image/*" 
-                  @change="(e) => handleImageUpload(e, 'kycFront')"
-                  class="hidden"
-                />
-                <div 
-                  v-if="personalInfoForm.idCardFront" 
-                  class="w-full h-full relative group"
-                  @click="triggerLoanKycFrontUpload"
-                >
-                  <img :src="getImageUrl(personalInfoForm.idCardFront)" class="w-full h-full object-cover" />
-                  <div class="absolute inset-0 bg-black/50 hidden group-hover:flex items-center justify-center text-white text-xs">{{ localeStore.t('clickToChange') }}</div>
-                </div>
-                <div 
-                  v-else 
-                  class="w-full h-full flex flex-col items-center justify-center text-gray-400 dark:text-gray-500 hover:text-[#8cc63f] transition-colors"
-                  @click="triggerLoanKycFrontUpload"
-                >
-                  <el-icon class="text-xl mb-1"><Plus /></el-icon>
-                  <span class="text-xs">{{ localeStore.t('idCardFront') }}</span>
-                </div>
-              </div>
-            </div>
-            <div class="flex flex-col items-center">
-              <div class="w-full h-24 border border-gray-200 dark:border-[#2b3139]-2 border border-gray-200 dark:border-[#2b3139]-dashed border border-gray-200 dark:border-[#2b3139]-gray-300 rounded-lg hover:border border-gray-200 dark:border-[#2b3139]-[#8cc63f] transition-colors cursor-pointer overflow-hidden bg-gray-50 dark:bg-[#181c27] relative">
-                <input 
-                  ref="loanKycBackInput"
-                  type="file" 
-                  accept="image/*" 
-                  @change="(e) => handleImageUpload(e, 'kycBack')"
-                  class="hidden"
-                />
-                <div 
-                  v-if="personalInfoForm.idCardBack" 
-                  class="w-full h-full relative group"
-                  @click="triggerLoanKycBackUpload"
-                >
-                  <img :src="getImageUrl(personalInfoForm.idCardBack)" class="w-full h-full object-cover" />
-                  <div class="absolute inset-0 bg-black/50 hidden group-hover:flex items-center justify-center text-white text-xs">{{ localeStore.t('clickToChange') }}</div>
-                </div>
-                <div 
-                  v-else 
-                  class="w-full h-full flex flex-col items-center justify-center text-gray-400 dark:text-gray-500 hover:text-[#8cc63f] transition-colors"
-                  @click="triggerLoanKycBackUpload"
-                >
-                  <el-icon class="text-xl mb-1"><Plus /></el-icon>
-                  <span class="text-xs">{{ localeStore.t('idCardBack') }}</span>
-                </div>
-              </div>
-            </div>
-            <div class="flex flex-col items-center">
-              <div class="w-full h-24 border border-gray-200 dark:border-[#2b3139]-2 border border-gray-200 dark:border-[#2b3139]-dashed border border-gray-200 dark:border-[#2b3139]-gray-300 rounded-lg hover:border border-gray-200 dark:border-[#2b3139]-[#8cc63f] transition-colors cursor-pointer overflow-hidden bg-gray-50 dark:bg-[#181c27] relative">
-                <input 
-                  ref="loanKycHandInput"
-                  type="file" 
-                  accept="image/*" 
-                  @change="(e) => handleImageUpload(e, 'kycHand')"
-                  class="hidden"
-                />
-                <div 
-                  v-if="personalInfoForm.idCardHand" 
-                  class="w-full h-full relative group"
-                  @click="triggerLoanKycHandUpload"
-                >
-                  <img :src="getImageUrl(personalInfoForm.idCardHand)" class="w-full h-full object-cover" />
-                  <div class="absolute inset-0 bg-black/50 hidden group-hover:flex items-center justify-center text-white text-xs">{{ localeStore.t('clickToChange') }}</div>
-                </div>
-                <div 
-                  v-else 
-                  class="w-full h-full flex flex-col items-center justify-center text-gray-400 dark:text-gray-500 hover:text-[#8cc63f] transition-colors"
-                  @click="triggerLoanKycHandUpload"
-                >
-                  <el-icon class="text-xl mb-1"><Camera /></el-icon>
-                  <span class="text-xs">{{ localeStore.t('idCardHand') }}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+    <el-dialog v-model="showPersonalInfoModal" :title="localeStore.text('貸款資料審核', 'Loan details review')" width="450px">
+      <div class="space-y-4">
+        <p>{{ localeStore.text('沿用已審核的實名身份，僅補充貸款聯絡資料及手持證件照。', 'Your approved identity is reused. Add loan contact details and a photo holding your ID.') }}</p>
+        <p v-if="loanInfoStatus === 'PENDING'">{{ localeStore.text('貸款資料審核中', 'Loan details under review') }}</p>
+        <p v-if="loanInfoStatus === 'APPROVED'">{{ localeStore.text('貸款資料已通過', 'Loan details approved') }}</p>
+        <p v-if="loanInfoStatus === 'NEEDS_UPDATE'">{{ localeStore.text('舊資料不完整或身份不一致，請重新提交。', 'Previous details are incomplete or do not match your identity. Please resubmit.') }}</p>
+        <p v-if="loanInfoRemark" class="text-red-500">{{ loanInfoRemark }}</p>
+        <label class="block">{{ localeStore.t('realName') }}<input :value="personalInfoForm.realName" readonly class="w-full border rounded p-2 dark:bg-[#131722]" /></label>
+        <label class="block">{{ localeStore.t('idNumber') }}<input :value="personalInfoForm.idNumber" readonly class="w-full border rounded p-2 dark:bg-[#131722]" /></label>
+        <label class="block">{{ localeStore.t('contactPhone') }}<input v-model="personalInfoForm.phone" type="tel" maxlength="32" :disabled="loanInfoLocked" class="w-full border rounded p-2 dark:bg-[#131722]" /></label>
+        <label class="block">{{ localeStore.t('homeAddress2') }}<textarea v-model="personalInfoForm.address" maxlength="500" :disabled="loanInfoLocked" class="w-full border rounded p-2 dark:bg-[#131722]"></textarea></label>
+        <label class="block">{{ localeStore.t('idCardHand') }}<input type="file" accept="image/*" :disabled="loanInfoLocked" @change="(e) => handleImageUpload(e, 'kycHand')" /></label>
+        <img v-if="personalInfoForm.idCardHand" :src="getImageUrl(personalInfoForm.idCardHand)" :alt="localeStore.t('idCardHand')" class="max-h-40" />
       </div>
       <template #footer>
-        <div class="px-2 pb-2 mt-2">
-          <button @click="submitPersonalInfo" class="w-full bg-[#8cc63f] text-white py-3.5 rounded-lg font-bold text-base hover:bg-[#7ab036] transition-colors shadow-md shadow-green-200/50">{{ localeStore.t('submitReview') }}</button>
-        </div>
+        <el-button v-if="!loanInfoLocked" type="primary" :loading="identitySubmitting" @click="submitPersonalInfo">{{ localeStore.t('submitReview') }}</el-button>
       </template>
     </el-dialog>
 
@@ -1646,6 +1531,9 @@
 </template>
 
 <script setup lang="ts">
+import { accountMode } from "@/utils/accountMode";
+const simulation = accountMode() === "DEMO";
+import TrialAccountCard from '@/components/TrialAccountCard.vue'
 import AppSelect from '@/components/AppSelect.vue'
 import CurrencyPicker from '@/components/CurrencyPicker.vue'
 import AssetPixelChart from '../../../exchange-frontend/src/components/AssetPixelChart.vue'
@@ -1661,6 +1549,7 @@ import { ref, onMounted, computed, watch, onUnmounted, nextTick } from 'vue';
 import marketWebSocket from '@/utils/marketWebSocket';
 import { useMarketStore } from '@/store/market';
 import { useAuthStore } from '@/store/auth';
+import { useTradeKyc } from '@/utils/useTradeKyc';
 import { useLocaleStore } from '@/store/locale';
 import { languages } from '@/utils/languages';
 import { useRouter } from 'vue-router';
@@ -1668,7 +1557,7 @@ import { ElMessage, ElMessageBox } from 'element-plus';
 import LeverageControl from '@/components/LeverageControl.vue';
 import PositionSizing from '@/components/PositionSizing.vue';
 import { useOrderSizing } from '@/utils/useOrderSizing';
-import { DEFAULT_LEVERAGE, leverageLimit, contractMargin, calculateContractProfit, contractEquity, contractDisplayPrice } from '@/utils/contract';
+import { DEFAULT_LEVERAGE, leverageLimit, contractMargin, calculateContractProfit, contractEquity, contractDisplayPrice, quantityUnit, validQuantity, displayFee } from '@/utils/contract';
 import request from '@/utils/request';
 import RegistrationCaptcha from '@/components/RegistrationCaptcha.vue';
 import { captchaText } from '@/utils/captchaText';
@@ -1996,6 +1885,8 @@ const stopLossPrice = ref(0);
 const useTakeProfit = ref(false);
 const takeProfitPrice = ref(0);
 const quantity = ref(0.01);
+const quantityStep = computed(() => Number(currentSymbolInfo.value?.quantityStep ?? 0.01));
+const unitLabel = computed(() => quantityUnit(currentSymbolInfo.value, localeStore.t('lots')));
 const selectedLeverage = ref(DEFAULT_LEVERAGE);
 
 const currentSymbolInfo = ref<any>(null);
@@ -2025,6 +1916,7 @@ const estimatedMargin = computed(() => contractMargin(
   Number(quantity.value), lotSize.value,
   Number(orderType.value === 'limit' ? limitPrice.value : marketStore.priceMap[currentSymbol.value]?.price),
   selectedLeverage.value, marketStore.getConversionRate(currentSymbol.value, currentSymbolInfo.value?.quoteCurrency),
+  marketStore.getMarginBaseRate(currentSymbolInfo.value, Number(orderType.value === 'limit' ? limitPrice.value : marketStore.priceMap[currentSymbol.value]?.price)),
 ));
 
 // 计算预估手续费 = 买入数量 × 手续费倍数
@@ -2222,10 +2114,10 @@ const handleImageUpload = async (e: Event, type: string) => {
         depositForm.value.proofImage = data.url;
         ElMessage.success(localeStore.t('voucherUploadSuccess'));
       } else if (type === 'kycFront') {
-        personalInfoForm.value.idCardFront = data.url;
+        kycForm.value.idCardFront = data.url;
         ElMessage.success(localeStore.t('idFrontUploadSuccess'));
       } else if (type === 'kycBack') {
-        personalInfoForm.value.idCardBack = data.url;
+        kycForm.value.idCardBack = data.url;
         ElMessage.success(localeStore.t('idBackUploadSuccess'));
       } else if (type === 'kycHand') {
         personalInfoForm.value.idCardHand = data.url;
@@ -2255,136 +2147,96 @@ const triggerKycBackUpload = () => {
   kycBackInput.value?.click();
 };
 
-const kycHandInput = ref<HTMLInputElement | null>(null);
-const triggerKycHandUpload = () => {
-  kycHandInput.value?.click();
-};
-
-const loanKycFrontInput = ref<HTMLInputElement | null>(null);
-const triggerLoanKycFrontUpload = () => {
-  loanKycFrontInput.value?.click();
-};
-
-const loanKycBackInput = ref<HTMLInputElement | null>(null);
-const triggerLoanKycBackUpload = () => {
-  loanKycBackInput.value?.click();
-};
-
-const loanKycHandInput = ref<HTMLInputElement | null>(null);
-const triggerLoanKycHandUpload = () => {
-  loanKycHandInput.value?.click();
-};
-
 const isKycVerified = ref(false);
-const kycStatus = ref('UNVERIFIED'); // 'UNVERIFIED', 'PENDING', 'VERIFIED'
+const kycStatus = ref('NOT_VERIFIED');
+const kycRemark = ref('');
+const kycForm = ref({ realName: '', idNumber: '', idCardFront: '', idCardBack: '', createdAt: '' });
+const isLoanInfoVerified = ref(false);
+const loanInfoStatus = ref('NOT_SUBMITTED');
+const loanInfoRemark = ref('');
+const identitySubmitting = ref(false);
+const loanInfoLocked = computed(() => !isKycVerified.value || ['PENDING', 'APPROVED'].includes(loanInfoStatus.value));
 
 const loadKycStatus = async () => {
+  isKycVerified.value = false;
+  isLoanInfoVerified.value = false;
+  kycStatus.value = 'NOT_VERIFIED';
+  loanInfoStatus.value = 'NOT_SUBMITTED';
+  kycRemark.value = '';
+  loanInfoRemark.value = '';
+  kycForm.value = { realName: '', idNumber: '', idCardFront: '', idCardBack: '', createdAt: '' };
+  personalInfoForm.value = { realName: '', idNumber: '', phone: '', address: '', idCardFront: '', idCardBack: '', idCardHand: '' };
   if (!auth.token) return;
   try {
+    const res: any = await request.get('/kyc/status');
+    const record = res?.latestRecord;
+    isKycVerified.value = res?.kycStatus === 'VERIFIED' && record?.status === 'APPROVED';
+    kycStatus.value = isKycVerified.value ? 'VERIFIED' : record?.status || 'NOT_VERIFIED';
+    kycRemark.value = record?.reviewRemark || '';
+    kycForm.value = { realName: record?.realName || '', idNumber: record?.idNumber || '',
+      idCardFront: record?.idFrontImage || '', idCardBack: record?.idBackImage || '', createdAt: record?.createdAt || '' };
+  } catch (e) { console.error('KYC status unavailable', e); }
+  try {
     const res: any = await request.get('/loan/personal-info/status');
-    if (res && res.success && res.verified) {
-      isKycVerified.value = true;
-      kycStatus.value = 'VERIFIED';
-    } else {
-      isKycVerified.value = false;
-      kycStatus.value = res?.status || 'UNVERIFIED';
-      // 如果未验证，可以把后端返回的数据填入表单，方便用户修改后重新提交
-      if (res && res.data) {
-        personalInfoForm.value = {
-          realName: res.data.realName || '',
-          idNumber: res.data.idNumber || '',
-          phone: res.data.phone || '',
-          address: res.data.address || '',
-          idCardFront: res.data.idCardFront || '',
-          idCardBack: res.data.idCardBack || '',
-          idCardHand: res.data.idCardHand || ''
-        };
-      }
-    }
-  } catch (e) {
-    console.error(`${localeStore.t('getText')}${localeStore.t('authText')}${localeStore.t('statusFailed')}`, e);
-    isKycVerified.value = false;
-    kycStatus.value = 'UNVERIFIED';
+    if (!res?.success) throw new Error('Loan details unavailable');
+    isLoanInfoVerified.value = (simulation && res.exempt === true) || (isKycVerified.value && res.verified === true);
+    loanInfoStatus.value = res.status || 'NOT_SUBMITTED';
+    loanInfoRemark.value = res.reviewRemark || '';
+    const data = res.data || {};
+    personalInfoForm.value = { realName: data.realName || '', idNumber: data.idNumber || '',
+      phone: data.phone || '', address: data.address || '', idCardFront: data.idFrontImage || '',
+      idCardBack: data.idBackImage || '', idCardHand: data.handheldImage || '' };
+  } catch (e) { console.error('Loan details status unavailable', e); }
+};
+
+const openLoanPersonalInfo = async () => {
+  await loadKycStatus();
+  if (!isKycVerified.value) {
+    showCreditLoan.value = false;
+    activeUserMenu.value = 'kyc';
+    showUserCenter.value = true;
+    return;
   }
+  showPersonalInfoModal.value = true;
 };
 
 const submitPersonalInfo = async () => {
-  if (!personalInfoForm.value.realName || !personalInfoForm.value.idNumber || !personalInfoForm.value.phone || !personalInfoForm.value.address) {
-    ElMessage.warning(localeStore.t('pleaseFillCompletePersonalInfo'));
-    return;
+  if (loanInfoLocked.value || identitySubmitting.value) return;
+  if (!personalInfoForm.value.phone.trim() || !personalInfoForm.value.address.trim() || !personalInfoForm.value.idCardHand) {
+    ElMessage.warning(localeStore.t('pleaseFillCompletePersonalInfo')); return;
   }
-  if (!personalInfoForm.value.idCardFront || !personalInfoForm.value.idCardBack || !personalInfoForm.value.idCardHand) {
-    ElMessage.warning(localeStore.t('pleaseUploadCompleteIdPhotos'));
-    return;
-  }
-  
+  identitySubmitting.value = true;
   try {
-    // 提交{{ localeStore.t('authText') }}信息时{{ localeStore.t('requiredText2') }}使用 FormData，因为后端接收的是 @RequestParam
-    const formData = new FormData();
-    formData.append('realName', personalInfoForm.value.realName);
-    formData.append('idNumber', personalInfoForm.value.idNumber);
-    formData.append('phone', personalInfoForm.value.phone);
-    formData.append('address', personalInfoForm.value.address);
-    
-    // 从后端接口看，其实直接提交图片 URL 并不是它期望的，它期望的是 MultipartFile
-    // 但是这里我们由于前端使用了 el-upload 已经把图片上传到 /api/upload/image {{ localeStore.t('getText') }}了 URL
-    // 我们${localeStore.t('requiredText2')}修改提交方式或者让后端接口兼容 URL 提交。
-    // 如果后端接口不支持，这里直接提交原先的 JSON 可能会导致 400/500。
-    // 为解决此问题，${localeStore.t('requiredText2')}调整提交的参数结构或者提交方式。
-    const res: any = await request.post('/loan/personal-info/submit', null, {
-      params: {
-        realName: personalInfoForm.value.realName,
-        idNumber: personalInfoForm.value.idNumber,
-        phone: personalInfoForm.value.phone,
-        address: personalInfoForm.value.address,
-        idFrontImage: personalInfoForm.value.idCardFront,
-        idBackImage: personalInfoForm.value.idCardBack,
-        handheldImage: personalInfoForm.value.idCardHand
-      }
-    });
-    if (res && res.success !== false) {
-      ElMessage.success(localeStore.t('personalInfoSubmitSuccessWaitReview'));
-      showPersonalInfoModal.value = false;
-      loadKycStatus(); // 更新状态
-    } else {
-      ElMessage.error(res?.message || localeStore.t('submitFailed'));
-    }
-  } catch (e: any) {
-    ElMessage.error(e.response?.data?.message || e.message || localeStore.t('networkErrorOrNotImplemented'));
-  }
+    const data = new FormData();
+    data.append('phone', personalInfoForm.value.phone.trim());
+    data.append('address', personalInfoForm.value.address.trim());
+    data.append('handheldImage', personalInfoForm.value.idCardHand);
+    const res: any = await request.post('/loan/personal-info/submit', data);
+    if (!res?.success) throw new Error(res?.message || localeStore.t('submitFailed'));
+    ElMessage.success(localeStore.t('submitSuccessWaitReview'));
+    await loadKycStatus();
+  } catch (e: any) { ElMessage.error(e.message || localeStore.t('submitFailed')); }
+  finally { identitySubmitting.value = false; }
 };
 
 const submitPersonalInfoFromKyc = async () => {
-  if (!personalInfoForm.value.realName || !personalInfoForm.value.idNumber) {
-    ElMessage.warning(localeStore.t('pleaseFillCompletePersonalInfo'));
-    return;
+  if (identitySubmitting.value) return;
+  if (!kycForm.value.realName.trim() || !kycForm.value.idNumber.trim() || !kycForm.value.idCardFront || !kycForm.value.idCardBack) {
+    ElMessage.warning(localeStore.t('pleaseFillCompletePersonalInfo')); return;
   }
-  if (!personalInfoForm.value.idCardFront || !personalInfoForm.value.idCardBack || !personalInfoForm.value.idCardHand) {
-    ElMessage.warning(localeStore.t('pleaseUploadCompleteIdPhotos'));
-    return;
-  }
-  
+  identitySubmitting.value = true;
   try {
-    const res: any = await request.post('/loan/personal-info/submit', null, {
-      params: {
-        realName: personalInfoForm.value.realName,
-        idNumber: personalInfoForm.value.idNumber,
-        phone: personalInfoForm.value.phone || '00000000000',
-        address: personalInfoForm.value.address || localeStore.t('noneText'),
-        idFrontImage: personalInfoForm.value.idCardFront,
-        idBackImage: personalInfoForm.value.idCardBack,
-        handheldImage: personalInfoForm.value.idCardHand
-      }
-    });
-    if (res && res.success !== false) {
-      ElMessage.success(localeStore.t('dataSubmitSuccessWaitReview'));
-      loadKycStatus(); // 更新页面状态为 PENDING
-    } else {
-      ElMessage.error(res?.message || localeStore.t('submitFailed'));
-    }
-  } catch (e: any) {
-    ElMessage.error(e.response?.data?.message || localeStore.t('submitFailed'));
-  }
+    const data = new FormData();
+    data.append('realName', kycForm.value.realName.trim());
+    data.append('idNumber', kycForm.value.idNumber.trim());
+    data.append('idFrontImageStr', kycForm.value.idCardFront);
+    data.append('idBackImageStr', kycForm.value.idCardBack);
+    const res: any = await request.post('/kyc/submit', data);
+    if (!res?.success) throw new Error(res?.message || localeStore.t('submitFailed'));
+    ElMessage.success(localeStore.t('submitSuccessWaitReview'));
+    await loadKycStatus();
+  } catch (e: any) { ElMessage.error(e.message || localeStore.t('submitFailed')); }
+  finally { identitySubmitting.value = false; }
 };
 
 const formatMoney = (v: number | string | undefined | null) => {
@@ -2419,8 +2271,8 @@ const submitLoan = async () => {
     showLoginModal.value = true;
     return;
   }
-  if (!isKycVerified.value) {
-    ElMessage.warning(localeStore.t('pleaseCompletePersonalInfoAuthFirst'));
+  if ((!simulation && !isKycVerified.value) || !isLoanInfoVerified.value) {
+    await openLoanPersonalInfo();
     return;
   }
   const amountNum = Number(loanAmount.value);
@@ -2442,7 +2294,7 @@ const submitLoan = async () => {
   }
   try {
     const personalInfoRes: any = await request.get('/loan/personal-info/status');
-    if (!personalInfoRes || !personalInfoRes.success || !personalInfoRes.verified || !personalInfoRes.data) {
+    if (!personalInfoRes || !personalInfoRes.success || (!personalInfoRes.verified && !personalInfoRes.exempt) || !personalInfoRes.data) {
       ElMessage.warning(localeStore.text('無法取得本人確認資料，請確認已完成本人確認。', 'Unable to retrieve identity information. Check that identity verification is complete.'));
       return;
     }
@@ -2454,8 +2306,8 @@ const submitLoan = async () => {
       days: currentLoanSetting.value.days,
       realName: personalInfo.realName,
       idNumber: personalInfo.idNumber,
-      phone: personalInfo.phone || '00000000000',
-      address: personalInfo.address || localeStore.t('noneText')
+      phone: personalInfo.phone,
+      address: personalInfo.address
     });
     if (res && res.success !== false && res.data) {
       ElMessage.success(localeStore.t('creditLoanApplySuccess'));
@@ -2693,6 +2545,7 @@ const totalMargin = ref(0);
 const walletBalance = ref(0);
 const walletFrozen = ref(0);
 const contractBalance = ref(0);
+const tradingAvailable = ref(0), optionTradingAvailable = ref(0);
 const contractFrozen = ref(0);
 const optionBalance = ref(0);
 const optionFrozen = ref(0);
@@ -2701,7 +2554,7 @@ const chartTotal = ref<number | null | undefined>(undefined);
 watch(() => auth.user?.id, () => { chartTotal.value = undefined });
 const { allocationPercent, setAllocation, canAllocate, orderReady, liquidation, refreshAccount } = useOrderSizing({
   catalog: computed(() => marketStore.symbols),
-  quantity, leverage: selectedLeverage, available: contractBalance,
+  quantity, leverage: selectedLeverage, available: tradingAvailable,
   active: computed(() => tradeMode.value === 'contract'), symbol: currentSymbol,
   price: computed(() => Number(orderType.value === 'limit' ? limitPrice.value : marketStore.priceMap[currentSymbol.value]?.price)),
   lotSize, feePerLot: feeMultiplier, currency: computed(() => currentSymbolInfo.value?.quoteCurrency || 'USD'),
@@ -2719,6 +2572,8 @@ const loadWalletBalances = async () => {
       optionBalance.value = Number(res.optionBalance || 0);
       optionFrozen.value = Number(res.optionFrozen || 0);
       await refreshAccount();
+      const option: any = await request.get('/trade/option/balance');
+      optionTradingAvailable.value = Number(option.available ?? option.balance ?? 0);
     }
   } catch (e) {
     console.error(localeStore.t('loadAccountAssetsFailed'), e);
@@ -2726,6 +2581,8 @@ const loadWalletBalances = async () => {
 };
 
 const loadContractBalance = async () => { await refreshAccount(); };
+onMounted(() => window.addEventListener('trial-account-changed', loadWalletBalances));
+onUnmounted(() => window.removeEventListener('trial-account-changed', loadWalletBalances));
 
 const transformContractOrder = (order: any) => {
   const pInfo = marketStore.priceMap[order.symbol];
@@ -2739,6 +2596,7 @@ const transformContractOrder = (order: any) => {
     symbol: order.symbol,
     displayName: order.displayName,
     type: order.side?.toLowerCase() || 'buy',
+    quantityUnitType: order.quantityUnitType, quantityAsset: order.quantityAsset,
     lots: Number(order.quantity || 0),
     price: Number(order.price || 0),
     openPrice: Number(order.openPrice || 0),
@@ -2868,13 +2726,24 @@ const updateOrdersRealTime = () => {
 // ======================
 // 平仓、撤单、TP/SL 逻辑
 // ======================
+const tradeSubmitting = ref(false);
+const { verified: tradeVerified, checking: kycChecking, promptOpen: kycPromptOpen, promptMessage: kycPromptMessage, ensure: ensureKyc, handleError: handleKycError } = useTradeKyc(
+  () => { showLoginModal.value = true; }, message => { ElMessage.warning(message); });
+const goToTradeVerification = () => {
+  kycPromptOpen.value = false;
+  activeUserMenu.value = 'kyc';
+  showUserCenter.value = true;
+  void loadKycStatus();
+};
+
 const submitContractOrder = async (side: 'BUY' | 'SELL') => {
+  if (tradeSubmitting.value || kycChecking.value || !await ensureKyc()) return;
   if (!auth.token) {
     ElMessage.warning(localeStore.t('pleaseLoginFirst'));
     showLoginModal.value = true;
     return;
   }
-  if (!Number.isFinite(quantity.value) || quantity.value < 0.01) {
+  if (!validQuantity(quantity.value, currentSymbolInfo.value)) {
     ElMessage.warning(localeStore.t('enterValidQuantity'));
     return;
   }
@@ -2891,7 +2760,7 @@ const submitContractOrder = async (side: 'BUY' | 'SELL') => {
     return;
   }
 
-  if (estimatedMargin.value + estimatedFee.value > contractBalance.value) {
+  if (estimatedMargin.value + estimatedFee.value > tradingAvailable.value) {
     ElMessage.warning(localeStore.t('contractBalanceInsufficient'));
     return;
   }
@@ -2902,13 +2771,15 @@ const submitContractOrder = async (side: 'BUY' | 'SELL') => {
     symbol: currentSymbol.value,
     side,
     type: orderType.value === 'market' ? 'MARKET' : 'LIMIT',
-    quantity: quantity.value,
+    quantity: String(quantity.value),
+    specVersion: currentSymbolInfo.value?.specVersion, quantityUnitType: currentSymbolInfo.value?.quantityUnitType,
     price: orderType.value === 'limit' ? limitPrice.value : undefined,
     leverage: selectedLeverage.value,
     takeProfit: useTakeProfit.value ? takeProfitPrice.value : undefined,
     stopLoss: useStopLoss.value ? stopLossPrice.value : undefined
   };
 
+  tradeSubmitting.value = true;
   try {
     const res: any = await request.post('/trade/contract/order', params);
     if (res && res.success !== false) {
@@ -2919,11 +2790,12 @@ const submitContractOrder = async (side: 'BUY' | 'SELL') => {
       ElMessage.error(parseErrorMsg(res?.message, localeStore.t('orderFailed')));
     }
   } catch (e: any) {
-    ElMessage.error(parseErrorMsg(e, localeStore.t('networkError')));
-  }
+    if (!handleKycError(e)) ElMessage.error(parseErrorMsg(e, localeStore.t('networkError')));
+  } finally { tradeSubmitting.value = false; }
 };
 
 const submitOptionOrder = async (direction: 'UP' | 'DOWN') => {
+  if (tradeSubmitting.value || kycChecking.value || !await ensureKyc()) return;
   if (!auth.token) {
     ElMessage.warning(localeStore.t('pleaseLoginFirst'));
     showLoginModal.value = true;
@@ -2951,6 +2823,7 @@ const submitOptionOrder = async (direction: 'UP' | 'DOWN') => {
     duration: optionTime.value
   };
 
+  tradeSubmitting.value = true;
   try {
     const res: any = await request.post('/trade/option/order', params);
     if (res && res.success !== false) {
@@ -2962,8 +2835,8 @@ const submitOptionOrder = async (direction: 'UP' | 'DOWN') => {
       ElMessage.error(parseErrorMsg(res?.message, localeStore.t('orderFailed')));
     }
   } catch (e: any) {
-    ElMessage.error(parseErrorMsg(e, localeStore.t('networkError')));
-  }
+    if (!handleKycError(e)) ElMessage.error(parseErrorMsg(e, localeStore.t('networkError')));
+  } finally { tradeSubmitting.value = false; }
 };
 
 const showTpSlModal = ref(false);
@@ -3279,7 +3152,7 @@ const submitDeposit = async () => {
     ElMessage.warning(localeStore.t('pleaseEnterValidDepositAmount'));
     return;
   }
-  if (!depositForm.value.proofImage) {
+  if (!simulation && !depositForm.value.proofImage) {
     ElMessage.warning(localeStore.t('pleaseUploadVoucher'));
     return;
   }
@@ -3296,7 +3169,7 @@ const submitDeposit = async () => {
     });
     
     if (res && res.success !== false) {
-      ElMessage.success(localeStore.t('depositSubmitWaitReview'));
+      ElMessage.success(simulation ? localeStore.text('模拟充值已到账，无真实付款', 'Virtual funds credited. No real payment.') : localeStore.t('depositSubmitWaitReview'));
       depositForm.value.amount = '';
       depositForm.value.proofImage = '';
       // 可以在此处重置回资金页面或拉取${localeStore.t('deposit2')}${localeStore.t('recordText')}
@@ -3361,6 +3234,8 @@ const loadUserWithdrawAccounts = async () => {
 const withdrawSubmitting = ref(false)
 const submitWithdraw = async () => {
   if (withdrawSubmitting.value) return
+  await loadKycStatus();
+  if (!simulation && !isKycVerified.value) { activeUserMenu.value = 'kyc'; showUserCenter.value = true; return }
   if (withdrawTab.value === 'bank' && withdrawRate.value === null) { ElMessage.error('汇率暂不可用，请稍后重试'); return }
   if (withdrawTab.value === 'digital' && !withdrawForm.value.currency) {
     ElMessage.warning(localeStore.t('pleaseSelectCurrency'));
@@ -3656,13 +3531,7 @@ const complaintEmail = ref('')
 const loadCustomerServiceLink = async () => {
   try {
     const res: any = await request.get('/user/customer-service/link')
-    if (res && res.link) {
-      let url = res.link.trim()
-      if (!url.startsWith('http://') && !url.startsWith('https://')) {
-        url = 'https://' + url
-      }
-      customerServiceLink.value = url
-    }
+    customerServiceLink.value = res?.available ? `${import.meta.env.BASE_URL}customer-service` : ''
   } catch (e) {
     console.error('Failed to load customer service link:', e)
   }
@@ -3747,8 +3616,11 @@ const submitPasswordChange = async () => {
 
 
 // watch for user menu actions
-watch(activeUserMenu, (val) => {
-  if (val === 'logout') {
+watch(activeUserMenu, async (val) => {
+  if (val === 'withdraw') { await loadKycStatus(); if (!simulation && !isKycVerified.value) { activeUserMenu.value = 'kyc'; return } }
+  if (val === 'kyc') {
+    void loadKycStatus();
+  } else if (val === 'logout') {
     auth.logout();
     showLoginModal.value = true;
     showUserCenter.value = false;

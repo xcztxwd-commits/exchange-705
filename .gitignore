@@ -50,6 +50,7 @@ docs/manual-history-order-new-session.txt
 !exchange-backend/src/main/resources/db/asset-equity/V001__net_equity_history.sql
 
 !exchange-backend/src/test/resources/manual-order-schema.sql
+!scripts/fx-standard/*.sql
 !exchange-backend/src/main/resources/db/asset-equity/V002__history_cache.sql
 !exchange-backend/src/test/resources/asset-cache-performance.sql
 
@@ -59,3 +60,9 @@ docs/manual-history-order-new-session.txt
 
 # Local design screenshots, not release source.
 design/order-module-preview-20260928/
+
+# Reviewed additive crypto quantity migration; backups remain ignored.
+!scripts/crypto-quantity/*.sql
+
+# Additive activity-credit migration; contains no customer data or secrets.
+!exchange-backend/src/main/resources/db/migration/create_activity_bonus.sql

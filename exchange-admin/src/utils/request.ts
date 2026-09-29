@@ -26,7 +26,7 @@ client.interceptors.request.use((config) => {
 client.interceptors.response.use(
   (res) => client === instance ? res.data : res,
   (err) => {
-    if (err.response?.status === 401) {
+    if (err.response?.status === 401 && err.config?.headers?.Authorization === `Bearer ${useAuthStore().token}`) {
       useAuthStore().logout()
       window.location.replace('/login')
       return Promise.reject(new Error(err.response?.data?.message || '登录已失效，请重新登录'))

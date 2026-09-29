@@ -57,6 +57,8 @@ class MinimalFixRegressionTest {
     @Autowired MockMvc mvc;
     @Autowired ObjectMapper json;
     @Autowired UserAccountRepository users;
+    @Autowired KycRecordRepository identities;
+    @Autowired LoanPersonalInfoRepository supplements;
     @Autowired AssetAccountRepository assets;
     @Autowired AdminUserRepository admins;
     @Autowired AdminMenuRepository menus;
@@ -94,6 +96,7 @@ class MinimalFixRegressionTest {
     @BeforeEach void setup() {
         prefix = "fix_" + UUID.randomUUID().toString().replace("-", "").substring(0, 10);
         a = user("a", "normal", null); b = user("b", "normal", null);
+        identity(a, "APPROVED"); // Existing trading scenarios explicitly use an approved trader; b remains unverified.
         ta = login(a); tb = login(b);
         superToken = admin("super_admin");
     }
@@ -297,6 +300,68 @@ class MinimalFixRegressionTest {
         assertEquals(count,deposits.count());assertEquals(400,status(request("POST","/api/withdraw/submit",ta,map("type","unknown","network","USD","address","test","amount",1))));same(before,balance(a,"FUND"));
         assertEquals(200,status(request("POST","/api/deposit/submit",ta,map("type","digital","network","USDT-TRC20","address","test","amount",1,"proofImage","test"))));assertEquals(count+1,deposits.count());
     }
+
+    KycRecord identity(UserAccount user, String status) {
+        KycRecord record = identities.findFirstByUserIdOrderByCreatedAtDesc(user.getId()).orElseGet(KycRecord::new);
+        record.setUserId(user.getId()); record.setRealName("Synthetic trader"); record.setIdNumber("TEST-" + user.getId());
+        record.setIdFrontImage("/uploads/test-front.png"); record.setIdBackImage("/uploads/test-back.png");
+        record.setStatus(status); return identities.saveAndFlush(record);
+    }
+    @Test void newOrdersRequireAuditedIdentityAndNeverMoveUnverifiedFunds() throws Exception {
+        TradingSymbol s = symbol(); quote(s, "100");
+        // A cached user flag (or approved loan supplement) must not grant trading permission.
+        UserAccount cachedUser = users.findById(b.getId()).get(); cachedUser.setKycStatus("VERIFIED"); users.saveAndFlush(cachedUser);
+        LoanPersonalInfo supplement = new LoanPersonalInfo(); supplement.setUserId(b.getId());
+        supplement.setRealName("Synthetic trader"); supplement.setIdNumber("TEST-" + b.getId()); supplement.setStatus("APPROVED");
+        supplement.setPhone("+819012345678"); supplement.setAddress("Test address"); supplements.saveAndFlush(supplement);
+        for (String state : Arrays.asList("NONE", "PENDING", "REJECTED")) {
+            if (!"NONE".equals(state)) identity(b, state);
+            JsonNode info = body(request("GET", "/api/kyc/status", tb, null));
+            assertFalse(info.path("canTrade").asBoolean()); assertEquals("NOT_VERIFIED", info.path("kycStatus").asText());
+            for (String type : Arrays.asList("MARKET", "LIMIT")) for (String side : Arrays.asList("BUY", "SELL")) {
+                MvcResult denied = request("POST", "/api/trade/contract/order", tb, map("symbol",s.getSymbol(),"type",type,"side",side,"quantity","0.01","price",100));
+                assertEquals(403, status(denied)); assertEquals("KYC_REQUIRED", body(denied).path("errorCode").asText());
+                assertEquals("NONE".equals(state) ? "NOT_VERIFIED" : state, body(denied).path("kycStatus").asText());
+            }
+            for (String direction : Arrays.asList("UP", "DOWN")) {
+                MvcResult denied = request("POST", "/api/trade/option/order", tb, map("symbol",s.getSymbol(),"direction",direction,"duration",60,"amount",10));
+                assertEquals(403, status(denied)); assertEquals("KYC_REQUIRED", body(denied).path("errorCode").asText());
+            }
+            assertTrue(contracts.findByUserIdOrderByCreatedAtDesc(b.getId()).isEmpty());
+            assertTrue(options.findByUserIdOrderByCreatedAtDesc(b.getId()).isEmpty());
+            for (AssetAccount account : assets.findByUserId(b.getId())) { same(new BigDecimal("10000"),account.getAvailable()); same(BigDecimal.ZERO,account.getFrozen()); }
+        }
+        KycRecord pendingIdentity = identity(b,"PENDING");
+        assertEquals(200,status(request("POST","/api/admin/kyc/"+pendingIdentity.getId()+"/approve",superToken,map())));
+        assertTrue(body(request("GET","/api/kyc/status",tb,null)).path("canTrade").asBoolean());
+        assertEquals(200,status(request("POST","/api/trade/contract/order",tb,map("symbol",s.getSymbol(),"type","MARKET","side","BUY","quantity","0.01"))));
+        durations.findByDuration(60).orElseGet(() -> {
+            OptionDuration d=new OptionDuration();d.setDuration(60);d.setLabel("60s");d.setEnabled(true);d.setSortOrder(1);
+            d.setProfitRate(new BigDecimal("0.8"));d.setLossRate(BigDecimal.ONE);d.setMinAmount(BigDecimal.ONE);d.setMaxAmount(new BigDecimal("100"));return durations.saveAndFlush(d);
+        });
+        for (String direction : Arrays.asList("UP","DOWN")) assertEquals(200,status(request("POST","/api/trade/option/order",tb,map("symbol",s.getSymbol(),"direction",direction,"duration",60,"amount",10))));
+        identity(b,"REJECTED");
+        for (OptionOrder order : options.findByUserIdOrderByCreatedAtDesc(b.getId())) {order.setOpenTime(LocalDateTime.now().minusMinutes(2));options.saveAndFlush(order);}
+        optionService.settleExpiredOrders(Collections.emptyMap());
+        for (OptionOrder order : options.findByUserIdOrderByCreatedAtDesc(b.getId())) assertEquals("CLOSED",order.getStatus());
+        same(BigDecimal.ZERO,assets.findByUserIdAndCoin(b.getId(),"OPTION").get().getFrozen());
+        // Same login token works immediately after approval; settlement never requires re-verification.
+    }
+    @Test void pendingMatchingChecksIdentityButCancellationAndClosingRemainAvailable() {
+        TradingSymbol s = symbol(); quote(s,"100");
+        ContractOrder open = limit(s,"BUY","100"); assertEquals(1,contractService.matchPendingLimitOrders());
+        ContractOrder modern = limit(s,"BUY","100"), legacy = limit(s,"BUY","100");
+        legacy.setLotSize(null); contracts.saveAndFlush(legacy);
+        identity(a,"REJECTED");
+        AssetAccount before = assets.findByUserIdAndCoin(a.getId(),"CONTRACT").get();
+        assertEquals(0,contractService.matchPendingLimitOrders());
+        for (ContractOrder order : Arrays.asList(modern,legacy)) assertEquals("PENDING",contracts.findById(order.getId()).get().getStatus());
+        AssetAccount after = assets.findById(before.getId()).get(); same(before.getAvailable(),after.getAvailable()); same(before.getFrozen(),after.getFrozen());
+        assertEquals("CLOSED",contractService.closeOrder(a.getId(),open.getId(),null).getStatus());
+        contractService.cancelOrder(a.getId(),modern.getId()); contractService.cancelOrder(a.getId(),legacy.getId());
+        same(BigDecimal.ZERO,assets.findById(before.getId()).get().getFrozen());
+    }
+
     TradingSymbol symbol(){TradingSymbol s=new TradingSymbol();s.setSymbol(prefix);s.setBaseCurrency("TEST");s.setName("QA");s.setSourceCategory("US");s.setMarketSource("yahoo");return symbols.saveAndFlush(s);}
     @Test void invalidTradeParametersLeaveBalancesAndOrdersUntouched()throws Exception{
         TradingSymbol symbol=symbol();OptionDuration d=durations.findByDuration(60).orElseGet(()->{OptionDuration x=new OptionDuration();x.setDuration(60);x.setLabel("60s");x.setSortOrder(1);x.setEnabled(true);x.setProfitRate(new BigDecimal("0.8"));x.setLossRate(BigDecimal.ONE);x.setMinAmount(BigDecimal.ONE);x.setMaxAmount(new BigDecimal("100"));return durations.saveAndFlush(x);});
@@ -604,13 +669,16 @@ class MinimalFixRegressionTest {
         assertEquals(403, status(request("POST", base + "/start", ta, valid)));
         UserAccount agent = user("controlAgent", "agent", null); String token = agentLogin(agent);
         assertEquals(403, status(request("GET", base, token, null)));
-        grant(agent, "ai_control");
+        assertEquals(403, status(request("POST", base + "/preview", token, valid)));
+        grant(agent, "ai_control", "preview", "start", "restore", "manual");
         org.mockito.Mockito.when(quotes.controlStatus(1L)).thenReturn(map("id", 1));
+        org.mockito.Mockito.when(quotes.previewControl(1L, 10, new BigDecimal("100"), 10, true)).thenReturn(map("feasible", true));
         assertEquals(200, status(request("GET", base, token, null)));
+        assertEquals(200, status(request("POST", base + "/preview", token, valid)));
         assertEquals(200, status(request("POST", base + "/start", token, valid)));
         org.mockito.Mockito.verify(quotes).startControl(org.mockito.ArgumentMatchers.eq(1L), org.mockito.ArgumentMatchers.eq(10), org.mockito.ArgumentMatchers.eq(new BigDecimal("100")), org.mockito.ArgumentMatchers.eq(10), org.mockito.ArgumentMatchers.eq(true), org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.argThat(o -> Boolean.FALSE.equals(o.getAutoRestore()) && "GRADUAL".equals(o.getRestoreMode()) && o.getRestoreDurationSeconds() == 10 && o.getRestoreIntensity() == 5 && o.getRestoreRandomOscillation() && o.getAutoReplaceHistory()));
         assertEquals(200, status(request("POST", base + "/start", token, map("durationSeconds", 10, "targetPrice", 100, "intensity", 10))));
-        org.mockito.Mockito.verify(quotes).startControl(org.mockito.ArgumentMatchers.eq(1L), org.mockito.ArgumentMatchers.eq(10), org.mockito.ArgumentMatchers.eq(new BigDecimal("100")), org.mockito.ArgumentMatchers.eq(10), org.mockito.ArgumentMatchers.eq(false), org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.argThat(o -> Boolean.FALSE.equals(o.getAutoRestore()) && "GRADUAL".equals(o.getRestoreMode()) && o.getRestoreDurationSeconds() == 10 && o.getRestoreIntensity() == 5 && o.getRestoreRandomOscillation() && o.getAutoReplaceHistory()));
+        org.mockito.Mockito.verify(quotes, org.mockito.Mockito.times(2)).startControl(org.mockito.ArgumentMatchers.eq(1L), org.mockito.ArgumentMatchers.eq(10), org.mockito.ArgumentMatchers.eq(new BigDecimal("100")), org.mockito.ArgumentMatchers.eq(10), org.mockito.ArgumentMatchers.eq(true), org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.argThat(o -> Boolean.FALSE.equals(o.getAutoRestore()) && "GRADUAL".equals(o.getRestoreMode()) && o.getRestoreDurationSeconds() == 10 && o.getRestoreIntensity() == 5 && o.getRestoreRandomOscillation() && o.getAutoReplaceHistory()));
         assertEquals(400, status(request("POST", base + "/start", token, map("durationSeconds", 10, "targetPrice", 100, "intensity", 1, "randomOscillation", null))));
         assertEquals(400, status(request("POST", base + "/start", superToken, map("durationSeconds", 0, "targetPrice", 100, "intensity", 1))));
         assertEquals(400, status(request("POST", base + "/start", superToken, map("durationSeconds", 10, "targetPrice", -1, "intensity", 1))));
@@ -716,7 +784,7 @@ class MinimalFixRegressionTest {
         assertEquals("100.0000000000000000",body(request("GET",url+"/summary"+query,superToken,null)).path("creditedUsd").asText());
         assertEquals(200,status(request("GET",url+"/export"+query,superToken,null)));
         assertEquals(400,status(request("GET",url+"/list?source=INVALID",superToken,null)));
-        UserAccount agent=user("depositAgent","agent",null);grant(agent,"deposit_orders","view_deposit_orders");String token=agentLogin(agent);
+        UserAccount agent=user("depositAgent","agent",null);grant(agent,"deposit_orders","view_deposit_orders","detail");String token=agentLogin(agent);
         assertEquals(0,body(request("GET",url+"/list",token,null)).path("total").asInt());
         assertEquals(404,status(request("GET",url+"/"+id,token,null)));
         assertEquals(403,status(request("GET",url+"/export",token,null)));
@@ -732,10 +800,12 @@ class MinimalFixRegressionTest {
     }
     @Test void detailReviewCannotBypassOldReviewPermission() throws Exception {
         UserAccount agent=user("depositReviewAgent","agent",null);a=users.findById(a.getId()).get();a.setParentUserId(agent.getId());a=users.saveAndFlush(a);
-        grant(agent,"deposit_orders","view_deposit_orders");String token=agentLogin(agent);DepositRecord d=deposit(a,10);
+        grant(agent,"deposit_orders","view_deposit_orders","detail");String token=agentLogin(agent);DepositRecord d=deposit(a,10);
         assertEquals(403,status(request("POST","/api/admin/deposit/orders/"+d.getId()+"/approve",token,null)));
         assertEquals("PENDING",deposits.findById(d.getId()).get().getStatus());
         grant(agent,"deposit_review","approve_deposit","reject_deposit");
+        assertEquals(403,status(request("POST","/api/admin/deposit/orders/"+d.getId()+"/approve",token,null)));
+        for (String operation : Arrays.asList("approve_deposit", "reject_deposit")) { UserAction action = new UserAction(); action.setUserId(agent.getId()); action.setMenuId(menu("deposit_orders").getId()); action.setActionCode(operation); actions.saveAndFlush(action); }
         assertEquals(200,status(request("POST","/api/admin/deposit/orders/"+d.getId()+"/approve",token,null)));
         assertEquals(409,status(request("POST","/api/admin/deposit/orders/"+d.getId()+"/reject",token,map("remark","no"))));
     }
@@ -757,5 +827,26 @@ class MinimalFixRegressionTest {
         assertEquals(2,body(request("GET",url+"/list"+query+"&size=2&page=2",superToken,null)).path("list").size());
         String exported=request("GET",url+"/export"+query,superToken,null).getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
         assertTrue(exported.startsWith("\ufeff"));assertTrue(exported.contains("'=SUM(1)"));
+    }
+
+    @Test void standardFxPersistsAndFillsWithoutRepricingLegacyOrders() {
+        TradingSymbol s=symbol(); s.setBaseCurrency("USD");s.setQuoteCurrency("JPY");s=symbols.saveAndFlush(s);
+        quote(s,"157.2");
+        org.mockito.Mockito.when(quotes.requireContractConversionRate("JPY","yahoo")).thenReturn(new BigDecimal("0.0063"));
+        org.mockito.Mockito.when(quotes.fxMarginRate(org.mockito.ArgumentMatchers.eq("USD"),org.mockito.ArgumentMatchers.eq("JPY"),org.mockito.ArgumentMatchers.any(BigDecimal.class))).thenReturn(BigDecimal.ONE);
+        CreateContractOrderRequest r=new CreateContractOrderRequest();r.setSymbol(s.getSymbol());r.setType("LIMIT");r.setSide("BUY");r.setQuantity(BigDecimal.ONE);r.setPrice(new BigDecimal("157.2"));r.setLeverage(new BigDecimal("100"));
+        ContractOrder legacy=contractService.createOrder(a.getId(),r);
+        assertNull(legacy.getFxBaseCurrency());same(new BigDecimal("9.9036"),legacy.getMargin());
+        s.setSourceCategory("Forex");FxContractRules.defaults(s);symbols.saveAndFlush(s);
+        ContractOrder standard=contractService.createOrder(a.getId(),r);
+        standard=contracts.findById(standard.getId()).get();
+        assertEquals("USD",standard.getFxBaseCurrency());same(new BigDecimal("1000"),standard.getMargin());same(new BigDecimal("7"),standard.getFee());
+        quote(s,"157");assertEquals(2,contractService.matchPendingLimitOrders());
+        standard=contracts.findById(standard.getId()).get();legacy=contracts.findById(legacy.getId()).get();
+        assertEquals("OPEN",standard.getStatus());same(new BigDecimal("1000"),standard.getMargin());
+        same(new BigDecimal("1000"),legacy.getLotSize());same(new BigDecimal("9.891"),legacy.getMargin());same(new BigDecimal("30"),legacy.getFee());
+        contractService.closeOrder(a.getId(),standard.getId(),null);contractService.closeOrder(a.getId(),legacy.getId(),null);
+        AssetAccount account=assets.findByUserIdAndCoin(a.getId(),"CONTRACT").get();
+        same(new BigDecimal("9963"),account.getAvailable());same(BigDecimal.ZERO,account.getFrozen());
     }
 }

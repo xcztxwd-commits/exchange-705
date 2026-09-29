@@ -19,6 +19,9 @@ import java.util.stream.Collectors;
 @Service
 public class AgentActionService {
 
+    @Autowired private com.gtcfesk.exchange.repository.AdminMenuRepository menus;
+    @Autowired private com.gtcfesk.exchange.repository.UserMenuRepository userMenus;
+
     @Autowired
     private MenuActionRepository menuActionRepository;
 
@@ -107,12 +110,7 @@ public class AgentActionService {
      * 检查代理是否有某个操作权限（通过菜单代码）
      */
     public boolean hasActionByMenuCode(Long agentId, String menuCode, String actionCode) {
-        // 这里需要先通过menuCode找到menuId，暂时返回true（后续可以优化）
-        // 实际使用时，前端会传入menuId
-        return true;
+        return menus.findByMenuCode(menuCode).map(m -> "active".equals(m.getStatus()) &&
+            userMenus.existsByUserIdAndMenuId(agentId, m.getId()) && hasAction(agentId, m.getId(), actionCode)).orElse(false);
     }
 }
-
-
-
-

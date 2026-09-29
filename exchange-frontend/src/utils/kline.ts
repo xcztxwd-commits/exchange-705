@@ -23,6 +23,7 @@
  * @returns kline_type 整数（1-10）
  */
 export function convertIntervalToKlineType(interval: string, isStock: boolean = false): number {
+  if (interval.trim() === '1M') return 10
   const normalizedInterval = interval.toLowerCase().trim()
   
   switch (normalizedInterval) {
@@ -57,7 +58,6 @@ export function convertIntervalToKlineType(interval: string, isStock: boolean = 
     case '1w':
     case '1week':
       return 9
-    case '1M':
     case '1month':
     case '1mo':
       // 月K（注意：'1m' 是1分钟，不是月K）
@@ -122,4 +122,3 @@ export function getStockCompatibleInterval(interval: string): string {
   
   return interval
 }
-

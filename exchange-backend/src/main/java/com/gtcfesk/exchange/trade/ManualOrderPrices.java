@@ -64,6 +64,10 @@ public class ManualOrderPrices {
         Map<String,Object> closing=open==close?opening:window(symbol,close);
         result.put("openPrice",exact(opening,open));result.put("closePrice",exact(closing,close));
         result.put("openRate",rate(symbol,open));result.put("closeRate",rate(symbol,close));
+        BigDecimal openingPrice=(BigDecimal)result.get("openPrice");
+        result.put("marginRate", !FxContractRules.isForex(symbol) ? openingPrice.multiply((BigDecimal)result.get("openRate"))
+            : "USD".equals(symbol.getBaseCurrency()) ? BigDecimal.ONE : "USD".equals(symbol.getQuoteCurrency()) ? openingPrice
+            : currencyRate(symbol.getBaseCurrency(),symbol.getMarketSource(),open));
         result.put("source",symbol.getMarketSource());result.put("priceBasis","EXACT_MINUTE_OPEN");
         result.put("openMinute",open);result.put("closeMinute",close);
         return result;
@@ -74,21 +78,37 @@ public class ManualOrderPrices {
         NavigableMap<Long,ManualOrderGenerator.Candle> result=new TreeMap<>();
         QuoteCurrencyConversion conversion=QuoteCurrencyConversion.fixed(symbol.getQuoteCurrency())?null:QuoteCurrencyConversion.route(symbol.getQuoteCurrency(),symbol.getMarketSource());
         if(!QuoteCurrencyConversion.fixed(symbol.getQuoteCurrency()) && conversion==null)throw new BusinessException("缺少历史换算率");
+        QuoteCurrencyConversion baseConversion=FxContractRules.isForex(symbol) && !"USD".equals(symbol.getBaseCurrency()) && !"USD".equals(symbol.getQuoteCurrency())
+            ? QuoteCurrencyConversion.route(symbol.getBaseCurrency(),symbol.getMarketSource()) : null;
         for(long cursor=Math.floorDiv(from,WINDOW)*WINDOW;cursor<to;cursor+=WINDOW) {
             SortedMap<Long,Map<String,Object>> primary=selectMinutes(window(symbol,cursor),from,to,System.currentTimeMillis(),ZoneOffset.UTC);
             SortedMap<Long,Map<String,Object>> rates=conversion==null?null:selectMinutes(market.getKline(conversion.code,"1m",720,conversion.category,Math.min(cursor+WINDOW-1,to-1)),from,to,System.currentTimeMillis(),ZoneOffset.UTC);
+            SortedMap<Long,Map<String,Object>> baseRates=baseConversion==null?null:selectMinutes(market.getKline(baseConversion.code,"1m",720,baseConversion.category,Math.min(cursor+WINDOW-1,to-1)),from,to,System.currentTimeMillis(),ZoneOffset.UTC);
             for(Map.Entry<Long,Map<String,Object>> e:primary.entrySet()) {
                 Map<String,Object> rate=rates==null?null:rates.get(e.getKey());
                 if(conversion!=null && rate==null)continue;
                 BigDecimal value=conversion==null?BigDecimal.ONE:new BigDecimal(rate.get("price").toString()).multiply(conversion.scale);
-                if(value.signum()>0)result.put(e.getKey(),new ManualOrderGenerator.Candle(e.getKey(),new BigDecimal(e.getValue().get("price").toString()),value));
+                BigDecimal price=new BigDecimal(e.getValue().get("price").toString()),marginRate=price.multiply(value);
+                if(FxContractRules.isForex(symbol)) {
+                    if("USD".equals(symbol.getBaseCurrency()))marginRate=BigDecimal.ONE;
+                    else if("USD".equals(symbol.getQuoteCurrency()))marginRate=price;
+                    else {
+                        Map<String,Object> baseRate=baseRates==null?null:baseRates.get(e.getKey());
+                        if(baseRate==null)continue;
+                        marginRate=new BigDecimal(baseRate.get("price").toString()).multiply(baseConversion.scale);
+                    }
+                }
+                if(value.signum()>0)result.put(e.getKey(),new ManualOrderGenerator.Candle(e.getKey(),price,value,marginRate));
             }
         }
         return result;
     }
     private BigDecimal rate(TradingSymbol s,long minute) {
-        if(QuoteCurrencyConversion.fixed(s.getQuoteCurrency())) return BigDecimal.ONE;
-        QuoteCurrencyConversion r=QuoteCurrencyConversion.route(s.getQuoteCurrency(),s.getMarketSource());
+        return currencyRate(s.getQuoteCurrency(),s.getMarketSource(),minute);
+    }
+    private BigDecimal currencyRate(String currency,String source,long minute) {
+        if(QuoteCurrencyConversion.fixed(currency)) return BigDecimal.ONE;
+        QuoteCurrencyConversion r=QuoteCurrencyConversion.route(currency,source);
         if(r==null) throw new BusinessException("缺少历史换算率");
         return ManualOrderCalculation.positive(exact(market.getKline(r.code,"1m",2,r.category,minute+59999),minute).multiply(r.scale),"历史换算率");
     }

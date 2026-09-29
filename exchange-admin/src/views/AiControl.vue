@@ -20,17 +20,23 @@ type ControlStatus = Partial<RecoveryOptions> & {
   rawPrice: number | null; currentPrice: number | null; offset: number
   startPrice: number | null; targetPrice: number | null; durationSeconds: number | null
   intensity: number | null; startedAt: number | null; completedAt: number | null; remainingSeconds: number
+  algorithmVersion?: number; v3Enabled?: boolean; minStepAmount?: string; maxStepAmount?: string
+  planSummary?: { points: number; minPrice: string; maxPrice: string; maxStep: string; averageStep: string;
+    segmentAverages: string[]; rolling10Min?: string; rolling10Max?: string; rolling30Min?: string; rolling30Max?: string }
 }
-type ControlTask = { id: string; kind: string; status: string; startSource: string; sourceTime: number; startedAt: number; endedAt: number | null; startPrice: number; targetPrice: number; holding?: boolean; historyReplacedAt?: number | null }
+type ControlTask = { id: string; kind: string; status: string; startSource: string; sourceTime: number; startedAt: number; endedAt: number | null; startPrice: number; targetPrice: number; algorithmVersion?: number; holding?: boolean; historyReplacedAt?: number | null }
+type PreviewTier = { intensity: number; minAmount?: string; maxAmount?: string; feasible: boolean; errorCode?: string; message?: string }
+type Preview = { feasible?: boolean; errorCode?: string; message?: string; startPrice?: string; minAmount?: string; maxAmount?: string; amountRandom?: boolean; summary?: ControlStatus['planSummary']; tiers?: PreviewTier[] }
 const history = ref<ControlTask[]>([])
 const sourceName = (source: string) => ({ LIVE_DISPLAY: '实时展示价', COMPLETED_CANDLE: '已完成 K 线收盘价', LAST_VALID_QUOTE: '最后有效报价', CONTROL_DISPLAY: '控盘展示价', LEGACY_PARAMETERS: '旧任务参数' }[source] || source)
 const timeText = (value: number | null | undefined) => value ? new Date(value).toLocaleString() : '—'
-const loading = ref(false), saving = ref(false), statusError = ref('')
+const loading = ref(false), saving = ref(false), statusError = ref(''), historyError = ref('')
 const symbols = ref<SymbolItem[]>([]), selectedId = ref<number>()
 const status = ref<ControlStatus | null>(null)
+const preview = ref<Preview | null>(null), previewError = ref(''), previewBusy = ref(false)
 const mode = ref<'target' | 'restore' | 'manual'>('target')
 const manual = ref({ enabled: false, offset: 0 as number | undefined })
-const target = ref({ durationSeconds: 10 as number | undefined, intensity: 1 as number | undefined, randomOscillation: false, targetPrice: undefined as number | undefined })
+const target = ref({ durationSeconds: 10 as number | undefined, intensity: 1 as number | undefined, randomOscillation: true, targetPrice: undefined as number | undefined })
 const restore = ref({ durationSeconds: 10 as number | undefined, intensity: 1 as number | undefined, randomOscillation: false })
 const timing = computed(() => mode.value === 'restore' ? restore.value : target.value)
 const currentSymbol = computed(() => symbols.value.find(item => item.id === selectedId.value))
@@ -42,7 +48,11 @@ const progress = computed(() => {
 })
 const formatPrice = (value: number | null | undefined) => value == null ? '—' : Number(value).toFixed(precision.value)
 let timer: ReturnType<typeof setTimeout> | undefined
+let previewTimer: ReturnType<typeof setTimeout> | undefined, previewVersion = 0
 let disposed = false, requestVersion = 0, statusRequests = 0
+let historyVersion = 0, historyRequests = 0, lastHistoryRequest = 0, resetPending = false
+const readError = (error: any, label: string) => error?.code === 'ECONNABORTED' || error?.code === 'ETIMEDOUT'
+  ? `${label}请求超时，正在自动重试` : `${label}加载失败：${error?.message || '网络异常'}`
 let timedRequest: { signature: string; key: string } | undefined
 function applyStatus(value: ControlStatus, reset = false) {
   status.value = value
@@ -50,8 +60,8 @@ function applyStatus(value: ControlStatus, reset = false) {
   if (reset) {
     manual.value = { enabled: value.enabled, offset: Number(value.offset || 0) }
     recovery.value = Object.fromEntries(Object.entries(defaultRecovery()).map(([key, fallback]) => [key, value[key as keyof RecoveryOptions] ?? fallback])) as RecoveryOptions
-    const savedTiming = { durationSeconds: value.durationSeconds ?? 10, intensity: value.intensity ?? 1, randomOscillation: value.randomOscillation ?? false }
-    const defaultTiming = { durationSeconds: 10, intensity: 1, randomOscillation: false }
+    const savedTiming = { durationSeconds: value.durationSeconds ?? 10, intensity: value.intensity ?? 1, randomOscillation: value.randomOscillation ?? true }
+    const defaultTiming = { durationSeconds: 10, intensity: 1, randomOscillation: true }
     target.value = { ...(value.restoring && value.autoRestore === undefined ? defaultTiming : savedTiming),
       targetPrice: (!value.restoring || value.autoRestore !== undefined ? value.targetPrice : null) ?? value.currentPrice ?? undefined }
     restore.value = { ...(value.restoring && value.autoRestore === undefined ? savedTiming : defaultTiming) }
@@ -61,23 +71,56 @@ function applyStatus(value: ControlStatus, reset = false) {
 async function fetchStatus(reset = false) {
   const id = selectedId.value, version = ++requestVersion
   if (id == null) return
+  resetPending ||= reset
   ++statusRequests
   try {
     const value = await request.get(`/admin/ai-control/${id}`) as unknown as ControlStatus
     if (!disposed && id === selectedId.value && version === requestVersion) {
-      applyStatus(value, reset)
-      const tasks = await request.get(`/admin/ai-control/${id}/history`) as unknown as ControlTask[]
-      if (!disposed && id === selectedId.value && version === requestVersion) history.value = [...tasks, ...history.value.filter(task => !tasks.some(latest => latest.id === task.id) && task.startedAt < (tasks[tasks.length - 1]?.startedAt ?? Infinity))]
+      applyStatus(value, resetPending)
+      resetPending = false
     }
   } catch (error: any) {
-    if (!disposed && id === selectedId.value && version === requestVersion) statusError.value = error?.message || '控盘状态加载失败'
+    if (!disposed && id === selectedId.value && version === requestVersion) statusError.value = readError(error, '控盘状态')
   } finally { --statusRequests }
+}
+async function fetchPreview() {
+  const id = selectedId.value, version = ++previewVersion
+  if (id == null || !status.value?.v3Enabled || mode.value !== 'target') return
+  const { durationSeconds, intensity, targetPrice, randomOscillation } = target.value
+  if (!Number.isInteger(durationSeconds) || !Number.isInteger(intensity) || !Number.isFinite(targetPrice) || targetPrice! <= 0) return
+  previewBusy.value = true
+  try {
+    const value = await request.post(`/admin/ai-control/${id}/preview`, { durationSeconds, intensity, targetPrice, randomOscillation }) as unknown as Preview
+    if (!disposed && version === previewVersion && id === selectedId.value) { preview.value = value; previewError.value = '' }
+  } catch (error: any) {
+    if (!disposed && version === previewVersion && id === selectedId.value) previewError.value = error?.message || '预览失败'
+  } finally { if (version === previewVersion) previewBusy.value = false }
+}
+async function fetchHistory(force = false) {
+  const id = selectedId.value
+  if (id == null || (!force && (historyRequests || Date.now() - lastHistoryRequest < 5000))) return
+  const version = ++historyVersion
+  lastHistoryRequest = Date.now()
+  ++historyRequests
+  try {
+    const tasks = await request.get(`/admin/ai-control/${id}/history`) as unknown as ControlTask[]
+    if (!disposed && id === selectedId.value && version === historyVersion) {
+      history.value = [...tasks, ...history.value.filter(task => !tasks.some(latest => latest.id === task.id) && task.startedAt < (tasks[tasks.length - 1]?.startedAt ?? Infinity))]
+      historyError.value = ''
+    }
+  } catch (error: any) {
+    if (!disposed && id === selectedId.value && version === historyVersion) historyError.value = readError(error, '任务历史')
+  } finally {
+    --historyRequests
+    if (version === historyVersion) lastHistoryRequest = Date.now()
+  }
 }
 async function loadSymbols() {
   loading.value = true
   try {
     symbols.value = await request.get('/admin/ai-control/symbols') as unknown as SymbolItem[]
     if (!symbols.value.some(item => item.id === selectedId.value)) selectedId.value = symbols.value.find(item => item.isEnabled)?.id ?? symbols.value[0]?.id
+    void fetchHistory(true)
     await fetchStatus(true)
   } catch (error: any) { ElMessage.error(error?.message || '加载币种失败') }
   finally { loading.value = false }
@@ -100,12 +143,18 @@ async function replaceHistory(task: ControlTask) {
 }
 async function selectSymbol() {
   status.value = null
+  statusError.value = ''
+  historyError.value = ''
   history.value = []
+  void fetchHistory(true)
   await fetchStatus(true)
 }
 async function poll() {
   if (disposed) return
-  if (!saving.value && !loading.value && !statusRequests) await fetchStatus()
+  if (!saving.value && !loading.value) {
+    void fetchHistory()
+    if (!statusRequests) await fetchStatus()
+  }
   if (!disposed) timer = setTimeout(poll, 1000)
 }
 async function submit(action: 'start' | 'restore' | 'manual' | 'stop' | 'random-market', payload?: object) {
@@ -124,9 +173,10 @@ async function submit(action: 'start' | 'restore' | 'manual' | 'stop' | 'random-
       applyStatus(value)
       if (action === 'start' || action === 'restore') timedRequest = undefined
       manual.value = { enabled: value.enabled, offset: Number(value.offset || 0) }
+      void fetchHistory(true)
       ElMessage.success(action === 'random-market' ? (value.randomMarketEnabled ? '随机行情已开启' : '随机行情已关闭') : action === 'start' ? '自动控盘已开始' : action === 'restore' ? '正在逐步恢复原始行情' : action === 'stop' ? '任务已停止，历史已保存' : value.enabled ? '偏移已保存' : '已恢复原始行情')
     }
-  } catch (error: any) { ElMessage.error(error?.message || '操作失败') }
+  } catch (error: any) { ElMessage.error([error?.response?.data?.errorCode, error?.message || '操作失败'].filter(Boolean).join('：')) }
   finally { saving.value = false }
 }
 function runTimed() {
@@ -148,8 +198,14 @@ function saveManual() {
 watch(mode, value => {
   if (value === 'manual' && status.value) manual.value = { enabled: status.value.enabled, offset: Number(status.value.offset || 0) }
 })
+watch(() => [selectedId.value, mode.value, status.value?.v3Enabled, target.value.durationSeconds,
+  target.value.intensity, target.value.targetPrice, target.value.randomOscillation], () => {
+  preview.value = null; previewError.value = ''; previewBusy.value = false; ++previewVersion
+  clearTimeout(previewTimer)
+  if (status.value?.v3Enabled && mode.value === 'target') previewTimer = setTimeout(() => void fetchPreview(), 350)
+})
 onMounted(async () => { await loadSymbols(); void poll() })
-onUnmounted(() => { disposed = true; ++requestVersion; clearTimeout(timer) })
+onUnmounted(() => { disposed = true; ++requestVersion; ++previewVersion; clearTimeout(timer); clearTimeout(previewTimer) })
 </script>
 <template>
   <div class="ai-control-page">
@@ -157,7 +213,7 @@ onUnmounted(() => { disposed = true; ++requestVersion; clearTimeout(timer) })
       <template #header>
         <div class="header">
           <div><strong>AI 控盘</strong></div>
-          <el-button :loading="loading" :disabled="saving" @click="loadSymbols">刷新列表</el-button>
+          <el-button v-permission="'ai_control:view'" :loading="loading" :disabled="saving" @click="loadSymbols">刷新列表</el-button>
         </div>
       </template>
       <el-form label-width="140px" class="control-form">
@@ -167,7 +223,7 @@ onUnmounted(() => { disposed = true; ++requestVersion; clearTimeout(timer) })
           </el-select>
         </el-form-item>
         <el-form-item label="随机行情">
-          <el-switch :model-value="!!status?.randomMarketEnabled" aria-label="随机行情" :disabled="busy || (!status?.virtualTrading && !status?.randomMarketEnabled)"
+          <el-switch v-permission="'ai_control:random'" :model-value="!!status?.randomMarketEnabled" aria-label="随机行情" :disabled="busy || (!status?.virtualTrading && !status?.randomMarketEnabled)"
             @change="(value: boolean | string | number) => submit('random-market', { enabled: value })" />
         </el-form-item>
         <el-alert v-if="statusError" :title="statusError" type="error" :closable="false" show-icon />
@@ -177,10 +233,12 @@ onUnmounted(() => { disposed = true; ++requestVersion; clearTimeout(timer) })
           <div><span>当前控盘价</span><strong>{{ formatPrice(status.currentPrice) }}</strong></div>
           <div><span>配置偏移</span><strong>{{ formatPrice(status.offset) }}</strong></div>
         </div>
+        <el-alert v-if="status?.algorithmVersion === 3" type="success" :closable="false"
+          :title="`均衡随机 V3 · TARGET 固定单秒幅度 ${status.minStepAmount}～${status.maxStepAmount}；HOLDING/恢复不受此范围约束`" />
         <el-progress v-if="status?.running" :percentage="Math.round(progress)" />
         <div class="actions">
-          <el-button v-if="status?.running" :disabled="busy" :loading="saving" @click="submit('stop')">停止任务并保存历史</el-button>
-          <el-button type="danger" plain :disabled="busy || !status?.enabled" :loading="saving" @click="submit('manual', { enabled: false, offset: 0 })">{{ status?.randomMarketEnabled ? '取消指定并继续随机' : '一键恢复原始行情' }}</el-button>
+          <el-button v-permission="'ai_control:stop'" v-if="status?.running" :disabled="busy" :loading="saving" @click="submit('stop')">停止任务并保存历史</el-button>
+          <el-button v-permission="'ai_control:manual'" type="danger" plain :disabled="busy || !status?.enabled" :loading="saving" @click="submit('manual', { enabled: false, offset: 0 })">{{ status?.randomMarketEnabled ? '取消指定并继续随机' : '一键恢复原始行情' }}</el-button>
         </div>
         <el-divider />
         <el-form-item label="控盘方式">
@@ -198,13 +256,26 @@ onUnmounted(() => { disposed = true; ++requestVersion; clearTimeout(timer) })
           <el-form-item :label="mode === 'restore' ? '恢复时长（秒）' : '执行时长（秒）'" for="control-duration">
             <el-input-number id="control-duration" :key="String(busy)" v-model="timing.durationSeconds" :min="1" :max="86400" :precision="0" :disabled="busy" />
           </el-form-item>
-          <el-form-item label="开启随机震荡" for="control-random-oscillation">
-            <el-switch id="control-random-oscillation" v-model="timing.randomOscillation" aria-label="开启随机震荡" :disabled="busy" />
+          <el-form-item :label="mode === 'target' && status?.v3Enabled ? '随机均衡排列' : '开启随机震荡'" for="control-random-oscillation">
+            <el-switch v-permission="'ai_control:start'" id="control-random-oscillation" v-model="timing.randomOscillation" aria-label="开启随机震荡" :disabled="busy" />
           </el-form-item>
+          <p v-if="mode === 'target'" class="hint">{{ status?.v3Enabled ? '均衡随机 V3：强度决定每秒绝对涨跌额的固定范围。关闭随机后仍为可复现的均衡排列，不是直线。' : '新建 V3 已暂停；本次按旧版规则启动。' }}</p>
           <el-form-item label="波动强度" for="control-intensity">
             <el-input-number id="control-intensity" :key="String(busy)" v-model="timing.intensity" :min="1" :max="10" :precision="0" :disabled="busy" />
           </el-form-item>
         <template v-if="mode === 'target'">
+          <el-alert v-if="previewError" :title="previewError" type="error" :closable="false" />
+          <el-alert v-else-if="preview?.feasible === false" :title="`${preview.errorCode}: ${preview.message}`" type="warning" :closable="false" />
+          <div v-if="preview" class="preview">
+            <p>预览起点 {{ preview.startPrice }}；当前档单秒幅度 {{ preview.minAmount ?? '—' }}～{{ preview.maxAmount ?? '—' }}。{{ preview.amountRandom === false ? '当前精度不支持金额随机。' : '' }}</p>
+            <p v-if="preview.summary">候选 {{ preview.summary.points }} 点；最高 {{ preview.summary.maxPrice }}，最低 {{ preview.summary.minPrice }}；最大单秒涨跌 {{ preview.summary.maxStep }}。候选仅供预览，启动时重验起点。</p>
+            <p v-if="preview.summary">前／中／后三段均幅 {{ preview.summary.segmentAverages.join(' / ') }}；10 秒窗口 {{ preview.summary.rolling10Min ?? '—' }}～{{ preview.summary.rolling10Max ?? '—' }}；30 秒窗口 {{ preview.summary.rolling30Min ?? '—' }}～{{ preview.summary.rolling30Max ?? '—' }}。</p>
+            <admin-table table-key="AiControl.1" v-if="preview.tiers" :data="preview.tiers" size="small" max-height="250">
+              <el-table-column prop="intensity" label="强度" width="70" />
+              <el-table-column label="固定单秒幅度"><template #default="{ row }">{{ row.minAmount ?? '—' }}～{{ row.maxAmount ?? '—' }}</template></el-table-column>
+              <el-table-column label="可行性"><template #default="{ row }">{{ row.feasible ? '可行' : row.errorCode || '不可行' }}</template></el-table-column>
+            </admin-table>
+          </div>
           <el-divider />
           <el-form-item label="自动恢复"><el-checkbox v-model="recovery.autoRestore" aria-label="自动恢复">启用</el-checkbox></el-form-item>
           <el-form-item v-if="recovery.autoRestore" label="恢复方式">
@@ -218,33 +289,35 @@ onUnmounted(() => { disposed = true; ++requestVersion; clearTimeout(timer) })
           <el-form-item label="自动替代历史行情"><el-checkbox v-model="recovery.autoReplaceHistory" aria-label="自动替代历史行情">启用</el-checkbox></el-form-item>
         </template>
           <el-form-item>
-            <el-button type="primary" :loading="saving" :disabled="busy || (mode === 'target' ? !(status?.canStart ?? status?.available) || status?.running || !currentSymbol?.isEnabled : !status?.available)" @click="runTimed">
+            <el-button v-permission="mode === 'restore' ? 'ai_control:restore' : 'ai_control:start'" type="primary" :loading="saving" :disabled="busy || (mode === 'target' ? !(status?.canStart ?? status?.available) || status?.running || !currentSymbol?.isEnabled || (!!status?.v3Enabled && (previewBusy || preview?.feasible !== true)) : !status?.available)" @click="runTimed">
               {{ mode === 'restore' ? '按设定恢复原始行情' : '开始自动控盘' }}
             </el-button>
           </el-form-item>
         </template>
         <template v-else>
-          <el-form-item label="启用控盘"><el-switch aria-label="启用控盘" v-model="manual.enabled" :disabled="saving || status?.running" /></el-form-item>
+          <el-form-item label="启用控盘"><el-switch v-permission="'ai_control:manual'" aria-label="启用控盘" v-model="manual.enabled" :disabled="saving || status?.running" /></el-form-item>
           <el-form-item label="控盘偏移" for="control-offset">
             <el-input-number id="control-offset" v-model="manual.offset" :precision="8" :step="0.0001" :disabled="saving || status?.running" />
           </el-form-item>
-          <el-form-item><el-button type="primary" :loading="saving" :disabled="busy || status?.running || (manual.enabled && !status?.available)" @click="saveManual">保存手动偏移</el-button></el-form-item>
+          <el-form-item><el-button v-permission="'ai_control:manual'" type="primary" :loading="saving" :disabled="busy || status?.running || (manual.enabled && !status?.available)" @click="saveManual">保存手动偏移</el-button></el-form-item>
         </template>
       </el-form>
       <h3>控盘任务历史</h3>
-      <el-table :data="history" empty-text="暂无持久化控盘任务">
+      <el-alert v-if="historyError" :title="historyError" type="warning" :closable="false" show-icon />
+      <admin-table table-key="AiControl.2" :data="history" empty-text="暂无持久化控盘任务">
         <el-table-column label="开始时间" min-width="180"><template #default="{ row }">{{ timeText(row.startedAt) }}</template></el-table-column>
         <el-table-column label="起点依据" min-width="180"><template #default="{ row }">{{ sourceName(row.startSource) }}<br>{{ timeText(row.sourceTime) }}</template></el-table-column>
         <el-table-column prop="startPrice" label="起点价格" />
         <el-table-column prop="targetPrice" label="目标价格" />
+        <el-table-column label="算法" width="85"><template #default="{ row }">V{{ row.algorithmVersion || 1 }}</template></el-table-column>
         <el-table-column label="状态" min-width="120"><template #default="{ row }">{{ row.holding ? '保持偏移' : row.status }}</template></el-table-column>
         <el-table-column label="轨迹结束时间" min-width="180"><template #default="{ row }">{{ timeText(row.endedAt) }}</template></el-table-column>
         <el-table-column label="历史行情" min-width="155" fixed="right"><template #default="{ row }">
-          <el-button size="small" :disabled="saving || !row.endedAt" @click="replaceHistory(row)">{{ row.historyReplacedAt ? '更新已发布区间' : '替代历史行情' }}</el-button>
+          <el-button v-permission="'ai_control:replace_history'" size="small" :disabled="saving || !row.endedAt" @click="replaceHistory(row)">{{ row.historyReplacedAt ? '更新已发布区间' : '替代历史行情' }}</el-button>
           <div v-if="row.historyReplacedAt" class="hint">{{ timeText(row.historyReplacedAt) }}</div>
         </template></el-table-column>
-      </el-table>
-      <el-button v-if="history.length >= 100" @click="olderTasks">加载更早任务</el-button>
+      </admin-table>
+      <el-button v-permission="'ai_control:view'" v-if="history.length >= 100" @click="olderTasks">加载更早任务</el-button>
     </el-card>
   </div>
 </template>
@@ -257,10 +330,12 @@ onUnmounted(() => { disposed = true; ++requestVersion; clearTimeout(timer) })
 .control-form :deep(.el-form-item) { margin-bottom: 18px; }
 .control-form :deep(.el-form-item__label) { white-space: nowrap; padding-right: 12px; }
 .hint { color: var(--el-text-color-secondary); font-size: 13px; line-height: 1.6; }
+.preview { margin: 0 0 16px 140px; color: var(--el-text-color-regular); font-size: 13px; }
+.preview p { margin: 6px 0; }
 .quotes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin: 20px 0 8px; }
 .quotes div { padding: 14px; border: 1px solid var(--el-border-color-light); border-radius: 6px; }
 .quotes span { display: block; color: var(--el-text-color-secondary); font-size: 12px; margin-bottom: 8px; }
 .quotes strong { font-size: 20px; overflow-wrap: anywhere; }
 .el-alert { margin-bottom: 16px; }
-@media (max-width: 600px) { .quotes { grid-template-columns: 1fr; gap: 8px; } .ai-control-page { padding: 8px; } }
+@media (max-width: 600px) { .quotes { grid-template-columns: 1fr; gap: 8px; } .ai-control-page { padding: 8px; } .preview { margin-left: 0; } }
 </style>

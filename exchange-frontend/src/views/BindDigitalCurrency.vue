@@ -279,7 +279,7 @@ onMounted(() => {
         <div class="form-label">{{ localeStore.t('currency') }}</div>
         <div class="form-input">
           <span>{{ addressForm.currency && addressForm.network ? `${addressForm.currency} -- ${addressForm.network}` : localeStore.t('pleaseSelectCurrency') }}</span>
-          <span class="arrow">›</span>
+          <span class="arrow ui-chevron" aria-hidden="true"></span>
         </div>
       </div>
 

@@ -22,6 +22,7 @@ public class OperationLogController {
      * 分页查询操作日志
      */
     @GetMapping
+    @com.gtcfesk.exchange.config.AdminPermission(menu = "operation_log", action = "")
     public ResponseEntity<?> getOperationLogs(
             @RequestParam(required = false) Long adminId,
             @RequestParam(required = false) String operationType,

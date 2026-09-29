@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { getSystemTimezone } from '@/utils/dateTime'
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { dispose, init, registerLocale, type CandleType, type Chart, type Coordinate, type DataLoaderGetBarsParams, type KLineData, type OverlayCreate } from 'klinecharts'
 import { useMarketStore } from '@/store/market'
@@ -45,8 +46,8 @@ const preferenceKey = 'exchange:chart-preferences:v1'
 let initialPreferences = normalizePreferences(null)
 try { initialPreferences = normalizePreferences(JSON.parse(localStorage.getItem(preferenceKey) || 'null')) } catch { /* Use defaults when storage is unavailable. */ }
 const preferences = ref(initialPreferences)
-const timezone = ref(initialPreferences.timezone || 'Europe/London')
-let systemTimezone = 'Europe/London'
+const systemTimezone = getSystemTimezone()
+const timezone = ref(initialPreferences.timezone || systemTimezone)
 const count = ref(0)
 const drawingCount = ref(0)
 const activeTool = ref('')
@@ -407,7 +408,7 @@ async function loadBars(params: DataLoaderGetBarsParams, version: number, signal
   if (!chart || version !== revision || signal.aborted) return
   if (params.type === 'backward') { params.callback([], { backward: false }); return }
   const history = params.type === 'forward'
-  if (history && !['1m', '5m', '15m', '30m', '1h', '1d'].includes(interval.value)) {
+  if (history && !['1m', '5m', '15m', '30m', '1h', '1d', '1w', '1M'].includes(interval.value)) {
     params.callback([], { forward: false, backward: false }); historyUnsupported.value = true; return
   }
   if (history) historyLoading.value = ++activeHistoryLoads > 0
@@ -675,12 +676,7 @@ onMounted(() => {
   resizeObserver.observe(container.value)
   themeObserver = new MutationObserver(applyTheme)
   themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] })
-  void request.get('/user/system/timezone').then((response: any) => {
-    if (chart && validTimezone(response?.timezone)) {
-      systemTimezone = response.timezone
-      if (!preferences.value.timezone) timezone.value = systemTimezone
-    }
-  }).catch(() => {})
+
 })
 onUnmounted(() => {
   persistDrawings()
@@ -736,7 +732,7 @@ onUnmounted(() => {
         <div v-if="activeTool" class="drawing-hint">{{ activeTool === 'brush' ? text('按住拖動繪製 · Esc 取消', 'Drag to draw · Esc to cancel') : text('點擊圖表設定錨點 · Esc 取消', 'Click to place points · Esc to cancel') }}</div>
       </div>
     </div>
-    <div class="chart-footer" :class="{ 'chart-warning': error || syncError || snapshotError || !saved || showSourceConnectionWarning(market.quoteStatusMap[props.symbol]) }" role="status" aria-live="polite">
+    <div v-if="!compact || fullscreen" class="chart-footer" :class="{ 'chart-warning': error || syncError || snapshotError || !saved || showSourceConnectionWarning(market.quoteStatusMap[props.symbol]) }" role="status" aria-live="polite">
       <span v-if="showSourceConnectionWarning(market.quoteStatusMap[props.symbol])">{{ text('數據源連接失敗，正在重試', 'Data source connection failed; retrying') }}</span>
       <span v-if="sourceMissing">{{ text('原始行情缺失，未补造数据', 'Original source data missing; no fabricated candles') }}</span>
       <span v-if="historyLoading">{{ text('正在載入更早行情…', 'Loading older candles…') }}</span>

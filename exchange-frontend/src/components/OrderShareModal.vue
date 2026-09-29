@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { markSimulationExport } from "@/utils/accountMode"
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import QRCode from 'qrcode'
 import request from '@/utils/request'
@@ -16,7 +17,7 @@ const copy = computed(() => shareCopy(locale.locale))
 const dialog = ref<HTMLDialogElement>()
 const order = ref<ShareOrder | null>(null)
 const busy = ref(true), error = ref(''), notice = ref(''), preview = ref(''), showQr = ref(false)
-const showAmount = ref(true), showRate = ref(false)
+const showAmount = ref(true), showRate = ref(true)
 const previewRatio = ref('3 / 4')
 const backgrounds = new Map<ShareTemplate, Promise<HTMLImageElement>>()
 function loadBackground(template: ShareTemplate) {
@@ -32,7 +33,7 @@ function loadBackground(template: ShareTemplate) {
   }
   return backgrounds.get(template)
 }
-const options = reactive<ShareOptions>({ template: 'light', mode: 'amount', quantity: false, capital: false, fee: false, leverage: false, orderId: false, openTime: false })
+const options = reactive<ShareOptions>({ template: 'light', mode: 'both', focus: 'amount', quantity: false, capital: false, fee: false, leverage: false, orderId: false, openTime: false })
 const templates = ref<ShareTemplate[]>([])
 const templateList = ref<HTMLElement>()
 const templateIndex = computed(() => templates.value.indexOf(options.template))
@@ -72,10 +73,12 @@ async function loadOrder() {
   try {
     const [result, , configured] = await Promise.all([
       request.get(`/trade/${props.kind}/orders`, { params: { status: 'CLOSED' } }), systemTimezoneReady,
-      request.get('/user/share-templates', { params: { locale: shareLanguage(locale.locale) } }),
+      request.get('/user/share-templates', { params: { locale: shareLanguage(locale.locale), details: true } }),
     ])
     if (disposed || run !== generation) return
-    const enabled = configured as unknown
+    const config = configured as unknown as { templates: unknown; focus?: string }
+    const enabled = Array.isArray(config) ? config : config.templates
+    options.focus = config.focus === 'rate' ? 'rate' : 'amount'
     if (!Array.isArray(enabled)) throw new Error('Templates unavailable')
     templates.value = [...new Set(enabled.filter((id): id is ShareTemplate => shareTemplates.includes(id)))]
     if (!templates.value.length) throw new Error('Templates unavailable')
@@ -152,6 +155,7 @@ async function render() {
     const display = { ...value, symbol: displaySymbol(value), openTime: displayTime(value.openTime), closeTime: displayTime(value.closeTime) }
     const canvas = document.createElement('canvas')
     drawSharePoster(canvas, display, settings, copy.value, props.brand, timezone, showQr.value ? qrImage : undefined, chart, background)
+    markSimulationExport(canvas)
     const result = await new Promise<Blob>((resolve, reject) => canvas.toBlob(data => data ? resolve(data) : reject(new Error(copy.value.error)), 'image/png'))
     if (disposed || run !== generation) return
     blob = result; previewRatio.value = `${canvas.width} / ${canvas.height}`; preview.value = URL.createObjectURL(result)
@@ -231,13 +235,13 @@ onBeforeUnmount(() => {
         <section class="pnl-controls">
           <div class="pnl-template-caption"><span>{{ copy.swipe }}</span><span aria-live="polite">{{ templateIndex + 1 }} / {{ templates.length }}</span></div>
           <div class="pnl-template-picker">
-          <button type="button" class="pnl-template-arrow" :aria-label="copy.previousTemplate" @click="changeTemplate(-1)">‹</button>
+          <button type="button" class="pnl-template-arrow" :aria-label="copy.previousTemplate" @click="changeTemplate(-1)"><span class="ui-chevron ui-chevron--left" aria-hidden="true"></span></button>
           <div ref="templateList" class="pnl-templates" role="group" :aria-label="copy.template">
             <button v-for="name in templates" :key="name" type="button" :aria-label="copy[name]" :aria-pressed="options.template === name" :class="['pnl-template', { selected: options.template === name }]" @click="options.template = name">
               <span :class="['pnl-swatch', name]" aria-hidden="true"></span><span>{{ copy[name] }}</span>
             </button>
           </div>
-          <button type="button" class="pnl-template-arrow" :aria-label="copy.nextTemplate" @click="changeTemplate(1)">›</button>
+          <button type="button" class="pnl-template-arrow" :aria-label="copy.nextTemplate" @click="changeTemplate(1)"><span class="ui-chevron" aria-hidden="true"></span></button>
           </div>
           <div class="pnl-toggles">
             <label><input v-model="showQr" type="checkbox" /><span>{{ copy.qrShort }}</span></label>
@@ -265,6 +269,7 @@ onBeforeUnmount(() => {
 .order-share button{font:inherit;cursor:pointer;box-sizing:border-box}.order-share button:disabled{opacity:.45;cursor:default}.order-share button:focus-visible,.order-share input:focus-visible{outline:3px solid #85bd00;outline-offset:2px}
 .pnl-header{height:60px;min-height:60px;position:relative;display:flex;align-items:center;padding:0 66px 0 22px;background:#fff}.pnl-header h2{font-size:17px;line-height:1.3;font-weight:650;margin:0}.order-share .pnl-close{position:absolute;right:10px;top:8px;z-index:5;display:flex;align-items:center;justify-content:center;width:44px;height:44px;padding:0;border:1px solid #e2e7ed;border-radius:50%;background:#f0f3f7;color:#344155;visibility:visible;opacity:1}.pnl-close svg{display:block;flex-shrink:0}
 .pnl-content{flex:1;min-height:0;display:flex;flex-direction:column}.pnl-preview{touch-action:pan-y pinch-zoom;outline-offset:-3px;flex:1;min-height:0;padding:16px;display:flex;align-items:center;justify-content:center;overflow:hidden}.poster-preview{display:block;width:auto;height:100%;max-width:100%;aspect-ratio:3/4;object-fit:contain;border-radius:12px;box-shadow:0 6px 22px #17202c18}.pnl-placeholder{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:12px;text-align:center;color:#697386;font-size:12px;max-width:300px}.pnl-placeholder p{margin:0}.pnl-retry{background:white;border:1px solid #c8d3b4;color:#527800;padding:8px 18px;border-radius:8px}
+.order-share .pnl-template-arrow{display:inline-flex;align-items:center;justify-content:center}
 .pnl-controls{flex:none;padding:4px 18px 8px}.pnl-template-caption{height:24px;display:flex;align-items:center;justify-content:space-between;color:#697386;font-size:11px}.pnl-template-picker{display:flex;align-items:center;gap:5px}.order-share .pnl-template-arrow{flex:none;width:28px;height:38px;padding:0;border:0;border-radius:8px;background:#eaf0e1;color:#527800;font-size:26px}.pnl-templates{position:relative;display:flex;flex:1;min-width:0;overflow-x:auto;scrollbar-width:none;gap:6px;padding:2px;overscroll-behavior-x:contain}.pnl-templates::-webkit-scrollbar{display:none}.pnl-template{flex:0 0 auto;display:flex;align-items:center;justify-content:center;gap:6px;height:38px;padding:0 6px;border:1px solid #dfe4eb;border-radius:10px;background:#fff;color:#697386;font-size:12px!important;min-width:0}.pnl-template span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.pnl-template.selected{border-color:#85bd00;background:#f4f9e9;color:#527800;box-shadow:inset 0 0 0 1px #85bd00}.pnl-swatch{width:13px;height:17px;border:1px solid #dfe4eb;border-radius:3px;background:#fff;flex-shrink:0}.pnl-swatch.dark{background:#131923;border-color:#131923}.pnl-swatch.chart{background:linear-gradient(140deg,#fff 42%,#85bd00 43%,#85bd00 57%,#eef6df 58%)}
 .pnl-swatch.launch{background:linear-gradient(135deg,#121516 55%,#dda448)}.pnl-swatch.aurora{background:radial-gradient(at top right,#56e4da,#102f3b 45%,#060e17)}.pnl-swatch.racing{background:linear-gradient(145deg,#081936 40%,#397eee 48%,#081936 57%)}.pnl-swatch.receipt{background:#eeefdf;border-color:#a7b78a}.pnl-swatch.journal{background:linear-gradient(#d9ed74 30%,#f4f7ed 30%)}.pnl-swatch.voyage{background:linear-gradient(#9bb1c9,#f0c4a2 55%,#425060)}.pnl-swatch.referenceGold{background:linear-gradient(145deg,#070d10 60%,#d3af45)}.pnl-swatch.referenceWhite{background:linear-gradient(135deg,#fff 30%,#bbb 33%,#fff 48%,#bbf462 49%,#fff 60%)}.pnl-swatch.referenceTerminal{background:linear-gradient(140deg,#020b12 45%,#5ac8a4 48%,#020b12 53%)}.pnl-swatch.gold{background:linear-gradient(145deg,#141914 48%,#bc9b52 50%,#353221 70%)}.pnl-swatch.globe{background:radial-gradient(circle at 70% 70%,#99c951,#10151e 70%)}.pnl-swatch.architecture{background:linear-gradient(135deg,#fff 45%,#85bd00 46%,#85bd00 53%,#e2e5df 54%)}.pnl-swatch.city{background:linear-gradient(#bed5e5,#f4d9ba 65%,#637f83 66%)}
 .pnl-toggles{height:44px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;align-items:center}.pnl-toggles label{display:flex;align-items:center;justify-content:center;gap:5px;min-height:38px;font-size:12px;cursor:pointer;min-width:0}.pnl-toggles input{accent-color:#709f00;width:16px;height:16px;margin:0;flex-shrink:0}.pnl-toggles span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.unavailable{opacity:.4}

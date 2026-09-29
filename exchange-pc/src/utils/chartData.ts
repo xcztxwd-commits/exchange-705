@@ -53,6 +53,12 @@ export function normalizeCandles(rows: unknown[], before = Infinity, interval = 
 export function candleFromQuote(last: KLineData | undefined, price: number, time: number, interval: string): KLineData | null {
   if (!last || !Number.isFinite(price) || price <= 0 || !Number.isFinite(time) || time < last.timestamp) return null
   const period = chartPeriod(interval)
+  if (period.type === 'month') {
+    const start = new Date(last.timestamp), current = new Date(time)
+    return start.getUTCFullYear() === current.getUTCFullYear() && start.getUTCMonth() === current.getUTCMonth()
+      ? { ...last, high: Math.max(last.high, price), low: Math.min(last.low, price), close: price }
+      : null
+  }
   const durations = { second: 1000, minute: 60_000, hour: 3_600_000, day: 86_400_000, week: 604_800_000, month: 0, year: 0 }
   const duration = durations[period.type] * period.span
   if (!duration) return null

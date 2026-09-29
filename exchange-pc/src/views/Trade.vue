@@ -10,7 +10,7 @@ import { useLocaleStore } from '@/store/locale'
 import request from '@/utils/request'
 import { getImageUrl } from '@/utils/imageUrl'
 import { displaySymbol } from '@/utils/displaySymbol'
-import { DEFAULT_LEVERAGE, leverageLimit, leverageChoices, contractMargin } from '@/utils/contract'
+import { quantityUnit, displayFee, DEFAULT_LEVERAGE, leverageLimit, leverageChoices, contractMargin } from '@/utils/contract'
 // 市场休市时间判断已移除，改用阿里云市场API返回的数据来判断市场状态
 import { formatDateTime, formatTime } from '@/utils/dateTime'
 
@@ -582,7 +582,7 @@ function getKlineLow(): number {
 
 // 调整数量
 function adjustQuantity(delta: number) {
-  const step = 0.01
+  const step = Number(currentSymbolInfo.value?.quantityStep ?? 0.01)
   const newValue = buyQuantity.value + delta * step
   buyQuantity.value = Math.max(step, Math.round(newValue / step) * step)
 }
@@ -671,7 +671,8 @@ async function handleBuy() {
       symbol: currentSymbol.value,
       side: 'BUY',
       type: orderType.value === 'limit' ? 'LIMIT' : 'MARKET',
-      quantity: buyQuantity.value,
+      quantity: String(buyQuantity.value),
+      specVersion: currentSymbolInfo.value?.specVersion, quantityUnitType: currentSymbolInfo.value?.quantityUnitType,
       leverage: selectedLeverage.value,
       price: orderType.value === 'limit' ? limitPrice.value : null,
       currentPrice: currentPrice.value,
@@ -728,7 +729,8 @@ async function handleSell() {
       symbol: currentSymbol.value,
       side: 'SELL',
       type: orderType.value === 'limit' ? 'LIMIT' : 'MARKET',
-      quantity: buyQuantity.value,
+      quantity: String(buyQuantity.value),
+      specVersion: currentSymbolInfo.value?.specVersion, quantityUnitType: currentSymbolInfo.value?.quantityUnitType,
       leverage: selectedLeverage.value,
       price: orderType.value === 'limit' ? limitPrice.value : null,
       currentPrice: currentPrice.value,
@@ -1030,6 +1032,7 @@ watch(maxLeverage, max => { selectedLeverage.value = Math.min(selectedLeverage.v
 const estimatedMargin = computed(() => contractMargin(
   Number(buyQuantity.value), lotSize.value,
   orderType.value === 'limit' ? Number(limitPrice.value) : currentPrice.value, selectedLeverage.value, marketStore.getConversionRate(currentSymbol.value, currentSymbolInfo.value?.quoteCurrency),
+  marketStore.getMarginBaseRate(currentSymbolInfo.value, orderType.value === 'limit' ? Number(limitPrice.value) : currentPrice.value),
 ))
 
 // 计算预估手续费 = 买入数量 × 手续费倍数
@@ -1398,7 +1401,7 @@ onUnmounted(() => {
     <div class="symbol-header">
       <div class="symbol-selector-dropdown" @click.stop="toggleSymbolDropdown">
         <span class="symbol-name">{{ currentDisplaySymbol }}</span>
-        <span class="dropdown-icon" :class="{ active: showSymbolDropdown }">▼</span>
+        <span class="dropdown-icon ui-chevron ui-chevron--down" :class="{ active: showSymbolDropdown }" aria-hidden="true"></span>
       </div>
       <div class="price-display">
         <span v-if="!isMarketClosed" class="price-value" :style="{ color: (change24h?.changePct || 0) >= 0 ? '#85bd00' : '#ef5350' }">
@@ -1410,7 +1413,7 @@ onUnmounted(() => {
           class="price-change"
           :style="{ color: (change24h?.changePct || 0) >= 0 ? '#85bd00' : '#ef5350' }"
         >
-          <span class="change-icon">{{ (change24h?.changePct || 0) >= 0 ? '▲' : '▼' }}</span>
+          <span class="change-icon ui-inline-arrow">{{ (change24h?.changePct || 0) >= 0 ? '▲' : '▼' }}</span>
           {{ (change24h?.changePct || 0) >= 0 ? '+' : '' }}{{ (change24h?.changePct || 0).toFixed(2) }}%
         </span>
         <span v-else class="price-change" style="color: #999;">-</span>
@@ -1451,7 +1454,7 @@ onUnmounted(() => {
       
       <!-- 最低价格显示（底部左侧） -->
       <div class="low-price-indicator" v-if="getKlineLow() > 0">
-        <span class="low-price-arrow">↑</span>
+        <span class="low-price-arrow ui-inline-arrow">↑</span>
         <span class="low-price-value">{{ formatPrice(getKlineLow(), 2) }}</span>
       </div>
     </div>
@@ -1573,10 +1576,10 @@ onUnmounted(() => {
 
       <!-- 买入数量 -->
       <div class="order-item">
-        <div class="order-label">{{ localeStore.t('buyQuantityLabel') }}</div>
+        <div class="order-label">{{ localeStore.t('quantity') }}（{{ quantityUnit(currentSymbolInfo, localeStore.t('lots')) }}）</div>
         <div class="order-input-group">
           <button class="input-btn" @click="adjustQuantity(-1)">-</button>
-          <input type="number" v-model.number="buyQuantity" step="0.01" min="0.01" class="order-input" />
+          <input type="number" v-model.number="buyQuantity" :step="Number(currentSymbolInfo?.quantityStep ?? 0.01)" :min="Number(currentSymbolInfo?.minOrderQuantity ?? 0.01)" class="order-input" />
           <button class="input-btn" @click="adjustQuantity(1)">+</button>
         </div>
       </div>
@@ -1584,12 +1587,12 @@ onUnmounted(() => {
       <!-- 交易详情 -->
       <div class="trade-details">
         <div class="detail-row">
-          <span class="detail-label">{{ localeStore.t('perLot') }}</span>
-          <span class="detail-value">1{{ localeStore.t('lots') }} = {{ Math.round(lotSize || 0) }} {{ currentDisplaySymbol }}</span>
+          <span class="detail-label">{{ currentSymbolInfo?.quantityUnitType ? localeStore.text('每輸入單位', 'Per input unit') : localeStore.t('perLot') }}</span>
+          <span class="detail-value">1{{ quantityUnit(currentSymbolInfo, localeStore.t('lots')) }} = {{ Math.round(lotSize || 0) }} {{ currentDisplaySymbol }}</span>
         </div>
         <div class="detail-row">
-          <span class="detail-label">{{ localeStore.t('estimatedFee') }}</span>
-          <span class="detail-value">{{ formatMoney(estimatedFee) }}</span>
+          <span class="detail-label">{{ localeStore.text('預留往返手續費', 'Reserved round-trip fee') }}</span>
+          <span class="detail-value">{{ displayFee(estimatedFee) }} USD</span>
         </div>
         <div class="detail-row">
           <span class="detail-label">{{ localeStore.t('estimatedMargin') }}</span>
@@ -1738,7 +1741,7 @@ onUnmounted(() => {
               :max="currentDurationConfig?.maxAmount || undefined"
               step="0.01"
             />
-            <span class="amount-arrow">›</span>
+            <span class="amount-arrow ui-chevron" aria-hidden="true"></span>
           </div>
           <div class="expected-return">
             <span class="expected-label">{{ localeStore.t('expectedReturnRate') }}</span>
@@ -1794,7 +1797,7 @@ onUnmounted(() => {
           <div class="term-detail-symbol">{{ displaySymbol(termOrderDetail) }}</div>
           <div class="term-detail-price">
             <span>{{ formatPrice(termOrderDetail?.openPrice || 0) }}</span>
-            <span class="arrow">→</span>
+            <span class="arrow ui-inline-arrow">→</span>
             <span :class="getPriceColorClass(termOrderDetail)">
               {{ formatPrice(termOrderDetail?.status === 'CLOSED' ? (termOrderDetail?.closePrice || 0) : currentPrice) }}
             </span>

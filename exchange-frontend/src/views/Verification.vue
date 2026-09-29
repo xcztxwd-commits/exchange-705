@@ -38,7 +38,7 @@
       </div>
 
       <!-- 认证表单 -->
-      <div v-if="!kycStatus || kycStatus === 'NOT_VERIFIED' || (latestRecord && latestRecord.status === 'REJECTED')" class="verification-form">
+      <div v-if="kycStatus !== 'VERIFIED' && latestRecord?.status !== 'PENDING'" class="verification-form">
         <div class="form-item">
           <div class="form-label">{{ localeStore.t('fullName') }}</div>
           <input 

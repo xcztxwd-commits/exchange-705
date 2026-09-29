@@ -27,11 +27,14 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class LoanService {
 
+    @org.springframework.beans.factory.annotation.Autowired(required=false) private com.gtcfesk.exchange.simulation.SimulationEnvironment simulation;
+    @org.springframework.beans.factory.annotation.Autowired(required=false) private com.gtcfesk.exchange.admin.LoanReviewService simulationReview;
     private final LoanRecordRepository loanRecordRepository;
     private final LoanSettingRepository loanSettingRepository;
     private final UserAccountRepository userAccountRepository;
     private final KycRecordRepository kycRecordRepository;
     private final AssetAccountRepository assetAccountRepository;
+    private final LoanPersonalInfoService loanPersonalInfoService;
 
     public List<LoanSetting> getAvailableLoanSettings() {
         return loanSettingRepository.findByEnabledTrueOrderByDaysAsc();
@@ -43,7 +46,7 @@ public class LoanService {
     }
 
     @Transactional
-    public LoanRecord createLoan(Long userId, BigDecimal amount, Long settingId, String realName, String idNumber, String phone, String address) {
+    public LoanRecord createLoan(Long userId, BigDecimal amount, Long settingId) {
         com.gtcfesk.exchange.common.TradeValidation.positive(amount, "贷款金额");
         LoanSetting setting = loanSettingRepository.findById(settingId)
                 .orElseThrow(() -> new BusinessException("贷款设置不存在"));
@@ -63,6 +66,8 @@ public class LoanService {
         // 验证用户存在
         userAccountRepository.findById(userId)
                 .orElseThrow(() -> new BusinessException("用户不存在"));
+
+        com.gtcfesk.exchange.entity.LoanPersonalInfo approved = loanPersonalInfoService.requireApprovedPersonalInfo(userId);
 
         // 计算利息（考虑免息天数）
         int chargeableDays = Math.max(0, setting.getDays() - setting.getFreeDays());
@@ -84,10 +89,10 @@ public class LoanService {
         record.setStatus("PENDING");
         
         // 设置实名信息
-        record.setRealName(realName);
-        record.setIdNumber(idNumber);
-        record.setPhone(phone);
-        record.setAddress(address);
+        record.setRealName(approved.getRealName());
+        record.setIdNumber(approved.getIdNumber());
+        record.setPhone(approved.getPhone());
+        record.setAddress(approved.getAddress());
 
         return loanRecordRepository.save(record);
     }
@@ -138,6 +143,10 @@ public class LoanService {
         record.setSignatureImage(signatureImage);
         record.setStatus("SIGNED");
         record.setRepaymentDate(LocalDateTime.now().plusDays(record.getDays()));
+        if (simulation != null && simulation.enabled()) {
+            loanRecordRepository.saveAndFlush(record);
+            simulationReview.approveLoan(record.getId());
+        }
 
         return loanRecordRepository.save(record);
     }

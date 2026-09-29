@@ -42,6 +42,7 @@ public class ForexQuoteMarketService {
     private volatile Map<String, TradingSymbol> registry = Collections.emptyMap();
     private final ScheduledExecutorService metadata = Executors.newSingleThreadScheduledExecutor(r -> new Thread(r, "market-symbols"));
     @Value("${market.virtual-trading.enabled:false}") private boolean virtualTrading;
+    @Value("${market.control.v3.enabled:true}") private boolean v3Enabled = true;
     private static final int MAX_KLINES = 128, MAX_PENDING = 32;
     private static class KlineRequest {
         final String code, interval, key;
@@ -135,7 +136,15 @@ public class ForexQuoteMarketService {
                 if (!"CryptoPerpetual".equals(sourceCategory(symbol))) updated.putIfAbsent(marketCode(symbol), symbol);
                 codes.computeIfAbsent(group(sourceCategory(symbol)), g -> new LinkedHashSet<>()).add(marketCode(symbol));
                 QuoteCurrencyConversion conversion=QuoteCurrencyConversion.route(symbol.getQuoteCurrency(),symbol.getMarketSource());
-                if(conversion!=null) codes.computeIfAbsent(group(conversion.category),g -> new LinkedHashSet<>()).add(conversion.code);
+                if(conversion!=null) {
+                    codes.computeIfAbsent(group(conversion.category),g -> new LinkedHashSet<>()).add(conversion.code);
+                    if("Forex".equals(conversion.category)) codes.computeIfAbsent(group("Forex"),g -> new LinkedHashSet<>()).add(conversion.code.replace("USD=X","=X"));
+                }
+                if (com.gtcfesk.exchange.trade.FxContractRules.isForex(symbol)
+                        && !"USD".equals(symbol.getBaseCurrency()) && !"USD".equals(symbol.getQuoteCurrency())) {
+                    codes.computeIfAbsent(group("Forex"), g -> new LinkedHashSet<>()).add(symbol.getBaseCurrency()+"USD=X");
+                    codes.computeIfAbsent(group("Forex"), g -> new LinkedHashSet<>()).add(symbol.getBaseCurrency()+"=X");
+                }
             }
             Set<String> conversionCurrencies = new LinkedHashSet<>(com.gtcfesk.exchange.admin.SystemConfigService.conversionCurrencies(
                 systemConfigs == null ? null : systemConfigs.getConfigValue("market.conversion.currencies")));
@@ -407,6 +416,42 @@ public class ForexQuoteMarketService {
         if(value==null)throw new BusinessException("结算汇率暂不可用或已过期，请稍后重试");
         return new BigDecimal(value.toString());
     }
+
+    /** Trading P&L must use a fresh, uncontrolled rate; fiat deposits retain their fixed-rate cache. */
+    public Map<String,Object> contractConversion(String currency,String source) {
+        if(QuoteCurrencyConversion.fixed(currency)) return conversion(currency,source);
+        Map<String,Object> result=new HashMap<>();
+        result.put("conversionAvailable",false);result.put("quoteToUsdRate",null);result.put("conversionExpiresAt",0L);
+        QuoteCurrencyConversion route=QuoteCurrencyConversion.route(currency,source);
+        if(route==null)return result;
+        String inverse="Forex".equals(route.category)?route.code.replace("USD=X","=X"):null;
+        String unit=route.code.replace("USD=X","");
+        List<String> codes=inverse==null?Collections.singletonList(route.code)
+            :Arrays.asList("EUR","GBP","AUD","NZD").contains(unit)?Arrays.asList(route.code,inverse):Arrays.asList(inverse,route.code);
+        for(String code:codes) {
+            Map<String,Object> raw=getPrice(code,route.category);
+            Map<String,Object> fresh=QuoteState.view(raw,60000);
+            if(!Boolean.TRUE.equals(fresh.get("available")) || Boolean.FALSE.equals(raw.get("available")))continue;
+            BigDecimal price=new BigDecimal(raw.get("price").toString());
+            BigDecimal rate=code.equals(inverse)?BigDecimal.ONE.divide(price,24,java.math.RoundingMode.HALF_UP):price;
+            result.put("quoteToUsdRate",rate.multiply(route.scale));result.put("conversionAvailable",true);
+            result.put("conversionExpiresAt",fresh.get("expiresAt"));result.put("conversionTimestamp",raw.get("timestamp"));
+            result.put("conversionSymbol",code);result.put("conversionMode","LIVE_CONTRACT");return result;
+        }
+        return result;
+    }
+    public BigDecimal requireContractConversionRate(String currency,String source) {
+        Object value=contractConversion(currency,source).get("quoteToUsdRate");
+        if(value==null)throw new BusinessException("合约换算汇率暂不可用或超过60秒，请稍后重试");
+        return new BigDecimal(value.toString());
+    }
+
+    /** Standard FX margin is in BASE currency; never use the hours-long settlement cache here. */
+    public BigDecimal fxMarginRate(String base, String quote, BigDecimal orderPrice) {
+        if ("USD".equals(base)) return BigDecimal.ONE;
+        if ("USD".equals(quote) && orderPrice != null && orderPrice.signum() > 0) return orderPrice;
+        return requireContractConversionRate(base,"yahoo");
+    }
     public boolean knownSymbol(String symbol) { return registry.containsKey(symbol); }
     /** Shared, versioned display snapshot. Trading always revalidates via freshPrice(). */
     public synchronized Map<String,Object> snapshotPrice(String symbol) {
@@ -417,7 +462,15 @@ public class ForexQuoteMarketService {
                 && now < QuoteState.time(previous.get("expiresAt"))) return previous;
         Map<String,Object> next = new HashMap<>(internalPrice(symbol));
         TradingSymbol config=registry.get(symbol);
-        next.putAll(conversion(config.getQuoteCurrency(),config.getMarketSource()));
+        next.putAll(contractConversion(config.getQuoteCurrency(),config.getMarketSource()));
+        if (com.gtcfesk.exchange.trade.FxContractRules.isForex(config)) {
+            try {
+                next.put("marginBaseToUsdRate",fxMarginRate(config.getBaseCurrency(),config.getQuoteCurrency(),new BigDecimal(String.valueOf(next.get("price")))));
+                next.put("marginRateExpiresAt",now+5000);
+            } catch (RuntimeException unavailable) {
+                next.put("marginBaseToUsdRate",null); next.put("marginRateExpiresAt",0L);
+            }
+        }
         next.put("quoteCurrency",config.getQuoteCurrency());
         next.put("epoch", epoch);
         next.put("quoteVersion", previous == null ? 0L : previous.get("quoteVersion"));
@@ -561,7 +614,7 @@ public class ForexQuoteMarketService {
                 for (Map<String, Object> row : (List<Map<String, Object>>) ((Map<?, ?>) entry.getValue().get("data")).get("kline_list")) {
                     long time = RandomMarketPath.timestamp(row);
                     if (time < config.getRandomMarketStartedAt()
-                        && (time + RandomMarketPath.duration(interval) <= config.getRandomMarketStartedAt()
+                        && (RandomMarketPath.periodEnd(interval, time) <= config.getRandomMarketStartedAt()
                             || QuoteState.time(entry.getValue().get("fetchedAt")) <= config.getRandomMarketStartedAt() + 999))
                         history.putIfAbsent(time, new HashMap<>(row));
                 }
@@ -588,7 +641,10 @@ public class ForexQuoteMarketService {
         }
         history = new ArrayList<>(frozen.values());
         if (!history.isEmpty()) redis.saveSimulationHistory(simulationHistoryKey(config), interval, history);
-        long anchor = history.isEmpty() ? 0 : RandomMarketPath.timestamp(history.get(0)) % RandomMarketPath.duration(interval);
+        long anchor = history.isEmpty() ? 0 : "1M".equals(interval)
+                ? RandomMarketPath.monthStart(RandomMarketPath.timestamp(history.get(history.size() - 1))) == RandomMarketPath.monthStart(start)
+                    ? RandomMarketPath.timestamp(history.get(history.size() - 1)) : 0
+                : RandomMarketPath.timestamp(history.get(0)) % RandomMarketPath.duration(interval);
         Map<String, Object> result = RandomMarketPath.klines(config, interval, count, endTime, System.currentTimeMillis(), anchor);
         Map<String, Object> data = (Map<String, Object>) result.get("data");
         RandomMarketPath.mergeHistory(result, history, start, count, endTime);
@@ -691,6 +747,7 @@ public class ForexQuoteMarketService {
         boolean running = PriceControlPath.running(config);
         BigDecimal price = quote.get("price") instanceof Number ? controlledPrice(config, quote, now) : null;
         result.put("id", config.getId()); result.put("enabled", Boolean.TRUE.equals(config.getControlEnabled()));
+        result.put("v3Enabled", v3Enabled);
         result.put("running", running); result.put("available", Boolean.TRUE.equals(quote.get("available")) && price != null && price.signum() > 0);
         result.put("rawPrice", quote.get("price")); result.put("currentPrice", price);
         result.put("offset", price == null ? config.getControlPriceOffset() : price.subtract(rawPrice(quote)));
@@ -709,6 +766,38 @@ public class ForexQuoteMarketService {
         }
         result.put("remainingSeconds", running ? Math.max(0, (PriceControlPath.endsAt(config) - now + 999) / 1000) : 0);
         if (controls != null && (!random || durableFlow(config))) controls.status(config, result, quote, now);
+        return result;
+    }
+    public Map<String, Object> previewControl(Long id, int duration, BigDecimal target, int intensity, boolean oscillation) {
+        if (duration < 1 || duration > 86400 || intensity < 1 || intensity > 10 || target == null || target.signum() <= 0)
+            throw new BalancedControlPlan.Failure("INVALID_PARAMETERS", "控盘参数无效");
+        TradingSymbol config = controlSymbol(id);
+        if (target.stripTrailingZeros().scale() > PriceControlPath.precision(config))
+            throw new BalancedControlPlan.Failure("INVALID_PARAMETERS", "目标价格超出币种精度");
+        long now = System.currentTimeMillis();
+        Map<String, Object> raw = RandomMarketPath.enabled(config) ? simulationBaseQuote(config, now)
+                : getPrice(marketCode(config), sourceCategory(config));
+        BigDecimal displayed = raw.get("price") instanceof Number ? controlledPrice(config, raw, now) : null;
+        BigDecimal start = controls.previewStart(config, raw, displayed);
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("algorithmVersion", 3); result.put("startPrice", start.toPlainString()); result.put("targetPrice", target.toPlainString());
+        result.put("preview", true); result.put("mappingVersion", 1); result.put("v3Enabled", v3Enabled);
+        List<Map<String, Object>> tiers = new ArrayList<>();
+        for (int i = 1; i <= 10; i++) {
+            try {
+                BalancedControlPlan.Parameters p = new BalancedControlPlan.Parameters(start, target, duration,
+                        PriceControlPath.precision(config), i, BalancedControlPlan.DEFAULT_RATIO);
+                tiers.add(BalancedControlPlan.feasibility(p));
+            } catch (BalancedControlPlan.Failure failure) {
+                Map<String, Object> tier = new LinkedHashMap<>(); tier.put("intensity", i);
+                tier.put("feasible", false); tier.put("errorCode", failure.code); tier.put("message", failure.getMessage()); tiers.add(tier);
+            }
+        }
+        result.put("tiers", tiers);
+        try { result.putAll(controls.prepare(config, raw, displayed, duration, target, intensity, oscillation).preview()); }
+        catch (BalancedControlPlan.Failure failure) {
+            result.put("feasible", false); result.put("errorCode", failure.code); result.put("message", failure.getMessage());
+        }
         return result;
     }
 
@@ -740,7 +829,7 @@ public class ForexQuoteMarketService {
             config.setRandomMarketControls(null);
             config.setRandomMarketBasePrice(basePrice);
             config.setRandomMarketStartedAt(System.currentTimeMillis() / 1000 * 1000);
-            for (String interval : Arrays.asList("1m", "5m", "15m", "30m", "1h", "4h", "1d", "1w")) {
+            for (String interval : Arrays.asList("1m", "5m", "15m", "30m", "1h", "4h", "1d", "1w", "1M")) {
                 List<Map<String, Object>> history = cachedSimulationHistory(config, interval);
                 if (!history.isEmpty()) redis.saveSimulationHistory(simulationHistoryKey(config), interval, history);
             }
@@ -756,43 +845,14 @@ public class ForexQuoteMarketService {
         return saveControl(config);
     }
 
-    @Transactional
-    public synchronized Map<String, Object> startControl(Long id, int duration, BigDecimal target, int intensity, boolean randomOscillation) {
+    public Map<String, Object> startControl(Long id, int duration, BigDecimal target, int intensity, boolean randomOscillation) {
         return startControl(id, duration, target, intensity, randomOscillation, null);
     }
-    @Transactional
-    public synchronized Map<String, Object> startControl(Long id, int duration, BigDecimal target, int intensity, boolean randomOscillation, String requestKey) {
-        if (duration < 1 || duration > 86400 || intensity < 1 || intensity > 10 || target == null
-                || target.signum() <= 0 || target.compareTo(new BigDecimal("10000000000000000")) >= 0)
-            throw new BusinessException("时长需为 1–86400 秒，波动强度需为 1–10，目标价格必须大于 0");
-        TradingSymbol config = controlSymbol(id);
-        if (!Boolean.TRUE.equals(config.getIsEnabled())) throw new BusinessException("请先启用该币种");
-        if (target.stripTrailingZeros().scale() > PriceControlPath.precision(config)) throw new BusinessException("目标价格超出币种价格精度");
-        if (!RandomMarketPath.enabled(config) && controls != null) {
-            Map<String, Object> raw = getPrice(marketCode(config), sourceCategory(config));
-            BigDecimal displayed = raw.get("price") instanceof Number ? controlledPrice(config, raw, System.currentTimeMillis()) : null;
-            controls.start(config, raw, displayed,
-                duration, target, intensity, randomOscillation, false, requestKey);
-            clearControl(config); config.setControlEnabled(false); config.setControlPriceOffset(BigDecimal.ZERO);
-            return saveControl(config);
-        }
-        if (PriceControlPath.running(config)) throw new BusinessException("自动控盘正在运行，请先停止任务");
-        Map<String, Object> quote = requireControlQuote(config);
-        long now = controlTime(config);
-        BigDecimal start = controlledPrice(config, quote, now);
-        if (start.signum() <= 0) throw new BusinessException("当前控盘价格无效，请先调整偏移");
-        config.setControlStartPrice(start); config.setControlTargetPrice(target);
-        config.setControlDurationSeconds(duration); config.setControlIntensity(intensity);
-        config.setControlRandomOscillation(randomOscillation);
-        config.setControlStartedAt(now); config.setControlCompletedAt(null); config.setControlEnabled(true);
-        config.setControlRestoring(false);
-        config.setControlPriceOffset(start.subtract(rawPrice(quote)));
-        recordSimulationControl(config, now);
-        return saveControl(config);
+    public Map<String, Object> startControl(Long id, int duration, BigDecimal target, int intensity, boolean randomOscillation, String requestKey) {
+        return startControl(id, duration, target, intensity, randomOscillation, requestKey, null);
     }
 
-    @Transactional
-    public synchronized Map<String, Object> startControl(Long id, int duration, BigDecimal target, int intensity,
+    public Map<String, Object> startControl(Long id, int duration, BigDecimal target, int intensity,
             boolean randomOscillation, String requestKey, RecoveryOptions options) {
         if (duration < 1 || duration > 86400 || intensity < 1 || intensity > 10 || target == null
                 || target.signum() <= 0 || target.compareTo(new BigDecimal("10000000000000000")) >= 0)
@@ -801,15 +861,43 @@ public class ForexQuoteMarketService {
         if (!Boolean.TRUE.equals(config.getIsEnabled())) throw new BusinessException("请先启用该币种");
         if (target.stripTrailingZeros().scale() > PriceControlPath.precision(config)) throw new BusinessException("目标价格超出币种价格精度");
         if (RandomMarketPath.enabled(config) && !virtualTrading) throw new BusinessException("随机行情仅可在虚拟交易环境使用");
+        if (controls == null) {
+            // Legacy virtual-only fixture; production always injects durable controls.
+            if (PriceControlPath.running(config)) throw new BusinessException("自动控盘正在运行，请先停止任务");
+            Map<String, Object> quote = requireControlQuote(config);
+            long at = controlTime(config);
+            BigDecimal start = controlledPrice(config, quote, at);
+            if (start.signum() <= 0) throw new BusinessException("当前控盘价格无效，请先调整偏移");
+            config.setControlStartPrice(start); config.setControlTargetPrice(target);
+            config.setControlDurationSeconds(duration); config.setControlIntensity(intensity);
+            config.setControlRandomOscillation(randomOscillation); config.setControlStartedAt(at);
+            config.setControlCompletedAt(null); config.setControlEnabled(true); config.setControlRestoring(false);
+            config.setControlPriceOffset(start.subtract(rawPrice(quote)));
+            recordSimulationControl(config, at); return saveControl(config);
+        }
+        PersistentPriceControl.Task previous = controls.existingTarget(id, requestKey, duration, target, intensity, randomOscillation, options);
+        if (previous != null) return controlStatus(config);
         long now = System.currentTimeMillis();
         Map<String,Object> raw = RandomMarketPath.enabled(config) ? simulationBaseQuote(config, now) : getPrice(marketCode(config), sourceCategory(config));
         Map<String,Object> view = controls.display(config, raw, now);
         BigDecimal displayed = view.get("price") instanceof Number ? ControlHistoryStore.number(view.get("price")) : null;
-        PersistentPriceControl.Task created = controls.start(config, raw, displayed, duration, target, intensity, randomOscillation, false, requestKey, options);
-        clearControl(config); config.setControlEnabled(false); config.setControlPriceOffset(BigDecimal.ZERO);
-        if (RandomMarketPath.enabled(config) && SimulationControlPath.events(config).stream().noneMatch(e -> e.at == created.startedAt / 1000 * 1000))
-            recordSimulationControl(config, created.startedAt);
-        return saveControl(config);
+        PersistentPriceControl.Prepared prepared = v3Enabled ? controls.prepare(config, raw, displayed, duration, target, intensity, randomOscillation) : null;
+        return controlHistory.transaction(() -> {
+            TradingSymbol fresh = controlSymbol(id);
+            long commitTime = System.currentTimeMillis();
+            Map<String,Object> currentRaw = RandomMarketPath.enabled(fresh) ? simulationBaseQuote(fresh, commitTime)
+                    : getPrice(marketCode(fresh), sourceCategory(fresh));
+            Map<String,Object> currentView = controls.display(fresh, currentRaw, commitTime);
+            BigDecimal currentDisplay = currentView.get("price") instanceof Number ? ControlHistoryStore.number(currentView.get("price")) : null;
+            PersistentPriceControl.Task created = prepared == null
+                    ? options == null ? controls.start(fresh, currentRaw, currentDisplay, duration, target, intensity, randomOscillation, false, requestKey)
+                    : controls.start(fresh, currentRaw, currentDisplay, duration, target, intensity, randomOscillation, false, requestKey, options)
+                    : controls.startPrepared(fresh, currentRaw, currentDisplay, duration, target, intensity, randomOscillation, requestKey, options, prepared);
+            clearControl(fresh); fresh.setControlEnabled(false); fresh.setControlPriceOffset(BigDecimal.ZERO);
+            if (RandomMarketPath.enabled(fresh) && SimulationControlPath.events(fresh).stream().noneMatch(e -> Objects.equals(e.planId, created.id)))
+                SimulationControlPath.record(fresh, created.startedAt, created.algorithmVersion == 3 ? created.id : null);
+            return saveControl(fresh);
+        });
     }
 
     @Transactional

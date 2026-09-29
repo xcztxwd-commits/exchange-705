@@ -16,6 +16,25 @@ public class AdminMenuController {
     @Autowired
     private AdminMenuService menuService;
 
+    @Autowired private AdminPermissionService permissions;
+
+    @Autowired private com.gtcfesk.exchange.repository.AdminRoleRepository roles;
+    @GetMapping("/roles")
+    public Map<String,Object> roleChoices() {
+        permissions.require("admin_list", "");
+        List<Map<String,Object>> choices = new java.util.ArrayList<>();
+        for (com.gtcfesk.exchange.entity.AdminRole role : roles.findAll()) {
+            if (!"active".equals(role.getStatus()) || (!permissions.isSuper() && Boolean.TRUE.equals(role.getIsSuper()))) continue;
+            Map<String,Object> row = new HashMap<>(); row.put("roleCode", role.getRoleCode()); row.put("roleName", role.getRoleName()); choices.add(row);
+        }
+        if (permissions.isSuper() && choices.stream().noneMatch(r -> "super_admin".equals(r.get("roleCode")))) {
+            Map<String,Object> row = new HashMap<>(); row.put("roleCode", "super_admin"); row.put("roleName", "超级管理员"); choices.add(row);
+        }
+        Map<String,Object> out = new HashMap<>(); out.put("success", true); out.put("list", choices); return out;
+    }
+    @GetMapping("/current")
+    public Map<String,Object> currentPermissions(javax.servlet.http.HttpServletResponse response) { response.setHeader("Cache-Control", "no-store"); return permissions.current(); }
+
     /**
      * 获取菜单树
      */

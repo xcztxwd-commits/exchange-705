@@ -16,7 +16,7 @@ public final class SimulationControlPath {
     };
     public static class Event {
         public long at, startedAt;
-        public String mode, symbol;
+        public String mode, symbol, planId;
         public int duration, intensity, precision, algorithmVersion;
         public boolean oscillation;
         public BigDecimal start, target, offset;
@@ -46,12 +46,16 @@ public final class SimulationControlPath {
         return events;
     }
 
-    public static void record(TradingSymbol symbol, long now) {
+    public static void record(TradingSymbol symbol, long now) { record(symbol, now, null); }
+    /** Durable V3 events reference the plan; the market merger reads committed samples, not future points. */
+    public static void record(TradingSymbol symbol, long now, String planId) {
         Event event = new Event();
         event.algorithmVersion = 2; // Missing version on saved events denotes the original algorithm.
-        event.at = now / 1000 * 1000; event.symbol = symbol.getSymbol(); event.precision = PriceControlPath.precision(symbol);
+        event.at = planId == null ? now / 1000 * 1000 : now;
+        event.symbol = symbol.getSymbol(); event.precision = PriceControlPath.precision(symbol);
         event.offset = symbol.getControlPriceOffset() == null ? BigDecimal.ZERO : symbol.getControlPriceOffset();
-        event.mode = "offset";
+        event.mode = planId == null ? "offset" : "durable"; event.planId = planId;
+        if (planId != null) event.algorithmVersion = 3;
         if (PriceControlPath.running(symbol)) {
             event.mode = Boolean.TRUE.equals(symbol.getControlRestoring()) ? "restore" : "target";
             event.startedAt = symbol.getControlStartedAt(); event.duration = symbol.getControlDurationSeconds();
@@ -69,11 +73,12 @@ public final class SimulationControlPath {
         long tick = time / 1000 * 1000;
         List<Event> events = events(symbol);
         Event current = null;
-        for (int i = events.size() - 1; i >= 0; i--) if (events.get(i).at <= tick) { current = events.get(i); break; }
+        for (int i = events.size() - 1; i >= 0; i--) if (events.get(i).at <= time) { current = events.get(i); break; }
         BigDecimal base = RandomMarketPath.basePrice(symbol, tick);
         if (current == null) return base;
         BigDecimal result;
-        if ("target".equals(current.mode)) {
+        if ("durable".equals(current.mode)) result = base;
+        else if ("target".equals(current.mode)) {
             result = tick < current.endsAt() ? PriceControlPath.price(current.plan(), tick, current.algorithmVersion == 0 ? 1 : current.algorithmVersion)
                 : base.add(current.target.subtract(RandomMarketPath.basePrice(symbol, current.endsAt())));
         } else if ("restore".equals(current.mode)) {

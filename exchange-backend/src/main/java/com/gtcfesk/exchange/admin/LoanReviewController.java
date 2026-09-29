@@ -24,6 +24,7 @@ public class LoanReviewController {
     private final UserAccountRepository userAccountRepository;
 
     @GetMapping("/list")
+    @com.gtcfesk.exchange.config.AdminPermission(menu = "loan_review", action = "")
     public ResponseEntity<?> getLoanRecords(
             @RequestParam(required = false) String status,
             @RequestParam(required = false) Long userId,
@@ -135,6 +136,7 @@ public class LoanReviewController {
     }
 
     @PostMapping("/approve/{id}")
+    @com.gtcfesk.exchange.config.AdminPermission(menu = "loan_review", action = "approve_loan")
     public ResponseEntity<?> approveLoan(@PathVariable Long id) {
         try {
             loanReviewService.approveLoan(id);
@@ -151,6 +153,7 @@ public class LoanReviewController {
     }
 
     @PostMapping("/reject/{id}")
+    @com.gtcfesk.exchange.config.AdminPermission(menu = "loan_review", action = "reject_loan")
     public ResponseEntity<?> rejectLoan(@PathVariable Long id, @RequestBody Map<String, String> request) {
         try {
             String remark = request.getOrDefault("remark", "");

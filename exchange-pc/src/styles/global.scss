@@ -28,6 +28,30 @@ button {
   font-family: inherit;
 }
 
+/* Fixed icon boxes keep navigation arrows centered across fonts and locales. */
+.ui-chevron, .ui-inline-arrow {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  vertical-align: middle;
+  pointer-events: none;
+}
+.ui-chevron { width: 20px; height: 20px; }
+.ui-chevron::before {
+  content: '';
+  display: block;
+  width: 7px;
+  height: 7px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(-45deg);
+}
+.ui-chevron--down::before { transform: rotate(45deg); }
+.ui-chevron--up::before { transform: rotate(225deg); }
+.ui-chevron--left::before { transform: rotate(135deg); }
+.ui-inline-arrow { width: 1em; height: 1em; line-height: 1; }
+
 #app {
   min-height: 100vh;
 }

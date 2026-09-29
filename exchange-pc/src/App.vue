@@ -1,6 +1,8 @@
 <template>
   <el-config-provider :locale="elementLocales[localeStore.locale]">
-    <router-view />
+    <AccountModeSwitch v-if="auth.token" real-path="/" />
+    <router-view :key="auth.user?.id" />
+    <SupportNotifications />
   </el-config-provider>
 </template>
 
@@ -9,6 +11,8 @@ import { onMounted, onUnmounted, watch } from 'vue'
 import { useAuthStore } from '@/store/auth'
 import { useLocaleStore } from '@/store/locale'
 import request from '@/utils/request'
+import SupportNotifications from '@/components/SupportNotifications.vue'
+import AccountModeSwitch from '@/components/AccountModeSwitch.vue'
 import { ElConfigProvider } from 'element-plus'
 import { elementLocales } from '@/utils/elementLocale'
 
@@ -68,6 +72,7 @@ watch(() => auth.token, (newToken) => {
 }, { immediate: true })
 
 const onLocaleStorage = (event: StorageEvent) => {
+  if (event.key === 'token' || event.key === 'user') { window.location.reload(); return }
   if (event.key === 'locale') localeStore.loadLocale()
 }
 onMounted(() => {
@@ -82,3 +87,7 @@ onUnmounted(() => {
 })
 </script>
 
+
+<style>
+body:has(.account-mode-bar) .trade-page.h-screen { height: calc(100dvh - 56px); }
+</style>

@@ -14,6 +14,18 @@ import java.time.LocalDateTime;
 @Table(name = "option_order")
 public class OptionOrder {
 
+    @Column(name="trial_reserved", precision=32, scale=16)
+    private java.math.BigDecimal trialReserved;
+
+    @Column(name = "deleted_at")
+    private LocalDateTime deletedAt;
+
+    @Column(name = "deleted_by", length = 64)
+    private String deletedBy;
+
+    @Transient
+    public boolean isDeleted() { return deletedAt != null; }
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;

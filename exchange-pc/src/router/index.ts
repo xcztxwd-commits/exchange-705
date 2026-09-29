@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import LanguageSelect from '@/views/LanguageSelect.vue'
 import DesktopTrade from '@/views/DesktopTrade.vue'
 import { useAuthStore } from '@/store/auth'
+import request from '@/utils/request'
 
 const legacyRoute = location.hash.startsWith('#/') ? new URL(location.hash.slice(1), location.origin) : null
 if (location.hash) {
@@ -12,16 +13,27 @@ if (location.hash) {
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
+    { path: '/demo', redirect: '/' },
     { path: '/', component: DesktopTrade },
     { path: '/trade', redirect: '/' }, // backward compatibility
     { path: '/login', redirect: '/?login=1' },
     { path: '/register', redirect: '/?register=1' },
     { path: '/forgot-password', redirect: '/?forgot=1' },
     { path: '/language', component: LanguageSelect },
+    { path: '/customer-service', component: () => import('@/views/SupportPage.vue') },
+    { path: '/inbox', component: () => import('@/views/Inbox.vue') },
   ],
   scrollBehavior() {
     return { top: 0 }
   },
+})
+
+router.beforeEach(async (to) => {
+  if (to.path !== '/withdraw') return true
+  const auth = useAuthStore()
+  if (!auth.token) return '/login'
+  try { const status: any = await request.get('/kyc/status'); return status.simulationExempt === true || (status.kycStatus === 'VERIFIED' && status.latestRecord?.status === 'APPROVED') ? true : { path: '/verification', query: { reason: 'withdraw' } } }
+  catch { return { path: '/verification', query: { reason: 'withdraw' } } }
 })
 
 router.beforeEach((to, _from, next) => {

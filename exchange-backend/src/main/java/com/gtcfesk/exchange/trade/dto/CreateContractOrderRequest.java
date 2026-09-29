@@ -8,6 +8,8 @@ import java.math.BigDecimal;
 @Getter
 @Setter
 public class CreateContractOrderRequest {
+    private Long specVersion;
+    private String quantityUnitType;
     private String symbol; // 交易对
     private String side; // BUY 买入, SELL 卖出
     private String type; // MARKET 市价, LIMIT 限价

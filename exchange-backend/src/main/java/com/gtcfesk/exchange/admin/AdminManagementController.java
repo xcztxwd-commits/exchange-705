@@ -25,11 +25,33 @@ public class AdminManagementController {
     
     private final AdminUserRepository adminUserRepository;
     private final PasswordEncoder passwordEncoder;
+    private final com.gtcfesk.exchange.repository.AdminRoleRepository roleRepository;
+    private final com.gtcfesk.exchange.repository.AdminRoleMenuRepository roleMenuRepository;
+    private final AdminPermissionService permissions;
+
+    private void validateRole(String code) {
+        if ("super_admin".equals(code)) {
+            if (!permissions.isSuper()) throw new org.springframework.security.access.AccessDeniedException("不能授予超级管理员");
+            return;
+        }
+        com.gtcfesk.exchange.entity.AdminRole role = roleRepository.findByRoleCode(code)
+            .orElseThrow(() -> new BusinessException("角色不存在"));
+        if (!"active".equals(role.getStatus())) throw new BusinessException("角色已停用");
+        permissions.validateGrant(roleMenuRepository.findByRoleId(role.getId()).stream()
+            .map(com.gtcfesk.exchange.entity.AdminRoleMenu::getMenuId).collect(java.util.stream.Collectors.toList()));
+    }
+    private void validateTarget(AdminUser target) {
+        if (!permissions.isSuper()) {
+            if ("super_admin".equals(target.getRole())) throw new org.springframework.security.access.AccessDeniedException("不能修改超级管理员");
+            validateRole(target.getRole());
+        }
+    }
     
     /**
      * 获取管理员列表（分页）
      */
     @GetMapping
+    @com.gtcfesk.exchange.config.AdminPermission(menu = "admin_list", action = "")
     public ResponseEntity<?> getAdminList(
             @RequestParam(defaultValue = "0") Integer page,
             @RequestParam(defaultValue = "20") Integer size,
@@ -140,6 +162,7 @@ public class AdminManagementController {
      * 创建管理员
      */
     @PostMapping
+    @com.gtcfesk.exchange.config.AdminPermission(menu = "admin_list", action = "create")
     public ResponseEntity<?> createAdmin(
             Authentication auth,
             @RequestBody CreateAdminRequest req
@@ -163,11 +186,7 @@ public class AdminManagementController {
             req.setRole("admin"); // 默认角色
         }
         
-        if (!"super_admin".equals(req.getRole()) && 
-            !"admin".equals(req.getRole()) && 
-            !"ops".equals(req.getRole())) {
-            throw new BusinessException("无效的角色类型");
-        }
+        validateRole(req.getRole());
         
         // 创建管理员
         AdminUser admin = new AdminUser();
@@ -191,6 +210,7 @@ public class AdminManagementController {
      * 更新管理员信息
      */
     @PutMapping("/{adminId}")
+    @com.gtcfesk.exchange.config.AdminPermission(menu = "admin_list", action = "edit")
     public ResponseEntity<?> updateAdmin(
             Authentication auth,
             @PathVariable Long adminId,
@@ -202,6 +222,7 @@ public class AdminManagementController {
         
         AdminUser admin = adminUserRepository.findById(adminId)
                 .orElseThrow(() -> new BusinessException("管理员不存在"));
+        validateTarget(admin);
         
         // 检查账号是否已被其他管理员使用
         if (req.getAccount() != null && !req.getAccount().trim().isEmpty()) {
@@ -225,11 +246,7 @@ public class AdminManagementController {
         
         // 更新角色
         if (req.getRole() != null && !req.getRole().trim().isEmpty()) {
-            if (!"super_admin".equals(req.getRole()) && 
-                !"admin".equals(req.getRole()) && 
-                !"ops".equals(req.getRole())) {
-                throw new BusinessException("无效的角色类型");
-            }
+            validateRole(req.getRole());
             admin.setRole(req.getRole());
         }
         
@@ -257,6 +274,7 @@ public class AdminManagementController {
      * 删除管理员
      */
     @DeleteMapping("/{adminId}")
+    @com.gtcfesk.exchange.config.AdminPermission(menu = "admin_list", action = "delete")
     public ResponseEntity<?> deleteAdmin(
             Authentication auth,
             @PathVariable Long adminId
@@ -274,6 +292,7 @@ public class AdminManagementController {
         
         AdminUser admin = adminUserRepository.findById(adminId)
                 .orElseThrow(() -> new BusinessException("管理员不存在"));
+        validateTarget(admin);
         
         // 不能删除超级管理员（可选限制）
         if ("super_admin".equals(admin.getRole())) {
@@ -292,6 +311,7 @@ public class AdminManagementController {
      * 启用/禁用管理员
      */
     @PutMapping("/{adminId}/status")
+    @com.gtcfesk.exchange.config.AdminPermission(menu = "admin_list", action = "status")
     public ResponseEntity<?> updateAdminStatus(
             Authentication auth,
             @PathVariable Long adminId,
@@ -310,6 +330,7 @@ public class AdminManagementController {
         
         AdminUser admin = adminUserRepository.findById(adminId)
                 .orElseThrow(() -> new BusinessException("管理员不存在"));
+        validateTarget(admin);
         
         Boolean enabled = request.get("enabled");
         if (enabled != null) {
@@ -328,9 +349,11 @@ public class AdminManagementController {
      * 获取管理员详情
      */
     @GetMapping("/{adminId}")
+    @com.gtcfesk.exchange.config.AdminPermission(menu = "admin_list", action = "detail")
     public ResponseEntity<?> getAdminDetail(@PathVariable Long adminId) {
         AdminUser admin = adminUserRepository.findById(adminId)
                 .orElseThrow(() -> new BusinessException("管理员不存在"));
+        validateTarget(admin);
         
         // 不返回密码哈希
         Map<String, Object> adminData = new HashMap<>();

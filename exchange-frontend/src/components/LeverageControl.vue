@@ -37,7 +37,7 @@ onUnmounted(restoreScroll)
 
 <template>
   <button type="button" class="leverage-trigger" :disabled="disabled || max === 1" aria-haspopup="dialog" @click="open">
-    {{ locale.t('leverage') }} <strong>{{ modelValue }}×</strong><span aria-hidden="true">⌄</span>
+    {{ locale.t('leverage') }} <strong>{{ modelValue }}×</strong><span class="ui-chevron ui-chevron--down" aria-hidden="true"></span>
   </button>
   <Teleport to="body">
     <dialog ref="dialog" class="leverage-dialog" aria-labelledby="leverage-title" @close="restoreScroll" @click="event => { if (event.target === dialog) close() }">

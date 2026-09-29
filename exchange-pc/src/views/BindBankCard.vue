@@ -282,7 +282,7 @@ onMounted(() => {
         <div class="form-label">{{ localeStore.t('currency') }}</div>
         <div class="form-input">
           <span>{{ formData.currency || localeStore.t('pleaseSelectCurrency') }}</span>
-          <span class="arrow">›</span>
+          <span class="arrow ui-chevron" aria-hidden="true"></span>
         </div>
       </div>
 

@@ -205,6 +205,8 @@ class PersistentPriceControlTest {
         org.springframework.test.util.ReflectionTestUtils.setField(market,"controls",controls);
         org.springframework.test.util.ReflectionTestUtils.setField(market,"controlHistory",store);
         org.springframework.test.util.ReflectionTestUtils.setField(market,"klineMerger",merger);
+        // This test pins the pre-V3 execution path; V3 has separate plan tests.
+        org.springframework.test.util.ReflectionTestUtils.setField(market,"v3Enabled",false);
         try {
             market.refreshSymbols(); long now=System.currentTimeMillis(); seed(now/60000*60000-60000);
             Map<String,Object> groups=(Map<String,Object>)org.springframework.test.util.ReflectionTestUtils.getField(market,"groups");
@@ -217,7 +219,7 @@ class PersistentPriceControlTest {
             AssetAccount account=new AssetAccount(); account.setAvailable(BigDecimal.valueOf(1000)); account.setFrozen(BigDecimal.ZERO);
             when(accounts.findByUserIdAndCoin(1L,"CONTRACT")).thenReturn(Optional.of(account));
             when(orders.save(any(ContractOrder.class))).thenAnswer(call -> call.getArgument(0));
-            ContractOrderService trading=new ContractOrderService(orders,accounts,repository,market,null,mock(MarketCategoryService.class));
+            ContractOrderService trading=new ContractOrderService(mock(com.gtcfesk.exchange.user.KycIdentityService.class),orders,accounts,repository,market,null,mock(MarketCategoryService.class));
             CreateContractOrderRequest request=new CreateContractOrderRequest(); request.setSymbol("TEST"); request.setSide("BUY");
             request.setType("MARKET"); request.setQuantity(BigDecimal.ONE); request.setLeverage(BigDecimal.ONE);
             ContractOrder opened=trading.createOrder(1L,request);
@@ -288,6 +290,20 @@ class PersistentPriceControlTest {
         store.sourceCandles(1,"1d",Collections.singletonList(bar(previousDay,80,99,79,90)),previousDay+86400000);
         List<Map<String,Object>> daily=ControlHistoryStore.rows(merger.merge(1,"1d",200,null,response,null,false));
         assertEquals(1,daily.size());assertEquals(previousDay,daily.get(0).get("timestamp"),"Unknown closed-market or DST session must not acquire a guessed daily anchor");
+    }
+    @Test void monthlyHistoryKeepsCalendarAnchorAndControlledMinutes() {
+        long month = java.time.Instant.parse("2026-02-01T00:00:00Z").toEpochMilli();
+        long start = java.time.Instant.parse("2026-02-20T12:00:00Z").toEpochMilli();
+        Map<String,Object> source = bar(month, 80, 99, 79, 90);
+        store.sourceCandles(1, "1M", Collections.singletonList(source), start);
+        legacy(start, 10); controls.advance(1, start + 10000);
+        Map<String,Object> response = new HashMap<>(); response.put("ret", 200);
+        response.put("data", Collections.singletonMap("kline_list", Collections.singletonList(source)));
+        List<Map<String,Object>> rows = ControlHistoryStore.rows(merger.merge(1, "1M", 200, null, response, null, false));
+        assertEquals(1, rows.size());
+        assertEquals(month, rows.get(0).get("timestamp"));
+        assertEquals(true, rows.get(0).get("controlled"));
+        assertTrue(ControlHistoryStore.rows(merger.merge(1, "1M", 200, month - 1, response, null, false)).isEmpty());
     }
     @Test void restoreIsNewFixedTargetSegmentAndSourceLossCannotChangeItsPath() {
         long now=System.currentTimeMillis();
@@ -400,6 +416,65 @@ class PersistentPriceControlTest {
         restarted.stopAndHold(1,start+8000);
         assertEquals(samples,count("market_control_sample")); assertTrue(restarted.latest(1).holding);
         restarted.stop(1,start+9000); assertFalse(restarted.latest(1).holding);
+    }
+    @Test void v3PersistsOnePlanAndPublishesOnlyElapsedSeconds() {
+        long now = System.currentTimeMillis();
+        Map<String, Object> quote = raw(now, true); quote.put("price", new BigDecimal("100000.00"));
+        BigDecimal start = new BigDecimal("100000.00"), target = new BigDecimal("100060.00");
+        PersistentPriceControl.Prepared prepared = controls.prepare(symbol, quote, start, 60, target, 10, true);
+        PersistentPriceControl.Task task = controls.startPrepared(symbol, quote, start, 60, target, 10, true, "v3-key", null, prepared);
+        assertEquals(3, task.algorithmVersion);
+        assertEquals(1, count("market_control_plan")); assertEquals(1, count("market_control_sample"));
+        String publicTask = assertDoesNotThrow(() -> new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(task));
+        assertFalse(publicTask.contains("prices")); assertFalse(publicTask.contains("\"plan\":")); assertFalse(publicTask.contains("\"store\":"));
+        assertEquals(start, task.price(task.startedAt));
+        assertEquals(start, task.price(task.startedAt + 999));
+        assertEquals(target, task.price(task.plannedEnd));
+        assertEquals(task.id, controls.existingTarget(1, "v3-key", 60, target, 10, true, null).id);
+        RecoveryOptions changed = new RecoveryOptions();
+        assertThrows(com.gtcfesk.exchange.common.BusinessException.class,
+                () -> controls.existingTarget(1, "v3-key", 60, target, 10, true, changed));
+        PersistentPriceControl restarted = new PersistentPriceControl(store);
+        restarted.advance(1, task.startedAt + 5000);
+        assertEquals(6, count("market_control_sample"));
+        assertEquals(task.price(task.startedAt + 5000), restarted.latest(1).price(task.startedAt + 5000));
+        assertEquals("START_BASIS_CHANGED", assertThrows(BalancedControlPlan.Failure.class,
+                () -> controls.startPrepared(symbol, quote, new BigDecimal("100001"), 60, target, 10, true, "new-key", null, prepared)).code);
+        assertEquals(1, count("market_control_task"));
+    }
+    @Test void concurrentV3RetriesKeepOnePlan() throws Exception {
+        long now = System.currentTimeMillis();
+        Map<String, Object> quote = raw(now, true); quote.put("price", new BigDecimal("100000.00"));
+        BigDecimal start = new BigDecimal("100000.00"), target = new BigDecimal("100060.00");
+        PersistentPriceControl.Prepared first = controls.prepare(symbol, quote, start, 60, target, 10, true);
+        PersistentPriceControl.Prepared second = controls.prepare(symbol, quote, start, 60, target, 10, true);
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        try {
+            Future<String> a = pool.submit(() -> controls.startPrepared(symbol, quote, start, 60, target, 10, true, "same-v3", null, first).id);
+            Future<String> b = pool.submit(() -> controls.startPrepared(symbol, quote, start, 60, target, 10, true, "same-v3", null, second).id);
+            assertEquals(a.get(10, TimeUnit.SECONDS), b.get(10, TimeUnit.SECONDS));
+        } finally { pool.shutdownNow(); }
+        assertEquals(1, count("market_control_task"));
+        assertEquals(1, count("market_control_plan"));
+        assertEquals(1, count("market_control_sample"));
+    }
+    @Test void v3ReloadChecksChecksumAndPlanWriteFailureRollsBackTask() {
+        long now = System.currentTimeMillis();
+        Map<String, Object> quote = raw(now, true); quote.put("price", new BigDecimal("100000.00"));
+        BigDecimal start = new BigDecimal("100000.00"), target = new BigDecimal("100060.00");
+        PersistentPriceControl.Prepared prepared = controls.prepare(symbol, quote, start, 60, target, 10, false);
+        PersistentPriceControl.Task task = controls.startPrepared(symbol, quote, start, 60, target, 10, false, "v3", null, prepared);
+        org.springframework.transaction.PlatformTransactionManager manager = new DataSourceTransactionManager(store.db.getDataSource());
+        ControlHistoryStore cold = new ControlHistoryStore(new JdbcTemplate(store.db.getDataSource()), manager);
+        assertEquals(task.price(task.startedAt + 7000), new PersistentPriceControl(cold).latest(1).price(task.startedAt + 7000));
+        store.db.update("UPDATE market_control_plan SET checksum='bad' WHERE task_id=?", task.id);
+        ControlHistoryStore damaged = new ControlHistoryStore(new JdbcTemplate(store.db.getDataSource()), manager);
+        assertEquals("PLAN_CORRUPTED", assertThrows(BalancedControlPlan.Failure.class,
+                () -> new PersistentPriceControl(damaged).latest(1).price(task.startedAt + 7000)).code);
+        store.db.update("DELETE FROM market_control_task"); store.db.update("DELETE FROM market_control_plan");
+        store.db.execute("DROP TABLE market_control_plan");
+        assertThrows(Exception.class, () -> controls.startPrepared(symbol, quote, start, 60, target, 10, false, "again", null, prepared));
+        assertEquals(0, count("market_control_task")); assertEquals(1, count("market_control_sample"));
     }
     @Test void nextControlAndRestoreContinueHeldPriceAndReleaseOnlyFutureHolding() {
         long start=System.currentTimeMillis()-120000;

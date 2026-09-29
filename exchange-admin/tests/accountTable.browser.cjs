@@ -1,0 +1,35 @@
+const {chromium}=require(process.env.PLAYWRIGHT_PATH||'C:/Users/徐乾妖/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright');
+const assert=require('node:assert/strict');
+(async()=>{const browser=await chromium.launch({headless:true,executablePath:'C:/Program Files/Google/Chrome/Application/chrome.exe'});try{
+ const page=await browser.newPage({viewport:{width:1600,height:1000}}),errors=[],queries=[];let fail=false;
+ page.on('pageerror',e=>errors.push(e.message));
+ await page.addInitScript(()=>{localStorage.setItem('admin_token','table-qa');localStorage.setItem('admin_user',JSON.stringify({id:1,userType:'admin',isSuperAdmin:true}))});
+ await page.route('**/api/**',async route=>{const req=route.request(),url=new URL(req.url());let p=url.pathname,mode='REAL',params=req.method()==='POST'?req.postDataJSON():Object.fromEntries(url.searchParams);
+  if(p==='/api/admin/menus/current')return route.fulfill({json:{success:true,superAdmin:true,menus:[{id:1,menuCode:'users',menuName:'用户',path:'/users'},{id:2,menuCode:'orders',menuName:'订单',path:'/orders'}],groups:[],actions:{users:['*'],orders:['*']}}});
+  if(p.includes('table-preferences'))return route.fulfill({json:{success:true,data:[],columns:[]}});
+  if(p==='/api/admin/account-query'){mode='DEMO';p=params.path;params=params.body||params.params||{};if(fail)return route.fulfill({status:503,json:{message:'模拟查询失败；未回退到真实账户'}})}
+  queries.push({mode,path:p,params});
+  const user={id:101,email:mode==='REAL'?'real@example.test':'demo@example.test',nickname:mode+' User',status:'active',userType:'user',createdAt:'2026-09-29T00:00:00',fundBalance:mode==='REAL'?100:999,tradeBalance:0,parentUserId:null};
+  if(p==='/api/admin/users/query')return route.fulfill({json:{success:true,list:[user],total:1}});
+  if(p==='/api/admin/users/101')return route.fulfill({json:user});
+  if(p==='/api/admin/wallet/101/bank-cards')return route.fulfill({json:{success:true,list:[{id:1,userId:101,bankName:mode+' bank',recipientAccount:'1234',currency:'USD'}]}});
+  if(p==='/api/admin/wallet/101/digital-addresses')return route.fulfill({json:{success:true,list:[]}});
+  return route.fulfill({json:{success:true,list:[],content:[],data:{},total:0,count:0}});
+ });
+ await page.goto(process.env.ADMIN_QA_URL||'http://127.0.0.1:18079/users');
+ const filters=page.locator('.account-type-filter').first(),real=filters.getByRole('checkbox',{name:'真实账户',exact:true}),demo=filters.getByRole('checkbox',{name:'模拟账户',exact:true});
+ await page.getByText('real@example.test',{exact:true}).first().waitFor();assert.equal(await real.isChecked(),true);assert.equal(await demo.isChecked(),false);assert.equal(await page.getByRole('button',{name:'账户筛选查看',exact:true}).count(),0);
+ await page.getByPlaceholder('搜索邮箱/手机/昵称').fill('alice');
+ await filters.getByText('模拟账户',{exact:true}).click();await page.getByText('demo@example.test',{exact:true}).first().waitFor();assert.equal(await page.getByText('real@example.test',{exact:true}).count(),1);assert.ok(queries.filter(q=>q.path==='/api/admin/users/query').slice(-2).every(q=>q.params.keyword==='alice'));
+ assert.equal(await page.locator('.users-page .admin-table-container').first().locator('.el-table__body tr').count(),2);
+ await filters.getByText('真实账户',{exact:true}).click();await page.waitForFunction(()=>!document.querySelector('.users-page .el-table__body').textContent.includes('real@example.test'));assert.equal(await page.getByText('demo@example.test',{exact:true}).count(),1);
+ await page.getByRole('button',{name:'操作',exact:true}).click();
+ await page.getByText('收款管理',{exact:true}).last().click();
+ const wallet=page.getByRole('dialog',{name:'收款管理',exact:true});await wallet.getByText('DEMO bank',{exact:true}).waitFor();
+ const wf=wallet.locator('.account-type-filter').first();assert.equal(await wf.getByRole('checkbox',{name:'模拟账户',exact:true}).isChecked(),true);assert.equal(await wf.getByRole('checkbox',{name:'真实账户',exact:true}).isChecked(),false);
+ await wf.getByText('真实账户',{exact:true}).click();await wallet.getByText('REAL bank',{exact:true}).waitFor();assert.equal(await wallet.locator('.el-table__body tr').count(),2);
+ await wallet.getByRole('button',{name:'Close this dialog'}).click();
+ await filters.getByText('模拟账户',{exact:true}).click();await page.waitForFunction(()=>!document.querySelector('.users-page .el-table__body').textContent.includes('demo@example.test'));assert.equal(await page.locator('.users-page .admin-table-container').first().locator('.el-table__body tr').count(),0);
+ await filters.getByText('真实账户',{exact:true}).click();await page.getByText('real@example.test',{exact:true}).first().waitFor();fail=true;await filters.getByText('模拟账户',{exact:true}).click();await page.getByText('模拟查询失败；未回退到真实账户',{exact:true}).first().waitFor();assert.equal(await page.locator('.users-page .admin-table-container').first().locator('.el-table__body tr').count(),0);
+ assert.deepEqual(errors,[]);await page.screenshot({path:'C:/workspace/fx/new/account-table-filter-20260929/table-browser.png',fullPage:true});console.log('PASS: original Users table; default REAL; both/DEMO/neither; filters preserved; duplicate IDs; failed DEMO clears rows; no old dialog; no browser errors');
+ }finally{await browser.close()}})().catch(e=>{console.error(e);process.exitCode=1});

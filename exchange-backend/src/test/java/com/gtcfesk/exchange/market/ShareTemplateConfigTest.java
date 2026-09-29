@@ -13,7 +13,7 @@ class ShareTemplateConfigTest {
         assertEquals(16, SystemConfigService.shareTemplates(null).size());
         SystemConfigService service = mock(SystemConfigService.class);
         when(service.getConfigValue("share.templates")).thenReturn("gold,light");
-        assertEquals(java.util.Arrays.asList("gold", "light"), new CustomerServiceController(service).getShareTemplates("en").getBody());
+        assertEquals(java.util.Arrays.asList("gold", "light"), new CustomerServiceController(service, mock(com.gtcfesk.exchange.support.SupportSettings.class)).getShareTemplates("en", false).getBody());
     }
 
     @Test void rejectsEmptyDuplicateAndUnknownTemplatesBeforeSaving() {
@@ -32,7 +32,28 @@ class ShareTemplateConfigTest {
         assertEquals(java.util.Arrays.asList("gold", "light"), SystemConfigService.shareTemplates("gold,light", "ja"));
         SystemConfigService service = mock(SystemConfigService.class);
         when(service.getConfigValue("share.templates")).thenReturn(config);
-        assertEquals(java.util.Arrays.asList("referenceWhite", "light"), new CustomerServiceController(service).getShareTemplates("ja").getBody());
+        assertEquals(java.util.Arrays.asList("referenceWhite", "light"), new CustomerServiceController(service, mock(com.gtcfesk.exchange.support.SupportSettings.class)).getShareTemplates("ja", false).getBody());
+    }
+
+    @Test void focusIsValidatedAndDeliveredWithTemplates() {
+        assertEquals("amount", SystemConfigService.shareFocus(null));
+        assertEquals("amount", SystemConfigService.shareFocus("gold,light"));
+        String base = "{\"version\":2,\"templates\":[{\"id\":\"light\",\"languages\":[\"*\"]}]";
+        assertEquals("amount", SystemConfigService.shareFocus(base + "}"));
+        for (String focus : new String[] {"amount", "rate"}) {
+            String value = base + ",\"focus\":\"" + focus + "\"}";
+            assertEquals(focus, SystemConfigService.shareFocus(value));
+            SystemConfigService service = mock(SystemConfigService.class);
+            when(service.getConfigValue("share.templates")).thenReturn(value);
+            java.util.Map<?, ?> result = (java.util.Map<?, ?>) new CustomerServiceController(service, mock(com.gtcfesk.exchange.support.SupportSettings.class)).getShareTemplates("ja", true).getBody();
+            assertEquals(focus, result.get("focus"));
+            assertEquals(java.util.Collections.singletonList("light"), result.get("templates"));
+        }
+        for (String focus : new String[] {"null", "true", "1", "\"unknown\"", "[]"}) {
+            String value = base + ",\"focus\":" + focus + "}";
+            assertThrows(BusinessException.class, () -> SystemConfigService.shareTemplates(value));
+            assertThrows(BusinessException.class, () -> new SystemConfigService().saveConfig("share.templates", value, "test"));
+        }
     }
 
     @Test void rejectsMalformedAndUncoveredLanguageScopes() {

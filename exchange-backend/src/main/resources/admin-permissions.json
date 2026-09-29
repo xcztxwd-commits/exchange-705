@@ -1,0 +1,338 @@
+{
+  "groups": [
+    {
+      "code": "overview",
+      "name": "运营总览",
+      "icon": "DataAnalysis"
+    },
+    {
+      "code": "customers",
+      "name": "客户与代理",
+      "icon": "User"
+    },
+    {
+      "code": "trading",
+      "name": "交易与行情",
+      "icon": "TrendCharts"
+    },
+    {
+      "code": "funds",
+      "name": "资金管理",
+      "icon": "Wallet"
+    },
+    {
+      "code": "credit",
+      "name": "信贷管理",
+      "icon": "CreditCard"
+    },
+    {
+      "code": "wealth",
+      "name": "理财管理",
+      "icon": "Coin"
+    },
+    {
+      "code": "system",
+      "name": "系统与权限",
+      "icon": "Setting"
+    }
+  ],
+  "menus": [
+    {
+      "code": "dashboard",
+      "name": "运营看板",
+      "path": "/dashboard",
+      "group": "overview",
+      "actions": {}
+    },
+    {
+      "code": "statistics",
+      "name": "数据统计",
+      "path": "/statistics",
+      "group": "overview",
+      "actions": {}
+    },
+    {
+      "code": "users",
+      "name": "客户管理",
+      "path": "/users",
+      "group": "customers",
+      "actions": {
+        "detail": "查看详情",
+        "reset_password": "重置密码",
+        "freeze_user": "冻结用户",
+        "unfreeze_user": "解冻用户",
+        "ban_user": "禁用用户",
+        "unban_user": "取消禁用",
+        "set_agent": "设为代理",
+        "unset_agent": "取消代理",
+        "modify_balance": "修改余额",
+        "modify_invite_code": "修改邀请码",
+        "modify_remark": "修改备注",
+        "wallet_management": "管理收款信息",
+        "view_subordinates": "查看下级",
+        "fund_details": "查看资金明细",
+        "delete_user": "删除用户",
+        "batch_ip": "更新IP归属地",
+        "bank_create": "新增银行卡",
+        "bank_edit": "编辑银行卡",
+        "bank_delete": "删除银行卡",
+        "address_create": "新增数字地址",
+        "address_edit": "编辑数字地址",
+        "address_delete": "删除数字地址"
+      }
+    },
+    {
+      "code": "kyc_review",
+      "name": "实名认证",
+      "path": "/kyc-review",
+      "group": "customers",
+      "actions": {
+        "detail": "查看详情",
+        "approve_kyc": "审核通过",
+        "reject_kyc": "审核拒绝"
+      }
+    },
+    {
+      "code": "agents",
+      "name": "代理管理",
+      "path": "/agents",
+      "group": "customers",
+      "actions": {
+        "assign_permission": "分配代理权限",
+        "defaults": "设置默认权限",
+        "modify_remark": "修改备注",
+        "view_subordinates": "查看下级",
+        "performance": "查看业绩",
+        "status": "启用或禁用代理"
+      }
+    },
+    {
+      "code": "symbols",
+      "name": "交易品种",
+      "path": "/symbols",
+      "group": "trading",
+      "actions": {
+        "detail": "查看详情",
+        "create": "添加品种",
+        "edit_symbol": "编辑品种",
+        "delete_symbol": "删除品种",
+        "toggle_hot": "切换热门",
+        "leverage": "修改杠杆上限",
+        "categories": "管理分类"
+      }
+    },
+    {
+      "code": "ai_control",
+      "name": "行情调控",
+      "path": "/ai-control",
+      "group": "trading",
+      "actions": {
+        "start": "启动自动控盘",
+        "preview": "预览控盘",
+        "stop": "停止任务",
+        "manual": "修改手动偏移",
+        "restore": "恢复原始行情",
+        "random": "随机行情开关",
+        "replace_history": "替代历史行情"
+      }
+    },
+    {
+      "code": "durations",
+      "name": "期权期限",
+      "path": "/durations",
+      "group": "trading",
+      "actions": {
+        "create": "新增",
+        "edit": "编辑与保存",
+        "delete": "删除"
+      }
+    },
+    {
+      "code": "orders",
+      "name": "交易订单",
+      "path": "/orders",
+      "group": "trading",
+      "actions": {
+        "close_order": "平仓",
+        "cancel_order": "撤单",
+        "set_profit": "预设盈利",
+        "set_loss": "预设亏损",
+        "clear_preset": "清除预设",
+        "manual_order": "生成订单（超级管理员）",
+        "delete_order": "删除订单",
+        "restore_order": "恢复订单"
+      }
+    },
+    {
+      "code": "deposit_orders",
+      "name": "充值台账",
+      "path": "/deposit-orders",
+      "group": "funds",
+      "actions": {
+        "detail": "查看详情",
+        "view_deposit_orders": "查看充值台账",
+        "export_deposit_orders": "导出充值台账",
+        "manual_deposit": "手动充值",
+        "approve_deposit": "通过充值",
+        "reject_deposit": "拒绝充值"
+      }
+    },
+    {
+      "code": "deposit_review",
+      "name": "充值审核",
+      "path": "/deposit-review",
+      "group": "funds",
+      "actions": {
+        "detail": "查看详情",
+        "approve_deposit": "审核通过",
+        "reject_deposit": "审核拒绝"
+      }
+    },
+    {
+      "code": "withdraw_review",
+      "name": "提现审核",
+      "path": "/withdraw-review",
+      "group": "funds",
+      "actions": {
+        "detail": "查看详情",
+        "approve_withdraw": "审核通过",
+        "reject_withdraw": "审核拒绝",
+        "complete_withdraw": "标记完成"
+      }
+    },
+    {
+      "code": "deposit_settings",
+      "name": "充值渠道",
+      "path": "/deposit-settings",
+      "group": "funds",
+      "actions": {
+        "create": "新增",
+        "edit": "编辑与保存",
+        "delete": "删除"
+      }
+    },
+    {
+      "code": "loan_personal_info_review",
+      "name": "贷款资料",
+      "path": "/loan-personal-info-review",
+      "group": "credit",
+      "actions": {
+        "detail": "查看详情",
+        "approve_loan_personal_info": "审核通过",
+        "reject_loan_personal_info": "审核拒绝"
+      }
+    },
+    {
+      "code": "loan_review",
+      "name": "贷款审核",
+      "path": "/loan-review",
+      "group": "credit",
+      "actions": {
+        "detail": "查看详情",
+        "approve_loan": "审核通过",
+        "reject_loan": "审核拒绝"
+      }
+    },
+    {
+      "code": "loan_settings",
+      "name": "贷款方案",
+      "path": "/loan-settings",
+      "group": "credit",
+      "actions": {
+        "create": "新增",
+        "edit": "编辑与保存",
+        "delete": "删除"
+      }
+    },
+    {
+      "code": "financial_products",
+      "name": "理财产品",
+      "path": "/financial-products",
+      "group": "wealth",
+      "actions": {
+        "create": "新增",
+        "edit": "编辑与保存",
+        "delete": "删除"
+      }
+    },
+    {
+      "code": "financial_orders",
+      "name": "理财订单",
+      "path": "/financial-orders",
+      "group": "wealth",
+      "actions": {
+        "detail": "查看详情",
+        "payout": "发放收益",
+        "payout_all": "批量发放收益",
+        "calculate": "计算收益"
+      }
+    },
+    {
+      "code": "announcement",
+      "name": "公告管理",
+      "path": "/announcement",
+      "group": "system",
+      "actions": {
+        "detail": "查看详情",
+        "create": "新增",
+        "edit": "编辑与保存",
+        "delete": "删除"
+      }
+    },
+    {
+      "code": "roles",
+      "name": "角色与权限",
+      "path": "/roles",
+      "group": "system",
+      "actions": {
+        "detail": "查看详情",
+        "create": "新增",
+        "edit": "编辑与保存",
+        "delete": "删除",
+        "assign_permission": "分配权限"
+      }
+    },
+    {
+      "code": "admin_list",
+      "name": "管理员账号",
+      "path": "/admin-list",
+      "group": "system",
+      "actions": {
+        "detail": "查看详情",
+        "create": "新增",
+        "edit": "编辑与保存",
+        "delete": "删除",
+        "status": "启用或禁用"
+      }
+    },
+    {
+      "code": "website_security",
+      "name": "网站安全",
+      "path": "/website-security",
+      "group": "system",
+      "actions": {
+        "save": "保存网站安全（超级管理员）"
+      }
+    },
+    {
+      "code": "settings",
+      "name": "系统配置",
+      "path": "/settings",
+      "group": "system",
+      "actions": {
+        "save": "保存系统配置",
+        "share_templates": "保存分享模板",
+        "sound_preview": "试听提示音"
+      }
+    },
+    {
+      "code": "operation_log",
+      "name": "操作日志",
+      "path": "/operation-log",
+      "group": "system",
+      "actions": {
+        "detail": "查看详情"
+      }
+    }
+  ]
+}

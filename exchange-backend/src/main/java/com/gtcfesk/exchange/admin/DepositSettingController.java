@@ -17,6 +17,7 @@ public class DepositSettingController {
     private final DepositSettingService depositSettingService;
 
     @GetMapping
+    @com.gtcfesk.exchange.config.AdminPermission(menu = "deposit_settings", action = "")
     public ResponseEntity<?> getAllSettings() {
         try {
             List<DepositSetting> settings = depositSettingService.getAllSettings();
@@ -33,6 +34,7 @@ public class DepositSettingController {
     }
 
     @PostMapping
+    @com.gtcfesk.exchange.config.AdminPermission(menu = "deposit_settings", action = "create")
     public ResponseEntity<?> createSetting(@RequestBody DepositSetting setting) {
         try {
             DepositSetting created = depositSettingService.createSetting(setting);
@@ -50,6 +52,7 @@ public class DepositSettingController {
     }
 
     @PutMapping("/{id}")
+    @com.gtcfesk.exchange.config.AdminPermission(menu = "deposit_settings", action = "edit")
     public ResponseEntity<?> updateSetting(@PathVariable Long id, @RequestBody DepositSetting setting) {
         try {
             DepositSetting updated = depositSettingService.updateSetting(id, setting);
@@ -67,6 +70,7 @@ public class DepositSettingController {
     }
 
     @DeleteMapping("/{id}")
+    @com.gtcfesk.exchange.config.AdminPermission(menu = "deposit_settings", action = "delete")
     public ResponseEntity<?> deleteSetting(@PathVariable Long id) {
         try {
             depositSettingService.deleteSetting(id);

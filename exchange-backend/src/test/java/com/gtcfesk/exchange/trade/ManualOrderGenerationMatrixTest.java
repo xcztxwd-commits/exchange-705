@@ -40,8 +40,8 @@ class ManualOrderGenerationMatrixTest {
         BigDecimal net=gross.subtract(fee),pct=margin.add(fee).divide(n("10"),8,RoundingMode.HALF_UP);
         equal(margin,c.calculation.get("margin"));equal(fee,c.calculation.get("fee"));equal(gross,c.calculation.get("profit"));equal(net,c.calculation.get("net"));equal(pct,c.calculation.get("percent"));
         if(r.targetNet!=null)assertTrue(net.subtract(r.targetNet).abs().compareTo(r.targetNet.abs().multiply(n("0.05")))<=0);
-        if(r.quantity!=null)equal(r.quantity,q);if(r.leverage!=null)equal(r.leverage,c.leverage);
-        if(r.side!=null)assertEquals(r.side,c.side);if(r.percent!=null)assertTrue(pct.subtract(r.percent).abs().compareTo(n("0.01"))<=0);
+        if(r.quantity!=null)assertTrue(ManualOrderGenerator.withinTarget(q,r.quantity));if(r.leverage!=null)assertTrue(ManualOrderGenerator.withinTarget(c.leverage,r.leverage));
+        if(r.side!=null)assertEquals(r.side,c.side);if(r.percent!=null)assertTrue(ManualOrderGenerator.withinTarget(pct,r.percent));
     }
     @ParameterizedTest(name="mask={0}") @MethodSource("masks") void all128KnownFeasibleMasks(int mask){
         ManualOrderGenerator.Request r=request(mask);NavigableMap<Long,ManualOrderGenerator.Candle> prices=candles();
@@ -102,7 +102,7 @@ class ManualOrderGenerationMatrixTest {
     }
     @Test void conflictsMissingDataAndInvalidPrecision(){
         ManualOrderGenerator.Request r=request(127);r.percent=n("15");assertThrows(BusinessException.class,()->ManualOrderGenerator.solve(r,candles(),OPEN,CLOSE,n("1000"),BigDecimal.ONE,n("2"),1));
-        for(String invalid:new String[]{"0","-1","0.001","1E+30"}){r.quantity=n(invalid);assertThrows(BusinessException.class,()->ManualOrderGenerator.validate(r,n("1000")));}
+        for(String invalid:new String[]{"0","-1","0.00000000000000001","1E+30"}){r.quantity=n(invalid);assertThrows(BusinessException.class,()->ManualOrderGenerator.validate(r,n("1000")));}
         assertThrows(BusinessException.class,()->ManualOrderGenerator.solve(request(0),new TreeMap<>(),null,null,n("1000"),BigDecimal.ONE,n("2"),1));
     }
 }

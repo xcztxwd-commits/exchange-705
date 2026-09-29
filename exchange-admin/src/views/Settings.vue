@@ -269,13 +269,13 @@ onMounted(() => {
               <el-select v-model="conversionCurrencies" multiple filterable allow-create :multiple-limit="30" aria-label="缓存币种（兑美元）" style="width: min(720px, 100%)">
                 <el-option v-for="[code, name] in currencyOptions" :key="code" :label="`${code} · ${name}`" :value="code" :disabled="code === 'USD'" />
               </el-select>
-              <el-button link @click="conversionCurrencies = [...defaultConversionCurrencies]">恢复默认币种</el-button>
+              <el-button v-permission="'settings:save'" link @click="conversionCurrencies = [...defaultConversionCurrencies]">恢复默认币种</el-button>
             </el-form-item>
             <p>美元为基准：1 单位所选币种 = 对应美元金额，USD 固定为 1。默认包含人民币和新加坡元，可搜索选择或输入三位货币代码。现有交易及充值所需汇率仍自动缓存；未被业务使用的取消币种停止预热，旧缓存到期失效。</p>
             <el-form-item label="汇率更新间隔（小时）">
               <el-input-number v-model="conversionHours" :min="1" :max="168" :step="1" :precision="0" aria-label="汇率更新间隔（小时）" />
             </el-form-item>
-            <el-alert type="info" :closable="false" title="默认 8 小时，范围 1–168 小时。期间固定使用缓存汇率计算保证金和盈亏；到期后更新，更新失败时暂停相关结算。保存后按新时长判断是否到期。交易品种的实时价格仍单独校验。" />
+            <el-alert type="info" :closable="false" title="法币充值/提现固定换汇缓存：默认 8 小时，范围 1–168 小时，保存后按原始时间戳判断到期。合约保证金、盈亏和权益使用独立的实时汇率，超过 60 秒或行情不可用时暂停相关计算，不使用此长周期缓存。" />
           </el-form>
         </el-tab-pane>
 
@@ -360,6 +360,7 @@ onMounted(() => {
         </el-tab-pane>
 
         <el-tab-pane label="客服配置" name="service">
+          <el-alert type="info" :closable="false" title="站内客服、站内信开关、欢迎语与客服提示音请前往独立的「客服与消息设置」；此处保留外部客服地址。" style="margin-bottom: 20px" />
           <el-form label-width="150px">
             <el-form-item
               v-for="cfg in serviceConfig"
@@ -440,12 +441,12 @@ onMounted(() => {
                   style="flex: 1"
                   readonly
                 />
-                <el-upload
+                <el-upload v-permission="'settings:save'"
                   :http-request="(options: any) => handleSoundUpload(cfg.key, options.file)"
                   :show-file-list="false"
                   accept="audio/*"
                 >
-                  <el-button 
+                  <el-button v-permission="'settings:save'"
                     type="primary" 
                     :loading="uploadingSound === cfg.key"
                     size="default"
@@ -453,14 +454,14 @@ onMounted(() => {
                     上传提示音
                   </el-button>
                 </el-upload>
-                <el-button 
+                <el-button v-permission="'settings:sound_preview'"
                   type="success" 
                   @click="testSound(cfg.value)"
                   :disabled="!cfg.value || cfg.value.trim() === ''"
                 >
                   试听
                 </el-button>
-                <el-button 
+                <el-button v-permission="'settings:save'"
                   v-if="cfg.value && cfg.value.trim() !== ''"
                   type="danger" 
                   @click="clearSound(cfg.key)"
@@ -505,7 +506,7 @@ onMounted(() => {
       </el-tabs>
 
       <div style="margin-top: 20px; text-align: center">
-        <el-button type="primary" :loading="loading" @click="saveConfigs">
+        <el-button v-permission="'settings:save'" type="primary" :loading="loading" @click="saveConfigs">
           保存配置
         </el-button>
       </div>

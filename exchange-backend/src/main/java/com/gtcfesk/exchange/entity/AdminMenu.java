@@ -22,7 +22,7 @@ public class AdminMenu {
     @Column(name = "menu_name", nullable = false, length = 50)
     private String menuName;
 
-    @Column(name = "menu_code", nullable = false, unique = true, length = 50)
+    @Column(name = "menu_code", nullable = false, unique = true, length = 150)
     private String menuCode;
 
     @Column(name = "menu_type", nullable = false, length = 20)

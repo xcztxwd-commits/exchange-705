@@ -3,7 +3,7 @@ import { onBeforeUnmount, ref, watch } from 'vue'
 import { drawSharePoster, shareBackgrounds, shareCopy, shareTemplates,
   type ShareChart, type ShareOrder, type ShareTemplate } from '@/utils/orderShare'
 
-const props = defineProps<{ template: string; name: string; language: string }>()
+const props = defineProps<{ template: string; name: string; language: string; focus?: 'amount' | 'rate' }>()
 const open = ref(false), loading = ref(false), error = ref(''), image = ref('')
 let generation = 0
 // Design fixtures only: never query or expose a customer's real order or market data.
@@ -37,8 +37,8 @@ async function render() {
     if (run !== generation) return
     const canvas = document.createElement('canvas')
     drawSharePoster(canvas, order, {
-      template, mode: 'both', quantity: true, capital: true, fee: true,
-      leverage: true, orderId: true, openTime: true,
+      template, mode: 'both', focus: props.focus, quantity: false, capital: false, fee: false,
+      leverage: false, orderId: false, openTime: true,
     }, shareCopy(language), 'DEMO', 'UTC', undefined, chart, background)
     image.value = canvas.toDataURL('image/png')
   } catch {
@@ -47,13 +47,13 @@ async function render() {
     if (run === generation) loading.value = false
   }
 }
-watch(() => [props.template, props.language], render, { immediate: true })
+watch(() => [props.template, props.language, props.focus], render, { immediate: true })
 onBeforeUnmount(() => { generation++ })
 </script>
 
 <template>
   <div class="share-template-preview">
-    <button v-if="!error" type="button" class="preview-thumbnail" :disabled="loading || !image"
+    <button v-permission="'settings:view'" v-if="!error" type="button" class="preview-thumbnail" :disabled="loading || !image"
       :aria-label="`预览${name}`" aria-haspopup="dialog" @click="open = true">
       <img v-if="image" :src="image" :alt="`${name} · ${language}示例图`" />
       <span v-else role="status">生成中…</span>
@@ -61,16 +61,16 @@ onBeforeUnmount(() => { generation++ })
     </button>
     <div v-else role="status">
       <span>{{ error }}</span>
-      <el-button link type="primary" @click="render">重试</el-button>
+      <el-button v-permission="'settings:view'" link type="primary" @click="render">重试</el-button>
     </div>
     <el-dialog v-model="open" :title="`${name} · 图片预览`" width="min(560px, calc(100vw - 32px))"
       top="4vh" append-to-body destroy-on-close class="share-preview-dialog">
       <p class="preview-caption">语言：{{ language }} · 示例数据，仅用于展示模板，不代表真实交易。</p>
       <div class="preview-stage" v-loading="loading">
         <img v-if="image" :src="image" :alt="`${name} · ${language}完整预览`" />
-        <div v-else-if="error" role="alert">{{ error }} <el-button @click="render">重试</el-button></div>
+        <div v-else-if="error" role="alert">{{ error }} <el-button v-permission="'settings:view'" @click="render">重试</el-button></div>
       </div>
-      <template #footer><el-button @click="open = false">关闭预览</el-button></template>
+      <template #footer><el-button v-permission="'session:close'" @click="open = false">关闭预览</el-button></template>
     </el-dialog>
   </div>
 </template>

@@ -906,7 +906,7 @@ const logoUrl = `${import.meta.env.BASE_URL}img/logo.svg`
             <div class="market-price" v-if="!isMarketClosed(s)">{{ formatPrice(getRealTimePrice(s), s.pricePrecision) }}</div>
             <div class="market-price market-closed" v-else>{{ localeStore.t('marketClosed') }}</div>
             <div class="market-change" v-if="!isMarketClosed(s)" :style="{ color: getChangeColor(getRealTimeChange(s).changePct) }">
-              <span class="change-icon">{{ getRealTimeChange(s).changePct >= 0 ? '▲' : '▼' }}</span>
+              <span class="change-icon ui-inline-arrow">{{ getRealTimeChange(s).changePct >= 0 ? '▲' : '▼' }}</span>
               {{ getRealTimeChange(s).changePct >= 0 ? '+' : '' }}{{ (getRealTimeChange(s).changePct || 0).toFixed(2) }}%
             </div>
             <div class="market-change" v-else style="color: #999;">-</div>
@@ -971,7 +971,7 @@ const logoUrl = `${import.meta.env.BASE_URL}img/logo.svg`
             <div class="symbol-price" v-if="!isMarketClosed(s)">{{ formatPrice(getRealTimePrice(s), s.pricePrecision) }}</div>
             <div class="symbol-price market-closed" v-else>{{ localeStore.t('marketClosed') }}</div>
             <div class="symbol-change" v-if="!isMarketClosed(s)" :style="{ color: getChangeColor(getRealTimeChange(s).changePct) }">
-              <span class="change-icon">{{ getRealTimeChange(s).changePct >= 0 ? '▲' : '▼' }}</span>
+              <span class="change-icon ui-inline-arrow">{{ getRealTimeChange(s).changePct >= 0 ? '▲' : '▼' }}</span>
               {{ Math.abs(getRealTimeChange(s).changePct).toFixed(2) }}%
             </div>
             <div class="symbol-change" v-else style="color: #999;">-</div>

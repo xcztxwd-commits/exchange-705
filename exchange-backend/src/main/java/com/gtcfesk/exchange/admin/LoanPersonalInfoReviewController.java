@@ -28,8 +28,10 @@ public class LoanPersonalInfoReviewController {
     private final LoanPersonalInfoRepository loanPersonalInfoRepository;
     private final UserAccountRepository userAccountRepository;
     private final JwtUtil jwtUtil;
+    private final com.gtcfesk.exchange.user.LoanPersonalInfoService loanPersonalInfoService;
     
     @GetMapping("/list")
+    @com.gtcfesk.exchange.config.AdminPermission(menu = "loan_personal_info_review", action = "")
     public ResponseEntity<?> getPersonalInfoList(
             @RequestParam(required = false) String status,
             @RequestParam(required = false) Long userId,
@@ -96,6 +98,7 @@ public class LoanPersonalInfoReviewController {
                 infoMap.put("address", info.getAddress());
                 infoMap.put("idFrontImage", info.getIdFrontImage());
                 infoMap.put("idBackImage", info.getIdBackImage());
+                infoMap.put("handheldImage", info.getHandheldImage());
                 infoMap.put("status", info.getStatus());
                 infoMap.put("reviewRemark", info.getReviewRemark());
                 infoMap.put("createdAt", info.getCreatedAt());
@@ -194,6 +197,7 @@ public class LoanPersonalInfoReviewController {
     
     @PostMapping("/approve/{id}")
     @Transactional
+    @com.gtcfesk.exchange.config.AdminPermission(menu = "loan_personal_info_review", action = "approve_loan_personal_info")
     public ResponseEntity<?> approvePersonalInfo(
             Authentication auth,
             @PathVariable Long id) {
@@ -214,6 +218,7 @@ public class LoanPersonalInfoReviewController {
                 }
             }
             
+            loanPersonalInfoService.validateForReview(info);
             info.setStatus("APPROVED");
             info.setReviewedBy(reviewerId);
             info.setReviewedAt(LocalDateTime.now());
@@ -233,6 +238,7 @@ public class LoanPersonalInfoReviewController {
     
     @PostMapping("/reject/{id}")
     @Transactional
+    @com.gtcfesk.exchange.config.AdminPermission(menu = "loan_personal_info_review", action = "reject_loan_personal_info")
     public ResponseEntity<?> rejectPersonalInfo(
             Authentication auth,
             @PathVariable Long id,

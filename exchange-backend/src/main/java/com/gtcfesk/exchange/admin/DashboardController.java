@@ -44,6 +44,7 @@ public class DashboardController {
      * 获取仪表盘统计数据
      */
     @GetMapping("/stats")
+    @com.gtcfesk.exchange.config.AdminPermission(menu = "dashboard", action = "")
     public ResponseEntity<?> getDashboardStats(
             @RequestHeader(value = "Authorization", required = false) String authHeader) {
         try {
@@ -65,6 +66,7 @@ public class DashboardController {
      * 获取充值和提现的图表数据
      */
     @GetMapping("/chart-data")
+    @com.gtcfesk.exchange.config.AdminPermission(menu = "dashboard", action = "")
     public ResponseEntity<?> getChartData(
             @RequestHeader(value = "Authorization", required = false) String authHeader) {
         try {

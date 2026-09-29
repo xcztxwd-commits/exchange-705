@@ -157,6 +157,19 @@ public class TradingSymbol {
     @Column(name = "row_version", nullable = false, columnDefinition = "BIGINT NOT NULL DEFAULT 0")
     private long rowVersion;
 
+
+    // NULL denotes the legacy lot protocol. Never infer an old order's unit from today's symbol.
+    @Column(name = "quantity_unit_type", length = 16)
+    private String quantityUnitType;
+    @Column(name = "spec_version")
+    private Long specVersion;
+    @Column(name = "min_order_quantity", precision = 32, scale = 16)
+    private BigDecimal minOrderQuantity;
+    @Column(name = "quantity_step", precision = 32, scale = 16)
+    private BigDecimal quantityStep;
+    @Column(name = "min_order_notional", precision = 32, scale = 16)
+    private BigDecimal minOrderNotional;
+
     // 合约交易设置
     @Column(name = "lot_size", precision = 32, scale = 16)
     private BigDecimal lotSize = BigDecimal.valueOf(1000); // 每手数量，默认1000
@@ -169,6 +182,20 @@ public class TradingSymbol {
 
     @Column(name = "max_leverage", precision = 10, scale = 2)
     private BigDecimal maxLeverage; // 新订单可选杠杆上限；NULL 表示100倍，旧leverage字段保留兼容
+
+    @Transient @JsonProperty(access = JsonProperty.Access.READ_ONLY)
+    public String getCommissionMode() { return com.gtcfesk.exchange.trade.FxContractRules.isForex(this) ? "PER_LOT_PER_SIDE" : (quantityUnitType == null || "LOT".equals(quantityUnitType) ? "PER_LOT_ROUND_TRIP" : "PER_INPUT_UNIT_ROUND_TRIP"); }
+    @Transient @JsonProperty(access = JsonProperty.Access.READ_ONLY)
+    public String getCommissionCurrency() { return "USD"; }
+    // Local contract lots are NOT the provider's base-asset minQty / quantityPrecision.
+    @Transient @JsonProperty(access = JsonProperty.Access.READ_ONLY)
+    public BigDecimal getContractMinLot() { return quantityUnitType != null && !"LOT".equals(quantityUnitType) ? null : minOrderQuantity != null ? minOrderQuantity : new BigDecimal("0.01"); }
+    @Transient @JsonProperty(access = JsonProperty.Access.READ_ONLY)
+    public BigDecimal getContractLotStep() { return quantityUnitType != null && !"LOT".equals(quantityUnitType) ? null : quantityStep != null ? quantityStep : new BigDecimal("0.01"); }
+    @Transient @JsonProperty(access = JsonProperty.Access.READ_ONLY)
+    public BigDecimal getCommissionPerLotPerSide() {
+        return com.gtcfesk.exchange.trade.FxContractRules.isForex(this) && feeMultiplier != null ? feeMultiplier.divide(BigDecimal.valueOf(2)) : null;
+    }
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;

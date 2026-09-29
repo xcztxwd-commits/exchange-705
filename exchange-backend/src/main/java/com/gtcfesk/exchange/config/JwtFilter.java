@@ -24,15 +24,37 @@ public class JwtFilter extends OncePerRequestFilter {
     private final UserAccountRepository userAccountRepository;
     private final AdminUserRepository adminUserRepository;
 
+    @org.springframework.beans.factory.annotation.Autowired(required=false) private com.gtcfesk.exchange.simulation.SimulationEnvironment simulation;
+    @org.springframework.beans.factory.annotation.Autowired(required=false) private com.gtcfesk.exchange.simulation.SimulationGateway simulationGateway;
+    @org.springframework.beans.factory.annotation.Autowired(required=false) private com.gtcfesk.exchange.simulation.SimulationProvisioner simulationProvisioner;
+
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
         return java.util.Arrays.asList("/api/auth/login", "/api/auth/captcha", "/api/auth/register", "/api/auth/sendEmailCode", "/api/auth/resetPassword", "/api/admin/auth/login").contains(request.getRequestURI());
     }
 
+
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {
         String header = request.getHeader("Authorization");
+        if (simulation != null && simulation.enabled() && header != null && header.startsWith("Bearer ")) {
+            try {
+                Long id = simulationGateway.authenticate(header);
+                simulationProvisioner.catalog(header);
+                simulationProvisioner.user(id);
+                SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
+                    id.toString(), null, Collections.singletonList(new SimpleGrantedAuthority("ROLE_USER"))));
+            } catch (org.springframework.web.client.HttpClientErrorException e) {
+                response.setStatus(e.getRawStatusCode() == 401 || e.getRawStatusCode() == 403 ? 401 : 503);
+                response.setContentType("application/json;charset=UTF-8");
+                response.getWriter().write("{\"message\":\"模拟身份服务拒绝请求，请重新登录或稍后重试\"}"); return;
+            } catch (Exception e) {
+                response.setStatus(503); response.setContentType("application/json;charset=UTF-8");
+                response.getWriter().write("{\"message\":\"独立模拟账户暂不可用，未切换到真实资金\"}"); return;
+            }
+            chain.doFilter(request, response); return;
+        }
         if (header != null && header.startsWith("Bearer ")) {
             try {
                 Claims claims = jwtUtil.parse(header.substring(7));

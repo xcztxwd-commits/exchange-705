@@ -30,6 +30,7 @@ public class AdminSymbolService {
     @Autowired private MarketCategoryService categories;
     @Autowired private ForexQuoteMarketService quotes;
     @Autowired private TransactionTemplate transactions;
+    @javax.persistence.PersistenceContext private javax.persistence.EntityManager entityManager;
 
     public synchronized Map<String,Object> addFromCatalog(String source, String sourceCategory, String projectCategory, List<String> codes) {
         if(codes==null || codes.isEmpty() || codes.size()>20 || new HashSet<>(codes).size()!=codes.size())
@@ -148,6 +149,7 @@ public class AdminSymbolService {
     }
     
     private TradingSymbol createSymbol(TradingSymbol symbol) {
+        com.gtcfesk.exchange.trade.FxContractRules.defaults(symbol);
         if (symbol.getMaxLeverage() == null) symbol.setMaxLeverage(BigDecimal.valueOf(100));
         com.gtcfesk.exchange.common.TradeValidation.leverage(symbol.getMaxLeverage());
         if (symbolRepository.findBySymbol(symbol.getSymbol()).isPresent()) {
@@ -170,19 +172,38 @@ public class AdminSymbolService {
         if (symbol.getLeverage() == null) {
             symbol.setLeverage(BigDecimal.valueOf(10));
         }
+        if("Crypto".equals(symbol.getSourceCategory()) || "CryptoPerpetual".equals(symbol.getSourceCategory())) {
+            // Unknown assets require explicit reviewed configuration; never copy BTC's step.
+            symbol.setIsEnabled(false);
+        }
+        com.gtcfesk.exchange.trade.QuantityRules.configuration(symbol);
         return symbolRepository.save(symbol);
     }
     
+    @org.springframework.transaction.annotation.Transactional
     public TradingSymbol updateSymbol(Long id, TradingSymbol symbol) {
         if (symbol.getMaxLeverage() != null) com.gtcfesk.exchange.common.TradeValidation.leverage(symbol.getMaxLeverage());
         TradingSymbol existing = symbolRepository.findById(id)
             .orElseThrow(() -> new IllegalArgumentException("币种不存在"));
         
+        if(entityManager!=null) entityManager.refresh(existing,javax.persistence.LockModeType.PESSIMISTIC_WRITE);
+        String previousSpec=com.gtcfesk.exchange.trade.QuantityRules.signature(existing);
+        if(existing.getQuantityUnitType()!=null && !Objects.equals(existing.getSpecVersion(),symbol.getSpecVersion()))
+            throw new BusinessException("规格版本已变化，请刷新");
+        if(existing.getQuantityUnitType()!=null && symbol.getQuantityUnitType()==null)
+            throw new BusinessException("不能移除已启用的数量协议");
+        if(symbol.getQuantityUnitType()!=null) {
+            existing.setQuantityUnitType(symbol.getQuantityUnitType());existing.setMinOrderQuantity(symbol.getMinOrderQuantity());
+            existing.setQuantityStep(symbol.getQuantityStep());existing.setMinOrderNotional(symbol.getMinOrderNotional());
+        }
         if(!Objects.equals(existing.getSymbol(),symbol.getSymbol()) || !Objects.equals(existing.getAlltickSymbol(),symbol.getAlltickSymbol())
             || !Objects.equals(existing.getMarketSource(),symbol.getMarketSource()) || !Objects.equals(existing.getSourceCategory(),symbol.getSourceCategory()))
             throw new BusinessException("源、源分类和交易对不可修改，请从源目录重新添加");
         if(symbol.getCategory()==null || symbol.getCategory().isEmpty()) throw new BusinessException("请选择项目分类");
         categories.projectCategory(symbol.getCategory(),existing.getMarketSource(),existing.getSourceCategory());
+        if(!Boolean.TRUE.equals(existing.getIsEnabled()) && Boolean.TRUE.equals(symbol.getIsEnabled())
+            && ("Crypto".equals(existing.getSourceCategory()) || "CryptoPerpetual".equals(existing.getSourceCategory())) && existing.getQuantityUnitType()==null)
+            throw new BusinessException("启用加密品种前必须完整配置数量规格");
         existing.setName(symbol.getName());
         existing.setNameEn(symbol.getNameEn());
         existing.setCategory(symbol.getCategory());
@@ -207,6 +228,13 @@ public class AdminSymbolService {
         }
         if (symbol.getMaxLeverage() != null) existing.setMaxLeverage(symbol.getMaxLeverage());
         
+        if(!previousSpec.equals(com.gtcfesk.exchange.trade.QuantityRules.signature(existing)) && existing.getQuantityUnitType()!=null)
+            existing.setSpecVersion(existing.getSpecVersion()==null?1L:Math.addExact(existing.getSpecVersion(),1L));
+        com.gtcfesk.exchange.trade.QuantityRules.configuration(existing);
+        com.gtcfesk.exchange.trade.FxContractRules.validate(existing);
+        if (com.gtcfesk.exchange.trade.FxContractRules.isForex(existing)) {
+            existing.setVolumePrecision(2); existing.setMinTradeAmount(new BigDecimal("0.01"));
+        }
         TradingSymbol saved=symbolRepository.saveAndFlush(existing);
         quotes.refreshSymbols();
         return saved;
@@ -230,6 +258,7 @@ public class AdminSymbolService {
      * @param symbolIds 币种ID列表（如果为空，则按分类设置）
      * @param category 分类（如果symbolIds为空，则按此分类设置）
      */
+    @org.springframework.transaction.annotation.Transactional
     public void batchSetLeverage(BigDecimal leverage, List<Long> symbolIds, String category) {
         com.gtcfesk.exchange.common.TradeValidation.leverage(leverage);
         List<TradingSymbol> symbols;
@@ -246,6 +275,8 @@ public class AdminSymbolService {
         }
         
         for (TradingSymbol symbol : symbols) {
+            if(entityManager!=null) entityManager.refresh(symbol,javax.persistence.LockModeType.PESSIMISTIC_WRITE);
+            if(symbol.getQuantityUnitType()!=null && (symbol.getMaxLeverage()==null || symbol.getMaxLeverage().compareTo(leverage)!=0)) symbol.setSpecVersion(Math.addExact(symbol.getSpecVersion(),1L));
             symbol.setMaxLeverage(leverage);
         }
         

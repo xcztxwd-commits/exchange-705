@@ -33,15 +33,17 @@
           </el-select>
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" icon="el-icon-search" @click="loadList">搜索</el-button>
-          <el-button icon="el-icon-refresh" @click="resetSearch">重置</el-button>
+          <el-button v-permission="'kyc_review:view'" type="primary" icon="el-icon-search" @click="loadList">搜索</el-button>
+          <el-button v-permission="'kyc_review:view'" icon="el-icon-refresh" @click="resetSearch">重置</el-button>
         </el-form-item>
       </el-form>
     </div>
 
     <!-- 列表 -->
     <div class="table-section">
-      <el-table :data="list" border stripe v-loading="loading">
+      <AccountTypeFilter v-model="accountModes" @change="accountFilterChanged" />
+<admin-table :row-key="(row: any) => `${row.accountMode || 'REAL'}:${row.id ?? row.userId}:${row.type || ''}`" table-key="KycReview.1" :data="list" border stripe v-loading="loading">
+<el-table-column prop="accountModeLabel" label="账户类型" width="110" fixed="left" />
         <el-table-column prop="id" label="ID" width="80" />
         <el-table-column prop="userId" label="用户ID" width="100" />
         <el-table-column prop="userRemark" label="用户备注" width="150">
@@ -67,7 +69,7 @@
           <template #default="{ row }">
             <el-image
               v-if="row.idFrontImage"
-              :src="getImageUrl(row.idFrontImage)"
+              :src="getImageUrl(row.idFrontImage, row.accountMode)"
               :preview-src-list="getPreviewImageList(row)"
               style="width: 80px; height: 60px; cursor: pointer; border: 1px solid #eee;"
               fit="cover"
@@ -89,7 +91,7 @@
           <template #default="{ row }">
             <el-image
               v-if="row.idBackImage"
-              :src="getImageUrl(row.idBackImage)"
+              :src="getImageUrl(row.idBackImage, row.accountMode)"
               :preview-src-list="getPreviewImageList(row)"
               style="width: 80px; height: 60px; cursor: pointer; border: 1px solid #eee;"
               fit="cover"
@@ -120,26 +122,26 @@
         </el-table-column>
         <el-table-column label="操作" width="200" fixed="right">
           <template #default="{ row }">
-            <el-button
-              v-if="row.status === 'PENDING' && canApproveKyc"
+            <el-button v-permission="'kyc_review:approve_kyc'"
+              v-if="row.status === 'PENDING'"
               type="success"
               size="small"
               @click="handleApprove(row)"
-            >
+             :disabled="accountModes.includes('DEMO') || !accountModes.length">
               通过
             </el-button>
-            <el-button
-              v-if="row.status === 'PENDING' && canRejectKyc"
+            <el-button v-permission="'kyc_review:reject_kyc'"
+              v-if="row.status === 'PENDING'"
               type="danger"
               size="small"
               @click="handleReject(row)"
-            >
+             :disabled="accountModes.includes('DEMO') || !accountModes.length">
               拒绝
             </el-button>
             <span v-if="row.status !== 'PENDING'">-</span>
           </template>
         </el-table-column>
-      </el-table>
+      </admin-table>
     </div>
 
     <!-- 分页 -->
@@ -150,8 +152,7 @@
         :total="total"
         :page-sizes="[10, 20, 50, 100]"
         layout="total, sizes, prev, pager, next, jumper"
-        @size-change="loadList"
-        @current-change="loadList"
+        @change="loadList"
       />
     </div>
 
@@ -172,8 +173,8 @@
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="rejectDialogVisible = false">取消</el-button>
-        <el-button type="danger" @click="confirmReject">确认拒绝</el-button>
+        <el-button v-permission="'session:close'" @click="rejectDialogVisible = false">取消</el-button>
+        <el-button v-permission="'kyc_review:reject_kyc'" type="danger" @click="confirmReject" :disabled="accountModes.includes('DEMO') || !accountModes.length">确认拒绝</el-button>
       </template>
     </el-dialog>
   </div>
@@ -191,7 +192,13 @@ const loadPermissions = async () => {
   canApproveKyc.value = await hasPermission('kyc-review', 'approve_kyc') || await hasPermission('kyc_review', 'approve_kyc')
   canRejectKyc.value = await hasPermission('kyc-review', 'reject_kyc') || await hasPermission('kyc_review', 'reject_kyc')
 }
-import request from '@/utils/request'
+import { useAccountTable } from '@/utils/useAccountTable'
+import { accountTableRequest } from '@/utils/accountTableRequest'
+import AccountTypeFilter from '@/components/AccountTypeFilter.vue'
+const accountTable = useAccountTable()
+const accountModes = accountTable.modes
+const request = accountTableRequest(accountTable)
+function accountFilterChanged() { list.value=[];total.value=0;page.value=1;loadList() }
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getImageUrl } from '@/utils/imageUrl'
 
@@ -276,14 +283,14 @@ function formatDateTime(dateTime: string) {
 function getPreviewImageList(row: any): string[] {
   const images: string[] = []
   if (row.idFrontImage) {
-    const frontUrl = getImageUrl(row.idFrontImage)
+    const frontUrl = getImageUrl(row.idFrontImage, row.accountMode)
     // 确保URL有效且不是空字符串
     if (frontUrl && frontUrl.trim() !== '') {
       images.push(frontUrl)
     }
   }
   if (row.idBackImage) {
-    const backUrl = getImageUrl(row.idBackImage)
+    const backUrl = getImageUrl(row.idBackImage, row.accountMode)
     // 确保URL有效且不是空字符串
     if (backUrl && backUrl.trim() !== '') {
       images.push(backUrl)
@@ -295,6 +302,7 @@ function getPreviewImageList(row: any): string[] {
 
 // 审核通过
 async function handleApprove(row: any) {
+  accountTable.selectRow(row)
   try {
     await ElMessageBox.confirm('确认通过该用户的实名认证申请吗？', '确认', {
       type: 'warning',

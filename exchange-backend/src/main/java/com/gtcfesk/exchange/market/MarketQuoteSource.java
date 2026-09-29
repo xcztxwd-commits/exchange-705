@@ -81,6 +81,7 @@ public class MarketQuoteSource {
 
     private String[] convertIntervalToYahoo(String interval) {
         if (interval == null) return new String[]{"1m", "5d"};
+        if ("1M".equals(interval.trim())) return new String[]{"1mo", "10y"};
         String v = interval.trim().toLowerCase(Locale.ROOT);
         switch (v) {
             case "1m": return new String[]{"1m", "5d"};
@@ -125,7 +126,8 @@ public class MarketQuoteSource {
                 // URL: https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?range={range}&interval={interval}
                 String urlStr = yahooUrl + "/chart/" + urlEncode(yahooSymbol) + "?range=" + yahooRange + "&interval=" + yahooInterval;
                 if (endTime != null) {
-                    long seconds = "1d".equals(interval) ? 86400 : "1h".equals(interval) ? 3600
+                    long seconds = "1M".equals(interval) ? 31 * 86400L : "1w".equals(interval) ? 7 * 86400L
+                            : "1d".equals(interval) ? 86400 : "1h".equals(interval) ? 3600
                             : Long.parseLong(interval.substring(0, interval.length() - 1)) * 60;
                     long end = endTime / 1000;
                     // Extra calendar time covers market closures; the client validates actual coverage.
@@ -501,6 +503,7 @@ public class MarketQuoteSource {
 
     private int convertIntervalToKlineType(String interval) {
         if (interval == null) return 1;
+        if ("1M".equals(interval.trim())) return 10;
         String v = interval.trim().toLowerCase(Locale.ROOT);
         switch (v) {
             case "1m":

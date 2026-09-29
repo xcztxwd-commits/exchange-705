@@ -19,6 +19,7 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/upload")
 public class FileUploadController {
+    @org.springframework.beans.factory.annotation.Autowired(required=false) private com.gtcfesk.exchange.simulation.SimulationEnvironment simulation;
 
     private static final String UPLOAD_DIR = "uploads/";
     private static final String IMAGE_DIR = UPLOAD_DIR + "images/";
@@ -129,7 +130,7 @@ public class FileUploadController {
 
             // 返回文件URL，使用 /api/uploads/images/ 确保通过后端Controller处理
             // 避免被Nginx直接拦截
-            String fileUrl = "/api/uploads/images/" + filename;
+            String fileUrl = (simulation != null && simulation.enabled() ? "/demo-uploads/images/" : "/api/uploads/images/") + filename;
 
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", true);

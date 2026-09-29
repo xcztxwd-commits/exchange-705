@@ -40,15 +40,18 @@ function showToast(message: string, type: 'success' | 'error' = 'error') {
 // 加载实名认证信息
 async function loadKycInfo() {
   try {
-    const res: any = await request.get('/loan/kyc-info')
-    if (res && res.success && res.data) {
+    const res: any = await request.get('/loan/personal-info/status')
+    if (res && res.success && (res.verified || res.exempt) && res.data) {
       const info = res.data
       if (info.realName) formData.value.realName = info.realName
       if (info.idNumber) formData.value.idNumber = info.idNumber
       if (info.phone) formData.value.phone = info.phone
+      formData.value.address = info.address || ''
+    } else {
+      router.replace('/loan/personal-info')
     }
   } catch (e) {
-    console.error('加载实名认证信息失败:', e)
+    router.replace('/loan/personal-info')
   }
 }
 
@@ -80,10 +83,7 @@ async function submitLoanInfo() {
     const res: any = await request.post('/loan/apply', {
       amount: loanData.amount,
       settingId: loanData.settingId,
-      realName: formData.value.realName.trim(),
-      idNumber: formData.value.idNumber.trim(),
-      phone: formData.value.phone.trim(),
-      address: formData.value.address.trim()
+
     })
 
     if (res && res.success && res.data) {
@@ -126,7 +126,7 @@ onMounted(() => {
       <div class="form-section">
         <div class="form-label">{{ localeStore.t('realName') }} <span class="required">*</span></div>
         <input
-          v-model="formData.realName"
+          readonly v-model="formData.realName"
           type="text"
           class="form-input"
           :placeholder="localeStore.t('enterRealName')"
@@ -136,7 +136,7 @@ onMounted(() => {
       <div class="form-section">
         <div class="form-label">{{ localeStore.t('idNumber') }} <span class="required">*</span></div>
         <input
-          v-model="formData.idNumber"
+          readonly v-model="formData.idNumber"
           type="text"
           class="form-input"
           :placeholder="localeStore.t('enterIdNumber')"
@@ -146,7 +146,7 @@ onMounted(() => {
       <div class="form-section">
         <div class="form-label">{{ localeStore.t('phoneNumber') }} <span class="required">*</span></div>
         <input
-          v-model="formData.phone"
+          readonly v-model="formData.phone"
           type="tel"
           class="form-input"
           :placeholder="localeStore.t('enterPhoneNumber')"
@@ -156,7 +156,7 @@ onMounted(() => {
       <div class="form-section">
         <div class="form-label">{{ localeStore.t('homeAddress') }} <span class="required">*</span></div>
         <textarea
-          v-model="formData.address"
+          readonly v-model="formData.address"
           class="form-textarea"
           :placeholder="localeStore.t('enterHomeAddress')"
           rows="3"

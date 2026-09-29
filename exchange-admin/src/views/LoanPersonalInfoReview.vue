@@ -1,9 +1,10 @@
 <template>
   <div class="loan-personal-info-review-page">
+    <el-alert title="姓名、证件号及正反面照片沿用已审核的账户实名资料；此处仅审核贷款补充资料。" type="info" :closable="false" style="margin-bottom: 16px" />
     <el-card>
       <template #header>
         <div class="card-header">
-          <span>贷款个人信息审核</span>
+          <span>贷款资料审核</span>
           <div>
             <el-input
               v-model="filterUserId"
@@ -25,13 +26,15 @@
               <el-option label="已通过" value="APPROVED" />
               <el-option label="已拒绝" value="REJECTED" />
             </el-select>
-            <el-button type="primary" :icon="Search" @click="handleSearch">搜索</el-button>
-            <el-button :icon="Refresh" @click="handleReset">重置</el-button>
+            <el-button v-permission="'loan_personal_info_review:view'" type="primary" :icon="Search" @click="handleSearch">搜索</el-button>
+            <el-button v-permission="'loan_personal_info_review:view'" :icon="Refresh" @click="handleReset">重置</el-button>
           </div>
         </div>
       </template>
 
-      <el-table :data="infoList" style="width: 100%" v-loading="loading">
+<AccountTypeFilter v-model="accountModes" @change="accountFilterChanged" />
+      <admin-table :row-key="(row: any) => `${row.accountMode || 'REAL'}:${row.id ?? row.userId}:${row.type || ''}`" table-key="LoanPersonalInfoReview.1" :data="infoList" style="width: 100%" v-loading="loading">
+<el-table-column prop="accountModeLabel" label="账户类型" width="110" fixed="left" />
         <el-table-column prop="id" label="ID" width="80" />
         <el-table-column prop="userId" label="用户ID" width="100" />
         <el-table-column prop="userRemark" label="用户备注" width="150">
@@ -67,32 +70,32 @@
         </el-table-column>
         <el-table-column label="操作" width="200" fixed="right">
           <template #default="{ row }">
-            <el-button 
+            <el-button v-permission="'loan_personal_info_review:detail'"
               size="small" 
               type="primary" 
               @click="handleViewDetail(row)"
             >
               查看详情
             </el-button>
-            <el-button 
+            <el-button v-permission="'loan_personal_info_review:approve_loan_personal_info'"
               v-if="row.status === 'PENDING'" 
               size="small" 
               type="success" 
               @click="handleApprove(row)"
-            >
+             :disabled="accountModes.includes('DEMO') || !accountModes.length">
               通过
             </el-button>
-            <el-button 
+            <el-button v-permission="'loan_personal_info_review:reject_loan_personal_info'"
               v-if="row.status === 'PENDING'" 
               size="small" 
               type="danger" 
               @click="handleReject(row)"
-            >
+             :disabled="accountModes.includes('DEMO') || !accountModes.length">
               拒绝
             </el-button>
           </template>
         </el-table-column>
-      </el-table>
+      </admin-table>
     </el-card>
 
     <!-- 详情对话框 -->
@@ -126,8 +129,8 @@
             <div v-if="currentDetail.idFrontImage" class="id-image-item">
               <div class="image-label">身份证正面</div>
               <el-image
-                :src="getImageUrl(currentDetail.idFrontImage)"
-                :preview-src-list="[getImageUrl(currentDetail.idFrontImage)]"
+                :src="getImageUrl(currentDetail.idFrontImage, currentDetail.accountMode)"
+                :preview-src-list="[getImageUrl(currentDetail.idFrontImage, currentDetail.accountMode)]"
                 style="width: 100%; max-width: 400px; cursor: pointer;"
                 fit="contain"
               />
@@ -135,8 +138,8 @@
             <div v-if="currentDetail.idBackImage" class="id-image-item">
               <div class="image-label">身份证反面</div>
               <el-image
-                :src="getImageUrl(currentDetail.idBackImage)"
-                :preview-src-list="[getImageUrl(currentDetail.idBackImage)]"
+                :src="getImageUrl(currentDetail.idBackImage, currentDetail.accountMode)"
+                :preview-src-list="[getImageUrl(currentDetail.idBackImage, currentDetail.accountMode)]"
                 style="width: 100%; max-width: 400px; cursor: pointer;"
                 fit="contain"
               />
@@ -144,8 +147,8 @@
             <div v-if="currentDetail.handheldImage" class="id-image-item">
               <div class="image-label">手持身份证</div>
               <el-image
-                :src="getImageUrl(currentDetail.handheldImage)"
-                :preview-src-list="[getImageUrl(currentDetail.handheldImage)]"
+                :src="getImageUrl(currentDetail.handheldImage, currentDetail.accountMode)"
+                :preview-src-list="[getImageUrl(currentDetail.handheldImage, currentDetail.accountMode)]"
                 style="width: 100%; max-width: 400px; cursor: pointer;"
                 fit="contain"
               />
@@ -154,19 +157,19 @@
         </div>
       </div>
       <template #footer>
-        <el-button @click="detailDialogVisible = false">关闭</el-button>
-        <el-button 
+        <el-button v-permission="'session:close'" @click="detailDialogVisible = false">关闭</el-button>
+        <el-button v-permission="'loan_personal_info_review:approve_loan_personal_info'"
           v-if="currentDetail && currentDetail.status === 'PENDING'" 
           type="success" 
           @click="handleApproveFromDetail"
-        >
+         :disabled="accountModes.includes('DEMO') || !accountModes.length">
           通过
         </el-button>
-        <el-button 
+        <el-button v-permission="'loan_personal_info_review:reject_loan_personal_info'"
           v-if="currentDetail && currentDetail.status === 'PENDING'" 
           type="danger" 
           @click="handleRejectFromDetail"
-        >
+         :disabled="accountModes.includes('DEMO') || !accountModes.length">
           拒绝
         </el-button>
       </template>
@@ -185,8 +188,8 @@
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="rejectDialogVisible = false">取消</el-button>
-        <el-button type="danger" @click="confirmReject">确认拒绝</el-button>
+        <el-button v-permission="'session:close'" @click="rejectDialogVisible = false">取消</el-button>
+        <el-button v-permission="'loan_personal_info_review:reject_loan_personal_info'" type="danger" @click="confirmReject" :disabled="accountModes.includes('DEMO') || !accountModes.length">确认拒绝</el-button>
       </template>
     </el-dialog>
   </div>
@@ -196,7 +199,13 @@
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search, Refresh } from '@element-plus/icons-vue'
-import request from '@/utils/request'
+import { useAccountTable } from '@/utils/useAccountTable'
+import { accountTableRequest } from '@/utils/accountTableRequest'
+import AccountTypeFilter from '@/components/AccountTypeFilter.vue'
+const accountTable = useAccountTable()
+const accountModes = accountTable.modes
+const request = accountTableRequest(accountTable)
+function accountFilterChanged() { infoList.value=[];loadList() }
 import { getImageUrl } from '@/utils/imageUrl'
 
 const infoList = ref<any[]>([])

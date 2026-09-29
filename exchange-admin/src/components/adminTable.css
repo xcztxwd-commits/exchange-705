@@ -1,0 +1,10 @@
+.admin-table-container{width:100%;min-width:0}
+.admin-table-toolbar{display:flex;justify-content:flex-end;align-items:center;gap:12px;margin:0 0 8px}
+.admin-table-error{color:var(--el-color-danger);font-size:12px}
+.admin-table-help{color:var(--el-text-color-secondary);line-height:1.6;margin-top:0}
+.admin-table-column-list{max-height:55vh;overflow:auto}
+.admin-table-column{display:flex;gap:8px;align-items:center;padding:10px 4px;border-bottom:1px solid var(--el-border-color-lighter);cursor:grab}
+.admin-table-column-label{flex:1;min-width:0;display:flex;align-items:center;gap:8px;overflow-wrap:anywhere}
+.admin-table-column input{accent-color:var(--el-color-primary)}
+.admin-table-column select{padding:5px;border:1px solid var(--el-border-color);border-radius:4px;background:var(--el-bg-color);color:var(--el-text-color-primary)}
+.admin-table-column .el-button+.el-button{margin-left:0}

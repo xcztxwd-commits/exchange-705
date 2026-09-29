@@ -17,6 +17,7 @@ public class LoanSettingController {
     private final LoanSettingService loanSettingService;
 
     @GetMapping
+    @com.gtcfesk.exchange.config.AdminPermission(menu = "loan_settings", action = "")
     public ResponseEntity<?> getAllSettings() {
         try {
             List<LoanSetting> settings = loanSettingService.getAllSettings();
@@ -33,6 +34,7 @@ public class LoanSettingController {
     }
 
     @PostMapping
+    @com.gtcfesk.exchange.config.AdminPermission(menu = "loan_settings", action = "create")
     public ResponseEntity<?> createSetting(@RequestBody LoanSetting setting) {
         try {
             LoanSetting created = loanSettingService.createSetting(setting);
@@ -50,6 +52,7 @@ public class LoanSettingController {
     }
 
     @PutMapping("/{id}")
+    @com.gtcfesk.exchange.config.AdminPermission(menu = "loan_settings", action = "edit")
     public ResponseEntity<?> updateSetting(@PathVariable Long id, @RequestBody LoanSetting setting) {
         try {
             LoanSetting updated = loanSettingService.updateSetting(id, setting);
@@ -67,6 +70,7 @@ public class LoanSettingController {
     }
 
     @DeleteMapping("/{id}")
+    @com.gtcfesk.exchange.config.AdminPermission(menu = "loan_settings", action = "delete")
     public ResponseEntity<?> deleteSetting(@PathVariable Long id) {
         try {
             loanSettingService.deleteSetting(id);

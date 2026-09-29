@@ -1,0 +1,177 @@
+<script setup lang="ts">
+import { ref, watch, onUnmounted } from 'vue'
+import { useAuthStore } from '@/store/auth'
+import { useRoute, useRouter } from 'vue-router'
+import request from '@/utils/request'
+import { supportText, supportUrl } from '@/utils/support'
+const props = withDefaults(defineProps<{ admin?: boolean; enabled?: boolean }>(), {
+  admin: false,
+  enabled: true,
+})
+const auth = useAuthStore(),
+  router = useRouter(),
+  route = useRoute()
+const state = ref<any>({}),
+  audioEnabled = ref(false),
+  audioError = ref('')
+const t = (zh: string, en: string) => supportText(zh, en, props.admin)
+let timer: ReturnType<typeof setTimeout> | undefined,
+  generation = 0,
+  audio: HTMLAudioElement | undefined
+let watermark = { latest: 0, queueLatest: 0, inboxLatest: 0 },
+  initialized = false
+async function sound() {
+  if (!state.value.sound || !audio) return
+  audio.src = supportUrl(state.value.sound)
+  audio.volume = 0.65
+  audio.currentTime = 0
+  try {
+    await audio.play()
+    audioError.value = ''
+  } catch {
+    audioEnabled.value = false
+    audioError.value = t('浏览器已暂停声音，请再次启用', 'Sound was blocked. Tap to enable again.')
+  }
+}
+async function enableAudio() {
+  if (audioEnabled.value) {
+    audioEnabled.value = false
+    audio?.pause()
+    return
+  }
+  audio ||= new Audio()
+  audioEnabled.value = true
+  await sound()
+}
+async function poll(version: number) {
+  if (version !== generation || !auth.token || !props.enabled) return
+  try {
+    const data: any = await request.get(`/${props.admin ? 'admin' : 'user'}/support/notifications`)
+    if (version !== generation) return
+    state.value = data
+    const incoming = (['latest', 'queueLatest', 'inboxLatest'] as const).some(
+      (key) => data[key] > watermark[key],
+    )
+    if (initialized && incoming && audioEnabled.value) await sound()
+    for (const key of ['latest', 'queueLatest', 'inboxLatest'] as const)
+      watermark[key] = Math.max(watermark[key], data[key] || 0)
+    initialized = true
+  } catch {
+    /* Next poll retries; do not turn network failures into an unread reset. */
+  } finally {
+    if (version === generation) timer = setTimeout(() => poll(version), 5000)
+  }
+}
+watch(
+  () => [auth.token, props.enabled],
+  () => {
+    clearTimeout(timer)
+    const current = ++generation
+    state.value = {}
+    initialized = false
+    watermark = { latest: 0, queueLatest: 0, inboxLatest: 0 }
+    audioEnabled.value = false
+    audio?.pause()
+    void poll(current)
+  },
+  { immediate: true },
+)
+onUnmounted(() => {
+  ++generation
+  clearTimeout(timer)
+  audio?.pause()
+})
+</script>
+<template>
+  <nav
+    v-if="
+      auth.token && enabled && route.path !== '/inbox' && (state.mode === 'internal' || state.inboxEnabled)
+    "
+    class="support-notifications"
+    :class="{ floating: !admin, detail: ['/customer-service', '/inbox'].includes(route.path) }"
+    :aria-label="t('消息通知', 'Message notifications')"
+  >
+    <button
+      v-if="
+        state.mode === 'internal' &&
+        (admin || (state.chatUnread && !['/customer-service', '/inbox'].includes(route.path)))
+      "
+      @click="router.push(admin ? '/support' : '/customer-service')"
+    >
+      {{ admin ? '客服' : t('客服回复', 'Support')
+      }}<b v-if="state.waiting + state.chatUnread">{{ state.waiting + state.chatUnread }}</b>
+    </button>
+    <button
+      v-if="!admin && state.inboxEnabled && !['/customer-service', '/inbox'].includes(route.path)"
+      @click="router.push('/inbox')"
+    >
+      {{ t('站内信', 'Inbox') }}<b v-if="state.inboxUnread">{{ state.inboxUnread }}</b>
+    </button>
+    <button
+      v-if="state.sound"
+      :aria-pressed="audioEnabled"
+      :title="
+        audioError ||
+        t(
+          '网页开启且完成声音授权后可提示；锁屏不保证播放',
+          'Requires an open page and sound permission; not guaranteed on a locked screen',
+        )
+      "
+      @click="enableAudio"
+    >
+      {{ audioEnabled ? t('静音', 'Mute') : t('开启提示音', 'Enable sound') }}
+    </button>
+    <span v-if="audioError" role="status">{{ audioError }}</span>
+  </nav>
+</template>
+<style scoped>
+.support-notifications {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+.support-notifications button {
+  border: 1px solid #e5eade;
+  border-radius: 20px;
+  background: #fff;
+  color: #527526;
+  font-size: 11px;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+.support-notifications b {
+  display: inline-block;
+  background: #739f32;
+  color: #fff;
+  min-width: 16px;
+  border-radius: 9px;
+  padding: 0 3px;
+  margin-left: 5px;
+}
+.support-notifications.floating {
+  position: fixed;
+  right: 16px;
+  bottom: 86px;
+  z-index: 35;
+  max-width: calc(100vw - 32px);
+  filter: drop-shadow(0 3px 8px #22341114);
+}
+.support-notifications.floating.detail {
+  bottom: auto;
+  top: 90px;
+  max-width: 130px;
+}
+.support-notifications span {
+  font-size: 10px;
+  background: white;
+  padding: 4px;
+  color: #a24c37;
+}
+@media (max-width: 600px) {
+  .support-notifications.floating.detail {
+    top: 78px;
+    right: 14px;
+  }
+}
+</style>

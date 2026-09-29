@@ -11,10 +11,15 @@ export function leverageChoices(max: number): number[] {
   return [...new Set([1, 5, 10, 20, 50, 100, max])].filter(value => value <= max).sort((a, b) => a - b)
 }
 
-export function contractMargin(quantity: number, lotSize: number, price: number, leverage: number, conversionRate = 1): number {
+export function contractMargin(quantity: number, lotSize: number, price: number, leverage: number, conversionRate = 1, marginBaseToUsdRate?: number): number {
+  if (marginBaseToUsdRate !== undefined) {
+    if (!Number.isFinite(marginBaseToUsdRate) || marginBaseToUsdRate <= 0) return NaN
+    if (![quantity, lotSize, leverage].every(value => Number.isFinite(value) && value > 0)) return 0
+    return decimalMargin(quantity, lotSize, 1, leverage, marginBaseToUsdRate)
+  }
   if (!Number.isFinite(conversionRate) || conversionRate <= 0) return NaN
   if (![quantity, lotSize, price, leverage].every(value => Number.isFinite(value) && value > 0)) return 0
-  return quantity * lotSize * price / leverage * conversionRate
+  return decimalMargin(quantity, lotSize, price, leverage, conversionRate)
 }
 
 export function calculateContractProfit(order: any, currentPrice: number, conversionRate = 1): number {
@@ -25,26 +30,26 @@ export function calculateContractProfit(order: any, currentPrice: number, conver
   if (order.side !== 'BUY' && order.side !== 'SELL') return Number(order.profit ?? 0)
   // NULL snapshots identify legacy orders. Never reprice them using current symbol settings.
   const multiplier = Number(order.lotSize ?? order.leverage ?? 1)
-  const difference = order.side === 'BUY' ? currentPrice - openPrice : openPrice - currentPrice
-  return difference * quantity * multiplier * conversionRate
+  try {
+    const difference = (decimal(currentPrice)-decimal(openPrice)) * BigInt(order.side === 'BUY' ? 1 : -1)
+    return Number(difference * decimal(quantity) * decimal(multiplier) * decimal(conversionRate, false) / (SCALE*SCALE*SCALE)) / Number(SCALE)
+  } catch { return NaN }
 }
 
 export function contractEquity(available: number, orders: any[]): number {
-  return available + orders.reduce((sum, order) => sum + Number(order.margin || 0) + Number(order.profit ?? 0)
-    + (order.lotSize == null ? Number(order.fee || 0) : 0), 0)
+  return decimalSum(available, ...orders.flatMap(order => [order.margin || 0, order.profit ?? 0, order.lotSize == null ? order.fee || 0 : 0]))
 }
 
-// The order form trades in 0.01 lots. Reserve both margin and the opening fee.
-export function quantityFromAllocation(available: number, percent: number, marginPerLot: number, feePerLot: number): number {
-  if (![available, percent, marginPerLot, feePerLot].every(Number.isFinite)
-    || available <= 0 || percent <= 0 || marginPerLot <= 0 || feePerLot < 0) return 0
-  const budget = available * Math.min(percent, 100) / 100
-  const cost = marginPerLot + feePerLot
-  let steps = Math.floor(budget / cost * 100)
-  if (!Number.isSafeInteger(steps)) return 0
-  // Floating point must never round a 100% allocation above the available funds.
-  while (steps > 0 && ((steps / 100) * marginPerLot + (steps / 100) * feePerLot) > budget) steps--
-  return steps / 100
+// Use the configured quantity grid; reserve margin and the complete round-trip fee.
+export function quantityFromAllocation(available: number, percent: number, marginPerLot: number, feePerLot: number, step = 0.01, minimum = 0.01, notionalPerUnit = 0, minNotional = 0): number {
+  if (![available,percent,marginPerLot,feePerLot,step,minimum,notionalPerUnit,minNotional].every(Number.isFinite) || available<=0 || percent<=0 || marginPerLot<=0 || feePerLot<0 || step<=0) return 0
+  try {
+    const budget=decimal(available)*decimal(Math.min(percent,100))/decimal(100)
+    const cost=decimal(marginPerLot, false)+decimal(feePerLot), grid=decimal(step)
+    const q=budget*SCALE/(cost*grid)*grid
+    if(q<decimal(minimum) || q*decimal(notionalPerUnit, false)<decimal(minNotional)*SCALE)return 0
+    return decimalDisplay(q)
+  } catch { return 0 }
 }
 
 export interface LiquidationPosition {
@@ -83,4 +88,50 @@ export function estimateLiquidationPrice(
   if (equity <= 0 || Math.abs(exposure) < 1e-12) return null
   const price = order.price - equity / exposure
   return Number.isFinite(price) && price > 0 ? price : null
+}
+
+// Exact base-10 integer arithmetic for quantity grids and allocation budgets (16 decimals).
+const SCALE = BigInt('10000000000000000')
+function decimal(value: unknown, exact = true): bigint {
+  const text = String(value)
+  if (!/^[+-]?\d+(?:\.\d+)?(?:e[+-]?\d+)?$/i.test(text)) throw new Error('Invalid decimal')
+  const [mantissa, exponent = '0'] = text.toLowerCase().split('e')
+  const negative = mantissa!.startsWith('-')
+  const [whole, fraction = ''] = mantissa!.replace(/^[+-]/, '').split('.')
+  const shift = 16 + Number(exponent) - fraction.length
+  if (Math.abs(shift) > 64) throw new Error('Decimal out of range')
+  let n = BigInt(whole! + fraction)
+  if (shift < 0) { const divisor = BigInt(10) ** BigInt(-shift); if(exact && n % divisor) throw new Error('Decimal precision'); n /= divisor }
+  else n *= BigInt(10) ** BigInt(shift)
+  if (n >= SCALE * SCALE) throw new Error('Decimal out of range')
+  return negative ? -n : n
+}
+export function quantityUnit(spec: any, lots = '手'): string {
+  return spec?.quantityUnitType === 'BASE_ASSET' ? spec.quantityAsset || spec.baseCurrency || '—' : spec?.quantityUnitType === 'SHARE' ? '股' : lots
+}
+export function validQuantity(quantity: unknown, spec: any): boolean {
+  try { const q=decimal(quantity), step=decimal(spec?.quantityStep ?? '0.01'), min=decimal(spec?.minOrderQuantity ?? '0.01'); return step>BigInt(0) && q>=min && q>BigInt(0) && q%step===BigInt(0) } catch { return false }
+}
+export function displayFee(value: unknown): string {
+  const n=Number(value)
+  if(!Number.isFinite(n))return '—'
+  if(n>0 && n<0.01)return '<0.01'
+  return n.toFixed(2)
+}
+export function decimalProduct(...values: number[]): number {
+  try { let n=SCALE, denominator=BigInt(1); for(const v of values){n*=decimal(v,false);denominator*=SCALE} return decimalDisplay(n/denominator) } catch {return NaN}
+}
+
+function decimalDisplay(n: bigint): number {
+  const digits=(n<BigInt(0)?-n:n).toString().padStart(17,'0')
+  return Number((n<BigInt(0)?'-':'')+digits.slice(0,-16)+'.'+digits.slice(-16))
+}
+export function decimalSum(...values: unknown[]): number {
+  try { return decimalDisplay(values.reduce<bigint>((sum,v)=>sum+decimal(v,false),BigInt(0))) } catch { return NaN }
+}
+function decimalMargin(q: number, lot: number, price: number, leverage: number, rate: number): number {
+  try {
+    const numerator=decimal(q)*decimal(lot)*decimal(price, false)*decimal(rate, false), denominator=decimal(leverage)*SCALE*SCALE
+    return decimalDisplay((numerator+denominator-BigInt(1))/denominator)
+  } catch {return NaN}
 }

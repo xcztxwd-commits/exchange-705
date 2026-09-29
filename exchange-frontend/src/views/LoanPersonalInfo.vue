@@ -1,632 +1,104 @@
 <script setup lang="ts">
 import { computed, ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import Tabbar from '@/components/Tabbar.vue'
 import request from '@/utils/request'
-import { useAuthStore } from '@/store/auth'
-import { getImageUrl } from '@/utils/imageUrl'
 import { useLocaleStore } from '@/store/locale'
-import AppSelect from '@/components/AppSelect.vue'
-
+import { getImageUrl } from '@/utils/imageUrl'
+import Tabbar from '@/components/Tabbar.vue'
 const router = useRouter()
-const auth = useAuthStore()
-auth.load()
-
-// 多语言
 const localeStore = useLocaleStore()
-localeStore.loadLocale()
-
-// 国家区号列表
-const countryCodes = [
-  { code: '+1', name: '美国/加拿大', flag: '🇺🇸' },
-  { code: '+86', name: '中国', flag: '🇨🇳' },
-  { code: '+852', name: '香港', flag: '🇭🇰' },
-  { code: '+853', name: '澳门', flag: '🇲🇴' },
-  { code: '+886', name: '台湾', flag: '🇹🇼' },
-  { code: '+81', name: '日本', flag: '🇯🇵' },
-  { code: '+82', name: '韩国', flag: '🇰🇷' },
-  { code: '+65', name: '新加坡', flag: '🇸🇬' },
-  { code: '+60', name: '马来西亚', flag: '🇲🇾' },
-  { code: '+66', name: '泰国', flag: '🇹🇭' },
-  { code: '+62', name: '印度尼西亚', flag: '🇮🇩' },
-  { code: '+63', name: '菲律宾', flag: '🇵🇭' },
-  { code: '+84', name: '越南', flag: '🇻🇳' },
-  { code: '+44', name: '英国', flag: '🇬🇧' },
-  { code: '+33', name: '法国', flag: '🇫🇷' },
-  { code: '+49', name: '德国', flag: '🇩🇪' },
-  { code: '+39', name: '意大利', flag: '🇮🇹' },
-  { code: '+34', name: '西班牙', flag: '🇪🇸' },
-  { code: '+31', name: '荷兰', flag: '🇳🇱' },
-  { code: '+32', name: '比利时', flag: '🇧🇪' },
-  { code: '+41', name: '瑞士', flag: '🇨🇭' },
-  { code: '+46', name: '瑞典', flag: '🇸🇪' },
-  { code: '+47', name: '挪威', flag: '🇳🇴' },
-  { code: '+45', name: '丹麦', flag: '🇩🇰' },
-  { code: '+358', name: '芬兰', flag: '🇫🇮' },
-  { code: '+7', name: '俄罗斯', flag: '🇷🇺' },
-  { code: '+91', name: '印度', flag: '🇮🇳' },
-  { code: '+61', name: '澳大利亚', flag: '🇦🇺' },
-  { code: '+64', name: '新西兰', flag: '🇳🇿' },
-  { code: '+27', name: '南非', flag: '🇿🇦' },
-  { code: '+55', name: '巴西', flag: '🇧🇷' },
-  { code: '+52', name: '墨西哥', flag: '🇲🇽' },
-  { code: '+971', name: '阿联酋', flag: '🇦🇪' },
-  { code: '+966', name: '沙特阿拉伯', flag: '🇸🇦' },
-  { code: '+974', name: '卡塔尔', flag: '🇶🇦' },
-  { code: '+965', name: '科威特', flag: '🇰🇼' },
-  { code: '+973', name: '巴林', flag: '🇧🇭' },
-  { code: '+968', name: '阿曼', flag: '🇴🇲' },
-  { code: '+961', name: '黎巴嫩', flag: '🇱🇧' },
-  { code: '+962', name: '约旦', flag: '🇯🇴' },
-  { code: '+972', name: '以色列', flag: '🇮🇱' },
-  { code: '+90', name: '土耳其', flag: '🇹🇷' },
-  { code: '+20', name: '埃及', flag: '🇪🇬' },
-  { code: '+234', name: '尼日利亚', flag: '🇳🇬' },
-  { code: '+254', name: '肯尼亚', flag: '🇰🇪' },
-  { code: '+233', name: '加纳', flag: '🇬🇭' },
-  { code: '+212', name: '摩洛哥', flag: '🇲🇦' },
-  { code: '+351', name: '葡萄牙', flag: '🇵🇹' },
-  { code: '+30', name: '希腊', flag: '🇬🇷' },
-  { code: '+353', name: '爱尔兰', flag: '🇮🇪' },
-  { code: '+48', name: '波兰', flag: '🇵🇱' },
-  { code: '+420', name: '捷克', flag: '🇨🇿' },
-  { code: '+36', name: '匈牙利', flag: '🇭🇺' },
-  { code: '+40', name: '罗马尼亚', flag: '🇷🇴' },
-  { code: '+380', name: '乌克兰', flag: '🇺🇦' },
-  { code: '+375', name: '白俄罗斯', flag: '🇧🇾' },
-  { code: '+370', name: '立陶宛', flag: '🇱🇹' },
-  { code: '+371', name: '拉脱维亚', flag: '🇱🇻' },
-  { code: '+372', name: '爱沙尼亚', flag: '🇪🇪' },
-  { code: '+356', name: '马耳他', flag: '🇲🇹' },
-  { code: '+357', name: '塞浦路斯', flag: '🇨🇾' },
-  { code: '+385', name: '克罗地亚', flag: '🇭🇷' },
-  { code: '+386', name: '斯洛文尼亚', flag: '🇸🇮' },
-  { code: '+421', name: '斯洛伐克', flag: '🇸🇰' },
-  { code: '+359', name: '保加利亚', flag: '🇧🇬' },
-  { code: '+381', name: '塞尔维亚', flag: '🇷🇸' },
-  { code: '+382', name: '黑山', flag: '🇲🇪' },
-  { code: '+387', name: '波黑', flag: '🇧🇦' },
-  { code: '+389', name: '北马其顿', flag: '🇲🇰' },
-  { code: '+383', name: '科索沃', flag: '🇽🇰' },
-  { code: '+355', name: '阿尔巴尼亚', flag: '🇦🇱' },
-  { code: '+994', name: '阿塞拜疆', flag: '🇦🇿' },
-  { code: '+374', name: '亚美尼亚', flag: '🇦🇲' },
-  { code: '+995', name: '格鲁吉亚', flag: '🇬🇪' },
-  { code: '+998', name: '乌兹别克斯坦', flag: '🇺🇿' },
-  { code: '+7', name: '哈萨克斯坦', flag: '🇰🇿' },
-  { code: '+996', name: '吉尔吉斯斯坦', flag: '🇰🇬' },
-  { code: '+992', name: '塔吉克斯坦', flag: '🇹🇯' },
-  { code: '+993', name: '土库曼斯坦', flag: '🇹🇲' },
-  { code: '+850', name: '朝鲜', flag: '🇰🇵' },
-  { code: '+880', name: '孟加拉国', flag: '🇧🇩' },
-  { code: '+92', name: '巴基斯坦', flag: '🇵🇰' },
-  { code: '+93', name: '阿富汗', flag: '🇦🇫' },
-  { code: '+94', name: '斯里兰卡', flag: '🇱🇰' },
-  { code: '+977', name: '尼泊尔', flag: '🇳🇵' },
-  { code: '+975', name: '不丹', flag: '🇧🇹' },
-  { code: '+960', name: '马尔代夫', flag: '🇲🇻' },
-  { code: '+673', name: '文莱', flag: '🇧🇳' },
-  { code: '+856', name: '老挝', flag: '🇱🇦' },
-  { code: '+855', name: '柬埔寨', flag: '🇰🇭' },
-  { code: '+670', name: '东帝汶', flag: '🇹🇱' }
-]
-
-const selectedCountryCode = ref('+1') // 默认区号为+1
-const countryOptions = computed(() => {
-  const names = new Intl.DisplayNames([localeStore.locale], { type: 'region' })
-  return countryCodes.map(country => {
-    const region = [...country.flag].map(char => String.fromCharCode(char.codePointAt(0)! - 0x1f1e6 + 65)).join('')
-    const name = region === 'US' ? [names.of('US'), names.of('CA')].join(' / ') : names.of(region)
-    return { value: country.code, label: `${country.code} · ${name || region}`, icon: country.flag }
-  })
-})
-
-const formData = ref({
-  realName: '',
-  idNumber: '',
-  phone: '',
-  address: ''
-})
-
-// 图片上传
-const frontImageFile = ref<File | null>(null)
-const frontImagePreview = ref<string>('')
-const backImageFile = ref<File | null>(null)
-const backImagePreview = ref<string>('')
-const handheldImageFile = ref<File | null>(null)
-const handheldImagePreview = ref<string>('')
-const frontImageInputRef = ref<HTMLInputElement | null>(null)
-const backImageInputRef = ref<HTMLInputElement | null>(null)
-const handheldImageInputRef = ref<HTMLInputElement | null>(null)
-
-const loading = ref(false)
+const loading = ref(true)
 const submitting = ref(false)
-const verified = ref(false)
-
-// Toast提示
-const toastMessage = ref('')
-const toastType = ref<'success' | 'error' | ''>('')
-
-function showToast(message: string, type: 'success' | 'error' = 'error') {
-  toastMessage.value = message
-  toastType.value = type
-  setTimeout(() => {
-    toastMessage.value = ''
-    toastType.value = ''
-  }, 3000)
-}
-
-// 加载实名认证信息（如果已通过审核，自动填入）
-async function loadKycInfo() {
+const kycVerified = ref(false)
+const status = ref('NOT_SUBMITTED')
+const remark = ref('')
+const message = ref('')
+const form = ref({ realName: '', idNumber: '', phone: '', address: '', idFrontImage: '', idBackImage: '', handheldImage: '' })
+const handheldFile = ref<File | null>(null)
+const locked = computed(() => loading.value || !kycVerified.value || ['PENDING', 'APPROVED'].includes(status.value))
+const statusText = computed(() => ({
+  PENDING: localeStore.text('貸款資料審核中', 'Loan details under review'), APPROVED: localeStore.text('貸款資料已通過', 'Loan details approved'),
+  REJECTED: localeStore.text('貸款資料已拒絕，請修改後重新提交', 'Loan details rejected. Update and resubmit.'),
+  NEEDS_UPDATE: localeStore.text('請依據已審核的實名身份，重新提交完整貸款資料。', 'Resubmit complete loan details using your approved identity.')
+}[status.value] || ''))
+async function load() {
   loading.value = true
   try {
-    // 先获取实名认证信息（如果已通过审核）
-    const kycRes: any = await request.get('/loan/personal-info/kyc-info')
-    if (kycRes && kycRes.success && kycRes.data) {
-      const info = kycRes.data
-      if (info.realName) formData.value.realName = info.realName
-      if (info.idNumber) formData.value.idNumber = info.idNumber
-    }
-    
-    // 再获取贷款个人信息（用于填充电话等）
-    const res: any = await request.get('/loan/kyc-info')
-    if (res && res.success && res.data) {
-      const info = res.data
-      if (info.phone) {
-        // 解析电话号码，提取区号和号码
-        const phone = info.phone
-        // 尝试匹配区号（以+开头）
-        const match = phone.match(/^(\+\d{1,4})(.+)$/)
-        if (match) {
-          selectedCountryCode.value = match[1]
-          formData.value.phone = match[2]
-        } else {
-          formData.value.phone = phone
-        }
-      }
-    }
-  } catch (e) {
-    console.error('加载实名认证信息失败:', e)
-  } finally {
-    loading.value = false
-  }
-}
-
-// 选择正面图片
-function handleFrontImageSelect(e: Event) {
-  const target = e.target as HTMLInputElement
-  const file = target.files?.[0]
-  if (!file) return
-  
-  // 检查文件类型
-  if (!file.type.startsWith('image/')) {
-    showToast(localeStore.t('onlyImageFiles'), 'error')
-    return
-  }
-  
-  // 检查文件大小（5MB）
-  if (file.size > 5 * 1024 * 1024) {
-    showToast(localeStore.t('imageSizeLimit'), 'error')
-    return
-  }
-  
-  frontImageFile.value = file
-  
-  // 创建预览
-  const reader = new FileReader()
-  reader.onload = (e) => {
-    frontImagePreview.value = e.target?.result as string
-  }
-  reader.readAsDataURL(file)
-}
-
-// 选择反面图片
-function handleBackImageSelect(e: Event) {
-  const target = e.target as HTMLInputElement
-  const file = target.files?.[0]
-  if (!file) return
-  
-  // 检查文件类型
-  if (!file.type.startsWith('image/')) {
-    showToast(localeStore.t('onlyImageFiles'), 'error')
-    return
-  }
-  
-  // 检查文件大小（5MB）
-  if (file.size > 5 * 1024 * 1024) {
-    showToast(localeStore.t('imageSizeLimit'), 'error')
-    return
-  }
-  
-  backImageFile.value = file
-  
-  // 创建预览
-  const reader = new FileReader()
-  reader.onload = (e) => {
-    backImagePreview.value = e.target?.result as string
-  }
-  reader.readAsDataURL(file)
-}
-
-// 触发文件选择
-function triggerFrontImageSelect() {
-  frontImageInputRef.value?.click()
-}
-
-function triggerBackImageSelect() {
-  backImageInputRef.value?.click()
-}
-
-// 选择手持图片
-function handleHandheldImageSelect(e: Event) {
-  const target = e.target as HTMLInputElement
-  const file = target.files?.[0]
-  if (!file) return
-  
-  // 检查文件类型
-  if (!file.type.startsWith('image/')) {
-    showToast(localeStore.t('onlyImageFiles'), 'error')
-    return
-  }
-  
-  // 检查文件大小（5MB）
-  if (file.size > 5 * 1024 * 1024) {
-    showToast(localeStore.t('imageSizeLimit'), 'error')
-    return
-  }
-  
-  handheldImageFile.value = file
-  
-  // 创建预览
-  const reader = new FileReader()
-  reader.onload = (e) => {
-    handheldImagePreview.value = e.target?.result as string
-  }
-  reader.readAsDataURL(file)
-}
-
-// 触发手持图片选择
-function triggerHandheldImageSelect() {
-  handheldImageInputRef.value?.click()
-}
-
-// getImageUrl 函数已从 @/utils/imageUrl 导入
-
-// 检查是否已填写个人信息
-async function checkPersonalInfo() {
-  try {
     const res: any = await request.get('/loan/personal-info/status')
-    if (res && res.success) {
-      verified.value = res.verified || false
-      if (res.data) {
-        formData.value = {
-          realName: res.data.realName || '',
-          idNumber: res.data.idNumber || '',
-          phone: '',
-          address: res.data.address || ''
-        }
-        // 解析电话号码
-        if (res.data.phone) {
-          const phone = res.data.phone
-          const match = phone.match(/^(\+\d{1,4})(.+)$/)
-          if (match) {
-            selectedCountryCode.value = match[1]
-            formData.value.phone = match[2]
-          } else {
-            formData.value.phone = phone
-          }
-        }
-        // 加载已上传的图片（如果已审核通过，显示预览）
-        if (res.data.idFrontImage) {
-          frontImagePreview.value = getImageUrl(res.data.idFrontImage)
-        }
-        if (res.data.idBackImage) {
-          backImagePreview.value = getImageUrl(res.data.idBackImage)
-        }
-        if (res.data.handheldImage) {
-          handheldImagePreview.value = getImageUrl(res.data.handheldImage)
-        }
-      }
-    }
-  } catch (e) {
-    console.error('检查个人信息状态失败:', e)
-  }
+    if (!res?.success) throw new Error(res?.message || localeStore.t('applicationFailed'))
+    kycVerified.value = res.kycVerified === true
+    status.value = res.status || 'NOT_SUBMITTED'
+    remark.value = res.reviewRemark || ''
+    form.value = { realName: '', idNumber: '', phone: '', address: '', idFrontImage: '', idBackImage: '', handheldImage: '', ...res.data }
+  } catch (e: any) { message.value = e.message; kycVerified.value = false }
+  finally { loading.value = false }
 }
-
-// 提交个人信息
-async function submitPersonalInfo() {
-  if (!formData.value.realName || !formData.value.realName.trim()) {
-    showToast(localeStore.t('enterRealName'), 'error')
-    return
+function selectHandheld(e: Event) {
+  const input = e.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) return
+  if (!file.type.startsWith('image/') || file.size > 5 * 1024 * 1024) {
+    message.value = localeStore.t('imageSizeLimit'); input.value = ''; return
   }
-
-  if (!formData.value.idNumber || !formData.value.idNumber.trim()) {
-    showToast(localeStore.t('enterIdNumber'), 'error')
-    return
+  handheldFile.value = file
+}
+async function submit() {
+  if (locked.value || submitting.value) return
+  if (!form.value.phone.trim() || !form.value.address.trim() || (!handheldFile.value && !form.value.handheldImage)) {
+    message.value = localeStore.t('pleaseFillCompletePersonalInfo'); return
   }
-
-  if (!formData.value.phone || !formData.value.phone.trim()) {
-    showToast(localeStore.t('enterPhoneNumber'), 'error')
-    return
-  }
-
-  if (!formData.value.address || !formData.value.address.trim()) {
-    showToast(localeStore.t('enterHomeAddress'), 'error')
-    return
-  }
-
-  if (!frontImageFile.value) {
-    showToast(localeStore.t('uploadIdFront'), 'error')
-    return
-  }
-
-  if (!backImageFile.value) {
-    showToast(localeStore.t('uploadIdBack'), 'error')
-    return
-  }
-
-  if (!handheldImageFile.value) {
-    showToast(localeStore.t('uploadHandheldId'), 'error')
-    return
-  }
-
-  submitting.value = true
+  submitting.value = true; message.value = ''
   try {
-    // 先上传图片
-    const uploadImage = async (file: File) => {
-      const formData = new FormData()
-      formData.append('file', file)
-      const uploadRes: any = await request.post('/upload/image', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      })
-      const url = uploadRes.url || uploadRes.data?.url
-      if (!url) throw new Error(localeStore.t('imageUploadFailed') || 'Image upload failed')
-      return url
-    }
-
-    let frontUrl = ''
-    let backUrl = ''
-    let handheldUrl = ''
-    
-    try {
-      [frontUrl, backUrl, handheldUrl] = await Promise.all([
-        uploadImage(frontImageFile.value),
-        uploadImage(backImageFile.value),
-        uploadImage(handheldImageFile.value)
-      ])
-    } catch (e: any) {
-      showToast(e.message || localeStore.t('imageUploadFailed') || 'Image upload failed', 'error')
-      submitting.value = false
-      return
-    }
-
-    // 创建 FormData，将区号和手机号组合
-    const fullPhone = `${selectedCountryCode.value}${formData.value.phone.trim()}`
-    const formDataToSend = new FormData()
-    formDataToSend.append('realName', formData.value.realName.trim())
-    formDataToSend.append('idNumber', formData.value.idNumber.trim())
-    formDataToSend.append('phone', fullPhone)
-    formDataToSend.append('address', formData.value.address.trim())
-    formDataToSend.append('idFrontImage', frontUrl)
-    formDataToSend.append('idBackImage', backUrl)
-    formDataToSend.append('handheldImage', handheldUrl)
-    
-    const res: any = await request.post('/loan/personal-info/submit', formDataToSend, {
-      headers: {
-        'Content-Type': 'multipart/form-data'
-      }
-    })
-
-    if (res && res.success) {
-      showToast(localeStore.t('submitSuccessWaitReview'), 'success')
-      setTimeout(() => {
-        checkPersonalInfo()
-      }, 1500)
-    } else {
-      showToast(res.message || localeStore.t('applicationFailed'), 'error')
-    }
-  } catch (e: any) {
-      showToast(e.response?.data?.message || e.message || localeStore.t('applicationFailed'), 'error')
-    console.error('提交个人信息失败:', e)
-  } finally {
-    submitting.value = false
-  }
+    const data = new FormData()
+    data.append('phone', form.value.phone.trim())
+    data.append('address', form.value.address.trim())
+    if (handheldFile.value) data.append('handheldImageFile', handheldFile.value)
+    else data.append('handheldImage', form.value.handheldImage)
+    const res: any = await request.post('/loan/personal-info/submit', data)
+    if (!res?.success) throw new Error(res?.message || localeStore.t('applicationFailed'))
+    message.value = localeStore.t('submitSuccessWaitReview')
+    handheldFile.value = null
+    await load()
+  } catch (e: any) { message.value = e.message }
+  finally { submitting.value = false }
 }
-
-onMounted(() => {
-  loadKycInfo()
-  checkPersonalInfo()
-})
+onMounted(load)
 </script>
 
 <template>
   <div class="loan-personal-info-page">
     <div class="page-header">
-      <div class="back-button" @click="router.back()">
-        <svg t="1767810682938" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" width="24" height="24">
-          <path d="M768 903.232l-50.432 56.768L256 512l461.568-448 50.432 56.768L364.928 512z" fill="#333"></path>
-        </svg>
-      </div>
-      <div class="header-title">{{ localeStore.t('loanPersonalInfo') }}</div>
+      <button class="back-button" @click="router.back()">‹</button>
+      <div class="header-title">{{ localeStore.text('貸款資料審核', 'Loan details review') }}</div>
       <div class="header-placeholder"></div>
     </div>
-
     <div class="page-content">
-      <div v-if="verified" class="verified-notice">
-        <div class="notice-icon">✓</div>
-        <div class="notice-text">{{ localeStore.t('personalInfoApproved') }}</div>
+      <p v-if="loading">{{ localeStore.t('loading') }}</p>
+      <div v-else-if="!kycVerified" class="verified-notice">
+        <p>{{ localeStore.text('請先完成帳戶實名認證，再補充貸款資料。', 'Complete account identity verification before submitting loan details.') }}</p>
+        <button class="submit-btn" @click="router.push('/verification')">{{ localeStore.t('verification') }}</button>
       </div>
-
-      <div class="form-section">
-        <div class="form-label">{{ localeStore.t('realName') }} <span class="required">*</span></div>
-        <input
-          v-model="formData.realName"
-          type="text"
-          class="form-input"
-          :placeholder="localeStore.t('enterRealName')"
-          :disabled="verified"
-        />
-      </div>
-
-      <div class="form-section">
-        <div class="form-label">{{ localeStore.t('idNumber') }} <span class="required">*</span></div>
-        <input
-          v-model="formData.idNumber"
-          type="text"
-          class="form-input"
-          :placeholder="localeStore.t('enterIdNumber')"
-          :disabled="verified"
-        />
-      </div>
-
-      <div class="form-section">
-        <div class="form-label">{{ localeStore.t('phoneNumber') }} <span class="required">*</span></div>
-        <div class="phone-input-wrapper">
-          <AppSelect class="country-code-select" :model-value="selectedCountryCode" :options="countryOptions" :display-label="selectedCountryCode" :placeholder="selectedCountryCode" :label="localeStore.t('searchCountryOrCode')" :search-placeholder="localeStore.t('searchCountryOrCode')" :searchable="true" :disabled="verified" :min-menu-width="300" @update:model-value="selectedCountryCode = String($event)" />
-          <input
-            v-model="formData.phone"
-            type="tel"
-            class="form-input phone-input"
-            :placeholder="localeStore.t('enterPhoneNumber')"
-            :disabled="verified"
-          />
-        </div>
-      </div>
-
-      <div class="form-section">
-        <div class="form-label">{{ localeStore.t('homeAddress') }} <span class="required">*</span></div>
-        <textarea
-          v-model="formData.address"
-          class="form-textarea"
-          :placeholder="localeStore.t('enterHomeAddress')"
-          rows="3"
-          :disabled="verified"
-        ></textarea>
-      </div>
-
-      <!-- 身份证上传 -->
-      <div class="form-section">
-        <div class="form-label">{{ localeStore.t('uploadIdFrontBack') }} <span class="required">*</span></div>
+      <template v-else>
+        <p>{{ localeStore.text('姓名、證件號及正反面照片沿用已審核的實名資料；僅需補充聯絡方式、地址及手持證件照。', 'Your approved name, ID number and ID photos are reused. Add contact details, address and a photo holding your ID.') }}</p>
+        <p v-if="statusText" role="status">{{ statusText }}</p>
+        <p v-if="remark">{{ remark }}</p>
+        <div class="form-section"><label class="form-label">{{ localeStore.t('realName') }}<input :value="form.realName" class="form-input" readonly /></label></div>
+        <div class="form-section"><label class="form-label">{{ localeStore.t('idNumber') }}<input :value="form.idNumber" class="form-input" readonly /></label></div>
         <div class="upload-section">
-          <!-- 正面 -->
-          <div class="upload-item">
-            <div 
-              class="upload-area"
-              :class="{ 'has-image': frontImagePreview }"
-              @click="!verified && triggerFrontImageSelect()"
-            >
-              <img 
-                v-if="frontImagePreview" 
-                :src="frontImagePreview" 
-                class="upload-preview"
-                :alt="localeStore.t('uploadIdFront')"
-              />
-              <img 
-                v-else
-                src="/img/id-front7ede1e14.png" 
-                class="upload-placeholder"
-                :alt="localeStore.t('uploadIdFront')"
-              />
-              <div v-if="!frontImagePreview && !verified" class="upload-plus">+</div>
-            </div>
-            <div class="upload-label">{{ localeStore.t('uploadIdFront') }}</div>
-            <input 
-              ref="frontImageInputRef"
-              type="file" 
-              accept="image/*" 
-              style="display: none"
-              @change="handleFrontImageSelect"
-              :disabled="verified"
-            />
-          </div>
-
-          <!-- 反面 -->
-          <div class="upload-item">
-            <div 
-              class="upload-area"
-              :class="{ 'has-image': backImagePreview }"
-              @click="!verified && triggerBackImageSelect()"
-            >
-              <img 
-                v-if="backImagePreview" 
-                :src="backImagePreview" 
-                class="upload-preview"
-                :alt="localeStore.t('uploadIdBack')"
-              />
-              <img 
-                v-else
-                src="/img/id-backgroundc00f8b70.png" 
-                class="upload-placeholder"
-                :alt="localeStore.t('uploadIdBack')"
-              />
-              <div v-if="!backImagePreview && !verified" class="upload-plus">+</div>
-            </div>
-            <div class="upload-label">{{ localeStore.t('uploadIdBack') }}</div>
-            <input 
-              ref="backImageInputRef"
-              type="file" 
-              accept="image/*" 
-              style="display: none"
-              @change="handleBackImageSelect"
-              :disabled="verified"
-            />
-          </div>
+          <img v-if="form.idFrontImage" :src="getImageUrl(form.idFrontImage)" :alt="localeStore.t('uploadIdFront')" style="width:45%;object-fit:contain" />
+          <img v-if="form.idBackImage" :src="getImageUrl(form.idBackImage)" :alt="localeStore.t('uploadIdBack')" style="width:45%;object-fit:contain" />
         </div>
-      </div>
-
-      <!-- 手持身份证上传 -->
-      <div class="form-section">
-        <div class="form-label">{{ localeStore.t('uploadHandheldId') }} <span class="required">*</span></div>
-        <div class="upload-section">
-          <div class="upload-item">
-            <div 
-              class="upload-area"
-              :class="{ 'has-image': handheldImagePreview }"
-              @click="!verified && triggerHandheldImageSelect()"
-            >
-              <img 
-                v-if="handheldImagePreview" 
-                :src="handheldImagePreview" 
-                class="upload-preview"
-                :alt="localeStore.t('uploadHandheldId')"
-              />
-              <img 
-                v-else
-                src="/img/id-front7ede1e14.png" 
-                class="upload-placeholder"
-                :alt="localeStore.t('uploadHandheldId')"
-              />
-              <div v-if="!handheldImagePreview && !verified" class="upload-plus">+</div>
-            </div>
-            <div class="upload-label">{{ localeStore.t('uploadHandheldId') }}</div>
-            <input 
-              ref="handheldImageInputRef"
-              type="file" 
-              accept="image/*" 
-              style="display: none"
-              @change="handleHandheldImageSelect"
-              :disabled="verified"
-            />
-          </div>
+        <div class="form-section"><label class="form-label">{{ localeStore.t('phoneNumber') }}<input v-model="form.phone" type="tel" maxlength="32" class="form-input" :disabled="locked" :placeholder="localeStore.text('含國家區號，例如 +81…', 'Include country code, e.g. +81…')" /></label></div>
+        <div class="form-section"><label class="form-label">{{ localeStore.t('homeAddress') }}<textarea v-model="form.address" maxlength="500" class="form-textarea" :disabled="locked"></textarea></label></div>
+        <div class="form-section">
+          <label class="form-label">{{ localeStore.t('uploadHandheldId') }}<input type="file" accept="image/*" :disabled="locked" @change="selectHandheld" /></label>
+          <img v-if="form.handheldImage" :src="getImageUrl(form.handheldImage)" :alt="localeStore.t('uploadHandheldId')" style="max-width:100%;max-height:180px" />
         </div>
-      </div>
-
-      <button 
-        v-if="!verified"
-        class="submit-btn" 
-        @click="submitPersonalInfo" 
-        :disabled="submitting || loading"
-      >
-        {{ submitting ? localeStore.t('submitting') : localeStore.t('submitReview') }}
-      </button>
+        <button v-if="!locked" class="submit-btn" :disabled="submitting" @click="submit">{{ submitting ? localeStore.t('submitting') : localeStore.t('submitReview') }}</button>
+      </template>
+      <p v-if="message" role="alert">{{ message }}</p>
     </div>
-
     <Tabbar />
-
-    <!-- Toast提示 -->
-    <div v-if="toastMessage" :class="['toast-message', toastType]">
-      {{ toastMessage }}
-    </div>
   </div>
 </template>
 
@@ -647,6 +119,9 @@ onMounted(() => {
 }
 
 .back-button {
+  border: 0;
+  background: transparent;
+  font-size: 26px;
   width: 40px;
   height: 40px;
   display: flex;
@@ -669,7 +144,12 @@ onMounted(() => {
   padding: 20px 16px;
 }
 
+.page-content > p { font-size: 14px; line-height: 1.6; margin-bottom: 16px; }
+.form-label { display: block; }
+.form-label > input, .form-label > textarea { margin-top: 8px; }
+.upload-section { margin-bottom: 20px; }
 .verified-notice {
+  flex-direction: column;
   background: #e8f5e9;
   border: 1px solid #2abf4b;
   border-radius: 8px;

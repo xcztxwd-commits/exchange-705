@@ -12,7 +12,16 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 @Repository
-public interface OptionOrderRepository extends JpaRepository<OptionOrder, Long> {
+public interface OptionOrderRepository extends JpaRepository<OptionOrder, Long>, org.springframework.data.jpa.repository.JpaSpecificationExecutor<OptionOrder> {
+
+    @org.springframework.data.jpa.repository.Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("UPDATE OptionOrder o SET o.deletedAt = :deletedAt, o.deletedBy = :deletedBy, o.rowVersion = o.rowVersion + 1 " +
+            "WHERE o.id = :id AND o.rowVersion = :version")
+    int updateDeletion(@Param("id") Long id, @Param("version") long version,
+                       @Param("deletedAt") LocalDateTime deletedAt, @Param("deletedBy") String deletedBy);
+
+    List<OptionOrder> findByUserIdAndDeletedAtIsNullOrderByCreatedAtDesc(Long userId);
+    List<OptionOrder> findByUserIdAndStatusAndDeletedAtIsNullOrderByCreatedAtDesc(Long userId, String status);
     
     List<OptionOrder> findByUserIdOrderByCreatedAtDesc(Long userId);
     

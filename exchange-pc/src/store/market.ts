@@ -1,3 +1,4 @@
+import { getAccountApiBase } from '@/utils/accountMode'
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import marketWebSocket, { normalizeQuote, type PriceUpdate } from '@/utils/marketWebSocket'
@@ -22,7 +23,7 @@ async function fetchMarketKline(url: string, options?: RequestInit): Promise<Res
 export const useMarketStore = defineStore('market', () => {
   // 当前选中的交易对
   const currentSymbol = ref<string>('')
-  const quoteStatusMap = ref<Record<string, { status: string, fetchedAt: number, expiresAt: number, timestamp: number, epoch?: string, quoteVersion?: number, simulated?: boolean, simulationSession?: number, marketRevision?: number, controlSourceResumed?: boolean, controlHistory?: boolean, controlHistoryRevision?: string, controlState?: string, controlTaskId?: string, sourceAvailable?: boolean, sourceConnectionFailed?: boolean, controlActive?: boolean, quoteToUsdRate?: number | null, conversionAvailable?: boolean, conversionExpiresAt?: number }>>({})
+  const quoteStatusMap = ref<Record<string, { status: string, fetchedAt: number, expiresAt: number, timestamp: number, epoch?: string, quoteVersion?: number, simulated?: boolean, simulationSession?: number, marketRevision?: number, controlSourceResumed?: boolean, controlHistory?: boolean, controlHistoryRevision?: string, controlState?: string, controlTaskId?: string, sourceAvailable?: boolean, sourceConnectionFailed?: boolean, controlActive?: boolean, quoteToUsdRate?: number | null, conversionAvailable?: boolean, conversionExpiresAt?: number, marginBaseToUsdRate?: number, marginRateExpiresAt?: number }>>({})
   let activeQuoteEpoch: string | undefined
   const retiredQuoteEpochs = new Set<string>()
   const recordQuoteStatus = (symbol: string, quote: any): boolean => {
@@ -59,7 +60,7 @@ export const useMarketStore = defineStore('market', () => {
     if (previous && previous.epoch === quote.epoch && sameSource && (valid.timestamp < previous.timestamp ||
       (valid.timestamp === previous.timestamp && quote.fetchedAt != null && valid.fetchedAt < previous.fetchedAt))) return false
     const { status, fetchedAt, expiresAt, timestamp, simulated, simulationSession, marketRevision, controlSourceResumed, controlHistoryRevision, controlHistory, controlState, controlTaskId, sourceAvailable, sourceConnectionFailed, controlActive } = valid
-    quoteStatusMap.value[symbol] = { quoteToUsdRate: valid.quoteToUsdRate, conversionAvailable: valid.conversionAvailable, conversionExpiresAt: valid.conversionExpiresAt, status, fetchedAt, expiresAt, timestamp, epoch: quote.epoch, quoteVersion: quote.quoteVersion, simulated, simulationSession, marketRevision, controlSourceResumed, controlHistoryRevision, controlHistory, controlState, controlTaskId, sourceAvailable, sourceConnectionFailed, controlActive }
+    quoteStatusMap.value[symbol] = { marginBaseToUsdRate: quote.marginBaseToUsdRate, marginRateExpiresAt: quote.marginRateExpiresAt, quoteToUsdRate: valid.quoteToUsdRate, conversionAvailable: valid.conversionAvailable, conversionExpiresAt: valid.conversionExpiresAt, status, fetchedAt, expiresAt, timestamp, epoch: quote.epoch, quoteVersion: quote.quoteVersion, simulated, simulationSession, marketRevision, controlSourceResumed, controlHistoryRevision, controlHistory, controlState, controlTaskId, sourceAvailable, sourceConnectionFailed, controlActive }
     return true
   }
   const getConversionRate = (symbol: string, currency = 'USD'): number => {
@@ -67,6 +68,15 @@ export const useMarketStore = defineStore('market', () => {
     const quote = quoteStatusMap.value[symbol]
     const rate = Number(quote?.quoteToUsdRate)
     return quote?.conversionAvailable && Number(quote.conversionExpiresAt) > Date.now() && Number.isFinite(rate) && rate > 0 ? rate : NaN
+  }
+  // Margin and P&L use different currencies. Undefined retains non-FX notional calculation.
+  const getMarginBaseRate = (instrument: any, price: number): number | undefined => {
+    if (instrument?.sourceCategory !== 'Forex') return undefined
+    if (instrument.baseCurrency === 'USD') return 1
+    if (instrument.quoteCurrency === 'USD') return Number.isFinite(price) && price > 0 ? price : NaN
+    const quote = quoteStatusMap.value[instrument.symbol]
+    const rate = Number(quote?.marginBaseToUsdRate)
+    return Number(quote?.marginRateExpiresAt) > Date.now() && Number.isFinite(rate) && rate > 0 ? rate : NaN
   }
   const getQuoteStatus = (symbol: string, now = Date.now()): string => {
     const quote = quoteStatusMap.value[symbol]
@@ -173,7 +183,7 @@ export const useMarketStore = defineStore('market', () => {
    */
   const loadAllSymbols = async (category: string = 'Crypto', owner = `category:${category}`) => {
     try {
-      const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '/api'
+      const apiBaseUrl = getAccountApiBase()
       const res: any = await fetch(`${apiBaseUrl}/market/all`)
       const data = await res.json()
       const symbols = data.list || []
@@ -386,7 +396,7 @@ export const useMarketStore = defineStore('market', () => {
         })
       }
       
-      const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '/api'
+      const apiBaseUrl = getAccountApiBase()
       console.log(`[Market Store] Fetching batch prices from Redis for ${alltickSymbols.length} symbols`)
       
       const requestEpoch = activeQuoteEpoch
@@ -458,7 +468,7 @@ export const useMarketStore = defineStore('market', () => {
   const fetchKlines = async (symbol: string, category: string = 'Crypto', interval: string = '1m', limit: number = 100) => {
     try {
       // 使用环境变量配置的 API base URL
-      const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '/api'
+      const apiBaseUrl = getAccountApiBase()
       
       // 检查是否为股票分类（美股、港股、A股）
       const isStock = category === 'Stock' || category === 'US' || category === 'HK' || category === 'A'
@@ -582,7 +592,7 @@ export const useMarketStore = defineStore('market', () => {
     
     try {
       // 使用环境变量配置的 API base URL
-      const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '/api'
+      const apiBaseUrl = getAccountApiBase()
       
       // 检查是否为股票分类
       const isStock = category === 'Stock' || category === 'US' || category === 'HK' || category === 'A'
@@ -1004,6 +1014,7 @@ export const useMarketStore = defineStore('market', () => {
     priceMap,
     quoteStatusMap,
     getConversionRate,
+    getMarginBaseRate,
     getQuoteStatus,
     initMarketService,
     subscribeSymbol,

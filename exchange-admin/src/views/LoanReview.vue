@@ -28,13 +28,15 @@
               <el-option label="已完成" value="COMPLETED" />
               <el-option label="已逾期" value="OVERDUE" />
             </el-select>
-            <el-button type="primary" :icon="Search" @click="handleSearch">搜索</el-button>
-            <el-button :icon="Refresh" @click="handleReset">重置</el-button>
+            <el-button v-permission="'loan_review:view'" type="primary" :icon="Search" @click="handleSearch">搜索</el-button>
+            <el-button v-permission="'loan_review:view'" :icon="Refresh" @click="handleReset">重置</el-button>
           </div>
         </div>
       </template>
 
-      <el-table :data="loanList" style="width: 100%" v-loading="loading">
+<AccountTypeFilter v-model="accountModes" @change="accountFilterChanged" />
+      <admin-table :row-key="(row: any) => `${row.accountMode || 'REAL'}:${row.id ?? row.userId}:${row.type || ''}`" table-key="LoanReview.1" :data="loanList" style="width: 100%" v-loading="loading">
+<el-table-column prop="accountModeLabel" label="账户类型" width="110" fixed="left" />
         <el-table-column prop="id" label="ID" width="80" />
         <el-table-column prop="userId" label="用户ID" width="100" />
         <el-table-column prop="userRemark" label="用户备注" width="150">
@@ -96,33 +98,32 @@
         </el-table-column>
         <el-table-column label="操作" width="250" fixed="right">
           <template #default="{ row }">
-            <el-button 
-              v-if="canViewLoanDetail"
+            <el-button v-permission="'loan_review:detail'"
               size="small" 
               type="primary" 
               @click="handleViewDetail(row)"
             >
               查看详情
             </el-button>
-            <el-button 
-              v-if="row.status === 'SIGNED' && canApproveLoan" 
+            <el-button v-permission="'loan_review:approve_loan'"
+              v-if="row.status === 'SIGNED'"
               size="small" 
               type="success" 
               @click="handleApprove(row)"
-            >
+             :disabled="accountModes.includes('DEMO') || !accountModes.length">
               通过
             </el-button>
-            <el-button 
-              v-if="(row.status === 'PENDING' || row.status === 'SIGNED') && canRejectLoan" 
+            <el-button v-permission="'loan_review:reject_loan'"
+              v-if="(row.status === 'PENDING' || row.status === 'SIGNED')"
               size="small" 
               type="danger" 
               @click="handleReject(row)"
-            >
+             :disabled="accountModes.includes('DEMO') || !accountModes.length">
               拒绝
             </el-button>
           </template>
         </el-table-column>
-      </el-table>
+      </admin-table>
     </el-card>
 
     <!-- 详情对话框 -->
@@ -167,27 +168,27 @@
         <div v-if="currentLoanDetail.signatureImage" class="signature-section">
           <div class="section-title">签名图片</div>
           <el-image
-            :src="getImageUrl(currentLoanDetail.signatureImage)"
-            :preview-src-list="[getImageUrl(currentLoanDetail.signatureImage)]"
+            :src="getImageUrl(currentLoanDetail.signatureImage, currentLoanDetail.accountMode)"
+            :preview-src-list="[getImageUrl(currentLoanDetail.signatureImage, currentLoanDetail.accountMode)]"
             style="max-width: 400px; max-height: 200px; cursor: pointer;"
             fit="contain"
           />
         </div>
       </div>
       <template #footer>
-        <el-button @click="detailDialogVisible = false">关闭</el-button>
-        <el-button 
+        <el-button v-permission="'session:close'" @click="detailDialogVisible = false">关闭</el-button>
+        <el-button v-permission="'loan_review:approve_loan'"
           v-if="currentLoanDetail && currentLoanDetail.status === 'SIGNED'" 
           type="success" 
           @click="handleApproveFromDetail"
-        >
+         :disabled="accountModes.includes('DEMO') || !accountModes.length">
           批准
         </el-button>
-        <el-button 
+        <el-button v-permission="'loan_review:reject_loan'"
           v-if="currentLoanDetail && (currentLoanDetail.status === 'PENDING' || currentLoanDetail.status === 'SIGNED')" 
           type="danger" 
           @click="handleRejectFromDetail"
-        >
+         :disabled="accountModes.includes('DEMO') || !accountModes.length">
           拒绝
         </el-button>
       </template>
@@ -206,8 +207,8 @@
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="rejectDialogVisible = false">取消</el-button>
-        <el-button type="danger" @click="confirmReject">确认拒绝</el-button>
+        <el-button v-permission="'session:close'" @click="rejectDialogVisible = false">取消</el-button>
+        <el-button v-permission="'loan_review:reject_loan'" type="danger" @click="confirmReject" :disabled="accountModes.includes('DEMO') || !accountModes.length">确认拒绝</el-button>
       </template>
     </el-dialog>
   </div>
@@ -217,7 +218,13 @@
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search, Refresh } from '@element-plus/icons-vue'
-import request from '@/utils/request'
+import { useAccountTable } from '@/utils/useAccountTable'
+import { accountTableRequest } from '@/utils/accountTableRequest'
+import AccountTypeFilter from '@/components/AccountTypeFilter.vue'
+const accountTable = useAccountTable()
+const accountModes = accountTable.modes
+const request = accountTableRequest(accountTable)
+function accountFilterChanged() { loanList.value=[];loadLoans() }
 import { getImageUrl } from '@/utils/imageUrl'
 import { usePermissions } from '@/composables/usePermissions'
 
@@ -227,7 +234,7 @@ const canApproveLoan = ref(true)
 const canRejectLoan = ref(true)
 
 const loadPermissions = async () => {
-  canViewLoanDetail.value = await hasPermission('loan-review', 'view_loan_detail') || await hasPermission('loan_review', 'view_loan_detail')
+  canViewLoanDetail.value = await hasPermission('loan-review', 'detail') || await hasPermission('loan_review', 'detail')
   canApproveLoan.value = await hasPermission('loan-review', 'approve_loan') || await hasPermission('loan_review', 'approve_loan')
   canRejectLoan.value = await hasPermission('loan-review', 'reject_loan') || await hasPermission('loan_review', 'reject_loan')
 }

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import TrialAccountCard from '@/components/TrialAccountCard.vue'
 import Tabbar from '@/components/Tabbar.vue'
 import request from '@/utils/request'
 import { useAuthStore } from '@/store/auth'
@@ -97,16 +98,17 @@ onMounted(() => {
       </div>
     </div>
 
+    <div style="margin:16px"><TrialAccountCard :visible="balanceVisible" /></div>
     <!-- 绑定银行卡 -->
     <div class="bind-item" @click="router.push('/wallet/bind-bank-card')">
       <div class="bind-label">{{ localeStore.t('bindBankCard') }}</div>
-      <div class="bind-arrow">›</div>
+      <div class="bind-arrow ui-chevron" aria-hidden="true"></div>
     </div>
 
     <!-- 绑定数字货币地址 -->
     <div class="bind-item" @click="router.push('/wallet/bind-digital-currency')">
       <div class="bind-label">{{ localeStore.t('bindDigitalCurrencyAddress') }}</div>
-      <div class="bind-arrow">›</div>
+      <div class="bind-arrow ui-chevron" aria-hidden="true"></div>
     </div>
 
     <Tabbar />

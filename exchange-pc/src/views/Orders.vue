@@ -2,7 +2,7 @@
 import { ref, computed, onMounted, watch, onUnmounted } from 'vue'
 import Tabbar from '@/components/Tabbar.vue'
 import request from '@/utils/request'
-import { calculateContractProfit, contractEquity } from '@/utils/contract'
+import { displayFee, quantityUnit, calculateContractProfit, contractEquity } from '@/utils/contract'
 import { useMarketStore } from '@/store/market'
 import { useLocaleStore } from '@/store/locale'
 import { formatDateTime } from '@/utils/dateTime'
@@ -90,6 +90,7 @@ function transformContractOrder(order: any) {
     symbol: order.symbol,
     displayName: order.displayName,
     type: order.side?.toLowerCase() || 'buy', // BUY -> buy, SELL -> sell
+    quantityUnitType: order.quantityUnitType, quantityAsset: order.quantityAsset,
     lots: Number(order.quantity || 0),
     openPrice: Number(order.openPrice || 0),
     price: Number(order.price || 0), // 限价单价格
@@ -921,7 +922,7 @@ function formatPrice(v: number | string | undefined | null) {
             <div class="order-symbol">{{ displaySymbol(order) }}</div>
             <div class="order-price">
               <span>{{ formatPrice(order.openPrice) }}</span>
-              <span class="arrow">→</span>
+              <span class="arrow ui-inline-arrow">→</span>
               <span :class="{ 
                 positive: order.currentPrice > order.openPrice, 
                 negative: order.currentPrice < order.openPrice 
@@ -932,7 +933,7 @@ function formatPrice(v: number | string | undefined | null) {
           </div>
           <div class="order-body">
             <div class="order-type-badge" :class="order.type === 'buy' ? 'buy' : 'sell'">
-              {{ order.type === 'buy' ? localeStore.t('buy') : localeStore.t('sell') }} {{ order.lots }}{{ localeStore.t('lots') }} · {{ order.leverage }}×
+              {{ order.type === 'buy' ? localeStore.t('buy') : localeStore.t('sell') }} {{ order.lots }} {{ quantityUnit(order, localeStore.t('lots')) }} · {{ order.leverage }}×
             </div>
             <div class="order-details">
               <div class="detail-item">
@@ -1007,7 +1008,7 @@ function formatPrice(v: number | string | undefined | null) {
             <div class="order-symbol">{{ displaySymbol(order) }}</div>
             <div class="order-price">
               <span>{{ formatPrice(order.price || order.openPrice) }}</span>
-              <span class="arrow">→</span>
+              <span class="arrow ui-inline-arrow">→</span>
               <span :class="{ 
                 positive: order.currentPrice > (order.price || order.openPrice), 
                 negative: order.currentPrice < (order.price || order.openPrice) 
@@ -1018,7 +1019,7 @@ function formatPrice(v: number | string | undefined | null) {
           </div>
           <div class="order-body">
             <div class="order-type-badge" :class="order.type === 'buy' ? 'buy' : 'sell'">
-              {{ order.type === 'buy' ? localeStore.t('buy') : localeStore.t('sell') }} {{ order.lots }}{{ localeStore.t('lots') }} · {{ order.leverage }}×
+              {{ order.type === 'buy' ? localeStore.t('buy') : localeStore.t('sell') }} {{ order.lots }} {{ quantityUnit(order, localeStore.t('lots')) }} · {{ order.leverage }}×
             </div>
             <div class="order-details">
               <div class="detail-item">
@@ -1070,13 +1071,13 @@ function formatPrice(v: number | string | undefined | null) {
             <div class="order-symbol">{{ displaySymbol(order) }}</div>
             <div class="order-price">
               <span>{{ formatPrice(order.openPrice) }}</span>
-              <span class="arrow">→</span>
+              <span class="arrow ui-inline-arrow">→</span>
               <span>{{ formatPrice(order.closePrice) }}</span>
             </div>
           </div>
           <div class="order-body">
             <div class="order-type-badge" :class="order.type === 'buy' ? 'buy' : 'sell'">
-              {{ order.type === 'buy' ? localeStore.t('buy') : localeStore.t('sell') }} {{ order.lots }} {{ localeStore.t('lots') }} · {{ order.leverage }}×
+              {{ order.type === 'buy' ? localeStore.t('buy') : localeStore.t('sell') }} {{ order.lots }} {{ quantityUnit(order, localeStore.t('lots')) }} · {{ order.leverage }}×
             </div>
             <div class="order-details">
               <div class="detail-item">
@@ -1120,7 +1121,7 @@ function formatPrice(v: number | string | undefined | null) {
             <div class="order-symbol">{{ displaySymbol(order) }}</div>
             <div class="order-price">
               <span>{{ formatPrice(order.openPrice) }}</span>
-              <span class="arrow">→</span>
+              <span class="arrow ui-inline-arrow">→</span>
               <span :class="{ 
                 positive: order.currentPrice > order.openPrice, 
                 negative: order.currentPrice < order.openPrice 
@@ -1186,7 +1187,7 @@ function formatPrice(v: number | string | undefined | null) {
             <div class="order-symbol">{{ displaySymbol(order) }}</div>
             <div class="order-price">
               <span>{{ formatPrice(order.openPrice) }}</span>
-              <span class="arrow">→</span>
+              <span class="arrow ui-inline-arrow">→</span>
               <span>{{ formatPrice(order.closePrice) }}</span>
             </div>
           </div>
@@ -1247,13 +1248,13 @@ function formatPrice(v: number | string | undefined | null) {
             <!-- 挂单：显示限价 → 当前价 -->
             <template v-if="detailOrder?.status === 'PENDING'">
               <span>{{ formatPrice(detailOrder?.price || detailOrder?.openPrice) }}</span>
-              <span class="arrow">→</span>
+              <span class="arrow ui-inline-arrow">→</span>
               <span class="positive">{{ formatPrice(detailOrder?.currentPrice) }}</span>
             </template>
             <!-- 持仓：显示开仓价 → 当前价 -->
             <template v-else>
               <span>{{ formatPrice(detailOrder?.openPrice) }}</span>
-              <span class="arrow">→</span>
+              <span class="arrow ui-inline-arrow">→</span>
               <span :class="{ 
                 positive: detailOrder?.currentPrice > detailOrder?.openPrice, 
                 negative: detailOrder?.currentPrice < detailOrder?.openPrice 
@@ -1279,7 +1280,7 @@ function formatPrice(v: number | string | undefined | null) {
               class="order-type-badge pending-badge" 
               :class="detailOrder?.type === 'buy' ? 'buy' : 'sell'"
             >
-              {{ detailOrder?.type === 'buy' ? localeStore.t('buy') : localeStore.t('sell') }} {{ detailOrder?.lots }} {{ localeStore.t('lots') }}
+              {{ detailOrder?.type === 'buy' ? localeStore.t('buy') : localeStore.t('sell') }} {{ detailOrder?.lots }} {{ quantityUnit(detailOrder, localeStore.t('lots')) }}
             </span>
           </div>
           
@@ -1296,7 +1297,7 @@ function formatPrice(v: number | string | undefined | null) {
             </div>
             <div class="finance-item">
               <span>{{ localeStore.t('fee') }}:</span>
-              <span>{{ formatMoney(detailOrder?.fee || 0) }}</span>
+              <span>{{ displayFee(detailOrder?.fee || 0) }}</span>
             </div>
             <!-- 持仓订单显示盈亏 -->
             <div class="finance-item profit-item" v-if="detailOrder?.status === 'OPEN'">

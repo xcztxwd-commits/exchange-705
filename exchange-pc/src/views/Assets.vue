@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import TrialAccountCard from '@/components/TrialAccountCard.vue'
 import CurrencyPicker from '@/components/CurrencyPicker.vue'
 import { useFiatCurrency } from '@/utils/fiatCurrency'
 const { currency, rate, formatAsset } = useFiatCurrency()
@@ -120,7 +121,7 @@ onMounted(() => {
       <div class="account-card">
         <div class="account-header">
           <div class="account-title">{{ localeStore.t('fundAccountTitle') }}</div>
-          <div class="account-arrow">›</div>
+          <div class="account-arrow ui-chevron" aria-hidden="true"></div>
         </div>
         <div class="account-details">
           <div class="account-detail-item">
@@ -144,7 +145,7 @@ onMounted(() => {
       <div class="account-card">
         <div class="account-header">
           <div class="account-title">{{ localeStore.t('optionAccountTitle') }}</div>
-          <div class="account-arrow">›</div>
+          <div class="account-arrow ui-chevron" aria-hidden="true"></div>
         </div>
         <div class="account-details">
           <div class="account-detail-item">
@@ -168,7 +169,7 @@ onMounted(() => {
       <div class="account-card">
         <div class="account-header">
           <div class="account-title">{{ localeStore.t('contractAccountTitle') }}</div>
-          <div class="account-arrow">›</div>
+          <div class="account-arrow ui-chevron" aria-hidden="true"></div>
         </div>
         <div class="account-details">
           <div class="account-detail-item">
@@ -187,6 +188,7 @@ onMounted(() => {
           </div>
         </div>
       </div>
+      <TrialAccountCard :visible="balanceVisible" />
     </div>
 
     <Tabbar />

@@ -50,8 +50,8 @@ onMounted(load)
           <span class="range">1–{{ row.max }}</span>
         </el-form-item>
       </el-form>
-      <el-button type="primary" :loading="saving" :disabled="!loaded || loading" @click="save">保存安全配置</el-button>
-      <el-button :disabled="saving || loading" @click="load">重新加载</el-button>
+      <el-button v-permission="'website_security:save'" type="primary" :loading="saving" :disabled="!loaded || loading" @click="save">保存安全配置</el-button>
+      <el-button v-permission="'website_security:view'" :disabled="saving || loading" @click="load">重新加载</el-button>
     </el-card>
   </div>
 </template>

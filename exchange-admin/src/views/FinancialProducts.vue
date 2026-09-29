@@ -4,11 +4,11 @@
       <template #header>
         <div class="card-header">
           <span>理财产品管理</span>
-          <el-button type="primary" @click="handleAdd">添加理财产品</el-button>
+          <el-button v-permission="'financial_products:create'" type="primary" @click="handleAdd">添加理财产品</el-button>
         </div>
       </template>
 
-      <el-table :data="productsList" style="width: 100%" v-loading="loading">
+      <admin-table table-key="FinancialProducts.1" :data="productsList" style="width: 100%" v-loading="loading">
         <el-table-column prop="name" label="产品名称" width="150" />
         <el-table-column prop="currency" label="货币" width="80" />
         <el-table-column prop="dailyYieldRate" label="日产率(%)" width="120">
@@ -39,7 +39,7 @@
         </el-table-column>
         <el-table-column prop="enabled" label="启用状态" width="100">
           <template #default="{ row }">
-            <el-switch
+            <el-switch v-permission="'financial_products:edit'"
               v-model="row.enabled"
               @change="handleUpdate(row)"
             />
@@ -47,11 +47,11 @@
         </el-table-column>
         <el-table-column label="操作" width="150" fixed="right">
           <template #default="{ row }">
-            <el-button size="small" type="primary" @click="handleEdit(row)">编辑</el-button>
-            <el-button size="small" type="danger" @click="handleDelete(row)">删除</el-button>
+            <el-button v-permission="'financial_products:edit'" size="small" type="primary" @click="handleEdit(row)">编辑</el-button>
+            <el-button v-permission="'financial_products:delete'" size="small" type="danger" @click="handleDelete(row)">删除</el-button>
           </template>
         </el-table-column>
-      </el-table>
+      </admin-table>
     </el-card>
 
     <!-- 添加/编辑对话框 -->
@@ -65,7 +65,7 @@
           <el-input v-model="formData.name" placeholder="如：180MH/S" />
         </el-form-item>
         <el-form-item label="产品图片">
-          <el-upload
+          <el-upload v-permission="formData.id ? 'financial_products:edit' : 'financial_products:create'"
             class="avatar-uploader"
             :http-request="handleImageUpload"
             :show-file-list="false"
@@ -104,8 +104,8 @@
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleSubmit">确定</el-button>
+        <el-button v-permission="'session:close'" @click="dialogVisible = false">取消</el-button>
+        <el-button v-permission="formData.id ? 'financial_products:edit' : 'financial_products:create'" type="primary" @click="handleSubmit">确定</el-button>
       </template>
     </el-dialog>
   </div>

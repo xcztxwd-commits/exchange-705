@@ -25,13 +25,15 @@
               <el-option label="已结束" value="COMPLETED" />
               <el-option label="已赎回" value="REDEEMED" />
             </el-select>
-            <el-button type="primary" :icon="Search" @click="handleSearch">搜索</el-button>
-            <el-button :icon="Refresh" @click="handleReset">重置</el-button>
+            <el-button v-permission="'financial_orders:view'" type="primary" :icon="Search" @click="handleSearch">搜索</el-button>
+            <el-button v-permission="'financial_orders:view'" :icon="Refresh" @click="handleReset">重置</el-button>
           </div>
         </div>
       </template>
 
-      <el-table :data="ordersList" style="width: 100%" v-loading="loading">
+      <AccountTypeFilter v-model="accountModes" @change="accountFilterChanged" />
+<admin-table :row-key="(row: any) => `${row.accountMode || 'REAL'}:${row.id ?? row.userId}:${row.type || ''}`" table-key="FinancialOrders.1" :data="ordersList" style="width: 100%" v-loading="loading">
+<el-table-column prop="accountModeLabel" label="账户类型" width="110" fixed="left" />
         <el-table-column prop="id" label="ID" width="80" />
         <el-table-column prop="userId" label="用户ID" width="100" />
         <el-table-column prop="userRemark" label="用户备注" width="150">
@@ -76,10 +78,10 @@
         </el-table-column>
         <el-table-column label="操作" width="120" fixed="right">
           <template #default="{ row }">
-            <el-button size="small" type="primary" @click="viewYieldList(row)">查看收益</el-button>
+            <el-button v-permission="'financial_orders:detail'" size="small" type="primary" @click="viewYieldList(row)">查看收益</el-button>
           </template>
         </el-table-column>
-      </el-table>
+      </admin-table>
     </el-card>
 
     <!-- 收益列表对话框 -->
@@ -117,7 +119,9 @@
         </el-row>
       </div>
 
-      <el-table :data="yieldList" style="width: 100%" v-loading="yieldLoading">
+      <AccountTypeFilter v-model="yieldModes" @change="viewYieldList({id:currentOrderId})" />
+<admin-table :row-key="(row: any) => `${row.accountMode || 'REAL'}:${row.id ?? row.userId}:${row.type || ''}`" table-key="FinancialOrders.2" :data="yieldList" style="width: 100%" v-loading="yieldLoading">
+<el-table-column prop="accountModeLabel" label="账户类型" width="110" />
         <el-table-column prop="yieldDate" label="收益日期" width="120">
           <template #default="{ row }">
             {{ formatDate(row.yieldDate) }}
@@ -147,18 +151,18 @@
         </el-table-column>
         <el-table-column label="操作" width="100">
           <template #default="{ row }">
-            <el-button
+            <el-button v-permission="'financial_orders:payout'"
               v-if="row.status === 'PENDING'"
               size="small"
               type="success"
               @click="payoutYield(row.id)"
-            >
+             :disabled="accountModes.includes('DEMO') || !accountModes.length">
               发放
             </el-button>
             <span v-else>-</span>
           </template>
         </el-table-column>
-      </el-table>
+      </admin-table>
     </el-dialog>
   </div>
 </template>
@@ -167,7 +171,14 @@
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search, Refresh } from '@element-plus/icons-vue'
-import request from '@/utils/request'
+import { useAccountTable } from '@/utils/useAccountTable'
+import { accountTableRequest } from '@/utils/accountTableRequest'
+import AccountTypeFilter from '@/components/AccountTypeFilter.vue'
+const accountTable = useAccountTable()
+const accountModes = accountTable.modes
+const yieldTable = useAccountTable(), yieldModes = yieldTable.modes
+const request = accountTableRequest(accountTable, () => yieldDialogVisible.value && yieldModes.value.join(",") !== "REAL")
+function accountFilterChanged() { ordersList.value=[];loadList() }
 
 const ordersList = ref<any[]>([])
 const loading = ref(false)
@@ -255,12 +266,15 @@ const handleReset = () => {
 
 // 查看收益列表
 async function viewYieldList(row: any) {
+  if (row.accountMode) yieldModes.value = [row.accountMode]
+  yieldList.value = []; yieldStats.value = null
+  accountTable.selectRow(row)
   currentOrderId.value = row.id
   yieldDialogVisible.value = true
   yieldLoading.value = true
   
   try {
-    const res: any = await request.get(`/admin/financial/yield/order/${row.id}`)
+    const res: any = await yieldTable.query(`/admin/financial/yield/order/${row.id}`)
     if (res && res.success) {
       yieldList.value = res.list || []
       yieldStats.value = res.stats || null

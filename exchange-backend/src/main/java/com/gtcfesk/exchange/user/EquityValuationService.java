@@ -83,7 +83,7 @@ public class EquityValuationService {
                 rs -> {
                     String symbol=rs.getString(1), currency=rs.getString(2), source=rs.getString(3);
                     batch.quotes.computeIfAbsent(symbol,k->snapshot(()->market.snapshotPrice(k)));
-                    batch.rates.computeIfAbsent(rateKey(currency,source),k->snapshot(()->market.conversion(currency,source)));
+                    batch.rates.computeIfAbsent(rateKey(currency,source),k->snapshot(()->market.contractConversion(currency,source)));
                 },ids.toArray());
         return batch;
     }

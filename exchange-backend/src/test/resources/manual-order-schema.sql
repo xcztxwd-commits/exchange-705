@@ -1,5 +1,12 @@
 -- Schema-only snapshot of local MySQL 5.7.44, 2026-09-28; disposable manual_order_test only. No application data.
 CREATE TABLE `contract_order` (
+  `quantity_unit_type` varchar(16) DEFAULT NULL,
+  `spec_version` bigint DEFAULT NULL,
+  `min_order_quantity` decimal(32,16) DEFAULT NULL,
+  `quantity_step` decimal(32,16) DEFAULT NULL,
+  `min_order_notional` decimal(32,16) DEFAULT NULL,
+  `quantity_asset` varchar(16) DEFAULT NULL,
+
   `id` bigint(20) NOT NULL AUTO_INCREMENT,
   `close_time` datetime(6) DEFAULT NULL,
   `created_at` datetime(6) NOT NULL,
@@ -23,6 +30,7 @@ CREATE TABLE `contract_order` (
   `leverage` decimal(10,2) DEFAULT NULL,
   `limit_match_enabled` bit(1) NOT NULL,
   `lot_size` decimal(32,16) DEFAULT NULL,
+  `fx_base_currency` varchar(3) DEFAULT NULL,
   `row_version` bigint(20) NOT NULL,
   `margin_conversion_rate` decimal(32,16) DEFAULT NULL,
   `quote_currency` varchar(16) DEFAULT NULL,
@@ -75,6 +83,12 @@ CREATE TABLE `user_account` (
   KEY `idx_user_type` (`user_type`)
 ) ENGINE=InnoDB  DEFAULT CHARSET=utf8mb4;
 CREATE TABLE `trading_symbol` (
+  `quantity_unit_type` varchar(16) DEFAULT NULL,
+  `spec_version` bigint DEFAULT NULL,
+  `min_order_quantity` decimal(32,16) DEFAULT NULL,
+  `quantity_step` decimal(32,16) DEFAULT NULL,
+  `min_order_notional` decimal(32,16) DEFAULT NULL,
+
   `id` bigint(20) NOT NULL AUTO_INCREMENT,
   `symbol` varchar(32) NOT NULL COMMENT '??????? BTCUSD, XAUUSD',
   `base_currency` varchar(16) NOT NULL COMMENT '?????? BTC, XAU',
@@ -99,6 +113,7 @@ CREATE TABLE `trading_symbol` (
   `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `fee_multiplier` decimal(32,16) DEFAULT NULL,
   `lot_size` decimal(32,16) DEFAULT NULL,
+  `fx_base_currency` varchar(3) DEFAULT NULL,
   `control_enabled` bit(1) NOT NULL,
   `control_price_offset` decimal(32,16) DEFAULT NULL,
   `leverage` decimal(10,2) DEFAULT NULL,

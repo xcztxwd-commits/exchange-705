@@ -1,0 +1,76 @@
+services:
+  backend:
+    environment:
+      SIMULATION_INSPECTION_KEY: ${SIMULATION_INSPECTION_KEY:?Set a shared random inspection key of at least 32 characters}
+      SIMULATION_INSPECTION_URL: http://demo-backend:8080/api/simulation/inspection
+    networks: [default, demo-identity]
+  pc:
+    networks: [default, demo-web]
+  mobile:
+    networks: [default, demo-web]
+  demo-mysql:
+    networks: [demo-data]
+    image: mysql:5.7
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DEMO_MYSQL_ROOT_PASSWORD:?Set DEMO_MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: exchange_demo
+      MYSQL_USER: simulation
+      MYSQL_PASSWORD: ${DEMO_MYSQL_PASSWORD:?Set DEMO_MYSQL_PASSWORD}
+    volumes:
+      - demo-mysql-data:/var/lib/mysql
+    healthcheck:
+      test: [CMD-SHELL, 'MYSQL_PWD=$$MYSQL_PASSWORD mysql -h127.0.0.1 -usimulation -Dexchange_demo -e "SELECT 1" >/dev/null']
+      interval: 10s
+      timeout: 5s
+      retries: 30
+    restart: unless-stopped
+  demo-redis:
+    networks: [demo-data]
+    image: redis:7-alpine
+    command: [redis-server, --appendonly, 'yes']
+    volumes:
+      - demo-redis-data:/data
+    restart: unless-stopped
+  demo-backend:
+    networks: [demo-data, demo-identity, demo-web]
+    build:
+      context: .
+      dockerfile: docker/backend.Dockerfile
+    environment:
+      SIMULATION_ENABLED: 'true'
+      SIMULATION_INSPECTION_KEY: ${SIMULATION_INSPECTION_KEY}
+      SIMULATION_IDENTITY_URL: http://backend:8080/api/simulation
+      SPRING_DATASOURCE_URL: jdbc:mysql://demo-mysql:3306/exchange_demo?useSSL=false&useUnicode=true&characterEncoding=utf8&serverTimezone=UTC
+      SPRING_DATASOURCE_USERNAME: simulation
+      SPRING_DATASOURCE_PASSWORD: ${DEMO_MYSQL_PASSWORD}
+      SPRING_REDIS_HOST: demo-redis
+      SPRING_JPA_SHOW_SQL: 'false'
+      JWT_SECRET: ${DEMO_JWT_SECRET:?Set independent DEMO_JWT_SECRET}
+      MANUAL_ORDERS_ENABLED: 'false'
+    volumes:
+      - demo-uploads:/app/uploads
+    depends_on:
+      demo-mysql:
+        condition: service_healthy
+      demo-redis:
+        condition: service_started
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD-SHELL, 'curl -fsS http://localhost:8080/api/user/system/timezone >/dev/null']
+      interval: 15s
+      timeout: 5s
+      start_period: 60s
+      retries: 10
+    restart: unless-stopped
+volumes:
+  demo-mysql-data:
+  demo-redis-data:
+  demo-uploads:
+
+networks:
+  demo-data:
+    internal: true
+  demo-identity:
+  demo-web:
+    internal: true

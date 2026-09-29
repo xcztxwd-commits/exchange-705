@@ -8,6 +8,17 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 class ExchangeQuoteTest {
+    @Test void weeklyAndMonthlyHistoryIntervalsAreAccepted() {
+        MarketKlineController controller = new MarketKlineController();
+        ForexQuoteMarketService market = mock(ForexQuoteMarketService.class);
+        org.springframework.test.util.ReflectionTestUtils.setField(controller, "marketService", market);
+        long cursor = System.currentTimeMillis() - 1000;
+        for (String interval : Arrays.asList("1w", "1M")) {
+            when(market.historicalKline("BTCUSDT", interval, 100, cursor)).thenReturn(Collections.singletonMap("ret", 200));
+            assertEquals(200, controller.history("BTCUSDT", interval, cursor, 100).getStatusCodeValue());
+            verify(market).historicalKline("BTCUSDT", interval, 100, cursor);
+        }
+    }
     @Test void exactInstrumentAndIntervalMapping() {
         assertEquals("XAUUSDT",ExchangeQuoteSource.symbol("XAUUSD","Metal",false));
         assertEquals("XAG-USDT-SWAP",ExchangeQuoteSource.symbol("XAGUSD","Metal",true));
@@ -15,6 +26,8 @@ class ExchangeQuoteTest {
         assertThrows(MarketHttp.Failure.class,()->ExchangeQuoteSource.symbol("XPTUSD","Metal",false));
         assertThrows(MarketHttp.Failure.class,()->ExchangeQuoteSource.symbol("B/TCUSD","Crypto",false));
         assertEquals("1M",ExchangeQuoteSource.interval("1mo",false));
+        assertArrayEquals(new String[]{"1mo","10y"}, org.springframework.test.util.ReflectionTestUtils.invokeMethod(new MarketQuoteSource(), "convertIntervalToYahoo", "1M"));
+        assertEquals(10, (Integer) org.springframework.test.util.ReflectionTestUtils.invokeMethod(new MarketQuoteSource(), "convertIntervalToKlineType", "1M"));
         assertEquals("1Dutc",ExchangeQuoteSource.interval("1d",true));
         assertEquals("4H",ExchangeQuoteSource.interval("4h",true));
         assertEquals("6Hutc",ExchangeQuoteSource.interval("6h",true));

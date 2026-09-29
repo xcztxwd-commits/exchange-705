@@ -39,7 +39,10 @@ public class OperationLogInterceptor implements HandlerInterceptor {
 
             // 排除GET请求（查询操作，减少日志量）
             String method = request.getMethod();
-            if ("GET".equals(method)) {
+            boolean supportRequest = requestURI.startsWith("/api/admin/support/");
+            boolean supportExport = supportRequest && requestURI.endsWith("/export");
+            if (supportRequest && (requestURI.endsWith("/presence") || requestURI.endsWith("/read"))) return;
+            if ("GET".equals(method) && !supportExport) {
                 return;
             }
 
@@ -68,7 +71,10 @@ public class OperationLogInterceptor implements HandlerInterceptor {
 
             // 获取请求参数
             try {
-                if (request instanceof ContentCachingRequestWrapper) {
+                if (supportRequest) {
+                    // Never leak private chat / inbox bodies via the general operation-log module.
+                    log.setRequestParams("{\"privateCommunication\":true}");
+                } else if (request instanceof ContentCachingRequestWrapper) {
                     ContentCachingRequestWrapper wrappedRequest = (ContentCachingRequestWrapper) request;
                     byte[] content = wrappedRequest.getContentAsByteArray();
                     if (content.length > 0) {

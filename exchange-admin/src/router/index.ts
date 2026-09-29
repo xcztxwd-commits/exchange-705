@@ -25,6 +25,7 @@ import Statistics from '@/views/Statistics.vue'
 import AiControl from '@/views/AiControl.vue'
 import Login from '@/views/Login.vue'
 import { useAuthStore } from '@/store/auth'
+import { access, loadAccess, canRoute } from '@/utils/access'
 
 const legacyRoute = location.hash.startsWith('#/') ? new URL(location.hash.slice(1), location.origin) : null
 if (location.hash) {
@@ -36,6 +37,7 @@ const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
     { path: '/login', component: Login },
+    { path: '/forbidden', component: () => import('@/views/Forbidden.vue') },
     {
       path: '/',
       component: Layout,
@@ -64,6 +66,9 @@ const router = createRouter({
         { path: 'admin-list', component: AdminList },
         { path: 'website-security', component: () => import('@/views/WebsiteSecurity.vue') },
         { path: 'settings', component: Settings },
+        { path: 'support', component: () => import('@/views/SupportDesk.vue') },
+        { path: 'support-settings', component: () => import('@/views/SupportSettings.vue') },
+        { path: 'inbox', component: () => import('@/views/InboxManagement.vue') },
         { path: 'operation-log', component: OperationLog },
         { path: 'statistics', component: Statistics },
       ],
@@ -71,21 +76,16 @@ const router = createRouter({
   ],
 })
 
-router.beforeEach((to, _from, next) => {
+router.beforeEach(async (to) => {
   const auth = useAuthStore()
   if (!auth.token || !auth.user) auth.load()
-  if (to.path !== '/login' && !auth.token) {
-    next('/login')
-    return
-  }
-  if (to.path === '/website-security' && !(auth.user?.isSuperAdmin || auth.user?.role === 'super_admin')) {
-    next('/dashboard'); return
-  }
-  if (to.path === '/login' && auth.token) {
-    next('/dashboard')
-    return
-  }
-  next()
+  if (!auth.token) return to.path === '/login' ? true : '/login'
+  try { await loadAccess(true) } catch { return to.path === '/forbidden' ? true : '/forbidden' }
+  const first = access.menus[0]?.path || '/forbidden'
+  if (to.path === '/login' || to.path === '/') return first
+  if (to.path === '/forbidden') return true
+  if (!canRoute(to.path)) return first === to.path ? '/forbidden' : first
+  return true
 })
 
 export default router

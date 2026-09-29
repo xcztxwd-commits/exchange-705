@@ -44,14 +44,14 @@
             />
           </el-form-item>
           <el-form-item>
-            <el-button type="primary" @click="handleSearch">搜索</el-button>
-            <el-button @click="handleReset">重置</el-button>
+            <el-button v-permission="'operation_log:view'" type="primary" @click="handleSearch">搜索</el-button>
+            <el-button v-permission="'operation_log:view'" @click="handleReset">重置</el-button>
           </el-form-item>
         </el-form>
       </div>
       
       <!-- 日志列表 -->
-      <el-table :data="logList" v-loading="loading" border stripe>
+      <admin-table table-key="OperationLog.1" :data="logList" v-loading="loading" border stripe>
         <el-table-column prop="id" label="ID" width="80" />
         <el-table-column prop="adminEmail" label="操作人" width="150">
           <template #default="{ row }">
@@ -94,10 +94,10 @@
         </el-table-column>
         <el-table-column label="操作" width="100" fixed="right">
           <template #default="{ row }">
-            <el-button link type="primary" @click="handleViewDetail(row)">详情</el-button>
+            <el-button v-permission="'operation_log:detail'" link type="primary" @click="handleViewDetail(row)">详情</el-button>
           </template>
         </el-table-column>
-      </el-table>
+      </admin-table>
       
       <el-empty v-if="!loading && logList.length === 0" description="暂无操作日志" />
       
@@ -109,8 +109,7 @@
           :total="total"
           :page-sizes="[10, 20, 50, 100]"
           layout="total, sizes, prev, pager, next, jumper"
-          @size-change="handleSizeChange"
-          @current-change="handlePageChange"
+          @change="loadLogs"
         />
       </div>
     </el-card>
@@ -143,7 +142,7 @@
         </el-descriptions-item>
       </el-descriptions>
       <template #footer>
-        <el-button @click="detailDialogVisible = false">关闭</el-button>
+        <el-button v-permission="'session:close'" @click="detailDialogVisible = false">关闭</el-button>
       </template>
     </el-dialog>
   </div>
@@ -163,7 +162,7 @@ const queryParams = ref({
   startTime: '',
   endTime: '',
   page: 1,
-  size: 20,
+  size: 10,
 })
 
 const detailDialogVisible = ref(false)
@@ -247,19 +246,8 @@ const handleReset = () => {
     startTime: '',
     endTime: '',
     page: 1,
-    size: 20,
+    size: 10,
   }
-  loadLogs()
-}
-
-const handlePageChange = (page: number) => {
-  queryParams.value.page = page
-  loadLogs()
-}
-
-const handleSizeChange = (size: number) => {
-  queryParams.value.size = size
-  queryParams.value.page = 1
   loadLogs()
 }
 

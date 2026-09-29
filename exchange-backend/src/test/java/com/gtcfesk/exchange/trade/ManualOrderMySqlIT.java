@@ -65,12 +65,24 @@ class ManualOrderMySqlIT {
         for(int level=1;level<=3;level++)store.progress(db,"rollup_"+level,day+86400000,0,System.currentTimeMillis());
     }
     ManualOrderService newService(String failure) {
-        ManualOrderService s=new ManualOrderService(source,new ObjectMapper(),repo,new ManualOrderPrices(market),null,new ManualOrderHistory(store)) {
+        com.gtcfesk.exchange.market.MarketCategoryService categories=mock(com.gtcfesk.exchange.market.MarketCategoryService.class);
+        when(categories.leverageEnabled(any())).thenReturn(true);
+        ManualOrderService s=new ManualOrderService(source,new ObjectMapper(),repo,new ManualOrderPrices(market),null,new ManualOrderHistory(store),categories) {
             @Override protected void checkpoint(String stage) {if(stage.equals(failure))throw new IllegalStateException("injected "+stage);}
         };
         ReflectionTestUtils.setField(s,"enabled",true);return s;
     }
     @AfterEach void clear(){SecurityContextHolder.clearContext();}
+    @Test void cryptoUnitProtocolAndPersistedSnapshot() {
+        symbol.setSourceCategory("Crypto");symbol.setBaseCurrency("BTC");symbol.setQuantityUnitType("BASE_ASSET");symbol.setSpecVersion(1L);
+        symbol.setMinOrderQuantity(n("0.001"));symbol.setQuantityStep(n("0.001"));symbol.setMinOrderNotional(BigDecimal.ZERO);symbol.setFeeMultiplier(n("0.03"));
+        ManualOrderService.Request r=request(true,false);r.driver="QUANTITY";r.input=n("0.001");
+        assertThrows(BusinessException.class,()->service.preview(r));equal("1000",wallet());assertEquals(0,count("contract_order"));
+        r.quantityUnitType="BASE_ASSET";r.specVersion=1L;create(r);
+        equal("0.001",db.queryForObject("select quantity from contract_order",BigDecimal.class));equal("0.00003",db.queryForObject("select fee from contract_order",BigDecimal.class));
+        assertEquals("BASE_ASSET",db.queryForObject("select quantity_unit_type from contract_order",String.class));assertEquals("BTC",db.queryForObject("select quantity_asset from contract_order",String.class));
+        assertEquals(1L,db.queryForObject("select spec_version from contract_order",Long.class));equal("1000.00997",wallet());
+    }
     ManualOrderService.Request request(boolean wallet,boolean history) {
         ManualOrderService.Request r=new ManualOrderService.Request();r.userId=1L;r.symbol="FIXTUREUSD";r.side="BUY";r.timezone="UTC";r.openLocal=local(t-60000);r.closeLocal=local(t);r.driver="NET";r.input=n("100");r.leverage=n("10");r.walletEnabled=wallet;r.historyEnabled=history;r.idempotencyKey=UUID.randomUUID().toString();return r;
     }
@@ -80,14 +92,15 @@ class ManualOrderMySqlIT {
     BigDecimal wallet(){return db.queryForObject("select available from asset_account where user_id=1",BigDecimal.class);}
     BigDecimal value(long at){return db.queryForObject("select net_equity from asset_history_1m where user_id=1 and basis_version='net_equity_v1' and bucket_start=?",BigDecimal.class,at);}
     @Test void generationOnlyPreviewsAndThenUsesExistingAtomicCreate() {
-        ManualOrderGenerator.Request r=new ManualOrderGenerator.Request();r.userId=1L;r.symbol="FIXTUREUSD";r.timezone="UTC";r.targetNet=n("100");r.openLocal=local(t-60000);r.walletEnabled=true;r.historyEnabled=true;
+        // Fixed historical close keeps this transaction test independent of the latest-close search.
+        ManualOrderGenerator.Request r=new ManualOrderGenerator.Request();r.userId=1L;r.symbol="FIXTUREUSD";r.timezone="UTC";r.targetNet=n("100");r.openLocal=local(t-60000);r.closeLocal=local(t+60*60000);r.walletEnabled=true;r.historyEnabled=true;
         Map<String,Object> out=service.generate(r);
         assertEquals(0,count("contract_order"));assertEquals(0,count("manual_order_record"));equal("1000",wallet());
         ManualOrderService.Request generated=new ObjectMapper().convertValue(out.get("request"),ManualOrderService.Request.class);
         assertEquals(r.openLocal,generated.openLocal);
         equal("100",generated.targetNet);
         long close=ManualOrderCalculation.minute(generated.closeLocal,generated.timezone,generated.closeOffset);
-        assertTrue(close-(t-60000)>=60*60000L);
+        assertEquals(t+60*60000,close);
         generated.previewToken=out.get("previewToken").toString();generated.idempotencyKey=UUID.randomUUID().toString();
         service.create(generated);service.create(generated);
         equal("1100",wallet());assertEquals(1,count("contract_order"));assertEquals(1,count("manual_order_record"));
@@ -102,6 +115,120 @@ class ManualOrderMySqlIT {
         r.historyEnabled=true;assertThrows(BusinessException.class,()->service.generate(r));
         SecurityContextHolder.clearContext();assertThrows(org.springframework.security.access.AccessDeniedException.class,()->service.generate(r));
     }
+    @Test void highPrecisionLotAllocationAndNetTargetsGenerateReadOnlyPreview() {
+        ManualOrderGenerator.Request r=new ManualOrderGenerator.Request();r.userId=1L;r.symbol="FIXTUREUSD";r.timezone="UTC";
+        r.openLocal=local(t-60000);r.closeLocal=local(t);r.side="BUY";r.leverage=n("10");
+        r.quantity=n("12.3456789");r.percent=n("15");r.targetNet=n("100");
+        Map<String,Object> out=service.generate(r);
+        Map<?,?> calc=(Map<?,?>)out.get("calculation"),info=(Map<?,?>)out.get("generation");
+        BigDecimal quantity=n(calc.get("quantity").toString()),percent=n(calc.get("percent").toString()),net=n(calc.get("net").toString());
+        assertTrue(ManualOrderGenerator.withinTarget(quantity,r.quantity));
+        assertTrue(ManualOrderGenerator.withinTarget(percent,r.percent));
+        assertTrue(ManualOrderGenerator.withinTarget(net,r.targetNet));
+        assertEquals(r.quantity,info.get("quantityTarget"));
+        assertEquals(0,count("contract_order"));equal("1000",wallet());
+    }
+    @Test void decimalWireRoundTripPreservesPreviewAndDurableIdempotence() throws Exception {
+        ManualOrderService.Request r=request(true,false);r.driver="QUANTITY";r.input=n("0.0100000000000000");r.leverage=n("10.00");r.targetNet=n("0.0800000000000000");
+        r.previewToken=service.preview(r).get("previewToken").toString();
+        r.input=n("1E-2");r.leverage=n("1E+1");r.targetNet=n("8E-2");
+        Map<String,Object> first=service.create(r);equal("1000.08",wallet());
+        r.input=n("0.0100");r.leverage=n("10.000");r.targetNet=n("0.0800");
+        assertEquals(first.get("orderId"),newService(null).create(r).get("orderId"));
+        Map<String,Object> legacy=new TreeMap<>(new ObjectMapper().convertValue(r,Map.class));legacy.remove("previewToken");legacy.remove("idempotencyKey");legacy.put("operator",1L);
+        String legacyHash=ReflectionTestUtils.invokeMethod(service,"digest",new ObjectMapper().writeValueAsString(legacy));
+        db.update("update manual_order_record set request_hash=? where idempotency_key=?",legacyHash,r.idempotencyKey);
+        r.input=n("1E-2");assertEquals(first.get("orderId"),newService(null).create(r).get("orderId"));
+        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken("2","unused",Collections.singletonList(new SimpleGrantedAuthority("ROLE_SUPER_ADMIN"))));
+        assertThrows(BusinessException.class,()->service.create(r));auth("SUPER_ADMIN");
+        r.input=n("0.02");assertThrows(BusinessException.class,()->service.create(r));
+        assertEquals(1,count("contract_order"));assertEquals(1,count("manual_order_record"));equal("1000.08",wallet());
+    }
+    @Test void equivalentNumbersDoNotBypassPreviewExpiryOrIdentity() {
+        ManualOrderService.Request r=request(false,false);r.input=n("100.00");r.previewToken=service.preview(r).get("previewToken").toString();r.input=n("1E2");
+        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken("2","unused",Collections.singletonList(new SimpleGrantedAuthority("ROLE_SUPER_ADMIN"))));
+        assertThrows(BusinessException.class,()->service.create(r));auth("SUPER_ADMIN");
+        Map<?,?> cache=(Map<?,?>)ReflectionTestUtils.getField(service,"previews");ReflectionTestUtils.setField(cache.get(r.previewToken),"expires",0L);
+        assertThrows(BusinessException.class,()->service.create(r));assertEquals(0,count("contract_order"));equal("1000",wallet());
+    }
+    @Test void leverageBoundsCannotBeBypassedByPreviewOrCreate() {
+        symbol.setMaxLeverage(n("5"));
+        ManualOrderGenerator.Request g=new ManualOrderGenerator.Request();g.userId=1L;g.symbol="FIXTUREUSD";g.timezone="UTC";
+        g.openLocal=local(t-60000);g.closeLocal=local(t);g.leverage=n("10");
+        assertThrows(BusinessException.class,()->service.generate(g));
+        g.leverage=n("0.5");assertThrows(BusinessException.class,()->service.generate(g));
+        for(String value:Arrays.asList("0.5","5.01","100.01")) {
+            ManualOrderService.Request r=request(false,false);r.leverage=n(value);
+            assertThrows(BusinessException.class,()->service.preview(r));
+            assertThrows(BusinessException.class,()->service.create(r));
+        }
+        symbol.setMaxLeverage(n("20"));
+        ManualOrderService.Request r=request(false,false);r.leverage=n("10.4");
+        r.previewToken=service.preview(r).get("previewToken").toString();
+        // Fresh DB upper bound wins even if an administrative change forgot to increment row_version.
+        db.update("update trading_symbol set max_leverage=5 where id=1");
+        assertThrows(BusinessException.class,()->service.create(r));
+        assertEquals(0,count("contract_order"));assertEquals(0,count("manual_order_record"));equal("1000",wallet());
+        db.update("update trading_symbol set max_leverage=20 where id=1");
+        service.create(r);equal("10.4",db.queryForObject("select leverage from contract_order",BigDecimal.class));
+    }
+    @Test void categoryDisablingLeverageIsRecheckedAtCreate() {
+        com.gtcfesk.exchange.market.MarketCategoryService categories=(com.gtcfesk.exchange.market.MarketCategoryService)ReflectionTestUtils.getField(service,"categories");
+        ManualOrderService.Request r=request(false,false);r.previewToken=service.preview(r).get("previewToken").toString();
+        when(categories.leverageEnabled(any())).thenReturn(false);
+        assertThrows(BusinessException.class,()->service.create(r));assertThrows(BusinessException.class,()->service.preview(r));
+        r.leverage=BigDecimal.ONE;create(r);equal("1",db.queryForObject("select leverage from contract_order",BigDecimal.class));equal("1000",wallet());
+    }
+    @Test void adjustedLeverageSurvivesPreviewAndCreation() {
+        ManualOrderGenerator.Request r=new ManualOrderGenerator.Request();r.userId=1L;r.symbol="FIXTUREUSD";r.timezone="UTC";
+        r.openLocal=local(t-60000);r.closeLocal=local(t);r.side="BUY";r.leverage=n("10");
+        r.quantity=n("0.01");r.percent=n("0.0128");r.targetNet=n("0.08");r.targetClosePrice=n("110");
+        Map<String,Object> out=service.generate(r);
+        Map<?,?> generated=(Map<?,?>)out.get("request"),info=(Map<?,?>)out.get("generation");
+        BigDecimal actual=n(generated.get("leverage").toString());
+        assertNotEquals(0,actual.compareTo(r.leverage));assertTrue(ManualOrderGenerator.withinTarget(actual,r.leverage));
+        assertEquals(r.leverage,info.get("leverageTarget"));
+        assertEquals(ManualOrderGenerator.error(actual,r.leverage),info.get("leverageErrorPercent"));
+        assertEquals(0,count("contract_order"));equal("1000",wallet());
+        ManualOrderService.Request create=new ObjectMapper().convertValue(generated,ManualOrderService.Request.class);
+        create.previewToken=out.get("previewToken").toString();create.idempotencyKey=UUID.randomUUID().toString();
+        service.create(create);assertEquals(1,count("contract_order"));equal("1000",wallet());
+        equal(actual.toString(),db.queryForObject("select leverage from contract_order",BigDecimal.class));
+    }
+    @Test void feeDominatedAllocationStillGeneratesReadOnlyPreview() {
+        symbol.setFeeMultiplier(n("10000"));
+        ManualOrderGenerator.Request r=new ManualOrderGenerator.Request();r.userId=1L;r.symbol="FIXTUREUSD";r.timezone="UTC";
+        r.openLocal=local(t-60000);r.closeLocal=local(t);r.side="BUY";
+        r.quantity=n("0.01");r.percent=n("9.9");r.targetNet=n("-99.9");
+        Map<String,Object> out=service.generate(r);
+        Map<?,?> actual=(Map<?,?>)out.get("calculation"),generated=(Map<?,?>)out.get("request");
+        assertTrue(ManualOrderGenerator.withinTarget(n(actual.get("percent").toString()),r.percent));
+        assertTrue(ManualOrderGenerator.withinTarget(n(actual.get("net").toString()),r.targetNet));
+        assertTrue(n(generated.get("leverage").toString()).signum()>0);
+        assertEquals(0,count("contract_order"));assertEquals(0,count("manual_order_record"));equal("1000",wallet());
+    }
+    @Test void blankCloseUsesLatestRealMinuteAndSearchesOnlyPriorSevenDays() {
+        long latest=Math.floorDiv(System.currentTimeMillis(),60000)*60000-60000,opening=latest-240*60000;
+        doAnswer(inv->{long end=inv.getArgument(3);int size=inv.getArgument(2);List<Map<String,Object>> rows=new ArrayList<>();
+            for(long minute:new long[]{opening,latest})if(minute<=end && minute>end-size*60000L){Map<String,Object> row=new HashMap<>();row.put("timestamp",minute);row.put("open_price",minute==opening?"100":"110");rows.add(row);}
+            return Collections.singletonMap("data",Collections.singletonMap("kline_list",rows));
+        }).when(market).historicalKline(eq("FIXTUREUSD"),eq("1m"),anyInt(),anyLong());
+        ManualOrderGenerator.Request r=new ManualOrderGenerator.Request();r.userId=1L;r.symbol="FIXTUREUSD";r.timezone="UTC";r.targetClosePrice=n("110");
+        Map<String,Object> out=service.generate(r);
+        Map<?,?> request=(Map<?,?>)out.get("request"),info=(Map<?,?>)out.get("generation");
+        assertEquals(local(latest),request.get("closeLocal"));assertEquals(local(opening),request.get("openLocal"));
+        assertEquals(Boolean.TRUE,info.get("closeAutomaticallySelected"));equal("110",((Map<?,?>)out.get("quotes")).get("closePrice"));
+        assertEquals(0,count("contract_order"));equal("1000",wallet());
+        r.targetClosePrice=n("116");assertTrue(assertThrows(BusinessException.class,()->service.generate(r)).getMessage().contains("目标平仓价"));
+        r.targetClosePrice=n("110");r.quantity=n("0.01");r.targetNet=n("10000");
+        assertTrue(assertThrows(BusinessException.class,()->service.generate(r)).getMessage().contains("之前 7 天没有符合条件的开仓分钟"));
+        r.quantity=null;r.targetNet=null;r.openLocal=local(latest-ManualOrderGenerator.RANGE-60000);
+        assertTrue(assertThrows(BusinessException.class,()->service.generate(r)).getMessage().contains("7 天内"));
+        doReturn(Collections.singletonMap("data",Collections.singletonMap("kline_list",Collections.emptyList())))
+            .when(market).historicalKline(eq("FIXTUREUSD"),eq("1m"),anyInt(),anyLong());
+        r.openLocal=null;
+        assertTrue(assertThrows(BusinessException.class,()->service.generate(r)).getMessage().contains("最近 7 天没有可用的平仓分钟行情"));
+    }
     @Test void targetConstraintSurvivesNormalPreviewAndCannotBeSilentlyMissed() {
         ManualOrderService.Request r=request(false,false);r.driver="QUANTITY";r.input=n("0.01");r.targetNet=n("100");
         assertThrows(BusinessException.class,()->service.preview(r));assertEquals(0,count("contract_order"));
@@ -109,7 +236,7 @@ class ManualOrderMySqlIT {
         r.targetNet=n("0");assertThrows(BusinessException.class,()->service.preview(r));
     }
     int count(String table){return db.queryForObject("select count(*) from "+table,Integer.class);}
-    @Test void generation128MasksThroughServiceAreReadOnly() throws Exception {
+    @Test void generation256MasksThroughServiceAreReadOnly() throws Exception {
         long opening=Math.floorDiv(System.currentTimeMillis(),60000)*60000-6*3600000,closing=opening+4*3600000;
         when(market.historicalKline(anyString(),eq("1m"),anyInt(),anyLong())).thenAnswer(inv->{
             long end=inv.getArgument(3);int size=inv.getArgument(2);List<Map<String,Object>> rows=new ArrayList<>();
@@ -117,8 +244,9 @@ class ManualOrderMySqlIT {
             return Collections.singletonMap("data",Collections.singletonMap("kline_list",rows));
         });
         List<String> rows=new ArrayList<>();rows.add("mask,status,milliseconds,market_calls,pairs,net,quantity,leverage,percent");
-        for(int mask=0;mask<128;mask++){
+        for(int mask=0;mask<256;mask++){
             ManualOrderGenerator.Request r=ManualOrderGenerationMatrixTest.request(mask);r.userId=1L;r.symbol="FIXTUREUSD";r.timezone="UTC";
+            if((mask&128)!=0)r.targetClosePrice=n("110");
             if((mask&2)!=0)r.openLocal=local(opening);if((mask&4)!=0)r.closeLocal=local(closing);
             clearInvocations(market);long started=System.nanoTime();Map<String,Object> out=service.generate(r);
             Map<?,?> calc=(Map<?,?>)out.get("calculation"),request=(Map<?,?>)out.get("request"),quotes=(Map<?,?>)out.get("quotes"),info=(Map<?,?>)out.get("generation");
@@ -126,15 +254,16 @@ class ManualOrderMySqlIT {
             BigDecimal fee=q.multiply(n("2")),margin=q.multiply(p0).divide(l,16,java.math.RoundingMode.CEILING),net=p1.subtract(p0).multiply(q).multiply("BUY".equals(request.get("side"))?BigDecimal.ONE:BigDecimal.ONE.negate()).subtract(fee);
             equal(net.toString(),calc.get("net"));equal(fee.toString(),calc.get("fee"));equal(margin.toString(),calc.get("margin"));
             if(r.targetNet!=null)assertTrue(net.subtract(r.targetNet).abs().compareTo(r.targetNet.abs().multiply(n("0.05")))<=0);
-            if(r.quantity!=null)equal(r.quantity.toString(),q);if(r.leverage!=null)equal(r.leverage.toString(),l);
-            if(r.percent!=null)assertTrue(n(calc.get("percent").toString()).subtract(r.percent).abs().compareTo(n("0.01"))<=0);
+            if(r.targetClosePrice!=null)assertTrue(ManualOrderGenerator.withinTarget(p1,r.targetClosePrice));
+            if(r.quantity!=null)assertTrue(ManualOrderGenerator.withinTarget(q,r.quantity));if(r.leverage!=null)assertTrue(ManualOrderGenerator.withinTarget(l,r.leverage));
+            if(r.percent!=null)assertTrue(ManualOrderGenerator.withinTarget(n(calc.get("percent").toString()),r.percent));
             if(r.side!=null)assertEquals(r.side,request.get("side"));if(r.openLocal!=null)assertEquals(r.openLocal,request.get("openLocal"));if(r.closeLocal!=null)assertEquals(r.closeLocal,request.get("closeLocal"));
             assertEquals(0,count("contract_order"));assertEquals(0,count("manual_order_record"));equal("1000",wallet());
             for(String table:Arrays.asList("asset_history_1m","asset_history_1h","asset_history_4h","asset_history_1d"))assertEquals(0,count(table));
             int calls=mockingDetails(market).getInvocations().size();assertTrue(calls<=18,"bounded seven-day windows plus preview");
             rows.add(mask+",PASS,"+(System.nanoTime()-started)/1000000.0+","+calls+","+info.get("searchedPairs")+","+net+","+q+","+l+","+calc.get("percent"));
         }
-        java.nio.file.Path dir=java.nio.file.Paths.get("target/manual-generation-matrix");java.nio.file.Files.createDirectories(dir);java.nio.file.Files.write(dir.resolve("service-matrix-128.csv"),rows,java.nio.charset.StandardCharsets.UTF_8);
+        java.nio.file.Path dir=java.nio.file.Paths.get("target/manual-generation-matrix");java.nio.file.Files.createDirectories(dir);java.nio.file.Files.write(dir.resolve("service-matrix-256.csv"),rows,java.nio.charset.StandardCharsets.UTF_8);
     }
     @Test void generationSecurityUnknownInputsAndTimeBoundaries() throws Exception {
         ManualOrderGenerator.Request r=new ManualOrderGenerator.Request();r.userId=1L;r.symbol="FIXTUREUSD";r.timezone="UTC";r.targetNet=n("-100");
@@ -273,7 +402,7 @@ class ManualOrderMySqlIT {
     }
     @Test void concurrentCaptureRollupAndWalletCannotSeeHalfCommit() throws Exception {
         CountDownLatch walletWritten=new CountDownLatch(1),release=new CountDownLatch(1);
-        service=new ManualOrderService(source,new ObjectMapper(),repo,new ManualOrderPrices(market),null,new ManualOrderHistory(store)) {
+        service=new ManualOrderService(source,new ObjectMapper(),repo,new ManualOrderPrices(market),null,new ManualOrderHistory(store),(com.gtcfesk.exchange.market.MarketCategoryService)ReflectionTestUtils.getField(service,"categories")) {
             @Override protected void checkpoint(String stage) {
                 if(!stage.equals("wallet"))return;
                 walletWritten.countDown();try{if(!release.await(10,TimeUnit.SECONDS))throw new IllegalStateException("test timeout");}catch(InterruptedException e){throw new IllegalStateException(e);}

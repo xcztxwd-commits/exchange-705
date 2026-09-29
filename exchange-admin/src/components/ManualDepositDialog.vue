@@ -15,24 +15,44 @@ const { currency, rate } = useFiatCurrency()
 const form = reactive({ userId: '', account: 'FUND', amount: '', type: 'manual', manualPurpose: 'ADJUSTMENT', remark: '', address: '', network: 'MANUAL', proofImage: '' })
 const recipient = ref<any>(null), pending = ref<any>(null), busy = ref(false), querying = ref(false)
 const key = ref('')
+const customerQuery = ref(''), lookupError = ref('')
 const preview = computed(() => rate.value === null ? null : previewUsd(form.amount, String(rate.value)))
-watch(() => props.modelValue, async value => {
+watch(() => props.modelValue, value => {
   if (!value) return
   const saved = sessionStorage.getItem(storageKey.value)
   pending.value = saved ? JSON.parse(saved) : null
   if (pending.value) { Object.assign(form, pending.value); currency.value = pending.value.currency; key.value = pending.value.idempotencyKey }
   else { Object.assign(form, { userId: props.userId ? String(props.userId) : '', account: 'FUND', amount: '', type: 'manual', manualPurpose: 'ADJUSTMENT', remark: '', address: '', network: 'MANUAL', proofImage: '' }); currency.value = 'USD'; key.value = crypto.randomUUID() }
   recipient.value = null
-  if (form.userId) await lookup()
+  customerQuery.value = form.userId
 })
-watch(() => form.userId, () => { recipient.value = null })
-async function lookup() {
-  if (!/^\d+$/.test(form.userId)) return
+watch([() => props.modelValue, customerQuery], ([visible, input], _, onCleanup) => {
+  let active = true
+  recipient.value = null
+  lookupError.value = ''
+  querying.value = false
+  if (!pending.value) form.userId = ''
+  const query = input.trim()
+  if (!visible || !query) return
+  if (!/^\d+$/.test(query) && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(query)) {
+    lookupError.value = '请输入客户 ID 或完整邮箱'
+    return
+  }
   querying.value = true
-  try { recipient.value = await request.get(`/admin/deposit/orders/recipient/${form.userId}`) }
-  catch (e: any) { recipient.value = null; ElMessage.error(e.message) }
-  finally { querying.value = false }
-}
+  const timer = setTimeout(async () => {
+    try {
+      const result: any = await request.get('/admin/deposit/orders/recipient', { params: { query } })
+      if (!active) return
+      recipient.value = result
+      if (!pending.value) form.userId = String(result.userId)
+    } catch (e: any) {
+      if (active) lookupError.value = e.message || '客户查询失败'
+    } finally {
+      if (active) querying.value = false
+    }
+  }, 400)
+  onCleanup(() => { active = false; clearTimeout(timer) })
+}, { flush: 'sync' })
 async function upload(options: any) {
   if (!options.file.type.startsWith('image/') || options.file.size > 5 * 1024 * 1024) { ElMessage.error('仅支持5MB以内图片'); return }
   const data = new FormData(); data.append('file', options.file)
@@ -45,7 +65,7 @@ async function submit() {
   try {
     let payload = pending.value
     if (!payload) {
-      if (!recipient.value || String(recipient.value.userId) !== String(form.userId) || !preview.value || !form.remark.trim()) { ElMessage.error('请查询客户并填写有效金额、备注'); return }
+      if (!recipient.value || String(recipient.value.userId) !== String(form.userId) || !preview.value || !form.remark.trim()) { ElMessage.error('请等待客户匹配成功，并填写有效金额、备注'); return }
       if (form.manualPurpose === 'RECEIPT' && (form.type === 'manual' || !form.proofImage)) { ElMessage.error('实收补录需要渠道和凭证'); return }
       await ElMessageBox.confirm(`UID ${form.userId}；${form.account}；${form.amount} ${currency.value}；费率0%；预计 ${preview.value} USD（以服务端提交时汇率为准）；原因：${form.remark}`, '确认手动入账', { type: 'warning' })
       payload = { ...form, currency: currency.value, idempotencyKey: key.value }
@@ -67,9 +87,9 @@ async function submit() {
   <el-dialog v-model="open" title="新增手动充值" width="640px" :close-on-click-modal="false">
     <el-alert v-if="pending" title="原请求结果待确认：表单已锁定，重试不会重复入账。关闭重开仍保留原请求。" type="warning" :closable="false" />
     <el-form label-width="110px" :disabled="busy || !!pending">
-      <el-form-item label="客户 UID"><el-input v-model="form.userId" /><el-button :loading="querying" @click="lookup">查询客户</el-button></el-form-item>
-      <el-alert v-if="recipient" :title="`${recipient.name}；用户备注：${recipient.remark || '—'}；余额 USD：${JSON.stringify(recipient.balances)}`" :closable="false" />
-      <el-form-item label="入账账户"><el-select v-model="form.account"><el-option v-for="v in ['FUND','CONTRACT','OPTION']" :key="v" :value="v" :label="v" /></el-select></el-form-item>
+      <el-form-item label="客户 ID/邮箱" :error="lookupError"><el-input v-model="customerQuery" placeholder="输入客户 ID 或完整邮箱，自动查询" clearable /><span v-if="querying" role="status">正在查询客户…</span></el-form-item>
+      <el-alert v-if="recipient" :title="`UID ${recipient.userId}；${recipient.name}；用户备注：${recipient.remark || '—'}；余额 USD：${JSON.stringify(recipient.balances)}`" :closable="false" />
+      <el-form-item label="入账账户"><el-select v-model="form.account"><el-option label="资金账户" value="FUND" /><el-option label="合约账户" value="CONTRACT" /><el-option label="期权账户" value="OPTION" /></el-select></el-form-item>
       <el-form-item label="计价货币"><CurrencyPicker v-model="currency" /></el-form-item>
       <el-form-item label="原币数量"><el-input v-model="form.amount" inputmode="decimal" /></el-form-item>
       <el-alert :title="`费率0%；预计到账 ${preview || '汇率或数量无效'} USD；以服务端提交时汇率为准`" type="info" :closable="false" />
@@ -78,8 +98,8 @@ async function submit() {
       <el-form-item v-if="form.type !== 'manual'" :label="form.type === 'bank' ? '收款信息' : '钱包地址'"><el-input v-model="form.address" maxlength="200" /></el-form-item>
       <el-form-item v-if="form.type === 'digital'" label="地址网络"><el-input v-model="form.network" maxlength="50" /></el-form-item>
       <el-form-item label="订单备注" required><el-input v-model="form.remark" type="textarea" maxlength="500" show-word-limit /></el-form-item>
-      <el-form-item label="充值凭证"><el-upload :http-request="upload" :show-file-list="false" accept="image/*"><el-button>上传凭证</el-button></el-upload><el-image v-if="form.proofImage" :src="form.proofImage" :preview-src-list="[form.proofImage]" style="width:60px" /></el-form-item>
+      <el-form-item label="充值凭证"><el-upload v-permission="'deposit_orders:manual_deposit'" :http-request="upload" :show-file-list="false" accept="image/*"><el-button v-permission="'deposit_orders:manual_deposit'">上传凭证</el-button></el-upload><el-image v-if="form.proofImage" :src="form.proofImage" :preview-src-list="[form.proofImage]" style="width:60px" /></el-form-item>
     </el-form>
-    <template #footer><el-button @click="open = false">关闭</el-button><el-button type="primary" :loading="busy" @click="submit">{{ pending ? '重试原请求' : '确认充值' }}</el-button></template>
+    <template #footer><el-button v-permission="'session:close'" @click="open = false">关闭</el-button><el-button v-permission="'deposit_orders:manual_deposit'" type="primary" :loading="busy" :disabled="!pending && (querying || !recipient)" @click="submit">{{ pending ? '重试原请求' : '确认充值' }}</el-button></template>
   </el-dialog>
 </template>

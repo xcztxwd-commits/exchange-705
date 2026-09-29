@@ -17,6 +17,10 @@ import java.util.stream.Collectors;
 @Service
 public class AdminRoleService {
 
+    @Autowired private AdminPermissionService permissions;
+    @Autowired private AdminUserRepository admins;
+    @Autowired private javax.persistence.EntityManager entityManager;
+
     @Autowired
     private AdminRoleRepository roleRepository;
 
@@ -42,6 +46,9 @@ public class AdminRoleService {
      * 创建角色
      */
     public AdminRole createRole(AdminRole role) {
+        role.setId(null);
+        role.setIsSuper(false);
+        if ("super_admin".equals(role.getRoleCode())) throw new IllegalArgumentException("保留角色代码");
         // 验证角色代码是否重复
         if (roleRepository.existsByRoleCode(role.getRoleCode())) {
             throw new IllegalArgumentException("角色代码已存在");
@@ -60,6 +67,7 @@ public class AdminRoleService {
             throw new IllegalArgumentException("超级管理员角色不能修改");
         }
         
+        permissions.validateManagedGrants(getRoleMenuIds(id));
         role.setRoleName(roleData.getRoleName());
         role.setDescription(roleData.getDescription());
         role.setStatus(roleData.getStatus());
@@ -79,6 +87,8 @@ public class AdminRoleService {
             throw new IllegalArgumentException("超级管理员角色不能删除");
         }
         
+        if (admins.findAll().stream().anyMatch(a -> role.getRoleCode().equals(a.getRole()))) throw new IllegalArgumentException("角色仍有绑定账号，不能删除");
+        permissions.validateManagedGrants(getRoleMenuIds(id));
         // 删除角色的菜单权限
         roleMenuRepository.deleteByRoleId(id);
         
@@ -108,12 +118,16 @@ public class AdminRoleService {
             throw new IllegalArgumentException("超级管理员权限不能修改");
         }
         
+        permissions.validateManagedGrants(getRoleMenuIds(roleId));
+        if (menuIds == null) throw new IllegalArgumentException("menuIds 不能为空；清空请传空列表");
+        permissions.validateGrant(menuIds);
         // 删除旧的权限
         roleMenuRepository.deleteByRoleId(roleId);
+        entityManager.flush();
         
         // 添加新的权限
         if (menuIds != null && !menuIds.isEmpty()) {
-            for (Long menuId : menuIds) {
+            for (Long menuId : new java.util.LinkedHashSet<>(menuIds)) {
                 AdminRoleMenu roleMenu = new AdminRoleMenu();
                 roleMenu.setRoleId(roleId);
                 roleMenu.setMenuId(menuId);

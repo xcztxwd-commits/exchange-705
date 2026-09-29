@@ -21,6 +21,7 @@ import java.util.Map;
 @RequestMapping("/api/withdraw")
 @RequiredArgsConstructor
 public class WithdrawController {
+    @org.springframework.beans.factory.annotation.Autowired private KycIdentityService identityService;
     
     private final WithdrawRecordRepository withdrawRecordRepository;
     private final AssetAccountRepository assetAccountRepository;
@@ -44,6 +45,7 @@ public class WithdrawController {
             }
             
             Long userId = Long.parseLong(auth.getName());
+            if (identityService != null) identityService.requireApproved(userId);
             String type = (String) req.get("type"); // digital 或 bank
             if (!"digital".equals(type) && !"bank".equals(type)) {
                 throw new com.gtcfesk.exchange.common.BusinessException("提现类型无效");
@@ -138,12 +140,20 @@ public class WithdrawController {
             record.setRemark(remark);
             record.setStatus("PENDING");
             
+            if (identityService != null && identityService.simulationExempt()) {
+                fundAccount.setFrozen(fundAccount.getFrozen().subtract(totalNeeded));
+                assetAccountRepository.save(fundAccount);
+                record.setStatus("COMPLETED"); record.setReviewRemark("SIMULATION ONLY — no external payment");
+                record.setReviewedAt(java.time.LocalDateTime.now());
+            }
             withdrawRecordRepository.save(record);
             
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", true);
-            resp.put("message", "提现申请已提交，等待审核");
+            resp.put("message", identityService != null && identityService.simulationExempt() ? "模拟提现已完成，仅扣减虚拟资金，不会真实出款" : "提现申请已提交，等待审核");
             return ResponseEntity.ok(resp);
+        } catch (com.gtcfesk.exchange.common.KycRequiredException e) {
+            throw e;
         } catch (Exception e) {
             if (org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive()) {
                 org.springframework.transaction.interceptor.TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
@@ -176,6 +186,8 @@ public class WithdrawController {
             resp.put("success", true);
             resp.put("list", records);
             return ResponseEntity.ok(resp);
+        } catch (com.gtcfesk.exchange.common.KycRequiredException e) {
+            throw e;
         } catch (Exception e) {
             if (org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive()) {
                 org.springframework.transaction.interceptor.TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
@@ -224,6 +236,8 @@ public class WithdrawController {
             resp.put("totalNeeded", amount.add(fee));
             resp.put("settlementCurrency", "USD");
             return ResponseEntity.ok(resp);
+        } catch (com.gtcfesk.exchange.common.KycRequiredException e) {
+            throw e;
         } catch (Exception e) {
             if (org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive()) {
                 org.springframework.transaction.interceptor.TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();

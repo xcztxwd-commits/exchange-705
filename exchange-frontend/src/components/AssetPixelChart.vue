@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { getSystemTimezone } from '@/utils/dateTime'
 import { computed, ref, watch, onMounted, onBeforeUnmount } from 'vue'
 import request from '@/utils/request'
 import { useLocaleStore } from '@/store/locale'
@@ -27,11 +28,11 @@ const chartRgb = computed(() => {
 })
 const incomePercent = ref<number | null>(null)
 const percentLabel = computed(() => incomePercent.value === null ? '—' : `${incomePercent.value > 0 ? '+' : incomePercent.value < 0 ? '−' : ''}${money(Math.abs(incomePercent.value))}%`)
-const timezone = ref('UTC')
+const timezone = computed(() => getSystemTimezone())
 const incomeLabel = computed(() => [['今日收益', 'Today’s income'], ['本週收益', 'This week’s income'], ['本月收益', 'This month’s income'], ['本年收益', 'This year’s income']].map(([zh, en]) => locale.text(zh!, en!))[periods.indexOf(period.value)])
 const money = (n: number) => n.toLocaleString(locale.locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const selectedDate = computed(() => {
-  const parts = new Intl.DateTimeFormat('en-GB', { timeZone: period.value === '1Y' ? 'UTC' : timezone.value, month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(selectedTime.value ?? asOf.value)
+  const parts = new Intl.DateTimeFormat('en-GB', { timeZone: timezone.value, month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(selectedTime.value ?? asOf.value)
   const part = (type: Intl.DateTimeFormatPartTypes) => parts.find(p => p.type === type)!.value
   const day = `${part('month')}/${part('day')}`, hour = part('hour')
   if (period.value === '1D') return `${hour}:${part('minute')}`
@@ -71,7 +72,7 @@ async function load(replay = false) {
     if (selectedTime.value !== null) {
       selectedTime.value = Math.max(data.from, Math.min(data.asOf, selectedTime.value))
     }
-    change.value = Number(data.income); timezone.value = data.timezone || 'UTC'
+    change.value = Number(data.income)
     incomePercent.value = data.incomePercent != null && Number.isFinite(Number(data.incomePercent)) ? Number(data.incomePercent) : null
     emit('total', data.total === null ? null : Number(data.total))
     if (selectedTime.value !== null) emitInspection()
@@ -146,8 +147,8 @@ function draw(progress: number, origin = -1) {
   }
   context.globalAlpha = 1
   if (progress < 1) return
-  // The only inferred opening is added when no earlier observation exists.
-  context.strokeStyle = tint(1); context.lineWidth = 1.1
+  // Keep the zero-to-first-observation rise visible above the zero grid line.
+  context.strokeStyle = tint(1); context.lineWidth = data[0]?.quality === 'INFERRED_ZERO' ? 2.2 : 1.1
   const line = new Path2D()
   vertices.forEach((point, index) => {
     const x = xAt(point.time), y = yAt(point.value!)
@@ -175,12 +176,18 @@ function draw(progress: number, origin = -1) {
   }
   if (selectedTime.value !== null) {
     const selectedValue = assetDisplayValue(data, selectedTime.value, intervalMs.value + 120000)
-    if (selectedValue === null) return
-    const x = xAt(selectedTime.value), y = yAt(selectedValue)
-    context.strokeStyle = tint(1); context.lineWidth = 1; context.setLineDash([3,3])
-    context.beginPath(); context.moveTo(x, 25); context.lineTo(x, base + 3); context.stroke(); context.setLineDash([])
-    context.fillStyle = '#fff'; context.strokeStyle = tint(1); context.lineWidth = 2
-    context.beginPath(); context.arc(Math.max(4,Math.min(width-4,x)), y, 3, 0, Math.PI*2); context.fill(); context.stroke()
+    const x = xAt(selectedTime.value), label = selectedDate.value
+    const labelWidth = context.measureText(label).width
+    const labelX = Math.max(labelWidth / 2 + 4, Math.min(width - labelWidth / 2 - 4, x))
+    context.textAlign = 'center'; context.textBaseline = 'middle'
+    context.fillStyle = '#fff'; context.fillRect(labelX - labelWidth / 2 - 4, 2, labelWidth + 8, 18)
+    context.fillStyle = tint(1); context.fillText(label, labelX, 11)
+    context.strokeStyle = tint(1); context.lineWidth = 1
+    context.beginPath(); context.moveTo(x, 22); context.lineTo(x, base + 3); context.stroke()
+    if (selectedValue !== null) {
+      context.fillStyle = '#fff'; context.lineWidth = 2
+      context.beginPath(); context.arc(x, yAt(selectedValue), 3, 0, Math.PI*2); context.fill(); context.stroke()
+    }
   }
 }
 function play(origin = -1) {
@@ -267,9 +274,10 @@ onBeforeUnmount(() => { disposed = true; generation++; resetSelection(); canvas.
     <div class="chart-wrap" :style="{ '--chart-rgb': chartRgb }">
       <canvas ref="canvas" role="img" tabindex="0" :aria-label="locale.text('長按拖動查看金額；方向鍵選擇時間，Esc恢復。', 'Hold and drag to inspect. Arrow keys select time; Escape resets.')" @pointerdown="startPointer" @pointermove="movePointer" @pointercancel="resetSelection" @lostpointercapture="resetSelection" @pointerup="endPointer" @contextmenu.prevent @keydown="scrubKey" />
       <div v-if="!visible || !points.length" class="empty">{{ !visible ? (locale.text('資產已隱藏', 'Assets hidden')) : loading ? (locale.text('載入中…', 'Loading…')) : failed ? (locale.text('載入失敗，請點刷新', 'Unable to load. Tap refresh.')) : (locale.text('正在累積真實資產記錄…', 'Recording real history…')) }}</div>
+      <span v-if="visible && selectedTime !== null" class="sr-only" role="status">{{ selectedDate }} · {{ selectedAmount === null ? '—' : '$' + money(selectedAmount) }}</span>
     </div>
     <div class="periods"><button v-for="(item, i) in periods" :key="item" type="button" :aria-pressed="period === item" @click="choose(item)">{{ labels[i] }}</button></div>
-    <div v-if="asOf && selectedTime === null" class="status">{{ locale.text('更新時間（快照）：', 'Updated (snapshot): ') }}{{ new Date(asOf).toLocaleString(locale.locale) }}</div>
+    <div v-if="asOf && selectedTime === null" class="status">{{ locale.text('更新時間（快照）：', 'Updated (snapshot): ') }}{{ new Date(asOf).toLocaleString(locale.locale, { timeZone: timezone }) }}</div>
     <div v-if="visible && valuationStale" class="status" role="status">{{ locale.text('估值不可用', 'Valuation unavailable') }}</div>
     <div v-if="failed && points.length" class="status" role="status">{{ locale.text('同步失敗 · 顯示上次資料', 'Sync failed · showing last update') }}</div>
   </section>
@@ -280,5 +288,6 @@ canvas{user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
 .pixel-history{margin-top:2px;min-width:0}.chart-toolbar{display:flex;align-items:center;gap:8px}.delta{flex:1;min-width:0}.delta{display:flex;flex-wrap:wrap;gap:7px;font-size:11px;color:#8d988b}.delta b{color:#5c9936;font-weight:600;font-variant-numeric:tabular-nums}.delta b.negative{color:#b65072}
 .refresh-button{display:grid;place-items:center;flex:0 0 32px;width:32px;height:32px;margin-left:auto;padding:6px;border:0;border-radius:8px;background:transparent;color:#6e9e54;cursor:pointer}.refresh-button:disabled{opacity:.5;cursor:default}.refresh-button svg{display:block;width:20px;height:20px;transition:transform .6s ease-in-out}.refresh-button:active{background:#f3f5f1}@media(prefers-reduced-motion:reduce){.refresh-button svg{transition:none}}
 .chart-wrap{position:relative;height:180px}canvas{display:block;width:100%;height:180px;touch-action:pan-y}.empty{position:absolute;inset:0;display:grid;place-items:center;background:#fff;color:#899687;font-size:12px}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 .periods{display:grid;grid-template-columns:repeat(4,1fr);gap:3px;margin-top:2px}.periods button{min-height:36px;border:0;border-radius:9px;background:transparent;color:#7d8a7a;font-size:11px;cursor:pointer}.periods button[aria-pressed=true]{background:#e6f0de;color:#4f852d;font-weight:700}.status{margin-top:10px;color:#929d8e;font-size:10px;line-height:1.5}button:focus-visible,canvas:focus-visible{outline:2px solid #73b100;outline-offset:2px}
 </style>

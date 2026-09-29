@@ -24,6 +24,7 @@ public class LoanReviewService {
     private final LoanRecordRepository loanRecordRepository;
     private final AssetAccountRepository assetAccountRepository;
     private final UserAccountRepository userAccountRepository;
+    private final com.gtcfesk.exchange.user.LoanPersonalInfoService loanPersonalInfoService;
 
     public List<LoanRecord> getLoanRecords(String status, Long userId, String userEmail, Long agentId) {
         List<LoanRecord> records;
@@ -96,6 +97,12 @@ public class LoanReviewService {
 
         if (!"SIGNED".equals(record.getStatus())) {
             throw new RuntimeException("只有已签约的贷款才能审核通过");
+        }
+
+        com.gtcfesk.exchange.entity.LoanPersonalInfo approved = loanPersonalInfoService.requireApprovedPersonalInfo(record.getUserId());
+        if (!java.util.Objects.equals(record.getRealName(), approved.getRealName())
+                || !java.util.Objects.equals(record.getIdNumber(), approved.getIdNumber())) {
+            throw new com.gtcfesk.exchange.common.BusinessException("贷款申请身份与已审核实名不一致，请重新申请贷款");
         }
 
         // 更新贷款记录状态

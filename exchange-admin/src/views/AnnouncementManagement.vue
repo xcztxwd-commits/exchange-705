@@ -1,5 +1,9 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import ActivityManagement from '@/components/ActivityManagement.vue'
+import { useAuthStore } from '@/store/auth'
+const auth = useAuthStore()
+const announcementTab = ref('ordinary')
 import { ElMessage, ElMessageBox } from 'element-plus'
 import request from '@/utils/request'
 
@@ -216,15 +220,17 @@ onMounted(() => {
 
 <template>
   <div class="announcement-management">
-    <el-card shadow="never">
+    <el-radio-group v-model="announcementTab" style="margin-bottom:20px"><el-radio-button value="ordinary">普通公告</el-radio-button><el-radio-button v-if="auth.user?.userType !== 'agent'" value="activity">活动公告 · 体验金</el-radio-button></el-radio-group>
+    <ActivityManagement v-if="announcementTab === 'activity' && auth.user?.userType !== 'agent'" />
+    <el-card v-show="announcementTab === 'ordinary'" shadow="never">
       <template #header>
         <div class="card-header">
           <span>公告管理</span>
-          <el-button type="primary" @click="openDialog()">新增公告</el-button>
+          <el-button v-permission="'announcement:create'" type="primary" @click="openDialog()">新增公告</el-button>
         </div>
       </template>
 
-      <el-table v-loading="loading" :data="announcements" border stripe>
+      <admin-table table-key="AnnouncementManagement.1" v-loading="loading" :data="announcements" border stripe>
         <el-table-column prop="id" label="ID" width="80" />
         <el-table-column prop="title" label="标题" min-width="200" show-overflow-tooltip />
         <el-table-column prop="content" label="内容" min-width="300" show-overflow-tooltip>
@@ -251,11 +257,11 @@ onMounted(() => {
         </el-table-column>
         <el-table-column label="操作" width="180" fixed="right">
           <template #default="{ row }">
-            <el-button type="primary" size="small" @click="openDialog(row)">编辑</el-button>
-            <el-button type="danger" size="small" @click="deleteAnnouncement(row.id)">删除</el-button>
+            <el-button v-permission="'announcement:edit'" type="primary" size="small" @click="openDialog(row)">编辑</el-button>
+            <el-button v-permission="'announcement:delete'" type="danger" size="small" @click="deleteAnnouncement(row.id)">删除</el-button>
           </template>
         </el-table-column>
-      </el-table>
+      </admin-table>
     </el-card>
 
     <!-- 编辑对话框 -->
@@ -302,8 +308,8 @@ onMounted(() => {
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="closeDialog">取消</el-button>
-        <el-button type="primary" :loading="loading" @click="saveAnnouncement">保存</el-button>
+        <el-button v-permission="'session:close'" @click="closeDialog">取消</el-button>
+        <el-button v-permission="editingAnnouncement ? 'announcement:edit' : 'announcement:create'" type="primary" :loading="loading" @click="saveAnnouncement">保存</el-button>
       </template>
     </el-dialog>
   </div>

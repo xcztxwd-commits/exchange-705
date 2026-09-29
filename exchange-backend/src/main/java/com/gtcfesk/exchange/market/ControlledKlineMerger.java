@@ -24,6 +24,7 @@ public class ControlledKlineMerger {
     public Map<String, Object> merge(long symbol, String interval, int limit, Long cursor,
             Map<String, Object> external, LongConsumer requestMinutes, boolean utcAnchors,
             java.util.function.BiFunction<Long,Long,List<Map<String,Object>>> baseMinutes) {
+        boolean monthly = "1M".equals(interval);
         long width = RandomMarketPath.duration(interval);
         long end = cursor == null ? System.currentTimeMillis() : cursor;
         TreeMap<Long, Map<String, Object>> bars = new TreeMap<>();
@@ -39,10 +40,10 @@ public class ControlledKlineMerger {
         for (Map<String, Object> row : store.candles(symbol, interval, end + 1, end + width - 1))
             anchors.put(ControlHistoryStore.time(row), row);
         // Bound rows by the requested number of occupied periods, never by a seven-day window.
-        List<Long> recentBuckets = store.db.queryForList("SELECT MIN(minute_at) AS bucket_start FROM market_mixed_minute WHERE symbol_id=? AND minute_at<=? GROUP BY FLOOR(minute_at / ?) ORDER BY bucket_start DESC LIMIT ?",
+        List<Long> recentBuckets = monthly ? Collections.emptyList() : store.db.queryForList("SELECT MIN(minute_at) AS bucket_start FROM market_mixed_minute WHERE symbol_id=? AND minute_at<=? GROUP BY FLOOR(minute_at / ?) ORDER BY bucket_start DESC LIMIT ?",
             Long.class, symbol, end + width - 1, width, limit + 2);
         // A short provider page must not hide older controls that still fit in the requested page.
-        long from = recentBuckets.isEmpty() ? 0
+        long from = monthly ? RandomMarketPath.monthStart(end - (limit + 2L) * 32 * 86400000L) : recentBuckets.isEmpty() ? 0
             : Math.floorDiv(recentBuckets.get(recentBuckets.size() - 1), width) * width - width;
         List<Map<String, Object>> mixed = store.visibleMixed(symbol, from, end + width - 1);
         boolean noAnchors = width >= 3600000 && !utcAnchors && anchors.isEmpty();
@@ -54,19 +55,20 @@ public class ControlledKlineMerger {
             Long anchor = anchors.floorKey(time);
             // Prefer the actual provider boundary (including exchange sessions and DST).
             Long nextAnchor = anchor == null ? null : anchors.higherKey(anchor);
-            long boundary = anchor == null ? 0 : anchor + width;
-            if (width >= 86400000 && nextAnchor != null && Math.abs(nextAnchor - boundary) <= 3600000) boundary = nextAnchor;
+            long boundary = anchor == null ? 0 : monthly ? nextAnchor == null ? RandomMarketPath.monthEnd(anchor) : nextAnchor : anchor + width;
+            if (!monthly && width >= 86400000 && nextAnchor != null && Math.abs(nextAnchor - boundary) <= 3600000) boundary = nextAnchor;
             if (width >= 86400000 && !utcAnchors && (anchor == null || time >= boundary)) {
                 missingAnchor = true; continue; // Do not extrapolate daily sessions across closures or unknown DST boundaries.
             }
-            long bucket = anchor != null && time < boundary ? anchor : fallbackBucket(time, width, anchors);
+            long bucket = anchor != null && time < boundary ? anchor : monthly ? RandomMarketPath.monthStart(time) : fallbackBucket(time, width, anchors);
             if (bucket > end) continue;
             affected.computeIfAbsent(bucket, ignored -> new ArrayList<>()).add(minute);
         }
         for (Map.Entry<Long, List<Map<String, Object>>> entry : affected.entrySet()) {
-            long start = entry.getKey(), bucketEnd = start + width;
+            long start = entry.getKey(), bucketEnd = monthly ? RandomMarketPath.monthEnd(start) : start + width;
             Long next = anchors.higherKey(start);
-            if (width >= 86400000 && next != null && Math.abs(next - bucketEnd) <= 3600000) bucketEnd = next;
+            if (monthly && next != null) bucketEnd = next;
+            else if (width >= 86400000 && next != null && Math.abs(next - bucketEnd) <= 3600000) bucketEnd = next;
             long stop = Math.min(bucketEnd - 1, System.currentTimeMillis());
             TreeMap<Long, Map<String, Object>> minutes = new TreeMap<>();
             for (Map<String, Object> row : baseMinutes == null ? store.candles(symbol, "1m", start, stop) : baseMinutes.apply(start, stop)) minutes.put(ControlHistoryStore.time(row), row);

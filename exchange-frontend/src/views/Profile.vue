@@ -129,8 +129,7 @@ onMounted(() => {
     <!-- 资产信息部分 -->
     <div class="assets-card">
       <div class="assets-header">
-        <div class="assets-title" @click="router.push('/assets')">{{ localeStore.t('myAssets') }} ›</div>
-        <div v-if="inspectedAsset" class="inspection-time" role="status">{{ inspectedAsset.time }}</div>
+        <div class="assets-title" @click="router.push('/assets')">{{ localeStore.t('myAssets') }} <span class="ui-chevron" aria-hidden="true"></span></div>
       </div>
       <div class="assets-value-row">
         <div class="assets-value">
@@ -166,7 +165,7 @@ onMounted(() => {
             <div class="button-subtitle">{{ localeStore.t('billDetails') }}</div>
           </div>
         </div>
-        <div class="button-arrow">›</div>
+        <div class="button-arrow ui-chevron" aria-hidden="true"></div>
       </div>
       <div class="action-button withdraw" @click="router.push('/withdraw')">
         <div class="button-content">
@@ -176,7 +175,7 @@ onMounted(() => {
             <div class="button-subtitle">{{ localeStore.t('billDetails') }}</div>
           </div>
         </div>
-        <div class="button-arrow">›</div>
+        <div class="button-arrow ui-chevron" aria-hidden="true"></div>
       </div>
     </div>
 
@@ -190,7 +189,7 @@ onMounted(() => {
       >
         <div class="menu-indicator"></div>
         <div class="menu-label">{{ item.label }}</div>
-        <div class="menu-arrow">›</div>
+        <div class="menu-arrow ui-chevron" aria-hidden="true"></div>
       </div>
     </div>
 
@@ -205,7 +204,7 @@ onMounted(() => {
       >
         <div class="menu-indicator"></div>
         <div class="menu-label">{{ item.label }}</div>
-        <div class="menu-arrow">›</div>
+        <div class="menu-arrow ui-chevron" aria-hidden="true"></div>
       </div>
     </div>
 
@@ -288,18 +287,12 @@ onMounted(() => {
 }
 
 .assets-title {
+  display: inline-flex;
+  align-items: center;
   font-size: 18px;
   font-weight: 600;
   color: #000;
 }
-
-.inspection-time {
-  color: #7d8a7a;
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
 
 .assets-value-row {
   display: flex;

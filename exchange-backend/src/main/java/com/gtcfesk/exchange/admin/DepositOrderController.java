@@ -35,7 +35,7 @@ public class DepositOrderController {
    try{permit(a);out.put(a,true);}catch(org.springframework.security.access.AccessDeniedException e){out.put(a,false);}
   }
   for(String a:Arrays.asList("approve_deposit","reject_deposit")) {
-   try{permit("view_deposit_orders");access.checkDepositReview(a);out.put(a,true);}catch(org.springframework.security.access.AccessDeniedException e){out.put(a,false);}
+   try{permit("view_deposit_orders");permit(a);out.put(a,true);}catch(org.springframework.security.access.AccessDeniedException e){out.put(a,false);}
   }return out;
  }
  private Map<String,Object> dto(DepositRecord d) {
@@ -49,15 +49,34 @@ public class DepositOrderController {
  }
  private DepositRecord visible(Long id){DepositRecord d=records.findById(id).orElseThrow(()->error(404,"订单不存在"));
   try{access.checkUser(d.getUserId());}catch(org.springframework.security.access.AccessDeniedException e){throw error(404,"订单不存在");}return d;}
- @GetMapping("/{id}") public Map<String,Object> detail(@PathVariable Long id){permit("view_deposit_orders");Map<String,Object> out=dto(visible(id));
+ @GetMapping("/{id}") public Map<String,Object> detail(@PathVariable Long id){permit("view_deposit_orders");permit("detail");Map<String,Object> out=dto(visible(id));
   out.put("credit",credits.findByDepositRecordId(id).map(c->{Map<String,Object> m=mapper.convertValue(c,Map.class);m.put("amountUsd",DepositOrderService.decimal(c.getAmountUsd()));m.put("balanceBefore",DepositOrderService.decimal(c.getBalanceBefore()));m.put("balanceAfter",DepositOrderService.decimal(c.getBalanceAfter()));return m;}).orElse(null));return out;}
+ @GetMapping("/customers") public List<Map<String,Object>> customers(@RequestParam String query) {
+  permit("view_deposit_orders");
+  String value=query.trim();
+  if(value.isEmpty())return Collections.emptyList();
+  if(value.length()>254)throw error(400,"搜索内容过长");
+  return users.findDepositCustomers(BackendAccess.agentId(),escape(value)+"%","%"+escape(value.toLowerCase(Locale.ROOT))+"%",PageRequest.of(0,20))
+   .stream().map(u->{Map<String,Object> row=new LinkedHashMap<>();row.put("userId",u.getId());row.put("email",u.getEmail());return row;}).collect(Collectors.toList());
+ }
+ @GetMapping("/recipient") public Map<String,Object> findRecipient(@RequestParam String query) {
+  permit("manual_deposit");
+  String value=query.trim();
+  if(value.isEmpty()||value.length()>254)throw error(400,"请输入客户 ID 或完整邮箱");
+  if(value.matches("[0-9]+")){
+   try{return recipient(Long.valueOf(value));}catch(NumberFormatException e){throw error(400,"客户 ID 无效");}
+  }
+  if(!value.matches("[^\\s@]+@[^\\s@]+\\.[^\\s@]+"))throw error(400,"请输入客户 ID 或完整邮箱");
+  UserAccount user=users.findByEmail(value).orElseThrow(()->error(404,"客户不存在"));
+  return recipient(user.getId());
+ }
  @GetMapping("/recipient/{userId}") public Map<String,Object> recipient(@PathVariable Long userId){permit("manual_deposit");access.checkUser(userId);
   UserAccount u=users.findById(userId).orElseThrow(()->error(404,"客户不存在"));Map<String,Object> out=new LinkedHashMap<>();
   out.put("userId",userId);out.put("name",u.getEmail());out.put("remark",u.getRemark());Map<String,String> balances=new LinkedHashMap<>();
   for(AssetAccount a:assets.findByUserId(userId))balances.put(a.getCoin(),DepositOrderService.decimal(a.getAvailable()));out.put("balances",balances);return out;}
  @PostMapping("/manual") public Map<String,Object> manual(@RequestBody DepositOrderRequest input){DepositRecord d=service.manual(input);Map<String,Object> out=dto(d);out.put("success",true);return out;}
- @PostMapping("/{id}/approve") public Map<String,Object> approve(@PathVariable Long id,@RequestBody(required=false) Map<String,String> body){permit("view_deposit_orders");visible(id);return dto(service.review(id,true,body==null?null:body.get("remark")));}
- @PostMapping("/{id}/reject") public Map<String,Object> reject(@PathVariable Long id,@RequestBody Map<String,String> body){permit("view_deposit_orders");visible(id);return dto(service.review(id,false,body.get("remark")));}
+ @PostMapping("/{id}/approve") public Map<String,Object> approve(@PathVariable Long id,@RequestBody(required=false) Map<String,String> body){permit("view_deposit_orders");permit("approve_deposit");visible(id);return dto(service.review(id,true,body==null?null:body.get("remark")));}
+ @PostMapping("/{id}/reject") public Map<String,Object> reject(@PathVariable Long id,@RequestBody Map<String,String> body){permit("view_deposit_orders");permit("reject_deposit");visible(id);return dto(service.review(id,false,body.get("remark")));}
  private int number(Map<String,String> p,String key,int def,int max){try{int n=Integer.parseInt(p.getOrDefault(key,""+def));if(n<1||n>max)throw error(400,"分页参数无效");return n;}catch(NumberFormatException e){throw error(400,"分页参数无效");}}
  @GetMapping("/list") public Map<String,Object> list(@RequestParam Map<String,String> p){permit("view_deposit_orders");int page=number(p,"page",1,1000000),size=number(p,"size",20,100);
   Page<DepositRecord> result=records.findAll(filter(p),PageRequest.of(page-1,size,SORT));Map<String,Object> out=new LinkedHashMap<>();

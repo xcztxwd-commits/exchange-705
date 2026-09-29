@@ -1,8 +1,17 @@
 <script setup lang="ts">
+import { useAccountTable } from '@/utils/useAccountTable'
+import { accountTableRequest, accountTableRawRequest } from '@/utils/accountTableRequest'
+import AccountTypeFilter from '@/components/AccountTypeFilter.vue'
+const accountTable = useAccountTable(), accountModes = accountTable.modes
+const request = accountTableRequest(accountTable)
+const axios = accountTableRawRequest(accountTable)
+const subTable = useAccountTable(), subModes = subTable.modes
+
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { rawRequest as axios } from '@/utils/request'
-import request from '@/utils/request'
+
+
+import { can } from '@/utils/access'
 
 // 开发环境使用空字符串，让Vite代理处理；生产环境使用生产API域名（不包含/api后缀）
 const getApiBase = () => {
@@ -22,7 +31,7 @@ const total = ref(0)
 
 // 分页
 const currentPage = ref(1)
-const pageSize = ref(20)
+const pageSize = ref(10)
 
 // 搜索条件
 const searchForm = ref({
@@ -63,6 +72,7 @@ const defaultCheckedActionsMap = ref<Map<number, string[]>>(new Map())
 
 // 获取代理列表
 const fetchAgents = async () => {
+  agents.value=[];total.value=0
   loading.value = true
   try {
     const params = {
@@ -104,14 +114,9 @@ const handleReset = () => {
   fetchAgents()
 }
 
-// 分页变化
-const handlePageChange = (page: number) => {
-  currentPage.value = page
-  fetchAgents()
-}
-
 // 修改状态
 const handleStatusChange = async (row: any) => {
+  accountTable.selectRow(row)
   try {
     const response = await axios.put(`${API_BASE}/api/admin/users/${row.id}/status`, {
       status: row.status
@@ -134,6 +139,8 @@ const handleStatusChange = async (row: any) => {
 
 // 查看下级代理
 const handleViewSubAgents = async (row: any) => {
+  accountTable.selectRow(row)
+  subModes.value = [row.accountMode || 'REAL']
   currentSubordinateAgentId.value = row.id
   currentSubordinateAgentName.value = row.nickname || row.email
   subordinatesDialogVisible.value = true
@@ -144,9 +151,10 @@ const handleViewSubAgents = async (row: any) => {
 const loadSubordinates = async () => {
   if (!currentSubordinateAgentId.value) return
   
+  subordinates.value = []
   subordinatesLoading.value = true
   try {
-    const response = await axios.get(`${API_BASE}/api/admin/users/${currentSubordinateAgentId.value}/subordinates`)
+    const response = { data: await subTable.query(`/admin/users/${currentSubordinateAgentId.value}/subordinates`) }
     if (response.data.list) {
       subordinates.value = response.data.list
     } else if (Array.isArray(response.data)) {
@@ -165,11 +173,13 @@ const loadSubordinates = async () => {
 
 // 查看业绩
 const handleViewPerformance = (row: any) => {
-  window.open(`/agents/${row.id}/performance`, '_blank')
+  accountTable.selectRow(row)
+  window.open(`/agents/${row.id}/performance?accountMode=${row.accountMode || 'REAL'}`, '_blank')
 }
 
 // 分配菜单权限
 const handleAssignMenus = async (row: any) => {
+  accountTable.selectRow(row)
   currentAgentId.value = row.id
   currentAgentName.value = row.nickname || row.email
   
@@ -177,7 +187,8 @@ const handleAssignMenus = async (row: any) => {
     // 获取所有菜单（扁平列表）
     const menusResponse = await axios.get(`${API_BASE}/api/admin/menus/list`)
     if (menusResponse.data.success) {
-      allMenus.value = menusResponse.data.list || []
+      allMenus.value = (menusResponse.data.list || []).filter((m: any) => m.menuType === 'menu').map((m: any) => ({ ...m,
+        groupName: menusResponse.data.list.find((g: any) => g.id === m.parentId)?.menuName || '其他' }))
     } else {
       // 如果失败，尝试获取树形菜单并展开
       const treeResponse = await axios.get(`${API_BASE}/api/admin/menus`)
@@ -192,7 +203,7 @@ const handleAssignMenus = async (row: any) => {
           })
           return result
         }
-        allMenus.value = flattenMenus(treeResponse.data.list || [])
+        allMenus.value = flattenMenus(treeResponse.data.list || []).filter((m: any) => m.menuType === 'menu')
       }
     }
     
@@ -202,26 +213,12 @@ const handleAssignMenus = async (row: any) => {
       const existingMenuIds = agentMenusResponse.data.menuIds || []
       const existingActions = agentMenusResponse.data.actions || {}
       
-      // 如果代理没有权限，使用默认权限
-      if (existingMenuIds.length === 0) {
-        await loadDefaultPermissions()
-        checkedMenuIds.value = [...defaultCheckedMenuIds.value]
-        checkedActionsMap.value = new Map(defaultCheckedActionsMap.value)
-      } else {
-        checkedMenuIds.value = existingMenuIds
-        checkedActionsMap.value = new Map()
-        for (const [menuIdStr, actionCodes] of Object.entries(existingActions)) {
-          const menuId = Number(menuIdStr)
-          checkedActionsMap.value.set(menuId, actionCodes as string[])
-        }
-      }
+      checkedMenuIds.value = existingMenuIds
+      checkedActionsMap.value = new Map(Object.entries(existingActions).map(([id, actions]) => [Number(id), actions as string[]]))
     } else {
-      // 如果获取失败，尝试使用默认权限
-      await loadDefaultPermissions()
-      checkedMenuIds.value = [...defaultCheckedMenuIds.value]
-      checkedActionsMap.value = new Map(defaultCheckedActionsMap.value)
+      throw new Error('读取代理权限失败，未应用默认授权')
     }
-    
+
     // 加载每个菜单的操作列表
     await loadMenuActions()
     
@@ -290,7 +287,7 @@ const handleSavePermission = async () => {
     // 构建操作权限对象 {menuId: [actionCode1, actionCode2, ...]}
     const actions: Record<number, string[]> = {}
     for (const [menuId, actionCodes] of checkedActionsMap.value.entries()) {
-      if (actionCodes && actionCodes.length > 0) {
+      if (checkedMenuIds.value.includes(menuId) && actionCodes && actionCodes.length > 0) {
         actions[menuId] = actionCodes
       }
     }
@@ -357,7 +354,8 @@ const handleSetDefaultPermissions = async () => {
     // 获取所有菜单（扁平列表）
     const menusResponse = await axios.get(`${API_BASE}/api/admin/menus/list`)
     if (menusResponse.data.success) {
-      allMenus.value = menusResponse.data.list || []
+      allMenus.value = (menusResponse.data.list || []).filter((m: any) => m.menuType === 'menu').map((m: any) => ({ ...m,
+        groupName: menusResponse.data.list.find((g: any) => g.id === m.parentId)?.menuName || '其他' }))
     } else {
       // 如果失败，尝试获取树形菜单并展开
       const treeResponse = await axios.get(`${API_BASE}/api/admin/menus`)
@@ -372,7 +370,7 @@ const handleSetDefaultPermissions = async () => {
           })
           return result
         }
-        allMenus.value = flattenMenus(treeResponse.data.list || [])
+        allMenus.value = flattenMenus(treeResponse.data.list || []).filter((m: any) => m.menuType === 'menu')
       }
     }
     
@@ -430,6 +428,7 @@ const handleSaveDefaultPermissions = async () => {
 
 // 打开编辑备注对话框
 const handleEditRemark = (row: any) => {
+  accountTable.selectRow(row)
   remarkForm.value = {
     userId: row.id,
     nickname: row.nickname || row.email,
@@ -463,7 +462,7 @@ const handleSaveRemark = async () => {
 // 页面加载时获取数据
 onMounted(() => {
   fetchAgents()
-  loadDefaultPermissions() // 预加载默认权限配置
+  if (can('agents:defaults')) loadDefaultPermissions()
 })
 </script>
 
@@ -473,7 +472,7 @@ onMounted(() => {
       <template #header>
         <div class="card-header">
           <span class="card-title">代理管理</span>
-          <el-button type="primary" @click="handleSetDefaultPermissions">
+          <el-button v-permission="'agents:defaults'" type="primary" @click="handleSetDefaultPermissions" :disabled="accountModes.includes('DEMO') || !accountModes.length">
             设置默认权限
           </el-button>
         </div>
@@ -496,26 +495,28 @@ onMounted(() => {
           </el-select>
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" @click="handleSearch">搜索</el-button>
-          <el-button @click="handleReset">重置</el-button>
+          <el-button v-permission="'agents:view'" type="primary" @click="handleSearch">搜索</el-button>
+          <el-button v-permission="'agents:view'" @click="handleReset">重置</el-button>
         </el-form-item>
       </el-form>
 
       <!-- 表格 -->
-      <el-table :data="agents" stripe border v-loading="loading">
+      <AccountTypeFilter v-model="accountModes" @change="currentPage=1;fetchAgents()" />
+<admin-table :row-key="(row: any) => `${row.accountMode || 'REAL'}:${row.id ?? row.userId}:${row.type || ''}`" table-key="AgentManagement.1" :data="agents" stripe border v-loading="loading">
+<el-table-column prop="accountModeLabel" label="账户类型" width="110" />
         <el-table-column prop="id" label="ID" width="80" />
         <el-table-column prop="email" label="邮箱" width="180" />
         <el-table-column prop="nickname" label="昵称" width="150">
           <template #default="{ row }">
             <div style="display: flex; align-items: center; gap: 8px;">
               <span>{{ row.nickname || '-' }}</span>
-              <el-button 
+              <el-button v-permission="'agents:modify_remark'"
                 link 
                 type="primary" 
                 size="small" 
                 @click="handleEditRemark(row)"
                 title="编辑备注"
-              >
+               :disabled="accountModes.includes('DEMO') || !accountModes.length">
                 备注
               </el-button>
             </div>
@@ -534,7 +535,7 @@ onMounted(() => {
         <el-table-column prop="myInviteCode" label="推广码" width="120" />
         <el-table-column label="下级数量" width="100" align="center">
           <template #default="{ row }">
-            <el-link type="primary" @click="handleViewSubAgents(row)">
+            <el-link v-permission="'agents:view_subordinates'" type="primary" @click="handleViewSubAgents(row)">
               {{ row.subordinateCount || 0 }}人
             </el-link>
           </template>
@@ -547,12 +548,12 @@ onMounted(() => {
         </el-table-column>
         <el-table-column label="状态" width="100" align="center">
           <template #default="{ row }">
-            <el-switch
+            <el-switch v-permission="'agents:status'"
               v-model="row.status"
               active-value="active"
               inactive-value="disabled"
               @change="handleStatusChange(row)"
-            />
+            :disabled="accountModes.includes('DEMO') || !accountModes.length" />
           </template>
         </el-table-column>
         <el-table-column label="登录信息" width="150">
@@ -566,26 +567,27 @@ onMounted(() => {
         <el-table-column prop="createdAt" label="注册时间" width="160" />
         <el-table-column label="操作" width="250" fixed="right">
           <template #default="{ row }">
-            <el-button link type="primary" size="small" @click="handleAssignMenus(row)">
+            <el-button v-permission="'agents:assign_permission'" link type="primary" size="small" @click="handleAssignMenus(row)" :disabled="accountModes.includes('DEMO') || !accountModes.length">
               分配权限
             </el-button>
-            <el-button link type="success" size="small" @click="handleViewPerformance(row)">
+            <el-button v-permission="'agents:performance'" link type="success" size="small" @click="handleViewPerformance(row)">
               查看业绩
             </el-button>
-            <el-button link type="warning" size="small" @click="handleEditRemark(row)">
+            <el-button v-permission="'agents:modify_remark'" link type="warning" size="small" @click="handleEditRemark(row)" :disabled="accountModes.includes('DEMO') || !accountModes.length">
               修改备注
             </el-button>
           </template>
         </el-table-column>
-      </el-table>
+      </admin-table>
 
       <!-- 分页 -->
       <el-pagination
         v-model:current-page="currentPage"
-        :page-size="pageSize"
+        v-model:page-size="pageSize"
         :total="total"
-        layout="total, prev, pager, next, jumper"
-        @current-change="handlePageChange"
+        :page-sizes="[10, 20, 50, 100]"
+        layout="total, sizes, prev, pager, next, jumper"
+        @change="fetchAgents"
         style="margin-top: 20px; justify-content: flex-end;"
       />
     </el-card>
@@ -604,15 +606,15 @@ onMounted(() => {
         <div v-for="menu in allMenus" :key="menu.id" style="margin-bottom: 15px; border: 1px solid #e4e7ed; border-radius: 4px; padding: 10px;">
           <div style="display: flex; align-items: center; justify-content: space-between;">
             <el-checkbox :label="menu.id">
-              {{ menu.menuName }} <span style="color: #909399;">({{ menu.menuCode }})</span>
+              {{ menu.groupName }} / {{ menu.menuName }} <span style="color: #909399;">({{ menu.menuCode }})</span>
             </el-checkbox>
-            <el-button 
+            <el-button v-permission="'agents:assign_permission'"
               v-if="(menuActionsMap.get(menu.id)?.length ?? 0) > 0 && checkedMenuIds.includes(menu.id)"
               link 
               type="primary" 
               size="small"
               @click="toggleMenuExpanded(menu.id)"
-            >
+             :disabled="accountModes.includes('DEMO') || !accountModes.length">
               {{ expandedMenus.has(menu.id) ? '收起操作' : '展开操作' }}
             </el-button>
           </div>
@@ -642,8 +644,8 @@ onMounted(() => {
       </el-checkbox-group>
       
       <template #footer>
-        <el-button @click="permissionDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleSavePermission" :loading="loading">保存</el-button>
+        <el-button v-permission="'session:close'" @click="permissionDialogVisible = false">取消</el-button>
+        <el-button v-permission="'agents:assign_permission'" type="primary" @click="handleSavePermission" :loading="loading" :disabled="accountModes.includes('DEMO') || !accountModes.length">保存</el-button>
       </template>
     </el-dialog>
 
@@ -654,22 +656,22 @@ onMounted(() => {
       width="500px"
     >
       <div style="margin-bottom: 15px; color: #606266;">
-        设置新代理的默认菜单权限和操作权限。当创建新代理或为代理分配权限时，如果代理没有权限，将自动应用这些默认权限。
+        设置新代理的默认菜单权限和操作权限。仅在创建新代理时应用；已撤销权限的代理不会自动恢复默认授权。
       </div>
       
       <el-checkbox-group v-model="defaultCheckedMenuIds" @change="handleMenuCheckChange">
         <div v-for="menu in allMenus" :key="menu.id" style="margin-bottom: 15px; border: 1px solid #e4e7ed; border-radius: 4px; padding: 10px;">
           <div style="display: flex; align-items: center; justify-content: space-between;">
             <el-checkbox :label="menu.id">
-              {{ menu.menuName }} <span style="color: #909399;">({{ menu.menuCode }})</span>
+              {{ menu.groupName }} / {{ menu.menuName }} <span style="color: #909399;">({{ menu.menuCode }})</span>
             </el-checkbox>
-            <el-button 
+            <el-button v-permission="'agents:assign_permission'"
               v-if="(menuActionsMap.get(menu.id)?.length ?? 0) > 0 && defaultCheckedMenuIds.includes(menu.id)"
               link 
               type="primary" 
               size="small"
               @click="toggleMenuExpanded(menu.id)"
-            >
+             :disabled="accountModes.includes('DEMO') || !accountModes.length">
               {{ expandedMenus.has(menu.id) ? '收起操作' : '展开操作' }}
             </el-button>
           </div>
@@ -699,8 +701,8 @@ onMounted(() => {
       </el-checkbox-group>
       
       <template #footer>
-        <el-button @click="defaultPermissionDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleSaveDefaultPermissions" :loading="loading">保存默认权限</el-button>
+        <el-button v-permission="'session:close'" @click="defaultPermissionDialogVisible = false">取消</el-button>
+        <el-button v-permission="'agents:defaults'" type="primary" @click="handleSaveDefaultPermissions" :loading="loading" :disabled="accountModes.includes('DEMO') || !accountModes.length">保存默认权限</el-button>
       </template>
     </el-dialog>
 
@@ -729,8 +731,8 @@ onMounted(() => {
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="remarkDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleSaveRemark" :loading="loading">保存</el-button>
+        <el-button v-permission="'session:close'" @click="remarkDialogVisible = false">取消</el-button>
+        <el-button v-permission="'agents:modify_remark'" type="primary" @click="handleSaveRemark" :loading="loading" :disabled="accountModes.includes('DEMO') || !accountModes.length">保存</el-button>
       </template>
     </el-dialog>
 
@@ -740,7 +742,9 @@ onMounted(() => {
       :title="`查看代理 ${currentSubordinateAgentName} 的下级`" 
       width="900px"
     >
-      <el-table :data="subordinates" stripe border v-loading="subordinatesLoading">
+      <AccountTypeFilter v-model="subModes" @change="loadSubordinates()" />
+<admin-table :row-key="(row: any) => `${row.accountMode || 'REAL'}:${row.id ?? row.userId}:${row.type || ''}`" table-key="AgentManagement.2" :data="subordinates" stripe border v-loading="subordinatesLoading">
+<el-table-column prop="accountModeLabel" label="账户类型" width="110" />
         <el-table-column prop="id" label="ID" width="80" />
         <el-table-column prop="email" label="邮箱" width="180" />
         <el-table-column prop="nickname" label="昵称" width="120">
@@ -768,12 +772,12 @@ onMounted(() => {
           </template>
         </el-table-column>
         <el-table-column prop="createdAt" label="注册时间" width="180" />
-      </el-table>
+      </admin-table>
       
       <el-empty v-if="!subordinatesLoading && subordinates.length === 0" description="暂无下级用户" />
       
       <template #footer>
-        <el-button @click="subordinatesDialogVisible = false">关闭</el-button>
+        <el-button v-permission="'session:close'" @click="subordinatesDialogVisible = false">关闭</el-button>
       </template>
     </el-dialog>
   </div>

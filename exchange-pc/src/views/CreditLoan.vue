@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { accountMode } from "@/utils/accountMode"
+const simulation = accountMode() === "DEMO"
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import Tabbar from '@/components/Tabbar.vue'
@@ -95,7 +97,7 @@ function selectTerm(id: string | number) {
 // 提交贷款申请
 async function submitLoan() {
   if (!verified.value) {
-    showToast(localeStore.t('pleaseCompleteVerification'), 'error')
+    router.push('/loan/personal-info')
     return
   }
 
@@ -124,7 +126,7 @@ async function submitLoan() {
   // 如果个人信息已审核通过，直接提交贷款申请
   try {
     const personalInfoRes: any = await request.get('/loan/personal-info/status')
-    if (personalInfoRes && personalInfoRes.success && personalInfoRes.verified && personalInfoRes.data) {
+    if (personalInfoRes && personalInfoRes.success && (personalInfoRes.verified || personalInfoRes.exempt) && personalInfoRes.data) {
       // 个人信息已审核通过，直接使用已审核的信息提交贷款申请
       const personalInfo = personalInfoRes.data
       const res: any = await request.post('/loan/apply', {
@@ -150,7 +152,7 @@ async function submitLoan() {
     } else {
       // 个人信息未审核通过，跳转到信息填写页面
       router.push({
-        path: '/loan/apply-info',
+        path: '/loan/personal-info',
         query: {
           amount: amount.value,
           settingId: selectedSetting.value.id.toString()
@@ -161,7 +163,7 @@ async function submitLoan() {
     console.error('提交贷款申请失败:', e)
     // 如果获取个人信息失败，也跳转到信息填写页面
     router.push({
-      path: '/loan/apply-info',
+      path: '/loan/personal-info',
       query: {
         amount: amount.value,
         settingId: selectedSetting.value.id.toString()
@@ -186,7 +188,7 @@ async function loadTotalLoanAmount() {
 async function loadKycStatus() {
   try {
     const res: any = await request.get('/loan/personal-info/status')
-    if (res && res.success && res.verified) {
+    if (res && res.success && (res.verified || res.exempt)) {
       verified.value = true
     } else {
       verified.value = false
@@ -230,7 +232,7 @@ onMounted(() => {
     <div class="page-content">
       <!-- 验证状态卡片 -->
       <div class="status-card">
-        <div class="status-text">{{ localeStore.t('startEnjoyLoanService') }}</div>
+        <div class="status-text">{{ localeStore.text('貸款資料審核', 'Loan details review') }}</div>
         <button 
           class="verified-btn" 
           :class="{ verified: verified }"
@@ -239,7 +241,7 @@ onMounted(() => {
           <svg v-if="verified" width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
             <path d="M20 6L9 17L4 12" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
-          <span>{{ verified ? localeStore.t('verified') : localeStore.t('unverified') }}</span>
+          <span>{{ simulation ? localeStore.text('模拟贷款 · 无需实名', 'Virtual loan · No KYC') : verified ? localeStore.text('貸款資料已通過', 'Loan details approved') : localeStore.text('補充或查看貸款資料', 'Submit or view loan details') }}</span>
         </button>
       </div>
 

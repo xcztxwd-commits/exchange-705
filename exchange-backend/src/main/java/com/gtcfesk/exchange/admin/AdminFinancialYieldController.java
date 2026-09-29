@@ -15,11 +15,14 @@ import java.util.Map;
 public class AdminFinancialYieldController {
     
     private final AdminFinancialYieldService yieldService;
+    private final com.gtcfesk.exchange.repository.FinancialYieldRecordRepository yieldRecords;
+    private final com.gtcfesk.exchange.config.BackendAccess access;
     
     /**
      * 获取订单的收益列表
      */
     @GetMapping("/order/{orderId}")
+    @com.gtcfesk.exchange.config.AdminPermission(menu = "financial_orders", action = "detail")
     public ResponseEntity<?> getOrderYields(@PathVariable Long orderId) {
         try {
             List<FinancialYieldRecord> yields = yieldService.getOrderYields(orderId);
@@ -42,6 +45,7 @@ public class AdminFinancialYieldController {
      * 手动触发收益计算
      */
     @PostMapping("/calculate")
+    @com.gtcfesk.exchange.config.AdminPermission(menu = "financial_orders", action = "calculate")
     public ResponseEntity<?> calculateYield() {
         try {
             yieldService.calculateDailyYield();
@@ -61,7 +65,10 @@ public class AdminFinancialYieldController {
      * 发放收益
      */
     @PostMapping("/payout/{yieldRecordId}")
+    @com.gtcfesk.exchange.config.AdminPermission(menu = "financial_orders", action = "payout")
     public ResponseEntity<?> payoutYield(@PathVariable Long yieldRecordId) {
+        if (com.gtcfesk.exchange.config.BackendAccess.agentId() != null)
+            access.checkUser(yieldRecords.findById(yieldRecordId).map(FinancialYieldRecord::getUserId).orElse(null));
         try {
             yieldService.payoutYield(yieldRecordId);
             Map<String, Object> resp = new HashMap<>();
@@ -80,6 +87,7 @@ public class AdminFinancialYieldController {
      * 批量发放所有待发放的收益
      */
     @PostMapping("/payout-all")
+    @com.gtcfesk.exchange.config.AdminPermission(menu = "financial_orders", action = "payout_all")
     public ResponseEntity<?> payoutAllPending() {
         try {
             yieldService.payoutAllPendingYields();

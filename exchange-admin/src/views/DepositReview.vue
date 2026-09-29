@@ -41,13 +41,15 @@
               <el-option label="已完成" value="COMPLETED" />
               <el-option label="已拒绝" value="REJECTED" />
             </el-select>
-            <el-button type="primary" :icon="Search" @click="handleSearch">搜索</el-button>
-            <el-button :icon="Refresh" @click="handleReset">重置</el-button>
+            <el-button v-permission="'deposit_review:view'" type="primary" :icon="Search" @click="handleSearch">搜索</el-button>
+            <el-button v-permission="'deposit_review:view'" :icon="Refresh" @click="handleReset">重置</el-button>
           </div>
         </div>
       </template>
 
-      <el-table :data="recordsList" style="width: 100%" v-loading="loading">
+      <AccountTypeFilter v-model="accountModes" @change="accountFilterChanged" />
+<admin-table :row-key="(row: any) => `${row.accountMode || 'REAL'}:${row.id ?? row.userId}:${row.type || ''}`" table-key="DepositReview.1" :data="recordsList" style="width: 100%" v-loading="loading">
+<el-table-column prop="accountModeLabel" label="账户类型" width="110" fixed="left" />
         <el-table-column prop="currency" label="原币货币" width="100" />
           <el-table-column prop="originalAmount" label="原币数量" width="150" />
           <el-table-column prop="source" label="充值来源（空为历史未知）" width="180" />
@@ -90,7 +92,7 @@
           <template #default="{ row }">
             <el-image
               v-if="row.proofImage"
-              :src="getImageUrl(row.proofImage)"
+              :src="getImageUrl(row.proofImage, row.accountMode)"
               :preview-src-list="getPreviewImageList(row)"
               style="width: 60px; height: 60px; cursor: pointer; border: 1px solid #eee;"
               fit="cover"
@@ -116,23 +118,23 @@
         </el-table-column>
         <el-table-column label="操作" width="200" fixed="right">
           <template #default="{ row }">
-            <el-button
+            <el-button v-permission="'deposit_review:approve_deposit'"
               v-if="row.status === 'PENDING' && hasPermission('deposit_review', 'approve_deposit')"
               size="small"
               type="success"
               @click="handleApprove(row)"
-            >
+             :disabled="accountModes.includes('DEMO') || !accountModes.length">
               审核通过
             </el-button>
-            <el-button
+            <el-button v-permission="'deposit_review:reject_deposit'"
               v-if="row.status === 'PENDING' && hasPermission('deposit_review', 'reject_deposit')"
               size="small"
               type="danger"
               @click="handleReject(row)"
-            >
+             :disabled="accountModes.includes('DEMO') || !accountModes.length">
               拒绝
             </el-button>
-            <el-button
+            <el-button v-permission="'deposit_review:detail'"
               v-if="row.status !== 'PENDING'"
               size="small"
               type="primary"
@@ -143,7 +145,7 @@
             <span v-else-if="row.status === 'PENDING' && !hasPermission('deposit_review', 'approve_deposit') && !hasPermission('deposit_review', 'reject_deposit')" class="no-action">待处理</span>
           </template>
         </el-table-column>
-      </el-table>
+      </admin-table>
     </el-card>
 
     <!-- 拒绝对话框 -->
@@ -163,8 +165,8 @@
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="rejectDialogVisible = false">取消</el-button>
-        <el-button type="danger" @click="confirmReject">确认拒绝</el-button>
+        <el-button v-permission="'session:close'" @click="rejectDialogVisible = false">取消</el-button>
+        <el-button v-permission="'deposit_review:reject_deposit'" type="danger" @click="confirmReject" :disabled="accountModes.includes('DEMO') || !accountModes.length">确认拒绝</el-button>
       </template>
     </el-dialog>
 
@@ -197,7 +199,7 @@
         <el-descriptions-item label="凭证" :span="2">
           <el-image
             v-if="detailRecord.proofImage"
-            :src="getImageUrl(detailRecord.proofImage)"
+            :src="getImageUrl(detailRecord.proofImage, detailRecord.accountMode)"
             :preview-src-list="getPreviewImageList(detailRecord)"
             style="width: 200px; height: 200px; cursor: pointer; border: 1px solid #eee;"
             fit="contain"
@@ -225,7 +227,7 @@
         </el-descriptions-item>
       </el-descriptions>
       <template #footer>
-        <el-button @click="detailDialogVisible = false">关闭</el-button>
+        <el-button v-permission="'session:close'" @click="detailDialogVisible = false">关闭</el-button>
       </template>
     </el-dialog>
   </div>
@@ -235,7 +237,14 @@
 import { ref, onMounted, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search, Refresh } from '@element-plus/icons-vue'
-import request from '@/utils/request'
+import { useAccountTable } from '@/utils/useAccountTable'
+import { accountTableRequest } from '@/utils/accountTableRequest'
+import AccountTypeFilter from '@/components/AccountTypeFilter.vue'
+const accountTable = useAccountTable()
+const accountModes = accountTable.modes
+const request = accountTableRequest(accountTable)
+function accountFilterChanged() { recordsList.value=[];loadRecords() }
+import { can, loadAccess } from '@/utils/access'
 import { getImageUrl } from '@/utils/imageUrl'
 import { useAuthStore } from '@/store/auth'
 
@@ -248,80 +257,10 @@ const userPermissions = ref<Map<string, string[]>>(new Map())
 const permissionsLoaded = ref(false)
 
 // 检查是否有操作权限
-const hasPermission = (menuCode: string, actionCode: string): boolean => {
-  if (auth.user?.isSuperAdmin || auth.user?.role === 'super_admin') {
-    return true
-  }
-  if (!isAgent.value) {
-    return true
-  }
-  if (!permissionsLoaded.value) {
-    return false
-  }
-  const actions = userPermissions.value.get(menuCode) || []
-  return actions.includes(actionCode)
-}
+const hasPermission = (menuCode: string, actionCode: string): boolean => can(`${menuCode}:${actionCode}`)
 
 // 加载权限信息
-const loadPermissions = async () => {
-  if (!isAgent.value) return
-  try {
-    const userId = auth.user?.id
-    if (userId) {
-      const permissionsResponse: any = await request.get(`/admin/users/${userId}/menus`)
-      console.log('[DepositReview] 权限API响应:', permissionsResponse)
-      
-      if (permissionsResponse.success) {
-        const allMenus: any = await request.get('/admin/menus/list')
-        console.log('[DepositReview] 所有菜单列表:', allMenus)
-        
-        if (allMenus.success) {
-          const menuMap = new Map<number, string>()
-          allMenus.list.forEach((m: any) => {
-            menuMap.set(m.id, m.menuCode)
-          })
-          console.log('[DepositReview] 菜单映射表:', menuMap)
-          
-          const actions = permissionsResponse.actions || {}
-          console.log('[DepositReview] 操作权限数据:', actions)
-          
-          userPermissions.value = new Map()
-          // 处理actions对象，key可能是字符串或数字
-          for (const [menuIdKey, actionCodes] of Object.entries(actions)) {
-            let menuId: number
-            if (typeof menuIdKey === 'string') {
-              menuId = parseInt(menuIdKey, 10)
-            } else {
-              menuId = Number(menuIdKey)
-            }
-            
-            const menuCode = menuMap.get(menuId)
-            console.log(`[DepositReview] 菜单ID ${menuId} -> 菜单代码 ${menuCode}, 操作:`, actionCodes)
-            
-            if (menuCode && Array.isArray(actionCodes)) {
-              // 同时支持两种菜单代码格式
-              userPermissions.value.set(menuCode, actionCodes as string[])
-              // 如果是 deposit-review，也添加到 deposit_review
-              if (menuCode === 'deposit-review') {
-                userPermissions.value.set('deposit_review', actionCodes as string[])
-              }
-              // 如果是 deposit_review，也添加到 deposit-review
-              if (menuCode === 'deposit_review') {
-                userPermissions.value.set('deposit-review', actionCodes as string[])
-              }
-            }
-          }
-          
-          console.log('[DepositReview] 最终权限Map:', Array.from(userPermissions.value.entries()))
-          permissionsLoaded.value = true
-        }
-      }
-    }
-  } catch (error: any) {
-    console.error('[DepositReview] 加载权限失败:', error)
-    permissionsLoaded.value = true
-  }
-}
+const loadPermissions = async () => { await loadAccess() }
 
 const loading = ref(false)
 const recordsList = ref<any[]>([])
@@ -364,7 +303,7 @@ function formatDateTime(dateTime: string | null | undefined): string {
 function getPreviewImageList(row: any): string[] {
   const images: string[] = []
   if (row.proofImage) {
-    const imageUrl = getImageUrl(row.proofImage)
+    const imageUrl = getImageUrl(row.proofImage, row.accountMode)
     // 确保URL有效且不是空字符串
     if (imageUrl && imageUrl.trim() !== '') {
       images.push(imageUrl)
@@ -464,6 +403,7 @@ const handleReset = () => {
 
 // 审核通过
 async function handleApprove(row: any) {
+  accountTable.selectRow(row)
   try {
     await ElMessageBox.confirm(
       `确定要通过该充值申请吗？\n用户ID: ${row.userId}\n充值金额: ${formatMoney(row.amount)} USD\n\n审核通过后，金额将直接充值到用户的资金账户。`,

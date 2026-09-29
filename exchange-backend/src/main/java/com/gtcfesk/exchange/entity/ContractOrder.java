@@ -14,6 +14,34 @@ import java.time.LocalDateTime;
 @Table(name = "contract_order")
 public class ContractOrder {
 
+    @Column(name="trial_reserved", precision=32, scale=16)
+    private java.math.BigDecimal trialReserved;
+
+
+    // NULL denotes the legacy lot protocol. Never infer an old order's unit from today's symbol.
+    @Column(name = "quantity_unit_type", length = 16)
+    private String quantityUnitType;
+    @Column(name = "spec_version")
+    private Long specVersion;
+    @Column(name = "min_order_quantity", precision = 32, scale = 16)
+    private BigDecimal minOrderQuantity;
+    @Column(name = "quantity_step", precision = 32, scale = 16)
+    private BigDecimal quantityStep;
+    @Column(name = "min_order_notional", precision = 32, scale = 16)
+    private BigDecimal minOrderNotional;
+
+    @Column(name = "quantity_asset", length = 16)
+    private String quantityAsset;
+
+    @Column(name = "deleted_at")
+    private LocalDateTime deletedAt;
+
+    @Column(name = "deleted_by", length = 64)
+    private String deletedBy;
+
+    @Transient
+    public boolean isDeleted() { return deletedAt != null; }
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -94,6 +122,15 @@ public class ContractOrder {
     // 新订单保存每手数量快照；NULL 表示沿用历史保证金、盈亏和手续费规则。
     @Column(name = "lot_size", precision = 32, scale = 16)
     private BigDecimal lotSize;
+
+    // NULL preserves every historical/pending order's original margin and fee interpretation.
+    @Column(name = "fx_base_currency", length = 3)
+    private String fxBaseCurrency;
+
+    @Transient
+    public BigDecimal getOpenCommission() { return fxBaseCurrency == null || fee == null ? null : fee.divide(BigDecimal.valueOf(2)); }
+    @Transient
+    public BigDecimal getCloseCommission() { return getOpenCommission(); }
 
     @Column(name = "quote_currency", length = 16)
     private String quoteCurrency = "USD";

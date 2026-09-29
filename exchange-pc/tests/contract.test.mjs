@@ -51,6 +51,8 @@ for (const app of ['exchange-pc', 'exchange-frontend']) {
   assert.equal(calculateContractProfit({ ...order, status: 'PENDING' }, 101), 0)
   assert.equal(calculateContractProfit({ ...order, status: 'CLOSED', profit: 7 }, 101), 7)
   assert.equal(contractEquity(1, [{ ...order, profit: -11 }]), 0)
-  assert.equal(contractEquity(1, [{ ...order, lotSize: null, profit: -11 }]), 0.30000000000000004)
+  // Exact decimal equity: 1 + 10 - 11 + 0.3 = 0.3 (not binary floating-point residue).
+  assert.equal(contractEquity(1, [{ ...order, lotSize: null, profit: -11 }]), 0.3)
+  assert.equal(contractEquity(0.1, [{ margin: 0.2, profit: 0, lotSize: 1 }]), 0.3)
 }
 console.log('PC/mobile contract margin, P&L, leverage and equity checks passed')

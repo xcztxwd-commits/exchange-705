@@ -22,6 +22,7 @@ public class AdminWalletController {
 
     // 获取用户的银行卡列表
     @GetMapping("/{userId}/bank-cards")
+    @com.gtcfesk.exchange.config.AdminPermission(menu = "users", action = "wallet_management")
     public ResponseEntity<?> getUserBankCards(@PathVariable Long userId) {
         try {
             List<UserBankCard> cards = userBankCardRepository.findByUserId(userId);
@@ -40,6 +41,7 @@ public class AdminWalletController {
 
     // 添加用户的银行卡
     @PostMapping("/{userId}/bank-cards")
+    @com.gtcfesk.exchange.config.AdminPermission(menu = "users", action = "bank_create")
     public ResponseEntity<?> addUserBankCard(@PathVariable Long userId, @RequestBody UserBankCardInput input) {
         try {
             UserBankCard card = new UserBankCard();
@@ -67,6 +69,7 @@ public class AdminWalletController {
 
     // 更新用户的银行卡
     @PutMapping("/{userId}/bank-cards/{id}")
+    @com.gtcfesk.exchange.config.AdminPermission(menu = "users", action = "bank_edit")
     public ResponseEntity<?> updateUserBankCard(@PathVariable Long userId, @PathVariable Long id, @RequestBody UserBankCardInput input) {
         try {
             UserBankCard existing = userBankCardRepository.findById(id)
@@ -100,6 +103,7 @@ public class AdminWalletController {
 
     // 删除用户的银行卡
     @DeleteMapping("/{userId}/bank-cards/{id}")
+    @com.gtcfesk.exchange.config.AdminPermission(menu = "users", action = "bank_delete")
     public ResponseEntity<?> deleteUserBankCard(@PathVariable Long userId, @PathVariable Long id) {
         try {
             UserBankCard existing = userBankCardRepository.findById(id)
@@ -125,6 +129,7 @@ public class AdminWalletController {
 
     // 获取用户的数字货币地址列表
     @GetMapping("/{userId}/digital-addresses")
+    @com.gtcfesk.exchange.config.AdminPermission(menu = "users", action = "wallet_management")
     public ResponseEntity<?> getUserDigitalAddresses(@PathVariable Long userId) {
         try {
             List<UserDigitalAddress> addresses = userDigitalAddressRepository.findByUserId(userId);
@@ -143,6 +148,7 @@ public class AdminWalletController {
 
     // 添加用户的数字货币地址
     @PostMapping("/{userId}/digital-addresses")
+    @com.gtcfesk.exchange.config.AdminPermission(menu = "users", action = "address_create")
     public ResponseEntity<?> addUserDigitalAddress(@PathVariable Long userId, @RequestBody UserDigitalAddressInput input) {
         try {
             UserDigitalAddress address = new UserDigitalAddress();
@@ -167,6 +173,7 @@ public class AdminWalletController {
 
     // 更新用户的数字货币地址
     @PutMapping("/{userId}/digital-addresses/{id}")
+    @com.gtcfesk.exchange.config.AdminPermission(menu = "users", action = "address_edit")
     public ResponseEntity<?> updateUserDigitalAddress(@PathVariable Long userId, @PathVariable Long id, @RequestBody UserDigitalAddressInput input) {
         try {
             UserDigitalAddress existing = userDigitalAddressRepository.findById(id)
@@ -197,6 +204,7 @@ public class AdminWalletController {
 
     // 删除用户的数字货币地址
     @DeleteMapping("/{userId}/digital-addresses/{id}")
+    @com.gtcfesk.exchange.config.AdminPermission(menu = "users", action = "address_delete")
     public ResponseEntity<?> deleteUserDigitalAddress(@PathVariable Long userId, @PathVariable Long id) {
         try {
             UserDigitalAddress existing = userDigitalAddressRepository.findById(id)

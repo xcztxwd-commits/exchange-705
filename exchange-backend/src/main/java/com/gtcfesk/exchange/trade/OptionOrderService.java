@@ -19,6 +19,11 @@ import java.util.List;
 @Service
 @RequiredArgsConstructor
 public class OptionOrderService {
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.gtcfesk.exchange.activity.TrialFunds trialFunds;
+    private static BigDecimal trial(BigDecimal value) { return value == null ? BigDecimal.ZERO : value; }
+
+    private final com.gtcfesk.exchange.user.KycIdentityService identityService;
 
     private final OptionOrderRepository optionOrderRepository;
     private final AssetAccountRepository assetAccountRepository;
@@ -32,6 +37,8 @@ public class OptionOrderService {
      */
     @Transactional
     public OptionOrder createOrder(Long userId, CreateOptionOrderRequest req) {
+        if (trialFunds != null) { trialFunds.lock(userId); trialFunds.requireTrade(userId); }
+        else identityService.requireApproved(userId);
         if (req == null || req.getSymbol() == null || !("UP".equals(req.getDirection()) || "DOWN".equals(req.getDirection()))
                 || req.getDuration() == null || req.getDuration() <= 0) throw new BusinessException("交易参数无效");
         com.gtcfesk.exchange.common.TradeValidation.positive(req.getAmount(), "金额");
@@ -54,6 +61,9 @@ public class OptionOrderService {
                 .findByUserIdAndCoin(userId, "OPTION")
                 .orElseThrow(() -> new BusinessException("期权账户不存在"));
 
+        BigDecimal trialReserved = BigDecimal.ZERO;
+        if (trialFunds != null) trialReserved = trialFunds.reserve(userId, optionAccount, req.getAmount(), "OPTION_RESERVE");
+        else {
         // 检查余额是否足够
         BigDecimal available = optionAccount.getAvailable() != null ? optionAccount.getAvailable() : BigDecimal.ZERO;
         if (available.compareTo(req.getAmount()) < 0) {
@@ -66,9 +76,12 @@ public class OptionOrderService {
         optionAccount.setFrozen(frozen.add(req.getAmount()));
         assetAccountRepository.save(optionAccount);
 
+        }
+
         // 创建订单
         OptionOrder order = new OptionOrder();
         order.setUserId(userId);
+        order.setTrialReserved(trialReserved);
         order.setSymbol(req.getSymbol());
         order.setDirection(req.getDirection()); // UP or DOWN
         order.setAmount(req.getAmount());
@@ -86,9 +99,9 @@ public class OptionOrderService {
      */
     public List<OptionOrder> getUserOrders(Long userId, String status) {
         if (status != null && !status.isEmpty()) {
-            return optionOrderRepository.findByUserIdAndStatusOrderByCreatedAtDesc(userId, status);
+            return optionOrderRepository.findByUserIdAndStatusAndDeletedAtIsNullOrderByCreatedAtDesc(userId, status);
         }
-        return optionOrderRepository.findByUserIdOrderByCreatedAtDesc(userId);
+        return optionOrderRepository.findByUserIdAndDeletedAtIsNullOrderByCreatedAtDesc(userId);
     }
 
     /**
@@ -99,9 +112,10 @@ public class OptionOrderService {
                 .findByUserIdAndCoin(userId, "OPTION")
                 .orElse(null);
         if (optionAccount == null) {
-            return BigDecimal.ZERO;
+            return trialFunds == null ? BigDecimal.ZERO : trialFunds.available(userId);
         }
-        return optionAccount.getAvailable() != null ? optionAccount.getAvailable() : BigDecimal.ZERO;
+        BigDecimal real = optionAccount.getAvailable() != null ? optionAccount.getAvailable() : BigDecimal.ZERO;
+        return trialFunds == null ? real : trialFunds.tradingBalance(userId, real);
     }
 
     /**
@@ -235,11 +249,14 @@ public class OptionOrderService {
         order.setProfit(profit);
         order.setCloseTime(LocalDateTime.now());
 
+        if (trialFunds != null) trialFunds.lock(userId);
         // 更新资产账户
         AssetAccount optionAccount = assetAccountRepository
                 .findByUserIdAndCoin(userId, "OPTION")
                 .orElseThrow(() -> new BusinessException("期权账户不存在"));
 
+        if (trialFunds != null) trialFunds.settle(userId, optionAccount, amount, trial(order.getTrialReserved()), profit, "OPTION_SETTLE:"+order.getId());
+        else {
         // 解冻金额
         BigDecimal frozen = optionAccount.getFrozen() != null ? optionAccount.getFrozen() : BigDecimal.ZERO;
         frozen = frozen.subtract(amount);
@@ -251,6 +268,7 @@ public class OptionOrderService {
         optionAccount.setAvailable(available);
 
         assetAccountRepository.save(optionAccount);
+        }
         return optionOrderRepository.save(order);
     }
 }

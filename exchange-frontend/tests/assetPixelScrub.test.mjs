@@ -6,21 +6,21 @@ import ts from 'typescript'
 import * as helpers from '../src/utils/assetPixelWindow.ts'
 const source=fs.readFileSync(new URL('../src/components/AssetPixelChart.vue',import.meta.url),'utf8')
 const script=source.match(/<script setup lang="ts">([\s\S]*?)<\/script>/)[1].replace(/^import .*$/gm,'')
-const timers=new Map(),captured=new Set(),texts=[],alphas=[], totals=[], inspections=[], rectangles=[], colors=[]
+const timers=new Map(),captured=new Set(),texts=[],alphas=[], totals=[], inspections=[], rectangles=[], colors=[], strokes=[]
 const labels=[]
 const props={visible:true}
 let sequence=0
-const drawing=new Proxy({globalAlpha:1,measureText:t=>({width:t.length*6}),fillText:(t,x,y)=>{texts.push(t);labels.push({text:t,x,y})},fillRect:(...args)=>rectangles.push(args)}, {
+const drawing=new Proxy({globalAlpha:1,measureText:t=>({width:t.length*6}),fillText:(t,x,y)=>{texts.push(t);labels.push({text:t,x,y})},fillRect:(...args)=>rectangles.push(args),beginPath(){this.path=[]},moveTo(x,y){this.path.push([x,y])},lineTo(x,y){this.path.push([x,y])},stroke(path){strokes.push({points:path?.points??this.path,width:this.lineWidth})}}, {
   get:(o,k)=>k in o?o[k]:()=>{}, set:(o,k,v)=>{o[k]=v;if(k==='globalAlpha')alphas.push(v);if(['fillStyle','strokeStyle','shadowColor'].includes(k))colors.push(v);return true}
 })
 const surface={getContext:()=>drawing,getBoundingClientRect:()=>({left:20,width:360}),setPointerCapture:id=>captured.add(id),hasPointerCapture:id=>captured.has(id),releasePointerCapture:id=>captured.delete(id)}
-const context={...helpers,inspections,console,Intl,performance,defineProps:()=>props,defineEmits:()=>((name,value)=>{if(name==='total')totals.push(value);else if(name==='inspect')inspections.push(value)}),useLocaleStore:()=>({locale:'zh-TW',text:(zh,en)=>zh}),ref:value=>({value}),computed:get=>({get value(){return get()}}),watch:()=>{},onMounted:()=>{},onBeforeUnmount:()=>{},setTimeout:fn=>{timers.set(++sequence,fn);return sequence},clearTimeout:id=>timers.delete(id),cancelAnimationFrame:()=>{},requestAnimationFrame:()=>1,Path2D:class{moveTo(){}lineTo(){}},request:{},window:{},document:{}}
+const context={visitorTimezone:'UTC',getSystemTimezone:()=>context.visitorTimezone,...helpers,inspections,console,Intl,performance,defineProps:()=>props,defineEmits:()=>((name,value)=>{if(name==='total')totals.push(value);else if(name==='inspect')inspections.push(value)}),useLocaleStore:()=>({locale:'zh-TW',text:(zh,en)=>zh}),ref:value=>({value}),computed:get=>({get value(){return get()}}),watch:()=>{},onMounted:()=>{},onBeforeUnmount:()=>{},setTimeout:fn=>{timers.set(++sequence,fn);return sequence},clearTimeout:id=>timers.delete(id),cancelAnimationFrame:()=>{},requestAnimationFrame:()=>1,Path2D:class{points=[];moveTo(x,y){this.points.push([x,y])}lineTo(x,y){this.points.push([x,y])}},request:{},window:{},document:{}}
 context.globalThis=context
 vm.runInNewContext(ts.transpileModule(script+`
 globalThis.fixture={startPointer,movePointer,endPointer,stopPointer,resetSelection,draw,load,choose,scrubKey,refreshChart,
   get turns(){return refreshTurns.value},
   color(range,opening,current){period.value=range;from.value=1000;asOf.value=25000;points.value=[{time:1000,value:opening},{time:25000,value:current}];selectedTime.value=null;draw(1);return chartRgb.value},
-  tooltip(range,point,zone='UTC',time=point?.time??asOf.value){period.value=range;timezone.value=zone;points.value=point?[point]:[];selectedTime.value=time;return [selectedDate.value,selectedAmount.value]},
+  tooltip(range,point,zone='UTC',time=point?.time??asOf.value){period.value=range;globalThis.visitorTimezone=zone;points.value=point?[point]:[];selectedTime.value=time;return [selectedDate.value,selectedAmount.value]},
   get points(){return points.value},get failed(){return failed.value},get high(){return extrema.value?.high.value},
   get time(){return selectedTime.value}, get dragging(){return scrubbing}, get inspection(){return inspections.at(-1)},
   setWindow(start,end,data){from.value=start;asOf.value=end;points.value=data},
@@ -108,7 +108,8 @@ assert.doesNotMatch(source,/point-detail|selectedCarried|selectedSourceTime/,'ch
 assert.match(source,/v-if="visible && selectedTime === null"/,'income is hidden during inspection')
 const profile=fs.readFileSync(new URL('../src/views/Profile.vue',import.meta.url),'utf8')
 assert.match(profile,/@inspect="inspectedAsset = \$event"/)
-assert.match(profile,/class="inspection-time"[^>]*>\{\{ inspectedAsset.time \}\}/)
+assert.doesNotMatch(profile,/class="inspection-time"/,'time is no longer fixed in the header')
+assert.match(source,/class="sr-only" role="status">\{\{ selectedDate \}\}/,'canvas time stays accessible')
 assert.match(profile,/displayedAssets === null \? '—' : '\$' \+ formatMoney\(displayedAssets\)/)
 f.resetSelection();f.setWindow(stamp,stamp+3600000,[{time:stamp,value:578.126}])
 f.startPointer(event(28))
@@ -116,7 +117,21 @@ for(const [id,fn] of [...timers]){timers.delete(id);fn()}
 assert.equal(f.inspection.time,'15:37');assert.equal(f.inspection.amount,578.126)
 f.movePointer(event(200));assert.equal(f.inspection.time,'16:07');assert.equal(f.inspection.amount,578.126)
 f.endPointer(event(200));assert.equal(f.inspection,null)
-console.log('PASS: period labels follow finger; top time/amount replace tooltip and income while held')
+labels.length=0;strokes.length=0
+f.startPointer(event(114))
+for(const [id,fn] of [...timers]){timers.delete(id);fn()}
+const firstTime=labels.at(-1),firstLine=strokes.findLast(s=>s.points?.[0]?.[1]===22)
+assert.equal(firstTime.x,94);assert.equal(firstTime.y,11);assert.equal(firstLine.points[0][0],firstTime.x)
+labels.length=0;strokes.length=0;f.movePointer(event(286))
+const nextTime=labels.at(-1),nextLine=strokes.findLast(s=>s.points?.[0]?.[1]===22)
+assert.equal(nextTime.x,266);assert.notEqual(nextTime.text,firstTime.text);assert.equal(nextLine.points[0][0],nextTime.x)
+f.endPointer(event(286));assert.equal(f.time,null)
+f.setWindow(stamp,stamp+3600000,[{time:stamp,value:null}]);labels.length=0;strokes.length=0
+f.startPointer(event(200,50,'mouse'))
+assert.equal(f.inspection.amount,null)
+assert.equal(labels.at(-1).x,strokes.findLast(s=>s.points?.[0]?.[1]===22).points[0][0],'time and vertical line remain visible without a value')
+f.resetSelection()
+console.log('PASS: period time follows finger at the top of its own vertical line, not the header')
 
 for (const range of ['1D','1W','1M','1Y']) {
   for (const [opening,current,rgb] of [[100,90,'214,74,83'],[100,110,'96,177,43'],[100,100,'96,177,43'],[-100,-90,'96,177,43'],[-100,-110,'214,74,83'],[0,0,'96,177,43'],[null,100,'137,150,135'],[100,null,'96,177,43']]) {
@@ -201,6 +216,12 @@ assert.equal(labels.length,0,'unavailable history has no fabricated extrema')
 context.request.get=async()=>({...response('100'),points:[{time:13000,value:'100'}]})
 await f.load();labels.length=0;f.draw(1)
 assert.ok(labels.some(p=>p.text==='最低 $0.00'),'no predecessor shows a zero opening in the plotted range')
+strokes.length=0;f.draw(1)
+const zeroRise=strokes.find(s=>s.width===2.2&&s.points?.length>=3)
+assert.ok(zeroRise,'inferred zero is drawn as a visible continuous step')
+assert.equal(zeroRise.points[0][1],zeroRise.points[1][1])
+assert.equal(zeroRise.points[1][0],zeroRise.points[2][0])
+assert.ok(zeroRise.points[2][1]<zeroRise.points[1][1],'first real value rises vertically from zero')
 assert.doesNotMatch(source,/selectedInferredZero|無更早記錄，按 \$0 顯示/)
 const annotation=source.slice(source.indexOf('const annotate ='),source.indexOf('if (extrema.value)'))
 assert.doesNotMatch(annotation,/\.(?:moveTo|lineTo|stroke)\(/,'annotations must not draw connector lines')

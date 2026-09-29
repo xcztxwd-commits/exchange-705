@@ -36,6 +36,7 @@ public class KycReviewController {
     
     // 获取实名认证申请列表
     @GetMapping("/list")
+    @com.gtcfesk.exchange.config.AdminPermission(menu = "kyc_review", action = "")
     public ResponseEntity<?> getKycList(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
@@ -201,6 +202,7 @@ public class KycReviewController {
     
     // 获取详情
     @GetMapping("/{id}")
+    @com.gtcfesk.exchange.config.AdminPermission(menu = "kyc_review", action = "detail")
     public ResponseEntity<?> getKycDetail(@PathVariable Long id) {
         KycRecord record = kycRecordRepository.findById(id)
                 .orElseThrow(() -> new BusinessException("申请不存在"));
@@ -214,6 +216,7 @@ public class KycReviewController {
     // 审核通过
     @PostMapping("/{id}/approve")
     @Transactional
+    @com.gtcfesk.exchange.config.AdminPermission(menu = "kyc_review", action = "approve_kyc")
     public ResponseEntity<?> approveKyc(
             Authentication auth,
             @PathVariable Long id,
@@ -261,6 +264,7 @@ public class KycReviewController {
     // 审核拒绝
     @PostMapping("/{id}/reject")
     @Transactional
+    @com.gtcfesk.exchange.config.AdminPermission(menu = "kyc_review", action = "reject_kyc")
     public ResponseEntity<?> rejectKyc(
             Authentication auth,
             @PathVariable Long id,

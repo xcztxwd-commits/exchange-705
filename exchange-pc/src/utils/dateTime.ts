@@ -1,34 +1,16 @@
-import request from '@/utils/request'
+import { initVisitorRegion, visitorRegion } from './visitorRegion'
 
-// 全局存储获取到的系统时区
-let globalSystemTimezone = 'Europe/London'
-
-// 尝试从后台获取系统时区配置
-async function initSystemTimezone() {
-  try {
-    const res: any = await request.get('/user/system/timezone')
-    if (res && res.timezone) {
-      globalSystemTimezone = res.timezone
-      console.log('[dateTime] Fetched timezone config:', globalSystemTimezone)
-    }
-  } catch (e) {
-    console.error('[dateTime] Error fetching timezone config, using default:', e)
-  }
-}
-
-// 立即触发初始化
-export const systemTimezoneReady = initSystemTimezone()
-
-export function getSystemTimezone() { return globalSystemTimezone }
+export const systemTimezoneReady = initVisitorRegion()
+export function getSystemTimezone() { return visitorRegion.value.timezone }
 
 /**
  * 日期时间格式化工具
  * 注意：后端可能返回服务器本地时间（北京时间 UTC+8），而不是UTC时间
- * 前端需要将其转换为UTC，然后转换为系统配置的时区（自动处理夏令时）显示
+ * 前端需要将其转换为UTC，然后转换为访问者 IP 时区（自动处理夏令时）显示
  */
 
 /**
- * 格式化日期为 YYYY-MM-DD 格式（英国时区）
+ * 格式化日期为 YYYY-MM-DD 格式（访问者时区）
  * @param dateTime 日期时间字符串或 Date 对象
  * @returns 格式化的日期字符串，如 "2023-12-25"
  */
@@ -70,9 +52,9 @@ export function formatDate(dateTime: string | Date | null | undefined): string {
       date = dateTime
     }
     
-    // 使用 Intl.DateTimeFormat 格式化系统配置时区的日期
+    // 使用 Intl.DateTimeFormat 格式化访问者时区的日期
     const formatter = new Intl.DateTimeFormat('en-GB', {
-      timeZone: globalSystemTimezone, // 使用动态获取的时区
+      timeZone: visitorRegion.value.timezone, // 使用访问者时区
       year: 'numeric',
       month: '2-digit',
       day: '2-digit'
@@ -92,7 +74,7 @@ export function formatDate(dateTime: string | Date | null | undefined): string {
 }
 
 /**
- * 格式化日期时间为 YYYY-MM-DD HH:mm:ss 格式（英国时区）
+ * 格式化日期时间为 YYYY-MM-DD HH:mm:ss 格式（访问者时区）
  * @param dateTime 日期时间字符串或 Date 对象
  * @returns 格式化的日期时间字符串，如 "2023-12-25 14:30:00"
  */
@@ -104,7 +86,7 @@ export function formatDateTime(dateTime: string | Date | null | undefined): stri
     
     if (typeof dateTime === 'string') {
       // 后端可能返回服务器本地时间（北京时间 UTC+8），而不是UTC时间
-      // 我们需要将其作为北京时间解析，然后转换为UTC，再转换为英国时区显示
+      // 我们需要将其作为北京时间解析，然后转换为UTC，再转换为访问者时区显示
       let dateStr = dateTime.trim()
       const originalStr = dateStr
       
@@ -153,7 +135,7 @@ export function formatDateTime(dateTime: string | Date | null | undefined): stri
       if (process.env.NODE_ENV === 'development') {
         const utcTime = date.toISOString()
         const ukFormatter = new Intl.DateTimeFormat('en-GB', {
-          timeZone: 'Europe/London',
+          timeZone: visitorRegion.value.timezone,
           year: 'numeric',
           month: '2-digit',
           day: '2-digit',
@@ -175,9 +157,9 @@ export function formatDateTime(dateTime: string | Date | null | undefined): stri
       date = dateTime
     }
     
-    // 使用 Intl.DateTimeFormat 格式化系统配置时区的日期时间
+    // 使用 Intl.DateTimeFormat 格式化访问者时区的日期时间
     const formatter = new Intl.DateTimeFormat('en-GB', {
-      timeZone: globalSystemTimezone, // 使用动态获取的时区
+      timeZone: visitorRegion.value.timezone, // 使用访问者时区
       year: 'numeric',
       month: '2-digit',
       day: '2-digit',
@@ -204,7 +186,7 @@ export function formatDateTime(dateTime: string | Date | null | undefined): stri
 }
 
 /**
- * 格式化时间为 HH:mm:ss 格式（英国时区）
+ * 格式化时间为 HH:mm:ss 格式（访问者时区）
  * @param dateTime 日期时间字符串或 Date 对象
  * @returns 格式化的时间字符串，如 "14:30:00"
  */
@@ -246,9 +228,9 @@ export function formatTime(dateTime: string | Date | null | undefined): string {
       date = dateTime
     }
     
-    // 使用 Intl.DateTimeFormat 格式化系统配置时区的时间
+    // 使用 Intl.DateTimeFormat 格式化访问者时区的时间
     const formatter = new Intl.DateTimeFormat('en-GB', {
-      timeZone: globalSystemTimezone, // 使用动态获取的时区
+      timeZone: visitorRegion.value.timezone, // 使用访问者时区
       hour: '2-digit',
       minute: '2-digit',
       second: '2-digit',
@@ -269,7 +251,7 @@ export function formatTime(dateTime: string | Date | null | undefined): string {
 }
 
 /**
- * 格式化日期时间为本地化格式（英国时区，除非options中指定了其他时区）
+ * 格式化日期时间为本地化格式（访问者时区，除非options中指定了其他时区）
  * @param dateTime 日期时间字符串或 Date 对象
  * @param locale 本地化语言代码，默认为 'en-GB'
  * @param options Intl.DateTimeFormatOptions 选项
@@ -310,7 +292,7 @@ export function formatDateTimeLocalized(
       minute: '2-digit',
       second: '2-digit',
       hour12: false,
-      timeZone: globalSystemTimezone, // 默认使用系统动态时区
+      timeZone: visitorRegion.value.timezone, // 默认使用访问者时区
       ...options // 如果options中指定了timeZone，会覆盖默认值
     }
     
