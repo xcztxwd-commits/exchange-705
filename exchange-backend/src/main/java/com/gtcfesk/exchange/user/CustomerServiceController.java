@@ -21,15 +21,15 @@ public class CustomerServiceController {
      */
     @GetMapping("/customer-service/link")
     public ResponseEntity<?> getCustomerServiceLink() {
-        String link = systemConfigService.getConfigValue("customer.service.link");
+        String link = supportSettings.externalLink();
         
         Map<String, Object> result = new HashMap<>();
         result.put("link", link != null ? link : "");
         String mode = supportSettings.get().mode;
         result.put("mode", mode);
-        result.put("link", supportSettings.externalLink());
+        result.put("link", link);
         result.put("inboxEnabled", supportSettings.get().inboxEnabled);
-        result.put("available", "internal".equals(mode) || ("external".equals(mode) && !supportSettings.externalLink().isEmpty()));
+        result.put("available", "internal".equals(mode) || ("external".equals(mode) && !link.isEmpty()));
         return ResponseEntity.ok(result);
     }
     

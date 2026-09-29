@@ -31,8 +31,6 @@ const onSubmit = async () => {
       password: loginForm.password,
       loginType: 'email',
     })
-    console.log('登录响应:', res)
-    console.log('用户信息:', res.user)
     auth.setAuth(res.token, res.user)
     ElMessage.success('登录成功')
     // 延迟一下，确保 auth store 更新完成

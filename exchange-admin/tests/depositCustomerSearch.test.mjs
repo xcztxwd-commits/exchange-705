@@ -8,9 +8,9 @@ const script = source.split('<script setup lang="ts">')[1].split('</script>')[0]
 const js = ts.transpileModule(script, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS } }).outputText
 const calls = [], timers = new Map()
 let id = 0, unmount
-const app = new Function('ref', 'reactive', 'onMounted', 'onUnmounted', 'request', 'ElMessage', 'setTimeout', 'clearTimeout', js + ';return {searchCustomers, customers, searchingCustomers, filters, load, rows, summary, resetFilters};')(
+const app = new Function('ref', 'reactive', 'onMounted', 'onUnmounted', 'useAccountTable', 'accountTableRequest', 'ElMessage', 'setTimeout', 'clearTimeout', js + ';return {searchCustomers, customers, searchingCustomers, filters, load, rows, summary, resetFilters};')(
   vue.ref, vue.reactive, () => {}, fn => { unmount = fn },
-  { get: (url, options) => new Promise((resolve, reject) => calls.push({ url, params: options.params, resolve, reject })) },
+  () => ({ modes: vue.ref(['REAL']), selectRow() {} }), () => ({ get: (url, options) => new Promise((resolve, reject) => calls.push({ url, params: options.params, resolve, reject })) }),
   { error: message => { throw new Error(message) } },
   fn => { timers.set(++id, fn); return id }, key => timers.delete(key)
 )

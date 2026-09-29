@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url'
 import { createRequire } from 'node:module'
 const require = createRequire(new URL('../package.json', import.meta.url))
 const ts = require('typescript')
+const { parse } = require('@vue/compiler-sfc')
 const source = fs.readFileSync(new URL('../src/utils/tablePreferences.ts', import.meta.url), 'utf8')
 const exports = {}
 new Function('exports', ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText)(exports)
@@ -25,7 +26,17 @@ walk(fileURLToPath(new URL('../src', import.meta.url)))
 for (const file of files) {
   const text = fs.readFileSync(file, 'utf8')
   assert.ok(!/<el-table[\s>]/.test(text), `Unconverted table: ${file}`)
-  for (const match of text.matchAll(/<admin-table\s+table-key="([^"]+)"/g)) keys.push(match[1])
+  const ast = parse(text).descriptor.template?.ast
+  function visit(node) {
+    if (node.tag === 'admin-table') {
+      const key = node.props.find(p => p.name === 'table-key' || (p.name === 'bind' && p.arg?.content === 'table-key'))
+      assert.ok(key, 'Missing table-key: ' + file)
+      if (key.name === 'table-key') keys.push(key.value.content)
+      else assert.ok(file.endsWith('AccountInspection.vue') && key.exp.content.includes('kind'), 'Unexpected dynamic table-key: ' + file)
+    }
+    for (const child of node.children || []) visit(child)
+  }
+  if (ast) visit(ast)
 }
 assert.equal(new Set(keys).size, keys.length)
 assert.equal(keys.length, 42) // AccountInspection uses a separate dynamic key per data category.

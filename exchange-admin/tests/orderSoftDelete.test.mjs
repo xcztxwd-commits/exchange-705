@@ -8,8 +8,8 @@ const script = file.split('<script setup lang="ts">')[1].split('</script>')[0].r
 const js = ts.transpileModule(script, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS } }).outputText
 const calls = [], warnings = []
 const request = { post: async (...args) => { calls.push(['post', ...args]); return { success: true, list: [], total: 0 } }, delete: async (...args) => { calls.push(['delete', ...args]); return { success: true } } }
-const app = new Function('ref', 'computed', 'onMounted', 'useAuthStore', 'usePermissions', 'request', 'ElMessage', 'ElMessageBox', js + ';return {handleDeletion, handleReset, activeTab, contractQueryParams, optionQueryParams};')(
-  vue.ref, vue.computed, () => {}, () => ({ user: { role: 'super_admin' } }), () => ({ isAgent: vue.ref(false), hasPermission: async () => true }), request,
+const app = new Function('ref', 'computed', 'onMounted', 'useAuthStore', 'usePermissions', 'useAccountTable', 'accountTableRequest', 'ElMessage', 'ElMessageBox', js + ';return {handleDeletion, handleReset, activeTab, contractQueryParams, optionQueryParams};')(
+  vue.ref, vue.computed, () => {}, () => ({ user: { role: 'super_admin' } }), () => ({ isAgent: vue.ref(false), hasPermission: async () => true }), () => ({ modes: vue.ref(['REAL']), selectRow() {} }), () => request,
   { success() {}, warning: m => warnings.push(m), error: m => { throw new Error(m) } }, { confirm: async () => {} }
 )
 for (const type of ['contract', 'option']) {
