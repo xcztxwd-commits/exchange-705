@@ -4,6 +4,7 @@ import { ElMessage } from 'element-plus'
 import request from '@/utils/request'
 import { createRequestKey } from '@/utils/requestKey'
 import { displaySymbol } from '@/utils/displaySymbol'
+import { formatPrice } from '@/utils/formatPrice'
 type SymbolItem = { id: number; symbol: string; name?: string; displayName?: string; category?: string; sourceCategory?: string; quoteCurrency?: string; pricePrecision: number; isEnabled: boolean }
 const symbolLabel = (item: SymbolItem) => {
   const label = displaySymbol(item)
@@ -46,7 +47,7 @@ const progress = computed(() => {
   const state = status.value
   return state?.durationSeconds ? Math.min(100, Math.max(0, (1 - state.remainingSeconds / state.durationSeconds) * 100)) : 0
 })
-const formatPrice = (value: number | null | undefined) => value == null ? '—' : Number(value).toFixed(precision.value)
+const formatControlPrice = (value: number | null | undefined) => value == null ? '—' : Number(value).toFixed(precision.value)
 let timer: ReturnType<typeof setTimeout> | undefined
 let previewTimer: ReturnType<typeof setTimeout> | undefined, previewVersion = 0
 let disposed = false, requestVersion = 0, statusRequests = 0
@@ -229,9 +230,9 @@ onUnmounted(() => { disposed = true; ++requestVersion; ++previewVersion; clearTi
         <el-alert v-if="statusError" :title="statusError" type="error" :closable="false" show-icon />
         <el-alert v-else-if="status && !status.available" title="无可用行情源" type="warning" :closable="false" show-icon />
         <div v-if="status" class="quotes">
-          <div><span>{{ status.randomMarketEnabled ? '随机基础价' : '原始行情' }}</span><strong>{{ formatPrice(status.rawPrice) }}</strong></div>
-          <div><span>当前控盘价</span><strong>{{ formatPrice(status.currentPrice) }}</strong></div>
-          <div><span>配置偏移</span><strong>{{ formatPrice(status.offset) }}</strong></div>
+          <div><span>{{ status.randomMarketEnabled ? '随机基础价' : '原始行情' }}</span><strong>{{ formatControlPrice(status.rawPrice) }}</strong></div>
+          <div><span>当前控盘价</span><strong>{{ formatControlPrice(status.currentPrice) }}</strong></div>
+          <div><span>配置偏移</span><strong>{{ formatControlPrice(status.offset) }}</strong></div>
         </div>
         <el-alert v-if="status?.algorithmVersion === 3" type="success" :closable="false"
           :title="`均衡随机 V3 · TARGET 固定单秒幅度 ${status.minStepAmount}～${status.maxStepAmount}；HOLDING/恢复不受此范围约束`" />
@@ -267,8 +268,8 @@ onUnmounted(() => { disposed = true; ++requestVersion; ++previewVersion; clearTi
           <el-alert v-if="previewError" :title="previewError" type="error" :closable="false" />
           <el-alert v-else-if="preview?.feasible === false" :title="`${preview.errorCode}: ${preview.message}`" type="warning" :closable="false" />
           <div v-if="preview" class="preview">
-            <p>预览起点 {{ preview.startPrice }}；当前档单秒幅度 {{ preview.minAmount ?? '—' }}～{{ preview.maxAmount ?? '—' }}。{{ preview.amountRandom === false ? '当前精度不支持金额随机。' : '' }}</p>
-            <p v-if="preview.summary">候选 {{ preview.summary.points }} 点；最高 {{ preview.summary.maxPrice }}，最低 {{ preview.summary.minPrice }}；最大单秒涨跌 {{ preview.summary.maxStep }}。候选仅供预览，启动时重验起点。</p>
+            <p>预览起点 {{ formatPrice(preview.startPrice) }}；当前档单秒幅度 {{ preview.minAmount ?? '—' }}～{{ preview.maxAmount ?? '—' }}。{{ preview.amountRandom === false ? '当前精度不支持金额随机。' : '' }}</p>
+            <p v-if="preview.summary">候选 {{ preview.summary.points }} 点；最高 {{ formatPrice(preview.summary.maxPrice) }}，最低 {{ formatPrice(preview.summary.minPrice) }}；最大单秒涨跌 {{ preview.summary.maxStep }}。候选仅供预览，启动时重验起点。</p>
             <p v-if="preview.summary">前／中／后三段均幅 {{ preview.summary.segmentAverages.join(' / ') }}；10 秒窗口 {{ preview.summary.rolling10Min ?? '—' }}～{{ preview.summary.rolling10Max ?? '—' }}；30 秒窗口 {{ preview.summary.rolling30Min ?? '—' }}～{{ preview.summary.rolling30Max ?? '—' }}。</p>
             <admin-table table-key="AiControl.1" v-if="preview.tiers" :data="preview.tiers" size="small" max-height="250">
               <el-table-column prop="intensity" label="强度" width="70" />

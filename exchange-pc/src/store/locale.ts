@@ -1,5 +1,5 @@
-import { visitorRegion } from '../utils/visitorRegion'
 import { japaneseServerMessage } from '../utils/serverJapanese'
+import { browserLocale } from '../../../exchange-frontend/src/utils/browserLocale'
 import { defineStore } from 'pinia'
 import { computed, ref, watch } from 'vue'
 import { uiMessages, uiAliases } from './uiMessages'
@@ -20356,18 +20356,14 @@ export const useLocaleStore = defineStore('locale', () => {
     console.log('[LocaleStore] Language changed to:', val)
   }
 
-  const detectBrowserLocale = (): LocaleKey => {
-    const language = (navigator.language.split('-')[0] || 'en').toLowerCase()
-    if (language === 'zh') return 'zh-TW'
-    return Object.prototype.hasOwnProperty.call(messages, language) ? language as LocaleKey : 'en'
-  }
+  const detectBrowserLocale = (): LocaleKey => browserLocale(navigator.languages?.length ? navigator.languages : [navigator.language || 'en'], messages) as LocaleKey
 
   const loadLocale = () => {
     const saved = localStorage.getItem('locale') as LocaleKey | null
-    const detected = visitorRegion.value.locale || detectBrowserLocale()
+    const detected = detectBrowserLocale()
     locale.value = saved && Object.prototype.hasOwnProperty.call(messages, saved)
       ? saved : Object.prototype.hasOwnProperty.call(messages, detected) ? detected as LocaleKey : 'en'
-    // Only setLocale persists an explicit choice; automatic defaults follow the next visit's IP.
+    // Only explicit choices are saved; first visits follow browser preferences, not IP.
   }
 
   return {

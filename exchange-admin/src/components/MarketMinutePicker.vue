@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import request from '@/utils/request'
+import { formatPrice } from '@/utils/formatPrice'
 import zhCn from 'element-plus/es/locale/lang/zh-cn'
 import { isCryptoMarket, marketMinuteHours } from '@/utils/marketMinuteHours'
 
@@ -81,7 +82,7 @@ onBeforeUnmount(stop)
 <template>
   <div class="minute-field">
     <el-button v-permission="'orders:manual_order'" class="minute-trigger" :disabled="!symbol || !active" @click="open">{{ modelValue ? modelValue.replace('T', ' ') : '选择日期与交易分钟' }} <span>▦</span></el-button>
-    <div class="minute-price"><small>该分钟开盘价</small><strong>{{ price ?? confirmed?.price ?? '—' }}</strong></div>
+    <div class="minute-price"><small>该分钟开盘价</small><strong>{{ formatPrice(price ?? confirmed?.price) }}</strong></div>
   </div>
   <el-dialog v-model="visible" :title="`选择${label}`" width="560px" append-to-body :close-on-click-modal="false">
     <div class="minute-meta">{{ symbol }} · {{ timezone }}</div>
@@ -98,7 +99,7 @@ onBeforeUnmount(stop)
       <el-select v-model="selected" placeholder="选择分钟查看开盘价" :disabled="!minutes.length" filterable><el-option v-for="m in minutes" :key="m.timestamp" :value="m.timestamp" :label="`${m.local.slice(11)} · UTC${m.offset === 'Z' ? '+00:00' : m.offset}`" /></el-select>
     </div>
     <p v-if="cryptoMarket && hour && !minutes.length" class="minute-help">该小时暂无可用历史分钟价格（或时间尚未发生），不是休市；可切换小时或重新获取。</p>
-    <div class="minute-quote"><small>所选分钟 K 线开盘价</small><strong>{{ draft?.price ?? '—' }}</strong><span>{{ draft ? `${draft.local.replace('T',' ')} · UTC${draft.offset === 'Z' ? '+00:00' : draft.offset}` : '选择分钟后展示价格，点击确定才应用' }}</span></div>
+    <div class="minute-quote"><small>所选分钟 K 线开盘价</small><strong>{{ formatPrice(draft?.price) }}</strong><span>{{ draft ? `${draft.local.replace('T',' ')} · UTC${draft.offset === 'Z' ? '+00:00' : draft.offset}` : '选择分钟后展示价格，点击确定才应用' }}</span></div>
     <p v-if="message" role="status" class="minute-help">{{ message }}</p>
     <el-button v-permission="'orders:manual_order'" text :loading="loading" @click="reload">重新获取行情</el-button>
     <template #footer><el-button v-permission="'session:close'" @click="visible = false">取消</el-button><el-button v-permission="'orders:manual_order'" type="primary" :disabled="!draft" @click="confirm">确定时间</el-button></template>

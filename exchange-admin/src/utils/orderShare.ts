@@ -1,4 +1,5 @@
 import { posterLocales, shareLanguage } from './orderShareLocales.ts'
+import { formatPrice } from './formatPrice.ts'
 export { shareLanguage } from './orderShareLocales.ts'
 // Kept identical in mobile, PC and admin builds.
 export type ShareKind = 'contract' | 'option'
@@ -316,7 +317,7 @@ export function drawSharePoster(canvas: HTMLCanvasElement, order: ShareOrder, op
     ctx.fillStyle = shade; ctx.fillRect(0, 440, 540, 204)
   }
   line(42, 460, 498, 460, scenic ? '#ffffff55' : border)
-  const price = (n: number) => new Intl.NumberFormat('en-US', { maximumFractionDigits: 16 }).format(n)
+  const price = (n: number) => formatPrice(n)
   text(copy.entry, 42, 484, 12, priceMuted, 500, 212)
   text(copy.exit, 287, 484, 12, priceMuted, 500, 211)
   text(price(order.openPrice), 42, 514, 25, priceInk, 600, 212)
@@ -421,7 +422,7 @@ function drawDistinctPoster(canvas: HTMLCanvasElement, order: ShareOrder, option
     const color = theme === 'racing' ? secondary.color === '#17804c' ? '#69d8a3' : secondary.color === '#c43d4b' ? '#ff828b' : '#b2c1ce' : secondary.color
     t(secondary.value, x, y, Math.min(size, primarySize * .58), color, 700, width, align)
   }
-  const price = (value: number) => new Intl.NumberFormat('en-US', { maximumFractionDigits: 16 }).format(value)
+  const price = (value: number) => formatPrice(value)
   const pricePair = (x: number, y: number, width: number, fill = ink, caption = muted) => {
     const cell = (width - 26) / 2
     t(copy.entry, x, y, 11, caption, 500, cell)

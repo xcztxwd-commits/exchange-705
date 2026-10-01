@@ -6,6 +6,7 @@ import request from '@/utils/request'
 import SymbolCatalogDialog from '@/components/SymbolCatalogDialog.vue'
 import { getImageUrl } from '@/utils/imageUrl'
 import { displaySymbol } from '@/utils/displaySymbol'
+import { formatPrice } from '@/utils/formatPrice'
 import { usePermissions } from '@/composables/usePermissions'
 
 const { hasPermission } = usePermissions()
@@ -325,7 +326,7 @@ onUnmounted(() => {
         <el-table-column prop="sourceCategory" label="源分类" width="100" />
         <el-table-column prop="currentPrice" label="当前价格" width="120">
           <template #default="{ row }">
-            {{ row.currentPrice || '0.00' }}
+            {{ formatPrice(row.currentPrice) }}
           </template>
         </el-table-column>
         <el-table-column prop="priceChangePct24h" label="24h涨跌" width="100">

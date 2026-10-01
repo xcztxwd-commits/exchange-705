@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import request from '@/utils/request'
+import { formatPrice } from '@/utils/formatPrice'
 import { can } from '@/utils/access'
 import { useAuthStore } from '@/store/auth'
 const auth = useAuthStore()
@@ -47,7 +48,7 @@ function changeKind() { status.value = ''; load() }
     </el-form>
     <el-alert v-if="error" :title="error" type="error" :closable="false" role="alert" />
     <admin-table :table-key="`AccountInspection.${mode}.${kind}`" v-loading="loading" :data="rows" border stripe empty-text="当前筛选下没有记录" style="width:100%" height="60vh">
-      <el-table-column v-for="column in columns" :key="column" :prop="column" :label="labels[column] || column" min-width="150" show-overflow-tooltip />
+      <el-table-column v-for="column in columns" :key="column" :prop="column" :label="labels[column] || column" min-width="150" show-overflow-tooltip><template #default="{ row }">{{ ['open_price', 'close_price'].includes(column) ? formatPrice(row[column]) : row[column] }}</template></el-table-column>
     </admin-table>
     <el-pagination v-model:current-page="page" :total="total" :page-size="20" layout="total, prev, pager, next" style="margin-top:20px" @current-change="load(false)" />
     <p>只展示已授权的数据分类。切换不迁移资金，不改变现有管理页面的数据范围；无权限或服务异常时不会自动显示另一类账户。</p>

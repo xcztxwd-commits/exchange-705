@@ -14,6 +14,7 @@ const manualForm = ref<InstanceType<typeof ManualContractOrder>>()
 import { useAuthStore } from '@/store/auth'
 import { usePermissions } from '@/composables/usePermissions'
 import { displaySymbol } from '@/utils/displaySymbol'
+import { formatPrice } from '@/utils/formatPrice'
 
 const auth = useAuthStore()
 const { isAgent, hasPermission } = usePermissions()
@@ -414,23 +415,23 @@ onMounted(() => {
           </el-table-column>
           <el-table-column prop="openPrice" label="开仓价" width="120">
             <template #default="{ row }">
-              {{ formatMoney(row.openPrice) }}
+              {{ formatPrice(row.openPrice) }}
             </template>
           </el-table-column>
           <el-table-column prop="currentPrice" label="当前价/平仓价" width="120">
             <template #default="{ row }">
-              {{ formatMoney(row.status === 'CLOSED' && row.closePrice ? row.closePrice : row.currentPrice) }}
+              {{ formatPrice(row.status === 'CLOSED' && row.closePrice ? row.closePrice : row.currentPrice) }}
             </template>
           </el-table-column>
           <el-table-column prop="stopLoss" label="止损" width="100">
             <template #default="{ row }">
-              <span v-if="row.stopLoss">{{ formatMoney(row.stopLoss) }}</span>
+              <span v-if="row.stopLoss">{{ formatPrice(row.stopLoss) }}</span>
               <span v-else style="color: #999;">设置</span>
             </template>
           </el-table-column>
           <el-table-column prop="takeProfit" label="止盈" width="100">
             <template #default="{ row }">
-              <span v-if="row.takeProfit">{{ formatMoney(row.takeProfit) }}</span>
+              <span v-if="row.takeProfit">{{ formatPrice(row.takeProfit) }}</span>
               <span v-else style="color: #999;">设置</span>
             </template>
           </el-table-column>
@@ -583,12 +584,12 @@ onMounted(() => {
           </el-table-column>
           <el-table-column prop="openPrice" label="开仓价" width="120">
             <template #default="{ row }">
-              {{ formatMoney(row.openPrice) }}
+              {{ formatPrice(row.openPrice) }}
             </template>
           </el-table-column>
           <el-table-column prop="closePrice" label="平仓价" width="120">
             <template #default="{ row }">
-              {{ formatMoney(row.closePrice) }}
+              {{ formatPrice(row.closePrice) }}
             </template>
           </el-table-column>
           <el-table-column prop="profit" label="盈亏" width="120">
