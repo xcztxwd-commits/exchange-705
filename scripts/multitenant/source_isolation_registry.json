@@ -3273,7 +3273,7 @@
       "review_reason": "Approved explicit enabled-tenant enumeration unchanged; catch now durable operational metadata after retention rollback. Scheduled actor stays SYSTEM, no automatic enable or policy changes."
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/control/ChatRetentionService.java": {
-      "sha256": "c7fc0c546a4a35c692c23794f8576a90dcef404cdcc44bb4b5efe9a2dd3416e3",
+      "sha256": "08a188f379f26cda7136c06a109c72d66c4dc2798608ac2db25ae6972e3fe454",
       "surfaces": [
         {
           "kind": "native_sql",
@@ -3432,7 +3432,7 @@
         }
       ],
       "classification": "control_plane",
-      "review_reason": "Reviewed UTC DATETIME(6) serialization fix: actual Connector/J returns LocalDateTime, canonicalize explicitly as UTC while preserving all six fractional digits. Same shared conversion covers v1/v2 exports; fixed SQL tenant and CONTROL/SYSTEM identity guards, file bounds, immutable content publication and restore prerequisites unchanged. No release approval."
+      "review_reason": "Reviewed UTC DATETIME(6) serialization fix: actual Connector/J returns LocalDateTime, canonicalize explicitly as UTC while preserving all six fractional digits. Same shared conversion covers v1/v2 exports; fixed SQL tenant and CONTROL/SYSTEM identity guards, file bounds, immutable content publication and restore prerequisites unchanged. No release approval.; Stage3/4 integration review: strict Timestamp/LocalDateTime types only, existing UTC microsecond archive formatter reused; tenant SQL, message hash fields, file paths and deletion approvals unchanged."
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/control/ControlAccessSession.java": {
       "sha256": "a889ffed319a2a3e9d53ddc462c3b33e1a2c6122159c501528b3c8c99ae12bf7",
