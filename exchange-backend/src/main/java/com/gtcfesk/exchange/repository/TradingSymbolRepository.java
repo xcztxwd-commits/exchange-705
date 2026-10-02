@@ -12,34 +12,30 @@ import java.util.List;
 import java.util.Optional;
 
 @Repository
-public interface TradingSymbolRepository extends JpaRepository<TradingSymbol, Long> {
+public interface TradingSymbolRepository extends com.gtcfesk.exchange.tenant.TenantRepository<TradingSymbol, Long> {
     
-    Optional<TradingSymbol> findBySymbol(String symbol);
+    Optional<TradingSymbol> findByTenantIdAndSymbol(Long tenantId, String symbol);
     
-    List<TradingSymbol> findByIsEnabledTrueOrderBySortOrderDesc();
+    List<TradingSymbol> findByTenantIdAndIsEnabledTrueOrderBySortOrderDesc(Long tenantId);
     
-    List<TradingSymbol> findByIsHotTrueAndIsEnabledTrueOrderBySortOrderDesc();
+    List<TradingSymbol> findByTenantIdAndIsHotTrueAndIsEnabledTrueOrderBySortOrderDesc(Long tenantId);
     
-    List<TradingSymbol> findByCategoryAndIsEnabledTrueOrderBySortOrderDesc(String category);
+    List<TradingSymbol> findByTenantIdAndCategoryAndIsEnabledTrueOrderBySortOrderDesc(Long tenantId, String category);
 
-    Page<TradingSymbol> findByCategoryAndIsEnabledTrueOrderBySortOrderDesc(String category, Pageable pageable);
+    Page<TradingSymbol> findByTenantIdAndCategoryAndIsEnabledTrueOrderBySortOrderDesc(Long tenantId, String category, Pageable pageable);
     
-    List<TradingSymbol> findByCategory(String category);
+    List<TradingSymbol> findByTenantIdAndCategory(Long tenantId, String category);
     
     // 后台管理系统查询：返回所有币种（包括未启用的），以便管理员可以编辑和重新启用
-    @Query("SELECT s FROM TradingSymbol s WHERE (s.category = :category OR :category IS NULL OR :category = '') ORDER BY s.sortOrder DESC, s.symbol ASC")
+    @org.springframework.data.jpa.repository.Query("SELECT s FROM TradingSymbol s WHERE s.tenantId = :#{T(com.gtcfesk.exchange.tenant.TenantContext).requireTenantId()} AND ((s.category = :category OR :category IS NULL OR :category = '')) ORDER BY s.sortOrder DESC, s.symbol ASC")
     Page<TradingSymbol> searchSymbols(@Param("category") String category, Pageable pageable);
     
-    List<TradingSymbol> findBySymbolIn(List<String> symbols);
+    List<TradingSymbol> findByTenantIdAndSymbolIn(Long tenantId, List<String> symbols);
     
-    List<TradingSymbol> findByAlltickSymbolIn(List<String> alltickSymbols);
+    List<TradingSymbol> findByTenantIdAndAlltickSymbolIn(Long tenantId, List<String> alltickSymbols);
     
     // 搜索币种/合约（按symbol、name、nameEn模糊查询）
-    @Query("SELECT s FROM TradingSymbol s WHERE s.isEnabled = true AND " +
-           "(LOWER(s.symbol) LIKE LOWER(CONCAT('%', :keyword, '%')) OR " +
-           "LOWER(s.name) LIKE LOWER(CONCAT('%', :keyword, '%')) OR " +
-           "LOWER(s.nameEn) LIKE LOWER(CONCAT('%', :keyword, '%'))) " +
-           "ORDER BY s.sortOrder DESC, s.symbol ASC")
+    @org.springframework.data.jpa.repository.Query("SELECT s FROM TradingSymbol s WHERE s.tenantId = :#{T(com.gtcfesk.exchange.tenant.TenantContext).requireTenantId()} AND (s.isEnabled = true AND (LOWER(s.symbol) LIKE LOWER(CONCAT('%', :keyword, '%')) OR LOWER(s.name) LIKE LOWER(CONCAT('%', :keyword, '%')) OR LOWER(s.nameEn) LIKE LOWER(CONCAT('%', :keyword, '%')))) ORDER BY s.sortOrder DESC, s.symbol ASC")
     List<TradingSymbol> searchSymbolsByKeyword(@Param("keyword") String keyword);
 }
 

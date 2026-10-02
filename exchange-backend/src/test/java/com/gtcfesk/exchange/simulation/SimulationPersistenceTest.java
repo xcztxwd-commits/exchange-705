@@ -38,15 +38,18 @@ import static org.mockito.Mockito.*;
 @AutoConfigureTestDatabase(replace=AutoConfigureTestDatabase.Replace.NONE)
 @ContextConfiguration(classes=SimulationPersistenceTest.Config.class)
 @Transactional(propagation=Propagation.NOT_SUPPORTED)
+@org.junit.jupiter.api.extension.ExtendWith(com.gtcfesk.exchange.tenant.TenantOneFixture.class)
 class SimulationPersistenceTest {
     @Configuration @org.springframework.boot.autoconfigure.AutoConfigurationPackage(basePackages="com.gtcfesk.exchange.simulation") @EntityScan(basePackageClasses={UserAccount.class,SimulationSeed.class,TrialAccount.class})
     static class Config {}
     @Autowired DataSource dataSource;
     @Autowired PlatformTransactionManager transactions;
     @Autowired EntityManager em;
-    <T> T repo(Class<T> type) { return new JpaRepositoryFactory(em).getRepository(type); }
+    <T> T repo(Class<T> type) { com.gtcfesk.exchange.tenant.TenantRepositoryFactoryBean bean=new com.gtcfesk.exchange.tenant.TenantRepositoryFactoryBean(type);bean.setEntityManager(em);bean.afterPropertiesSet();return type.cast(bean.getObject()); }
     SimulationEnvironment demoEnvironment() { SimulationEnvironment e=mock(SimulationEnvironment.class);when(e.enabled()).thenReturn(true);return e; }
     KycIdentityService identity() { KycIdentityService service=new KycIdentityService(repo(KycRecordRepository.class));ReflectionTestUtils.setField(service,"simulation",demoEnvironment());return service; }
+    void policy(Object s){ReflectionTestUtils.setField(s,"tenantPolicy",mock(com.gtcfesk.exchange.control.TenantPolicyService.class));}
+    void audit(Object s,String name){ReflectionTestUtils.setField(s,name,mock(com.gtcfesk.exchange.control.ControlAuditService.class));}
     BigDecimal balance(long id,String coin) { return jdbc.queryForObject("SELECT available FROM asset_account WHERE user_id=? AND coin=?",BigDecimal.class,id,coin); }
     SimulationProvisioner provisioner; JdbcTemplate jdbc;
     @BeforeEach void init() {
@@ -65,7 +68,7 @@ class SimulationPersistenceTest {
     @Test void concurrentLoginsCannotMintRepeatedSeed() throws Exception {
         ExecutorService pool=Executors.newFixedThreadPool(6);
         try {
-            List<Future<?>> futures=new ArrayList<>();for(int i=0;i<12;i++)futures.add(pool.submit(()->provisioner.user(7002L)));
+            List<Future<?>> futures=new ArrayList<>();for(int i=0;i<12;i++)futures.add(pool.submit(com.gtcfesk.exchange.tenant.TenantOneFixture.worker(()->{provisioner.user(7002L);return null;})));
             for(Future<?> f:futures)f.get(20,TimeUnit.SECONDS);
         } finally {pool.shutdownNow();}
         assertEquals(1,jdbc.queryForObject("SELECT COUNT(*) FROM simulation_seed WHERE user_id=7002",Integer.class));
@@ -97,11 +100,14 @@ class SimulationPersistenceTest {
         provisioner.user(7011L);
         FinancialProductRepository products=repo(FinancialProductRepository.class);
         FinancialService service=new FinancialService(products,repo(FinancialOrderRepository.class),repo(AssetAccountRepository.class));
+        policy(service);audit(service,"audit");ReflectionTestUtils.setField(service,"users",repo(UserAccountRepository.class));
         new TransactionTemplate(transactions).execute(status->{
             FinancialProduct product=new FinancialProduct();product.setName("Simulation product");product.setDailyYieldRate(BigDecimal.ONE);
             product.setRentalFee(BigDecimal.ZERO);product.setMinPurchase(BigDecimal.ONE);product.setMaxPurchase(new BigDecimal("10000"));product.setTermDays(7);product.setPenaltyRate(BigDecimal.ZERO);
             product=products.save(product);
-            FinancialOrder order=service.purchaseProduct(7011L,product.getId(),new BigDecimal("100"));assertEquals("IN_PROGRESS",order.getStatus());
+            FinancialOrder order=service.purchaseProduct(7011L,product.getId(),new BigDecimal("100"),"simulation-finance-key");assertEquals("IN_PROGRESS",order.getStatus());
+            assertEquals(order.getId(),service.purchaseProduct(7011L,product.getId(),new BigDecimal("100.0"),"simulation-finance-key").getId());
+            Long productId=product.getId();assertThrows(com.gtcfesk.exchange.common.BusinessException.class,()->service.purchaseProduct(7011L,productId,new BigDecimal("101"),"simulation-finance-key"));
             service.earlyRedeem(7011L,order.getId());return null;
         });
         assertEquals(0,new BigDecimal("100000").compareTo(balance(7011,"FUND")));
@@ -112,11 +118,13 @@ class SimulationPersistenceTest {
         UserAccountRepository users=repo(UserAccountRepository.class);AssetAccountRepository assets=repo(AssetAccountRepository.class);
         LoanPersonalInfoService personal=new LoanPersonalInfoService(repo(LoanPersonalInfoRepository.class),identity());
         LoanService service=new LoanService(records,settings,users,repo(KycRecordRepository.class),assets,personal);
-        ReflectionTestUtils.setField(service,"simulation",demoEnvironment());
-        ReflectionTestUtils.setField(service,"simulationReview",new LoanReviewService(records,assets,users,personal));
+        ReflectionTestUtils.setField(service,"simulation",demoEnvironment());policy(service);
+        audit(service,"audit");LoanReviewService review=new LoanReviewService(records,assets,users,personal);ReflectionTestUtils.setField(review,"audit",mock(com.gtcfesk.exchange.control.ControlAuditService.class));policy(review);ReflectionTestUtils.setField(service,"simulationReview",review);
         Long id=new TransactionTemplate(transactions).execute(status->{
             LoanSetting setting=new LoanSetting();setting.setDays(7);setting.setFreeDays(7);setting.setDailyRate(BigDecimal.ZERO);setting.setOverdueRate(BigDecimal.ZERO);settings.save(setting);
-            LoanRecord order=service.createLoan(7012L,new BigDecimal("100"),setting.getId());
+            LoanRecord order=service.createLoan(7012L,new BigDecimal("100"),setting.getId(),"simulation-loan-key");
+            assertEquals(order.getId(),service.createLoan(7012L,new BigDecimal("100.00"),setting.getId(),"simulation-loan-key").getId());
+            assertThrows(com.gtcfesk.exchange.common.BusinessException.class,()->service.createLoan(7012L,new BigDecimal("101"),setting.getId(),"simulation-loan-key"));
             service.signContract(order.getId(),7012L,"SIMULATION-SIGNATURE");assertEquals("APPROVED",order.getStatus());return order.getId();
         });
         assertEquals(0,new BigDecimal("100100").compareTo(balance(7012,"FUND")));
@@ -128,8 +136,11 @@ class SimulationPersistenceTest {
         provisioner.user(7013L);
         ForexQuoteMarketService quotes=mock(ForexQuoteMarketService.class);when(quotes.requireConversionRate("USD","yahoo")).thenReturn(BigDecimal.ONE);
         DepositOrderService service=new DepositOrderService(repo(DepositRecordRepository.class),repo(DepositCreditRecordRepository.class),repo(AssetAccountRepository.class),repo(UserAccountRepository.class),mock(AdminUserRepository.class),new FiatCurrencyService(quotes),mock(BackendAccess.class),new ObjectMapper(),transactions);
-        ReflectionTestUtils.setField(service,"simulation",demoEnvironment());
-        DepositOrderRequest request=new DepositOrderRequest();request.type="digital";request.currency="USD";request.amount=new BigDecimal("50");request.network="USDT-TRC20";request.idempotencyKey="virtual-deposit";
+        ReflectionTestUtils.setField(service,"simulation",demoEnvironment());policy(service);
+        DepositSettingRepository channels=repo(DepositSettingRepository.class);
+        ReflectionTestUtils.setField(service,"channels",channels);
+        new TransactionTemplate(transactions).execute(status->{DepositSetting channel=new DepositSetting();channel.setType("digital");channel.setNetwork("USDT-PERSISTENCE");channel.setAddress("SIMULATION-PERSISTENCE-ONLY");channel.setEnabled(true);channels.saveAndFlush(channel);return null;});
+        audit(service,"controlAudit");DepositOrderRequest request=new DepositOrderRequest();request.type="digital";request.currency="USD";request.amount=new BigDecimal("50");request.network="USDT-PERSISTENCE";request.address="SIMULATION-PERSISTENCE-ONLY";request.idempotencyKey="virtual-deposit";
         DepositRecord record=service.submit(7013L,request);assertEquals("COMPLETED",record.getStatus());service.submit(7013L,request);
         assertEquals(0,new BigDecimal("100050").compareTo(balance(7013,"FUND")));
     }
@@ -137,10 +148,12 @@ class SimulationPersistenceTest {
         provisioner.user(7014L);
         ForexQuoteMarketService quotes=mock(ForexQuoteMarketService.class);
         WithdrawController service=new WithdrawController(repo(WithdrawRecordRepository.class),repo(AssetAccountRepository.class),repo(UserDigitalAddressRepository.class),repo(UserBankCardRepository.class),new FiatCurrencyService(quotes));
-        ReflectionTestUtils.setField(service,"identityService",identity());
+        ReflectionTestUtils.setField(service,"identityService",identity());policy(service);
+        ReflectionTestUtils.setField(service,"users",repo(UserAccountRepository.class));
         new TransactionTemplate(transactions).execute(status->{
             UserDigitalAddress address=new UserDigitalAddress();address.setUserId(7014L);address.setCurrency("USDT");address.setAddress("SIMULATION-ONLY");address.setNetwork("USDT-TRC20");repo(UserDigitalAddressRepository.class).save(address);
-            Map<String,Object> request=new HashMap<>();request.put("type","digital");request.put("network","USDT-TRC20");request.put("amount","25");request.put("address","SIMULATION-ONLY");
+            Map<String,Object> request=new HashMap<>();request.put("type","digital");request.put("network","USDT-TRC20");request.put("amount","25");request.put("address","SIMULATION-ONLY");request.put("requestId","simulation-withdraw-key");
+            assertEquals(200,service.submitWithdraw(new UsernamePasswordAuthenticationToken("7014","x"),request).getStatusCodeValue());
             assertEquals(200,service.submitWithdraw(new UsernamePasswordAuthenticationToken("7014","x"),request).getStatusCodeValue());return null;
         });
         assertEquals("COMPLETED",jdbc.queryForObject("SELECT status FROM withdraw_record WHERE user_id=7014",String.class));
@@ -159,7 +172,7 @@ class SimulationPersistenceTest {
         SimulationGateway gateway=mock(SimulationGateway.class);
         Map<String,Object> catalog=new LinkedHashMap<>();
         for(String table:SimulationCatalogController.TABLES)catalog.put(table,new ArrayList<>());
-        Map<String,Object> config=new LinkedHashMap<>();config.put("id",999L);config.put("config_key","system.timezone");config.put("config_value","UTC");config.put("description","Timezone");
+        Map<String,Object> config=new LinkedHashMap<>();config.put("tenant_id",1L);config.put("id",999L);config.put("config_key","system.timezone");config.put("config_value","UTC");config.put("description","Timezone");
         catalog.put("system_config",Arrays.asList(config));when(gateway.get("/catalog","Bearer fixture")).thenReturn(catalog);
         SimulationProvisioner service=new SimulationProvisioner(demoEnvironment(),gateway,jdbc,transactions,mock(ForexQuoteMarketService.class));
         service.catalog("Bearer fixture");service.catalog("Bearer fixture");
@@ -181,27 +194,43 @@ class SimulationPersistenceTest {
         MarketCategoryService categories=mock(MarketCategoryService.class);when(categories.leverageEnabled(anyString())).thenReturn(true);
         ContractOrderService contracts=new ContractOrderService(kyc,repo(ContractOrderRepository.class),assets,symbols,quotes,transactions,categories);
         OptionOrderService options=new OptionOrderService(kyc,repo(OptionOrderRepository.class),assets,symbols,repo(OptionDurationRepository.class),quotes);
-        ReflectionTestUtils.setField(contracts,"trialFunds",funds);ReflectionTestUtils.setField(options,"trialFunds",funds);
-        new TransactionTemplate(transactions).execute(status->{
+        policy(contracts);policy(options);ReflectionTestUtils.setField(contracts,"trialFunds",funds);ReflectionTestUtils.setField(options,"trialFunds",funds);
+        ReflectionTestUtils.setField(contracts,"users",repo(UserAccountRepository.class));ReflectionTestUtils.setField(options,"users",repo(UserAccountRepository.class));
+        ReflectionTestUtils.setField(options,"transactionManager",transactions);
+        TransactionTemplate transaction=new TransactionTemplate(transactions);
+        transaction.execute(status->{
             OptionDuration duration=new OptionDuration();duration.setDuration(60);duration.setLabel("60s");duration.setSortOrder(0);duration.setEnabled(true);duration.setProfitRate(new BigDecimal("0.8"));duration.setLossRate(BigDecimal.ONE);repo(OptionDurationRepository.class).save(duration);
-            for(String category:Arrays.asList("Crypto","Metal","US","Forex","CFD","Oil")) {
-                TradingSymbol symbol=new TradingSymbol();symbol.setSymbol("SIM-"+category);symbol.setName(category);symbol.setBaseCurrency("EUR");symbol.setQuoteCurrency("USD");symbol.setSourceCategory(category);symbol.setCategory(category);symbol.setMarketSource("yahoo");symbol.setIsEnabled(true);symbol.setLotSize(BigDecimal.ONE);symbol.setFeeMultiplier(BigDecimal.ONE);symbol.setMaxLeverage(new BigDecimal("100"));
-                FxContractRules.defaults(symbol);symbols.save(symbol);
-                for(String side:Arrays.asList("BUY","SELL")) {
-                    CreateContractOrderRequest req=new CreateContractOrderRequest();req.setSymbol(symbol.getSymbol());req.setSide(side);req.setType("MARKET");req.setQuantity(new BigDecimal("0.01"));req.setLeverage(BigDecimal.TEN);
-                    ContractOrder order=contracts.createOrder(7016L,req);assertEquals("OPEN",order.getStatus());
-                    contracts.closeOrder(7016L,order.getId(),null);assertEquals("CLOSED",order.getStatus());
-                    req.setType("LIMIT");req.setPrice(new BigDecimal("90"));ContractOrder pending=contracts.createOrder(7016L,req);assertEquals("PENDING",pending.getStatus());contracts.cancelOrder(7016L,pending.getId());
-                }
-                for(String direction:Arrays.asList("UP","DOWN")) {
-                    CreateOptionOrderRequest req=new CreateOptionOrderRequest();req.setSymbol(symbol.getSymbol());req.setDirection(direction);req.setAmount(BigDecimal.TEN);req.setDuration(60);
-                    OptionOrder order=options.createOrder(7016L,req);assertEquals("TRADING",order.getStatus());
-                    order.setOpenTime(java.time.LocalDateTime.now().minusSeconds(120));repo(OptionOrderRepository.class).save(order);
-                    options.settleExpiredOrders(Collections.emptyMap());assertNotEquals("TRADING",order.getStatus());
-                }
-            }
             return null;
         });
+        for(String category:Arrays.asList("Crypto","Metal","US","Forex","CFD","Oil")) {
+            String symbolName="SIM-"+category;
+            transaction.execute(status->{
+                TradingSymbol symbol=new TradingSymbol();symbol.setSymbol(symbolName);symbol.setName(category);symbol.setBaseCurrency("EUR");symbol.setQuoteCurrency("USD");symbol.setSourceCategory(category);symbol.setCategory(category);symbol.setMarketSource("yahoo");symbol.setIsEnabled(true);symbol.setLotSize(BigDecimal.ONE);symbol.setFeeMultiplier(BigDecimal.ONE);symbol.setMaxLeverage(new BigDecimal("100"));
+                FxContractRules.defaults(symbol);symbols.save(symbol);
+                for(String side:Arrays.asList("BUY","SELL")) {
+                    CreateContractOrderRequest req=new CreateContractOrderRequest();req.setSymbol(symbolName);req.setSide(side);req.setType("MARKET");req.setQuantity(new BigDecimal("0.01"));req.setLeverage(BigDecimal.TEN);
+                    req.setRequestId("simulation-contract-"+category+"-"+side+"-market");
+                    ContractOrder order=contracts.createOrder(7016L,req);assertEquals("OPEN",order.getStatus());
+                    assertEquals(order.getId(),contracts.createOrder(7016L,req).getId());
+                    contracts.closeOrder(7016L,order.getId(),null);assertEquals("CLOSED",order.getStatus());
+                    req.setType("LIMIT");req.setPrice(new BigDecimal("90"));req.setRequestId("simulation-contract-"+category+"-"+side+"-limit");ContractOrder pending=contracts.createOrder(7016L,req);assertEquals("PENDING",pending.getStatus());contracts.cancelOrder(7016L,pending.getId());
+                }
+                return null;
+            });
+            for(String direction:Arrays.asList("UP","DOWN")) {
+                // Commit the expired fixture before the production scheduler opens REQUIRES_NEW.
+                Long id=transaction.execute(status->{
+                    CreateOptionOrderRequest req=new CreateOptionOrderRequest();req.setSymbol(symbolName);req.setDirection(direction);req.setAmount(BigDecimal.TEN);req.setDuration(60);
+                    req.setRequestId("simulation-option-"+category+"-"+direction);
+                    OptionOrder order=options.createOrder(7016L,req);assertEquals("TRADING",order.getStatus());
+                    assertEquals(order.getId(),options.createOrder(7016L,req).getId());
+                    order.setOpenTime(java.time.LocalDateTime.now().minusSeconds(120));repo(OptionOrderRepository.class).save(order);
+                    return order.getId();
+                });
+                options.settleExpiredOrders(Collections.emptyMap());
+                assertNotEquals("TRADING",repo(OptionOrderRepository.class).findByTenantIdAndId(1L,id).get().getStatus());
+            }
+        }
         assertEquals(24,jdbc.queryForObject("SELECT COUNT(*) FROM contract_order WHERE user_id=7016",Integer.class));
         assertEquals(12,jdbc.queryForObject("SELECT COUNT(*) FROM option_order WHERE user_id=7016",Integer.class));
         assertEquals(0,jdbc.queryForObject("SELECT COUNT(*) FROM kyc_record WHERE user_id=7016",Integer.class));

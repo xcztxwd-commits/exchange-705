@@ -13,13 +13,39 @@ import java.time.format.DateTimeFormatter;
 @Service @RequiredArgsConstructor
 public class ManualOrderPrices {
     private final ForexQuoteMarketService market;
+    public static final int HISTORY_LOADING=425;
     private static final long WINDOW=720*60000L;
     // Shared UTC windows let the picker and final preview reuse the same historical candles.
-    private Map<String,Object> window(TradingSymbol symbol,long minute) {
+    private static long windowEnd(long minute) {
         long end=Math.min((Math.floorDiv(minute,WINDOW)+1)*WINDOW-1,System.currentTimeMillis());
         // Keep current-window cache keys stable within the minute.
-        end=Math.floorDiv(end,60000)*60000+59999;
-        return market.historicalKline(symbol.getSymbol(),"1m",720,end);
+        return Math.floorDiv(end,60000)*60000+59999;
+    }
+    private Map<String,Object> window(TradingSymbol symbol,long minute) {
+        return market.historicalKline(symbol.getSymbol(),"1m",720,windowEnd(minute));
+    }
+    private Map<String,Object> currencyWindow(String currency,String source,long minute) {
+        if(QuoteCurrencyConversion.fixed(currency))return Collections.emptyMap();
+        QuoteCurrencyConversion route=QuoteCurrencyConversion.route(currency,source);
+        if(route==null)throw new BusinessException("缺少历史换算率");
+        return market.getKline(route.code,"1m",720,route.category,windowEnd(minute));
+    }
+    /** Read-only chart: the same cached minute feed as final preview, never unfinished or fabricated OHLC. */
+    public Map<String,Object> chart(TradingSymbol symbol,String timezone) {
+        ZoneId zone;try {zone=ZoneId.of(timezone);}catch(DateTimeException | NullPointerException invalid){throw new BusinessException("时区无效");}
+        long now=System.currentTimeMillis(),to=Math.floorDiv(now,60000)*60000,from=Math.max(0,to-ManualOrderGenerator.RANGE);
+        SortedMap<Long,Map<String,Object>> rows=new TreeMap<>();boolean pending=false,unavailable=false,stale=false;
+        for(long cursor=Math.floorDiv(from,WINDOW)*WINDOW;cursor<to;cursor+=WINDOW) {
+            Map<String,Object> response=window(symbol,cursor);Object raw=response.get("data");
+            if(!(raw instanceof Map)){unavailable=true;continue;}Map<?,?> state=(Map<?,?>)raw;
+            pending|=Boolean.TRUE.equals(state.get("pending"));unavailable|="unavailable".equals(state.get("status"));stale|="stale".equals(state.get("status"));
+            rows.putAll(selectMinutes(response,from,to,now,zone));
+        }
+        rows.values().removeIf(row->!row.containsKey("low") || !row.containsKey("high") || !row.containsKey("close"));
+        for(Map<String,Object> row:rows.values())for(String name:Arrays.asList("low","high","close"))row.put(name,((BigDecimal)row.get(name)).toPlainString());
+        Map<String,Object> out=new LinkedHashMap<>();out.put("candles",new ArrayList<>(rows.values()));out.put("pending",pending);
+        out.put("status",pending?"loading":unavailable?"unavailable":stale?"stale":rows.isEmpty()?"empty":"available");
+        out.put("source",symbol.getMarketSource());out.put("from",from);out.put("to",to);out.put("interval","1m");return out;
     }
     public Map<String,Object> minutes(TradingSymbol symbol,String date,String timezone) {
         try {
@@ -53,7 +79,12 @@ public class ManualOrderPrices {
                 BigDecimal price=minutePrice(row);
                 ZonedDateTime local=Instant.ofEpochMilli(time).atZone(zone);Map<String,Object> entry=new LinkedHashMap<>();
                 entry.put("timestamp",time);entry.put("local",local.format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm")));
-                entry.put("offset",local.getOffset().toString());entry.put("price",price.toPlainString());result.put(time,entry);
+                entry.put("offset",local.getOffset().toString());entry.put("price",price.toPlainString());
+                try {
+                    BigDecimal low=field(row,"low"),high=field(row,"high"),closing=field(row,"close");
+                    if(low.compareTo(high)<=0 && price.compareTo(low)>=0 && price.compareTo(high)<=0 && closing.compareTo(low)>=0 && closing.compareTo(high)<=0) {entry.put("low",low);entry.put("high",high);entry.put("close",closing);}
+                } catch(RuntimeException incomplete) { /* Old open-only feeds remain usable in advanced mode. */ }
+                result.put(time,entry);
             }catch(NumberFormatException | ArithmeticException | BusinessException ignored){ }
         }
         return result;
@@ -62,12 +93,18 @@ public class ManualOrderPrices {
         Map<String,Object> result=new LinkedHashMap<>();
         Map<String,Object> opening=window(symbol,open);
         Map<String,Object> closing=open==close?opening:window(symbol,close);
+        // Queue all exact-minute sources before checking readiness; one loading source must not block the others.
+        Map<String,Object> openConversion=currencyWindow(symbol.getQuoteCurrency(),symbol.getMarketSource(),open);
+        Map<String,Object> closeConversion=open==close?openConversion:currencyWindow(symbol.getQuoteCurrency(),symbol.getMarketSource(),close);
+        boolean cross=FxContractRules.isForex(symbol) && !"USD".equals(symbol.getBaseCurrency()) && !"USD".equals(symbol.getQuoteCurrency());
+        Map<String,Object> baseConversion=cross?currencyWindow(symbol.getBaseCurrency(),symbol.getMarketSource(),open):null;
         result.put("openPrice",exact(opening,open));result.put("closePrice",exact(closing,close));
-        result.put("openRate",rate(symbol,open));result.put("closeRate",rate(symbol,close));
+        result.put("openRate",currencyRate(symbol.getQuoteCurrency(),symbol.getMarketSource(),open,openConversion));
+        result.put("closeRate",currencyRate(symbol.getQuoteCurrency(),symbol.getMarketSource(),close,closeConversion));
         BigDecimal openingPrice=(BigDecimal)result.get("openPrice");
         result.put("marginRate", !FxContractRules.isForex(symbol) ? openingPrice.multiply((BigDecimal)result.get("openRate"))
             : "USD".equals(symbol.getBaseCurrency()) ? BigDecimal.ONE : "USD".equals(symbol.getQuoteCurrency()) ? openingPrice
-            : currencyRate(symbol.getBaseCurrency(),symbol.getMarketSource(),open));
+            : currencyRate(symbol.getBaseCurrency(),symbol.getMarketSource(),open,baseConversion));
         result.put("source",symbol.getMarketSource());result.put("priceBasis","EXACT_MINUTE_OPEN");
         result.put("openMinute",open);result.put("closeMinute",close);
         return result;
@@ -82,8 +119,8 @@ public class ManualOrderPrices {
             ? QuoteCurrencyConversion.route(symbol.getBaseCurrency(),symbol.getMarketSource()) : null;
         for(long cursor=Math.floorDiv(from,WINDOW)*WINDOW;cursor<to;cursor+=WINDOW) {
             SortedMap<Long,Map<String,Object>> primary=selectMinutes(window(symbol,cursor),from,to,System.currentTimeMillis(),ZoneOffset.UTC);
-            SortedMap<Long,Map<String,Object>> rates=conversion==null?null:selectMinutes(market.getKline(conversion.code,"1m",720,conversion.category,Math.min(cursor+WINDOW-1,to-1)),from,to,System.currentTimeMillis(),ZoneOffset.UTC);
-            SortedMap<Long,Map<String,Object>> baseRates=baseConversion==null?null:selectMinutes(market.getKline(baseConversion.code,"1m",720,baseConversion.category,Math.min(cursor+WINDOW-1,to-1)),from,to,System.currentTimeMillis(),ZoneOffset.UTC);
+            SortedMap<Long,Map<String,Object>> rates=conversion==null?null:selectMinutes(market.getKline(conversion.code,"1m",720,conversion.category,windowEnd(cursor)),from,to,System.currentTimeMillis(),ZoneOffset.UTC);
+            SortedMap<Long,Map<String,Object>> baseRates=baseConversion==null?null:selectMinutes(market.getKline(baseConversion.code,"1m",720,baseConversion.category,windowEnd(cursor)),from,to,System.currentTimeMillis(),ZoneOffset.UTC);
             for(Map.Entry<Long,Map<String,Object>> e:primary.entrySet()) {
                 Map<String,Object> rate=rates==null?null:rates.get(e.getKey());
                 if(conversion!=null && rate==null)continue;
@@ -98,19 +135,58 @@ public class ManualOrderPrices {
                         marginRate=new BigDecimal(baseRate.get("price").toString()).multiply(baseConversion.scale);
                     }
                 }
-                if(value.signum()>0)result.put(e.getKey(),new ManualOrderGenerator.Candle(e.getKey(),price,value,marginRate));
+                if(value.signum()>0)result.put(e.getKey(),new ManualOrderGenerator.Candle(e.getKey(),price,value,marginRate,(BigDecimal)e.getValue().get("low"),(BigDecimal)e.getValue().get("high"),(BigDecimal)e.getValue().get("close")));
             }
         }
         return result;
     }
-    private BigDecimal rate(TradingSymbol s,long minute) {
-        return currencyRate(s.getQuoteCurrency(),s.getMarketSource(),minute);
+    private static BigDecimal field(Map<?,?> row,String name) {
+        return ManualOrderCalculation.positive(new BigDecimal(String.valueOf(row.containsKey(name+"_price")?row.get(name+"_price"):row.get(name))),"K线"+name);
     }
-    private BigDecimal currencyRate(String currency,String source,long minute) {
+    public NavigableMap<Long,ManualOrderGenerator.Candle> simpleCandles(TradingSymbol symbol,long from,long to) {
+        boolean pending=false;
+        for(long cursor=Math.floorDiv(from,WINDOW)*WINDOW;cursor<to;cursor+=WINDOW) {
+            List<Map<String,Object>> responses=new ArrayList<>();responses.add(window(symbol,cursor));
+            responses.add(currencyWindow(symbol.getQuoteCurrency(),symbol.getMarketSource(),cursor));
+            if(FxContractRules.isForex(symbol) && !"USD".equals(symbol.getBaseCurrency()) && !"USD".equals(symbol.getQuoteCurrency()))responses.add(currencyWindow(symbol.getBaseCurrency(),symbol.getMarketSource(),cursor));
+            for(Map<String,Object> response:responses) {Object state=response.get("data");pending|=state instanceof Map && Boolean.TRUE.equals(((Map<?,?>)state).get("pending"));}
+        }
+        if(pending)throw new BusinessException(HISTORY_LOADING,"历史行情正在加载，请稍后重新生成");
+        NavigableMap<Long,ManualOrderGenerator.Candle> values=generationCandles(symbol,from,to);
+        values.values().removeIf(c->c.low==null || c.high==null || c.closePrice==null || c.time+60000>System.currentTimeMillis());
+        return values;
+    }
+    public Map<String,Object> rangeQuote(TradingSymbol symbol,long open,long close,BigDecimal p0,BigDecimal p1) {
+        Map<String,Object> result=quote(symbol,open,close);
+        Map<?,?> a=rangeCandle(window(symbol,open),open),b=rangeCandle(window(symbol,close),close);
+        BigDecimal low0=field(a,"low"),high0=field(a,"high"),low1=field(b,"low"),high1=field(b,"high");
+        if(p0.compareTo(low0)<0 || p0.compareTo(high0)>0 || p1.compareTo(low1)<0 || p1.compareTo(high1)>0)throw new BusinessException("订单价格不在对应K线高低价范围内，请重新生成");
+        result.put("openPrice",p0);result.put("closePrice",p1);result.put("openLow",low0);result.put("openHigh",high0);result.put("closeLow",low1);result.put("closeHigh",high1);
+        if(!FxContractRules.isForex(symbol))result.put("marginRate",p0.multiply((BigDecimal)result.get("openRate")));
+        else if("USD".equals(symbol.getQuoteCurrency()))result.put("marginRate",p0);
+        result.put("priceBasis","SIMPLE_OHLC_RANGE");return result;
+    }
+    private Map<?,?> rangeCandle(Map<String,Object> response,long minute) {
+        exact(response,minute); // Preserve the existing loading/unavailable error contract.
+        Object data=response.get("data"),rows=data instanceof Map?((Map<?,?>)data).get("kline_list"):null;
+        if(rows instanceof List)for(Object item:(List<?>)rows)if(item instanceof Map) {
+            Map<?,?> row=(Map<?,?>)item;
+            try {
+                long t=new BigDecimal(String.valueOf(row.get("timestamp"))).longValueExact();if(t<100000000000L)t*=1000;
+                if(t==minute) {
+                    BigDecimal low=field(row,"low"),high=field(row,"high"),opening=minutePrice(row),closing=field(row,"close");
+                    if(low.compareTo(high)>0 || opening.compareTo(low)<0 || opening.compareTo(high)>0 || closing.compareTo(low)<0 || closing.compareTo(high)>0)throw new BusinessException("分钟OHLC行情无效");
+                    return row;
+                }
+            }catch(NumberFormatException | ArithmeticException invalid) { }
+        }
+        throw new BusinessException("该分钟缺少完整OHLC行情，不能进行价格区间匹配");
+    }
+    private BigDecimal currencyRate(String currency,String source,long minute,Map<String,Object> response) {
         if(QuoteCurrencyConversion.fixed(currency)) return BigDecimal.ONE;
         QuoteCurrencyConversion r=QuoteCurrencyConversion.route(currency,source);
         if(r==null) throw new BusinessException("缺少历史换算率");
-        return ManualOrderCalculation.positive(exact(market.getKline(r.code,"1m",2,r.category,minute+59999),minute).multiply(r.scale),"历史换算率");
+        return ManualOrderCalculation.positive(exact(response,minute).multiply(r.scale),"历史换算率");
     }
     public static BigDecimal exact(Map<String,Object> response,long minute) {
         Object data=response==null?null:response.get("data");
@@ -129,7 +205,7 @@ public class ManualOrderPrices {
         Map<?,?> state=data instanceof Map?(Map<?,?>)data:Collections.emptyMap();
         String reason=Boolean.TRUE.equals(state.get("pending"))?"历史行情正在加载，请稍后重新预览":
             "unavailable".equals(state.get("status"))?"行情接口暂不可用，请稍后重试":"该分钟没有有效开盘价，可能休市或数据源未覆盖";
-        throw new BusinessException(reason+"（"+state.getOrDefault("code",null)+" / "+Instant.ofEpochMilli(minute)+"）；不使用邻近价格");
+        throw new BusinessException(Boolean.TRUE.equals(state.get("pending"))?HISTORY_LOADING:400,reason+"（"+state.getOrDefault("code",null)+" / "+Instant.ofEpochMilli(minute)+"）；不使用邻近价格");
     }
     private static BigDecimal minutePrice(Map<?,?> row) {
         BigDecimal price=new BigDecimal(String.valueOf(row.containsKey("open_price")?row.get("open_price"):row.get("open")));

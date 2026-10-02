@@ -199,7 +199,7 @@ function onEnter(event: KeyboardEvent) {
         v-for="m in messages"
         :key="m.id"
         class="message"
-        :class="{ mine: m.sender === (admin ? 'ADMIN' : 'USER'), system: m.sender === 'SYSTEM' }"
+        :class="{ mine: (admin ? ['ADMIN','CONTROL'].includes(m.sender) : m.sender === 'USER'), system: m.sender === 'SYSTEM' }"
       >
         <template v-if="m.sender === 'SYSTEM'"
           ><p>{{ m.text }}</p>
@@ -217,7 +217,7 @@ function onEnter(event: KeyboardEvent) {
             /><span v-else-if="m.image">{{ t('无图片查看权限', 'Image access not permitted') }}</span>
             <p v-if="m.text">{{ m.text }}</p>
           </div>
-          <small v-if="m.sender === (admin ? 'ADMIN' : 'USER')">{{
+          <small v-if="(admin ? ['ADMIN','CONTROL'].includes(m.sender) : m.sender === 'USER')">{{
             m.id <= (admin ? conversation?.userReadId || 0 : conversation?.adminReadId || 0)
               ? t('已读', 'Read')
               : t('已发送', 'Sent')

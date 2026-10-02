@@ -30,10 +30,10 @@ public class DepositController {
             List<DepositSetting> enabledSettings;
             if (type != null && !type.isEmpty()) {
                 // 按类型筛选
-                enabledSettings = depositSettingRepository.findByTypeAndEnabled(type, true);
+                enabledSettings = depositSettingRepository.findByTenantIdAndTypeAndEnabled(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), type, true);
             } else {
                 // 获取所有启用的充值设置
-                List<DepositSetting> settings = depositSettingRepository.findAll();
+                List<DepositSetting> settings = depositSettingRepository.findAllByTenantId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId());
                 enabledSettings = settings.stream()
                         .filter(DepositSetting::getEnabled)
                         .collect(java.util.stream.Collectors.toList());
@@ -55,7 +55,7 @@ public class DepositController {
     public ResponseEntity<?> getBankSettings() {
         try {
             // 获取启用的银行卡设置
-            List<DepositSetting> bankSettings = depositSettingRepository.findByTypeAndEnabled("bank", true);
+            List<DepositSetting> bankSettings = depositSettingRepository.findByTenantIdAndTypeAndEnabled(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), "bank", true);
             
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", true);
@@ -82,10 +82,10 @@ public class DepositController {
         try {
             DepositSetting setting = null;
             if (network != null && !network.isEmpty()) {
-                setting = depositSettingRepository.findByNetwork(network).orElse(null);
+                setting = depositSettingRepository.findByTenantIdAndNetwork(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), network).orElse(null);
             } else {
                 // 返回第一个启用的设置
-                List<DepositSetting> settings = depositSettingRepository.findAll();
+                List<DepositSetting> settings = depositSettingRepository.findAllByTenantId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId());
                 setting = settings.stream()
                         .filter(DepositSetting::getEnabled)
                         .findFirst()
@@ -125,7 +125,7 @@ public class DepositController {
             DepositOrderRequest input=new DepositOrderRequest();
             input.type=(String)req.get("type");input.network=(String)req.get("network");input.address=(String)req.get("address");
             input.currency=(String)req.get("currency");input.amount=new BigDecimal(req.get("amount").toString());
-            input.proofImage=(String)req.get("proofImage");input.remark=(String)req.get("remark");input.idempotencyKey=(String)req.get("requestId");
+            input.proofImage=(String)req.get("proofImage");input.remark=(String)req.get("remark");input.idempotencyKey=com.gtcfesk.exchange.common.OrderRequest.required((String)req.get("requestId"));
             DepositRecord record=orders.submit(Long.parseLong(auth.getName()),input);
 
             Map<String, Object> resp = new HashMap<>();
@@ -144,6 +144,12 @@ public class DepositController {
         }
     }
 
+    @PostMapping("/cancel/{id}")
+    public ResponseEntity<?> cancelDeposit(Authentication auth,@PathVariable Long id){
+        if(auth==null)return ResponseEntity.status(401).build();
+        return ResponseEntity.ok(java.util.Collections.singletonMap("order",DepositOrderService.publicDto(orders.cancel(Long.parseLong(auth.getName()),id))));
+    }
+
     @GetMapping("/records")
     public ResponseEntity<?> getRecords(Authentication auth) {
         try {
@@ -155,7 +161,7 @@ public class DepositController {
             }
 
             Long userId = Long.parseLong(auth.getName());
-            List<DepositRecord> records = depositRecordRepository.findByUserIdOrderByCreatedAtDesc(userId);
+            List<DepositRecord> records = depositRecordRepository.findByTenantIdAndUserIdOrderByCreatedAtDesc(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), userId);
 
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", true);

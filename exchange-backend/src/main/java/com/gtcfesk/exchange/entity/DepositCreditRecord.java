@@ -4,9 +4,10 @@ import lombok.Setter;
 import javax.persistence.*;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-@Getter @Setter @Entity
-@Table(name="deposit_credit_record", uniqueConstraints=@UniqueConstraint(name="uk_deposit_credit", columnNames="deposit_record_id"))
-public class DepositCreditRecord {
+@Getter @Setter @org.hibernate.annotations.Persister(impl = com.gtcfesk.exchange.tenant.TenantEntityPersister.class)
+@Entity
+@Table(name="deposit_credit_record", uniqueConstraints=@UniqueConstraint(name="uk_deposit_credit", columnNames={"tenant_id", "deposit_record_id"}))
+public class DepositCreditRecord extends com.gtcfesk.exchange.tenant.TenantOwnedEntity {
  @Id @GeneratedValue(strategy=GenerationType.IDENTITY) private Long id;
  @Column(name="deposit_record_id",nullable=false) private Long depositRecordId;
  @Column(nullable=false) private Long userId;

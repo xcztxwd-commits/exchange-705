@@ -21,7 +21,9 @@ import java.util.Map;
 @RequestMapping("/api/withdraw")
 @RequiredArgsConstructor
 public class WithdrawController {
+    @org.springframework.beans.factory.annotation.Autowired private com.gtcfesk.exchange.repository.UserAccountRepository users;
     @org.springframework.beans.factory.annotation.Autowired private KycIdentityService identityService;
+    @org.springframework.beans.factory.annotation.Autowired private com.gtcfesk.exchange.control.TenantPolicyService tenantPolicy;
     
     private final WithdrawRecordRepository withdrawRecordRepository;
     private final AssetAccountRepository assetAccountRepository;
@@ -36,6 +38,7 @@ public class WithdrawController {
     @PostMapping("/submit")
     @Transactional
     public ResponseEntity<?> submitWithdraw(Authentication auth, @RequestBody Map<String, Object> req) {
+        tenantPolicy.requireNewBusiness("withdraw");
         try {
             if (auth == null || auth.getName() == null || auth.getName().isEmpty()) {
                 Map<String, Object> resp = new HashMap<>();
@@ -74,9 +77,16 @@ public class WithdrawController {
                 return ResponseEntity.badRequest().body(resp);
             }
             
+            String requestKey=com.gtcfesk.exchange.common.OrderRequest.required(req.get("requestId"));
+            String requestHash=com.gtcfesk.exchange.common.OrderRequest.hash("withdraw",type,network,originalAmount,currency,address,remark);
+            users.lockById(userId).orElseThrow(()->new com.gtcfesk.exchange.common.BusinessException("用户不存在"));
+            WithdrawRecord previous=withdrawRecordRepository.findByTenantIdAndUserIdAndRequestKey(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(),userId,requestKey).orElse(null);
+            if(previous!=null) {
+                com.gtcfesk.exchange.common.OrderRequest.same(previous.getRequestHash(),requestHash);
+                Map<String,Object> replay=new HashMap<>();replay.put("success",true);replay.put("orderId",previous.getId());replay.put("message","提现申请已提交，请核对原记录");return ResponseEntity.ok(replay);
+            }
             // 获取用户资金账户余额
-            AssetAccount fundAccount = assetAccountRepository.findByUserIdAndCoin(userId, "FUND")
-                    .orElse(null);
+            AssetAccount fundAccount = assetAccountRepository.lockByUserId(userId).stream().filter(a -> "FUND".equals(a.getCoin())).findFirst().orElse(null);
             
             if (fundAccount == null || fundAccount.getAvailable() == null) {
                 Map<String, Object> resp = new HashMap<>();
@@ -99,7 +109,7 @@ public class WithdrawController {
             
             // 验证地址/账户是否属于当前用户
             if ("digital".equals(type)) {
-                boolean addressExists = userDigitalAddressRepository.findByUserId(userId).stream()
+                boolean addressExists = userDigitalAddressRepository.findByTenantIdAndUserId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), userId).stream()
                         .anyMatch(addr -> address.equals(addr.getAddress()) && network.equals(addr.getNetwork()));
                 if (!addressExists) {
                     Map<String, Object> resp = new HashMap<>();
@@ -108,7 +118,7 @@ public class WithdrawController {
                     return ResponseEntity.badRequest().body(resp);
                 }
             } else if ("bank".equals(type)) {
-                boolean accountExists = userBankCardRepository.findByUserId(userId).stream()
+                boolean accountExists = userBankCardRepository.findByTenantIdAndUserId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), userId).stream()
                         .anyMatch(card -> address.equals(card.getRecipientAccount()));
                 if (!accountExists) {
                     Map<String, Object> resp = new HashMap<>();
@@ -125,6 +135,7 @@ public class WithdrawController {
             
             // 创建提现记录
             WithdrawRecord record = new WithdrawRecord();
+            record.setRequestKey(requestKey);record.setRequestHash(requestHash);
             record.setUserId(userId);
             record.setType(type);
             record.setNetwork(network);
@@ -150,6 +161,7 @@ public class WithdrawController {
             
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", true);
+            resp.put("orderId",record.getId());
             resp.put("message", identityService != null && identityService.simulationExempt() ? "模拟提现已完成，仅扣减虚拟资金，不会真实出款" : "提现申请已提交，等待审核");
             return ResponseEntity.ok(resp);
         } catch (com.gtcfesk.exchange.common.KycRequiredException e) {
@@ -180,7 +192,7 @@ public class WithdrawController {
             }
             
             Long userId = Long.parseLong(auth.getName());
-            List<WithdrawRecord> records = withdrawRecordRepository.findByUserIdOrderByCreatedAtDesc(userId);
+            List<WithdrawRecord> records = withdrawRecordRepository.findByTenantIdAndUserIdOrderByCreatedAtDesc(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), userId);
             
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", true);

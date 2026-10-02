@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { canStartBusiness } from '@/utils/tenantFeatures'
 import { accountMode } from "@/utils/accountMode"
 const simulation = accountMode() === "DEMO"
 import { ref, computed, onMounted } from 'vue'
@@ -288,7 +289,7 @@ onMounted(() => {
       </div>
 
       <!-- 现在借款按钮 -->
-      <button class="submit-btn" @click="submitLoan">{{ localeStore.t('borrowNow') }}</button>
+      <button v-if="canStartBusiness('loan')" class="submit-btn" @click="submitLoan">{{ localeStore.t('borrowNow') }}</button>
     </div>
 
     <Tabbar />

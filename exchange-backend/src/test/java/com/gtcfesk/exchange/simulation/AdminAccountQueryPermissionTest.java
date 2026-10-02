@@ -12,6 +12,7 @@ import java.util.*;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+@org.junit.jupiter.api.extension.ExtendWith(com.gtcfesk.exchange.tenant.TenantOneFixture.class)
 class AdminAccountQueryPermissionTest {
  AdminPermissionService permissions=mock(AdminPermissionService.class);
  SimulationEnvironment environment=mock(SimulationEnvironment.class);

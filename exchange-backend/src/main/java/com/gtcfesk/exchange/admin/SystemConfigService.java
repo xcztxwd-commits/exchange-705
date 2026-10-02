@@ -11,16 +11,27 @@ import java.util.Optional;
 
 @Service
 public class SystemConfigService {
+    @Autowired private com.gtcfesk.exchange.control.TenantPolicyService tenantPolicy;
+    @Autowired private com.gtcfesk.exchange.tenant.TenantSecrets secrets;
     @Autowired
     private SystemConfigRepository systemConfigRepository;
 
     public List<SystemConfig> getAllConfigs() {
-        return systemConfigRepository.findAll();
+        java.util.List<SystemConfig> result=new java.util.ArrayList<>();
+        for(SystemConfig stored:systemConfigRepository.findAllByTenantId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId())) {
+            SystemConfig view=new SystemConfig(); view.setId(stored.getId()); view.setConfigKey(stored.getConfigKey()); view.setDescription(stored.getDescription()); view.setUpdatedAt(stored.getUpdatedAt()); view.setCreatedAt(stored.getCreatedAt());
+            view.setConfigValue(com.gtcfesk.exchange.tenant.TenantSecrets.secret(stored.getConfigKey())?com.gtcfesk.exchange.tenant.TenantSecrets.MASK:tenantPolicy.effectiveConfig(stored.getConfigKey(),stored.getConfigValue()));result.add(view);
+        } return result;
+    }
+
+    public com.gtcfesk.exchange.auth.RegistrationFields registrationFields() {
+        return com.gtcfesk.exchange.auth.RegistrationFields.parse(getConfigValue(com.gtcfesk.exchange.auth.RegistrationFields.KEY));
     }
 
     public String getConfigValue(String key) {
-        Optional<SystemConfig> config = systemConfigRepository.findByConfigKey(key);
-        return config.map(SystemConfig::getConfigValue).orElse(null);
+        Optional<SystemConfig> config = systemConfigRepository.findByTenantIdAndConfigKey(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), key);
+        String value=tenantPolicy.effectiveConfig(key,config.map(SystemConfig::getConfigValue).orElse(null));
+        return com.gtcfesk.exchange.tenant.TenantSecrets.secret(key)?secrets.decrypt(key,value):value;
     }
 
     public static final String DEFAULT_CONVERSION_CURRENCIES = "USD,EUR,JPY,GBP,CNY,CHF,AUD,CAD,HKD,SGD";
@@ -53,6 +64,7 @@ public class SystemConfigService {
     }
 
     public static final String SHARE_TEMPLATES_KEY = "share.templates";
+    public static final String SHARE_MATERIALS_KEY = "share.materials";
     public static final List<String> SHARE_TEMPLATES = java.util.Arrays.asList("light", "dark", "chart", "gold", "globe", "architecture", "city", "referenceGold", "referenceWhite", "referenceTerminal", "launch", "aurora", "racing", "receipt", "journal", "voyage");
 
     public static final List<String> SHARE_LANGUAGES = java.util.Arrays.asList(
@@ -67,9 +79,10 @@ public class SystemConfigService {
 
     public static List<String> shareTemplates(String value) { return shareTemplates(value, "en"); }
 
-    // Legacy CSV remains readable. Version 2 stores ordered language scopes atomically.
+    // CSV / v2 remain readable. V3 adds per-template focus and bounded fixed-field layouts.
     public static List<String> shareTemplates(String value, String locale) {
         if (value == null) return SHARE_TEMPLATES;
+        if (value.getBytes(java.nio.charset.StandardCharsets.UTF_8).length > 60000) throw invalidShareTemplates();
         if (!value.trim().startsWith("{")) {
             List<String> selected = java.util.Arrays.asList(value.split(",", -1));
             if (!SHARE_TEMPLATES.containsAll(selected) || new java.util.HashSet<>(selected).size() != selected.size())
@@ -78,27 +91,39 @@ public class SystemConfigService {
         }
         try {
             com.fasterxml.jackson.databind.JsonNode root = new com.fasterxml.jackson.databind.ObjectMapper().readTree(value);
-            if (!root.isObject() || root.size() != (root.has("focus") ? 3 : 2) || !root.path("version").isIntegralNumber() || root.path("version").intValue() != 2
-                    || !root.path("templates").isArray() || root.path("templates").size() == 0) throw invalidShareTemplates();
+            int version = root.path("version").asInt();
+            if (!root.isObject() || root.size() != (root.has("focus") ? 3 : 2) || !root.path("version").isIntegralNumber() || (version != 2 && version != 3)
+                    || !root.path("templates").isArray() || root.path("templates").size() == 0 || root.path("templates").size() > 32) throw invalidShareTemplates();
             if (root.has("focus") && (!root.path("focus").isTextual() || !java.util.Arrays.asList("amount", "rate").contains(root.path("focus").asText()))) throw invalidShareTemplates();
             java.util.Set<String> ids = new java.util.HashSet<>(), covered = new java.util.HashSet<>();
             List<String> selected = new java.util.ArrayList<>();
             for (com.fasterxml.jackson.databind.JsonNode row : root.path("templates")) {
                 String id = row.path("id").asText();
                 com.fasterxml.jackson.databind.JsonNode languages = row.path("languages");
-                if (!row.isObject() || row.size() != 2 || !SHARE_TEMPLATES.contains(id) || !ids.add(id)
+                boolean builtin = SHARE_TEMPLATES.contains(id);
+                if (!row.isObject() || !row.path("id").isTextual() || (!builtin && (version != 3 || !id.matches("custom-[a-z0-9-]{1,48}"))) || !ids.add(id)
+                        || (version == 2 && row.size() != 2)
                         || !languages.isArray() || languages.size() == 0) throw invalidShareTemplates();
+                if (version == 3) {
+                    if (!ShareTemplateDesignValidator.keys(row, "id", "name", "base", "languages", "focus", "enabled", "design") || row.size() != 5 + (row.has("design") ? 1 : 0) + (row.has("enabled") ? 1 : 0)
+                            || !row.path("name").isTextual() || row.path("name").asText().trim().isEmpty() || row.path("name").asText().length() > 80
+                            || !row.path("base").isTextual() || !SHARE_TEMPLATES.contains(row.path("base").asText())
+                            || !row.path("focus").isTextual() || !java.util.Arrays.asList("amount", "rate").contains(row.path("focus").asText())
+                            || (row.has("enabled") && !row.path("enabled").isBoolean()) || (!builtin && !row.has("design"))) throw invalidShareTemplates();
+                    if (row.has("design")) ShareTemplateDesignValidator.validate(row.get("design"));
+                }
                 java.util.Set<String> scope = new java.util.HashSet<>();
                 for (com.fasterxml.jackson.databind.JsonNode language : languages) {
                     String code = language.asText();
                     if (!language.isTextual() || !("*".equals(code) || SHARE_LANGUAGES.contains(code)) || !scope.add(code))
                         throw invalidShareTemplates();
                 }
+                boolean enabled = version == 2 || !row.has("enabled") || row.path("enabled").asBoolean();
                 if (scope.contains("*")) {
                     if (scope.size() != 1) throw invalidShareTemplates();
-                    covered.addAll(SHARE_LANGUAGES);
-                } else covered.addAll(scope);
-                if (scope.contains("*") || scope.contains(shareLanguage(locale))) selected.add(id);
+                    if (enabled) covered.addAll(SHARE_LANGUAGES);
+                } else if (enabled) covered.addAll(scope);
+                if (enabled && (scope.contains("*") || scope.contains(shareLanguage(locale)))) selected.add(id);
             }
             if (!covered.containsAll(SHARE_LANGUAGES))
                 throw new com.gtcfesk.exchange.common.BusinessException("每种页面语言至少需要一款模板，请启用全语言通用模板或补齐语言配置");
@@ -114,19 +139,96 @@ public class SystemConfigService {
         } catch (java.io.IOException invalid) { throw invalidShareTemplates(); }
     }
 
+    public static java.util.List<com.fasterxml.jackson.databind.JsonNode> shareTemplateDefinitions(String value, String locale) {
+        List<String> selected = shareTemplates(value, locale);
+        java.util.List<com.fasterxml.jackson.databind.JsonNode> result = new java.util.ArrayList<>();
+        if (value == null || !value.trim().startsWith("{")) return result;
+        try {
+            com.fasterxml.jackson.databind.JsonNode root = new com.fasterxml.jackson.databind.ObjectMapper().readTree(value);
+            if (root.path("version").asInt() == 3) for (com.fasterxml.jackson.databind.JsonNode row : root.path("templates"))
+                if (selected.contains(row.path("id").asText())) result.add(row);
+            return result;
+        } catch (java.io.IOException invalid) { throw invalidShareTemplates(); }
+    }
+
     private static com.gtcfesk.exchange.common.BusinessException invalidShareTemplates() {
         return new com.gtcfesk.exchange.common.BusinessException("分享模板配置无效：请检查模板编号、语言范围及重复项");
     }
 
+    public static com.fasterxml.jackson.databind.node.ObjectNode shareMaterials(String value) {
+        com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+        if (value == null) { com.fasterxml.jackson.databind.node.ObjectNode root = mapper.createObjectNode(); root.put("version", 1); root.putArray("materials"); return root; }
+        try {
+            if (value.getBytes(java.nio.charset.StandardCharsets.UTF_8).length > 60000) throw new IllegalArgumentException();
+            com.fasterxml.jackson.databind.JsonNode root = mapper.readTree(value);
+            if (!ShareTemplateDesignValidator.keys(root, "version", "materials") || root.size() != 2 || !root.path("version").isIntegralNumber() || root.path("version").asInt() != 1
+                    || !root.path("materials").isArray() || root.path("materials").size() > 500) throw new IllegalArgumentException();
+            java.util.Set<String> ids = new java.util.HashSet<>(); int active = 0;
+            for (com.fasterxml.jackson.databind.JsonNode item : root.path("materials")) {
+                if (!ShareTemplateDesignValidator.keys(item, "id", "name", "layer", "deleted") || item.size() != 4 || !item.path("deleted").isBoolean()
+                        || !item.path("id").isTextual() || !item.path("id").asText().matches("material-[a-z0-9-]{1,48}") || !ids.add(item.path("id").asText())
+                        || !item.path("name").isTextual() || item.path("name").asText().trim().isEmpty() || item.path("name").asText().length() > 80) throw new IllegalArgumentException();
+                ShareTemplateDesignValidator.validateDecoration(item.path("layer"), 2160, 2160);
+                if (!item.path("deleted").asBoolean() && ++active > 100) throw new IllegalArgumentException();
+            }
+            return (com.fasterxml.jackson.databind.node.ObjectNode) root;
+        } catch (java.io.IOException | IllegalArgumentException e) { throw new com.gtcfesk.exchange.common.BusinessException("素材库配置无效或容量已满（最多 100 个可用素材）"); }
+    }
+
+    public boolean hasShareImage(String src, boolean publishedOnly) {
+        if (!ShareTemplateDesignValidator.imagePath(src) || !src.startsWith("/api/uploads/images/" + com.gtcfesk.exchange.tenant.TenantContext.requireTenantId() + "/staff/")) return false;
+        String value = getConfigValue(SHARE_TEMPLATES_KEY);
+        try {
+            if (value != null && value.trim().startsWith("{")) {
+                com.fasterxml.jackson.databind.JsonNode root = new com.fasterxml.jackson.databind.ObjectMapper().readTree(value);
+                for (com.fasterxml.jackson.databind.JsonNode row : root.path("templates")) {
+                    if (publishedOnly && !row.path("enabled").asBoolean(true)) continue;
+                    for (com.fasterxml.jackson.databind.JsonNode layer : row.path("design").path("decorations"))
+                        if ("image".equals(layer.path("type").asText()) && src.equals(layer.path("src").asText()) && (!publishedOnly || layer.path("visible").asBoolean())) return true;
+                }
+            }
+            if (!publishedOnly) for (com.fasterxml.jackson.databind.JsonNode item : shareMaterials(getConfigValue(SHARE_MATERIALS_KEY)).path("materials"))
+                if ("image".equals(item.path("layer").path("type").asText()) && src.equals(item.path("layer").path("src").asText())) return true;
+        } catch (java.io.IOException e) { return false; }
+        return false;
+    }
+
+    public void requireShareImage(String src) {
+        String own = "/api/uploads/images/" + com.gtcfesk.exchange.tenant.TenantFiles.ownerPath() + "/";
+        if (!ShareTemplateDesignValidator.imagePath(src) || !src.startsWith("/api/uploads/images/" + com.gtcfesk.exchange.tenant.TenantContext.requireTenantId() + "/staff/")
+                || (!src.startsWith(own) && !hasShareImage(src, false))) throw new org.springframework.security.access.AccessDeniedException("只能使用自己上传或已入库的本租户素材图片");
+    }
+
+    private void requireShareImages(String value, boolean library) {
+        try {
+            com.fasterxml.jackson.databind.JsonNode root = new com.fasterxml.jackson.databind.ObjectMapper().readTree(value);
+            for (com.fasterxml.jackson.databind.JsonNode row : root.path(library ? "materials" : "templates")) {
+                Iterable<com.fasterxml.jackson.databind.JsonNode> layers = library ? java.util.Collections.singletonList(row.path("layer")) : row.path("design").path("decorations");
+                for (com.fasterxml.jackson.databind.JsonNode layer : layers) if ("image".equals(layer.path("type").asText())) requireShareImage(layer.path("src").asText());
+            }
+        } catch (java.io.IOException e) { throw invalidShareTemplates(); }
+    }
+
+    @org.springframework.transaction.annotation.Transactional
     public void saveConfig(String key, String value, String description) {
+        tenantPolicy.requireConfigChange(key,value);
+        if ("ui.advanced.enabled".equals(key) && !"true".equals(value) && !"false".equals(value))
+            throw new com.gtcfesk.exchange.common.BusinessException("高级版入口开关必须为 true 或 false");
         if (com.gtcfesk.exchange.user.KycIdentityService.TRADE_KYC_KEY.equals(key) && !"true".equals(value) && !"false".equals(value))
             throw new com.gtcfesk.exchange.common.BusinessException("未实名不可交易开关必须为 true 或 false");
+        if(com.gtcfesk.exchange.tenant.TenantSecrets.secret(key)){
+            if(com.gtcfesk.exchange.tenant.TenantSecrets.MASK.equals(value))return;
+            value=secrets.encrypt(key,value);
+        }
+        if (com.gtcfesk.exchange.auth.RegistrationFields.KEY.equals(key)) com.gtcfesk.exchange.auth.RegistrationFields.parse(value);
         if ("support.settings".equals(key)) com.gtcfesk.exchange.support.SupportSettings.parse(value);
         if (com.gtcfesk.exchange.security.WebsiteSecuritySettings.KEY.equals(key)) com.gtcfesk.exchange.security.WebsiteSecuritySettings.parse(value);
         if (SHARE_TEMPLATES_KEY.equals(key)) {
             if (value == null) throw new com.gtcfesk.exchange.common.BusinessException("请选择分享模板");
             shareTemplates(value);
+            if (value.trim().startsWith("{")) requireShareImages(value, false);
         }
+        if (SHARE_MATERIALS_KEY.equals(key)) { shareMaterials(value); if (value == null) throw invalidShareTemplates(); requireShareImages(value, true); }
         if ("market.conversion.cache-hours".equals(key)) {
             if (value == null || value.trim().isEmpty()) throw new com.gtcfesk.exchange.common.BusinessException("汇率更新间隔请输入 1–168 的整数小时");
             conversionCacheHours(value);
@@ -135,7 +237,7 @@ public class SystemConfigService {
             if (value == null) throw new com.gtcfesk.exchange.common.BusinessException("请选择缓存币种");
             value = String.join(",", conversionCurrencies(value));
         }
-        Optional<SystemConfig> existing = systemConfigRepository.findByConfigKey(key);
+        Optional<SystemConfig> existing = systemConfigRepository.findByTenantIdAndConfigKey(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), key);
         SystemConfig config;
         if (existing.isPresent()) {
             config = existing.get();

@@ -17,7 +17,7 @@ for (const app of ['exchange-pc', 'exchange-frontend']) {
     }
     globalThis.window = new EventTarget()
     globalThis.document = Object.assign(new EventTarget(), { visibilityState: 'visible' })
-    globalThis.location = { protocol: 'https:', host: 'test.local', hostname: 'test.local' }
+    globalThis.location = { protocol: 'https:', host: 'test.local', hostname: 'test.local', origin: 'https://test.local' }
     globalThis.WebSocket = Socket
     globalThis.fetch = async (url, options) => {
       requests.push({ url, symbols: JSON.parse(options.body).symbols })

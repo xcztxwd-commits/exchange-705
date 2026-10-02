@@ -8,6 +8,8 @@ import java.math.BigDecimal;
 @Getter
 @Setter
 public class CreateContractOrderRequest {
+    private String requestId;
+    private String fundingSource; // TRIAL or CONTRACT; omitted legacy clients use CONTRACT only
     private Long specVersion;
     private String quantityUnitType;
     private String symbol; // 交易对

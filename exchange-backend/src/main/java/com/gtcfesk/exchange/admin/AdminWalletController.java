@@ -25,7 +25,7 @@ public class AdminWalletController {
     @com.gtcfesk.exchange.config.AdminPermission(menu = "users", action = "wallet_management")
     public ResponseEntity<?> getUserBankCards(@PathVariable Long userId) {
         try {
-            List<UserBankCard> cards = userBankCardRepository.findByUserId(userId);
+            List<UserBankCard> cards = userBankCardRepository.findByTenantIdAndUserId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), userId);
             
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", true);
@@ -72,7 +72,7 @@ public class AdminWalletController {
     @com.gtcfesk.exchange.config.AdminPermission(menu = "users", action = "bank_edit")
     public ResponseEntity<?> updateUserBankCard(@PathVariable Long userId, @PathVariable Long id, @RequestBody UserBankCardInput input) {
         try {
-            UserBankCard existing = userBankCardRepository.findById(id)
+            UserBankCard existing = userBankCardRepository.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), id)
                     .orElseThrow(() -> new IllegalArgumentException("银行卡不存在"));
             
             if (!existing.getUserId().equals(userId)) {
@@ -106,14 +106,14 @@ public class AdminWalletController {
     @com.gtcfesk.exchange.config.AdminPermission(menu = "users", action = "bank_delete")
     public ResponseEntity<?> deleteUserBankCard(@PathVariable Long userId, @PathVariable Long id) {
         try {
-            UserBankCard existing = userBankCardRepository.findById(id)
+            UserBankCard existing = userBankCardRepository.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), id)
                     .orElseThrow(() -> new IllegalArgumentException("银行卡不存在"));
             
             if (!existing.getUserId().equals(userId)) {
                 throw new IllegalArgumentException("无权操作");
             }
             
-            userBankCardRepository.deleteById(id);
+            userBankCardRepository.deleteByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), id);
             
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", true);
@@ -132,7 +132,7 @@ public class AdminWalletController {
     @com.gtcfesk.exchange.config.AdminPermission(menu = "users", action = "wallet_management")
     public ResponseEntity<?> getUserDigitalAddresses(@PathVariable Long userId) {
         try {
-            List<UserDigitalAddress> addresses = userDigitalAddressRepository.findByUserId(userId);
+            List<UserDigitalAddress> addresses = userDigitalAddressRepository.findByTenantIdAndUserId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), userId);
             
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", true);
@@ -176,7 +176,7 @@ public class AdminWalletController {
     @com.gtcfesk.exchange.config.AdminPermission(menu = "users", action = "address_edit")
     public ResponseEntity<?> updateUserDigitalAddress(@PathVariable Long userId, @PathVariable Long id, @RequestBody UserDigitalAddressInput input) {
         try {
-            UserDigitalAddress existing = userDigitalAddressRepository.findById(id)
+            UserDigitalAddress existing = userDigitalAddressRepository.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), id)
                     .orElseThrow(() -> new IllegalArgumentException("地址不存在"));
             
             if (!existing.getUserId().equals(userId)) {
@@ -207,14 +207,14 @@ public class AdminWalletController {
     @com.gtcfesk.exchange.config.AdminPermission(menu = "users", action = "address_delete")
     public ResponseEntity<?> deleteUserDigitalAddress(@PathVariable Long userId, @PathVariable Long id) {
         try {
-            UserDigitalAddress existing = userDigitalAddressRepository.findById(id)
+            UserDigitalAddress existing = userDigitalAddressRepository.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), id)
                     .orElseThrow(() -> new IllegalArgumentException("地址不存在"));
             
             if (!existing.getUserId().equals(userId)) {
                 throw new IllegalArgumentException("无权操作");
             }
             
-            userDigitalAddressRepository.deleteById(id);
+            userDigitalAddressRepository.deleteByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), id);
             
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", true);

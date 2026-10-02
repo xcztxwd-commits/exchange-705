@@ -19,6 +19,7 @@ public class CustomerServiceController {
     /**
      * 获取客服链接
      */
+
     @GetMapping("/customer-service/link")
     public ResponseEntity<?> getCustomerServiceLink() {
         String link = supportSettings.externalLink();
@@ -58,7 +59,14 @@ public class CustomerServiceController {
         Map<String, Object> result = new HashMap<>();
         result.put("templates", templates);
         result.put("focus", SystemConfigService.shareFocus(value));
+        result.put("definitions", SystemConfigService.shareTemplateDefinitions(value, locale));
         return ResponseEntity.ok(result);
+    }
+
+    @GetMapping("/ui-edition")
+    public ResponseEntity<?> getUiEdition() {
+        return ResponseEntity.ok(java.util.Collections.singletonMap("advancedEnabled",
+                !"false".equals(systemConfigService.getConfigValue("ui.advanced.enabled"))));
     }
 
     @GetMapping("/system/timezone")

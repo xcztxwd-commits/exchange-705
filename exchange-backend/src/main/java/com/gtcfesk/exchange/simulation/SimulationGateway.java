@@ -11,6 +11,7 @@ import java.util.*;
 @Component
 public class SimulationGateway {
     @Value("${simulation.identity-url:http://backend:8080/api/simulation}") private String identityUrl;
+    @org.springframework.beans.factory.annotation.Autowired private com.gtcfesk.exchange.control.TenantRepository tenants;
     private final RestTemplate http;
     public SimulationGateway() {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
@@ -18,8 +19,13 @@ public class SimulationGateway {
     }
     public Map<String,Object> get(String path, String bearer) {
         HttpHeaders headers = new HttpHeaders(); headers.set("Authorization", bearer); headers.set("X-Account-Mode", "REAL");
+        Long tenant = com.gtcfesk.exchange.tenant.TenantContext.requireTenantId();
+        com.gtcfesk.exchange.control.Tenant registration=tenants.findById(tenant).orElseThrow(IllegalArgumentException::new);
+        String domain=registration.getFrontendHost();
+        if (domain == null || !registration.isDomainVerified() || "DISABLED".equals(registration.getStatus())) throw new IllegalStateException("Missing verified tenant domain");
+        headers.set("X-Forwarded-Host", domain);
         Map<String,Object> body = http.exchange(identityUrl + path, HttpMethod.GET, new HttpEntity<>(headers), Map.class).getBody();
-        if (body == null) throw new IllegalStateException("Identity service unavailable");
+        if (body == null || !(body.get("tenantId") instanceof Number) || ((Number)body.get("tenantId")).longValue() != tenant) throw new IllegalStateException("Identity tenant mismatch");
         return body;
     }
     public Long authenticate(String bearer) {

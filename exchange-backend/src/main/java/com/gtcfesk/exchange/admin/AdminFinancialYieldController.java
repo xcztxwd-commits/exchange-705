@@ -68,7 +68,7 @@ public class AdminFinancialYieldController {
     @com.gtcfesk.exchange.config.AdminPermission(menu = "financial_orders", action = "payout")
     public ResponseEntity<?> payoutYield(@PathVariable Long yieldRecordId) {
         if (com.gtcfesk.exchange.config.BackendAccess.agentId() != null)
-            access.checkUser(yieldRecords.findById(yieldRecordId).map(FinancialYieldRecord::getUserId).orElse(null));
+            access.checkUser(yieldRecords.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), yieldRecordId).map(FinancialYieldRecord::getUserId).orElse(null));
         try {
             yieldService.payoutYield(yieldRecordId);
             Map<String, Object> resp = new HashMap<>();

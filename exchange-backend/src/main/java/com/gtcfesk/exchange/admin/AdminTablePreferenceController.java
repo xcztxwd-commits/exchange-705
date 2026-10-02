@@ -25,34 +25,28 @@ public class AdminTablePreferenceController {
         if (auth == null || !auth.isAuthenticated() || auth.getAuthorities().stream().noneMatch(a ->
                 Arrays.asList("ROLE_ADMIN", "ROLE_SUPER_ADMIN", "ROLE_AGENT").contains(a.getAuthority())))
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "请使用后台账号登录");
-        if (!table.matches("[A-Za-z0-9_.-]{1,100}"))
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "表格标识无效");
+        TablePreferenceValidation.table(table);
+        com.gtcfesk.exchange.control.ControlIdentity identity=com.gtcfesk.exchange.control.ControlIdentity.current();
+        if(com.gtcfesk.exchange.control.ControlIdentity.isAccess()){com.gtcfesk.exchange.tenant.TenantContext.require(identity.getTenantId());if(identity.getActorId()==null||identity.getActorId()<=0)throw new ResponseStatusException(HttpStatus.FORBIDDEN,"总控身份无效");}
         boolean agent = auth.getAuthorities().stream().anyMatch(a -> a.getAuthority().equals("ROLE_AGENT"));
-        return (agent ? "agent:" : "admin:") + auth.getName() + ":" + table;
+        return "tenant:"+com.gtcfesk.exchange.tenant.TenantContext.requireTenantId()+":"+(com.gtcfesk.exchange.control.ControlIdentity.isAccess()?"control:":agent?"agent:":"admin:") + (com.gtcfesk.exchange.control.ControlIdentity.isAccess()?com.gtcfesk.exchange.control.ControlIdentity.actorId():auth.getName()) + ":" + table;
     }
 
     @GetMapping("/{table}")
     public JsonNode get(@PathVariable String table) throws java.io.IOException {
-        Optional<AdminTablePreference> saved = repository.findById(key(table));
+        Optional<AdminTablePreference> saved = repository.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), key(table));
+        if(!saved.isPresent()&&!com.gtcfesk.exchange.control.ControlIdentity.isAccess()){
+            Authentication auth=SecurityContextHolder.getContext().getAuthentication();
+            boolean agent=auth.getAuthorities().stream().anyMatch(a->a.getAuthority().equals("ROLE_AGENT"));
+            saved=repository.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(),(agent?"agent:":"admin:")+auth.getName()+":"+table);
+        }
         return saved.isPresent() ? mapper.readTree(saved.get().getColumnsJson()) : mapper.createArrayNode();
     }
 
     @PutMapping("/{table}")
     public Map<String, Boolean> save(@PathVariable String table, @RequestBody JsonNode columns) {
         String id = key(table);
-        if (!columns.isArray() || columns.size() > 150 || columns.toString().length() > 60000)
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "列配置无效");
-        Set<String> ids = new HashSet<>();
-        boolean visible = columns.size() == 0;
-        for (JsonNode column : columns) {
-            if (!column.isObject() || column.size() != 3 || !column.path("id").isTextual() ||
-                    column.path("id").asText().isEmpty() || column.path("id").asText().length() > 200 ||
-                    !ids.add(column.path("id").asText()) || !column.path("visible").isBoolean() ||
-                    !column.path("fixed").isTextual() || !Arrays.asList("", "left", "right").contains(column.path("fixed").asText()))
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "列配置无效");
-            visible |= column.path("visible").asBoolean();
-        }
-        if (!visible) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "至少保留一列");
+        TablePreferenceValidation.columns(columns);
         AdminTablePreference entity = new AdminTablePreference();
         entity.setId(id);
         entity.setColumnsJson(columns.toString());

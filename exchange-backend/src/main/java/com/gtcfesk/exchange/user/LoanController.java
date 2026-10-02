@@ -49,7 +49,7 @@ public class LoanController {
             BigDecimal amount = new BigDecimal(request.get("amount").toString());
             Long settingId = Long.parseLong(request.get("settingId").toString());
             
-            LoanRecord record = loanService.createLoan(userId, amount, settingId);
+            LoanRecord record = loanService.createLoan(userId, amount, settingId, com.gtcfesk.exchange.common.OrderRequest.required(request.get("requestId")));
 
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", true);

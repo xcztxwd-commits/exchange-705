@@ -11,6 +11,8 @@ const request = accountTableRequest(accountTable)
 function accountFilterChanged() { contractOrders.value=[];optionOrders.value=[];contractTotal.value=0;optionTotal.value=0;contractQueryParams.value.page=0;optionQueryParams.value.page=0;loadContractOrders();loadOptionOrders() }
 import ManualContractOrder from '@/components/ManualContractOrder.vue'
 const manualForm = ref<InstanceType<typeof ManualContractOrder>>()
+import SimpleManualContractOrder from '@/components/SimpleManualContractOrder.vue'
+const simpleManualForm = ref<InstanceType<typeof SimpleManualContractOrder>>()
 import { useAuthStore } from '@/store/auth'
 import { usePermissions } from '@/composables/usePermissions'
 import { displaySymbol } from '@/utils/displaySymbol'
@@ -49,6 +51,7 @@ const loading = ref(false)
 const agentList = ref<any[]>([])
 
 const contractQueryParams = ref({
+  binding: '',
   userId: '',
   userEmail: '',
   status: '',
@@ -134,6 +137,7 @@ const handleSearch = () => {
 
 const handleReset = () => {
   if (activeTab.value === 'contract') {
+    contractQueryParams.value.binding = ''
     contractQueryParams.value.userId = ''
     contractQueryParams.value.userEmail = ''
     contractQueryParams.value.status = ''
@@ -236,59 +240,26 @@ const formatDate = (date: string | null) => {
   return new Date(date).toLocaleString('zh-CN')
 }
 
-const handleCloseOrder = async (row: any) => {
+const exitRetries = new Map<string, {requestId: string, reason: string}>()
+async function controlledContractExit(row: any, command: 'close' | 'cancel') {
   accountTable.selectRow(row)
+  const key = `${row.id}:${command}`
   try {
-    const closePrice = await ElMessageBox.prompt('请输入平仓价格', '平仓', {
-      confirmButtonText: '确定',
-      cancelButtonText: '取消',
-      inputPattern: /^\d+(\.\d+)?$/,
-      inputErrorMessage: '请输入有效的价格',
-      inputValue: row.currentPrice || row.openPrice || '0'
-    })
-    
-    if (closePrice.value) {
-      const res: any = await request.post(`/admin/orders/contract/${row.id}/close`, {
-        closePrice: closePrice.value
-      })
-      
-      if (res.success !== false) {
-        ElMessage.success('平仓成功')
-        loadContractOrders()
-      } else {
-        ElMessage.error(res.message || '平仓失败')
-      }
-    }
+    const input = await ElMessageBox.prompt(command === 'close' ? '使用服务端新鲜行情平仓。请输入受控处理原因（5至500字）' : '请输入受控撤单原因（5至500字）', '受控退出', {inputValue: exitRetries.get(key)?.reason || '', inputValidator: value => !!value && value.trim().length >= 5 && value.length <= 500 || '请输入5至500字原因'})
+    const prior = exitRetries.get(key)
+    const body = prior?.reason === input.value ? prior : {requestId: crypto.randomUUID(), reason: input.value}
+    exitRetries.set(key, body)
+    const res: any = await request.post(`/admin/orders/contract/${row.id}/${command}`, body)
+    if (res.success === false) throw new Error(res.message || '处理失败')
+    exitRetries.delete(key)
+    ElMessage.success('受控退出已完成并留痕')
+    await loadContractOrders()
   } catch (e: any) {
-    if (e !== 'cancel') {
-      ElMessage.error(e?.response?.data?.message || e?.message || '平仓失败')
-    }
+    if (e !== 'cancel' && e !== 'close') ElMessage.error(e?.response?.data?.message || e?.message || '处理失败；重试保留原幂等键')
   }
 }
-
-const handleCancelOrder = async (row: any) => {
-  accountTable.selectRow(row)
-  try {
-    await ElMessageBox.confirm('确定要撤单吗？', '撤单', {
-      confirmButtonText: '确定',
-      cancelButtonText: '取消',
-      type: 'warning'
-    })
-    
-    const res: any = await request.post(`/admin/orders/contract/${row.id}/cancel`)
-    
-    if (res.success !== false) {
-      ElMessage.success('撤单成功')
-      loadContractOrders()
-    } else {
-      ElMessage.error(res.message || '撤单失败')
-    }
-  } catch (e: any) {
-    if (e !== 'cancel') {
-      ElMessage.error(e?.response?.data?.message || e?.message || '撤单失败')
-    }
-  }
-}
+const handleCloseOrder = (row: any) => controlledContractExit(row, 'close')
+const handleCancelOrder = (row: any) => controlledContractExit(row, 'cancel')
 
 // Soft deletion only changes visibility; no settlement or balance mutation.
 async function handleDeletion(row: any, type: 'contract' | 'option') {
@@ -325,7 +296,9 @@ onMounted(() => {
     
     <el-tabs v-model="activeTab" @tab-change="() => {}">
       <el-tab-pane label="合约订单" name="contract">
-        <el-button v-permission="'orders:manual_order'" v-if="auth.user?.isSuperAdmin || auth.user?.role === 'super_admin'" type="primary" @click="manualForm?.open()" :disabled="accountModes.includes('DEMO') || !accountModes.length">生成订单</el-button>
+        <el-button v-permission="'orders:manual_order'" v-if="auth.user?.isSuperAdmin || auth.user?.role === 'super_admin'" type="primary" @click="simpleManualForm?.open()" :disabled="accountModes.length !== 1 || accountModes[0] !== 'REAL'">生成订单（简版）</el-button>
+        <el-button v-permission="'orders:manual_order'" v-if="auth.user?.isSuperAdmin || auth.user?.role === 'super_admin'" @click="manualForm?.open()" :disabled="accountModes.length !== 1 || accountModes[0] !== 'REAL'">高级版</el-button>
+        <SimpleManualContractOrder v-if="accountModes.length === 1 && accountModes[0] === 'REAL'" ref="simpleManualForm" @created="loadContractOrders" />
         <ManualContractOrder v-if="accountModes.length === 1 && accountModes[0] === 'REAL'" ref="manualForm" @created="loadContractOrders" />
         <div class="toolbar">
           <div class="search-form">
@@ -346,6 +319,7 @@ onMounted(() => {
                 :value="agent.id"
               />
             </el-select>
+            <el-select v-model="contractQueryParams.binding" clearable placeholder="用户绑定状态" style="width: 150px; margin-right: 12px;"><el-option value="unbound" label="未绑定用户" /><el-option value="bound" label="已绑定用户" /></el-select>
             <el-input
               v-model="contractQueryParams.userId"
               placeholder="用户ID"
@@ -387,12 +361,14 @@ onMounted(() => {
           <el-table-column prop="userId" label="用户ID" width="200">
             <template #default="{ row }">
               <span v-if="row.agentInfo">{{ row.userId }}({{ row.agentInfo }})</span>
-              <span v-else>{{ row.userId }}</span>
+              <span v-else>{{ row.userId ?? '未绑定用户' }}</span>
+              <small v-if="row.orderSource === 'MANUAL_TEST'" style="margin-left: 6px; color: #909399;">模拟单</small>
             </template>
           </el-table-column>
-          <el-table-column prop="userRemark" label="用户备注" width="150">
+          <el-table-column prop="userEmail" label="用户邮箱" min-width="200" show-overflow-tooltip />
+        <el-table-column prop="userRemark" label="用户备注" width="150">
             <template #default="{ row }">
-              {{ row.userRemark || row.remark || '-' }}
+              {{ row.userRemark || '-' }}
             </template>
           </el-table-column>
           <el-table-column prop="symbol" label="交易对" width="120"><template #default="{ row }">{{ displaySymbol(row) }}</template></el-table-column>
@@ -420,7 +396,7 @@ onMounted(() => {
           </el-table-column>
           <el-table-column prop="currentPrice" label="当前价/平仓价" width="120">
             <template #default="{ row }">
-              {{ formatPrice(row.status === 'CLOSED' && row.closePrice ? row.closePrice : row.currentPrice) }}
+              {{ formatPrice(row.status === 'CLOSED' ? row.closePrice : row.currentPrice) }}
             </template>
           </el-table-column>
           <el-table-column prop="stopLoss" label="止损" width="100">
@@ -458,6 +434,7 @@ onMounted(() => {
           <el-table-column label="操作" width="200" fixed="right">
             <template #default="{ row }">
               <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                <el-button v-permission="'orders:manual_order'" v-if="!row.deleted && row.status === 'CLOSED' && row.userId == null && row.orderSource === 'MANUAL_TEST' && (auth.user?.isSuperAdmin || auth.user?.role === 'super_admin')" type="primary" size="small" :disabled="accountModes.length !== 1 || accountModes[0] !== 'REAL'" @click="simpleManualForm?.openBinding(row)">绑定用户</el-button>
                 <el-button v-permission="'orders:close_order'"
                   v-if="!row.deleted && row.status === 'OPEN'"
                   type="success" 
@@ -564,9 +541,10 @@ onMounted(() => {
               <span v-else>{{ row.userId }}</span>
             </template>
           </el-table-column>
-          <el-table-column prop="userRemark" label="用户备注" width="150">
+          <el-table-column prop="userEmail" label="用户邮箱" min-width="200" show-overflow-tooltip />
+        <el-table-column prop="userRemark" label="用户备注" width="150">
             <template #default="{ row }">
-              {{ row.userRemark || row.remark || '-' }}
+              {{ row.userRemark || '-' }}
             </template>
           </el-table-column>
           <el-table-column prop="symbol" label="交易对" width="120"><template #default="{ row }">{{ displaySymbol(row) }}</template></el-table-column>

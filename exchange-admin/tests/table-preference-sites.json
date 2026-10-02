@@ -1,0 +1,287 @@
+[
+  {
+    "file": "src/components/AccountInspection.vue",
+    "binding": ":table-key",
+    "key": "`AccountInspection.${mode}.${kind}`"
+  },
+  {
+    "file": "src/components/ActivityManagement.vue",
+    "binding": "table-key",
+    "key": "ActivityManagement.1"
+  },
+  {
+    "file": "src/components/ActivityManagement.vue",
+    "binding": "table-key",
+    "key": "ActivityManagement.2"
+  },
+  {
+    "file": "src/components/ActivityManagement.vue",
+    "binding": "table-key",
+    "key": "ActivityManagement.3"
+  },
+  {
+    "file": "src/components/BackendAccounts.vue",
+    "binding": "table-key",
+    "key": "backend-accounts"
+  },
+  {
+    "file": "src/components/OnlineUsers.vue",
+    "binding": "table-key",
+    "key": "online-users"
+  },
+  {
+    "file": "src/components/ShareTemplateSettings.vue",
+    "binding": "table-key",
+    "key": "ShareTemplateSettings.1"
+  },
+  {
+    "file": "src/components/SymbolCatalogDialog.vue",
+    "binding": "table-key",
+    "key": "SymbolCatalogDialog.1"
+  },
+  {
+    "file": "src/components/TenantPolicyNotice.vue",
+    "binding": "table-key",
+    "key": "tenant-policy-notice"
+  },
+  {
+    "file": "src/control/AuditSecurity.vue",
+    "binding": ":table-key",
+    "key": "security ? 'control.access-sessions' : 'control.audit'"
+  },
+  {
+    "file": "src/control/BusinessSupervision.vue",
+    "binding": ":table-key",
+    "key": "`control.business.${kind}`"
+  },
+  {
+    "file": "src/control/ChatSupervision.vue",
+    "binding": "table-key",
+    "key": "control.chat.conversations"
+  },
+  {
+    "file": "src/control/ChatSupervision.vue",
+    "binding": "table-key",
+    "key": "control.chat.messages"
+  },
+  {
+    "file": "src/control/ControlAccounts.vue",
+    "binding": "table-key",
+    "key": "control.accounts"
+  },
+  {
+    "file": "src/control/Operations.vue",
+    "binding": "table-key",
+    "key": "control.operations.issues"
+  },
+  {
+    "file": "src/control/StatisticsSupervision.vue",
+    "binding": ":table-key",
+    "key": "`control.statistics.${table.key}`"
+  },
+  {
+    "file": "src/control/SupervisionRecords.vue",
+    "binding": ":table-key",
+    "key": "`control.supervision.${kind}`"
+  },
+  {
+    "file": "src/control/TenantManager.vue",
+    "binding": "table-key",
+    "key": "control.tenants"
+  },
+  {
+    "file": "src/control/TenantManager.vue",
+    "binding": "table-key",
+    "key": "control.readiness"
+  },
+  {
+    "file": "src/control/TenantManager.vue",
+    "binding": "table-key",
+    "key": "control.policies"
+  },
+  {
+    "file": "src/views/AdminList.vue",
+    "binding": "table-key",
+    "key": "AdminList.1"
+  },
+  {
+    "file": "src/views/AgentManagement.vue",
+    "binding": "table-key",
+    "key": "AgentManagement.1"
+  },
+  {
+    "file": "src/views/AgentManagement.vue",
+    "binding": "table-key",
+    "key": "AgentManagement.2"
+  },
+  {
+    "file": "src/views/AgentPerformance.vue",
+    "binding": "table-key",
+    "key": "AgentPerformance.1"
+  },
+  {
+    "file": "src/views/AiControl.vue",
+    "binding": "table-key",
+    "key": "AiControl.1"
+  },
+  {
+    "file": "src/views/AiControl.vue",
+    "binding": "table-key",
+    "key": "AiControl.2"
+  },
+  {
+    "file": "src/views/AnnouncementManagement.vue",
+    "binding": "table-key",
+    "key": "AnnouncementManagement.1"
+  },
+  {
+    "file": "src/views/DepositOrders.vue",
+    "binding": "table-key",
+    "key": "DepositOrders.1"
+  },
+  {
+    "file": "src/views/DepositReview.vue",
+    "binding": "table-key",
+    "key": "DepositReview.1"
+  },
+  {
+    "file": "src/views/DepositSettings.vue",
+    "binding": "table-key",
+    "key": "DepositSettings.1"
+  },
+  {
+    "file": "src/views/Durations.vue",
+    "binding": "table-key",
+    "key": "Durations.1"
+  },
+  {
+    "file": "src/views/FinancialOrders.vue",
+    "binding": "table-key",
+    "key": "FinancialOrders.1"
+  },
+  {
+    "file": "src/views/FinancialOrders.vue",
+    "binding": "table-key",
+    "key": "FinancialOrders.2"
+  },
+  {
+    "file": "src/views/FinancialProducts.vue",
+    "binding": "table-key",
+    "key": "FinancialProducts.1"
+  },
+  {
+    "file": "src/views/InboxManagement.vue",
+    "binding": "table-key",
+    "key": "InboxManagement.1"
+  },
+  {
+    "file": "src/views/KycReview.vue",
+    "binding": "table-key",
+    "key": "KycReview.1"
+  },
+  {
+    "file": "src/views/LoanPersonalInfoReview.vue",
+    "binding": "table-key",
+    "key": "LoanPersonalInfoReview.1"
+  },
+  {
+    "file": "src/views/LoanReview.vue",
+    "binding": "table-key",
+    "key": "LoanReview.1"
+  },
+  {
+    "file": "src/views/LoanSettings.vue",
+    "binding": "table-key",
+    "key": "LoanSettings.1"
+  },
+  {
+    "file": "src/views/OperationLog.vue",
+    "binding": "table-key",
+    "key": "OperationLog.1"
+  },
+  {
+    "file": "src/views/Orders.vue",
+    "binding": "table-key",
+    "key": "Orders.1"
+  },
+  {
+    "file": "src/views/Orders.vue",
+    "binding": "table-key",
+    "key": "Orders.2"
+  },
+  {
+    "file": "src/views/Roles.vue",
+    "binding": "table-key",
+    "key": "Roles.1"
+  },
+  {
+    "file": "src/views/Symbols.vue",
+    "binding": "table-key",
+    "key": "Symbols.1"
+  },
+  {
+    "file": "src/views/Symbols.vue",
+    "binding": "table-key",
+    "key": "Symbols.2"
+  },
+  {
+    "file": "src/views/Users.vue",
+    "binding": "table-key",
+    "key": "Users.1"
+  },
+  {
+    "file": "src/views/Users.vue",
+    "binding": "table-key",
+    "key": "Users.2"
+  },
+  {
+    "file": "src/views/Users.vue",
+    "binding": "table-key",
+    "key": "Users.3"
+  },
+  {
+    "file": "src/views/Users.vue",
+    "binding": "table-key",
+    "key": "Users.4"
+  },
+  {
+    "file": "src/views/Users.vue",
+    "binding": "table-key",
+    "key": "Users.5"
+  },
+  {
+    "file": "src/views/Users.vue",
+    "binding": "table-key",
+    "key": "Users.6"
+  },
+  {
+    "file": "src/views/Users.vue",
+    "binding": "table-key",
+    "key": "Users.7"
+  },
+  {
+    "file": "src/views/Users.vue",
+    "binding": "table-key",
+    "key": "Users.8"
+  },
+  {
+    "file": "src/views/Users.vue",
+    "binding": "table-key",
+    "key": "Users.9"
+  },
+  {
+    "file": "src/views/Users.vue",
+    "binding": "table-key",
+    "key": "Users.10"
+  },
+  {
+    "file": "src/views/Users.vue",
+    "binding": "table-key",
+    "key": "Users.11"
+  },
+  {
+    "file": "src/views/WithdrawReview.vue",
+    "binding": "table-key",
+    "key": "WithdrawReview.1"
+  }
+]

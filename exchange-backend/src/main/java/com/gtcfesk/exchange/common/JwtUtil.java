@@ -18,13 +18,26 @@ public class JwtUtil {
     @Value("${jwt.expireSeconds}")
     private Long expireSeconds;
 
+    @org.springframework.beans.factory.annotation.Autowired private com.gtcfesk.exchange.control.TenantRepository tenants;
+
     public Long getExpireSeconds() {
         return expireSeconds;
     }
 
     public String generateToken(String subject, Map<String, Object> claims) {
+        Map<String,Object> scoped = new java.util.HashMap<>(claims);
+        if (!"control".equals(scoped.get("userType")) && !"control_access".equals(scoped.get("userType")))
+        {
+            Long tenant = com.gtcfesk.exchange.tenant.TenantContext.requireTenantId();
+            scoped.put("tenantId", tenant);
+            scoped.put("tenantVersion", tenants.findById(tenant).orElseThrow(IllegalArgumentException::new).getSessionVersion());
+        }
+        return generateToken(subject, scoped, expireSeconds);
+    }
+
+    public String generateToken(String subject, Map<String,Object> claims, long lifetimeSeconds) {
         Date now = new Date();
-        Date exp = new Date(now.getTime() + expireSeconds * 1000);
+        Date exp = new Date(now.getTime() + lifetimeSeconds * 1000);
         return Jwts.builder()
                 .setClaims(claims)
                 .setSubject(subject)

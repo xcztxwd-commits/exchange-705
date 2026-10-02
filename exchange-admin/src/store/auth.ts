@@ -1,43 +1,38 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { clearAccess } from '@/utils/access'
+import { readSession, validSession, clearAdminSession, ADMIN_SESSION_KEY, type AdminSession, type AccessSession } from '@/utils/adminSession'
+
+// Never import an old shared token. The server migration revokes it independently.
+localStorage.removeItem('admin_token')
+localStorage.removeItem('admin_user')
+export const exchangeOpener = window.opener as Window | null
+if (exchangeOpener || /\/control-exchange\/?$/.test(location.pathname)) clearAdminSession(sessionStorage)
+// Keep the reference only for the isolated exchange component; other pages sever it.
+if (!/\/control-exchange\/?$/.test(location.pathname)) window.opener = null
 
 export const useAuthStore = defineStore('auth', () => {
-  const token = ref<string | null>(localStorage.getItem('admin_token'))
-  const user = ref<any>(null)
-
-  const setAuth = (tk: string, info: any) => {
-    console.log('[AuthStore] 设置用户信息:', info)
+  const session = ref<AdminSession | null>(readSession(sessionStorage))
+  const token = computed(() => session.value?.token || null)
+  const user = computed(() => session.value?.user || null)
+  const isControl = computed(() => session.value?.mode === 'control')
+  const accessSession = computed(() => session.value?.accessSession)
+  const logout = () => { clearAccess(); session.value = null; clearAdminSession(sessionStorage) }
+  const setAuth = (tk: string, info: any, access?: AccessSession) => {
+    const next: AdminSession = { token: tk, user: info, mode: access ? 'control' : 'admin', ...(access ? { accessSession: access } : {}) }
+    if (!validSession(next)) { logout(); throw new Error('登录响应缺少有效租户或访问会话') }
     if (token.value !== tk) clearAccess()
-    token.value = tk
-    user.value = info
-    localStorage.setItem('admin_token', tk)
-    localStorage.setItem('admin_user', JSON.stringify(info || {}))
-    console.log('[AuthStore] 用户信息已保存，userType:', info?.userType)
+    sessionStorage.setItem(ADMIN_SESSION_KEY, JSON.stringify(next))
+    session.value = next
   }
-
   const load = () => {
-    const tk = localStorage.getItem('admin_token')
-    const u = localStorage.getItem('admin_user')
-    if (token.value !== tk) clearAccess()
-    token.value = tk
-    user.value = u ? JSON.parse(u) : null
+    const next = readSession(sessionStorage)
+    if (next?.token !== token.value) clearAccess()
+    session.value = next
   }
-
-  const logout = () => {
-    clearAccess()
-    token.value = null
-    user.value = null
-    localStorage.removeItem('admin_token')
-    localStorage.removeItem('admin_user')
+  const ensureValid = () => {
+    if (!validSession(session.value)) { logout(); return false }
+    return true
   }
-
-  return { token, user, setAuth, load, logout }
+  return { token, user, isControl, accessSession, setAuth, load, ensureValid, logout }
 })
-
-
-
-
-
-
-

@@ -1,0 +1,671 @@
+{
+  "schema_epoch": 2026100201,
+  "default_tenant_id": 1,
+  "private": [
+    "activity_campaign",
+    "activity_delivery",
+    "activity_material",
+    "activity_selection",
+    "activity_selection_member",
+    "activity_send_receipt",
+    "admin_role",
+    "admin_role_menu",
+    "admin_table_preference",
+    "admin_user",
+    "announcement",
+    "announcement_receipt",
+    "asset_account",
+    "asset_history_1d",
+    "asset_history_1h",
+    "asset_history_1m",
+    "asset_history_4h",
+    "asset_history_baseline",
+    "asset_history_job_state",
+    "asset_history_quote_batch",
+    "asset_history_revision",
+    "asset_snapshot",
+    "balance_adjustment",
+    "contract_order",
+    "demo_account",
+    "demo_ledger",
+    "demo_order",
+    "deposit_credit_record",
+    "deposit_record",
+    "deposit_setting",
+    "financial_order",
+    "financial_product",
+    "financial_yield_record",
+    "inbox_letter",
+    "kyc_record",
+    "loan_personal_info",
+    "loan_record",
+    "loan_setting",
+    "manual_order_binding",
+    "manual_order_record",
+    "market_control_flow",
+    "market_control_hold",
+    "market_control_plan",
+    "market_control_publication",
+    "market_control_resume",
+    "market_control_sample",
+    "market_control_task",
+    "market_legacy_minute_snapshot",
+    "market_mixed_minute",
+    "market_simulation_source_candle",
+    "market_source_candle",
+    "market_source_event",
+    "market_source_quote",
+    "market_source_tick",
+    "operation_log",
+    "option_duration",
+    "option_order",
+    "simulation_seed",
+    "support_attachment",
+    "support_conversation",
+    "support_message",
+    "support_presence",
+    "symbol_duration",
+    "system_config",
+    "t_ai_model",
+    "trading_symbol",
+    "transfer_record",
+    "trial_account",
+    "trial_grant",
+    "trial_ledger",
+    "user_account",
+    "user_action",
+    "user_bank_card",
+    "user_digital_address",
+    "user_menu",
+    "verify_code",
+    "withdraw_record"
+  ],
+  "shared": [
+    "admin_menu",
+    "menu_action",
+    "asset_history_migration"
+  ],
+  "control": [
+    "backend_login",
+    "control_access_session",
+    "control_admin",
+    "control_audit_log",
+    "control_chat_archive_job",
+    "control_table_preference",
+    "tenant",
+    "tenant_domain_binding",
+    "tenant_domain_history",
+    "tenant_policy",
+    "tenant_schema_version",
+    "user_id_sequence"
+  ],
+  "relations": [
+    [
+      "activity_delivery",
+      "user_id",
+      "user_account",
+      "id"
+    ],
+    [
+      "asset_account",
+      "user_id",
+      "user_account",
+      "id"
+    ],
+    [
+      "asset_snapshot",
+      "user_id",
+      "user_account",
+      "id"
+    ],
+    [
+      "balance_adjustment",
+      "user_id",
+      "user_account",
+      "id"
+    ],
+    [
+      "contract_order",
+      "user_id",
+      "user_account",
+      "id"
+    ],
+    [
+      "deposit_credit_record",
+      "user_id",
+      "user_account",
+      "id"
+    ],
+    [
+      "deposit_record",
+      "user_id",
+      "user_account",
+      "id"
+    ],
+    [
+      "financial_order",
+      "user_id",
+      "user_account",
+      "id"
+    ],
+    [
+      "financial_yield_record",
+      "user_id",
+      "user_account",
+      "id"
+    ],
+    [
+      "kyc_record",
+      "user_id",
+      "user_account",
+      "id"
+    ],
+    [
+      "loan_personal_info",
+      "user_id",
+      "user_account",
+      "id"
+    ],
+    [
+      "loan_record",
+      "user_id",
+      "user_account",
+      "id"
+    ],
+    [
+      "option_order",
+      "user_id",
+      "user_account",
+      "id"
+    ],
+    [
+      "transfer_record",
+      "user_id",
+      "user_account",
+      "id"
+    ],
+    [
+      "user_action",
+      "user_id",
+      "user_account",
+      "id"
+    ],
+    [
+      "user_bank_card",
+      "user_id",
+      "user_account",
+      "id"
+    ],
+    [
+      "user_digital_address",
+      "user_id",
+      "user_account",
+      "id"
+    ],
+    [
+      "user_menu",
+      "user_id",
+      "user_account",
+      "id"
+    ],
+    [
+      "withdraw_record",
+      "user_id",
+      "user_account",
+      "id"
+    ],
+    [
+      "demo_account",
+      "user_id",
+      "user_account",
+      "id"
+    ],
+    [
+      "demo_order",
+      "user_id",
+      "user_account",
+      "id"
+    ],
+    [
+      "demo_ledger",
+      "user_id",
+      "user_account",
+      "id"
+    ],
+    [
+      "trial_account",
+      "user_id",
+      "user_account",
+      "id"
+    ],
+    [
+      "trial_ledger",
+      "user_id",
+      "user_account",
+      "id"
+    ],
+    [
+      "simulation_seed",
+      "user_id",
+      "user_account",
+      "id"
+    ],
+    [
+      "inbox_letter",
+      "user_id",
+      "user_account",
+      "id"
+    ],
+    [
+      "support_conversation",
+      "user_id",
+      "user_account",
+      "id"
+    ],
+    [
+      "asset_history_1m",
+      "user_id",
+      "user_account",
+      "id"
+    ],
+    [
+      "asset_history_1h",
+      "user_id",
+      "user_account",
+      "id"
+    ],
+    [
+      "asset_history_4h",
+      "user_id",
+      "user_account",
+      "id"
+    ],
+    [
+      "asset_history_1d",
+      "user_id",
+      "user_account",
+      "id"
+    ],
+    [
+      "asset_history_baseline",
+      "user_id",
+      "user_account",
+      "id"
+    ],
+    [
+      "asset_history_revision",
+      "user_id",
+      "user_account",
+      "id"
+    ],
+    [
+      "manual_order_record",
+      "user_id",
+      "user_account",
+      "id"
+    ],
+    [
+      "user_account",
+      "parent_user_id",
+      "user_account",
+      "id"
+    ],
+    [
+      "admin_user",
+      "role_id",
+      "admin_role",
+      "id"
+    ],
+    [
+      "admin_role_menu",
+      "role_id",
+      "admin_role",
+      "id"
+    ],
+    [
+      "financial_order",
+      "product_id",
+      "financial_product",
+      "id"
+    ],
+    [
+      "financial_yield_record",
+      "product_id",
+      "financial_product",
+      "id"
+    ],
+    [
+      "financial_yield_record",
+      "order_id",
+      "financial_order",
+      "id"
+    ],
+    [
+      "deposit_credit_record",
+      "deposit_record_id",
+      "deposit_record",
+      "id"
+    ],
+    [
+      "activity_delivery",
+      "campaign_id",
+      "activity_campaign",
+      "id"
+    ],
+    [
+      "support_conversation",
+      "active_user_id",
+      "user_account",
+      "id"
+    ],
+    [
+      "support_conversation",
+      "admin_id",
+      "admin_user",
+      "id"
+    ],
+    [
+      "support_message",
+      "conversation_id",
+      "support_conversation",
+      "id"
+    ],
+    [
+      "support_presence",
+      "admin_id",
+      "admin_user",
+      "id"
+    ],
+    [
+      "support_attachment",
+      "message_id",
+      "support_message",
+      "id"
+    ],
+    [
+      "inbox_letter",
+      "admin_id",
+      "admin_user",
+      "id"
+    ],
+    [
+      "backend_login",
+      "user_id",
+      "user_account",
+      "id"
+    ],
+    [
+      "backend_login",
+      "admin_user_id",
+      "admin_user",
+      "id"
+    ],
+    [
+      "demo_ledger",
+      "order_id",
+      "demo_order",
+      "id"
+    ],
+    [
+      "manual_order_record",
+      "order_id",
+      "contract_order",
+      "id"
+    ],
+    [
+      "market_control_flow",
+      "task_id",
+      "market_control_task",
+      "id"
+    ],
+    [
+      "market_control_hold",
+      "task_id",
+      "market_control_task",
+      "id"
+    ],
+    [
+      "market_control_plan",
+      "task_id",
+      "market_control_task",
+      "id"
+    ],
+    [
+      "market_control_publication",
+      "task_id",
+      "market_control_task",
+      "id"
+    ],
+    [
+      "market_control_resume",
+      "task_id",
+      "market_control_task",
+      "id"
+    ],
+    [
+      "market_control_sample",
+      "task_id",
+      "market_control_task",
+      "id"
+    ],
+    [
+      "market_control_task",
+      "symbol_id",
+      "trading_symbol",
+      "id"
+    ],
+    [
+      "market_legacy_minute_snapshot",
+      "symbol_id",
+      "trading_symbol",
+      "id"
+    ],
+    [
+      "market_mixed_minute",
+      "symbol_id",
+      "trading_symbol",
+      "id"
+    ],
+    [
+      "market_simulation_source_candle",
+      "symbol_id",
+      "trading_symbol",
+      "id"
+    ],
+    [
+      "market_source_candle",
+      "symbol_id",
+      "trading_symbol",
+      "id"
+    ],
+    [
+      "market_source_event",
+      "symbol_id",
+      "trading_symbol",
+      "id"
+    ],
+    [
+      "market_source_quote",
+      "symbol_id",
+      "trading_symbol",
+      "id"
+    ],
+    [
+      "market_source_tick",
+      "symbol_id",
+      "trading_symbol",
+      "id"
+    ],
+    [
+      "asset_history_1m",
+      "quote_batch_id",
+      "asset_history_quote_batch",
+      "batch_id"
+    ],
+    [
+      "activity_selection",
+      "campaign_id",
+      "activity_campaign",
+      "id"
+    ],
+    [
+      "activity_selection_member",
+      "selection_id",
+      "activity_selection",
+      "id"
+    ],
+    [
+      "activity_selection_member",
+      "user_id",
+      "user_account",
+      "id"
+    ],
+    [
+      "activity_send_receipt",
+      "campaign_id",
+      "activity_campaign",
+      "id"
+    ],
+    [
+      "trial_grant",
+      "user_id",
+      "user_account",
+      "id"
+    ],
+    [
+      "trial_grant",
+      "campaign_id",
+      "activity_campaign",
+      "id"
+    ],
+    [
+      "trial_grant",
+      "delivery_id",
+      "activity_delivery",
+      "id"
+    ],
+    [
+      "announcement_receipt",
+      "user_id",
+      "user_account",
+      "id"
+    ],
+    [
+      "announcement_receipt",
+      "announcement_id",
+      "announcement",
+      "id"
+    ],
+    [
+      "manual_order_binding",
+      "order_id",
+      "contract_order",
+      "id"
+    ],
+    [
+      "manual_order_binding",
+      "user_id",
+      "user_account",
+      "id"
+    ]
+  ],
+  "notes": {
+    "market_source_*": "Currently references tenant-owned trading_symbol.id; keep private until a separate public instrument catalogue exists.",
+    "operation_log.admin_id": "Polymorphic legacy audit actor; not safely constrained to admin_user. Real control actor remains separate.",
+    "support_message.sender_id": "Polymorphic sender, validated by service against conversation tenant.",
+    "simulation_seed": "Requires local simulation user row; do not reference IDs from a different database without a tenant-bound identity mapping."
+  },
+  "legacy_triggers": {
+    "ahc_1_delete": {
+      "table": "asset_history_1h",
+      "event": "DELETE",
+      "timing": "AFTER",
+      "body_sha256": "664071c08f615ee2c2818e60721eab539740d32a368e460ecfb756989aaa3b05"
+    },
+    "ahc_1_insert": {
+      "table": "asset_history_1h",
+      "event": "INSERT",
+      "timing": "AFTER",
+      "body_sha256": "534402f110f31896cc6093631aa1351a210db3af59922b5a8600c57065d6d36a"
+    },
+    "ahc_1_update": {
+      "table": "asset_history_1h",
+      "event": "UPDATE",
+      "timing": "AFTER",
+      "body_sha256": "56e4570a8e62cc5ba4c547abdc0d078f390716541bc7fbeb210caad090271098"
+    },
+    "ahc_2_delete": {
+      "table": "asset_history_4h",
+      "event": "DELETE",
+      "timing": "AFTER",
+      "body_sha256": "f5032f3298a3d273140d83dd1338e5369e4f90bd4d41f2ce90ef1b0b48353a4f"
+    },
+    "ahc_2_insert": {
+      "table": "asset_history_4h",
+      "event": "INSERT",
+      "timing": "AFTER",
+      "body_sha256": "814b806003d954c744fe2ab32b4390d6952416f2e69a1f5d11948a9e8b9b3cb7"
+    },
+    "ahc_2_update": {
+      "table": "asset_history_4h",
+      "event": "UPDATE",
+      "timing": "AFTER",
+      "body_sha256": "72b4e8227ca8147a2c40cab83a6a2f0a9dab14c8997c83d25653a9045da323d9"
+    },
+    "ahc_3_delete": {
+      "table": "asset_history_1d",
+      "event": "DELETE",
+      "timing": "AFTER",
+      "body_sha256": "ff6b2fc75f8f0f487b4bfb571d6a577eb655a2cb0e9c52120427a80812312ced"
+    },
+    "ahc_3_insert": {
+      "table": "asset_history_1d",
+      "event": "INSERT",
+      "timing": "AFTER",
+      "body_sha256": "8e88c45874f6414d73c4b81795ecd719030038a84bb483fd17a05e5cafba03d9"
+    },
+    "ahc_3_update": {
+      "table": "asset_history_1d",
+      "event": "UPDATE",
+      "timing": "AFTER",
+      "body_sha256": "fd364e4b75124a7fb72e7891dd793addafca78aa5af44c833d52a7895ea845a6"
+    }
+  },
+  "introduced_tables": {
+    "activity_material": "V2026092905__activity_material_library.sql",
+    "balance_adjustment": "V2026092900__legacy_feature_prerequisites.sql",
+    "control_table_preference": "V2026093002__control_table_preferences.sql",
+    "tenant_domain_binding": "V2026093004__tenant_domain_candidates.sql",
+    "user_id_sequence": "V2026093005__user_id_sequence.sql",
+    "control_chat_archive_job": "V2026093006__chat_archive_jobs.sql",
+    "activity_selection": "V2026100102__stage1_current_business_schema.sql",
+    "activity_selection_member": "V2026100102__stage1_current_business_schema.sql",
+    "activity_send_receipt": "V2026100102__stage1_current_business_schema.sql",
+    "trial_grant": "V2026100102__stage1_current_business_schema.sql",
+    "announcement_receipt": "V2026100102__stage1_current_business_schema.sql",
+    "manual_order_binding": "V2026100102__stage1_current_business_schema.sql"
+  },
+  "migration_files": [
+    "V2026092900__legacy_feature_prerequisites.sql",
+    "V2026092901__multitenant_control.sql",
+    "V2026092902__multitenant_isolation.sql",
+    "V2026092903__activity_delivery_settings.sql",
+    "V2026092904__activity_template_design.sql",
+    "V2026092905__activity_material_library.sql",
+    "V2026092906__activity_repeat_send.sql",
+    "V2026093001__activity_material_constraints.sql",
+    "V2026093002__control_table_preferences.sql",
+    "V2026093003__support_time_filter.sql",
+    "V2026093004__tenant_domain_candidates.sql",
+    "V2026093005__user_id_sequence.sql",
+    "V2026093006__chat_archive_jobs.sql",
+    "V2026100101__tenant_history_revision_and_legacy_markers.sql",
+    "V2026100102__stage1_current_business_schema.sql",
+    "V2026100201__ordinary_funds_creation_receipts.sql"
+  ],
+  "superseded_authoring_inputs": {
+    "V2026093001__simple_manual_orders.sql": "V2026100102__stage1_current_business_schema.sql",
+    "V2026093006__moddoc_T02_trial_activity.sql": "V2026100102__stage1_current_business_schema.sql",
+    "moddoc-T01-registration-fields.sql": "V2026100102__stage1_current_business_schema.sql"
+  }
+}

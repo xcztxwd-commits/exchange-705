@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ProtectedImage from '@/components/ProtectedImage.vue'
 import { ref, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import request from '@/utils/request'
@@ -281,7 +282,7 @@ onMounted(() => {
             <div class="signature-label">{{ localeStore.t('borrower') }}{{ localeStore.t('signature') }}:</div>
           </div>
           <div class="signature-image" v-if="loan.signatureImage">
-            <img :src="getSignatureImageUrl(loan.signatureImage)" :alt="localeStore.t('signature')" @error="handleImageError" />
+            <ProtectedImage :src="getSignatureImageUrl(loan.signatureImage)" :alt="localeStore.t('signature')" @error="handleImageError" />
           </div>
           <div class="signature-date" v-if="loan.updatedAt">
             {{ localeStore.t('signDate') }}: {{ formatDate(loan.updatedAt) }} {{ loan.updatedAt ? getSystemTimeZoneLabel(new Date(loan.updatedAt)) : '' }}

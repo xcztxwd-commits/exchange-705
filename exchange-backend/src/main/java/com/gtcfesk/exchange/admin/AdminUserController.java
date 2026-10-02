@@ -323,6 +323,7 @@ public class AdminUserController {
     @com.gtcfesk.exchange.config.AdminPermission(menu = "users", action = "view_subordinates")
     public ResponseEntity<?> getSubordinates(
             @PathVariable Long userId,
+            @RequestParam(required = false) String email,
             @RequestHeader(value = "Authorization", required = false) String authHeader
     ) {
         // 如果是代理，只能查看自己的下级用户
@@ -334,6 +335,11 @@ public class AdminUserController {
         }
         
         List<UserAccount> subordinates = adminUserService.getSubordinates(userId);
+        if (email != null && !email.trim().isEmpty()) {
+            AdminUserIdentity.emailPattern(email);
+            String search = email.trim().toLowerCase(java.util.Locale.ROOT);
+            subordinates = subordinates.stream().filter(user -> user.getEmail() != null && user.getEmail().toLowerCase(java.util.Locale.ROOT).contains(search)).collect(java.util.stream.Collectors.toList());
+        }
         Map<String, Object> result = new HashMap<>();
         result.put("list", subordinates);
         result.put("total", subordinates.size());

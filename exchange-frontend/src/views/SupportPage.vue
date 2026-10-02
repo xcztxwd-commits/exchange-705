@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { ref, watch, onMounted, onUnmounted } from 'vue'
+import { computed, ref, watch, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import request from '@/utils/request'
 import SupportThread from '@/components/SupportThread.vue'
+import AppSelect from '@/components/AppSelect.vue'
 import { supportText as t, supportDate, type Conversation, type SupportConfig } from '@/utils/support'
 import { useLocaleStore } from '@/store/locale'
 const localeStore = useLocaleStore()
@@ -10,6 +11,7 @@ const router = useRouter(),
   config = ref<SupportConfig>(),
   sessions = ref<Conversation[]>([]),
   current = ref<Conversation>()
+const sessionOptions = computed(() => sessions.value.map(s => ({ value: s.id, label: `#${s.id} · ${supportDate(s.createdAt)} · ${s.status}` })))
 const busy = ref(false),
   error = ref(''),
   historyPage = ref(0)
@@ -126,18 +128,9 @@ function changePage(delta: number) {
         }}
       </div>
       <div class="session-toolbar">
-        <select
-          v-if="sessions.length"
-          :value="current?.id"
-          :aria-label="t('历史会话', 'Conversation history')"
-          @change="
-            current = sessions.find((s) => s.id === Number(($event.target as HTMLSelectElement).value))
-          "
-        >
-          <option v-for="s in sessions" :key="s.id" :value="s.id">
-            #{{ s.id }} · {{ supportDate(s.createdAt) }} · {{ s.status }}
-          </option>
-        </select>
+        <AppSelect v-if="sessions.length" class="session-select" :model-value="current?.id ?? ''"
+          :options="sessionOptions" :label="t('历史会话', 'Conversation history')"
+          @update:model-value="current = sessions.find(s => s.id === Number($event))" />
         <div v-if="historyPage > 0 || sessions.length === 30" class="history-pages">
           <button :disabled="historyPage === 0" @click="changePage(-1)">‹</button
           ><button :disabled="sessions.length < 30" @click="changePage(1)">›</button>
@@ -240,16 +233,7 @@ function changePage(delta: number) {
   padding: 12px 22px;
   min-height: 30px;
 }
-.session-toolbar select {
-  min-width: 0;
-  max-width: 65%;
-  padding: 8px;
-  border: 1px solid #e7ebe1;
-  border-radius: 8px;
-  background: white;
-  font-size: 12px;
-  color: #687285;
-}
+.session-select { min-width:0; max-width:65%; font-size:12px; }
 .session-toolbar > button {
   margin-left: auto;
   font-size: 12px;

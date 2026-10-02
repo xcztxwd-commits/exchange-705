@@ -21,17 +21,20 @@ public class AssetHistoryService {
     private boolean equityRead;
     @org.springframework.beans.factory.annotation.Value("${asset.history.equity.collect-enabled:false}")
     private boolean equityCollect;
+    @org.springframework.beans.factory.annotation.Autowired private com.gtcfesk.exchange.tenant.TenantJobRunner tenantJobs;
     // Same accounting boundary for the headline and every historical sample.
     // Frozen money remains owned; internal transfers must not appear as gains/losses.
     private static final String TOTAL = "coalesce(sum(coalesce(available,0)+coalesce(frozen,0)),0)";
     private static final String ACCOUNTS = "upper(coin) in ('FUND','CONTRACT','OPTION')";
 
     @Scheduled(fixedDelay = 60000, initialDelay = 10000)
-    @Transactional
     public void capture() {
         if (equityCollect) return;
-        jdbc.update("insert into asset_snapshot (user_id,captured_at,total) select user_id,?," + TOTAL
-                + " from asset_account where " + ACCOUNTS + " group by user_id", System.currentTimeMillis());
+        tenantJobs.each("asset-history",tenant -> captureTenant());
+    }
+    private void captureTenant() {
+        jdbc.update("insert into asset_snapshot (tenant_id,user_id,captured_at,total) select tenant_id,user_id,?," + TOTAL
+                + " from asset_account where tenant_id="+com.gtcfesk.exchange.tenant.TenantContext.requireTenantId()+" and " + ACCOUNTS + " group by tenant_id,user_id", System.currentTimeMillis());
     }
 
     /** Retained compatibility entry point; raw history is never automatically deleted. */
@@ -50,22 +53,22 @@ public class AssetHistoryService {
     public Map<String, Object> history(Long userId, String range) {
         if (equityRead) return equity.history(userId, range);
         long duration = rangeMillis(range); // Validate before database access.
-        List<String> zones = jdbc.query("select config_value from system_config where config_key='system.timezone'", (rs, row) -> rs.getString(1));
+        List<String> zones = jdbc.query("select config_value from system_config where tenant_id="+com.gtcfesk.exchange.tenant.TenantContext.requireTenantId()+" and config_key='system.timezone'", (rs, row) -> rs.getString(1));
         ZoneId zone;
         try { zone = ZoneId.of(zones.isEmpty() ? "Europe/London" : zones.get(0)); }
         catch (DateTimeException | NullPointerException e) { zone = ZoneId.of("Europe/London"); }
         long now = System.currentTimeMillis(), from = now - duration;
         long bucket = bucketMillis(range);
         List<Map<String, Object>> points = jdbc.query(
-                "select captured_at,total from asset_snapshot where id in (select max(id) from asset_snapshot "
-                + "where user_id=? and captured_at>=? and captured_at<=? group by floor((captured_at-?) / ?)) "
-                + "or id=(select min(id) from asset_snapshot where user_id=? and captured_at>=? and captured_at<=?) "
-                + "or id=(select id from asset_snapshot where user_id=? and captured_at>=? and captured_at<=? order by total asc,captured_at asc limit 1) "
-                + "or id=(select id from asset_snapshot where user_id=? and captured_at>=? and captured_at<=? order by total desc,captured_at asc limit 1) order by captured_at",
+                "select captured_at,total from asset_snapshot where tenant_id="+com.gtcfesk.exchange.tenant.TenantContext.requireTenantId()+" and id in (select max(id) from asset_snapshot "
+                + "where tenant_id="+com.gtcfesk.exchange.tenant.TenantContext.requireTenantId()+" and user_id=? and captured_at>=? and captured_at<=? group by floor((captured_at-?) / ?)) "
+                + "or id=(select min(id) from asset_snapshot where tenant_id="+com.gtcfesk.exchange.tenant.TenantContext.requireTenantId()+" and user_id=? and captured_at>=? and captured_at<=?) "
+                + "or id=(select id from asset_snapshot where tenant_id="+com.gtcfesk.exchange.tenant.TenantContext.requireTenantId()+" and user_id=? and captured_at>=? and captured_at<=? order by total asc,captured_at asc limit 1) "
+                + "or id=(select id from asset_snapshot where tenant_id="+com.gtcfesk.exchange.tenant.TenantContext.requireTenantId()+" and user_id=? and captured_at>=? and captured_at<=? order by total desc,captured_at asc limit 1) order by captured_at",
                 (rs, row) -> point(rs.getLong(1), rs.getBigDecimal(2)), userId, from, now, from, bucket, userId, from, now, userId, from, now, userId, from, now);
-        BigDecimal current = jdbc.queryForObject("select " + TOTAL + " from asset_account where user_id=? and " + ACCOUNTS,
+        BigDecimal current = jdbc.queryForObject("select " + TOTAL + " from asset_account where tenant_id="+com.gtcfesk.exchange.tenant.TenantContext.requireTenantId()+" and user_id=? and " + ACCOUNTS,
                 BigDecimal.class, userId);
-        List<Map<String, Object>> opening = jdbc.query("select captured_at,total from asset_snapshot where user_id=? and captured_at<=? and captured_at>=? order by captured_at desc limit 1",
+        List<Map<String, Object>> opening = jdbc.query("select captured_at,total from asset_snapshot where tenant_id="+com.gtcfesk.exchange.tenant.TenantContext.requireTenantId()+" and user_id=? and captured_at<=? and captured_at>=? order by captured_at desc limit 1",
                 (rs, row) -> { Map<String,Object> p = point(from, rs.getBigDecimal(2)); p.put("observedAt", rs.getLong(1)); return p; }, userId, from, from - 120000);
         // Carry only a recent known opening balance, never assume missing history was zero.
         if (!opening.isEmpty() && (points.isEmpty() || (Long) points.get(0).get("time") > from)) points.add(0, opening.get(0));
@@ -95,11 +98,11 @@ public class AssetHistoryService {
     }
 
     BigDecimal incomeOpening(Long userId, long start, long now) {
-        List<BigDecimal> values = jdbc.query("select total from asset_snapshot where user_id=? and captured_at<=? and captured_at>=? order by captured_at desc,id desc limit 1",
+        List<BigDecimal> values = jdbc.query("select total from asset_snapshot where tenant_id="+com.gtcfesk.exchange.tenant.TenantContext.requireTenantId()+" and user_id=? and captured_at<=? and captured_at>=? order by captured_at desc,id desc limit 1",
                 (rs, row) -> rs.getBigDecimal(1), userId, start, start - 120000);
         // Product fallback: earliest positive observed assets, not reconstructed deposits.
         if (values.isEmpty() || values.get(0).signum() == 0) {
-            values = jdbc.query("select total from asset_snapshot where user_id=? and captured_at<=? and total>0 order by captured_at asc,id asc limit 1",
+            values = jdbc.query("select total from asset_snapshot where tenant_id="+com.gtcfesk.exchange.tenant.TenantContext.requireTenantId()+" and user_id=? and captured_at<=? and total>0 order by captured_at asc,id asc limit 1",
                     (rs, row) -> rs.getBigDecimal(1), userId, now);
         }
         return values.isEmpty() ? BigDecimal.ZERO : values.get(0);
@@ -137,9 +140,9 @@ public class AssetHistoryService {
         // server's storage timezone before querying the timestamp-without-zone columns.
         Timestamp start = Timestamp.valueOf(LocalDateTime.ofInstant(Instant.ofEpochMilli(from), ZoneId.systemDefault()));
         Timestamp end = Timestamp.valueOf(LocalDateTime.ofInstant(Instant.ofEpochMilli(to), ZoneId.systemDefault()));
-        BigDecimal options = jdbc.queryForObject("select coalesce(sum(profit),0) from option_order where user_id=? and status='CLOSED' and close_time>=? and close_time<=?", BigDecimal.class, userId, start, end);
-        BigDecimal contracts = jdbc.queryForObject("select coalesce(sum(coalesce(profit,0)-case when lot_size is not null then coalesce(fee,0) else 0 end),0) from contract_order where user_id=? and status='CLOSED' and close_time>=? and close_time<=?", BigDecimal.class, userId, start, end);
-        BigDecimal yield = jdbc.queryForObject("select coalesce(sum(daily_yield),0) from financial_yield_record where user_id=? and status='PAID' and paid_at>=? and paid_at<=?", BigDecimal.class, userId, start, end);
+        BigDecimal options = jdbc.queryForObject("select coalesce(sum(profit),0) from option_order where tenant_id="+com.gtcfesk.exchange.tenant.TenantContext.requireTenantId()+" and user_id=? and status='CLOSED' and close_time>=? and close_time<=?", BigDecimal.class, userId, start, end);
+        BigDecimal contracts = jdbc.queryForObject("select coalesce(sum(coalesce(profit,0)-case when lot_size is not null then coalesce(fee,0) else 0 end),0) from contract_order where tenant_id="+com.gtcfesk.exchange.tenant.TenantContext.requireTenantId()+" and user_id=? and status='CLOSED' and close_time>=? and close_time<=?", BigDecimal.class, userId, start, end);
+        BigDecimal yield = jdbc.queryForObject("select coalesce(sum(daily_yield),0) from financial_yield_record where tenant_id="+com.gtcfesk.exchange.tenant.TenantContext.requireTenantId()+" and user_id=? and status='PAID' and paid_at>=? and paid_at<=?", BigDecimal.class, userId, start, end);
         return options.add(contracts).add(yield);
     }
 

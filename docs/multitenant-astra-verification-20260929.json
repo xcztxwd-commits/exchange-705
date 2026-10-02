@@ -1,0 +1,966 @@
+{
+  "date": "2026-09-29",
+  "timezone": "Asia/Singapore",
+  "complete": false,
+  "production_deployed": false,
+  "workspace": "C:\\workspace\\fx\\705",
+  "head": "668edcbc72ebda33d0e50172d119bc92ccebb479",
+  "evidence_directory": "C:\\Windows\\Temp\\mt705-astra-20260929",
+  "source_manifest": "C:\\Windows\\Temp\\mt705-astra-20260929\\full-second-source-manifest.json",
+  "source_manifest_sha256": "335d791c9aa8a48939e45b3d3a8a748ad126c8a3c2d75b8dcabd43f5a0bef3ef",
+  "snapshot_workspace_drift": [],
+  "full_suite": {
+    "exit_code": 1,
+    "totals": {
+      "tests": 2393,
+      "failures": 8,
+      "errors": 213,
+      "skipped": 31,
+      "passed": 2141
+    },
+    "failed_suites": [
+      {
+        "suite": "com.gtcfesk.exchange.admin.AnnouncementCountdownTest",
+        "tests": 1,
+        "failures": 0,
+        "errors": 1,
+        "skipped": 0,
+        "first_cause": "Request processing failed; nested exception is org.springframework.security.access.AccessDeniedException: 缺少有效租户上下文"
+      },
+      {
+        "suite": "com.gtcfesk.exchange.admin.DepositRecipientTest",
+        "tests": 1,
+        "failures": 0,
+        "errors": 1,
+        "skipped": 0,
+        "first_cause": "缺少有效租户上下文"
+      },
+      {
+        "suite": "com.gtcfesk.exchange.auth.RegistrationWithoutCodeTest",
+        "tests": 1,
+        "failures": 0,
+        "errors": 1,
+        "skipped": 0,
+        "first_cause": "Cannot invoke \"com.gtcfesk.exchange.control.TenantPolicyService.requireNewBusiness(String)\" because \"this.tenantPolicy\" is null"
+      },
+      {
+        "suite": "com.gtcfesk.exchange.market.ShareTemplateConfigTest",
+        "tests": 5,
+        "failures": 3,
+        "errors": 0,
+        "skipped": 0,
+        "first_cause": "Unexpected exception type thrown ==> expected: <com.gtcfesk.exchange.common.BusinessException> but was: <java.lang.NullPointerException>"
+      },
+      {
+        "suite": "com.gtcfesk.exchange.security.AdminPermissionIntegrationTest",
+        "tests": 7,
+        "failures": 0,
+        "errors": 7,
+        "skipped": 0,
+        "first_cause": "Failed to load ApplicationContext"
+      },
+      {
+        "suite": "com.gtcfesk.exchange.security.AdminPermissionLoginAuditTest",
+        "tests": 11,
+        "failures": 0,
+        "errors": 11,
+        "skipped": 0,
+        "first_cause": "Failed to load ApplicationContext"
+      },
+      {
+        "suite": "com.gtcfesk.exchange.security.MinimalFixRegressionTest",
+        "tests": 47,
+        "failures": 0,
+        "errors": 47,
+        "skipped": 0,
+        "first_cause": "Failed to load ApplicationContext"
+      },
+      {
+        "suite": "com.gtcfesk.exchange.security.PermissionGrantRepairTest",
+        "tests": 14,
+        "failures": 0,
+        "errors": 14,
+        "skipped": 0,
+        "first_cause": "Failed to load ApplicationContext"
+      },
+      {
+        "suite": "com.gtcfesk.exchange.security.RegistrationSecurityTest",
+        "tests": 6,
+        "failures": 1,
+        "errors": 0,
+        "skipped": 1,
+        "first_cause": "Unexpected exception type thrown ==> expected: <com.gtcfesk.exchange.security.SecurityFailure> but was: <org.springframework.security.access.AccessDeniedException>"
+      },
+      {
+        "suite": "com.gtcfesk.exchange.simulation.AccountInspectionTest",
+        "tests": 7,
+        "failures": 2,
+        "errors": 4,
+        "skipped": 0,
+        "first_cause": "缺少有效租户上下文"
+      },
+      {
+        "suite": "com.gtcfesk.exchange.simulation.AdminAccountQueryPermissionTest",
+        "tests": 6,
+        "failures": 0,
+        "errors": 1,
+        "skipped": 0,
+        "first_cause": "缺少有效租户上下文"
+      },
+      {
+        "suite": "com.gtcfesk.exchange.simulation.AdminReadDispatchTest",
+        "tests": 4,
+        "failures": 0,
+        "errors": 4,
+        "skipped": 0,
+        "first_cause": "Failed to load ApplicationContext"
+      },
+      {
+        "suite": "com.gtcfesk.exchange.simulation.SimulationApplicationTest",
+        "tests": 3,
+        "failures": 0,
+        "errors": 3,
+        "skipped": 0,
+        "first_cause": "Failed to load ApplicationContext"
+      },
+      {
+        "suite": "com.gtcfesk.exchange.simulation.SimulationGatewayTest",
+        "tests": 3,
+        "failures": 2,
+        "errors": 1,
+        "skipped": 0,
+        "first_cause": "缺少有效租户上下文"
+      },
+      {
+        "suite": "com.gtcfesk.exchange.simulation.SimulationPersistenceTest",
+        "tests": 12,
+        "failures": 0,
+        "errors": 11,
+        "skipped": 0,
+        "first_cause": "缺少有效租户上下文"
+      },
+      {
+        "suite": "com.gtcfesk.exchange.simulation.SimulationSecurityTest",
+        "tests": 8,
+        "failures": 0,
+        "errors": 2,
+        "skipped": 0,
+        "first_cause": "缺少有效租户上下文"
+      },
+      {
+        "suite": "com.gtcfesk.exchange.support.SupportHttpTest",
+        "tests": 4,
+        "failures": 0,
+        "errors": 4,
+        "skipped": 0,
+        "first_cause": "Failed to load ApplicationContext"
+      },
+      {
+        "suite": "com.gtcfesk.exchange.support.SupportServiceTest",
+        "tests": 42,
+        "failures": 0,
+        "errors": 42,
+        "skipped": 0,
+        "first_cause": "Failed to load ApplicationContext"
+      },
+      {
+        "suite": "com.gtcfesk.exchange.trade.CryptoQuantityPersistenceTest",
+        "tests": 2,
+        "failures": 0,
+        "errors": 2,
+        "skipped": 0,
+        "first_cause": "缺少有效租户上下文"
+      },
+      {
+        "suite": "com.gtcfesk.exchange.user.AssetEquityCarryTest",
+        "tests": 1,
+        "failures": 0,
+        "errors": 1,
+        "skipped": 0,
+        "first_cause": "缺少有效租户上下文"
+      },
+      {
+        "suite": "com.gtcfesk.exchange.user.AssetHistoryTest",
+        "tests": 8,
+        "failures": 0,
+        "errors": 8,
+        "skipped": 0,
+        "first_cause": "缺少有效租户上下文"
+      },
+      {
+        "suite": "com.gtcfesk.exchange.user.ContractEquityRateTest",
+        "tests": 1,
+        "failures": 0,
+        "errors": 1,
+        "skipped": 0,
+        "first_cause": "缺少有效租户上下文"
+      },
+      {
+        "suite": "com.gtcfesk.exchange.user.DepositOrderAccessTest",
+        "tests": 4,
+        "failures": 0,
+        "errors": 1,
+        "skipped": 0,
+        "first_cause": "缺少有效租户上下文"
+      },
+      {
+        "suite": "com.gtcfesk.exchange.user.DepositOrderServiceTest",
+        "tests": 20,
+        "failures": 0,
+        "errors": 20,
+        "skipped": 0,
+        "first_cause": "缺少有效租户上下文"
+      },
+      {
+        "suite": "com.gtcfesk.exchange.user.FiatDepositTest",
+        "tests": 22,
+        "failures": 0,
+        "errors": 22,
+        "skipped": 0,
+        "first_cause": "缺少有效租户上下文"
+      },
+      {
+        "suite": "com.gtcfesk.exchange.user.OrderSoftDeleteTest",
+        "tests": 5,
+        "failures": 0,
+        "errors": 4,
+        "skipped": 0,
+        "first_cause": "缺少有效租户上下文"
+      }
+    ],
+    "xml_files": [
+      {
+        "name": "TEST-com.gtcfesk.exchange.activity.ActivityDesignValidatorTest.xml",
+        "sha256": "1a432c2f0be79128f70ca8453cbfc813808825b63838b96c8befe65a6e4f2a46"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.activity.ActivityIntegrationTest.xml",
+        "sha256": "5e0fd6e63b16d8476741a413928cc9175fb98ea9e9aff6ddc4d6de492a9c0394"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.activity.ActivitySecurityTest.xml",
+        "sha256": "46b48fdcdaa6c6832f1d3ab23c11a3e4f1d7266893f3752171a24f95e59add3b"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.admin.AdminOrderQuantityProjectionTest.xml",
+        "sha256": "277a55a1345af1fc92fcb4ad94d98b2f1f258594b539206b5c5f63f40cacb61f"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.admin.AdminTablePreferenceTest.xml",
+        "sha256": "c9bb53d86b476a0479a5a661a961990fde804212fa0f4c780548cf5d4d30108c"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.admin.AgentProvisioningPolicyTest.xml",
+        "sha256": "ca2b97b508b16a2d4f6312bcd79bb64a8df286fef03ace7d1bc23a970561cbc3"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.admin.AnnouncementCountdownTest.xml",
+        "sha256": "2e02cb105624b0c055b0200b58a74356d7fa7135cee6eb32ddbd4ec9558376d1"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.admin.DepositCustomerSearchTest.xml",
+        "sha256": "9706e08ced3528491e046ab999371b49cc136667322034ebfa65179ef99d926a"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.admin.DepositRecipientTest.xml",
+        "sha256": "2c271f9254a3dfe0ca88cad18db80499a9010cfe21e918c2c591a2c3ad609970"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.admin.SystemConfigControllerTest.xml",
+        "sha256": "1dde69a5e00b9f0e38f89d94b4bd192155268feee4651680c2b9fe08f009e09e"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.auth.RegistrationWithoutCodeTest.xml",
+        "sha256": "cd276ee490189ad68de5ee0be79455036f6ebd2f1deaba4367b049b4e9232a4d"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.common.AudioValidationTest.xml",
+        "sha256": "9a708a02bb654b9ccba74e6abce9977c7a4b5ea4814f5e1e979e94d86a834b60"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.common.ForexDisplayNameTest.xml",
+        "sha256": "5b656c8a0e70e1225daac7929185db5bafa6453917a886abe2ce0fc7d98cd1f3"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.common.ImageAuthorizationTest.xml",
+        "sha256": "9e561739b49965d208017b4460bbecf12013f6d2adf9ec350a60a6fdb0b6f2de"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.control.ControlAccountSecurityTest.xml",
+        "sha256": "66c37b338d7969596475c256b99e1d870c1947af36d45df390c08e0d98b9a214"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.control.ControlFundsTransactionTest.xml",
+        "sha256": "16bc7a64388e17bb0c1cedb0039e75637119f89caf5f2eab161f9f1c44910063"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.control.ControlReadQueryTest.xml",
+        "sha256": "97291d9c8eb9b375ebdc001748489a63ff9d7215e387b97b1533ce489b1f984a"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.control.ControlSecurityTest.xml",
+        "sha256": "5a37bde9d1d2d6f7331075c291f298c861155e1b73c52ddc9a00c8e207432c77"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.control.ControlSupportIsolationTest.xml",
+        "sha256": "a382c4f67e2366e76f3f320c4edb8c549f85cf06fccbcb1105b9f11ba73cc8a5"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.control.SimulationTenantIsolationTest.xml",
+        "sha256": "6bb9a3da28690d54f9da4b61aea5be881520236c8cccdd64abf43f63822d4127"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.control.TenantJwtBoundaryTest.xml",
+        "sha256": "0f4100e0d39bc4ec59afac86fac2d17f1f3a6b1f23420c525bdcefd1e0519af9"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.control.TenantReadinessTest.xml",
+        "sha256": "a3742ca77a271e368073a91d44d13af9e99aba1fabf5b424ae2f81bade2a9184"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.demo.DemoPersistenceTest.xml",
+        "sha256": "65829d846a33d5410eb26fde837c6f731326fb2dccb2ce8152c4719d55856778"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.demo.DemoSecurityTest.xml",
+        "sha256": "efaf26f1f4539e6b5ea9435367d21df26d5a5fefeea822a97cb1cd6ffd03d5d5"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.demo.DemoTradingTest.xml",
+        "sha256": "b4c5e75e6552db4c255ae16d000b22eec3c1700b6a8756d1ba768d66c2dc00a3"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.market.BalancedControlPlanMySqlTest.xml",
+        "sha256": "a5068f463f6d9c5c393fc0bc2143ffa8f96b4872d5f87c513a675b03ea4f3e7a"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.market.BalancedControlPlanTest.xml",
+        "sha256": "2112e5883a9c1c9c3269e2cfa5a4d552769c77200f14e2f437b7747e51cf9bdd"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.market.CatalogLiveTest.xml",
+        "sha256": "cebeeace4de16cae60c73ae5eaad75d6839bd3b27abddeed53d86953ef3cf072"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.market.ContractCloseConcurrencyTest.xml",
+        "sha256": "ea518c38e7145bf579e46317652de3644a732bb4cfe02db1da59ccfc55ad0c18"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.market.ContractConversionTest.xml",
+        "sha256": "fbdfa37f61ef18e198ec51f4ecc549d7b7d11aecab5c7db40d78a2681155c86c"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.market.ControlFlowMarketIntegrationTest.xml",
+        "sha256": "979140eab50cc2ac9e39bf32aa72609f5678657552a7a8252688fe7ea921b96e"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.market.ControlRecoveryFlowTest.xml",
+        "sha256": "7dc88b7c72fc766d428404944c67879c6f70c8ee3d338fe0f364a8830aec2719"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.market.CryptoPerpetualTest.xml",
+        "sha256": "0950e8b3e82c2f40a10843bc990891afe1fcc31d2a83c2940d857afadb9f9674"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.market.ExchangeConnectionTest.xml",
+        "sha256": "0f8e6eb57643feb44ede6046086c41700ec8bcccf9a4b0b3d5d1a8773a996a76"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.market.ExchangeFallbackTest.xml",
+        "sha256": "ef4775fee56ce91748f75eee803bf91bd38bb2000e50872a922d786706bb9844"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.market.ExchangeLiveTest.xml",
+        "sha256": "217df8d04aa5fc1b7303a5db02c40b34f34cacadacf075606cd059969766d1ed"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.market.ExchangeQuoteTest.xml",
+        "sha256": "15dda316366cd4e224ab20d6c8a03f60ba86d4b16f7e31164a1ac7026e676c9f"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.market.ExecutionQuoteTest.xml",
+        "sha256": "2bb5aab5484d92f9ef11555c94ec63ea5320c612d577d0c1e7dc2fcde9e44629"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.market.KlineRetentionRegressionTest.xml",
+        "sha256": "7f1bd686a46eb1c481acf6221f7f7ad318cc930de271086b694e82ee234f8938"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.market.KlineSchedulingTest.xml",
+        "sha256": "c1bd984b883c56b87c477d5e8a74224c86323d0a60c10ee31af4a2e186c93611"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.market.MarketForexSearchTest.xml",
+        "sha256": "1e7a4d44771976dc14c1603773e0105298d4885a78614ef15fad47983f22a6a4"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.market.MarketIconTest.xml",
+        "sha256": "70cc3ec07e03bb9e74108b5f31347bee35d7be2e1b36142bb7f87d2cb0130fe1"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.market.MarketInstrumentCatalogTest.xml",
+        "sha256": "81c397480024530612d0ff21993da4a818b8de259021d1ed52b97ea234d85dbe"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.market.MarketIsolationTest.xml",
+        "sha256": "c5ca2e0812307536fd87e974788feacff1093372ec773421c6b0a084c4f25c6f"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.market.MarketPushTest.xml",
+        "sha256": "3bd1f013baa7f930657575b251c242ae34639f2095ac55779bc06e31d5796a97"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.market.PersistentPriceControlTest.xml",
+        "sha256": "db23fd595e73a58465155b6aec0f7d754b1e65b97e43587ea7e982b7ee5eb3df"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.market.PriceControlTest.xml",
+        "sha256": "918115d1bf377a1eea3e80f447c1bfd1d4336c00bfa21c828eb887e72dad86ba"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.market.PriceControlV2Test.xml",
+        "sha256": "d6866e0a81e3499a0d2553b5527f986129df45f634ffd8e88834485b81c46081"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.market.QuoteCurrencyConversionTest.xml",
+        "sha256": "315a897228d4c3a45e15cf142c21925909a43c37a4dfad05c703e6585c3d3459"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.market.QuoteStateTest.xml",
+        "sha256": "a8ace21b21ab6a9d2939fa719b53d09fbbce081646cd4c1ef10ad2a0c3a407d6"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.market.RandomMarketPathTest.xml",
+        "sha256": "f701d0da5468069d7718ab61631273fd704e0fa846dcc26e6fafc6d826551f29"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.market.ReceivedIndexRegressionTest.xml",
+        "sha256": "64d8ada4550dd411dfa9fd679e97e7384730a05dccab4633a791dd140af9b865"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.market.ShareHistoryTest.xml",
+        "sha256": "f09daf5f2c920bac9eb83c2e908375439af7856b04a03ae5571000b9ca28c882"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.market.ShareTemplateConfigTest.xml",
+        "sha256": "f181cec1b2e54af9e01e76bb1031f82295215507d31647d30fe619117c8c10d9"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.market.SimulationControlPathTest.xml",
+        "sha256": "940eb594a0d698dd6427cf3c16bc303eba45f47a8f5e50468c8a3a158c3e0384"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.market.SimulationControlTenantTest.xml",
+        "sha256": "c4d34f3f60b5a993de7ffc06f2a0426482052df616bd328242ac676093d67748"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.market.SourceCandlesBatchRegressionTest.xml",
+        "sha256": "72d47fb87aaf378f0741ffe740eba50a5c341dab431a4f727ab106a52078c238"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.market.TenantMarketIsolationTest.xml",
+        "sha256": "e10cf5f0dbfd6d3e0d2df7de00ab527e1d42fe04dc9a8c5ef579953f860cb4e9"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.market.YahooConnectionTest.xml",
+        "sha256": "99f7a0c10196c5d8f17fe611a3fed948ccd85cfd136154ce81379f7b4868dae9"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.market.YahooQuoteStreamTest.xml",
+        "sha256": "abafa6bd402a14aae9c73a7a8dc2ac305249dd5fbb1c397e82e8471926b916c1"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.security.AdminPermissionIntegrationTest.xml",
+        "sha256": "62eed2e8df3e0cbf2ddbc0968f8d2aab94c3d504e798523cd8989ba7b07ec29c"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.security.AdminPermissionLoginAuditTest.xml",
+        "sha256": "feac708542c7ee6bf1deef9efa005aa05663e59383288c989672b047561aab99"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.security.EmailRateLimitTest.xml",
+        "sha256": "0ff40abf78d6095e53a45c8d817443ee4ec9b5acda5488ecad60d9f71b9659c3"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.security.MinimalFixRegressionTest.xml",
+        "sha256": "1283aafbac92e3577a061f4e0a1bdfaf8e899ff1a6b75911469495e316250078"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.security.OutboundEndpointPolicyTest.xml",
+        "sha256": "3b40fe6dbf53f8d9ebd956bff78a23153c39e8ae41934112e9d3b628819bd97a"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.security.PermissionGrantRepairTest.xml",
+        "sha256": "947a3611f3769faef31dd7edbf55b3161191415775cdeed5de459181401d3982"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.security.RealRegistrationFlowTest.xml",
+        "sha256": "364f6e3500c7443698d39642ca5efcfe82d182daa0bdb41bf626905a47b3fe20"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.security.RegistrationSecurityTest.xml",
+        "sha256": "5d2ba0a265b0c429d78da31a61ad72a91b5ef7a799e8864ad87749b61213bfe0"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.service.EmailOutboundTest.xml",
+        "sha256": "a6720a939e9294c6561f565cab341a513027e3dbcfe31408cefd13620b507356"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.simulation.AccountInspectionTest.xml",
+        "sha256": "65acb1b73a2298ab6d09deeafd3f5d8fa53c44b937b597ca2eb79dff201a11b7"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.simulation.AdminAccountQueryPermissionTest.xml",
+        "sha256": "0c06fa3f51e836e6ff70e40b44fe5ae3880080adbf852b805368f1b3f7806d42"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.simulation.AdminReadDispatchTest.xml",
+        "sha256": "088c5ad7f86119305b8b8793e50d4a4becf1b35059e304c1b7c421c22098f55e"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.simulation.SimulationApplicationTest.xml",
+        "sha256": "c9fd1b3422d5a7e2a1772712b08dc7842993eddb2a704ac3fa090fc8cb16ca0d"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.simulation.SimulationGatewayTest.xml",
+        "sha256": "fda2a6de0a8b2af2924834ec49ac0e544e60adbf6b16ca07a893fc12efb0d527"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.simulation.SimulationPersistenceTest.xml",
+        "sha256": "38249c91fb60265f935ee2919ba4d360a0682b58007ac8d5583893812aad07fe"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.simulation.SimulationSecurityTest.xml",
+        "sha256": "376986cd70830f452fd94cc150187a49e69df238e9830a903e514df4aea44f3e"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.support.InboxRecipientSearchTest.xml",
+        "sha256": "d1f6f6d5fa6a0eab2f2cd11afc4eb4f321f8cbfaaf7f4200394b044c2deedd06"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.support.SupportAuditLogTest.xml",
+        "sha256": "253c4e43bad69dab2d9f275bfa8f3b25f25386a22a15b8824e97e01764ad5481"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.support.SupportHttpTest.xml",
+        "sha256": "9105dfe7c1283acf21452680919b451c41336b30969296df0bff66b9e0bcdd70"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.support.SupportLocaleTest.xml",
+        "sha256": "ac69f2ee2b1ceb7fe76da704c1c53df03e2869e765eef697ed5a117954518a5a"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.support.SupportServiceTest.xml",
+        "sha256": "9d44a3c7a508c78e3f03ab65a6ae8e5d680a9d3c64ed6cae6605c20a3f87c702"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.tenant.TenantBoundaryTest.xml",
+        "sha256": "1f85db0fa3cf080a3af3b001e5126bd399b44496286493829602ec29db930ef7"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.tenant.TenantCorsBoundaryTest.xml",
+        "sha256": "ebc5773a57729c42543adf8156b7363f4a041b4e4d3cf9d55d64f648f163db8d"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.tenant.TenantForceVersionTest.xml",
+        "sha256": "f5df99c38d2db11a62301badf49fa147263191e094c9830f3a643d88e6e84b95"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.tenant.TenantSourceGateTest.xml",
+        "sha256": "056fb5e0d389b29e4482d8c145c7140b82d1903f82b2ec8b406546707faf5065"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.trade.AllInstrumentCalculationTest.xml",
+        "sha256": "573024168ab48cbcb8aa126067a859fcbe04043f74c2508c40125cc4c85476e2"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.trade.CalculationTenantBoundaryTest.xml",
+        "sha256": "4add315663454eb6720dea404c90adfc5cbf0d4b706c9575783d08a32d0c5a97"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.trade.CryptoQuantityCompatibilityTest.xml",
+        "sha256": "1d5bbcb5363f42a5acf5a3660a1c83ac1e0ae94574664beab4a4236e76cb0866"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.trade.CryptoQuantityLifecycleTest.xml",
+        "sha256": "5980811e876bb06b6bb6dd717ae8f4f7cfdf0b0229c1939ef9597bc9bdc0f095"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.trade.CryptoQuantityPersistenceTest.xml",
+        "sha256": "d1708bacd2b6b38f26d5ced83741c51f02f4e370c32ad74e00cf21b1f539d627"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.trade.CryptoQuantityRulesTest.xml",
+        "sha256": "268c7f37d86e15d7f688b8d993f481ee9c598d381535c6cea91479daf2e672a9"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.trade.FeeCalculationAuditTest.xml",
+        "sha256": "6d7ae8631ae4efb427509203846400502e92595a5ddbbe700f9d804904f61497"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.trade.FxStandardContractTest.xml",
+        "sha256": "aa81df339316a0067e1d3a20cbad87cb1c11341659623a8fd7f41b8690000b09"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.trade.ManualControlJdbcMySqlTest.xml",
+        "sha256": "6db56265434f3b38895f8cf061d06ba526c00ab6904fd788af3745c15f9c6343"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.trade.ManualOrderCalculationTest.xml",
+        "sha256": "16bb165ed4d95c7378aa30b8794dac6a21227e7e040f0185a062f926ef6cf39e"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.trade.ManualOrderFeasibilityTest.xml",
+        "sha256": "e6e38e8f8d97712599ba992240a2bbd71749643737f4ff2f70c16cc78c538693"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.trade.ManualOrderGenerationMatrixTest.xml",
+        "sha256": "6e2dc1f5c780d3c899437984d36228ed0bebbcd4d58e854bee1249dec40da71c"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.trade.ManualOrderGeneratorTest.xml",
+        "sha256": "0cc2f6c3d97c01e76adf3ee9a89cfb52186478343e73fa3936d60ef60757489b"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.trade.ManualOrderHashTest.xml",
+        "sha256": "d2c76fdeee29fe55aed9adb1fe1fb591fa0ed68280ab77f28a66dc8ab4819578"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.trade.ManualOrderLeverageBoundsTest.xml",
+        "sha256": "d26047e589863757534431e499cf9f9192997c1db0332a80781d6c2b13babbb3"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.trade.ManualOrderMinutesTest.xml",
+        "sha256": "d1a2693f350d7047a915648fb322a5c4b78a5e30b1e17b9428a204fdeb0aaff5"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.trade.ManualOrderScreenshotRuleTest.xml",
+        "sha256": "6d2c94069d169b36c02ba8b0c31671a1e71517398b7ce64ca2b14fc03bfc1af1"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.trade.ManualOrderToleranceTest.xml",
+        "sha256": "d95f3a445ebcbaeb7f52f37ed1cf7b7ed3bcb026e4203792520863238934d36d"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.trade.YahooHistoryCalendarTest.xml",
+        "sha256": "fdb2977f9073d82fde6dc7ddb7e02c866b540bf188966a38c88778242671184a"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.user.AssetEquityCarryTest.xml",
+        "sha256": "e2a801972adbb6f3d944870d4abcfe94d549ae7aa30048874f46b1c46a8a7a49"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.user.AssetEquityMySqlTest.xml",
+        "sha256": "398fdccab5d553de27fb82f22b627b81092198fe3edc92faaa7edaca7f0e6e04"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.user.AssetEquityScheduleTest.xml",
+        "sha256": "d6f4efdb231cd34a8312c827f60aa24f192a253486edd92d7174887d168a526d"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.user.AssetEquityValuationTest.xml",
+        "sha256": "e72404d22c0818d6e9f823c3887f05342aaad7c51553ea42eb5de6e467686a52"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.user.AssetHistoryRollupTest.xml",
+        "sha256": "4dd2c51853d7ec73a33773c6767130aee4dd0c651008393f1acfc3aa7ac9b251"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.user.AssetHistoryTest.xml",
+        "sha256": "35f22b7f6803ba8cbfb27f279d982c031b4efaafd6144e87649da34c7c5e3586"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.user.ContractEquityRateTest.xml",
+        "sha256": "3184441bd6d9d83c64971b77bcc38b5c622e39c136e329f8f72cb3134610acc9"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.user.DepositOrderAccessTest.xml",
+        "sha256": "a84029e342c8107ee15fea8d3c0588417e623381057a273b76e00d3490281700"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.user.DepositOrderServiceTest.xml",
+        "sha256": "1e1ef80ba8a99fc2fa8b9e1a0cc57373170d78c6a09fc0f467e6ccd13b888195"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.user.FiatDepositTest.xml",
+        "sha256": "4b450269b301a91f288c89863af1748cfd3ca91d6beeaa52d1106db202288a84"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.user.FiatWithdrawTest.xml",
+        "sha256": "425b2dbbdd9129257d027678fe94481cab53e142bcc87b6dffe8f7e4c1f1d3ff"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.user.IdentityLoanFlowTest.xml",
+        "sha256": "44963329f106136289769d3cd9939b1e1bd42fbbd8ac0a3a9d8c88a6b011e682"
+      },
+      {
+        "name": "TEST-com.gtcfesk.exchange.user.OrderSoftDeleteTest.xml",
+        "sha256": "f095a59317f9c80f55e06037c6d8b5699711349eb627cf9e9091ceb00c78604a"
+      }
+    ]
+  },
+  "targeted": {
+    "calculation_baseline": {
+      "totals": {
+        "tests": 1057,
+        "failures": 21,
+        "errors": 1035,
+        "skipped": 0,
+        "passed": 1
+      },
+      "suites": [
+        {
+          "tests": 266,
+          "failures": 14,
+          "errors": 252,
+          "skipped": 0,
+          "name": "com.gtcfesk.exchange.trade.AllInstrumentCalculationTest",
+          "sha256": "07c874b90803609f7c8ff4e8250c882ba004b34ab71e57b4734e8628816600e2"
+        },
+        {
+          "tests": 2,
+          "failures": 0,
+          "errors": 2,
+          "skipped": 0,
+          "name": "com.gtcfesk.exchange.trade.CryptoQuantityCompatibilityTest",
+          "sha256": "b854363b8b60a9494d5ae7cab763c01e600a3d4ebdfd163387e64cbb0f066f15"
+        },
+        {
+          "tests": 4,
+          "failures": 0,
+          "errors": 3,
+          "skipped": 0,
+          "name": "com.gtcfesk.exchange.trade.CryptoQuantityLifecycleTest",
+          "sha256": "885ac4dd29c74ae3a6a710eaaddf1f22ade6db78fbbd8147f288796085be5730"
+        },
+        {
+          "tests": 423,
+          "failures": 3,
+          "errors": 420,
+          "skipped": 0,
+          "name": "com.gtcfesk.exchange.trade.CryptoQuantityRulesTest",
+          "sha256": "2001b6aa6dc08efc0ac92d2530a87255fa20263333361fe6fc49852d3c528daf"
+        },
+        {
+          "tests": 166,
+          "failures": 3,
+          "errors": 163,
+          "skipped": 0,
+          "name": "com.gtcfesk.exchange.trade.FeeCalculationAuditTest",
+          "sha256": "f87adc0f5a0175cf7e6afe755a2651dc7dc20b7f8bfa2dce2ddde667aa417b13"
+        },
+        {
+          "tests": 196,
+          "failures": 1,
+          "errors": 195,
+          "skipped": 0,
+          "name": "com.gtcfesk.exchange.trade.FxStandardContractTest",
+          "sha256": "d6b42eedbb344018d969607ee67fee43de9680b72e2811357d19411ca1a0fe08"
+        }
+      ]
+    },
+    "calculation_fixed": {
+      "totals": {
+        "tests": 1061,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "passed": 1061
+      },
+      "suites": [
+        {
+          "tests": 266,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "name": "com.gtcfesk.exchange.trade.AllInstrumentCalculationTest",
+          "sha256": "879619baecb9ea1f867ae8345087926dbac1b43d94f5ee191f43830b92676e6d"
+        },
+        {
+          "tests": 4,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "name": "com.gtcfesk.exchange.trade.CalculationTenantBoundaryTest",
+          "sha256": "ec9e38fecd582ecab97fc1adcc33370bf8de26ffcb6088885d3275cf4b594156"
+        },
+        {
+          "tests": 2,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "name": "com.gtcfesk.exchange.trade.CryptoQuantityCompatibilityTest",
+          "sha256": "22ebe77df71ea669ed35c2e262710b768404f18945d32a0d2fc73aa01304d6c6"
+        },
+        {
+          "tests": 4,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "name": "com.gtcfesk.exchange.trade.CryptoQuantityLifecycleTest",
+          "sha256": "042358a83d249b18db0c07dfc0b27a7da230c3c1746163251c48fdf1b44d1332"
+        },
+        {
+          "tests": 423,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "name": "com.gtcfesk.exchange.trade.CryptoQuantityRulesTest",
+          "sha256": "1a78d015043ff1e8510741aa456466c8bc8e1a5d24006a8e3046b7a9f48bb34f"
+        },
+        {
+          "tests": 166,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "name": "com.gtcfesk.exchange.trade.FeeCalculationAuditTest",
+          "sha256": "32c81b37769a4cd8daf826a6d93e1811ee135a610bbc6636d87656d68d99149e"
+        },
+        {
+          "tests": 196,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "name": "com.gtcfesk.exchange.trade.FxStandardContractTest",
+          "sha256": "9d646d2c3e3c95cf644c5e1df86db7a089e73d3fa0866a5ba630e0298f0e1edf"
+        }
+      ]
+    },
+    "review_fixed": {
+      "totals": {
+        "tests": 52,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "passed": 52
+      },
+      "suites": [
+        {
+          "tests": 6,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "name": "com.gtcfesk.exchange.activity.ActivityDesignValidatorTest",
+          "sha256": "42b79caeaa151a7af90992efe3006b8adf0e385e1ad062ad2958b45bda19722c"
+        },
+        {
+          "tests": 24,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "name": "com.gtcfesk.exchange.activity.ActivityIntegrationTest",
+          "sha256": "42952d74b43db05451534f227887f396aa1c01bc7ff87ce6bcab3c705d1a3b70"
+        },
+        {
+          "tests": 1,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "name": "com.gtcfesk.exchange.admin.AdminTablePreferenceTest",
+          "sha256": "f564377e4ee7ff09f217178780aa6d90010ccd5575e27e24b46ae3fa409bbb76"
+        },
+        {
+          "tests": 7,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "name": "com.gtcfesk.exchange.control.ControlReadQueryTest",
+          "sha256": "37aac81a39d2de984d27d26a57e976987310d6236428a0c0418cbb2cd1cb5424"
+        },
+        {
+          "tests": 7,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "name": "com.gtcfesk.exchange.control.ControlSupportIsolationTest",
+          "sha256": "108decb778a939d296037eb0da77e9aad1373bdf36ca0c0ff42c8663213997b1"
+        },
+        {
+          "tests": 1,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "name": "com.gtcfesk.exchange.support.InboxRecipientSearchTest",
+          "sha256": "9ba1fa92e2fb592da54cb5fa4eb084b6e99de1a88797511c4da1efdbea6ef5c1"
+        },
+        {
+          "tests": 1,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "name": "com.gtcfesk.exchange.support.SupportAuditLogTest",
+          "sha256": "b893626b9f02b8d1df419f03f7c6abc4485e4aacc465e54c4052fcffca07db74"
+        },
+        {
+          "tests": 5,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "name": "com.gtcfesk.exchange.support.SupportLocaleTest",
+          "sha256": "623e3685645e3428f6471a32741ac4c2b86ec15b3c93cd19579d7e7f7288bb21"
+        }
+      ]
+    },
+    "force_mysql_before": {
+      "totals": {
+        "tests": 7,
+        "failures": 6,
+        "errors": 0,
+        "skipped": 0,
+        "passed": 1
+      },
+      "suites": [
+        {
+          "tests": 7,
+          "failures": 6,
+          "errors": 0,
+          "skipped": 0,
+          "name": "com.gtcfesk.exchange.tenant.TenantForceVersionTest",
+          "sha256": "4b8336d0404bd137f45a06610980430a8e28677195ad1844fe6e328dcae7c7ac"
+        }
+      ]
+    },
+    "force_mysql_after": {
+      "totals": {
+        "tests": 7,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "passed": 7
+      },
+      "suites": [
+        {
+          "tests": 7,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "name": "com.gtcfesk.exchange.tenant.TenantForceVersionTest",
+          "sha256": "104e508c043472b87b71796b67956c9f67ae725a47236ab76447ee2be1099edf"
+        }
+      ]
+    }
+  },
+  "source_gate": {
+    "exit_code": 0,
+    "files": 355,
+    "sensitive_sites": 1466
+  },
+  "release_gate": {
+    "exit_code": 1,
+    "issues": 4,
+    "approval_modified": false,
+    "blockers_modified": false
+  },
+  "frontend_table_preferences": {
+    "exit_code": 1,
+    "first_failure": "Unconverted table: BackendAccounts.vue"
+  },
+  "not_completed": [
+    "remaining fixture repair and full green suite",
+    "dual-identity table preference integration",
+    "current jar isolated deployment",
+    "current API and Chrome/mobile matrix",
+    "production governance and approval"
+  ],
+  "report": "C:/workspace/fx/705/docs/multitenant-astra-verification-20260929.md"
+}

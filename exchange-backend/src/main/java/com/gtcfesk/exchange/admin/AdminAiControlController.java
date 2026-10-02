@@ -18,7 +18,7 @@ public class AdminAiControlController {
     @Autowired private PersistentPriceControl controls;
 
     @Getter @Setter
-    public static class StartRequest extends com.gtcfesk.exchange.market.RecoveryOptions {
+    public static class StartRequest extends com.gtcfesk.exchange.market.TargetControlOptions {
         @NotNull @Min(1) @Max(86400) @Digits(integer = 5, fraction = 0) private BigDecimal durationSeconds;
         @NotNull @DecimalMin(value = "0", inclusive = false) @Digits(integer = 16, fraction = 8) private BigDecimal targetPrice;
         @NotNull @Min(1) @Max(10) @Digits(integer = 2, fraction = 0) private BigDecimal intensity;
@@ -69,13 +69,23 @@ public class AdminAiControlController {
     @PostMapping("/{id}/start")
     @com.gtcfesk.exchange.config.AdminPermission(menu = "ai_control", action = "start")
     public Map<String, Object> startControl(@PathVariable Long id, @Valid @RequestBody StartRequest request) {
-        return market.startControl(id, request.getDurationSeconds().intValueExact(), request.getTargetPrice(), request.getIntensity().intValueExact(), request.getRandomOscillation(), request.getRequestKey(), request);
+        return market.startControl(id, request.getDurationSeconds().intValueExact(), request.getTargetPrice(), request.getIntensity().intValueExact(), request.getRandomOscillation(), request.getRequestKey(), request, request);
     }
     @PostMapping("/{id}/preview")
     @com.gtcfesk.exchange.config.AdminPermission(menu = "ai_control", action = "preview")
     public Map<String, Object> previewControl(@PathVariable Long id, @Valid @RequestBody StartRequest request) {
         return market.previewControl(id, request.getDurationSeconds().intValueExact(), request.getTargetPrice(),
-                request.getIntensity().intValueExact(), request.getRandomOscillation());
+                request.getIntensity().intValueExact(), request.getRandomOscillation(), request);
+    }
+
+    @GetMapping("/{id}/formula")
+    @com.gtcfesk.exchange.config.AdminPermission(menu = "ai_control", action = "")
+    public Map<String, Object> formula(@PathVariable Long id) { return market.controlFormula(id); }
+
+    @PutMapping("/{id}/formula")
+    @com.gtcfesk.exchange.config.AdminPermission(menu = "ai_control", action = "start")
+    public Map<String, Object> saveFormula(@PathVariable Long id, @Valid @RequestBody StartRequest request) {
+        return market.saveControlFormula(id, request.getDurationSeconds().intValueExact(), request.getTargetPrice(), request.getIntensity().intValueExact(), request);
     }
 
     @PostMapping("/{id}/history/{taskId}/replace")

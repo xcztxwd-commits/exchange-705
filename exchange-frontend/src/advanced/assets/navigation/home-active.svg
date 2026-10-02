@@ -1,0 +1,7 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="26" height="26" viewBox="0 0 26 26" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="Graphic">
+<path id="House/Roof" d="M3.25 10.2917L13 2.16667L22.75 10.2917H20.5833V19.5C20.5833 20.6917 19.6083 21.6667 18.4167 21.6667H7.58333C6.39167 21.6667 5.41667 20.6917 5.41667 19.5V10.2917H3.25Z" fill="#F5F2F7" stroke="#51495F" stroke-width="1.95" stroke-linecap="round" stroke-linejoin="round"/>
+<path id="House/Body" opacity="0" d="M5.41667 8.66667V20.0417C5.41667 21.0167 6.06667 21.6667 7.04167 21.6667H18.9583C19.9333 21.6667 20.5833 21.0167 20.5833 20.0417V8.66667" stroke="#51495F" stroke-width="1.95" stroke-linecap="round" stroke-linejoin="round"/>
+<path id="House/Door" d="M10.8333 21.6667V15.1667H15.1667V21.6667" stroke="#51495F" stroke-width="1.95" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+</svg>

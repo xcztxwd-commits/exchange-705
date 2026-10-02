@@ -31,9 +31,9 @@ public class OptionOrderController {
         try {
             List<TradingSymbol> symbols;
             if (category != null && !category.isEmpty()) {
-                symbols = tradingSymbolRepository.findByCategoryAndIsEnabledTrueOrderBySortOrderDesc(category);
+                symbols = tradingSymbolRepository.findByTenantIdAndCategoryAndIsEnabledTrueOrderBySortOrderDesc(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), category);
             } else {
-                symbols = tradingSymbolRepository.findByIsEnabledTrueOrderBySortOrderDesc();
+                symbols = tradingSymbolRepository.findByTenantIdAndIsEnabledTrueOrderBySortOrderDesc(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId());
             }
             Map<String, Object> resp = new HashMap<>();
             resp.put("list", symbols);
@@ -68,6 +68,7 @@ public class OptionOrderController {
             }
             
             Long userId = Long.parseLong(auth.getName());
+            com.gtcfesk.exchange.common.OrderRequest.required(req==null?null:req.getRequestId());
             OptionOrder order = optionOrderService.createOrder(userId, req);
             
             Map<String, Object> resp = new HashMap<>();

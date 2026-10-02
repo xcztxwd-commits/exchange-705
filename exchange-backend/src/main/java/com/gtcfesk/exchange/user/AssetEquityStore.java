@@ -29,7 +29,7 @@ public class AssetEquityStore {
     public void locked(String task,Consumer<Session> work) {
         try(Connection c=dataSource.getConnection()) {
             boolean auto=c.getAutoCommit(); int isolation=c.getTransactionIsolation(); boolean locked=false;
-            Session s=new Session(c); String name="equity_v1_"+task;
+            Session s=new Session(c); String name="tenant_"+com.gtcfesk.exchange.tenant.TenantContext.requireTenantId()+"_equity_v1_"+task;
             try {
                 c.setTransactionIsolation(Connection.TRANSACTION_REPEATABLE_READ);c.setAutoCommit(false);
                 locked=Integer.valueOf(1).equals(s.db.queryForObject("select get_lock(?,0)",Integer.class,name));
@@ -59,30 +59,30 @@ public class AssetEquityStore {
         if(closingBoundary!=null && (closingBoundary%60000!=0 || values.stream().anyMatch(v->!AssetEquityJobs.withinCaptureMinute(closingBoundary,v.observedAt))))
             throw new IllegalArgumentException("Observation outside scheduled closing minute");
         Map<String,Object> evidence=new LinkedHashMap<>();evidence.put("quotes",batch.quotes);evidence.put("rates",batch.rates);
-        db.update("insert into asset_history_quote_batch(batch_id,prepared_at,evidence) values(?,?,?)",batch.id,batch.preparedAt,json(evidence));
+        db.update("insert into asset_history_quote_batch(tenant_id,batch_id,prepared_at,evidence) values("+com.gtcfesk.exchange.tenant.TenantContext.requireTenantId()+",?,?,?)",batch.id,batch.preparedAt,json(evidence));
         for(EquityValuationService.Value v:values) {
             long bucket=closingBoundary==null?AssetHistoryBucket.floor(v.observedAt,60000):closingBoundary-60000;
             List<Object> args=new ArrayList<>(Arrays.asList(v.userId,BASIS,bucket,v.observedAt));
             args.addAll(v.amounts.values());args.add(v.status());args.add(String.join(",",v.reasons));args.add(batch.id);args.add(json(v.evidence));args.add(v.observedAt);
             String fields=String.join(",",v.amounts.keySet());
-            db.update("insert into asset_history_1m(user_id,basis_version,bucket_start,observed_at,"+fields+",valuation_status,reason_code,quote_batch_id,valuation_evidence,created_at) values("+
+            db.update("insert into asset_history_1m(tenant_id,user_id,basis_version,bucket_start,observed_at,"+fields+",valuation_status,reason_code,quote_batch_id,valuation_evidence,created_at) values("+com.gtcfesk.exchange.tenant.TenantContext.requireTenantId()+","+
                     String.join(",",Collections.nCopies(args.size(),"?"))+") on duplicate key update user_id=user_id",args.toArray());
             // Read the fixed observation, not a later duplicate attempt, when establishing the baseline.
-            db.update("insert into asset_history_baseline(user_id,basis_version,capture_from,first_positive,first_positive_at) " +
-                    "select user_id,basis_version,observed_at,case when net_equity>0 then net_equity end,case when net_equity>0 then observed_at end from asset_history_1m where user_id=? and basis_version=? and bucket_start=? and origin='OBSERVED' " +
+            db.update("insert into asset_history_baseline(tenant_id,user_id,basis_version,capture_from,first_positive,first_positive_at) " +
+                    "select tenant_id,user_id,basis_version,observed_at,case when net_equity>0 then net_equity end,case when net_equity>0 then observed_at end from asset_history_1m where tenant_id="+com.gtcfesk.exchange.tenant.TenantContext.requireTenantId()+" and user_id=? and basis_version=? and bucket_start=? and origin='OBSERVED' " +
                     "on duplicate key update capture_from=least(capture_from,values(capture_from)),first_positive=if(values(first_positive_at) is not null and (first_positive_at is null or values(first_positive_at)<first_positive_at),values(first_positive),first_positive),"+
                     "first_positive_at=if(values(first_positive_at) is not null and (first_positive_at is null or values(first_positive_at)<first_positive_at),values(first_positive_at),first_positive_at)",v.userId,BASIS,bucket);
         }
     }
     public long[] state(JdbcTemplate db,String task,long initial) {
-        List<long[]> rows=db.query("select watermark,user_cursor from asset_history_job_state where task_name=? and basis_version=?",(rs,n)->new long[]{rs.getLong(1),rs.getLong(2)},task,BASIS);
+        List<long[]> rows=db.query("select watermark,user_cursor from asset_history_job_state where tenant_id="+com.gtcfesk.exchange.tenant.TenantContext.requireTenantId()+" and task_name=? and basis_version=?",(rs,n)->new long[]{rs.getLong(1),rs.getLong(2)},task,BASIS);
         return rows.isEmpty()?new long[]{initial,0}:rows.get(0);
     }
     public void progress(JdbcTemplate db,String task,long watermark,long cursor,long now) {
-        db.update("insert into asset_history_job_state(task_name,basis_version,watermark,user_cursor,success_at) values(?,?,?,?,?) on duplicate key update watermark=values(watermark),user_cursor=values(user_cursor),success_at=values(success_at),error=null",task,BASIS,watermark,cursor,now);
+        db.update("insert into asset_history_job_state(tenant_id,task_name,basis_version,watermark,user_cursor,success_at) values("+com.gtcfesk.exchange.tenant.TenantContext.requireTenantId()+",?,?,?,?,?) on duplicate key update watermark=values(watermark),user_cursor=values(user_cursor),success_at=values(success_at),error=null",task,BASIS,watermark,cursor,now);
     }
     public void error(String task,Exception failure) {
-        locked("error_"+task,s->s.db.update("insert into asset_history_job_state(task_name,basis_version,watermark,user_cursor,error) values(?,?,0,0,?) on duplicate key update error=values(error)",
+        locked("error_"+task,s->s.db.update("insert into asset_history_job_state(tenant_id,task_name,basis_version,watermark,user_cursor,error) values("+com.gtcfesk.exchange.tenant.TenantContext.requireTenantId()+",?,?,0,0,?) on duplicate key update error=values(error)",
                 "error_"+task,BASIS,failure.getClass().getSimpleName()));
     }
     public void saveBucket(JdbcTemplate db,int level,AssetHistoryBucket b,long now) {
@@ -90,14 +90,14 @@ public class AssetEquityStore {
         String fields="bucket_end,open_value,high_value,low_value,close_value,open_at,high_at,low_at,close_at,source_count,valid_sample_count,invalid_sample_count,expected_sample_count,quality,source_through,updated_at,finalized";
         List<String> updates=new ArrayList<>();
         for(String field:fields.split(","))updates.add(field+"=if(finalized=0 or values(finalized)=1,values("+field+"),"+field+")");
-        db.update("insert into "+TABLES[level]+"(user_id,basis_version,bucket_start,"+fields+") values("+String.join(",",Collections.nCopies(20,"?"))+") on duplicate key update "+String.join(",",updates),
+        db.update("insert into "+TABLES[level]+"(tenant_id,user_id,basis_version,bucket_start,"+fields+") values("+com.gtcfesk.exchange.tenant.TenantContext.requireTenantId()+","+String.join(",",Collections.nCopies(20,"?"))+") on duplicate key update "+String.join(",",updates),
                 b.userId,BASIS,b.start,b.end,b.open,b.high,b.low,b.close,b.openAt,b.highAt,b.lowAt,b.closeAt,b.sourceCount,b.valid,b.invalid,b.expected,b.quality(),b.through,now,b.finalized);
     }
     public List<AssetHistoryBucket> source(JdbcTemplate db,int level,List<Long> ids,long start,long end,long asOf,boolean finalized) {
         if(level<0 || level>3)throw new IllegalArgumentException("Invalid level");
         String columns=level==0?"user_id,bucket_start,observed_at,effective_at,net_equity":
                 "user_id,bucket_start,bucket_end,open_value,high_value,low_value,close_value,open_at,high_at,low_at,close_at,source_count,valid_sample_count,invalid_sample_count,expected_sample_count,finalized,source_through";
-        return db.query("select "+columns+" from "+TABLES[level]+" where basis_version=? and bucket_start>=? and bucket_start<? and user_id in ("+EquityValuationService.placeholders(ids)+")"+
+        return db.query("select "+columns+" from "+TABLES[level]+" where tenant_id="+com.gtcfesk.exchange.tenant.TenantContext.requireTenantId()+" and basis_version=? and bucket_start>=? and bucket_start<? and user_id in ("+EquityValuationService.placeholders(ids)+")"+
                 (level==0?" and coalesce(effective_at,observed_at)<=?": " and source_through<=?"+(finalized?" and finalized=1":""))+" order by user_id,bucket_start",(rs,n)->level==0?AssetHistoryBucket.minute(rs):AssetHistoryBucket.row(rs),
                 arguments(ids,start,end,asOf));
     }

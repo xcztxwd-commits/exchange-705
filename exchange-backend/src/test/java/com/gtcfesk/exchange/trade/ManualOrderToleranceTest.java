@@ -22,22 +22,21 @@ class ManualOrderToleranceTest {
     static void within(BigDecimal actual,BigDecimal target) {
         assertTrue(actual.subtract(target).abs().compareTo(target.abs().multiply(n("0.05")))<=0,actual+" outside "+target);
     }
-    @ParameterizedTest @ValueSource(strings={"9.5","10.5"})
-    void leverageBoundaryIncluded(String value) {
+    @ParameterizedTest @ValueSource(strings={"9.5","9.99","10.01","10.5"})
+    void leverageMustMatchExactlyEvenInsideFivePercent(String value) {
         ManualOrderGenerator.Request r=new ManualOrderGenerator.Request();r.leverage=n("10");
-        assertTrue(ManualOrderGenerator.matches(r,Collections.emptyMap(),n(value)));
-        assertFalse(ManualOrderGenerator.matches(r,Collections.emptyMap(),n(value).add(n(value).compareTo(n("10"))<0?n("-0.0000000001"):n("0.0000000001"))));
+        assertTrue(ManualOrderGenerator.matches(r,Collections.emptyMap(),n("10.00")));
+        assertFalse(ManualOrderGenerator.matches(r,Collections.emptyMap(),n(value)));
     }
     @ParameterizedTest @ValueSource(strings={"9.55","10.45"})
-    void adjustableLeverageRescuesIntegerQuantity(String witness) {
+    void fixedLeverageDoesNotRescueConflictingIntegerQuantity(String witness) {
         ManualOrderGenerator.Request r=new ManualOrderGenerator.Request();
         r.side="BUY";r.leverage=n("10");r.quantity=BigDecimal.ONE;r.targetNet=n("8");
         // Put the exact-leverage allocation just outside the permitted band.
         BigDecimal percent=n("100").divide(n(witness),16,RoundingMode.HALF_UP).add(n("2")).divide(n("10"));
         r.percent=percent.multiply(n(witness).compareTo(n("10"))<0?n("1.02"):n("0.98")).setScale(16,RoundingMode.HALF_UP);
-        ManualOrderGenerator.Candidate c=ManualOrderGenerator.solve(r,candles(n("110")),OPEN,CLOSE,n("1000"),BigDecimal.ONE,n("2"),1,BigDecimal.ONE,BigDecimal.ONE,BigDecimal.ZERO);
-        assertNotEquals(0,c.leverage.compareTo(r.leverage));within(c.leverage,r.leverage);within(c.calculation.get("percent"),r.percent);
-        assertEquals(n("10"),r.leverage);assertEquals("BUY",c.side);assertEquals(OPEN,c.open.time);assertEquals(CLOSE,c.close.time);
+        assertThrows(BusinessException.class,()->ManualOrderGenerator.solve(r,candles(n("110")),OPEN,CLOSE,n("1000"),BigDecimal.ONE,n("2"),1,BigDecimal.ONE,BigDecimal.ONE,BigDecimal.ZERO));
+        assertEquals(n("10"),r.leverage);
     }
     static IntStream cases() { return IntStream.range(0,512); }
     @ParameterizedTest(name="feasible perturbed targets {0}") @MethodSource("cases")
@@ -49,11 +48,11 @@ class ManualOrderToleranceTest {
         BigDecimal net=close.subtract(n("100")).multiply("BUY".equals(side)?BigDecimal.ONE:BigDecimal.ONE.negate()).subtract(fee).multiply(q);
         BigDecimal percent=q.multiply(n("100")).divide(leverage,16,RoundingMode.CEILING).add(q.multiply(fee)).divide(n("10"),8,RoundingMode.HALF_UP);
         ManualOrderGenerator.Request r=new ManualOrderGenerator.Request();r.side=side;
-        r.quantity=perturb(q,random);r.leverage=perturb(leverage,random).setScale(2,RoundingMode.HALF_UP);
+        r.quantity=perturb(q,random);r.leverage=leverage;
         r.targetNet=perturb(net,random);r.percent=perturb(percent,random);r.targetClosePrice=perturb(close,random);
         NavigableMap<Long,ManualOrderGenerator.Candle> prices=candles(close);
         ManualOrderGenerator.Candidate c=ManualOrderGenerator.solve(r,prices,OPEN,CLOSE,n("1000"),BigDecimal.ONE,fee,index,BigDecimal.ONE,BigDecimal.ONE,BigDecimal.ZERO);
-        within(c.leverage,r.leverage);within(c.calculation.get("quantity"),r.quantity);within(c.calculation.get("net"),r.targetNet);within(c.calculation.get("percent"),r.percent);within(c.close.price,r.targetClosePrice);
+        assertEquals(0,c.leverage.compareTo(r.leverage));within(c.calculation.get("quantity"),r.quantity);within(c.calculation.get("net"),r.targetNet);within(c.calculation.get("percent"),r.percent);within(c.close.price,r.targetClosePrice);
         assertSame(prices.get(OPEN),c.open);assertSame(prices.get(CLOSE),c.close);
         BigDecimal actualQ=c.calculation.get("quantity");assertEquals(0,actualQ.remainder(BigDecimal.ONE).signum());
         BigDecimal expectedNet=close.subtract(n("100")).multiply("BUY".equals(side)?BigDecimal.ONE:BigDecimal.ONE.negate()).subtract(fee).multiply(actualQ);

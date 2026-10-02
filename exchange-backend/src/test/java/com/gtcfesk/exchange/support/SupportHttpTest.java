@@ -3,6 +3,8 @@ package com.gtcfesk.exchange.support;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gtcfesk.exchange.admin.*;
 import com.gtcfesk.exchange.common.JwtUtil;
+import com.gtcfesk.exchange.control.*;
+import com.gtcfesk.exchange.tenant.*;
 import com.gtcfesk.exchange.config.*;
 import com.gtcfesk.exchange.entity.*;
 import com.gtcfesk.exchange.repository.*;
@@ -25,14 +27,18 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 /** Real JWT filter, security chain, permission interceptor and controllers against an isolated database. */
 @SpringJUnitConfig({SupportServiceTest.Config.class, SupportHttpTest.Web.class})
 @WebAppConfiguration
-@TestPropertySource(properties={"jwt.secret=support-test-key-never-use-in-production-2026", "jwt.expireSeconds=3600", "security.trusted-proxies=10.0.0.0/8"})
+@org.junit.jupiter.api.extension.ExtendWith(TenantOneFixture.class)
+@TestPropertySource(properties={"jwt.secret=support-test-key-never-use-in-production-2026", "jwt.expireSeconds=3600", "security.trusted-proxies=10.0.0.0/8", "platform.base-domain=mt705.test", "platform.admin-origin=https://admin.mt705.test", "platform.control-origin=https://control.mt705.test"})
 class SupportHttpTest {
     @Configuration @EnableWebMvc
     @Import({SecurityConfig.class, JwtFilter.class, JwtUtil.class, BackendAccess.class, GlobalExceptionHandler.class,
-        UserSupportController.class, AdminSupportController.class, SystemConfigController.class})
+        UserSupportController.class, AdminSupportController.class, SystemConfigController.class,TenantHostService.class,TenantRequestFilter.class,BackendLoginRegistry.class,BootTenantFixture.class})
     static class Web implements WebMvcConfigurer {
         @Autowired BackendAccess access;
         @Override public void addInterceptors(InterceptorRegistry registry) { registry.addInterceptor(access).addPathPatterns("/api/admin/**"); }
+        @Bean ControlService control(){return org.mockito.Mockito.mock(ControlService.class);}
+        @Bean TenantDomainVerification domains(){return org.mockito.Mockito.mock(TenantDomainVerification.class);}
+        @Bean org.springframework.jdbc.core.JdbcTemplate jdbc(javax.sql.DataSource source){return new org.springframework.jdbc.core.JdbcTemplate(source);}
         @Bean static org.springframework.beans.factory.config.BeanFactoryPostProcessor mockMarketRegistration() {
             return factory -> factory.registerSingleton("market", org.mockito.Mockito.mock(com.gtcfesk.exchange.market.ForexQuoteMarketService.class));
         }
@@ -40,6 +46,10 @@ class SupportHttpTest {
     @Autowired WebApplicationContext context;
     @Autowired FilterChainProxy springSecurityFilterChain;
     @Autowired JwtUtil jwt;
+    @Autowired TenantRequestFilter tenantFilter;
+    @Autowired com.gtcfesk.exchange.control.TenantRepository tenants;
+    @Autowired TenantPolicyService policy;
+    @Autowired BackendLoginRegistry backendNames;
     @Autowired SupportSettings settings;
     @Autowired SupportPermissionCatalog catalog;
     @Autowired AdminUserRepository admins;
@@ -52,7 +62,8 @@ class SupportHttpTest {
     String userToken, secondToken, adminToken, superToken, limitedToken, agentToken;
     Long userId;
     @BeforeEach void setup() {
-        mvc=MockMvcBuilders.webAppContextSetup(context).addFilters(springSecurityFilterChain).build(); catalog.run();
+        mvc=MockMvcBuilders.webAppContextSetup(context).defaultRequest(get("/").with(r->{if(r.getHeader("Host")==null)r.addHeader("Host",r.getRequestURI().startsWith("/api/admin/")?BootTenantFixture.ADMIN:BootTenantFixture.FRONT);return r;})).addFilters(new BootTenantFixture.RestoreFixtureScope(),tenantFilter,springSecurityFilterChain).build();
+        org.mockito.Mockito.when(policy.current()).thenAnswer(c->tenants.findById(TenantContext.requireTenantId()).orElseThrow(IllegalStateException::new));catalog.run();
         SupportSettings.Settings s=new SupportSettings.Settings();s.mode="internal";s.inboxEnabled=true;settings.save(s);
         UserAccount user=user("normal");userId=user.getId();userToken=token(user.getId(),"user",user.getCurrentToken(),user.getPasswordHash());
         UserAccount second=user("normal");secondToken=token(second.getId(),"user",second.getCurrentToken(),second.getPasswordHash());
@@ -61,20 +72,27 @@ class SupportHttpTest {
         for(AdminMenu m:menus.findAll())if(!"directory".equals(m.getMenuType())){AdminRoleMenu g=new AdminRoleMenu();g.setRoleId(r.getId());g.setMenuId(m.getId());grants.saveAndFlush(g);}
         adminToken=admin(role);superToken=admin("super_admin");limitedToken=admin("no_support_grants");
     }
-    UserAccount user(String type){UserAccount u=new UserAccount();u.setEmail(UUID.randomUUID()+"@test.invalid");u.setPasswordHash("unused");u.setUserType(type);u.setCurrentToken(UUID.randomUUID().toString());return users.saveAndFlush(u);}
-    String admin(String role){AdminUser a=new AdminUser();a.setAccount(UUID.randomUUID().toString());a.setEmail(a.getAccount()+"@test.invalid");a.setPasswordHash("unused");a.setCurrentToken(UUID.randomUUID().toString());a.setRole(role);admins.saveAndFlush(a);return token(a.getId(),"admin",a.getCurrentToken(),a.getPasswordHash());}
+    UserAccount user(String type){UserAccount u=new UserAccount();u.setEmail(UUID.randomUUID()+"@test.invalid");u.setPasswordHash("unused");u.setUserType(type);u.setCurrentToken(UUID.randomUUID().toString());u=users.saveAndFlush(u);if("agent".equals(type))backendNames.register("AGENT",u.getId(),u.getEmail());return u;}
+    String admin(String role){AdminUser a=new AdminUser();a.setAccount(UUID.randomUUID().toString());a.setEmail(a.getAccount()+"@test.invalid");a.setPasswordHash("unused");a.setCurrentToken(UUID.randomUUID().toString());a.setRole(role);admins.saveAndFlush(a);backendNames.register("ADMIN",a.getId(),a.getAccount());return token(a.getId(),"admin",a.getCurrentToken(),a.getPasswordHash());}
     String token(Long id,String type,String sid,String password){Map<String,Object> c=new HashMap<>();c.put("userType",type);c.put("sid",sid);c.put("credential",jwt.credentialKey(password));return jwt.generateToken(type+"-"+id,c);}
     String json(Object o)throws Exception{return mapper.writeValueAsString(o);}
     long start()throws Exception{return mapper.readTree(mvc.perform(post("/api/user/support/sessions").header("Authorization","Bearer "+userToken)).andExpect(status().isOk()).andReturn().getResponse().getContentAsString()).get("id").asLong();}
+    @Test void unknownOrMissingHostRejectsBeforeSupportMutations()throws Exception{
+        long before=new org.springframework.jdbc.core.JdbcTemplate(context.getBean(javax.sql.DataSource.class)).queryForObject("SELECT COUNT(*) FROM support_conversation WHERE tenant_id=1",Long.class);
+        mvc.perform(post("/api/user/support/sessions").header("Host","unknown.mt705.test").header("Authorization","Bearer "+userToken)).andExpect(status().isForbidden());
+        mvc.perform(get("/api/admin/support/sessions").header("Host",BootTenantFixture.FRONT).header("Authorization","Bearer "+adminToken)).andExpect(status().isForbidden());
+        assertEquals(before,new org.springframework.jdbc.core.JdbcTemplate(context.getBean(javax.sql.DataSource.class)).queryForObject("SELECT COUNT(*) FROM support_conversation WHERE tenant_id=1",Long.class));
+    }
     @Test void authRoleAndMenuBoundaries()throws Exception{
         mvc.perform(get("/api/user/support/config")).andExpect(status().isOk()).andExpect(jsonPath("$.mode").value("internal"));
         mvc.perform(get("/api/user/support/tones/arrival.wav")).andExpect(status().isOk()).andExpect(content().contentType("audio/wav"));
         mvc.perform(post("/api/user/support/sessions")).andExpect(status().isUnauthorized());
-        for(String tk:Arrays.asList(userToken,agentToken,limitedToken))mvc.perform(get("/api/admin/support/sessions").header("Authorization","Bearer "+tk)).andExpect(status().isForbidden());
+        mvc.perform(get("/api/admin/support/sessions").header("Authorization","Bearer "+userToken)).andExpect(status().isUnauthorized()).andExpect(jsonPath("$.code").value("TOKEN_INVALID"));
+        for(String tk:Arrays.asList(agentToken,limitedToken))mvc.perform(get("/api/admin/support/sessions").header("Authorization","Bearer "+tk)).andExpect(status().isForbidden());
         mvc.perform(get("/api/admin/support/sessions").header("Authorization","Bearer "+adminToken)).andExpect(status().isOk());
         mvc.perform(get("/api/admin/support/sessions?scope=all").header("Authorization","Bearer "+adminToken)).andExpect(status().isForbidden());
         mvc.perform(get("/api/admin/support/sessions?scope=all").header("Authorization","Bearer "+superToken)).andExpect(status().isOk());
-        mvc.perform(get("/api/user/support/inbox").header("Authorization","Bearer "+adminToken)).andExpect(status().isForbidden());
+        mvc.perform(get("/api/user/support/inbox").header("Authorization","Bearer "+adminToken)).andExpect(status().isUnauthorized());
     }
     @Test void liveQueueTextImageReadExportAndCrossUserDenial()throws Exception{
         long id=start();

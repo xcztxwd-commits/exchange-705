@@ -63,9 +63,10 @@
             <span v-else>{{ row.userId }}</span>
           </template>
         </el-table-column>
+        <el-table-column prop="userEmail" label="用户邮箱" min-width="200" show-overflow-tooltip />
         <el-table-column prop="userRemark" label="用户备注" width="150">
           <template #default="{ row }">
-            {{ row.userRemark || row.remark || '-' }}
+            {{ row.userRemark || '-' }}
           </template>
         </el-table-column>
         <el-table-column prop="type" label="类型" width="100">

@@ -7,8 +7,8 @@ import org.springframework.stereotype.Repository;
 import java.util.List;
 
 @Repository
-public interface UserDigitalAddressRepository extends JpaRepository<UserDigitalAddress, Long> {
-    List<UserDigitalAddress> findByUserId(Long userId);
+public interface UserDigitalAddressRepository extends com.gtcfesk.exchange.tenant.TenantRepository<UserDigitalAddress, Long> {
+    List<UserDigitalAddress> findByTenantIdAndUserId(Long tenantId, Long userId);
 }
 
 

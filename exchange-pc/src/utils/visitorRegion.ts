@@ -18,7 +18,32 @@ export function validRegionTimezone(value: unknown): value is string {
   if (typeof value !== 'string' || !value.trim()) return false
   try { new Intl.DateTimeFormat('en', { timeZone: value }); return true } catch { return false }
 }
-export const visitorRegion = ref({ timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC', locale: '', source: 'device' })
+
+// ipwho.is free replies may omit currency; use country fallback for the registration default.
+export const currencyForCountry = (country: string): string => {
+  const c = country.toUpperCase()
+  const groups: Record<string, string> = {
+    EUR: 'AD AT BE CY DE EE ES FI FR GR HR IE IT LT LU LV MC ME MT NL PT SI SK SM VA',
+    GBP: 'GB GG IM JE', CNY: 'CN', TWD: 'TW', HKD: 'HK', MOP: 'MO',
+    SGD: 'SG', JPY: 'JP', KRW: 'KR', INR: 'IN', CHF: 'CH LI',
+    CAD: 'CA', AUD: 'AU', NZD: 'NZ', BRL: 'BR', MXN: 'MX',
+    RUB: 'RU', TRY: 'TR', IDR: 'ID', MYR: 'MY', THB: 'TH',
+    VND: 'VN', AED: 'AE', SAR: 'SA', ZAR: 'ZA', PLN: 'PL',
+    CZK: 'CZ', SEK: 'SE', NOK: 'NO', DKK: 'DK',
+    ARS: 'AR', CLP: 'CL', COP: 'CO', PEN: 'PE',
+  }
+  return Object.entries(groups).find(([, countries]) => countries.split(' ').includes(c))?.[0] || 'USD'
+}
+export const regionDefaults = (data: any) => {
+  if (data?.success !== true || !/^[A-Z]{2}$/.test(data.country_code)) return null
+  const rawDial = String(data.calling_code ?? '').replace(/^[+]/, '')
+  const dialCode = /^[1-9][0-9]{0,2}$/.test(rawDial) ? '+' + rawDial : '+1'
+  const rawCurrency = String(data.currency?.code ?? '').toUpperCase()
+  return { countryCode: data.country_code as string, dialCode,
+    currency: /^[A-Z]{3}$/.test(rawCurrency) ? rawCurrency : currencyForCountry(data.country_code) }
+}
+
+export const visitorRegion = ref({ timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC', locale: '', source: 'device', countryCode: 'US', dialCode: '+1', currency: 'USD' })
 let pending: Promise<void> | undefined
 export function initVisitorRegion(): Promise<void> {
   return pending ??= (async () => {
@@ -27,13 +52,14 @@ export function initVisitorRegion(): Promise<void> {
     try {
       // Direct lookup sees the visitor's public IP, not the web server/proxy IP.
       // No account data, tokens or cookies are sent to the provider.
-      const response = await fetch('https://ipwho.is/?fields=success,country_code,timezone.id', {
+      const response = await fetch('https://ipwho.is/?fields=success,country_code,calling_code,currency.code,timezone.id', {
         signal: controller.signal, credentials: 'omit', referrerPolicy: 'no-referrer', cache: 'no-store',
       })
       if (!response.ok) return
       const data = await response.json()
       if (data?.success !== true || !/^[A-Z]{2}$/.test(data.country_code) || !validRegionTimezone(data.timezone?.id)) return
-      visitorRegion.value = { timezone: data.timezone.id, locale: localeForCountry(data.country_code), source: 'ip' }
+      const defaults = regionDefaults(data)
+      if (defaults) visitorRegion.value = { timezone: data.timezone.id, locale: localeForCountry(data.country_code), source: 'ip', ...defaults }
     } catch { /* Offline, blocked or rate-limited: retain device timezone and browser language. */ }
     finally { clearTimeout(timer) }
   })()

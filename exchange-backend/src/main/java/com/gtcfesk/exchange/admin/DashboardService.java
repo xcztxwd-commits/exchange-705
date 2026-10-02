@@ -42,7 +42,7 @@ public class DashboardService {
         
         if (agentId != null) {
             // 代理统计：下级用户、下级用户交易订单、下级用户交易金额
-            List<UserAccount> subordinates = userAccountRepository.findByParentUserId(agentId);
+            List<UserAccount> subordinates = userAccountRepository.findByTenantIdAndParentUserId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), agentId);
             long subordinateCount = subordinates.size();
             stats.put("subordinateCount", subordinateCount);
             
@@ -53,21 +53,21 @@ public class DashboardService {
             
             if (!subordinateUserIds.isEmpty()) {
                 // 统计下级用户的交易订单数（合约订单 + 期货订单）
-                long contractOrderCount = contractOrderRepository.findAll().stream()
+                long contractOrderCount = contractOrderRepository.findAllByTenantId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId()).stream()
                         .filter(order -> subordinateUserIds.contains(order.getUserId()))
                         .count();
-                long optionOrderCount = optionOrderRepository.findAll().stream()
+                long optionOrderCount = optionOrderRepository.findAllByTenantId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId()).stream()
                         .filter(order -> subordinateUserIds.contains(order.getUserId()))
                         .count();
                 long totalOrderCount = contractOrderCount + optionOrderCount;
                 stats.put("subordinateOrderCount", totalOrderCount);
                 
                 // 统计下级用户的交易金额（合约订单的保证金 + 期货订单的金额）
-                BigDecimal contractAmount = contractOrderRepository.findAll().stream()
+                BigDecimal contractAmount = contractOrderRepository.findAllByTenantId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId()).stream()
                         .filter(order -> subordinateUserIds.contains(order.getUserId()))
                         .map(order -> order.getMargin() != null ? order.getMargin() : BigDecimal.ZERO)
                         .reduce(BigDecimal.ZERO, BigDecimal::add);
-                BigDecimal optionAmount = optionOrderRepository.findAll().stream()
+                BigDecimal optionAmount = optionOrderRepository.findAllByTenantId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId()).stream()
                         .filter(order -> subordinateUserIds.contains(order.getUserId()))
                         .map(order -> order.getAmount() != null ? order.getAmount() : BigDecimal.ZERO)
                         .reduce(BigDecimal.ZERO, BigDecimal::add);
@@ -79,18 +79,17 @@ public class DashboardService {
             }
         } else {
             // 管理员统计：用户总数、今日交易、交易金额、活跃用户
-            long totalUsers = userAccountRepository.count();
+            long totalUsers = userAccountRepository.countByTenantId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId());
             stats.put("totalUsers", totalUsers);
             
             // 今日交易（今日创建的订单数）
             LocalDateTime todayStart = LocalDateTime.of(LocalDate.now(), LocalTime.MIN);
             LocalDateTime todayEnd = LocalDateTime.of(LocalDate.now(), LocalTime.MAX);
-            long todayTransactions = financialOrderRepository.countByPurchaseTimeBetween(todayStart, todayEnd);
+            long todayTransactions = financialOrderRepository.countByTenantIdAndPurchaseTimeBetween(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), todayStart, todayEnd);
             stats.put("todayTransactions", todayTransactions);
             
             // 今日交易金额（今日订单的总金额）
-            BigDecimal todayAmount = financialOrderRepository
-                    .findByPurchaseTimeBetween(todayStart, todayEnd)
+            BigDecimal todayAmount = financialOrderRepository.findByTenantIdAndPurchaseTimeBetween(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), todayStart, todayEnd)
                     .stream()
                     .map(FinancialOrder::getPurchaseAmount)
                     .reduce(BigDecimal.ZERO, BigDecimal::add);
@@ -134,14 +133,14 @@ public class DashboardService {
             
             if (agentId != null) {
                 // 代理：只统计下级用户的数据
-                List<UserAccount> subordinates = userAccountRepository.findByParentUserId(agentId);
+                List<UserAccount> subordinates = userAccountRepository.findByTenantIdAndParentUserId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), agentId);
                 Set<Long> subordinateUserIds = subordinates.stream()
                         .map(UserAccount::getId)
                         .collect(Collectors.toSet());
                 
                 if (!subordinateUserIds.isEmpty()) {
                     // 统计下级用户的充值金额（已审核通过的）
-                    depositAmount = depositRecordRepository.findAll().stream().filter(d -> !"ADMIN_MANUAL".equals(d.getSource()))
+                    depositAmount = depositRecordRepository.findAllByTenantId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId()).stream().filter(d -> !"ADMIN_MANUAL".equals(d.getSource()))
                             .filter(record -> subordinateUserIds.contains(record.getUserId()))
                             .filter(record -> record.getCreatedAt() != null 
                                     && !record.getCreatedAt().isBefore(startOfDay)
@@ -151,7 +150,7 @@ public class DashboardService {
                             .reduce(BigDecimal.ZERO, BigDecimal::add);
                     
                     // 统计下级用户的提现金额（已审核通过的，包括APPROVED和COMPLETED）
-                    withdrawAmount = withdrawRecordRepository.findAll().stream()
+                    withdrawAmount = withdrawRecordRepository.findAllByTenantId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId()).stream()
                             .filter(record -> subordinateUserIds.contains(record.getUserId()))
                             .filter(record -> record.getCreatedAt() != null 
                                     && !record.getCreatedAt().isBefore(startOfDay)
@@ -162,7 +161,7 @@ public class DashboardService {
                 }
             } else {
                 // 管理员：统计所有用户的数据
-                depositAmount = depositRecordRepository.findAll().stream().filter(d -> !"ADMIN_MANUAL".equals(d.getSource()))
+                depositAmount = depositRecordRepository.findAllByTenantId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId()).stream().filter(d -> !"ADMIN_MANUAL".equals(d.getSource()))
                         .filter(record -> record.getCreatedAt() != null 
                                 && !record.getCreatedAt().isBefore(startOfDay)
                                 && !record.getCreatedAt().isAfter(endOfDay))
@@ -170,7 +169,7 @@ public class DashboardService {
                         .map(record -> record.getAmount() != null ? record.getAmount() : BigDecimal.ZERO)
                         .reduce(BigDecimal.ZERO, BigDecimal::add);
                 
-                withdrawAmount = withdrawRecordRepository.findAll().stream()
+                withdrawAmount = withdrawRecordRepository.findAllByTenantId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId()).stream()
                         .filter(record -> record.getCreatedAt() != null 
                                 && !record.getCreatedAt().isBefore(startOfDay)
                                 && !record.getCreatedAt().isAfter(endOfDay))
@@ -199,13 +198,13 @@ public class DashboardService {
         Map<String, Object> stats = new HashMap<>();
         Long agent = com.gtcfesk.exchange.config.BackendAccess.agentId();
         if (agent != null) {
-            java.util.Set<Long> allowed = userAccountRepository.findByParentUserId(agent).stream().map(UserAccount::getId).collect(java.util.stream.Collectors.toSet());
+            java.util.Set<Long> allowed = userAccountRepository.findByTenantIdAndParentUserId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), agent).stream().map(UserAccount::getId).collect(java.util.stream.Collectors.toSet());
             java.util.function.Predicate<LocalDateTime> inRange = time -> time != null && !time.toLocalDate().isBefore(startDate) && !time.toLocalDate().isAfter(endDate);
             stats.put("totalUsers", (long) allowed.size());
-            stats.put("totalDeposit", depositRecordRepository.findAll().stream().filter(d -> !"ADMIN_MANUAL".equals(d.getSource())).filter(d -> allowed.contains(d.getUserId()) && "COMPLETED".equals(d.getStatus()) && inRange.test(d.getCreatedAt())).map(d -> d.getAmount()).reduce(BigDecimal.ZERO, BigDecimal::add));
-            stats.put("totalWithdraw", withdrawRecordRepository.findAll().stream().filter(d -> allowed.contains(d.getUserId()) && ("APPROVED".equals(d.getStatus()) || "COMPLETED".equals(d.getStatus())) && inRange.test(d.getCreatedAt())).map(d -> d.getAmount()).reduce(BigDecimal.ZERO, BigDecimal::add));
-            BigDecimal contract = contractOrderRepository.findAll().stream().filter(d -> allowed.contains(d.getUserId()) && inRange.test(d.getCreatedAt())).map(d -> d.getMargin()).reduce(BigDecimal.ZERO, BigDecimal::add);
-            BigDecimal option = optionOrderRepository.findAll().stream().filter(d -> allowed.contains(d.getUserId()) && inRange.test(d.getCreatedAt())).map(d -> d.getAmount()).reduce(BigDecimal.ZERO, BigDecimal::add);
+            stats.put("totalDeposit", depositRecordRepository.findAllByTenantId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId()).stream().filter(d -> !"ADMIN_MANUAL".equals(d.getSource())).filter(d -> allowed.contains(d.getUserId()) && "COMPLETED".equals(d.getStatus()) && inRange.test(d.getCreatedAt())).map(d -> d.getAmount()).reduce(BigDecimal.ZERO, BigDecimal::add));
+            stats.put("totalWithdraw", withdrawRecordRepository.findAllByTenantId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId()).stream().filter(d -> allowed.contains(d.getUserId()) && ("APPROVED".equals(d.getStatus()) || "COMPLETED".equals(d.getStatus())) && inRange.test(d.getCreatedAt())).map(d -> d.getAmount()).reduce(BigDecimal.ZERO, BigDecimal::add));
+            BigDecimal contract = contractOrderRepository.findAllByTenantId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId()).stream().filter(d -> allowed.contains(d.getUserId()) && inRange.test(d.getCreatedAt())).map(d -> d.getMargin()).reduce(BigDecimal.ZERO, BigDecimal::add);
+            BigDecimal option = optionOrderRepository.findAllByTenantId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId()).stream().filter(d -> allowed.contains(d.getUserId()) && inRange.test(d.getCreatedAt())).map(d -> d.getAmount()).reduce(BigDecimal.ZERO, BigDecimal::add);
             stats.put("totalTrade", contract.add(option));
             return stats;
         }
@@ -216,7 +215,7 @@ public class DashboardService {
         
         try {
             // 1. 总用户数（所有用户）
-            long totalUsers = userAccountRepository.count();
+            long totalUsers = userAccountRepository.countByTenantId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId());
             stats.put("totalUsers", totalUsers);
             System.out.println("[DashboardService] 总用户数: " + totalUsers);
             
@@ -297,14 +296,14 @@ public class DashboardService {
             
             if (agentId != null) {
                 // 代理：只统计下级用户的数据
-                List<UserAccount> subordinates = userAccountRepository.findByParentUserId(agentId);
+                List<UserAccount> subordinates = userAccountRepository.findByTenantIdAndParentUserId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), agentId);
                 Set<Long> subordinateUserIds = subordinates.stream()
                         .map(UserAccount::getId)
                         .collect(Collectors.toSet());
                 
                 if (!subordinateUserIds.isEmpty()) {
                     // 统计下级用户的充值金额（已完成的）
-                    depositAmount = depositRecordRepository.findAll().stream().filter(d -> !"ADMIN_MANUAL".equals(d.getSource()))
+                    depositAmount = depositRecordRepository.findAllByTenantId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId()).stream().filter(d -> !"ADMIN_MANUAL".equals(d.getSource()))
                             .filter(record -> subordinateUserIds.contains(record.getUserId()))
                             .filter(record -> record.getCreatedAt() != null 
                                     && !record.getCreatedAt().isBefore(startOfDay)
@@ -314,7 +313,7 @@ public class DashboardService {
                             .reduce(BigDecimal.ZERO, BigDecimal::add);
                     
                     // 统计下级用户的提现金额（已审核通过的，包括APPROVED和COMPLETED）
-                    withdrawAmount = withdrawRecordRepository.findAll().stream()
+                    withdrawAmount = withdrawRecordRepository.findAllByTenantId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId()).stream()
                             .filter(record -> subordinateUserIds.contains(record.getUserId()))
                             .filter(record -> record.getCreatedAt() != null 
                                     && !record.getCreatedAt().isBefore(startOfDay)
@@ -325,7 +324,7 @@ public class DashboardService {
                 }
             } else {
                 // 管理员：统计所有用户的数据
-                depositAmount = depositRecordRepository.findAll().stream().filter(d -> !"ADMIN_MANUAL".equals(d.getSource()))
+                depositAmount = depositRecordRepository.findAllByTenantId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId()).stream().filter(d -> !"ADMIN_MANUAL".equals(d.getSource()))
                         .filter(record -> record.getCreatedAt() != null 
                                 && !record.getCreatedAt().isBefore(startOfDay)
                                 && !record.getCreatedAt().isAfter(endOfDay))
@@ -333,7 +332,7 @@ public class DashboardService {
                         .map(record -> record.getAmount() != null ? record.getAmount() : BigDecimal.ZERO)
                         .reduce(BigDecimal.ZERO, BigDecimal::add);
                 
-                withdrawAmount = withdrawRecordRepository.findAll().stream()
+                withdrawAmount = withdrawRecordRepository.findAllByTenantId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId()).stream()
                         .filter(record -> record.getCreatedAt() != null 
                                 && !record.getCreatedAt().isBefore(startOfDay)
                                 && !record.getCreatedAt().isAfter(endOfDay))

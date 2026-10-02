@@ -11,9 +11,9 @@ import java.util.*;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
-class MarketInstrumentCatalogTest {
+class MarketInstrumentCatalogTest extends TenantMarketTestContext {
     final MarketInstrumentCatalog catalog=new MarketInstrumentCatalog();
-    MarketInstrumentCatalogTest(){catalog.http=mock(MarketHttp.class);catalog.symbols=mock(TradingSymbolRepository.class);catalog.exchange=new ExchangeQuoteSource();when(catalog.symbols.findAll()).thenReturn(Collections.emptyList());}
+    MarketInstrumentCatalogTest(){catalog.http=mock(MarketHttp.class);catalog.symbols=mock(TradingSymbolRepository.class);catalog.exchange=new ExchangeQuoteSource();when(catalog.symbols.findAllByTenantId(1L)).thenReturn(Collections.emptyList());}
     static String spot(){return "{\"symbols\":[{\"symbol\":\"ETHBTC\",\"status\":\"TRADING\",\"isSpotTradingAllowed\":true,\"baseAsset\":\"ETH\",\"quoteAsset\":\"BTC\",\"filters\":[{\"filterType\":\"PRICE_FILTER\",\"tickSize\":\"0.00001000\"},{\"filterType\":\"LOT_SIZE\",\"stepSize\":\"0.00100000\",\"minQty\":\"0.001\"}]},{\"symbol\":\"OLDUSDT\",\"status\":\"BREAK\",\"isSpotTradingAllowed\":true}]}";}
     @Test void exchangeMetadataAddedStateAndSourceCategoryAreIndependent(){
         when(catalog.http.get(any(URI.class),anyInt())).thenReturn(ResponseEntity.ok(spot()));
@@ -21,7 +21,7 @@ class MarketInstrumentCatalogTest {
         assertEquals("BTC",symbol.getQuoteCurrency());assertEquals(5,symbol.getPricePrecision());assertEquals(3,symbol.getVolumePrecision());
         symbol.setCategory("US");symbol.setIsEnabled(false);
         assertEquals("binance:Crypto:ETHBTC",MarketInstrumentCatalog.identity(symbol));
-        when(catalog.symbols.findAll()).thenReturn(Collections.singletonList(symbol));
+        when(catalog.symbols.findAllByTenantId(1L)).thenReturn(Collections.singletonList(symbol));
         Map<String,Object> result=catalog.list("binance","Crypto","",0);
         assertEquals(1,result.get("total"));Map<?,?> row=(Map<?,?>)((List<?>)result.get("list")).get(0);assertEquals(true,row.get("added"));
         assertTrue(((List<?>)catalog.list("binance","Crypto","no-match",0).get("list")).isEmpty());

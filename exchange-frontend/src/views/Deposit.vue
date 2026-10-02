@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { canStartBusiness } from '@/utils/tenantFeatures'
+import ProtectedImage from '@/components/ProtectedImage.vue'
 import { accountMode } from "@/utils/accountMode"
 const simulation = accountMode() === "DEMO"
 import { ref, onMounted } from 'vue'
@@ -49,6 +51,7 @@ const depositAmount = ref<number | null>(null)
 // 上传凭证
 const proofFile = ref<File | null>(null)
 const proofPreview = ref<string>('')
+const uploadedProof = ref('')
 const uploading = ref(false)
 const proofInputRef = ref<HTMLInputElement | null>(null)
 
@@ -205,6 +208,7 @@ function handleFileSelect(event: Event) {
       return
     }
     
+    uploadedProof.value = ''
     proofFile.value = file
     
     // 创建预览
@@ -223,6 +227,7 @@ function triggerFileSelect() {
 
 // 移除图片
 function removeProof() {
+  uploadedProof.value = ''
   proofFile.value = null
   proofPreview.value = ''
   if (proofInputRef.value) {
@@ -232,6 +237,7 @@ function removeProof() {
 
 // 提交充值
 async function submitDeposit() {
+  if (uploading.value) return
   if (rate.value === null) { showToast('汇率暂不可用，请稍后重试', 'error'); return }
   if (!depositAmount.value || depositAmount.value <= 0) {
     showToast(localeStore.t('pleaseEnterValidDepositAmount'), 'error')
@@ -246,17 +252,15 @@ async function submitDeposit() {
   uploading.value = true
   
   try {
-    // 先上传图片
-    const formData = new FormData()
-    if (proofFile.value) formData.append('file', proofFile.value)
-    
-    const uploadRes: any = simulation ? { url: 'SIMULATION-NO-PAYMENT' } : await request.post('/upload/image', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data'
-      }
-    })
-    
-    const imageUrl = uploadRes.url || uploadRes.data?.url
+    // Keep a successful upload stable when the creation response is unknown.
+    let imageUrl = uploadedProof.value
+    if (!imageUrl) {
+      const formData = new FormData()
+      if (proofFile.value) formData.append('file', proofFile.value)
+      const uploadRes: any = simulation ? { url: 'SIMULATION-NO-PAYMENT' } : await request.post('/upload/image', formData, { headers: { 'Content-Type': 'multipart/form-data' } })
+      imageUrl = String(uploadRes.url || uploadRes.data?.url || '')
+      uploadedProof.value = imageUrl
+    }
     
     if (!imageUrl) {
       throw new Error(localeStore.t('imageUploadFailed'))
@@ -284,6 +288,7 @@ async function submitDeposit() {
       showToast(localeStore.t('depositApplicationSubmitted'), 'success')
       // 清空表单
       depositAmount.value = null
+      uploadedProof.value = ''
       proofFile.value = null
       proofPreview.value = ''
       if (proofInputRef.value) {
@@ -399,7 +404,7 @@ onMounted(() => {
       <!-- 二维码和地址 -->
       <div class="qr-section">
         <div class="qr-code" v-if="qrCodeUrl">
-          <img :src="qrCodeUrl" :alt="localeStore.t('qrCode')" />
+          <ProtectedImage :src="qrCodeUrl" :alt="localeStore.t('qrCode')" />
         </div>
         <div class="qr-code-placeholder" v-else>
           <svg class="placeholder-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -464,14 +469,14 @@ onMounted(() => {
             <div class="upload-text">{{ localeStore.t('clickToUpload') }}</div>
           </div>
           <div v-else class="upload-preview">
-            <img :src="proofPreview" :alt="localeStore.t('uploadPaymentVoucher')" />
+            <ProtectedImage :src="proofPreview" :alt="localeStore.t('uploadPaymentVoucher')" />
             <button class="remove-button" @click="removeProof">×</button>
           </div>
         </div>
       </div>
 
       <!-- 提交按钮 -->
-      <button 
+      <button v-if="canStartBusiness('deposit')"
         class="submit-button" 
         @click="submitDeposit"
         :disabled="uploading || rate === null || !depositAmount || (!simulation && !proofFile)"
@@ -545,14 +550,14 @@ onMounted(() => {
               <div class="upload-text">{{ localeStore.t('clickToUpload') }}</div>
             </div>
             <div v-else class="upload-preview">
-              <img :src="proofPreview" :alt="localeStore.t('uploadPaymentVoucher')" />
+              <ProtectedImage :src="proofPreview" :alt="localeStore.t('uploadPaymentVoucher')" />
               <button class="remove-button" @click="removeProof">×</button>
             </div>
           </div>
         </div>
         
         <!-- 提交按钮 -->
-        <button 
+        <button v-if="canStartBusiness('deposit')"
           class="submit-button" 
           @click="submitDeposit"
           :disabled="uploading || rate === null || !depositAmount || (!simulation && !proofFile)"

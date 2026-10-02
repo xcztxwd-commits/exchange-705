@@ -160,7 +160,8 @@
         "clear_preset": "清除预设",
         "manual_order": "生成订单（超级管理员）",
         "delete_order": "删除订单",
-        "restore_order": "恢复订单"
+        "restore_order": "恢复订单",
+        "risk_exit": "受控修改止盈止损"
       }
     },
     {
@@ -264,7 +265,8 @@
         "detail": "查看详情",
         "payout": "发放收益",
         "payout_all": "批量发放收益",
-        "calculate": "计算收益"
+        "calculate": "计算收益",
+        "controlled_exit": "受控赎回"
       }
     },
     {
@@ -313,6 +315,13 @@
       "actions": {
         "save": "保存网站安全（超级管理员）"
       }
+    },
+    {
+      "code": "share_templates",
+      "name": "持仓分享模板",
+      "path": "/share-templates",
+      "group": "system",
+      "actions": { "save": "新增、编辑与保存模板" }
     },
     {
       "code": "settings",

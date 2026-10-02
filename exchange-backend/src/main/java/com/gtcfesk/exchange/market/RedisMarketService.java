@@ -33,7 +33,7 @@ public class RedisMarketService {
         pendingPrices.forEach((symbol, quote) -> {
             if (!pendingPrices.remove(symbol, quote)) return;
             try {
-                redisTemplate.opsForValue().set(PRICE_PREFIX + symbol, objectMapper.writeValueAsString(quote));
+                redisTemplate.opsForValue().set(symbol, objectMapper.writeValueAsString(quote));
             } catch (Exception failure) {
                 pendingPrices.putIfAbsent(symbol, quote);
                 if (System.currentTimeMillis() - lastPriceWriteError > 30000) {
@@ -45,6 +45,7 @@ public class RedisMarketService {
     }
     @PreDestroy public void stopPriceWriter() { priceWriter.shutdownNow(); flushPrices(); }
     
+    private static String tenantPrefix() { return "tenant:" + com.gtcfesk.exchange.tenant.TenantContext.requireTenantId() + ":"; }
     // Redis键前缀
     private static final String KLINE_PREFIX = "market:kline:";
     private static final String PRICE_PREFIX = "market:price:";
@@ -61,8 +62,9 @@ public class RedisMarketService {
      * @param klineList K线数据列表
      */
     public void saveKlines(String symbol, String interval, List<Map<String, Object>> klineList) {
+        com.gtcfesk.exchange.tenant.TenantContext.requireTenantId();
         try {
-            String key = KLINE_PREFIX + symbol + ":" + interval;
+            String key = tenantPrefix() + KLINE_PREFIX + symbol + ":" + interval;
             String json = objectMapper.writeValueAsString(klineList);
             redisTemplate.opsForValue().set(key, json, KLINE_EXPIRE_SECONDS, TimeUnit.SECONDS);
             System.out.println("[RedisMarketService] Saved " + klineList.size() + " klines for " + symbol + ":" + interval);
@@ -73,8 +75,9 @@ public class RedisMarketService {
     }
     
     public void saveSimulationHistory(String session, String interval, List<Map<String, Object>> rows) {
+        com.gtcfesk.exchange.tenant.TenantContext.requireTenantId();
         try {
-            redisTemplate.opsForValue().set(KLINE_PREFIX + session + ":" + interval, objectMapper.writeValueAsString(rows));
+            redisTemplate.opsForValue().set(tenantPrefix() + KLINE_PREFIX + session + ":" + interval, objectMapper.writeValueAsString(rows));
         } catch (Exception failure) {
             throw new IllegalStateException("无法保存随机行情的历史快照", failure);
         }
@@ -87,8 +90,9 @@ public class RedisMarketService {
      * @return K线数据列表，如果不存在则返回null
      */
     public List<Map<String, Object>> getKlines(String symbol, String interval) {
+        com.gtcfesk.exchange.tenant.TenantContext.requireTenantId();
         try {
-            String key = KLINE_PREFIX + symbol + ":" + interval;
+            String key = tenantPrefix() + KLINE_PREFIX + symbol + ":" + interval;
             String json = redisTemplate.opsForValue().get(key);
             if (json == null || json.isEmpty()) {
                 return null;
@@ -107,6 +111,7 @@ public class RedisMarketService {
      * @return 交易对符号到K线数据的映射
      */
     public Map<String, List<Map<String, Object>>> getBatchKlines(List<String> symbols, String interval) {
+        com.gtcfesk.exchange.tenant.TenantContext.requireTenantId();
         Map<String, List<Map<String, Object>>> result = new HashMap<>();
         for (String symbol : symbols) {
             List<Map<String, Object>> klines = getKlines(symbol, interval);
@@ -125,9 +130,10 @@ public class RedisMarketService {
      * @param changePct24h 24小时涨跌幅
      */
     public void savePrice(String symbol, Map<String, Object> quote) {
+        com.gtcfesk.exchange.tenant.TenantContext.requireTenantId();
         if (!QuoteState.valid(quote)) return;
         // Only persistence snapshots coalesce; authoritative source events are handled separately.
-        pendingPrices.put(symbol, new HashMap<>(quote));
+        pendingPrices.put(tenantPrefix() + PRICE_PREFIX + symbol, new HashMap<>(quote));
     }
     /**
      * 从Redis获取价格数据
@@ -135,8 +141,9 @@ public class RedisMarketService {
      * @return 价格数据，如果不存在则返回null
      */
     public Map<String, Object> getPrice(String symbol) {
+        com.gtcfesk.exchange.tenant.TenantContext.requireTenantId();
         try {
-            String key = PRICE_PREFIX + symbol;
+            String key = tenantPrefix() + PRICE_PREFIX + symbol;
             String json = redisTemplate.opsForValue().get(key);
             if (json == null || json.isEmpty()) {
                 return null;
@@ -165,7 +172,7 @@ public class RedisMarketService {
 
     /** Atomic, fixed settlement snapshot; duration changes apply to the original source timestamp. */
     public Map<String,Object> conversionQuote(String source, String category, String code, Map<String,Object> raw) {
-        String key = "market:conversion:" + source + ":" + category + ":" + code;
+        String key = tenantPrefix() + "market:conversion:" + source + ":" + category + ":" + code;
         try {
             long now = System.currentTimeMillis();
             String configured = configs.getConfigValue("market.conversion.cache-hours");
@@ -198,6 +205,7 @@ public class RedisMarketService {
      * @return 交易对符号到价格数据的映射
      */
     public Map<String, Map<String, Object>> getBatchPrices(List<String> symbols) {
+        com.gtcfesk.exchange.tenant.TenantContext.requireTenantId();
         Map<String, Map<String, Object>> result = new HashMap<>();
         for (String symbol : symbols) {
             Map<String, Object> price = getPrice(symbol);
@@ -214,8 +222,9 @@ public class RedisMarketService {
      * @param price24hAgo 24小时前的价格
      */
     public void savePrice24hAgo(String symbol, Double price24hAgo) {
+        com.gtcfesk.exchange.tenant.TenantContext.requireTenantId();
         try {
-            String key = PRICE_24H_PREFIX + symbol;
+            String key = tenantPrefix() + PRICE_24H_PREFIX + symbol;
             redisTemplate.opsForValue().set(key, String.valueOf(price24hAgo), 86400, TimeUnit.SECONDS); // 24小时过期
         } catch (Exception e) {
             System.err.println("[RedisMarketService] Failed to save price24hAgo: " + e.getMessage());
@@ -228,8 +237,9 @@ public class RedisMarketService {
      * @return 24小时前的价格，如果不存在则返回null
      */
     public Double getPrice24hAgo(String symbol) {
+        com.gtcfesk.exchange.tenant.TenantContext.requireTenantId();
         try {
-            String key = PRICE_24H_PREFIX + symbol;
+            String key = tenantPrefix() + PRICE_24H_PREFIX + symbol;
             String value = redisTemplate.opsForValue().get(key);
             if (value == null || value.isEmpty()) {
                 return null;

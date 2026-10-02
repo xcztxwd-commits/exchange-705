@@ -1,0 +1,7 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="26" height="26" viewBox="0 0 26 26" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="Graphic">
+<rect id="Profile/Badge" x="4.225" y="4.225" width="17.55" height="17.55" rx="4.44167" fill="#F5F2F7" stroke="#51495F" stroke-width="1.95" stroke-linejoin="round"/>
+<circle id="Profile/Head" cx="13" cy="8.9375" r="1.4625" fill="#51495F" stroke="#51495F" stroke-width="1.95" stroke-linejoin="round"/>
+<path id="Profile/Shoulders" d="M7.58333 18.4167C7.58333 15.8167 9.96667 14.0833 13 14.0833C16.0333 14.0833 18.4167 15.8167 18.4167 18.4167" stroke="#51495F" stroke-width="1.95" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+</svg>

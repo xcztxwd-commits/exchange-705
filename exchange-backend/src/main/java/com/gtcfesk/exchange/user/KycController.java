@@ -42,7 +42,7 @@ public class KycController {
         Long userId = Long.parseLong(auth.getName());
         
         // 检查是否已有审核中的申请
-        Optional<KycRecord> existingRecord = kycRecordRepository.findFirstByUserIdOrderByCreatedAtDesc(userId);
+        Optional<KycRecord> existingRecord = kycRecordRepository.findFirstByTenantIdAndUserIdOrderByCreatedAtDesc(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), userId);
         if (existingRecord.isPresent()) {
             KycRecord record = existingRecord.get();
             if ("PENDING".equals(record.getStatus())) {
@@ -98,10 +98,10 @@ public class KycController {
         
         Long userId = Long.parseLong(auth.getName());
         
-        userAccountRepository.findById(userId)
+        userAccountRepository.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), userId)
                 .orElseThrow(() -> new BusinessException("用户不存在"));
         
-        Optional<KycRecord> latestRecord = kycRecordRepository.findFirstByUserIdOrderByCreatedAtDesc(userId);
+        Optional<KycRecord> latestRecord = kycRecordRepository.findFirstByTenantIdAndUserIdOrderByCreatedAtDesc(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), userId);
         
         Map<String, Object> result = new HashMap<>();
         boolean approved = latestRecord.map(record -> "APPROVED".equals(record.getStatus())).orElse(false);

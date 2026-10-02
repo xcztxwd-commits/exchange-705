@@ -1,17 +1,24 @@
 <script setup lang="ts">
+import { canStartBusiness, tenantFeatures } from '@/utils/tenantFeatures'
 import { ref, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useLocaleStore } from '@/store/locale'
+import { useAuthStore } from '@/store/auth'
+import { accountMode } from '@/utils/accountMode'
+import { resumableClaim, steadyWall } from '@/utils/claimContinuation'
 import request from '@/utils/request'
 import RegistrationCaptcha from '@/components/RegistrationCaptcha.vue'
+import RegistrationProfileFields from '@/components/RegistrationProfileFields.vue'
 import { captchaText } from '@/utils/captchaText'
 
 const router = useRouter()
 const route = useRoute()
+const auth = useAuthStore()
 const localeStore = useLocaleStore()
 localeStore.loadLocale()
 
 const captcha = ref<InstanceType<typeof RegistrationCaptcha> | null>(null)
+const profile = ref<InstanceType<typeof RegistrationProfileFields> | null>(null)
 const captchaReady = ref(false)
 const email = ref('')
 const password = ref('')
@@ -104,20 +111,43 @@ const onSubmit = async () => {
     showToastMessage(localeStore.t('passwordTooShort'), 'error')
     return
   }
+  let profileFields: Record<string, string>
+  try { profileFields = profile.value?.payload() || {} }
+  catch (e: any) { showToastMessage(e.message, 'error'); return }
   const challenge = captcha.value?.submission()
   if (!challenge) return
+  const tenant = tenantFeatures.value?.tenantId || 0
+  const submittedEmail = email.value.trim().toLowerCase()
+  const pending = !auth.token && !localStorage.getItem('token') && route.path === '/register'
+    && canStartBusiness('registration') && accountMode() === 'REAL'
+    ? resumableClaim(localStorage, tenant, 0, 'REAL', steadyWall()) : null
   loading.value = true
   try {
-    await request.post('/auth/register', {
+    const response: any = await request.post('/auth/register', {
       ...challenge,
+      ...profileFields,
       email: email.value,
       password: password.value,
       confirmPassword: confirmPassword.value,
       invitationCode: inviteCode.value.trim() || undefined,
     })
-    showToastMessage(localeStore.t('registerSuccess'), 'success')
+    const user = response?.user
+    const current = pending && Number.isSafeInteger(user?.id) && user.id > 0
+      ? resumableClaim(localStorage, tenant, user.id, 'REAL', steadyWall()) : null
+    // Only the same live anonymous action may consume the server-issued registration session.
+    const continued = Boolean(pending && pending.user == null && current
+      && current.campaign === pending.campaign && current.actionId === pending.actionId
+      && current.created === pending.created && !auth.token && !localStorage.getItem('token')
+      && route.path === '/register' && tenantFeatures.value?.tenantId === tenant
+      && canStartBusiness('registration') && accountMode() === 'REAL'
+      && sessionStorage.getItem(`account-mode:${tenant}:${user.id}`) !== 'DEMO'
+      && user.tenantId === tenant && user.email === submittedEmail
+      && typeof response.token === 'string' && /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(response.token)
+      && Number.isSafeInteger(response.expire) && response.expire > Date.now())
+    if (continued) auth.setAuth(response.token, user)
+    showToastMessage(localeStore.t(continued ? 'loginSuccess' : 'registerSuccess'), 'success')
     setTimeout(() => {
-      router.replace('/login')
+      router.replace(continued ? '/home' : '/login')
     }, 500)
   } catch (e: any) {
     await captcha.value?.registrationFailed(e)
@@ -219,6 +249,8 @@ const onSubmit = async () => {
         </div>
       </div>
 
+      <RegistrationProfileFields ref="profile" />
+
       <RegistrationCaptcha ref="captcha" :disabled="loading" @ready="captchaReady = $event" />
 
       <div class="form-group">
@@ -231,7 +263,7 @@ const onSubmit = async () => {
       />
       </div>
 
-      <button class="primary-btn" :disabled="loading || !captchaReady" @click="onSubmit">
+      <button v-if="canStartBusiness('registration')" class="primary-btn" :disabled="loading || !captchaReady || !profile?.ready" @click="onSubmit">
         {{ loading ? localeStore.t('submitting') : localeStore.t('register') }}
       </button>
 

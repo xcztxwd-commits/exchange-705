@@ -60,9 +60,9 @@ assert.equal(generationConstraintError({quantity: 2, percent: 121}, values), '')
 console.log('PASS: manual preview remains strict; generated preview accepts numeric targets within 5%')
 
 values.leverage = '10'
-for (const actual of [9.5, 10, 10.5]) assert.equal(generationConstraintError({}, values, true, undefined, actual), '')
-for (const actual of [9.4999, 10.5001, null, undefined, NaN, Infinity]) assert.match(generationConstraintError({}, values, true, undefined, actual), /杠杆/)
+assert.equal(generationConstraintError({}, values, true, undefined, 10), '')
+for (const actual of [9.5, 9.99, 10.01, 10.5, null, undefined, NaN, Infinity]) assert.match(generationConstraintError({}, values, true, undefined, actual), /杠杆/)
 assert.match(generationConstraintError({}, values, false, undefined, 10.01), /杠杆/)
 assert.equal(generationConstraintError({}, values, false, undefined, 10), '')
 assert.equal(generationRequest(form, values).leverage, '10', 'adjusted result must not overwrite target')
-console.log('PASS leverage target boundaries, nonfinite values, manual exactness and target preservation')
+console.log('PASS leverage remains exact for both manual and generated previews; nonfinite values rejected')

@@ -4,10 +4,11 @@ import javax.persistence.*;
 import java.math.BigDecimal;
 import java.time.Instant;
 
+@org.hibernate.annotations.Persister(impl = com.gtcfesk.exchange.tenant.TenantEntityPersister.class)
 @Entity
-@Table(name = "demo_order", uniqueConstraints = @UniqueConstraint(columnNames = {"user_id", "request_key"}),
+@Table(name = "demo_order", uniqueConstraints = @UniqueConstraint(columnNames={"tenant_id", "user_id", "request_key"}),
     indexes = @Index(name = "idx_demo_order_owner_status", columnList = "user_id,status,created_at"))
-public class DemoOrder {
+public class DemoOrder extends com.gtcfesk.exchange.tenant.TenantOwnedEntity {
     @Id @Column(length = 36) public String id;
     @Column(name = "user_id", nullable = false) public Long userId;
     @Column(name = "request_key", nullable = false, length = 36) public String requestKey;

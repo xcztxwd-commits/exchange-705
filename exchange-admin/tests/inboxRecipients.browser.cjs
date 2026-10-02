@@ -8,7 +8,7 @@ const assert = require('node:assert/strict')
     const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } })
     const errors = [], sent = []
     page.on('pageerror', e => errors.push(e.message))
-    await page.addInitScript(() => { localStorage.setItem('admin_token', 'inbox-qa'); localStorage.setItem('admin_user', JSON.stringify({id:1,role:'super_admin'})) })
+    await page.addInitScript(() => sessionStorage.setItem('exchange.admin.session.v2', JSON.stringify({ token: 'inbox-qa', mode: 'admin', user: { id: 1, tenantId: 1, userType: 'admin' } })))
     await page.route('**/api/**', async route => {
       const url = new URL(route.request().url())
       if (url.pathname.endsWith('/menus/current')) return route.fulfill({ json: { success: true, menus: [{ id: 1, menuCode: 'inbox', menuName: '站内信管理', path: '/inbox' }], groups: [], actions: { inbox: ['send'] } } })

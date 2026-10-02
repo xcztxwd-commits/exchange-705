@@ -5,9 +5,10 @@ import org.springframework.test.util.ReflectionTestUtils;
 import java.math.BigDecimal;
 import java.util.*;
 import static org.junit.jupiter.api.Assertions.*;
+import static com.gtcfesk.exchange.market.MarketSqlFixture.inTenant;
 
 /** Real market service + durable H2 flows; only repository/provider/Redis are isolated fixtures. */
-class ControlFlowMarketIntegrationTest {
+class ControlFlowMarketIntegrationTest extends TenantMarketTestContext {
     private static RecoveryOptions enabledRecovery() {
         RecoveryOptions options = new RecoveryOptions(); options.setAutoRestore(true); return options;
     }

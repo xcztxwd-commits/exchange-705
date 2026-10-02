@@ -37,9 +37,10 @@
 <el-table-column prop="accountModeLabel" label="账户类型" width="110" fixed="left" />
         <el-table-column prop="id" label="ID" width="80" />
         <el-table-column prop="userId" label="用户ID" width="100" />
+        <el-table-column prop="userEmail" label="用户邮箱" min-width="200" show-overflow-tooltip />
         <el-table-column prop="userRemark" label="用户备注" width="150">
           <template #default="{ row }">
-            {{ row.userRemark || row.remark || '-' }}
+            {{ row.userRemark || '-' }}
           </template>
         </el-table-column>
         <el-table-column prop="realName" label="真实姓名" width="120" />
@@ -128,7 +129,7 @@
           <div class="id-images">
             <div v-if="currentDetail.idFrontImage" class="id-image-item">
               <div class="image-label">身份证正面</div>
-              <el-image
+              <ProtectedElementImage
                 :src="getImageUrl(currentDetail.idFrontImage, currentDetail.accountMode)"
                 :preview-src-list="[getImageUrl(currentDetail.idFrontImage, currentDetail.accountMode)]"
                 style="width: 100%; max-width: 400px; cursor: pointer;"
@@ -137,7 +138,7 @@
             </div>
             <div v-if="currentDetail.idBackImage" class="id-image-item">
               <div class="image-label">身份证反面</div>
-              <el-image
+              <ProtectedElementImage
                 :src="getImageUrl(currentDetail.idBackImage, currentDetail.accountMode)"
                 :preview-src-list="[getImageUrl(currentDetail.idBackImage, currentDetail.accountMode)]"
                 style="width: 100%; max-width: 400px; cursor: pointer;"
@@ -146,7 +147,7 @@
             </div>
             <div v-if="currentDetail.handheldImage" class="id-image-item">
               <div class="image-label">手持身份证</div>
-              <el-image
+              <ProtectedElementImage
                 :src="getImageUrl(currentDetail.handheldImage, currentDetail.accountMode)"
                 :preview-src-list="[getImageUrl(currentDetail.handheldImage, currentDetail.accountMode)]"
                 style="width: 100%; max-width: 400px; cursor: pointer;"
@@ -196,6 +197,7 @@
 </template>
 
 <script setup lang="ts">
+import ProtectedElementImage from '@/components/ProtectedElementImage.vue'
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search, Refresh } from '@element-plus/icons-vue'

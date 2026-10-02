@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import { canStartBusiness } from '@/utils/tenantFeatures'
+import { simulationSessionMatches } from '../../../exchange-frontend/src/utils/tenantCapabilities'
 import { useLocaleStore } from '@/store/locale'
 import { accountMode, accountModeKey, demoApiBase, setAccountMode } from '@/utils/accountMode'
 withDefaults(defineProps<{ realPath: string; placement?: 'bar' | 'menu' }>(), { placement: 'bar' })
@@ -7,7 +9,7 @@ const demo = accountMode() === 'DEMO', busy = ref(false), error = ref('')
 const locale = useLocaleStore()
 const text = (zh: string, en: string) => locale.text(zh, en)
 async function switchAccount() {
-  if (busy.value) return
+  if (busy.value || (!demo && !canStartBusiness('simulation'))) return
   busy.value = true; error.value = ''
   try {
     const owner = accountModeKey(), token = localStorage.getItem('token') || ''
@@ -17,7 +19,7 @@ async function switchAccount() {
         cache: 'no-store', signal: AbortSignal.timeout(15000),
       })
       const session = await response.json()
-      if (!response.ok || session.environment !== 'DEMO' || `account-mode:${session.userId}` !== owner || accountModeKey() !== owner || localStorage.getItem('token') !== token) throw new Error(text('独立模拟服务暂不可用，当前账户未改变', 'Demo service unavailable. Account unchanged.'))
+      if (!response.ok || !simulationSessionMatches(session, owner) || accountModeKey() !== owner || localStorage.getItem('token') !== token) throw new Error(text('独立模拟服务暂不可用，当前账户未改变', 'Demo service unavailable. Account unchanged.'))
     }
     setAccountMode(demo ? 'REAL' : 'DEMO')
     // Full reload discards old stores, subscriptions and in-flight responses. Accepted writes stay in their original account.
@@ -29,7 +31,7 @@ async function switchAccount() {
 }
 </script>
 <template>
-  <div v-if="placement === 'menu' && !demo" class="account-mode-entry">
+  <div v-if="placement === 'menu' && !demo && canStartBusiness('simulation')" class="account-mode-entry">
     <button type="button" class="account-mode-menu" :disabled="busy" @click="switchAccount">
       <span class="entry-indicator" aria-hidden="true"></span>
       <span>{{ busy ? text('正在切换…', 'Switching…') : text('切换模拟账户', 'Switch to demo') }}</span>
@@ -38,8 +40,8 @@ async function switchAccount() {
     <p v-if="error" role="alert">{{ error }}</p>
   </div>
   <nav v-else-if="placement === 'bar' && demo" class="account-mode-bar" :title="text('已提交操作继续在原账户执行；未提交表单不会带入另一个账户', 'Accepted operations finish in the original account. Unsubmitted forms are not transferred.')" :class="{ practice: demo }" :aria-label="text('账户模式', 'Account mode')">
-    <div><span class="mode-dot" aria-hidden="true"></span><strong>{{ demo ? text('独立模拟账户', 'Independent demo account') : text('真实账户', 'Real account') }}</strong><small>{{ demo ? text('全功能 · 无需实名 · 无真实出入金', 'All features · No KYC · Virtual funds only') : text('与模拟资金完全隔离', 'Isolated from demo funds') }}</small></div>
-    <section style="display:flex;align-items:center;gap:8px"><button type="button" :disabled="busy" @click="switchAccount">{{ busy ? text('正在切换…', 'Switching…') : demo ? text('切换真实账户', 'Switch to real') : text('切换模拟账户', 'Switch to demo') }} ⇄</button></section>
+    <div><span class="mode-dot" aria-hidden="true"></span><strong>{{ demo ? text('独立模拟账户', 'Independent demo account') : text('真实账户', 'Real account') }}</strong><small>{{ demo ? text('获授权功能 · 无真实出入金', 'Authorized features · Virtual funds only') : text('与模拟资金完全隔离', 'Isolated from demo funds') }}</small></div>
+    <section style="display:flex;align-items:center;gap:8px"><button v-if="demo || canStartBusiness('simulation')" type="button" :disabled="busy" @click="switchAccount">{{ busy ? text('正在切换…', 'Switching…') : demo ? text('切换真实账户', 'Switch to real') : text('切换模拟账户', 'Switch to demo') }} ⇄</button></section>
     <p v-if="error" role="alert">{{ error }}</p>
   </nav>
 </template>

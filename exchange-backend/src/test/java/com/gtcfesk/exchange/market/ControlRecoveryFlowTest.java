@@ -6,6 +6,7 @@ import java.math.BigDecimal;
 import java.util.*;
 import java.util.concurrent.*;
 import static org.junit.jupiter.api.Assertions.*;
+import static com.gtcfesk.exchange.market.MarketSqlFixture.inTenant;
 
 /** Isolated H2 MySQL-mode database per test. No network, user, balance, or order writes. */
 class ControlRecoveryFlowTest extends PersistentPriceControlTest {
@@ -153,8 +154,8 @@ class ControlRecoveryFlowTest extends PersistentPriceControlTest {
         RecoveryOptions o = enabledRecovery(); PersistentPriceControl.Task t = start(o);
         ExecutorService executor = Executors.newFixedThreadPool(2);
         try {
-            Future<?> a = executor.submit(() -> assertEquals(t.id, start(o).id));
-            Future<?> b = executor.submit(() -> assertEquals(t.id, start(o).id));
+            Future<?> a = executor.submit(inTenant(() -> {assertEquals(t.id, start(o).id);return null;}));
+            Future<?> b = executor.submit(inTenant(() -> {assertEquals(t.id, start(o).id);return null;}));
             a.get(); b.get();
         } finally { executor.shutdownNow(); }
         assertEquals(1, count("market_control_flow"));

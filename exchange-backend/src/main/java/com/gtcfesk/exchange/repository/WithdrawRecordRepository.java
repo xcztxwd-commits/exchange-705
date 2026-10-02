@@ -10,13 +10,18 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 @Repository
-public interface WithdrawRecordRepository extends JpaRepository<WithdrawRecord, Long> {
-    List<WithdrawRecord> findByUserIdOrderByCreatedAtDesc(Long userId);
-    List<WithdrawRecord> findByStatusOrderByCreatedAtDesc(String status);
-    List<WithdrawRecord> findByStatusAndTypeOrderByCreatedAtDesc(String status, String type);
-    List<WithdrawRecord> findAllByOrderByCreatedAtDesc();
+public interface WithdrawRecordRepository extends com.gtcfesk.exchange.tenant.TenantRepository<WithdrawRecord, Long> {
+    // Current read after the caller locks the user, including under MySQL REPEATABLE_READ.
+    @org.springframework.transaction.annotation.Transactional(readOnly=true)
+    @org.springframework.data.jpa.repository.Lock(javax.persistence.LockModeType.PESSIMISTIC_READ)
+    java.util.Optional<WithdrawRecord> findByTenantIdAndUserIdAndRequestKey(Long tenantId, Long userId, String requestKey);
+
+    List<WithdrawRecord> findByTenantIdAndUserIdOrderByCreatedAtDesc(Long tenantId, Long userId);
+    List<WithdrawRecord> findByTenantIdAndStatusOrderByCreatedAtDesc(Long tenantId, String status);
+    List<WithdrawRecord> findByTenantIdAndStatusAndTypeOrderByCreatedAtDesc(Long tenantId, String status, String type);
+    List<WithdrawRecord> findAllByTenantIdOrderByCreatedAtDesc(Long tenantId);
     
-    @Query("SELECT SUM(w.amount) FROM WithdrawRecord w WHERE (w.status = 'APPROVED' OR w.status = 'COMPLETED') AND w.createdAt >= :start AND w.createdAt <= :end")
+    @org.springframework.data.jpa.repository.Query("SELECT SUM(w.amount) FROM WithdrawRecord w WHERE w.tenantId = :#{T(com.gtcfesk.exchange.tenant.TenantContext).requireTenantId()} AND ((w.status = 'APPROVED' OR w.status = 'COMPLETED') AND w.createdAt >= :start AND w.createdAt <= :end)")
     java.math.BigDecimal sumAmountByApprovedStatusAndCreatedAtBetween(
         @Param("start") LocalDateTime start,
         @Param("end") LocalDateTime end

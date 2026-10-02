@@ -24,7 +24,7 @@ public class AdminDurationController {
     @GetMapping
     @com.gtcfesk.exchange.config.AdminPermission(menu = "durations", action = "")
     public ResponseEntity<?> getAllDurations() {
-        List<OptionDuration> durations = optionDurationRepository.findAllByOrderBySortOrderAsc();
+        List<OptionDuration> durations = optionDurationRepository.findAllByTenantIdOrderBySortOrderAsc(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId());
         Map<String, Object> result = new HashMap<>();
         result.put("list", durations);
         return ResponseEntity.ok(result);
@@ -44,7 +44,7 @@ public class AdminDurationController {
         }
         
         // 检查是否已存在相同的duration
-        List<OptionDuration> existing = optionDurationRepository.findAll();
+        List<OptionDuration> existing = optionDurationRepository.findAllByTenantId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId());
         boolean duplicate = existing.stream()
             .anyMatch(d -> d.getDuration().equals(duration.getDuration()));
         if (duplicate) {
@@ -93,12 +93,12 @@ public class AdminDurationController {
     @PutMapping("/{id}")
     @com.gtcfesk.exchange.config.AdminPermission(menu = "durations", action = "edit")
     public ResponseEntity<?> updateDuration(@PathVariable Long id, @RequestBody OptionDuration duration) {
-        OptionDuration existing = optionDurationRepository.findById(id)
+        OptionDuration existing = optionDurationRepository.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), id)
             .orElseThrow(() -> new BusinessException("期限选项不存在"));
 
         if (duration.getDuration() != null && duration.getDuration() > 0) {
             // 检查是否与其他选项重复
-            List<OptionDuration> all = optionDurationRepository.findAll();
+            List<OptionDuration> all = optionDurationRepository.findAllByTenantId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId());
             boolean duplicate = all.stream()
                 .filter(d -> !d.getId().equals(id))
                 .anyMatch(d -> d.getDuration().equals(duration.getDuration()));
@@ -149,7 +149,7 @@ public class AdminDurationController {
     @DeleteMapping("/{id}")
     @com.gtcfesk.exchange.config.AdminPermission(menu = "durations", action = "delete")
     public ResponseEntity<?> deleteDuration(@PathVariable Long id) {
-        OptionDuration duration = optionDurationRepository.findById(id)
+        OptionDuration duration = optionDurationRepository.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), id)
             .orElseThrow(() -> new BusinessException("期限选项不存在"));
 
         optionDurationRepository.delete(duration);

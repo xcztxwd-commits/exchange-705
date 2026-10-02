@@ -13,7 +13,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
-class PriceControlTest {
+class PriceControlTest extends TenantMarketTestContext {
     final ForexQuoteMarketService market = new ForexQuoteMarketService();
     final TradingSymbolRepository repository = mock(TradingSymbolRepository.class);
     final AtomicReference<TradingSymbol> saved = new AtomicReference<>();
@@ -21,14 +21,14 @@ class PriceControlTest {
 
     TradingSymbol copy(TradingSymbol value) { TradingSymbol copy = new TradingSymbol(); BeanUtils.copyProperties(value, copy); return copy; }
     @BeforeEach @SuppressWarnings("unchecked") void setup() {
-        TradingSymbol symbol = new TradingSymbol(); symbol.setId(1L); symbol.setSymbol("TEST"); symbol.setCategory("Metal"); symbol.setSourceCategory("Metal"); symbol.setMarketSource(com.gtcfesk.exchange.market.MarketInstrumentCatalog.inferredSource("Metal"));
+        TradingSymbol symbol = new TradingSymbol(); symbol.setTenantId(1L); symbol.setId(1L); symbol.setSymbol("TEST"); symbol.setCategory("Metal"); symbol.setSourceCategory("Metal"); symbol.setMarketSource(com.gtcfesk.exchange.market.MarketInstrumentCatalog.inferredSource("Metal"));
         symbol.setName("Test"); symbol.setBaseCurrency("TEST"); symbol.setAlltickSymbol("SOURCE"); saved.set(symbol);
-        when(repository.findAll()).thenAnswer(call -> Collections.singletonList(copy(saved.get())));
-        when(repository.findById(1L)).thenAnswer(call -> Optional.of(copy(saved.get())));
+        when(repository.findAllByTenantId(1L)).thenAnswer(call -> Collections.singletonList(copy(saved.get())));
+        when(repository.findByTenantIdAndId(1L, 1L)).thenAnswer(call -> Optional.of(copy(saved.get())));
         when(repository.saveAndFlush(any())).thenAnswer(call -> { saved.set(copy(call.getArgument(0))); return copy(saved.get()); });
         ReflectionTestUtils.setField(market, "symbols", repository);
         ReflectionTestUtils.setField(market, "redis", mock(RedisMarketService.class));
-        Map<String, Object> groups = (Map<String, Object>) ReflectionTestUtils.getField(market, "groups");
+        Map<String, Object> groups = (Map<String, Object>) ReflectionTestUtils.getField(marketState(market), "groups");
         source = (Map<String, Map<String, Object>>) ReflectionTestUtils.getField(groups.get("Metal"), "quotes");
         raw(90); market.refreshSymbols();
     }
@@ -77,7 +77,7 @@ class PriceControlTest {
             .when(historyRedis).saveSimulationHistory(anyString(), anyString(), anyList());
         when(historyRedis.getKlines(anyString(), anyString())).thenAnswer(call -> snapshots.get(call.getArgument(0) + ":" + call.getArgument(1)));
         ReflectionTestUtils.setField(market, "redis", historyRedis);
-        Map<String, Object> groups = (Map<String, Object>) ReflectionTestUtils.getField(market, "groups");
+        Map<String, Object> groups = (Map<String, Object>) ReflectionTestUtils.getField(marketState(market), "groups");
         Map<String, Map<String, Object>> cache = (Map<String, Map<String, Object>>) ReflectionTestUtils.getField(groups.get("Metal"), "klines");
         long oldTime = System.currentTimeMillis() / 60000 * 60000 - 2 * 86400000L;
         Map<String, Object> bar = new HashMap<>();
@@ -133,9 +133,9 @@ class PriceControlTest {
         order.setDirection("UP"); order.setOpenPrice(BigDecimal.ONE); order.setAmount(BigDecimal.TEN);
         com.gtcfesk.exchange.entity.AssetAccount account = new com.gtcfesk.exchange.entity.AssetAccount();
         account.setAvailable(BigDecimal.ZERO); account.setFrozen(BigDecimal.TEN);
-        when(orders.findById(1L)).thenReturn(Optional.of(order));
+        when(orders.findByTenantIdAndId(1L, 1L)).thenReturn(Optional.of(order));
         when(orders.save(any())).thenAnswer(call -> call.getArgument(0));
-        when(accounts.findByUserIdAndCoin(2L, "OPTION")).thenReturn(Optional.of(account));
+        when(accounts.findByTenantIdAndUserIdAndCoin(1L, 2L, "OPTION")).thenReturn(Optional.of(account));
         com.gtcfesk.exchange.trade.OptionOrderService service = new com.gtcfesk.exchange.trade.OptionOrderService(mock(com.gtcfesk.exchange.user.KycIdentityService.class), orders, accounts, repository, durations, market);
         BigDecimal before = market.freshPrice("TEST");
         service.closeOrder(2L, 1L, new BigDecimal("999999"));
@@ -155,6 +155,11 @@ class PriceControlTest {
         });
         ReflectionTestUtils.setField(market, "source", provider);
         ReflectionTestUtils.setField(market, "http", mock(MarketHttp.class));
+        org.springframework.jdbc.core.JdbcTemplate jobsDb = mock(org.springframework.jdbc.core.JdbcTemplate.class);
+        when(jobsDb.queryForList("SELECT id FROM tenant ORDER BY id", Long.class)).thenReturn(Collections.singletonList(1L));
+        org.springframework.transaction.PlatformTransactionManager transactions = mock(org.springframework.transaction.PlatformTransactionManager.class);
+        when(transactions.getTransaction(any())).thenAnswer(call -> new org.springframework.transaction.support.SimpleTransactionStatus());
+        ReflectionTestUtils.setField(market, "tenantJobs", new com.gtcfesk.exchange.tenant.TenantJobRunner(jobsDb, transactions));
         market.start();
         market.startControl(1L, 2, new BigDecimal("100"), 5, true);
         awaitCompletion(); price("100");

@@ -20,6 +20,9 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 
 @EnabledIfSystemProperty(named="security.test.redis.port", matches="[0-9]+")
+@org.springframework.context.annotation.Import(com.gtcfesk.exchange.tenant.BootTenantFixture.class)
+@org.junit.jupiter.api.extension.ExtendWith(com.gtcfesk.exchange.tenant.TenantOneFixture.class)
+@org.springframework.test.context.TestPropertySource(properties={"spring.sql.init.mode=always","spring.sql.init.schema-locations=classpath:multitenant-market-test.sql","spring.redis.host=127.0.0.1", "spring.redis.port=${MT705_TEST_REDIS_PORT:1}", "spring.redis.password=${MT705_TEST_REDIS_PASSWORD:}", "platform.base-domain=mt705.test","platform.admin-origin=https://admin.mt705.test","platform.control-origin=https://control.mt705.test"})
 @SpringBootTest(properties={"spring.datasource.url=jdbc:h2:mem:registration_captcha;MODE=MySQL;DB_CLOSE_DELAY=-1", "spring.datasource.driver-class-name=org.h2.Driver", "spring.datasource.username=sa", "spring.datasource.password=", "spring.jpa.hibernate.ddl-auto=create-drop", "spring.jpa.show-sql=false", "logging.level.root=ERROR", "spring.redis.host=127.0.0.1", "spring.redis.timeout=1s"})
 @AutoConfigureMockMvc(print=org.springframework.boot.test.autoconfigure.web.servlet.MockMvcPrint.NONE)
 class RealRegistrationFlowTest {
@@ -32,7 +35,9 @@ class RealRegistrationFlowTest {
     @MockBean MarketOrderProcessor processor;
     @MockBean RedisMarketService marketRedis;
     @MockBean EmailService mail;
-    @MockBean AdminDataInitializer initializer;
+    // No SMTP provider is involved in this captcha/Redis contract fixture. Real sink/provider readiness remains separate mandatory acceptance.
+    @MockBean com.gtcfesk.exchange.control.TenantReadinessService readiness;
+
     @Autowired MockMvc mvc;
     @Autowired ObjectMapper json;
     @Autowired StringRedisTemplate redis;
@@ -51,28 +56,28 @@ class RealRegistrationFlowTest {
         JsonNode old=json.readTree(generated.getResponse().getContentAsString());
         assertFalse(old.has("code")); assertFalse(old.has("answer"));
         JsonNode current=json.readTree(postJson("/api/auth/captcha",issue).getResponse().getContentAsString());
-        String key=RegistrationSecurity.PREFIX+"challenge:"+session;
+        String key=RegistrationSecurity.prefix()+"challenge:"+session;
         String answer=redis.opsForValue().get(key).substring(33);
         String email=session+"@example.invalid";
         Map<String,Object> form=new HashMap<>();
         form.put("email",email); form.put("password","testSecret123"); form.put("confirmPassword","testSecret123");
         assertEquals(400,postJson("/api/auth/register",form).getResponse().getStatus());
-        assertFalse(users.existsByEmail(email));
+        assertFalse(users.existsByTenantIdAndEmail(1L, email));
         form.put("captchaSession",session); form.put("captchaId",old.path("captchaId").asText()); form.put("captchaCode",answer);
         assertEquals(400,postJson("/api/auth/register",form).getResponse().getStatus());
         assertNotNull(redis.opsForValue().get(key));
         form.put("captchaId",current.path("captchaId").asText()); form.put("captchaCode","XXXX");
         assertEquals(400,postJson("/api/auth/register",form).getResponse().getStatus());
-        assertNull(redis.opsForValue().get(key)); assertFalse(users.existsByEmail(email));
+        assertNull(redis.opsForValue().get(key)); assertFalse(users.existsByTenantIdAndEmail(1L, email));
         current=json.readTree(postJson("/api/auth/captcha",issue).getResponse().getContentAsString());
         form.put("captchaId",current.path("captchaId").asText()); form.put("captchaCode",redis.opsForValue().get(key).substring(33).toLowerCase(Locale.ROOT));
         assertEquals(200,postJson("/api/auth/register",form).getResponse().getStatus());
-        assertEquals(3,assets.findByUserId(users.findByEmail(email).get().getId()).size());
+        assertEquals(3,assets.findByTenantIdAndUserId(1L, users.findByTenantIdAndEmail(1L, email).get().getId()).size());
         assertNull(redis.opsForValue().get(key));
         assertEquals(400,postJson("/api/auth/register",form).getResponse().getStatus());
         // Valid format + no matching session/challenge cannot create a second account.
         form.put("email","other"+email); form.put("captchaSession",UUID.randomUUID().toString().replace("-",""));
         assertEquals(400,postJson("/api/auth/register",form).getResponse().getStatus());
-        assertFalse(users.existsByEmail("other"+email));
+        assertFalse(users.existsByTenantIdAndEmail(1L, "other"+email));
     }
 }

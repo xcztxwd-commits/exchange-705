@@ -10,19 +10,19 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 
 @Repository
-public interface UserActionRepository extends JpaRepository<UserAction, Long> {
-    List<UserAction> findByUserId(Long userId);
-    List<UserAction> findByUserIdAndMenuId(Long userId, Long menuId);
-    boolean existsByUserIdAndMenuIdAndActionCode(Long userId, Long menuId, String actionCode);
+public interface UserActionRepository extends com.gtcfesk.exchange.tenant.TenantRepository<UserAction, Long> {
+    List<UserAction> findByTenantIdAndUserId(Long tenantId, Long userId);
+    List<UserAction> findByTenantIdAndUserIdAndMenuId(Long tenantId, Long userId, Long menuId);
+    boolean existsByTenantIdAndUserIdAndMenuIdAndActionCode(Long tenantId, Long userId, Long menuId, String actionCode);
     
     @Modifying
     @Transactional
-    @Query("DELETE FROM UserAction ua WHERE ua.userId = ?1")
+    @org.springframework.data.jpa.repository.Query("DELETE FROM UserAction ua WHERE ua.tenantId = ?#{T(com.gtcfesk.exchange.tenant.TenantContext).requireTenantId()} AND (ua.userId = ?1)")
     void deleteByUserId(Long userId);
     
     @Modifying
     @Transactional
-    @Query("DELETE FROM UserAction ua WHERE ua.userId = ?1 AND ua.menuId = ?2")
+    @org.springframework.data.jpa.repository.Query("DELETE FROM UserAction ua WHERE ua.tenantId = ?#{T(com.gtcfesk.exchange.tenant.TenantContext).requireTenantId()} AND (ua.userId = ?1 AND ua.menuId = ?2)")
     void deleteByUserIdAndMenuId(Long userId, Long menuId);
 }
 

@@ -12,7 +12,7 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.*;
 
-class MarketForexSearchTest {
+class MarketForexSearchTest extends TenantMarketTestContext {
     @Test void searchingVisiblePairFindsProviderCodeWithoutChangingIt() {
         MarketController controller = new MarketController();
         TradingSymbolRepository repository = mock(TradingSymbolRepository.class);

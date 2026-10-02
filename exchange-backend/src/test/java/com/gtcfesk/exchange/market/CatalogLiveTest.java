@@ -11,7 +11,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class CatalogLiveTest {
     @Test void publicCatalogsResolveRealProviderMetadata() {
         MarketInstrumentCatalog catalog=new MarketInstrumentCatalog();catalog.http=new MarketHttp();catalog.exchange=new ExchangeQuoteSource();
-        catalog.symbols=mock(TradingSymbolRepository.class);when(catalog.symbols.findAll()).thenReturn(Collections.emptyList());
+        catalog.symbols=mock(TradingSymbolRepository.class);when(catalog.symbols.findAllByTenantId(1L)).thenReturn(Collections.emptyList());
         try {
             Map<String,Object> list=catalog.list("binance","Crypto","",0);
             assertTrue(((Number)list.get("total")).intValue()>500);assertEquals(50,((List<?>)list.get("list")).size());

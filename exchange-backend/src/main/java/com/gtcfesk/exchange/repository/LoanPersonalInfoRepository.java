@@ -8,12 +8,12 @@ import java.util.List;
 import java.util.Optional;
 
 @Repository
-public interface LoanPersonalInfoRepository extends JpaRepository<LoanPersonalInfo, Long> {
-    Optional<LoanPersonalInfo> findByUserId(Long userId);
+public interface LoanPersonalInfoRepository extends com.gtcfesk.exchange.tenant.TenantRepository<LoanPersonalInfo, Long> {
+    Optional<LoanPersonalInfo> findByTenantIdAndUserId(Long tenantId, Long userId);
     
-    List<LoanPersonalInfo> findByStatusOrderByCreatedAtDesc(String status);
+    List<LoanPersonalInfo> findByTenantIdAndStatusOrderByCreatedAtDesc(Long tenantId, String status);
     
-    List<LoanPersonalInfo> findAllByOrderByCreatedAtDesc();
+    List<LoanPersonalInfo> findAllByTenantIdOrderByCreatedAtDesc(Long tenantId);
 }
 
 

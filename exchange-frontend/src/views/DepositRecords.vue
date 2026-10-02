@@ -14,6 +14,14 @@ localeStore.loadLocale()
 
 const loading = ref(false)
 const records = ref<any[]>([])
+const cancelling = ref<number | null>(null)
+async function cancelDeposit(record: any) {
+  if (cancelling.value !== null || !window.confirm(localeStore.text('取消尚未入账的充值申请？', 'Cancel this uncredited deposit request?'))) return
+  cancelling.value = record.id
+  try { await request.post('/deposit/cancel/' + record.id); await loadRecords() }
+  catch (error: any) { window.alert(error.message || 'Unable to confirm the result. Check deposit history before retrying.') }
+  finally { cancelling.value = null }
+}
 
 // 格式化金额
 function formatMoney(v: number | string | undefined | null) {
@@ -85,9 +93,10 @@ onMounted(() => {
             'status-completed': record.status === 'COMPLETED',
             'status-rejected': record.status === 'REJECTED'
           }">
-            {{ record.status === 'PENDING' ? localeStore.t('statusPending') : record.status === 'COMPLETED' ? localeStore.t('statusCompleted') : localeStore.t('statusRejected') }}
+            {{ record.status === 'CANCELLED' ? localeStore.text('已取消', 'Cancelled') : record.status === 'PENDING' ? localeStore.t('statusPending') : record.status === 'COMPLETED' ? localeStore.t('statusCompleted') : localeStore.t('statusRejected') }}
           </span>
         </div>
+        <button v-if="record.status === 'PENDING' && record.source === 'USER_SUBMITTED'" :disabled="cancelling !== null" @click="cancelDeposit(record)">{{ localeStore.text('取消申请', 'Cancel request') }}</button>
         <div class="record-row" v-if="record.remark">
           <span class="record-label">{{ localeStore.t('remark') }}</span>
           <span class="record-value">{{ record.remark }}</span>

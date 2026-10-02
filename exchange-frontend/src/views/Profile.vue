@@ -3,6 +3,9 @@ import { computed, ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import AccountModeSwitch from '@/components/AccountModeSwitch.vue'
 import Tabbar from '@/components/Tabbar.vue'
+import EditionSwitch from '@/advanced/components/EditionSwitch.vue'
+import MessageHeaderActions from '@/components/MessageHeaderActions.vue'
+import { supportText } from '@/utils/support'
 import AssetPixelChart from '@/components/AssetPixelChart.vue'
 import request from '@/utils/request'
 import { useAuthStore } from '@/store/auth'
@@ -38,7 +41,7 @@ const menuItems = computed(() => [
   { label: localeStore.t('changePassword'), icon: '', route: '/change-password' },
   { label: localeStore.t('contactCustomerService'), icon: '', route: '/customer-service' },
   { label: localeStore.t('complaintEmail'), icon: '', route: '/complaint' },
-  { label: localeStore.t('announcements'), icon: '', route: '/announcements' },
+  { label: supportText('站内信与公告', 'Inbox & announcements'), icon: '', route: '/inbox' },
 ])
 
 // 设置列表
@@ -110,20 +113,7 @@ onMounted(() => {
           <div class="user-line">{{ localeStore.t('uid') }} {{ uid || 9210000 }}</div>
           
         </div>
-        <div class="top-icons">
-          <img 
-            src="/img/yy.png" 
-            :alt="localeStore.t('language')"
-            class="top-icon" 
-            @click="router.push('/language')" 
-          />
-          <img 
-            src="data:image/png;base64,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" 
-            :alt="localeStore.t('logout')"
-            class="top-icon" 
-            @click="handleLogout" 
-          />
-        </div>
+        <MessageHeaderActions />
       </div>
     </div>
 
@@ -210,11 +200,14 @@ onMounted(() => {
       </div>
     </div>
 
+    <button class="logout-button" type="button" @click="handleLogout">{{ localeStore.t('logout') }}</button>
+    <EditionSwitch />
     <Tabbar />
   </div>
 </template>
 
 <style scoped>
+.logout-button{display:block;margin:20px 8px;padding:12px 20px;background:#f5f5f5;color:#555;border:1px solid #ddd;border-radius:12px;cursor:pointer;font:inherit}
 .profile-page {
   min-height: 100vh;
   background: #fff;
@@ -236,6 +229,8 @@ onMounted(() => {
 }
 
 .user-info-section {
+  min-width: 0;
+  overflow-wrap: anywhere;
   flex: 1;
   display: flex;
   flex-direction: column;

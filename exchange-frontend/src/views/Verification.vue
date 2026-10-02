@@ -69,7 +69,7 @@
               :class="{ 'has-image': frontImagePreview }"
               @click="triggerFrontImageSelect"
             >
-              <img 
+              <ProtectedImage
                 v-if="frontImagePreview" 
                 :src="frontImagePreview" 
                 class="upload-preview"
@@ -100,7 +100,7 @@
               :class="{ 'has-image': backImagePreview }"
               @click="triggerBackImageSelect"
             >
-              <img 
+              <ProtectedImage
                 v-if="backImagePreview" 
                 :src="backImagePreview" 
                 class="upload-preview"
@@ -141,6 +141,7 @@
 </template>
 
 <script setup lang="ts">
+import ProtectedImage from '@/components/ProtectedImage.vue'
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import Tabbar from '@/components/Tabbar.vue'

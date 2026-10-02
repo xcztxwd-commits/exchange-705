@@ -1,3 +1,7 @@
+export function optionalPrice(value: number | string | null | undefined): number | null {
+  return value == null || String(value).trim() === '' ? null : Number(value)
+}
+
 // Validation shared by mobile order entry and protection editing. Prices remain server-authoritative.
 export function validIncrement(value: number, step: number): boolean {
   return Number.isFinite(value) && value > 0 && Number.isFinite(step) && step > 0

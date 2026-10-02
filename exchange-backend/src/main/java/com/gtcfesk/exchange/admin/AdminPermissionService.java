@@ -29,14 +29,14 @@ public class AdminPermissionService {
     public Long agentId() { return com.gtcfesk.exchange.config.BackendAccess.agentId(); }
     private Set<Long> grantedIds() {
         Long agent = agentId();
-        if (agent != null) return userMenus.findByUserId(agent).stream().map(UserMenu::getMenuId).collect(Collectors.toSet());
+        if (agent != null) return userMenus.findByTenantIdAndUserId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), agent).stream().map(UserMenu::getMenuId).collect(Collectors.toSet());
         Authentication a = SecurityContextHolder.getContext().getAuthentication();
         if (a == null || !a.getAuthorities().stream().anyMatch(r -> r.getAuthority().equals("ROLE_ADMIN"))) return Collections.emptySet();
-        AdminUser admin = admins.findById(Long.valueOf(a.getName())).orElse(null);
+        AdminUser admin = admins.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), Long.valueOf(a.getName())).orElse(null);
         if (admin == null || !Boolean.TRUE.equals(admin.getEnabled())) return Collections.emptySet();
-        AdminRole role = roles.findByRoleCode(admin.getRole()).orElse(null);
+        AdminRole role = roles.findByTenantIdAndRoleCode(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), admin.getRole()).orElse(null);
         if (role == null || !"active".equals(role.getStatus())) return Collections.emptySet();
-        return roleMenus.findByRoleId(role.getId()).stream().map(AdminRoleMenu::getMenuId).collect(Collectors.toSet());
+        return roleMenus.findByTenantIdAndRoleId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), role.getId()).stream().map(AdminRoleMenu::getMenuId).collect(Collectors.toSet());
     }
     public Map<String,Object> current() {
         boolean superUser = isSuper();
@@ -48,7 +48,7 @@ public class AdminPermissionService {
         for (AdminMenu m : active) {
             if (!"menu".equals(m.getMenuType()) || m.getPath() == null || m.getPath().isEmpty()) continue;
             if (!superUser && ("website_security".equals(normalize(m.getMenuCode())) || !ids.contains(m.getId()))) continue;
-            if (agentId() != null && Arrays.asList("roles", "admin_list", "settings", "website_security", "support", "inbox", "support_settings").contains(normalize(m.getMenuCode()))) continue;
+            if (agentId() != null && Arrays.asList("roles", "admin_list", "settings", "share_templates", "website_security", "support", "inbox", "support_settings").contains(normalize(m.getMenuCode()))) continue;
             AdminMenu parent = byId.get(m.getParentId());
             if (m.getParentId() != null && m.getParentId() != 0 && parent == null) continue;
             visible.add(m);
@@ -57,7 +57,7 @@ public class AdminPermissionService {
             else if (agentId() != null) {
                 Set<String> registered = active.stream().filter(b -> "button".equals(b.getMenuType()) && m.getId().equals(b.getParentId()))
                     .map(b -> b.getMenuCode().substring(b.getMenuCode().indexOf(':') + 1)).collect(Collectors.toSet());
-                userActions.findByUserIdAndMenuId(agentId(), m.getId()).stream().map(UserAction::getActionCode)
+                userActions.findByTenantIdAndUserIdAndMenuId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), agentId(), m.getId()).stream().map(UserAction::getActionCode)
                     .filter(registered::contains).forEach(allowed::add);
             } else {
                 for (AdminMenu b : active) if ("button".equals(b.getMenuType()) && m.getId().equals(b.getParentId()) && ids.contains(b.getId()))

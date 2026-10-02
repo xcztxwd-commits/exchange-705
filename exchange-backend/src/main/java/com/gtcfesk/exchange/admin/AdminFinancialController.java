@@ -118,6 +118,7 @@ public class AdminFinancialController {
                 Map<String, Object> orderMap = new HashMap<>();
                 orderMap.put("id", order.getId());
                 orderMap.put("userId", order.getUserId());
+                AdminUserIdentity.put(orderMap, null);
                 orderMap.put("productId", order.getProductId());
                 orderMap.put("productName", order.getProductName());
                 orderMap.put("purchaseAmount", order.getPurchaseAmount());
@@ -132,9 +133,9 @@ public class AdminFinancialController {
                 
                 // 添加用户备注
                 if (order.getUserId() != null) {
-                    UserAccount user = userAccountRepository.findById(order.getUserId()).orElse(null);
+                    UserAccount user = userAccountRepository.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), order.getUserId()).orElse(null);
                     if (user != null) {
-                        orderMap.put("userRemark", user.getRemark());
+                        AdminUserIdentity.put(orderMap, user);
                     }
                 }
                 

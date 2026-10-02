@@ -1,0 +1,8 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="26" height="26" viewBox="0 0 26 26" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="Graphic">
+<circle id="Compass/Ring" cx="13" cy="13" r="8.775" fill="#F5F2F7" stroke="#51495F" stroke-width="1.95" stroke-linejoin="round"/>
+<g id="Compass/Needle">
+<path id="Needle" d="M20.1515 10.2548L14.0981 15.8606L5.84847 15.7452L11.9019 10.1394L20.1515 10.2548Z" fill="#51495F" stroke="#51495F" stroke-width="1.95" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+</g>
+</svg>

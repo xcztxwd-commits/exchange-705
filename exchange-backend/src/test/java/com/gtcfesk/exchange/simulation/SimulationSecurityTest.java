@@ -13,6 +13,7 @@ import java.util.*;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+@org.junit.jupiter.api.extension.ExtendWith(com.gtcfesk.exchange.tenant.TenantOneFixture.class)
 class SimulationSecurityTest {
     SimulationEnvironment environment(boolean enabled) {
         SimulationEnvironment e = new SimulationEnvironment(mock(DataSource.class));
@@ -30,7 +31,7 @@ class SimulationSecurityTest {
     }
     @Test void demoKycExemptionDoesNotForgeApprovalOrWriteIdentity() {
         KycRecordRepository records=mock(KycRecordRepository.class);
-        when(records.findFirstByUserIdOrderByCreatedAtDesc(7L)).thenReturn(Optional.empty());
+        when(records.findFirstByTenantIdAndUserIdOrderByCreatedAtDesc(1L, 7L)).thenReturn(Optional.empty());
         KycIdentityService kyc=new KycIdentityService(records);
         ReflectionTestUtils.setField(kyc,"simulation",environment(true));
         assertTrue(kyc.canUseTradingFunds(7L)); assertFalse(kyc.isApproved(7L));
@@ -43,7 +44,7 @@ class SimulationSecurityTest {
     }
     @Test void realKycStillRequired() {
         KycRecordRepository records=mock(KycRecordRepository.class);
-        when(records.findFirstByUserIdOrderByCreatedAtDesc(7L)).thenReturn(Optional.empty());
+        when(records.findFirstByTenantIdAndUserIdOrderByCreatedAtDesc(1L, 7L)).thenReturn(Optional.empty());
         KycIdentityService kyc=new KycIdentityService(records);
         ReflectionTestUtils.setField(kyc,"simulation",environment(false));
         assertFalse(kyc.canUseTradingFunds(7L)); assertThrows(KycRequiredException.class,()->kyc.requireApproved(7L));

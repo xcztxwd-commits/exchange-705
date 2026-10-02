@@ -18,7 +18,7 @@ public class SimulationIdentityBoundary extends OncePerRequestFilter {
         String path=request.getServletPath();
         if (path == null || path.isEmpty()) path=request.getRequestURI().substring(request.getContextPath().length());
         return !environment.enabled() || "OPTIONS".equals(request.getMethod()) ||
-            !(path.startsWith("/api/auth/") || path.startsWith("/api/admin/") || path.startsWith("/api/user/changePassword"));
+            !(path.startsWith("/api/control/") || path.startsWith("/api/auth/") || path.startsWith("/api/admin/") || path.startsWith("/api/user/changePassword"));
     }
     @Override protected void doFilterInternal(HttpServletRequest request,HttpServletResponse response,FilterChain chain) throws IOException {
         response.setStatus(409);response.setHeader("X-Account-Environment","DEMO");response.setHeader("Cache-Control","no-store");

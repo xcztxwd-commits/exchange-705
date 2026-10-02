@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { canStartBusiness } from '@/utils/tenantFeatures'
 import { ref, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useLocaleStore } from '@/store/locale'
@@ -231,7 +232,7 @@ const onSubmit = async () => {
       />
       </div>
 
-      <button class="primary-btn" :disabled="loading || !captchaReady" @click="onSubmit">
+      <button v-if="canStartBusiness('registration')" class="primary-btn" :disabled="loading || !captchaReady" @click="onSubmit">
         {{ loading ? localeStore.t('submitting') : localeStore.t('register') }}
       </button>
 

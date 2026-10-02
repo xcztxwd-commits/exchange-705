@@ -5,9 +5,10 @@ import java.math.BigDecimal;
 import java.time.Instant;
 
 /** Append-only virtual cash movements. Never read by real account reporting. */
+@org.hibernate.annotations.Persister(impl = com.gtcfesk.exchange.tenant.TenantEntityPersister.class)
 @Entity
 @Table(name = "demo_ledger", indexes = @Index(name = "idx_demo_ledger_owner_time", columnList = "user_id,created_at"))
-public class DemoLedger {
+public class DemoLedger extends com.gtcfesk.exchange.tenant.TenantOwnedEntity {
     @Id @Column(length = 36) public String id;
     @Column(name = "user_id", nullable = false) public Long userId;
     @Column(nullable = false) public int generation;

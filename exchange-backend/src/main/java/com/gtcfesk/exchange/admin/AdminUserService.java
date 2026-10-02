@@ -44,6 +44,11 @@ import java.util.HashMap;
 
 @Service
 public class AdminUserService {
+    @Autowired private com.gtcfesk.exchange.control.TenantPolicyService tenantPolicy;
+    @Autowired private AdminPermissionService rolePermissions;
+    @Autowired private com.gtcfesk.exchange.control.BackendLoginRegistry backendRegistry;
+    @Autowired private com.gtcfesk.exchange.control.BackendLoginRepository backendLogins;
+    @Autowired private com.gtcfesk.exchange.control.ControlAuditService controlAudit;
     @Autowired
     private com.gtcfesk.exchange.user.FiatCurrencyService fiatCurrencyService;
     @Autowired
@@ -99,7 +104,7 @@ public class AdminUserService {
         
         // 如果是代理查询，只返回下级用户
         if (req.getAgentId() != null) {
-            List<UserAccount> subordinates = userAccountRepository.findByParentUserId(req.getAgentId());
+            List<UserAccount> subordinates = userAccountRepository.findByTenantIdAndParentUserId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), req.getAgentId());
             // 应用过滤条件
             if (req.getUserId() != null) {
                 subordinates = subordinates.stream()
@@ -146,7 +151,7 @@ public class AdminUserService {
         
         // 如果管理员传入了筛选代理ID，只返回该代理的下级用户
         if (req.getFilterAgentId() != null) {
-            List<UserAccount> subordinates = userAccountRepository.findByParentUserId(req.getFilterAgentId());
+            List<UserAccount> subordinates = userAccountRepository.findByTenantIdAndParentUserId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), req.getFilterAgentId());
             // 应用过滤条件
             if (req.getUserId() != null) {
                 subordinates = subordinates.stream()
@@ -195,7 +200,7 @@ public class AdminUserService {
         
         // 如果指定了用户ID，直接查询
         if (req.getUserId() != null) {
-            Optional<UserAccount> userOpt = userAccountRepository.findById(req.getUserId());
+            Optional<UserAccount> userOpt = userAccountRepository.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), req.getUserId());
             if (userOpt.isPresent()) {
                 UserAccount user = userOpt.get();
                 // 应用其他过滤条件
@@ -261,7 +266,7 @@ public class AdminUserService {
 
     private void fillParentUser(UserAccount user) {
         if (user.getParentUserId() != null) {
-            userAccountRepository.findById(user.getParentUserId())
+            userAccountRepository.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), user.getParentUserId())
                     .ifPresent(parent -> {
                         user.setParentUserEmail(parent.getEmail());
                     });
@@ -269,7 +274,7 @@ public class AdminUserService {
     }
 
     public void resetPassword(ResetPasswordRequest req) {
-        UserAccount user = userAccountRepository.findById(req.getUserId())
+        UserAccount user = userAccountRepository.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), req.getUserId())
             .orElseThrow(() -> new IllegalArgumentException("用户不存在"));
         user.setPasswordHash(passwordEncoder.encode(req.getNewPassword()));
         user.setCurrentToken(null);
@@ -285,7 +290,7 @@ public class AdminUserService {
     }
 
     public void updateStatus(UpdateUserStatusRequest req) {
-        UserAccount user = userAccountRepository.findById(req.getUserId())
+        UserAccount user = userAccountRepository.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), req.getUserId())
             .orElseThrow(() -> new IllegalArgumentException("用户不存在"));
         user.setStatus(req.getStatus());
         user.setCurrentToken(null);
@@ -293,16 +298,22 @@ public class AdminUserService {
         userAccountRepository.save(user);
     }
 
+    @Transactional
     public void updateUserType(com.gtcfesk.exchange.admin.dto.UpdateUserTypeRequest req) {
-        UserAccount user = userAccountRepository.findById(req.getUserId())
-            .orElseThrow(() -> new IllegalArgumentException("用户不存在"));
-        user.setUserType(req.getUserType());
-        user.setUpdatedAt(LocalDateTime.now());
-        userAccountRepository.save(user);
+        if(com.gtcfesk.exchange.config.BackendAccess.agentId()!=null)throw new org.springframework.security.access.AccessDeniedException("代理不能变更后台代理身份");
+        rolePermissions.require("users","agent".equals(req.getUserType())?"set_agent":"unset_agent");
+        if(!java.util.Arrays.asList("normal","agent").contains(req.getUserType()))throw new IllegalArgumentException("用户类型无效");
+        UserAccount user=userAccountRepository.lockById(req.getUserId()).orElseThrow(()->new IllegalArgumentException("用户不存在"));
+        String previous=user.getUserType();if(java.util.Objects.equals(previous,req.getUserType()))return;
+        if("agent".equals(req.getUserType()))tenantPolicy.requireNewBusiness("agent");
+        user.setUserType(req.getUserType());user.setCurrentToken(null);user.setUpdatedAt(LocalDateTime.now());userAccountRepository.saveAndFlush(user);
+        if("agent".equals(req.getUserType()))backendRegistry.register("AGENT",user.getId(),user.getEmail());
+        else backendLogins.findByTenantIdAndUserId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(),user.getId()).ifPresent(login->{login.setEnabled(false);backendLogins.save(login);});
+        controlAudit.recordCurrent("USER_TYPE_UPDATE",String.valueOf(user.getId()),"type:"+previous+"->"+req.getUserType(),null);
     }
 
     public UserAccount getUserDetail(Long userId) {
-        UserAccount user = userAccountRepository.findById(userId)
+        UserAccount user = userAccountRepository.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), userId)
             .orElseThrow(() -> new IllegalArgumentException("用户不存在"));
         fillBalances(user);
         fillUserTypeLabel(user);
@@ -311,6 +322,7 @@ public class AdminUserService {
 
     @org.springframework.beans.factory.annotation.Autowired
     private com.gtcfesk.exchange.user.DepositOrderService depositOrders;
+    @Autowired private com.gtcfesk.exchange.user.BalanceAdjustmentService balanceAdjustments;
 
     @Transactional
     public void updateBalance(UpdateUserBalanceRequest req) {
@@ -326,29 +338,12 @@ public class AdminUserService {
             input.userId=userId;input.account=req.getAccount();input.currency=req.getCurrency();input.amount=req.getAmount();
             input.idempotencyKey=req.getIdempotencyKey();input.remark=req.getRemark();depositOrders.manual(input);return;
         }
-        updateSingleBalance(userId, "FUND", req.getFundBalance());
-        updateSingleBalance(userId, "CONTRACT", req.getContractBalance());
-        updateSingleBalance(userId, "OPTION", req.getOptionBalance());
+        balanceAdjustments.adjust(req);
     }
 
-    private void updateSingleBalance(Long userId, String coin, BigDecimal value) {
-        if (value == null) {
-            return;
-        }
-        AssetAccount account = assetAccountRepository
-                .findByUserIdAndCoin(userId, coin)
-                .orElseGet(() -> {
-                    AssetAccount a = new AssetAccount();
-                    a.setUserId(userId);
-                    a.setCoin(coin);
-                    return a;
-                });
-        account.setAvailable(value);
-        assetAccountRepository.save(account);
-    }
 
     private void fillBalances(UserAccount user) {
-        List<AssetAccount> assets = assetAccountRepository.findByUserId(user.getId());
+        List<AssetAccount> assets = assetAccountRepository.findByTenantIdAndUserId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), user.getId());
         BigDecimal fund = BigDecimal.ZERO;
         BigDecimal contract = BigDecimal.ZERO;
         BigDecimal option = BigDecimal.ZERO;
@@ -383,7 +378,7 @@ public class AdminUserService {
      */
     private void fillSubordinateCount(UserAccount user) {
         if (user.getId() != null) {
-            List<UserAccount> subordinates = userAccountRepository.findByParentUserId(user.getId());
+            List<UserAccount> subordinates = userAccountRepository.findByTenantIdAndParentUserId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), user.getId());
             user.setSubordinateCount(subordinates != null ? subordinates.size() : 0);
         } else {
             user.setSubordinateCount(0);
@@ -415,7 +410,7 @@ public class AdminUserService {
     }
 
     public List<UserAccount> getSubordinates(Long userId) {
-        List<UserAccount> subordinates = userAccountRepository.findByParentUserId(userId);
+        List<UserAccount> subordinates = userAccountRepository.findByTenantIdAndParentUserId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), userId);
         subordinates.forEach(this::fillBalances);
         return subordinates;
     }
@@ -434,18 +429,18 @@ public class AdminUserService {
         String[] history = {"contract_order", "option_order", "deposit_record", "withdraw_record", "loan_record",
                 "financial_order", "financial_yield_record", "transfer_record", "kyc_record", "loan_personal_info"};
         for (String table : history) {
-            Number count = (Number) entityManager.createNativeQuery("SELECT COUNT(*) FROM " + table + " WHERE user_id = ?")
+            Number count = (Number) entityManager.createNativeQuery("SELECT COUNT(*) FROM " + table + " WHERE tenant_id = " + com.gtcfesk.exchange.tenant.TenantContext.requireTenantId() + " AND user_id = ?")
                     .setParameter(1, userId).getSingleResult();
             if (count.longValue() != 0) throw new com.gtcfesk.exchange.common.BusinessException("账户存在业务历史，不能删除，请使用禁用功能");
         }
-        if (!userAccountRepository.findByParentUserId(userId).isEmpty()) {
+        if (!userAccountRepository.findByTenantIdAndParentUserId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), userId).isEmpty()) {
             throw new com.gtcfesk.exchange.common.BusinessException("账户存在下级用户，不能删除");
         }
         for (String table : new String[]{"user_action", "user_menu", "user_bank_card", "user_digital_address"}) {
-            entityManager.createNativeQuery("DELETE FROM " + table + " WHERE user_id = ?").setParameter(1, userId).executeUpdate();
+            entityManager.createNativeQuery("DELETE FROM " + table + " WHERE tenant_id = " + com.gtcfesk.exchange.tenant.TenantContext.requireTenantId() + " AND user_id = ?").setParameter(1, userId).executeUpdate();
         }
-        assetAccountRepository.deleteAll(assets);
-        userAccountRepository.deleteById(userId);
+        assetAccountRepository.deleteAllByTenantId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), assets);
+        userAccountRepository.deleteByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), userId);
         entityManager.flush();
     }
 
@@ -468,7 +463,7 @@ public class AdminUserService {
      * 获取所有代理用户列表（用于筛选）
      */
     public List<UserAccount> getAllAgents() {
-        return userAccountRepository.findAll().stream()
+        return userAccountRepository.findAllByTenantId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId()).stream()
                 .filter(user -> "agent".equals(user.getUserType()))
                 .filter(user -> com.gtcfesk.exchange.config.BackendAccess.agentId() == null || user.getId().equals(com.gtcfesk.exchange.config.BackendAccess.agentId()))
                 .filter(user -> "active".equals(user.getStatus()) || "normal".equals(user.getStatus()))
@@ -482,31 +477,31 @@ public class AdminUserService {
         Map<String, Object> result = new HashMap<>();
         
         // 1. 合约订单
-        List<ContractOrder> contractOrders = contractOrderRepository.findByUserIdOrderByCreatedAtDesc(userId);
+        List<ContractOrder> contractOrders = contractOrderRepository.findByTenantIdAndUserIdOrderByCreatedAtDesc(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), userId);
         result.put("contractOrders", contractOrders);
         
         // 2. 期权订单
-        List<OptionOrder> optionOrders = optionOrderRepository.findByUserIdOrderByCreatedAtDesc(userId);
+        List<OptionOrder> optionOrders = optionOrderRepository.findByTenantIdAndUserIdOrderByCreatedAtDesc(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), userId);
         result.put("optionOrders", optionOrders);
         
         // 3. 充值记录（入金）
-        List<DepositRecord> deposits = depositRecordRepository.findByUserIdOrderByCreatedAtDesc(userId);
+        List<DepositRecord> deposits = depositRecordRepository.findByTenantIdAndUserIdOrderByCreatedAtDesc(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), userId);
         result.put("deposits", deposits);
         
         // 4. 提现记录（出金）
-        List<WithdrawRecord> withdraws = withdrawRecordRepository.findByUserIdOrderByCreatedAtDesc(userId);
+        List<WithdrawRecord> withdraws = withdrawRecordRepository.findByTenantIdAndUserIdOrderByCreatedAtDesc(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), userId);
         result.put("withdraws", withdraws);
         
         // 5. 贷款记录
-        List<LoanRecord> loans = loanRecordRepository.findByUserIdOrderByCreatedAtDesc(userId);
+        List<LoanRecord> loans = loanRecordRepository.findByTenantIdAndUserIdOrderByCreatedAtDesc(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), userId);
         result.put("loans", loans);
         
         // 6. 理财订单
-        List<FinancialOrder> financialOrders = financialOrderRepository.findByUserIdOrderByPurchaseTimeDesc(userId);
+        List<FinancialOrder> financialOrders = financialOrderRepository.findByTenantIdAndUserIdOrderByPurchaseTimeDesc(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), userId);
         result.put("financialOrders", financialOrders);
         
         // 7. 转账记录
-        List<TransferRecord> transfers = transferRecordRepository.findByUserIdOrderByCreatedAtDesc(userId);
+        List<TransferRecord> transfers = transferRecordRepository.findByTenantIdAndUserIdOrderByCreatedAtDesc(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), userId);
         result.put("transfers", transfers);
         
         return result;
@@ -517,33 +512,7 @@ public class AdminUserService {
      * @param agentId 代理ID，如果为null则统计所有用户，否则只统计该代理的下级用户
      */
     public int getOnlineUserCount(Long agentId) {
-        List<UserAccount> users;
-        if (agentId != null) {
-            // 代理：只统计下级用户
-            users = userAccountRepository.findByParentUserId(agentId);
-        } else {
-            // 管理员：统计所有用户
-            users = userAccountRepository.findAll();
-        }
-        
-        // 统计在线用户数（最后活动时间在5分钟内认为在线）
-        // 使用 lastActivityAt 而不是 lastLoginAt，因为 lastActivityAt 会在每次请求时更新
-        int onlineCount = 0;
-        LocalDateTime fiveMinutesAgo = LocalDateTime.now().minusMinutes(5);
-        
-        for (UserAccount user : users) {
-            // 优先使用 lastActivityAt（实时更新），如果为空则使用 lastLoginAt（兼容旧数据）
-            LocalDateTime activityTime = user.getLastActivityAt();
-            if (activityTime == null) {
-                activityTime = user.getLastLoginAt();
-            }
-            
-            if (activityTime != null && activityTime.isAfter(fiveMinutesAgo)) {
-                onlineCount++;
-            }
-        }
-        
-        return onlineCount;
+        return Math.toIntExact(new com.gtcfesk.exchange.user.UserActivityService(userAccountRepository).count(agentId));
     }
 
     /**
@@ -551,12 +520,12 @@ public class AdminUserService {
      */
     @Transactional
     public void updateInviteCode(Long userId, String newInviteCode) {
-        UserAccount user = userAccountRepository.findById(userId)
+        UserAccount user = userAccountRepository.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), userId)
                 .orElseThrow(() -> new IllegalArgumentException("用户不存在"));
         
         // 检查邀请码是否已被其他用户使用
-        if (userAccountRepository.findByMyInviteCode(newInviteCode).isPresent()) {
-            UserAccount existingUser = userAccountRepository.findByMyInviteCode(newInviteCode).get();
+        if (userAccountRepository.findByTenantIdAndMyInviteCode(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), newInviteCode).isPresent()) {
+            UserAccount existingUser = userAccountRepository.findByTenantIdAndMyInviteCode(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), newInviteCode).get();
             if (!existingUser.getId().equals(userId)) {
                 throw new IllegalArgumentException("邀请码已被其他用户使用");
             }
@@ -572,7 +541,7 @@ public class AdminUserService {
      */
     @Transactional
     public void updateRemark(Long userId, String remark) {
-        UserAccount user = userAccountRepository.findById(userId)
+        UserAccount user = userAccountRepository.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), userId)
                 .orElseThrow(() -> new IllegalArgumentException("用户不存在"));
         
         user.setRemark(remark);
@@ -586,7 +555,7 @@ public class AdminUserService {
      */
     @Transactional
     public int batchUpdateIpRegions() {
-        List<UserAccount> allUsers = userAccountRepository.findAll();
+        List<UserAccount> allUsers = userAccountRepository.findAllByTenantId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId());
         int updatedCount = 0;
         
         for (UserAccount user : allUsers) {

@@ -7,6 +7,8 @@ import com.gtcfesk.exchange.admin.AdminUserRepository;
 import com.gtcfesk.exchange.entity.UserAccount;
 import io.jsonwebtoken.impl.DefaultClaims;
 import org.junit.jupiter.api.*;
+import com.gtcfesk.exchange.tenant.TenantContext;
+import com.gtcfesk.exchange.control.*;
 import org.springframework.beans.factory.annotation.*;
 import org.springframework.context.annotation.*;
 import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
@@ -26,9 +28,20 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @WebAppConfiguration
 @org.springframework.test.context.TestPropertySource(properties = {"jwt.secret=demo-security-fixture-not-a-production-key", "jwt.expireSeconds=60"})
 class DemoSecurityTest {
+ private TenantContext.Scope tenantScope;
+ @AfterEach void closeTenantScope(){ if(tenantScope!=null)tenantScope.close(); }
     @Configuration @EnableWebMvc
     @Import({SecurityConfig.class, JwtFilter.class, DemoTradingController.class, DemoModeBoundary.class})
     static class Config {
+        @Bean com.gtcfesk.exchange.security.OutboundEndpointPolicy outbound(){return mock(com.gtcfesk.exchange.security.OutboundEndpointPolicy.class);}
+        @Bean TenantReadinessService readiness(){return mock(TenantReadinessService.class);}
+        @Bean TenantRepository tenants(){return mock(TenantRepository.class);}
+
+        @Bean ControlService control(){return mock(ControlService.class);}
+        @Bean TenantPolicyService tenantPolicy(){TenantPolicyService policy=mock(TenantPolicyService.class);Tenant tenant=new Tenant();tenant.setId(1L);when(policy.current()).thenReturn(tenant);return policy;}
+        @Bean BackendLoginRegistry logins(){BackendLoginRegistry registry=mock(BackendLoginRegistry.class);when(registry.active(anyString(),anyLong())).thenReturn(true);return registry;}
+        @Bean ControlAuditService audit(){return mock(ControlAuditService.class);}
+
         @Bean JwtUtil jwtUtil() { return mock(JwtUtil.class); }
         @Bean UserAccountRepository users() { return mock(UserAccountRepository.class); }
         @Bean AdminUserRepository admins() { return mock(AdminUserRepository.class); }
@@ -41,14 +54,15 @@ class DemoSecurityTest {
     @Autowired DemoTradingService service;
     MockMvc mvc;
     @BeforeEach void setup() {
+        tenantScope = TenantContext.open(1L);
         reset(jwt, users, service);
         mvc = MockMvcBuilders.webAppContextSetup(context).addFilters(security).build();
         UserAccount user = new UserAccount(); user.setId(7L); user.setStatus("normal"); user.setKycStatus("NOT_VERIFIED");
         user.setCurrentToken("session"); user.setPasswordHash("hash"); user.setUserType("agent");
-        when(users.findById(7L)).thenReturn(Optional.of(user)); when(jwt.credentialKey("hash")).thenReturn("credential");
+        when(users.findByTenantIdAndId(1L, 7L)).thenReturn(Optional.of(user)); when(jwt.credentialKey("hash")).thenReturn("credential");
         for (String type : Arrays.asList("user", "agent")) {
             DefaultClaims claims = new DefaultClaims(); claims.setSubject(type + "-7"); claims.setExpiration(new Date(System.currentTimeMillis() + 60000));
-            claims.put("userType", type); claims.put("sid", "session"); claims.put("credential", "credential");
+            claims.put("tenantId",1L); claims.put("tenantVersion",0L); claims.put("userType", type); claims.put("sid", "session"); claims.put("credential", "credential");
             when(jwt.parse(type)).thenReturn(claims);
         }
         when(service.initialize(7L)).thenReturn(new DemoAccount());
@@ -62,7 +76,7 @@ class DemoSecurityTest {
         verify(service).initialize(7L);
     }
     @Test void agentTokenDeniedEvenWhenItReferencesExistingUser() throws Exception {
-        mvc.perform(post("/api/demo/account").header("Authorization", "Bearer agent")).andExpect(status().isForbidden());
+        mvc.perform(post("/api/demo/account").header("Authorization", "Bearer agent")).andExpect(status().isUnauthorized());
         verifyNoInteractions(service);
     }
     @Test void invalidAmountsNeverReachService() throws Exception {

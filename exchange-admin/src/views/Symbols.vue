@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ProtectedImage from '../../../exchange-frontend/src/components/ProtectedImage.vue'
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search, Refresh, Plus, Edit, Delete, Star, StarFilled, List } from '@element-plus/icons-vue'
@@ -319,14 +320,14 @@ onUnmounted(() => {
         style="margin-top: 16px"
       >
         <el-table-column prop="id" label="ID" width="80" />
-        <el-table-column prop="symbol" label="交易对" min-width="170"><template #default="{ row }"><span style="display:flex;align-items:center;gap:8px"><img v-if="row.iconUrl" :src="getImageUrl(row.iconUrl)" alt="" width="28" height="28" />{{ displaySymbol(row) }}</span></template></el-table-column>
+        <el-table-column prop="symbol" label="交易对" min-width="170"><template #default="{ row }"><span style="display:flex;align-items:center;gap:8px"><ProtectedImage v-if="row.iconUrl" :src="getImageUrl(row.iconUrl)" alt="" width="28" height="28" />{{ displaySymbol(row) }}</span></template></el-table-column>
         <el-table-column prop="name" label="名称" min-width="150"><template #default="{ row }">{{ row.category === 'Forex' || row.sourceCategory === 'Forex' ? displaySymbol(row) : row.name }}</template></el-table-column>
         <el-table-column prop="category" label="项目分类" width="100" />
         <el-table-column prop="marketSource" label="行情源" width="100" />
         <el-table-column prop="sourceCategory" label="源分类" width="100" />
         <el-table-column prop="currentPrice" label="当前价格" width="120">
           <template #default="{ row }">
-            {{ formatPrice(row.currentPrice) }}
+            {{ formatPrice(row.currentPrice ?? 0) }}
           </template>
         </el-table-column>
         <el-table-column prop="priceChangePct24h" label="24h涨跌" width="100">
@@ -434,7 +435,7 @@ onUnmounted(() => {
               <el-button v-permission="'symbols:edit_symbol'" size="small" type="primary">上传图标</el-button>
             </el-upload>
             <div v-if="formData.iconUrl" style="display: flex; align-items: center; gap: 8px;">
-              <img :src="getImageUrl(formData.iconUrl)" style="width: 40px; height: 40px; border-radius: 4px; object-fit: cover;" />
+              <ProtectedImage :src="getImageUrl(formData.iconUrl)" style="width: 40px; height: 40px; border-radius: 4px; object-fit: cover;" />
               <el-button v-permission="'symbols:edit_symbol'" size="small" type="danger" @click="formData.iconUrl = ''">删除</el-button>
             </div>
           </div>

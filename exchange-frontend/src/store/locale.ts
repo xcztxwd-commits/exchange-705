@@ -1,5 +1,4 @@
 import { japaneseServerMessage } from '../utils/serverJapanese'
-import { browserLocale } from '../utils/browserLocale'
 import { defineStore } from 'pinia'
 import { computed, ref, watch } from 'vue'
 import { uiMessages, uiAliases } from './uiMessages'
@@ -20336,7 +20335,15 @@ export const useLocaleStore = defineStore('locale', () => {
     console.log('[LocaleStore] Language changed to:', val)
   }
 
-  const detectBrowserLocale = (): LocaleKey => browserLocale(navigator.languages?.length ? navigator.languages : [navigator.language || 'en'], messages) as LocaleKey
+  const detectBrowserLocale = (): LocaleKey => {
+    const languages = navigator.languages?.length ? navigator.languages : [navigator.language || 'en']
+    for (const preference of languages) {
+      const language = preference.split('-')[0]?.toLowerCase() || ''
+      if (language === 'zh') return 'zh-TW'
+      if (Object.prototype.hasOwnProperty.call(messages, language)) return language as LocaleKey
+    }
+    return 'en'
+  }
 
   const loadLocale = () => {
     const saved = localStorage.getItem('locale') as LocaleKey | null

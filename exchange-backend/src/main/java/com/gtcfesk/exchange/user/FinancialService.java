@@ -1,6 +1,7 @@
 package com.gtcfesk.exchange.user;
 
 import com.gtcfesk.exchange.common.BusinessException;
+import com.gtcfesk.exchange.common.OrderRequest;
 import com.gtcfesk.exchange.entity.AssetAccount;
 import com.gtcfesk.exchange.entity.FinancialOrder;
 import com.gtcfesk.exchange.entity.FinancialProduct;
@@ -19,6 +20,9 @@ import java.util.List;
 @Service
 @RequiredArgsConstructor
 public class FinancialService {
+    @org.springframework.beans.factory.annotation.Autowired private com.gtcfesk.exchange.control.ControlAuditService audit;
+    @org.springframework.beans.factory.annotation.Autowired private com.gtcfesk.exchange.repository.UserAccountRepository users;
+    @org.springframework.beans.factory.annotation.Autowired private com.gtcfesk.exchange.control.TenantPolicyService tenantPolicy;
     
     private final FinancialProductRepository productRepository;
     private final FinancialOrderRepository orderRepository;
@@ -28,14 +32,14 @@ public class FinancialService {
      * 获取启用的理财产品列表
      */
     public List<FinancialProduct> getAvailableProducts() {
-        return productRepository.findByEnabledTrueOrderBySortOrderAsc();
+        return productRepository.findByTenantIdAndEnabledTrueOrderBySortOrderAsc(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId());
     }
     
     /**
      * 获取产品详情
      */
     public FinancialProduct getProduct(Long productId) {
-        return productRepository.findById(productId)
+        return productRepository.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), productId)
                 .orElseThrow(() -> new BusinessException("产品不存在"));
     }
     
@@ -44,11 +48,20 @@ public class FinancialService {
      */
     @Transactional
     public FinancialOrder purchaseProduct(Long userId, Long productId, BigDecimal purchaseAmount) {
+        return purchaseProduct(userId,productId,purchaseAmount,null);
+    }
+
+    @Transactional
+    public FinancialOrder purchaseProduct(Long userId, Long productId, BigDecimal purchaseAmount, String key) {
+        String requestKey=OrderRequest.optional(key);
+        String requestHash=requestKey==null?null:OrderRequest.hash("financial",productId,purchaseAmount);
+        tenantPolicy.requireNewBusiness("financial");
         com.gtcfesk.exchange.common.TradeValidation.positive(purchaseAmount, "申购金额");
         // 获取产品
         FinancialProduct product = getProduct(productId);
         
-        if (!product.getEnabled()) {
+        validateProduct(product);
+        if (!Boolean.TRUE.equals(product.getEnabled())) {
             throw new BusinessException("产品已下架");
         }
         
@@ -60,9 +73,12 @@ public class FinancialService {
             throw new BusinessException("申购金额不能大于" + product.getMaxPurchase());
         }
         
-        // 检查用户资金账户余额
-        AssetAccount fundAccount = assetAccountRepository
-                .findByUserIdAndCoin(userId, "FUND")
+        users.lockById(userId).orElseThrow(() -> new BusinessException("用户不存在"));
+        if(requestKey!=null) {
+            FinancialOrder previous=orderRepository.findByTenantIdAndUserIdAndRequestKey(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(),userId,requestKey).orElse(null);
+            if(previous!=null) {OrderRequest.same(previous.getRequestHash(),requestHash);return previous;}
+        }
+        AssetAccount fundAccount = assetAccountRepository.lockByUserId(userId).stream().filter(a -> "FUND".equals(a.getCoin())).findFirst()
                 .orElseGet(() -> {
                     AssetAccount account = new AssetAccount();
                     account.setUserId(userId);
@@ -90,6 +106,7 @@ public class FinancialService {
         
         // 创建订单
         FinancialOrder order = new FinancialOrder();
+        order.setRequestKey(requestKey);order.setRequestHash(requestHash);
         order.setUserId(userId);
         order.setProductId(productId);
         order.setProductName(product.getName());
@@ -104,25 +121,44 @@ public class FinancialService {
         order.setPurchaseTime(LocalDateTime.now());
         order.setEndTime(LocalDateTime.now().plusDays(product.getTermDays()));
         
-        return orderRepository.save(order);
+        orderRepository.save(order);
+        audit.recordCurrent("FINANCIAL_PURCHASE",order.getId().toString(),"userId="+userId+"; amount="+purchaseAmount+"; availableBefore="+available+"; availableAfter="+fundAccount.getAvailable()+"; frozenBefore="+frozen+"; frozenAfter="+fundAccount.getFrozen(),null);
+        return order;
     }
     
+    /** Validate the selected product before locking or freezing funds; readiness checks only one product. */
+    static void validateProduct(FinancialProduct product) {
+        if (product.getTermDays() == null || product.getTermDays() <= 0 || !"USD".equals(product.getCurrency()))
+            throw new BusinessException("理财期限或资金账户币种配置异常");
+        com.gtcfesk.exchange.common.TradeValidation.positive(product.getMinPurchase(), "最小申购金额");
+        com.gtcfesk.exchange.common.TradeValidation.positive(product.getMaxPurchase(), "最大申购金额");
+        com.gtcfesk.exchange.common.TradeValidation.nonNegative(product.getDailyYieldRate(), "理财收益率");
+        com.gtcfesk.exchange.common.TradeValidation.nonNegative(product.getRentalFee(), "租金");
+        com.gtcfesk.exchange.common.TradeValidation.nonNegative(product.getPenaltyRate(), "赎回费率");
+        if (product.getMaxPurchase().compareTo(product.getMinPurchase()) < 0 || product.getPenaltyRate().compareTo(new BigDecimal("100")) > 0)
+            throw new BusinessException("理财金额范围或赎回费率配置异常");
+    }
+
     /**
      * 违约赎回
      */
     @Transactional
     public FinancialOrder earlyRedeem(Long userId, Long orderId) {
-        FinancialOrder order = orderRepository.findById(orderId)
+        FinancialOrder order = orderRepository.lockById(orderId)
                 .orElseThrow(() -> new BusinessException("订单不存在"));
         
         if (!order.getUserId().equals(userId)) {
             throw new BusinessException("无权操作此订单");
         }
         
+        users.lockById(userId).orElseThrow(() -> new BusinessException("用户不存在"));
+        if ("REDEEMED".equals(order.getStatus()) && order.getRedeemTime()!=null) return order;
         if (!"IN_PROGRESS".equals(order.getStatus())) {
             throw new BusinessException("订单状态不允许赎回");
         }
         
+        com.gtcfesk.exchange.common.TradeValidation.positive(order.getPurchaseAmount(), "申购本金");
+        if(order.getPenaltyRate()==null||order.getPenaltyRate().signum()<0||order.getPenaltyRate().compareTo(new BigDecimal("100"))>0)throw new BusinessException("赎回费率配置异常");
         // 计算违约金
         BigDecimal penaltyAmount = order.getPurchaseAmount()
                 .multiply(order.getPenaltyRate())
@@ -132,8 +168,7 @@ public class FinancialService {
         BigDecimal refundAmount = order.getPurchaseAmount().subtract(penaltyAmount);
         
         // 解冻并扣除资金
-        AssetAccount fundAccount = assetAccountRepository
-                .findByUserIdAndCoin(userId, "FUND")
+        AssetAccount fundAccount = assetAccountRepository.lockByUserId(userId).stream().filter(a -> "FUND".equals(a.getCoin())).findFirst()
                 .orElseThrow(() -> new BusinessException("资金账户不存在"));
         
         BigDecimal frozen = fundAccount.getFrozen() != null ? fundAccount.getFrozen() : BigDecimal.ZERO;
@@ -152,28 +187,30 @@ public class FinancialService {
         order.setPenaltyAmount(penaltyAmount);
         order.setRedeemTime(LocalDateTime.now());
         
-        return orderRepository.save(order);
+        orderRepository.save(order);
+        audit.recordCurrent("FINANCIAL_REDEEM",orderId.toString(),"userId="+userId+"; refund="+refundAmount+"; penalty="+penaltyAmount+"; availableBefore="+available+"; availableAfter="+fundAccount.getAvailable()+"; frozenBefore="+frozen+"; frozenAfter="+fundAccount.getFrozen()+"; status=IN_PROGRESS/REDEEMED",null);
+        return order;
     }
     
     /**
      * 获取用户的订单列表
      */
     public List<FinancialOrder> getUserOrders(Long userId) {
-        return orderRepository.findByUserIdOrderByPurchaseTimeDesc(userId);
+        return orderRepository.findByTenantIdAndUserIdOrderByPurchaseTimeDesc(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), userId);
     }
     
     /**
      * 获取用户的订单（按状态）
      */
     public List<FinancialOrder> getUserOrdersByStatus(Long userId, String status) {
-        return orderRepository.findByUserIdAndStatusOrderByPurchaseTimeDesc(userId, status);
+        return orderRepository.findByTenantIdAndUserIdAndStatusOrderByPurchaseTimeDesc(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), userId, status);
     }
     
     /**
      * 计算违约赎回的违约金
      */
     public BigDecimal calculatePenalty(Long userId, Long orderId) {
-        FinancialOrder order = orderRepository.findById(orderId)
+        FinancialOrder order = orderRepository.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), orderId)
                 .orElseThrow(() -> new BusinessException("订单不存在"));
         
         if (!order.getUserId().equals(userId)) {

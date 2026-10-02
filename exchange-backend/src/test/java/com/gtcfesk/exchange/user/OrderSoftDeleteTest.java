@@ -18,6 +18,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 @SpringJUnitConfig(DepositOrderServiceTest.Config.class)
+@org.junit.jupiter.api.extension.ExtendWith(com.gtcfesk.exchange.tenant.TenantOneFixture.class)
 class OrderSoftDeleteTest {
     static { ((ch.qos.logback.classic.Logger)org.slf4j.LoggerFactory.getLogger(org.slf4j.Logger.ROOT_LOGGER_NAME)).setLevel(ch.qos.logback.classic.Level.WARN); }
     @Autowired ContractOrderRepository contracts;
@@ -50,26 +51,26 @@ class OrderSoftDeleteTest {
         AdminOrderController c=controller(); TransactionTemplate tx=new TransactionTemplate(manager);
         AssetAccount account=new AssetAccount(); account.setUserId(u.getId()); account.setCoin("CONTRACT");
         account.setAvailable(new BigDecimal("123")); account.setFrozen(new BigDecimal("7")); assets.saveAndFlush(account);
-        java.time.LocalDateTime closeTime=contracts.findById(o.getId()).get().getCloseTime();
-        long count=contracts.count();
+        java.time.LocalDateTime closeTime=contracts.findByTenantIdAndId(1L, o.getId()).get().getCloseTime();
+        long count=contracts.countByTenantId(1L);
         tx.execute(s -> c.softDeleteContractOrder(o.getId(), new UsernamePasswordAuthenticationToken("admin-test", "unused")));
         tx.execute(s -> c.softDeleteContractOrder(o.getId(), new UsernamePasswordAuthenticationToken("other", "unused")));
-        assertEquals(count, contracts.count());
-        assertEquals("CLOSED", contracts.findById(o.getId()).get().getStatus());
-        assertEquals("admin-test", contracts.findById(o.getId()).get().getDeletedBy());
-        assertEquals(1, contracts.findByUserIdAndDeletedAtIsNullOrderByCreatedAtDesc(u.getId()).size());
-        assertTrue(contracts.findByUserIdAndStatusAndDeletedAtIsNullOrderByCreatedAtDesc(u.getId(), "CLOSED").isEmpty());
+        assertEquals(count, contracts.countByTenantId(1L));
+        assertEquals("CLOSED", contracts.findByTenantIdAndId(1L, o.getId()).get().getStatus());
+        assertEquals("admin-test", contracts.findByTenantIdAndId(1L, o.getId()).get().getDeletedBy());
+        assertEquals(1, contracts.findByTenantIdAndUserIdAndDeletedAtIsNullOrderByCreatedAtDesc(1L, u.getId()).size());
+        assertTrue(contracts.findByTenantIdAndUserIdAndStatusAndDeletedAtIsNullOrderByCreatedAtDesc(1L, u.getId(), "CLOSED").isEmpty());
         Map<?,?> all=(Map<?,?>)c.queryContractOrders(params(u.getId(), ""), null).getBody();
         assertEquals(2L, all.get("total")); assertEquals(1, ((List<?>)all.get("list")).size());
         Map<?,?> deleted=(Map<?,?>)c.queryContractOrders(params(u.getId(), "deleted"), null).getBody();
         assertEquals(1L, deleted.get("total")); assertEquals(true, ((Map<?,?>)((List<?>)deleted.get("list")).get(0)).get("deleted"));
         assertEquals(1L, ((Map<?,?>)c.queryContractOrders(params(u.getId(), "active"), null).getBody()).get("total"));
         tx.execute(s -> c.restoreContractOrder(o.getId())); tx.execute(s -> c.restoreContractOrder(o.getId()));
-        assertEquals(2, contracts.findByUserIdAndDeletedAtIsNullOrderByCreatedAtDesc(u.getId()).size());
-        assertFalse(contracts.findById(o.getId()).get().isDeleted());
-        assertEquals(closeTime, contracts.findById(o.getId()).get().getCloseTime());
-        assertEquals(0, new BigDecimal("123").compareTo(assets.findByUserIdAndCoin(u.getId(), "CONTRACT").get().getAvailable()));
-        assertEquals(0, new BigDecimal("7").compareTo(assets.findByUserIdAndCoin(u.getId(), "CONTRACT").get().getFrozen()));
+        assertEquals(2, contracts.findByTenantIdAndUserIdAndDeletedAtIsNullOrderByCreatedAtDesc(1L, u.getId()).size());
+        assertFalse(contracts.findByTenantIdAndId(1L, o.getId()).get().isDeleted());
+        assertEquals(closeTime, contracts.findByTenantIdAndId(1L, o.getId()).get().getCloseTime());
+        assertEquals(0, new BigDecimal("123").compareTo(assets.findByTenantIdAndUserIdAndCoin(1L, u.getId(), "CONTRACT").get().getAvailable()));
+        assertEquals(0, new BigDecimal("7").compareTo(assets.findByTenantIdAndUserIdAndCoin(1L, u.getId(), "CONTRACT").get().getFrozen()));
         assertThrows(BusinessException.class, () -> c.softDeleteContractOrder(contract(u.getId(), "OPEN").getId(), new UsernamePasswordAuthenticationToken("admin", "unused")));
         assertThrows(BusinessException.class, () -> c.softDeleteContractOrder(contract(u.getId(), "PENDING").getId(), new UsernamePasswordAuthenticationToken("admin", "unused")));
     }
@@ -102,19 +103,19 @@ class OrderSoftDeleteTest {
         UserAccount u=user(); ContractOrder o=contract(u.getId(), "CLOSED"); TransactionTemplate tx=new TransactionTemplate(manager);
         assertEquals(1, (int)tx.execute(s -> contracts.updateDeletion(o.getId(), o.getRowVersion(), java.time.LocalDateTime.now(), "admin")));
         assertEquals(0, (int)tx.execute(s -> contracts.updateDeletion(o.getId(), o.getRowVersion(), null, null)));
-        assertTrue(contracts.findById(o.getId()).get().isDeleted());
+        assertTrue(contracts.findByTenantIdAndId(1L, o.getId()).get().isDeleted());
     }
     @Test void optionDeleteRestoreAndActiveProtection() {
         UserAccount u=user(); OptionOrder o=option(u.getId(), "CLOSED"); AdminOrderController c=controller();
-        TransactionTemplate tx=new TransactionTemplate(manager); long count=options.count();
+        TransactionTemplate tx=new TransactionTemplate(manager); long count=options.countByTenantId(1L);
         tx.execute(s -> c.softDeleteOptionOrder(o.getId(), new UsernamePasswordAuthenticationToken("admin", "unused")));
-        assertEquals(count, options.count()); assertEquals("CLOSED", options.findById(o.getId()).get().getStatus());
-        assertTrue(options.findByUserIdAndDeletedAtIsNullOrderByCreatedAtDesc(u.getId()).isEmpty());
-        assertTrue(options.findByUserIdAndStatusAndDeletedAtIsNullOrderByCreatedAtDesc(u.getId(), "CLOSED").isEmpty());
+        assertEquals(count, options.countByTenantId(1L)); assertEquals("CLOSED", options.findByTenantIdAndId(1L, o.getId()).get().getStatus());
+        assertTrue(options.findByTenantIdAndUserIdAndDeletedAtIsNullOrderByCreatedAtDesc(1L, u.getId()).isEmpty());
+        assertTrue(options.findByTenantIdAndUserIdAndStatusAndDeletedAtIsNullOrderByCreatedAtDesc(1L, u.getId(), "CLOSED").isEmpty());
         assertEquals(1L, ((Map<?,?>)c.queryOptionOrders(params(u.getId(), "deleted"), null).getBody()).get("total"));
         tx.execute(s -> c.restoreOptionOrder(o.getId()));
-        assertEquals(1, options.findByUserIdAndDeletedAtIsNullOrderByCreatedAtDesc(u.getId()).size());
-        assertEquals(0, BigDecimal.TEN.compareTo(options.findById(o.getId()).get().getAmount()));
+        assertEquals(1, options.findByTenantIdAndUserIdAndDeletedAtIsNullOrderByCreatedAtDesc(1L, u.getId()).size());
+        assertEquals(0, BigDecimal.TEN.compareTo(options.findByTenantIdAndId(1L, o.getId()).get().getAmount()));
         assertThrows(BusinessException.class, () -> c.softDeleteOptionOrder(option(u.getId(), "TRADING").getId(), new UsernamePasswordAuthenticationToken("admin", "unused")));
     }
 }

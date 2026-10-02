@@ -15,7 +15,7 @@ public class DepositSettingService {
     private final DepositSettingRepository depositSettingRepository;
 
     public List<DepositSetting> getAllSettings() {
-        return depositSettingRepository.findAll();
+        return depositSettingRepository.findAllByTenantId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId());
     }
 
     @Transactional
@@ -33,7 +33,7 @@ public class DepositSettingService {
                 throw new IllegalArgumentException("充值地址不能为空");
             }
             // 检查是否已存在
-            if (depositSettingRepository.findByNetworkAndType(setting.getNetwork(), "digital").isPresent()) {
+            if (depositSettingRepository.findByTenantIdAndNetworkAndType(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), setting.getNetwork(), "digital").isPresent()) {
                 throw new IllegalArgumentException("该网络/币种已存在");
             }
         } else if ("bank".equals(setting.getType())) {
@@ -54,12 +54,12 @@ public class DepositSettingService {
 
     @Transactional
     public DepositSetting updateSetting(Long id, DepositSetting setting) {
-        DepositSetting existing = depositSettingRepository.findById(id)
+        DepositSetting existing = depositSettingRepository.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), id)
                 .orElseThrow(() -> new IllegalArgumentException("充值设置不存在"));
         
         if (setting.getNetwork() != null && !setting.getNetwork().isEmpty()) {
             // 检查网络是否与其他记录冲突
-            depositSettingRepository.findByNetwork(setting.getNetwork())
+            depositSettingRepository.findByTenantIdAndNetwork(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), setting.getNetwork())
                     .ifPresent(s -> {
                         if (!s.getId().equals(id)) {
                             throw new IllegalArgumentException("该网络/币种已被其他设置使用");
@@ -85,10 +85,10 @@ public class DepositSettingService {
 
     @Transactional
     public void deleteSetting(Long id) {
-        if (!depositSettingRepository.existsById(id)) {
+        if (!depositSettingRepository.existsByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), id)) {
             throw new IllegalArgumentException("充值设置不存在");
         }
-        depositSettingRepository.deleteById(id);
+        depositSettingRepository.deleteByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), id);
     }
 }
 

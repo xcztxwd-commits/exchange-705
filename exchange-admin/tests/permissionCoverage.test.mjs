@@ -67,3 +67,20 @@ test('all declared backend action guards reference the same catalog', () => {
   assert.ok(count >= 85)
   console.log(`Explicit backend endpoint guards: ${count}`)
 })
+
+test('shared control widgets keep total-control and tenant grants distinct', () => {
+  const accounts = fs.readFileSync(path.join(root, 'exchange-admin/src/components/BackendAccounts.vue'), 'utf8')
+  const online = fs.readFileSync(path.join(root, 'exchange-admin/src/components/OnlineUsers.vue'), 'utf8')
+  const manager = fs.readFileSync(path.join(root, 'exchange-admin/src/control/TenantManager.vue'), 'utf8')
+  assert.match(accounts, /v-permission="control \? 'session:self' : 'admin_list:create'"/)
+  assert.match(accounts, /v-permission="control \? 'session:self' : 'admin_list:view'"/)
+  assert.match(online, /v-permission="control \? 'session:self' : 'users:view'"/)
+  assert.match(manager, /<BackendAccounts :control="true"/)
+  assert.match(manager, /<OnlineUsers :control="true"/)
+})
+test('backend administrator create and reset forms require twelve-character passwords', () => {
+  const source = fs.readFileSync(path.join(root, 'exchange-admin/src/views/AdminList.vue'), 'utf8')
+  assert.equal([...source.matchAll(/value\.length < 12/g)].length, 2)
+  assert.doesNotMatch(source, /value\.length < 6/)
+  assert.equal([...source.matchAll(/密码长度至少12个字符/g)].length, 2)
+})

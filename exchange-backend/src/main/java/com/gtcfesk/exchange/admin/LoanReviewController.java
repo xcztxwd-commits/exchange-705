@@ -43,6 +43,7 @@ public class LoanReviewController {
                 Map<String, Object> recordMap = new HashMap<>();
                 recordMap.put("id", record.getId());
                 recordMap.put("userId", record.getUserId());
+                AdminUserIdentity.put(recordMap, null);
                 recordMap.put("realName", record.getRealName());
                 recordMap.put("agentInfo", record.getAgentInfo());
                 recordMap.put("phone", record.getPhone());
@@ -62,9 +63,9 @@ public class LoanReviewController {
                 
                 // 添加用户备注
                 if (record.getUserId() != null) {
-                    UserAccount user = userAccountRepository.findById(record.getUserId()).orElse(null);
+                    UserAccount user = userAccountRepository.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), record.getUserId()).orElse(null);
                     if (user != null) {
-                        recordMap.put("userRemark", user.getRemark());
+                        AdminUserIdentity.put(recordMap, user);
                     }
                 }
                 

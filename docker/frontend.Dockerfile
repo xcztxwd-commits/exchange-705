@@ -1,5 +1,6 @@
 FROM node:20-alpine AS build
 ARG APP
+ARG BUILD_SCRIPT=build
 WORKDIR /app
 COPY ${APP}/package*.json ./
 RUN --mount=type=cache,target=/root/.npm \
@@ -12,7 +13,7 @@ RUN ln -s /app/node_modules /exchange-frontend/node_modules
 COPY docker/device-layout.js /tmp/device-layout.js
 ENV VITE_API_BASE_URL=/api
 ENV VITE_IMAGE_API_BASE_URL=/api
-RUN if [ "$APP" = "exchange-frontend" ]; then npm run build -- --base=/mobile/; else npm run build; fi \
+RUN if [ "$APP" = "exchange-frontend" ]; then npm run "$BUILD_SCRIPT" -- --base=/mobile/ --outDir=/app/dist; else npm run "$BUILD_SCRIPT" -- --outDir=/app/dist; fi \
     && if [ "$APP" = "exchange-pc" ] || [ "$APP" = "exchange-frontend" ]; then \
       layout=pc; [ "$APP" != "exchange-frontend" ] || layout=mobile; \
       cp /tmp/device-layout.js dist/device-layout.js; \

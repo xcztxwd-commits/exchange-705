@@ -5,13 +5,9 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.File;
 import java.io.IOException;
-import java.net.URLDecoder;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -21,67 +17,7 @@ import java.util.UUID;
 public class FileUploadController {
     @org.springframework.beans.factory.annotation.Autowired(required=false) private com.gtcfesk.exchange.simulation.SimulationEnvironment simulation;
 
-    private static final String UPLOAD_DIR = "uploads/";
-    private static final String IMAGE_DIR = UPLOAD_DIR + "images/";
-    private static final String AUDIO_DIR = UPLOAD_DIR + "audio/";
-    private static final Path IMAGE_DIR_PATH;
-    private static final Path AUDIO_DIR_PATH;
-
-    static {
-        // 创建上传目录（使用jar包所在目录或当前工作目录）
-        Path imageDirPath;
-        Path audioDirPath;
-        try {
-            // 尝试获取jar包所在目录
-            String jarPath = FileUploadController.class.getProtectionDomain()
-                    .getCodeSource().getLocation().getPath();
-            
-            // 解码URL编码的路径（处理空格等特殊字符）
-            try {
-                jarPath = URLDecoder.decode(jarPath, StandardCharsets.UTF_8.toString());
-            } catch (Exception e) {
-                // 解码失败，使用原始路径
-            }
-            
-            Path basePath;
-            if (jarPath != null && jarPath.endsWith(".jar")) {
-                // 如果是jar包，使用jar包所在目录
-                File jarFile = new File(jarPath);
-                basePath = jarFile.getParentFile().toPath();
-            } else {
-                // 否则使用当前工作目录
-                basePath = Paths.get("").toAbsolutePath();
-            }
-            
-            // 如果basePath为null，使用当前工作目录
-            if (basePath == null) {
-                basePath = Paths.get("").toAbsolutePath();
-            }
-            
-            imageDirPath = basePath.resolve(IMAGE_DIR).toAbsolutePath();
-            Files.createDirectories(imageDirPath);
-            System.out.println("[FileUploadController] 图片上传目录: " + imageDirPath);
-            
-            audioDirPath = basePath.resolve(AUDIO_DIR).toAbsolutePath();
-            Files.createDirectories(audioDirPath);
-            System.out.println("[FileUploadController] 音频上传目录: " + audioDirPath);
-        } catch (Exception e) {
-            // 如果上述方法失败，使用简单的相对路径
-            try {
-                imageDirPath = Paths.get(IMAGE_DIR).toAbsolutePath();
-                Files.createDirectories(imageDirPath);
-                System.out.println("[FileUploadController] 图片上传目录（备用）: " + imageDirPath);
-                
-                audioDirPath = Paths.get(AUDIO_DIR).toAbsolutePath();
-                Files.createDirectories(audioDirPath);
-                System.out.println("[FileUploadController] 音频上传目录（备用）: " + audioDirPath);
-            } catch (IOException ex) {
-                throw new RuntimeException("无法创建上传目录", ex);
-            }
-        }
-        IMAGE_DIR_PATH = imageDirPath;
-        AUDIO_DIR_PATH = audioDirPath;
-    }
+    @org.springframework.beans.factory.annotation.Autowired private com.gtcfesk.exchange.common.UploadStorage storage;
 
     @PostMapping("/image")
     public ResponseEntity<?> uploadImage(
@@ -119,8 +55,8 @@ public class FileUploadController {
                 return ResponseEntity.badRequest().body(resp);
             }
 
-            Path filePath = com.gtcfesk.exchange.common.ImageFiles.save(file, IMAGE_DIR_PATH);
-            String filename = filePath.getFileName().toString();
+            Path filePath = com.gtcfesk.exchange.common.ImageFiles.save(file, com.gtcfesk.exchange.tenant.TenantFiles.directory(storage.images()));
+            String filename = com.gtcfesk.exchange.tenant.TenantFiles.ownerPath()+"/"+filePath.getFileName().toString();
 
             // 验证文件是否真的保存成功
             boolean fileExists = Files.exists(filePath);
@@ -196,7 +132,9 @@ public class FileUploadController {
             String filename = UUID.randomUUID().toString() + extension;
 
             // 保存文件（使用绝对路径）
-            Path filePath = AUDIO_DIR_PATH.resolve(filename);
+            filename = com.gtcfesk.exchange.tenant.TenantFiles.ownerPath()+"/"+filename;
+            com.gtcfesk.exchange.tenant.TenantFiles.directory(storage.audio());
+            Path filePath = storage.audio().resolve(filename);
             Files.write(filePath, audio);
             
             // 验证文件是否真的保存成功

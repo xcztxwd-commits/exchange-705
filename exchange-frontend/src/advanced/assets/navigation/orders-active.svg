@@ -1,0 +1,8 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="26" height="26" viewBox="0 0 26 26" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="Graphic">
+<path id="Order/Sheet" d="M7.58333 2.16667H18.4167C20.2583 2.16667 21.6667 3.575 21.6667 5.41667V18.4167C21.6667 20.2583 20.2583 21.6667 18.4167 21.6667H7.58333C5.74167 21.6667 4.33333 20.2583 4.33333 18.4167V5.41667C4.33333 3.575 5.74167 2.16667 7.58333 2.16667Z" fill="#F5F2F7" stroke="#51495F" stroke-width="1.95" stroke-linecap="round" stroke-linejoin="round"/>
+<path id="Order/Fold" opacity="0" d="M17.3333 2.16667V6.5H21.6667" stroke="#51495F" stroke-width="1.95" stroke-linecap="round" stroke-linejoin="round"/>
+<path id="Order/Lines" d="M8.66667 8.66667H17.3333" stroke="#51495F" stroke-width="1.95" stroke-linecap="round" stroke-linejoin="round"/>
+<path id="Order/Check" d="M9.75 15.1667L12.1333 17.3333L16.25 13" stroke="#51495F" stroke-width="1.95" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+</svg>

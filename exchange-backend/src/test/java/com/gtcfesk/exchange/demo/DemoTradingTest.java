@@ -5,6 +5,8 @@ import com.gtcfesk.exchange.entity.*;
 import com.gtcfesk.exchange.repository.*;
 import com.gtcfesk.exchange.market.ForexQuoteMarketService;
 import org.junit.jupiter.api.*;
+import com.gtcfesk.exchange.tenant.TenantContext;
+import com.gtcfesk.exchange.control.*;
 import org.springframework.mock.web.*;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -13,6 +15,8 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 class DemoTradingTest {
+ private TenantContext.Scope tenantScope;
+ @AfterEach void closeTenantScope(){ if(tenantScope!=null)tenantScope.close(); }
     final UserAccountRepository users = mock(UserAccountRepository.class);
     final DemoAccountRepository accounts = mock(DemoAccountRepository.class);
     final DemoOrderRepository orders = mock(DemoOrderRepository.class);
@@ -26,19 +30,21 @@ class DemoTradingTest {
     BigDecimal d(String value) { return new BigDecimal(value); }
     void equal(String expected, BigDecimal actual) { assertEquals(0, d(expected).compareTo(actual)); }
     @BeforeEach void setup() {
+        tenantScope = TenantContext.open(1L);
+        org.springframework.test.util.ReflectionTestUtils.setField(service,"tenantPolicy",mock(TenantPolicyService.class));
         user = new UserAccount(); user.setId(1L); user.setStatus("normal"); user.setKycStatus("NOT_VERIFIED");
         when(users.lockById(1L)).thenReturn(Optional.of(user));
-        when(accounts.findById(1L)).thenAnswer(call -> Optional.ofNullable(account));
+        when(accounts.findByTenantIdAndId(1L, 1L)).thenAnswer(call -> Optional.ofNullable(account));
         when(accounts.save(any())).thenAnswer(call -> account = call.getArgument(0));
-        when(orders.findByUserIdAndRequestKey(eq(1L), anyString())).thenAnswer(call -> saved.values().stream().filter(o -> o.requestKey.equals(call.getArgument(1))).findFirst());
-        when(orders.findByIdAndUserId(anyString(), eq(1L))).thenAnswer(call -> Optional.ofNullable(saved.get(call.getArgument(0))));
-        when(orders.findByUserIdAndStatusOrderByCreatedAtDesc(1L, "OPEN")).thenAnswer(call -> {
+        when(orders.findByTenantIdAndUserIdAndRequestKey(org.mockito.ArgumentMatchers.eq(1L), eq(1L), anyString())).thenAnswer(call -> saved.values().stream().filter(o -> o.requestKey.equals(call.getArgument(2))).findFirst());
+        when(orders.findByTenantIdAndIdAndUserId(org.mockito.ArgumentMatchers.eq(1L), anyString(), eq(1L))).thenAnswer(call -> Optional.ofNullable(saved.get(call.getArgument(1))));
+        when(orders.findByTenantIdAndUserIdAndStatusOrderByCreatedAtDesc(1L, 1L, "OPEN")).thenAnswer(call -> {
             List<DemoOrder> result = new ArrayList<>(); saved.values().stream().filter(o -> o.status.equals("OPEN")).forEach(result::add); return result;
         });
         when(orders.save(any())).thenAnswer(call -> { DemoOrder order = call.getArgument(0); saved.put(order.id, order); return order; });
         symbol = new TradingSymbol(); symbol.setSymbol("BTCUSDT"); symbol.setAlltickSymbol("BTCUSDT");
         symbol.setIsEnabled(true); symbol.setSourceCategory("Crypto"); symbol.setQuoteCurrency("USDT");
-        when(symbols.findBySymbol("BTCUSDT")).thenReturn(Optional.of(symbol));
+        when(symbols.findByTenantIdAndSymbol(1L, "BTCUSDT")).thenReturn(Optional.of(symbol));
         quote = new HashMap<>(); quote.put("price", d("100")); quote.put("timestamp", System.currentTimeMillis());
         quote.put("fetchedAt", System.currentTimeMillis()); quote.put("available", true);
         when(quotes.getPrice("BTCUSDT", "Crypto")).thenReturn(quote);
@@ -73,7 +79,7 @@ class DemoTradingTest {
         UserAccount other = new UserAccount(); other.setStatus("normal");
         when(users.lockById(2L)).thenReturn(Optional.of(other));
         DemoAccount otherAccount = new DemoAccount(); otherAccount.generation = 1;
-        when(accounts.findById(2L)).thenReturn(Optional.of(otherAccount));
+        when(accounts.findByTenantIdAndId(1L, 2L)).thenReturn(Optional.of(otherAccount));
         assertThrows(BusinessException.class, () -> service.close(2L, order.id, 1));
         user.setStatus("frozen"); assertThrows(BusinessException.class, () -> service.snapshot(1L));
         equal("98999", account.cash);

@@ -9,29 +9,33 @@ import java.time.LocalDateTime;
 
 @Getter
 @Setter
+@org.hibernate.annotations.Persister(impl = com.gtcfesk.exchange.tenant.TenantEntityPersister.class)
 @Entity
 @Table(name = "user_account")
-public class UserAccount {
+public class UserAccount extends com.gtcfesk.exchange.tenant.TenantOwnedEntity {
     @Id
-    @GeneratedValue(generator = "custom-user-id-generator")
-    @org.hibernate.annotations.GenericGenerator(
-        name = "custom-user-id-generator",
-        strategy = "com.gtcfesk.exchange.config.CustomUserIdGenerator"
-    )
+    @GeneratedValue(generator = "user-id")
+    @org.hibernate.annotations.GenericGenerator(name = "user-id", strategy = "com.gtcfesk.exchange.config.UserIdGenerator")
     private Long id;
 
     @Version
     @Column(name = "row_version", nullable = false)
     private long rowVersion;
 
-    @Column(unique = true, nullable = false, length = 128)
+    @Column(nullable = false, length = 128)
     private String email;
 
     @Column(length = 32)
     private String countryCode;
 
-    @Column(unique = true, length = 32)
+    @Column(length = 32)
     private String phone;
+
+    @Column(name = "annual_income", precision = 14, scale = 2)
+    private BigDecimal annualIncome;
+
+    @Column(name = "annual_income_currency", length = 3)
+    private String annualIncomeCurrency;
 
     @Column(nullable = false, length = 128)
     @com.fasterxml.jackson.annotation.JsonIgnore
@@ -43,7 +47,7 @@ public class UserAccount {
     @Column(name = "invite_code", length = 32)
     private String inviteCode; // 注册时使用的邀请码（上级的邀请码）
 
-    @Column(name = "my_invite_code", unique = true, length = 32)
+    @Column(name = "my_invite_code", length = 32)
     private String myInviteCode; // 用户自己的邀请码（用于邀请别人）
 
     @Column(name = "parent_user_id")
@@ -81,6 +85,15 @@ public class UserAccount {
 
     @Column(name = "last_activity_at")
     private LocalDateTime lastActivityAt; // 最后活动时间（用于实时在线检测）
+
+    @Column(name = "last_page_code", length = 32)
+    private String lastPageCode;
+    @Column(name = "last_page_seen_at")
+    private LocalDateTime lastPageSeenAt;
+    @Column(name = "last_page_sequence")
+    private Long lastPageSequence;
+    @Column(name = "last_device_type", length = 16)
+    private String lastDeviceType;
 
     @Column(name = "current_token", length = 128)
     @com.fasterxml.jackson.annotation.JsonIgnore

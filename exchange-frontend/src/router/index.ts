@@ -33,6 +33,7 @@ import Search from '@/views/Search.vue'
 import Invite from '@/views/Invite.vue'
 import { useAuthStore } from '@/store/auth'
 import request from '@/utils/request'
+import { useUiEditionStore } from '@/store/uiEdition'
 
 const legacyRoute = location.hash.startsWith('#/') ? new URL(location.hash.slice(1), location.origin) : null
 if (location.hash) {
@@ -49,6 +50,7 @@ const router = createRouter({
     { path: '/trade', component: Trade },
     { path: '/orders', component: Orders },
     { path: '/profile', component: Profile },
+    { path: '/explore', component: () => import('@/advanced/views/Explore.vue') },
     { path: '/assets', component: Assets },
     { path: '/deposit', component: Deposit },
     { path: '/deposit/records', component: DepositRecords },
@@ -83,6 +85,14 @@ const router = createRouter({
   scrollBehavior() {
     return { top: 0 }
   },
+})
+
+// Explore is the only new route; all existing business URLs and guards stay intact.
+router.beforeEach(to => {
+  if (to.path !== '/explore') return true
+  const auth = useAuthStore()
+  if (auth.token && !auth.user) auth.load()
+  return useUiEditionStore().edition === 'advanced' ? true : '/profile'
 })
 
 router.beforeEach(async (to) => {

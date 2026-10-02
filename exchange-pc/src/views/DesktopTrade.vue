@@ -45,10 +45,11 @@
         </template>
         <template v-else>
           <button @click="showLoginModal = true" class="hover:text-[#8cc63f] transition-colors font-bold">{{ localeStore.t('login') }}</button>
-          <button @click="showRegisterModal = true" class="bg-[#8cc63f] text-white px-4 py-1.5 rounded text-sm font-bold shadow-sm hover:bg-[#7ab036] transition-colors">{{ localeStore.t('register') }}</button>
+          <button v-if="canStartBusiness('registration')" @click="showRegisterModal = true" class="bg-[#8cc63f] text-white px-4 py-1.5 rounded text-sm font-bold shadow-sm hover:bg-[#7ab036] transition-colors">{{ localeStore.t('register') }}</button>
         </template>
       </div>
     </header>
+    <div id="trade-activities" class="shrink-0 max-h-[160px] overflow-y-auto"></div>
 
     <div class="trade-layout flex flex-1 overflow-hidden">
       <!-- Left Sidebar -->
@@ -66,7 +67,7 @@
                @click="selectSymbol(symbol)"
                :class="['flex justify-between items-center p-3 cursor-pointer border-b border-gray-200 dark:border-[#2b3139] transition-colors', currentSymbol === symbol.symbol ? 'bg-gray-50 dark:bg-[#181c27] border-l border-gray-200 dark:border-[#363c4e]-4 border-l border-gray-200 dark:border-[#363c4e]-[#8cc63f]' : 'bg-white dark:bg-[#131722] hover:bg-gray-50 dark:hover:bg-[#181c27] dark:bg-[#181c27] border-l border-gray-200 dark:border-[#363c4e]-4 border-l border-gray-200 dark:border-[#363c4e]-transparent']">
             <div class="flex items-center space-x-3 w-[45%]">
-              <img v-if="symbol.iconUrl" :src="getImageUrl(symbol.iconUrl)" class="w-8 h-8 rounded-full object-contain shrink-0" />
+              <ProtectedImage v-if="symbol.iconUrl" :src="getImageUrl(symbol.iconUrl)" class="w-8 h-8 rounded-full object-contain shrink-0" />
               <div class="w-8 h-8 rounded-full bg-gray-100 dark:bg-[#2b3139] flex items-center justify-center text-sm text-gray-500 dark:text-gray-400 dark:text-gray-500 font-bold border border-gray-200 dark:border-[#2b3139] shadow-inner shrink-0" v-else>{{ displaySymbol(symbol).substring(0,1) }}</div>
               <span class="font-bold text-gray-700 dark:text-gray-200 truncate">{{ displaySymbol(symbol) }}</span>
             </div>
@@ -132,7 +133,7 @@
                    <th class="py-3 px-2 font-medium whitespace-nowrap">{{ localeStore.t('handlingFee') }} (USD)</th>
                    <th class="py-3 px-2 font-medium whitespace-nowrap">{{ localeStore.t('margin') }} (USD)</th>
                    <th class="py-3 px-2 font-medium whitespace-nowrap">{{ orderSubTab === 'history' ? localeStore.text('已實現盈虧（不含手續費）', 'Realized P&L (excluding fees)') : localeStore.t('profitAndLoss') }} (USD)</th>
-                   <th class="py-3 px-2 font-medium whitespace-nowrap">{{ orderSubTab === 'pending' ? localeStore.t('createTime') : localeStore.t('openTimeLabel') }}</th>
+                   <th class="py-3 px-2 font-medium whitespace-nowrap">{{ orderSubTab === 'pending' ? localeStore.t('createTime') : orderSubTab === 'history' ? `${localeStore.t('openTimeLabel')} / ${localeStore.t('closeTimeLabel')}` : localeStore.t('openTimeLabel') }}</th>
                    <th class="py-3 px-4 font-medium whitespace-nowrap text-right">{{ localeStore.t('action') }}</th>
                  </tr>
                </thead>
@@ -145,7 +146,7 @@
                       <span>{{ displaySymbol(order) }}</span>
                     </td>
                     <td class="py-3 px-2 text-gray-500 dark:text-gray-400 dark:text-gray-500">#{{ order.id }}</td>
-                    <td class="py-3 px-2"><span :class="['text-white px-2 py-0.5 rounded text-[11px] font-bold', order.type === 'buy' ? 'bg-[#8cc63f]' : 'bg-[#ff4d4f]']">{{ order.type === 'buy' ? localeStore.t('buy') : localeStore.t('sell') }}</span></td>
+                    <td class="py-3 px-2"><span :class="['inline-block whitespace-nowrap text-white px-2 py-0.5 rounded text-[11px] font-bold', order.type === 'buy' ? 'bg-[#8cc63f]' : 'bg-[#ff4d4f]']">{{ order.type === 'buy' ? localeStore.t('buy') : localeStore.t('sell') }}</span></td>
                     <td class="py-3 px-2">{{ order.lots }} {{ quantityUnit(order, localeStore.t('lots')) }} <span class="text-gray-500 text-xs">{{ order.leverage }}×</span></td>
                     <td class="py-3 px-2 font-mono">{{ (orderSubTab === 'pending' ? order.price : order.openPrice).toFixed(4) }}</td>
                     <td class="py-3 px-2 font-mono font-bold text-gray-700 dark:text-gray-200">{{ contractDisplayPrice(order)?.toFixed(4) ?? '—' }}</td>
@@ -154,7 +155,13 @@
                     <td class="py-3 px-2">{{ displayFee(order.fee) }}</td>
                     <td class="py-3 px-2">{{ order.margin.toFixed(2) }}</td>
                     <td :class="['py-3 px-2 font-bold', order.profit >= 0 ? 'text-[#8cc63f]' : 'text-[#ff4d4f]']">{{ formatMoney(order.profit) }}</td>
-                    <td class="py-3 px-2 text-gray-400 dark:text-gray-500" v-html="(order.openTime + (order.orderSource === 'MANUAL_TEST' ? '<br/>' + localeStore.t('closeTimeLabel') + ' ' + order.manualCloseTime : '')).replace(' ', '<br/>')"></td>
+                    <td class="py-3 px-2 text-gray-400 dark:text-gray-500">
+                      <template v-if="orderSubTab === 'history'">
+                        <div class="whitespace-nowrap">{{ localeStore.t('openTimeLabel') }} <time>{{ order.openTime || '—' }}</time></div>
+                        <div class="whitespace-nowrap">{{ localeStore.t('closeTimeLabel') }} <time>{{ order.closeTime || '—' }}</time></div>
+                      </template>
+                      <template v-else>{{ orderSubTab === 'pending' ? order.createdTime : order.openTime }}<div v-if="order.orderSource === 'MANUAL_TEST'">{{ localeStore.t('closeTimeLabel') }} {{ order.manualCloseTime }}</div></template>
+                    </td>
                     <td class="py-3 px-4 text-right space-x-2">
                       <button v-if="order.status === 'CLOSED'" @click="shareOrder = { id: order.id, kind: 'contract' }" class="pnl-share-entry" :aria-label="shareLabel" :title="shareLabel"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 15V3m-4 4 4-4 4 4M6 10H4v11h16V10h-2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" /></svg></button>
                       <button v-if="orderSubTab === 'positions'" @click="openTpSlModal(order)" class="bg-[#8cc63f] text-white px-2 py-1 rounded text-[11px] font-medium hover:bg-[#7ab036] transition-colors">TP/SL</button>
@@ -188,7 +195,7 @@
                  </tr>
                  <tr v-for="order in currentOrderList" :key="order.id" class="border-b border-gray-200 dark:border-[#2b3139] hover:bg-gray-50 dark:hover:bg-[#181c27] dark:bg-[#181c27] transition-colors">
                     <td class="py-3 px-4 font-bold text-gray-700 dark:text-gray-200">{{ displaySymbol(order) }}</td>
-                    <td class="py-3 px-2"><span :class="['text-white px-2 py-0.5 rounded text-[11px] font-bold', order.type === 'buy' || order.type === 'up' ? 'bg-[#8cc63f]' : 'bg-[#ff4d4f]']">{{ order.type === 'buy' || order.type === 'up' ? localeStore.t('buyUpText') : localeStore.t('buyDownText') }}</span></td>
+                    <td class="py-3 px-2"><span :class="['inline-block whitespace-nowrap text-white px-2 py-0.5 rounded text-[11px] font-bold', order.type === 'buy' || order.type === 'up' ? 'bg-[#8cc63f]' : 'bg-[#ff4d4f]']">{{ order.type === 'buy' || order.type === 'up' ? localeStore.t('buyUpText') : localeStore.t('buyDownText') }}</span></td>
                     <td class="py-3 px-2 font-mono">{{ order.amount ? order.amount.toFixed(2) : '0.00' }}</td>
                     <td class="py-3 px-2 font-mono">{{ order.openPrice ? order.openPrice.toFixed(4) : '0.0000' }}</td>
                     <td class="py-3 px-2 font-mono">{{ order.closePrice && order.closePrice > 0 ? order.closePrice.toFixed(4) : '-' }}</td>
@@ -199,7 +206,10 @@
                       <span v-if="order.status === 'TRADING'" class="text-[#8cc63f] bg-green-50 px-2 py-1 rounded">{{ localeStore.t('tradingStatus') }}</span>
                       <span v-else class="text-gray-500 dark:text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-[#2b3139] px-2 py-1 rounded">{{ localeStore.t('settled') }}</span>
                     </td>
-                    <td class="py-3 px-4 text-right text-gray-400 dark:text-gray-500" v-html="order.openTime.replace(' ', '<br/>')"></td>
+                    <td class="py-3 px-4 text-right text-gray-400 dark:text-gray-500">
+                      <div class="whitespace-nowrap">{{ localeStore.t('openTimeLabel') }} <time>{{ order.openTime || '—' }}</time></div>
+                      <div v-if="orderSubTab === 'history'" class="whitespace-nowrap">{{ localeStore.t('closeTimeLabel') }} <time>{{ order.closeTime || '—' }}</time></div>
+                    </td>
                     <td class="py-3 px-4 text-right"><button v-if="order.status === 'CLOSED'" @click="shareOrder = { id: order.id, kind: 'option' }" class="pnl-share-entry" :aria-label="shareLabel" :title="shareLabel"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 15V3m-4 4 4-4 4 4M6 10H4v11h16V10h-2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" /></svg></button></td>
                  </tr>
                </tbody>
@@ -220,6 +230,20 @@
         <div class="flex text-center bg-gray-100 dark:bg-[#2b3139] p-1 mx-4 mt-4 rounded-md">
            <button @click="tradeMode = 'contract'; orderSubTab = 'positions'; loadContractOrders()" :class="['flex-1 py-1.5 rounded font-bold text-sm transition-all', tradeMode === 'contract' ? 'bg-white dark:bg-[#131722] text-[#8cc63f] shadow-sm' : 'text-gray-500 dark:text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-200 dark:text-gray-200']">{{ localeStore.t('contract') }}</button>
            <button @click="tradeMode = 'options'; orderSubTab = 'positions'; loadOptionOrders()" :class="['flex-1 py-1.5 rounded font-bold text-sm transition-all', tradeMode === 'options' ? 'bg-white dark:bg-[#131722] text-[#8cc63f] shadow-sm' : 'text-gray-500 dark:text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-200 dark:text-gray-200']">{{ localeStore.t('optionsTerm') }}</button>
+        </div>
+
+        <div v-if="auth.token" class="mx-4 mt-3 text-sm" role="group" :aria-label="localeStore.text('资金账户', 'Funding account')">
+          <div class="flex gap-2">
+            <button v-if="wallet.state.eligible && wallet.state.available > 0" type="button" data-source="TRIAL"
+              :aria-pressed="fundingSource === 'TRIAL'" :disabled="tradeSubmitting || kycChecking"
+              :class="['flex-1 rounded border p-2', fundingSource === 'TRIAL' ? 'border-[#8cc63f] text-[#8cc63f]' : 'border-gray-300 text-gray-500']"
+              @click="chooseFunding('TRIAL')">{{ localeStore.text('体验金', 'Trial credit') }}</button>
+            <button type="button" :data-source="tradeMode === 'contract' ? 'CONTRACT' : 'OPTION'"
+              :aria-pressed="fundingSource !== 'TRIAL'" :disabled="tradeSubmitting || kycChecking"
+              :class="['flex-1 rounded border p-2', fundingSource !== 'TRIAL' ? 'border-[#8cc63f] text-[#8cc63f]' : 'border-gray-300 text-gray-500']"
+              @click="chooseFunding(tradeMode === 'contract' ? 'CONTRACT' : 'OPTION')">{{ tradeMode === 'contract' ? localeStore.t('contractAccountTitle') : localeStore.t('optionAccountTitle') }}</button>
+          </div>
+          <p v-if="fundingSource === 'TRIAL' && wallet.state.expiresAt != null" class="mt-2 text-[#8cc63f]" data-testid="trade-trial-countdown">{{ localeStore.text('剩余有效时间', 'Time remaining') }} {{ wallet.remaining }}</p>
         </div>
 
         <!-- Contract Form -->
@@ -248,39 +272,30 @@
              <PositionSizing :percent="allocationPercent" :disabled="!canAllocate" :buy="liquidation.buy" :sell="liquidation.sell" :precision="currentSymbolInfo?.pricePrecision ?? 2" @change="setAllocation">
              <div class="bg-gray-50 dark:bg-[#181c27] p-4 rounded-lg text-xs text-gray-500 dark:text-gray-400 dark:text-gray-500 space-y-2 mt-4 border border-gray-100 dark:border-[#2b3139]">
                <div class="flex justify-between items-center"><span class="font-medium text-gray-600 dark:text-gray-300">{{ currentSymbolInfo?.quantityUnitType ? localeStore.text('每输入单位', 'Per input unit') : localeStore.t('perLot') }}</span><span class="font-mono text-gray-800 dark:text-gray-100 font-medium">1 {{ unitLabel }} = {{ currentSymbolInfo ? lotSize.toLocaleString(localeStore.locale) : '—' }} {{ currentSymbolInfo?.baseCurrency || forexLotUnit(currentSymbolInfo) }}</span></div>
-               <div class="flex justify-between items-center"><span class="font-medium text-gray-600 dark:text-gray-300">{{ localeStore.text('預留往返手續費', 'Reserved round-trip fee') }}</span><span class="font-mono text-gray-800 dark:text-gray-100 font-medium">{{ displayFee(estimatedFee) }} USD</span></div>
+               <div class="flex justify-between items-center"><span class="font-medium text-gray-600 dark:text-gray-300">{{ localeStore.t('fee') }}</span><span class="font-mono text-gray-800 dark:text-gray-100 font-medium">{{ displayFee(estimatedFee) }} USD</span></div>
                <p v-if="currentSymbolInfo?.quantityUnitType === 'BASE_ASSET'" class="text-xs">{{ localeStore.locale === 'ja' ? `1 ${unitLabel}あたりの往復手数料：${feeMultiplier} USD（固定）` : `每1 ${unitLabel} 固定往返佣金 ${feeMultiplier} USD` }}</p>
-               <p v-if="currentSymbolInfo?.sourceCategory === 'Forex'" class="text-xs text-gray-500">{{ localeStore.text('開倉 / 平倉各', 'Open / close each') }} {{ (estimatedFee / 2).toFixed(3) }} USD · {{ localeStore.text('往返佣金預留，平倉結算；撤單退還', 'Round-trip reserved; settled on close, refunded on cancellation') }}</p>
-               <div class="flex justify-between items-center"><span class="font-medium text-gray-600 dark:text-gray-300">{{ localeStore.t('estMargin') }}</span><span class="font-mono text-gray-800 dark:text-gray-100 font-medium">{{ Number.isFinite(estimatedMargin) ? estimatedMargin.toFixed(2) : '--' }} USD</span></div>
+               <div class="flex justify-between items-center"><span class="font-medium text-gray-600 dark:text-gray-300">{{ localeStore.t('margin') }}</span><span class="font-mono text-gray-800 dark:text-gray-100 font-medium">{{ Number.isFinite(estimatedMargin) ? estimatedMargin.toFixed(2) : '--' }} USD</span></div>
                <div class="flex justify-between items-center"><span class="font-medium text-gray-600 dark:text-gray-300">{{ localeStore.t('balance') }}</span><span class="font-mono text-gray-800 dark:text-gray-100 font-medium">{{ formatMoney(tradingAvailable) }} USD</span></div>
              </div>
 
              </PositionSizing>
 
              <div class="grid grid-cols-2 gap-3">
-             <div>
-               <div class="flex items-center justify-between mb-2">
-                 <span class="text-gray-600 dark:text-gray-300 font-medium text-sm">{{ localeStore.t('stopLossPrice') }}</span>
-                 <el-switch v-model="useStopLoss" style="--el-switch-on-color: #8cc63f;" />
-               </div>
-               <el-input-number v-if="useStopLoss" v-model="stopLossPrice" class="w-full custom-input-number" :controls="true" />
-             </div>
-
-             <div>
-               <div class="flex items-center justify-between mb-2">
-                 <span class="text-gray-600 dark:text-gray-300 font-medium text-sm">{{ localeStore.t('takeProfitPrice') }}</span>
-                 <el-switch v-model="useTakeProfit" style="--el-switch-on-color: #8cc63f;" />
-               </div>
-               <el-input-number v-if="useTakeProfit" v-model="takeProfitPrice" class="w-full custom-input-number" :controls="true" />
-             </div>
-
+               <label class="text-gray-600 dark:text-gray-300 font-medium text-sm">
+                 {{ localeStore.t('takeProfit') }} ({{ currentSymbolInfo?.quoteCurrency }})
+                 <input v-model="takeProfitPrice" type="number" inputmode="decimal" :step="protectionStep" :aria-label="localeStore.t('takeProfit')" class="protection-input" />
+               </label>
+               <label class="text-gray-600 dark:text-gray-300 font-medium text-sm">
+                 {{ localeStore.t('stopLoss') }} ({{ currentSymbolInfo?.quoteCurrency }})
+                 <input v-model="stopLossPrice" type="number" inputmode="decimal" :step="protectionStep" :aria-label="localeStore.t('stopLoss')" class="protection-input" />
+               </label>
              </div>
 
              <p v-if="currentSymbolInfo && !Number.isFinite(estimatedMargin)" role="status" class="text-xs text-amber-600 mt-2">{{ localeStore.text('結算匯率暫不可用', 'Settlement rate unavailable') }}</p>
              <p v-if="auth.token && tradingAvailable <= 0" role="status" class="text-xs text-amber-600 mt-2">{{ localeStore.t('contractBalanceInsufficient') }}</p>
              <div class="flex space-x-3 pt-4">
-               <button :disabled="tradeSubmitting || kycChecking || (tradeVerified && (!currentSymbolInfo || !orderReady))" @click="submitContractOrder('BUY')" class="disabled:opacity-50 disabled:cursor-not-allowed flex-1 bg-[#8cc63f] text-white py-3.5 rounded-lg font-bold text-base hover:bg-[#7ab036] transition-colors shadow-sm shadow-green-200">{{ localeStore.t('buy') }}</button>
-               <button :disabled="tradeSubmitting || kycChecking || (tradeVerified && (!currentSymbolInfo || !orderReady))" @click="submitContractOrder('SELL')" class="disabled:opacity-50 disabled:cursor-not-allowed flex-1 bg-[#ff4d4f] text-white py-3.5 rounded-lg font-bold text-base hover:bg-[#e64042] transition-colors shadow-sm shadow-red-200">{{ localeStore.t('sell') }}</button>
+               <button v-if="canStartBusiness('contract')" :disabled="tradeSubmitting || kycChecking || (tradeVerified && (!currentSymbolInfo || !orderReady))" @click="submitContractOrder('BUY')" class="disabled:opacity-50 disabled:cursor-not-allowed flex-1 bg-[#8cc63f] text-white py-3.5 rounded-lg font-bold text-base hover:bg-[#7ab036] transition-colors shadow-sm shadow-green-200">{{ localeStore.t('buy') }}</button>
+               <button v-if="canStartBusiness('contract')" :disabled="tradeSubmitting || kycChecking || (tradeVerified && (!currentSymbolInfo || !orderReady))" @click="submitContractOrder('SELL')" class="disabled:opacity-50 disabled:cursor-not-allowed flex-1 bg-[#ff4d4f] text-white py-3.5 rounded-lg font-bold text-base hover:bg-[#e64042] transition-colors shadow-sm shadow-red-200">{{ localeStore.t('sell') }}</button>
              </div>
            </div>
         </div>
@@ -319,8 +334,8 @@
            </div>
 
            <div class="flex space-x-3">
-             <button :disabled="tradeSubmitting || kycChecking || (tradeVerified && !currentSymbolInfo)" @click="submitOptionOrder('UP')" class="flex-1 bg-[#8cc63f] text-white py-3.5 rounded-lg font-bold text-base hover:bg-[#7ab036] transition-colors shadow-sm shadow-green-200">{{ localeStore.t('buyUp') }}</button>
-             <button :disabled="tradeSubmitting || kycChecking || (tradeVerified && !currentSymbolInfo)" @click="submitOptionOrder('DOWN')" class="flex-1 bg-[#ff4d4f] text-white py-3.5 rounded-lg font-bold text-base hover:bg-[#e64042] transition-colors shadow-sm shadow-red-200">{{ localeStore.t('buyDown') }}</button>
+             <button v-if="canStartBusiness('option')" :disabled="tradeSubmitting || kycChecking || (tradeVerified && !currentSymbolInfo)" @click="submitOptionOrder('UP')" class="flex-1 bg-[#8cc63f] text-white py-3.5 rounded-lg font-bold text-base hover:bg-[#7ab036] transition-colors shadow-sm shadow-green-200">{{ localeStore.t('buyUp') }}</button>
+             <button v-if="canStartBusiness('option')" :disabled="tradeSubmitting || kycChecking || (tradeVerified && !currentSymbolInfo)" @click="submitOptionOrder('DOWN')" class="flex-1 bg-[#ff4d4f] text-white py-3.5 rounded-lg font-bold text-base hover:bg-[#e64042] transition-colors shadow-sm shadow-red-200">{{ localeStore.t('buyDown') }}</button>
            </div>
         </div>
       </aside>
@@ -330,7 +345,7 @@
     <el-dialog v-model="showFinancialPurchase" :title="localeStore.t('financialPurchase')" width="500px" class="custom-dialog rounded-xl overflow-hidden">
       <div v-if="activeFinancialProduct" class="space-y-5 px-2">
         <div class="bg-gray-50 dark:bg-[#181c27] p-4 rounded-lg border border-gray-100 dark:border-[#2b3139] flex items-center space-x-4 mb-4">
-          <img :src="getImageUrl(activeFinancialProduct.imageUrl)" class="w-12 h-12 rounded-full object-contain bg-white dark:bg-[#131722] shadow-sm p-1" />
+          <ProtectedImage :src="getImageUrl(activeFinancialProduct.imageUrl)" class="w-12 h-12 rounded-full object-contain bg-white dark:bg-[#131722] shadow-sm p-1" />
           <div>
             <div class="font-bold text-gray-800 dark:text-gray-100 text-lg">{{ activeFinancialProduct.name }}</div>
             <div class="text-sm text-gray-500 dark:text-gray-400 dark:text-gray-500">{{ activeFinancialProduct.currency }}</div>
@@ -357,7 +372,7 @@
       </div>
       <template #footer>
         <div class="px-2 pb-2">
-          <button @click="submitFinancialPurchase" class="w-full bg-[#8cc63f] text-white py-3.5 rounded-lg font-bold text-base hover:bg-[#7ab036] transition-colors shadow-md shadow-green-200/50">{{ localeStore.t('confirmPurchase') }}</button>
+          <button v-if="canStartBusiness('financial')" @click="submitFinancialPurchase" class="w-full bg-[#8cc63f] text-white py-3.5 rounded-lg font-bold text-base hover:bg-[#7ab036] transition-colors shadow-md shadow-green-200/50">{{ localeStore.t('confirmPurchase') }}</button>
         </div>
       </template>
     </el-dialog>
@@ -470,7 +485,7 @@
       </div>
       <template #footer>
         <div class="px-2 pb-2">
-          <button @click="submitLoan" class="w-full bg-[#8cc63f] text-white py-3.5 rounded-lg font-bold text-base hover:bg-[#7ab036] transition-colors shadow-md shadow-green-200/50">{{ localeStore.t('borrowNow') }}</button>
+          <button v-if="canStartBusiness('loan')" @click="submitLoan" class="w-full bg-[#8cc63f] text-white py-3.5 rounded-lg font-bold text-base hover:bg-[#7ab036] transition-colors shadow-md shadow-green-200/50">{{ localeStore.t('borrowNow') }}</button>
         </div>
       </template>
     </el-dialog>
@@ -514,14 +529,14 @@
           <div class="space-y-4 py-2 h-[400px] overflow-y-auto custom-scrollbar pr-2">
             <div class="border border-gray-200 dark:border-[#2b3139] rounded-lg p-5 flex justify-between items-center hover:shadow-md transition-shadow bg-white dark:bg-[#131722]" v-for="product in financialProducts" :key="product.id">
               <div class="flex items-center space-x-5">
-                <img :src="getImageUrl(product.imageUrl)" class="w-14 h-14 rounded-full shadow-inner object-contain bg-gray-50 dark:bg-[#181c27] p-1" />
+                <ProtectedImage :src="getImageUrl(product.imageUrl)" class="w-14 h-14 rounded-full shadow-inner object-contain bg-gray-50 dark:bg-[#181c27] p-1" />
                 <div>
                   <div class="font-bold text-lg text-gray-800 dark:text-gray-100 mb-1">{{ product.name }}</div>
                   <div class="text-sm text-gray-500 dark:text-gray-400 dark:text-gray-500 mb-0.5">{{ localeStore.t('expectedDailyYield') }}: <span class="font-bold text-gray-700 dark:text-gray-200">{{ Number(product.dailyYieldRate).toFixed(2) }}%</span></div>
                   <div class="text-sm text-gray-500 dark:text-gray-400 dark:text-gray-500">{{ localeStore.t('lockRent') }}: <span class="font-mono text-gray-700 dark:text-gray-200 font-medium">{{ Number(product.rentalFee).toFixed(2) }}</span></div>
                 </div>
               </div>
-              <button @click="showFinancialPurchaseModal(product)" class="bg-[#8cc63f] text-white px-8 py-2.5 rounded-lg font-bold hover:bg-[#7ab036] transition-colors shadow-sm shadow-green-200">{{ localeStore.t('subscribe') }}</button>
+              <button v-if="canStartBusiness('financial')" @click="showFinancialPurchaseModal(product)" class="bg-[#8cc63f] text-white px-8 py-2.5 rounded-lg font-bold hover:bg-[#7ab036] transition-colors shadow-sm shadow-green-200">{{ localeStore.t('subscribe') }}</button>
             </div>
           </div>
         </el-tab-pane>
@@ -609,6 +624,7 @@
         </div>
         <div class="flex-1 p-8 overflow-y-auto bg-white dark:bg-[#131722] custom-scrollbar relative">
           <div v-if="activeUserMenu === 'assets'" class="max-w-2xl mx-auto">
+            <div id="profile-activities"></div>
             <CurrencyPicker v-model="displayCurrency" />
             <p v-if="displayRate === null" role="alert">{{ localeStore.text('匯率暫不可用，請稍後重試', 'Exchange rate unavailable; please retry later') }}</p>
             <div class="text-center mb-10 bg-gray-50 dark:bg-[#181c27] p-8 rounded-2xl border border-gray-100 dark:border-[#2b3139] shadow-sm relative overflow-hidden">
@@ -753,7 +769,7 @@
                     class="relative h-[160px] w-full"
                     @click="triggerDepositProofUpload"
                   >
-                    <img :src="getImageUrl(depositForm.proofImage)" class="w-full h-full object-contain" />
+                    <ProtectedImage :src="getImageUrl(depositForm.proofImage)" class="w-full h-full object-contain" />
                     <div class="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                       <span class="text-white text-sm">{{ localeStore.t('clickReupload') }}</span>
                     </div>
@@ -769,7 +785,7 @@
                 </div>
               </div>
               
-              <button :disabled="depositRate === null || depositSubmitting" @click="submitDeposit" class="w-full bg-[#8cc63f] text-white py-3 rounded-lg font-bold hover:bg-[#7ab036] transition-colors shadow-sm shadow-green-200 mt-4">{{ localeStore.t('submitDepositApplication') }}</button>
+              <button v-if="canStartBusiness('deposit')" :disabled="depositRate === null || depositSubmitting" @click="submitDeposit" class="w-full bg-[#8cc63f] text-white py-3 rounded-lg font-bold hover:bg-[#7ab036] transition-colors shadow-sm shadow-green-200 mt-4">{{ localeStore.t('submitDepositApplication') }}</button>
             </div>
             
             <div class="mt-8 bg-white dark:bg-[#131722] p-6 rounded-xl border border-gray-100 dark:border-[#2b3139] shadow-sm">
@@ -782,12 +798,13 @@
                   <div class="flex justify-between items-start mb-2">
                     <div class="font-bold text-gray-800 dark:text-gray-100 text-base">{{ localeStore.t('quantityText') }}: {{ Number(record.originalAmount ?? record.amount).toFixed(2) }} {{ record.currency || 'USD' }} · {{ Number(record.amount).toFixed(2) }} USD</div>
                     <div class="text-xs px-2 py-1 rounded-full font-medium" :class="record.status === 'COMPLETED' ? 'bg-green-50 text-[#8cc63f]' : (record.status === 'REJECTED' ? 'bg-red-50 text-red-500' : 'bg-orange-50 text-orange-400')">
-                      {{ record.status === 'COMPLETED' ? localeStore.t('completedText') : (record.status === 'REJECTED' ? localeStore.t('rejectedText') : localeStore.t('reviewingText')) }}
+                      {{ record.status === 'CANCELLED' ? localeStore.text('已取消', 'Cancelled') : record.status === 'COMPLETED' ? localeStore.t('completedText') : (record.status === 'REJECTED' ? localeStore.t('rejectedText') : localeStore.t('reviewingText')) }}
                     </div>
                   </div>
                   <div class="text-sm text-gray-600 dark:text-gray-300 mb-1">
                     {{ record.type === 'digital' ? localeStore.t('digitalCurrencyDeposit') : localeStore.t('bankCardDeposit2') }}
                   </div>
+                  <el-button v-if="record.status === 'PENDING' && record.source === 'USER_SUBMITTED'" size="small" :disabled="cancellingDeposit !== null" @click="cancelDeposit(record)">{{ localeStore.text('取消申请', 'Cancel request') }}</el-button>
                   <div v-if="record.status === 'REJECTED' && record.remark" class="text-xs text-red-500 bg-red-50 p-2 rounded mb-1">
                     {{ localeStore.t('rejectReasonText') }}: {{ record.remark }}
                   </div>
@@ -1137,7 +1154,7 @@
                         class="w-full h-full p-1 relative group"
                         @click="triggerKycFrontUpload"
                       >
-                        <img :src="getImageUrl(kycForm.idCardFront)" class="w-full h-full object-contain rounded" />
+                        <ProtectedImage :src="getImageUrl(kycForm.idCardFront)" class="w-full h-full object-contain rounded" />
                         <div class="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                           <el-icon class="text-white text-2xl"><Camera /></el-icon>
                         </div>
@@ -1166,7 +1183,7 @@
                         class="w-full h-full p-1 relative group"
                         @click="triggerKycBackUpload"
                       >
-                        <img :src="getImageUrl(kycForm.idCardBack)" class="w-full h-full object-contain rounded" />
+                        <ProtectedImage :src="getImageUrl(kycForm.idCardBack)" class="w-full h-full object-contain rounded" />
                         <div class="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                           <el-icon class="text-white text-2xl"><Camera /></el-icon>
                         </div>
@@ -1343,7 +1360,7 @@
         <label class="block">{{ localeStore.t('contactPhone') }}<input v-model="personalInfoForm.phone" type="tel" maxlength="32" :disabled="loanInfoLocked" class="w-full border rounded p-2 dark:bg-[#131722]" /></label>
         <label class="block">{{ localeStore.t('homeAddress2') }}<textarea v-model="personalInfoForm.address" maxlength="500" :disabled="loanInfoLocked" class="w-full border rounded p-2 dark:bg-[#131722]"></textarea></label>
         <label class="block">{{ localeStore.t('idCardHand') }}<input type="file" accept="image/*" :disabled="loanInfoLocked" @change="(e) => handleImageUpload(e, 'kycHand')" /></label>
-        <img v-if="personalInfoForm.idCardHand" :src="getImageUrl(personalInfoForm.idCardHand)" :alt="localeStore.t('idCardHand')" class="max-h-40" />
+        <ProtectedImage v-if="personalInfoForm.idCardHand" :src="getImageUrl(personalInfoForm.idCardHand)" :alt="localeStore.t('idCardHand')" class="max-h-40" />
       </div>
       <template #footer>
         <el-button v-if="!loanInfoLocked" type="primary" :loading="identitySubmitting" @click="submitPersonalInfo">{{ localeStore.t('submitReview') }}</el-button>
@@ -1465,6 +1482,7 @@
             </el-icon>
           </div>
         </div>
+        <RegistrationProfileFields v-if="showRegisterModal" ref="registerProfile" />
         <RegistrationCaptcha v-if="showRegisterModal" ref="registerCaptcha" desktop :disabled="registerLoading" @ready="registerCaptchaReady = $event" />
         <div>
           <div class="text-gray-600 dark:text-gray-300 font-medium text-sm mb-2">{{ localeStore.t('inviteCode') }}（{{ captchaText(localeStore.locale, 'optional') }}）</div>
@@ -1477,7 +1495,7 @@
       </form>
       <template #footer>
         <div class="px-2 pb-2">
-          <button type="submit" form="pc-register-form" :disabled="registerLoading || !registerCaptchaReady" class="w-full bg-[#8cc63f] text-white py-3.5 rounded-lg font-bold text-base hover:bg-[#7ab036] transition-colors shadow-md shadow-green-200/50 disabled:opacity-50">
+          <button type="submit" form="pc-register-form" :disabled="registerLoading || !registerCaptchaReady || !registerProfile?.ready" class="w-full bg-[#8cc63f] text-white py-3.5 rounded-lg font-bold text-base hover:bg-[#7ab036] transition-colors shadow-md shadow-green-200/50 disabled:opacity-50">
             {{ registerLoading ? localeStore.t('submitting') : localeStore.t('register') }}
           </button>
         </div>
@@ -1534,6 +1552,9 @@
 </template>
 
 <script setup lang="ts">
+import { canStartBusiness } from '@/utils/tenantFeatures'
+import ProtectedImage from '../../../exchange-frontend/src/components/ProtectedImage.vue'
+import { reportPageView } from '@/utils/pageActivity'
 
 import AccountModeSwitch from '@/components/AccountModeSwitch.vue';
 import { accountMode } from "@/utils/accountMode";
@@ -1549,7 +1570,7 @@ const { currency: depositCurrency, rate: depositRate, usdPreview } = useFiatCurr
 const { currency: withdrawCurrency, rate: withdrawRate, usdPreview: withdrawUsdPreview } = useFiatCurrency()
 
 import OrderShareModal from "@/components/OrderShareModal.vue";
-import { shareCopy, type ShareKind } from "@/utils/orderShare";
+import { orderTimestamp, shareCopy, type ShareKind } from "@/utils/orderShare";
 import { ref, onMounted, computed, watch, onUnmounted, nextTick } from 'vue';
 import marketWebSocket from '@/utils/marketWebSocket';
 import { useMarketStore } from '@/store/market';
@@ -1561,10 +1582,14 @@ import { useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import LeverageControl from '@/components/LeverageControl.vue';
 import PositionSizing from '@/components/PositionSizing.vue';
+import { optionalPrice, protectionError, validIncrement } from '@/utils/tradeValidation';
 import { useOrderSizing } from '@/utils/useOrderSizing';
 import { DEFAULT_LEVERAGE, leverageLimit, contractMargin, calculateContractProfit, contractEquity, contractDisplayPrice, quantityUnit, validQuantity, displayFee } from '@/utils/contract';
 import request from '@/utils/request';
 import RegistrationCaptcha from '@/components/RegistrationCaptcha.vue';
+import RegistrationProfileFields from '@/components/RegistrationProfileFields.vue';
+import { useTrialWallet } from '@/utils/useTrialWallet';
+import { reconcileFunding, selectedAvailable, type FundingSource, type FundingChoice } from '@/utils/trialLifecycle';
 import { captchaText } from '@/utils/captchaText';
 import { formatDateTime } from '@/utils/dateTime';
 import { getImageUrl } from '@/utils/imageUrl';
@@ -1632,6 +1657,7 @@ const registerInviteLocked = ref(false);
 const registerLoading = ref(false);
 const registerCaptcha = ref<InstanceType<typeof RegistrationCaptcha> | null>(null);
 const registerCaptchaReady = ref(false);
+const registerProfile = ref<InstanceType<typeof RegistrationProfileFields> | null>(null);
 const registerShowPwd = ref(false);
 const registerShowPwd2 = ref(false);
 
@@ -1649,12 +1675,16 @@ const onRegisterSubmit = async () => {
     ElMessage.error(localeStore.t('passwordTooShort'));
     return;
   }
+  let profileFields: Record<string, string>;
+  try { profileFields = registerProfile.value?.payload() || {}; }
+  catch (e: any) { ElMessage.error(e.message); return; }
   const challenge = registerCaptcha.value?.submission();
   if (!challenge) return;
   registerLoading.value = true;
   try {
     await request.post('/auth/register', {
       ...challenge,
+      ...profileFields,
       email: registerEmail.value,
       password: registerPassword.value,
       confirmPassword: registerConfirmPassword.value,
@@ -1890,10 +1920,10 @@ watch(currentSymbol, () => {
   }
 });
 
-const useStopLoss = ref(false);
-const stopLossPrice = ref(0);
-const useTakeProfit = ref(false);
-const takeProfitPrice = ref(0);
+const stopLossPrice = ref<number | string>('');
+const takeProfitPrice = ref<number | string>('');
+const protectionStep = computed(() => 10 ** -(currentSymbolInfo.value?.pricePrecision ?? 2));
+const protection = computed(() => ({ takeProfit: optionalPrice(takeProfitPrice.value), stopLoss: optionalPrice(stopLossPrice.value) }));
 const quantity = ref(0.01);
 const quantityStep = computed(() => Number(currentSymbolInfo.value?.quantityStep ?? 0.01));
 const unitLabel = computed(() => quantityUnit(currentSymbolInfo.value, localeStore.t('lots')));
@@ -2538,6 +2568,14 @@ watch(wealthTab, (val) => {
 
 const showUserCenter = ref(false);
 const activeUserMenu = ref('assets');
+watch([showUserCenter, activeUserMenu, showWealth, showCreditLoan, showFinancialPurchase, tradeMode], () => {
+  const panelCodes: Record<string, string> = { assets: 'profile', deposit: 'deposit', withdraw: 'withdraw', transfer: 'transfer', wallet: 'wallet', kyc: 'verification', announcement: 'announcement', invite: 'invite', password: 'security', support: 'support' }
+  const code = showUserCenter.value ? panelCodes[activeUserMenu.value] || 'unknown'
+    : showCreditLoan.value ? 'loan' : showWealth.value || showFinancialPurchase.value ? 'financial'
+    : tradeMode.value === 'options' ? 'option' : 'contract'
+  reportPageView(code)
+}, { flush: 'post' })
+
 
 const currentTime = ref('');
 
@@ -2548,6 +2586,10 @@ const orderSubTab = ref<'positions' | 'pending' | 'history'>('positions');
 const positionsData = ref<any[]>([]);
 const pendingOrdersData = ref<any[]>([]);
 const historyData = ref<any[]>([]);
+// Contract and option rows have different shapes; never render the old mode's rows.
+watch(tradeMode, () => {
+  positionsData.value = []; pendingOrdersData.value = []; historyData.value = []; totalMargin.value = 0;
+}, { flush: 'sync' });
 const totalMargin = ref(0);
 // ======================
 // 资金与资产逻辑
@@ -2555,7 +2597,27 @@ const totalMargin = ref(0);
 const walletBalance = ref(0);
 const walletFrozen = ref(0);
 const contractBalance = ref(0);
-const tradingAvailable = ref(0), optionTradingAvailable = ref(0);
+const wallet = useTrialWallet();
+const contractChoice = ref<FundingChoice>({ source: 'CONTRACT', manual: false });
+const optionChoice = ref<FundingChoice>({ source: 'OPTION', manual: false });
+const contractFunding = computed(() => contractChoice.value.source);
+const optionFunding = computed(() => optionChoice.value.source);
+const fundingSource = computed(() => tradeMode.value === 'contract' ? contractFunding.value : optionFunding.value);
+function chooseFunding(source: FundingSource) {
+  if (tradeSubmitting.value || kycChecking.value) return;
+  const choice = tradeMode.value === 'contract' ? contractChoice : optionChoice;
+  choice.value = { source, manual: true };
+}
+watch([() => auth.token, () => auth.user?.id, () => auth.user?.tenantId], () => {
+  contractChoice.value = { source: 'CONTRACT', manual: false };
+  optionChoice.value = { source: 'OPTION', manual: false };
+});
+watch([() => wallet.state.eligible, () => wallet.state.available], () => {
+  contractChoice.value = reconcileFunding(contractChoice.value, 'CONTRACT', wallet.state, accountMode());
+  optionChoice.value = reconcileFunding(optionChoice.value, 'OPTION', wallet.state, accountMode());
+}, { immediate: true });
+const tradingAvailable = ref(0);
+const optionTradingAvailable = computed(() => selectedAvailable(wallet.snapshot, optionFunding.value, wallet.state));
 const contractFrozen = ref(0);
 const optionBalance = ref(0);
 const optionFrozen = ref(0);
@@ -2563,7 +2625,7 @@ const totalAsset = computed(() => walletBalance.value + contractBalance.value + 
 const chartTotal = ref<number | null | undefined>(undefined);
 watch(() => auth.user?.id, () => { chartTotal.value = undefined });
 const { allocationPercent, setAllocation, canAllocate, orderReady, liquidation, refreshAccount } = useOrderSizing({
-  catalog: computed(() => marketStore.symbols),
+  fundingSource: contractFunding, catalog: computed(() => marketStore.symbols),
   quantity, leverage: selectedLeverage, available: tradingAvailable,
   active: computed(() => tradeMode.value === 'contract'), symbol: currentSymbol,
   price: computed(() => Number(orderType.value === 'limit' ? limitPrice.value : marketStore.priceMap[currentSymbol.value]?.price)),
@@ -2573,7 +2635,8 @@ const { allocationPercent, setAllocation, canAllocate, orderReady, liquidation, 
 const loadWalletBalances = async () => {
   if (!auth.token) return;
   try {
-    const res: any = await request.get('/user/assets');
+    await wallet.refresh();
+    const res = wallet.snapshot;
     if (res && res.success !== false) {
       walletBalance.value = Number(res.fundBalance || res.balance || 0);
       walletFrozen.value = Number(res.fundFrozen || 0);
@@ -2582,8 +2645,7 @@ const loadWalletBalances = async () => {
       optionBalance.value = Number(res.optionBalance || 0);
       optionFrozen.value = Number(res.optionFrozen || 0);
       await refreshAccount();
-      const option: any = await request.get('/trade/option/balance');
-      optionTradingAvailable.value = Number(option.available ?? option.balance ?? 0);
+
     }
   } catch (e) {
     console.error(localeStore.t('loadAccountAssetsFailed'), e);
@@ -2594,12 +2656,17 @@ const loadContractBalance = async () => { await refreshAccount(); };
 onMounted(() => window.addEventListener('trial-account-changed', loadWalletBalances));
 onUnmounted(() => window.removeEventListener('trial-account-changed', loadWalletBalances));
 
+const formatOrderTime = (value: string | null | undefined) => {
+  const timestamp = value ? orderTimestamp(value) : NaN;
+  return Number.isFinite(timestamp) ? formatDateTime(new Date(timestamp).toISOString()) : '';
+};
+
 const transformContractOrder = (order: any) => {
   const pInfo = marketStore.priceMap[order.symbol];
   const currentPrice = pInfo ? Number(pInfo.price) : 0;
   const leverage = Number(order.leverage ?? 1);
   const calculatedProfit = calculateContractProfit({ ...order, leverage }, currentPrice, marketStore.getConversionRate(order.symbol, order.quoteCurrency));
-  const displayTime = order.status === 'PENDING' ? (order.createdAt || order.openTime) : (order.openTime || order.createdAt);
+
   
   return {
     id: order.id,
@@ -2617,7 +2684,9 @@ const transformContractOrder = (order: any) => {
     fee: Number(order.fee || 0),
     orderSource: order.orderSource,
     manualCloseTime: order.manualCloseTimeUtc != null ? formatDateTime(new Date(order.manualCloseTimeUtc).toISOString()) : '',
-    openTime: formatDateTime(order.manualOpenTimeUtc != null ? new Date(order.manualOpenTimeUtc).toISOString() : displayTime),
+    createdTime: formatOrderTime(order.createdAt),
+    openTime: formatOrderTime(order.manualOpenTimeUtc != null ? new Date(order.manualOpenTimeUtc).toISOString() : order.openTime),
+    closeTime: formatOrderTime(order.manualCloseTimeUtc != null ? new Date(order.manualCloseTimeUtc).toISOString() : order.closeTime),
     stopLoss: order.stopLoss ? Number(order.stopLoss) : 0,
     takeProfit: order.takeProfit ? Number(order.takeProfit) : 0,
     status: order.status,
@@ -2630,13 +2699,15 @@ const transformContractOrder = (order: any) => {
 };
 
 const loadOptionOrders = async () => {
-  if (!auth.token) return;
+  if (!auth.token || tradeMode.value !== 'options') return;
+  const token = auth.token, tab = orderSubTab.value;
   try {
     let status = 'TRADING'; // 后端创建期权订单的状态是 TRADING 而不是 OPEN
     if (orderSubTab.value === 'pending') status = 'PENDING';
     if (orderSubTab.value === 'history') status = 'CLOSED';
 
     const res: any = await request.get('/trade/option/orders', { params: { status } });
+    if (auth.token !== token || tradeMode.value !== 'options' || orderSubTab.value !== tab) return;
     
     // 兼容后端可能返回的数组或包含在 list 字段中的格式
     const rawList = Array.isArray(res) ? res : (res && res.list ? res.list : (res && res.data ? res.data : []));
@@ -2662,7 +2733,8 @@ const loadOptionOrders = async () => {
         period: order.period || order.duration || 60, // 兼容 optionOrder 的 duration 字段
         expectedProfit,
         profit: Number(order.profit ?? 0),
-        openTime: formatDateTime(order.createdAt || order.openTime),
+        openTime: formatOrderTime(order.openTime),
+        closeTime: formatOrderTime(order.closeTime),
         status: order.status,
         side: order.side || order.direction
       };
@@ -2680,13 +2752,15 @@ const loadOptionOrders = async () => {
   }
 };
 const loadContractOrders = async () => {
-  if (!auth.token) return;
+  if (!auth.token || tradeMode.value !== 'contract') return;
+  const token = auth.token, tab = orderSubTab.value;
   try {
     let status = 'OPEN';
     if (orderSubTab.value === 'pending') status = 'PENDING';
     if (orderSubTab.value === 'history') status = 'CLOSED';
 
     const res: any = await request.get('/trade/contract/orders', { params: { status } });
+    if (auth.token !== token || tradeMode.value !== 'contract' || orderSubTab.value !== tab) return;
     const orders = (res.list || []).map(transformContractOrder);
 
     if (orderSubTab.value === 'positions') {
@@ -2747,7 +2821,9 @@ const goToTradeVerification = () => {
 };
 
 const submitContractOrder = async (side: 'BUY' | 'SELL') => {
+  const funding = contractFunding.value;
   if (tradeSubmitting.value || kycChecking.value || !await ensureKyc()) return;
+  if (funding !== contractFunding.value) return;
   if (!auth.token) {
     ElMessage.warning(localeStore.t('pleaseLoginFirst'));
     showLoginModal.value = true;
@@ -2777,7 +2853,16 @@ const submitContractOrder = async (side: 'BUY' | 'SELL') => {
 
   if (!orderReady.value) return;
 
+  const { takeProfit, stopLoss } = protection.value;
+  const reference = orderType.value === 'limit' ? Number(limitPrice.value) : currentPrice;
+  if (protectionError(side, reference, takeProfit, stopLoss)
+      || [takeProfit, stopLoss].some(value => value != null && !validIncrement(value, protectionStep.value))) {
+    ElMessage.warning(localeStore.text('請檢查止盈止損方向及價格精度', 'Check protection direction and precision'));
+    return;
+  }
+
   const params = {
+    fundingSource: funding,
     symbol: currentSymbol.value,
     side,
     type: orderType.value === 'market' ? 'MARKET' : 'LIMIT',
@@ -2785,8 +2870,8 @@ const submitContractOrder = async (side: 'BUY' | 'SELL') => {
     specVersion: currentSymbolInfo.value?.specVersion, quantityUnitType: currentSymbolInfo.value?.quantityUnitType,
     price: orderType.value === 'limit' ? limitPrice.value : undefined,
     leverage: selectedLeverage.value,
-    takeProfit: useTakeProfit.value ? takeProfitPrice.value : undefined,
-    stopLoss: useStopLoss.value ? stopLossPrice.value : undefined
+    takeProfit,
+    stopLoss
   };
 
   tradeSubmitting.value = true;
@@ -2805,7 +2890,13 @@ const submitContractOrder = async (side: 'BUY' | 'SELL') => {
 };
 
 const submitOptionOrder = async (direction: 'UP' | 'DOWN') => {
+  const funding = optionFunding.value;
   if (tradeSubmitting.value || kycChecking.value || !await ensureKyc()) return;
+  if (funding !== optionFunding.value) return;
+  if (!wallet.ready || !Number.isFinite(optionTradingAvailable.value)) {
+    ElMessage.warning(localeStore.text('账户资料尚未就绪', 'Account data unavailable'));
+    return;
+  }
   if (!auth.token) {
     ElMessage.warning(localeStore.t('pleaseLoginFirst'));
     showLoginModal.value = true;
@@ -2818,6 +2909,10 @@ const submitOptionOrder = async (direction: 'UP' | 'DOWN') => {
     return;
   }
 
+  if (amount > optionTradingAvailable.value) {
+    ElMessage.warning(localeStore.t('optionBalanceInsufficient'));
+    return;
+  }
   const pInfo = marketStore.priceMap[currentSymbol.value];
   const currentPrice = pInfo ? Number(pInfo.price) : 0;
   if (currentPrice <= 0) {
@@ -2826,6 +2921,7 @@ const submitOptionOrder = async (direction: 'UP' | 'DOWN') => {
   }
 
   const params = {
+    fundingSource: funding,
     symbol: currentSymbol.value,
     direction,
     amount,
@@ -3098,6 +3194,15 @@ const depositForm = ref({
 });
 
 const depositRecords = ref<any[]>([]);
+const cancellingDeposit = ref<number | null>(null)
+const cancelDeposit = async (record: any) => {
+  if (cancellingDeposit.value !== null) return
+  try { await ElMessageBox.confirm(localeStore.text('取消尚未入账的充值申请？', 'Cancel this uncredited deposit request?')) } catch { return }
+  cancellingDeposit.value = record.id
+  try { await request.post('/deposit/cancel/' + record.id); await loadDepositRecords() }
+  catch (error: any) { ElMessage.error(error.message || 'Unable to confirm the result. Check deposit history before retrying.') }
+  finally { cancellingDeposit.value = null }
+}
 
 const loadDepositRecords = async () => {
   if (!auth.token) return;
@@ -3154,7 +3259,7 @@ const submitDeposit = async () => {
       ElMessage.warning(localeStore.t('contactServiceForBankCard'));
       return;
     }
-    network = bankSetting.value.bankName;
+    network = 'BANK';
     address = bankSetting.value.bankAccount;
   }
   
@@ -3655,6 +3760,8 @@ const darkLogoUrl = `${import.meta.env.BASE_URL}img/logo-dark.svg`
 </script>
 
 <style>
+.protection-input { display:block; width:100%; min-height:44px; margin-top:8px; padding:8px 12px; border:1px solid #dce0e7; border-radius:8px; background:transparent; color:inherit; }
+.protection-input:focus-visible { outline:2px solid #8cc63f; outline-offset:2px; }
 .brand-logo {
   display: block;
   width: 140px;

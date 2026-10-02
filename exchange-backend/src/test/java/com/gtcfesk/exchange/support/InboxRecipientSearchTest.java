@@ -2,6 +2,7 @@ package com.gtcfesk.exchange.support;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gtcfesk.exchange.admin.AdminPermissionService;
+import com.gtcfesk.exchange.tenant.TenantContext;
 import org.junit.jupiter.api.*;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -15,7 +16,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 class InboxRecipientSearchTest {
-    @Test void searchUsesSendPermissionProjectionAndBoundedLiteralQuery() {
+    @Test void searchUsesSendPermissionTenantProjectionAndBoundedLiteralQuery() {
         EntityManager em = mock(EntityManager.class);
         @SuppressWarnings("unchecked") TypedQuery<Object[]> query = mock(TypedQuery.class, RETURNS_SELF);
         SupportSettings settings = mock(SupportSettings.class);
@@ -28,12 +29,13 @@ class InboxRecipientSearchTest {
         when(query.getResultList()).thenReturn(Collections.singletonList(new Object[]{7L, "a@example.com"}));
         SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken("1", null,
             Collections.singleton(new SimpleGrantedAuthority("ROLE_ADMIN"))));
-        try {
+        try (TenantContext.Scope ignored = TenantContext.open(42L)) {
             assertEquals(7L, service.searchRecipients(" 7 ").get(0).get("id"));
             verify(permissions).require("inbox", "send");
+            verify(query).setParameter("tenant", 42L);
             verify(query).setParameter("id", 7L);
             verify(query).setMaxResults(20);
-            verify(em).createQuery(contains("(u.id=:id or"), eq(Object[].class));
+            verify(em).createQuery(contains("u.tenantId=:tenant and (u.id=:id or"), eq(Object[].class));
             assertEquals(new HashSet<>(Arrays.asList("id", "email")), service.searchRecipients("A_%!").get(0).keySet());
             verify(query).setParameter("email", "%a!_!%!!%");
             assertTrue(service.searchRecipients("  ").isEmpty());

@@ -8,9 +8,10 @@ import java.time.LocalDateTime;
 
 @Getter
 @Setter
+@org.hibernate.annotations.Persister(impl = com.gtcfesk.exchange.tenant.TenantEntityPersister.class)
 @Entity
 @Table(name = "admin_user")
-public class AdminUser {
+public class AdminUser extends com.gtcfesk.exchange.tenant.TenantOwnedEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -23,10 +24,10 @@ public class AdminUser {
     @Column(name = "current_token", length = 128)
     private String currentToken;
 
-    @Column(nullable = false, unique = true, length = 64)
+    @Column(nullable = false, length = 64)
     private String account;
 
-    @Column(nullable = false, unique = true, length = 128)
+    @Column(nullable = false, length = 128)
     private String email;
 
     @Column(nullable = false, length = 128)
@@ -38,6 +39,9 @@ public class AdminUser {
 
     @Column(nullable = false)
     private Boolean enabled = true;
+
+    @Column(nullable = false)
+    private boolean mustChangePassword;
 
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

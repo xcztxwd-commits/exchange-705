@@ -66,12 +66,12 @@ public class TransferController {
         }
         
         com.gtcfesk.exchange.common.TradeValidation.positive(req.getAmount(), "划转金额");
-        if (req.getRequestId() != null && !req.getRequestId().matches("[A-Za-z0-9_-]{1,64}")) throw new BusinessException("请求编号无效");
+        com.gtcfesk.exchange.common.OrderRequest.required(req.getRequestId());
         // Serialize account creation and idempotency for this user; lock all accounts in fixed order.
         users.lockById(userId).orElseThrow(() -> new BusinessException("用户不存在"));
         assetAccountRepository.lockByUserId(userId);
         if (req.getRequestId() != null) {
-            TransferRecord previous = transferRecordRepository.findByUserIdAndRequestId(userId, req.getRequestId()).orElse(null);
+            TransferRecord previous = transferRecordRepository.findByTenantIdAndUserIdAndRequestId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), userId, req.getRequestId()).orElse(null);
             if (previous != null) {
                 if (!fromAccount.equals(previous.getFromAccount()) || !toAccount.equals(previous.getToAccount())
                         || req.getAmount().compareTo(previous.getAmount()) != 0) throw new BusinessException("请求编号已用于不同划转");
@@ -82,8 +82,7 @@ public class TransferController {
             }
         }
         // 获取转出账户
-        AssetAccount fromAsset = assetAccountRepository
-                .findByUserIdAndCoin(userId, fromAccount)
+        AssetAccount fromAsset = assetAccountRepository.findByTenantIdAndUserIdAndCoin(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), userId, fromAccount)
                 .orElseGet(() -> {
                     AssetAccount a = new AssetAccount();
                     a.setUserId(userId);
@@ -100,8 +99,7 @@ public class TransferController {
         }
         
         // 获取转入账户
-        AssetAccount toAsset = assetAccountRepository
-                .findByUserIdAndCoin(userId, toAccount)
+        AssetAccount toAsset = assetAccountRepository.findByTenantIdAndUserIdAndCoin(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), userId, toAccount)
                 .orElseGet(() -> {
                     AssetAccount a = new AssetAccount();
                     a.setUserId(userId);
@@ -152,7 +150,7 @@ public class TransferController {
         Sort sort = Sort.by(Sort.Direction.DESC, "createdAt");
         Pageable pageable = PageRequest.of(page, size, sort);
         
-        Page<TransferRecord> records = transferRecordRepository.findByUserIdOrderByCreatedAtDesc(userId, pageable);
+        Page<TransferRecord> records = transferRecordRepository.findByTenantIdAndUserIdOrderByCreatedAtDesc(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), userId, pageable);
         
         Map<String, Object> result = new HashMap<>();
         result.put("success", true);

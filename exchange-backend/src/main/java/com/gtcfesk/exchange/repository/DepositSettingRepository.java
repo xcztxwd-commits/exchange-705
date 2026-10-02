@@ -8,9 +8,9 @@ import java.util.List;
 import java.util.Optional;
 
 @Repository
-public interface DepositSettingRepository extends JpaRepository<DepositSetting, Long> {
-    Optional<DepositSetting> findByNetwork(String network);
-    Optional<DepositSetting> findByNetworkAndType(String network, String type);
-    List<DepositSetting> findByTypeAndEnabled(String type, Boolean enabled);
+public interface DepositSettingRepository extends com.gtcfesk.exchange.tenant.TenantRepository<DepositSetting, Long> {
+    Optional<DepositSetting> findByTenantIdAndNetwork(Long tenantId, String network);
+    Optional<DepositSetting> findByTenantIdAndNetworkAndType(Long tenantId, String network, String type);
+    List<DepositSetting> findByTenantIdAndTypeAndEnabled(Long tenantId, String type, Boolean enabled);
 }
 

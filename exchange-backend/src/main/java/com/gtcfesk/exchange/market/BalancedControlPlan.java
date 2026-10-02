@@ -8,7 +8,7 @@ import java.security.MessageDigest;
 import java.util.*;
 
 /** A complete, immutable V3 target path. All monetary checks use integer price ticks. */
-public final class BalancedControlPlan {
+public final class BalancedControlPlan implements TargetControlPlan {
     public static final int VERSION = 3;
     public static final BigDecimal DEFAULT_RATIO = new BigDecimal("0.00001");
     private static final BigInteger HUNDRED = BigInteger.valueOf(100), LOW = BigInteger.valueOf(97), HIGH = BigInteger.valueOf(103);
@@ -194,6 +194,10 @@ public final class BalancedControlPlan {
     }
     private BalancedControlPlan(Parameters p, String[] prices) { this.parameters = p; this.prices = prices.clone(); this.summary = Collections.unmodifiableMap(validate(p, this.prices)); }
     public static BalancedControlPlan restore(Parameters p, List<String> prices) { return new BalancedControlPlan(p, prices.toArray(new String[0])); }
+    public int version() { return VERSION; }
+    public int precision() { return parameters.precision; }
+    public Map<String, Object> snapshot() { return parameters.snapshot(); }
+    public Map<String, Object> preview() { return feasibility(parameters); }
     public Parameters parameters() { return parameters; }
     public List<String> prices() { return Collections.unmodifiableList(Arrays.asList(prices)); }
     public Map<String, Object> summary() { return summary; }

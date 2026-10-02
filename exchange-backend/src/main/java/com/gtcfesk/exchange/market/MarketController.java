@@ -36,7 +36,7 @@ public class MarketController {
      */
     @GetMapping("/hot")
     public ResponseEntity<?> getHotSymbols() {
-        List<TradingSymbol> symbols = symbolRepository.findByIsHotTrueAndIsEnabledTrueOrderBySortOrderDesc();
+        List<TradingSymbol> symbols = symbolRepository.findByTenantIdAndIsHotTrueAndIsEnabledTrueOrderBySortOrderDesc(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId());
         Map<String, Object> result = new HashMap<>();
         applyCategoryLeverage(symbols);
         result.put("list", symbols);
@@ -50,9 +50,9 @@ public class MarketController {
     public ResponseEntity<?> getSymbolsByCategory(@RequestParam(required = false) String category) {
         List<TradingSymbol> symbols;
         if (category != null && !category.isEmpty()) {
-            symbols = symbolRepository.findByCategoryAndIsEnabledTrueOrderBySortOrderDesc(category);
+            symbols = symbolRepository.findByTenantIdAndCategoryAndIsEnabledTrueOrderBySortOrderDesc(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), category);
         } else {
-            symbols = symbolRepository.findByIsEnabledTrueOrderBySortOrderDesc();
+            symbols = symbolRepository.findByTenantIdAndIsEnabledTrueOrderBySortOrderDesc(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId());
         }
         Map<String, Object> result = new HashMap<>();
         applyCategoryLeverage(symbols);
@@ -65,7 +65,7 @@ public class MarketController {
      */
     @GetMapping("/all")
     public ResponseEntity<?> getAllSymbols() {
-        List<TradingSymbol> symbols = symbolRepository.findByIsEnabledTrueOrderBySortOrderDesc();
+        List<TradingSymbol> symbols = symbolRepository.findByTenantIdAndIsEnabledTrueOrderBySortOrderDesc(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId());
         Map<String, Object> result = new HashMap<>();
         applyCategoryLeverage(symbols);
         result.put("list", symbols);

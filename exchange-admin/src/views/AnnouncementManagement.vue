@@ -1,9 +1,13 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
+import InboxManagement from './InboxManagement.vue'
+import { can } from '@/utils/access'
 import ActivityManagement from '@/components/ActivityManagement.vue'
 import { useAuthStore } from '@/store/auth'
 const auth = useAuthStore()
-const announcementTab = ref('ordinary')
+const props = withDefaults(defineProps<{ initialTab?: string }>(), { initialTab: 'ordinary' })
+const announcementTab = ref(props.initialTab)
+watch(() => props.initialTab, value => { announcementTab.value = value })
 import { ElMessage, ElMessageBox } from 'element-plus'
 import request from '@/utils/request'
 
@@ -15,6 +19,7 @@ interface Announcement {
   countdownSeconds: number
   priority: number
   language?: string
+  displayAt?: string
   createdAt?: string
   updatedAt?: string
 }
@@ -75,6 +80,7 @@ const openDialog = (announcement?: Announcement) => {
     editingAnnouncement.value = announcement
     dialogTitle.value = '编辑公告'
     formData.value = {
+      displayAt: announcement.displayAt || announcement.createdAt,
       title: announcement.title,
       content: announcement.content,
       status: announcement.status,
@@ -130,6 +136,7 @@ const saveAnnouncement = async () => {
     if (editingAnnouncement.value?.id) {
       // 更新
       await request.put(`/admin/announcement/${editingAnnouncement.value.id}`, {
+        displayAt: formData.value.displayAt || undefined,
         title: formData.value.title.trim(),
         content: formData.value.content.trim(),
         status: formData.value.status,
@@ -141,6 +148,7 @@ const saveAnnouncement = async () => {
     } else {
       // 新增
       await request.post('/admin/announcement/create', {
+        displayAt: formData.value.displayAt || undefined,
         title: formData.value.title.trim(),
         content: formData.value.content.trim(),
         status: formData.value.status,
@@ -214,15 +222,21 @@ const formatDate = (dateString?: string) => {
 }
 
 onMounted(() => {
-  loadAnnouncements()
+  if (can('announcement:view')) loadAnnouncements()
 })
 </script>
 
 <template>
   <div class="announcement-management">
-    <el-radio-group v-model="announcementTab" style="margin-bottom:20px"><el-radio-button value="ordinary">普通公告</el-radio-button><el-radio-button v-if="auth.user?.userType !== 'agent'" value="activity">活动公告 · 体验金</el-radio-button></el-radio-group>
-    <ActivityManagement v-if="announcementTab === 'activity' && auth.user?.userType !== 'agent'" />
-    <el-card v-show="announcementTab === 'ordinary'" shadow="never">
+    <h1>消息与公告管理</h1>
+    <el-radio-group v-model="announcementTab" style="margin-bottom:20px">
+      <el-radio-button v-if="can('announcement:view')" value="ordinary">普通公告</el-radio-button>
+      <el-radio-button v-if="can('inbox:view')" value="letters">个人站内信</el-radio-button>
+      <el-radio-button v-if="can('announcement:view') && auth.user?.userType !== 'agent'" value="activity">活动公告 · 体验金</el-radio-button>
+    </el-radio-group>
+    <InboxManagement v-if="announcementTab === 'letters' && can('inbox:view')" />
+    <ActivityManagement v-if="announcementTab === 'activity' && can('announcement:view') && auth.user?.userType !== 'agent'" />
+    <el-card v-if="can('announcement:view')" v-show="announcementTab === 'ordinary'" shadow="never">
       <template #header>
         <div class="card-header">
           <span>公告管理</span>
@@ -252,7 +266,10 @@ onMounted(() => {
         </el-table-column>
         <el-table-column prop="countdownSeconds" label="不可点击倒计时（秒）" width="180" />
         <el-table-column prop="priority" label="优先级" width="100" />
-        <el-table-column prop="createdAt" label="创建时间" width="160">
+        <el-table-column prop="displayAt" label="显示时间（UTC）" width="170">
+          <template #default="{ row }">{{ formatDate(row.displayAt || row.createdAt) }}</template>
+        </el-table-column>
+        <el-table-column prop="createdAt" label="创建时间（审计）" width="170">
           <template #default="{ row }">{{ formatDate(row.createdAt) }}</template>
         </el-table-column>
         <el-table-column label="操作" width="180" fixed="right">
@@ -297,6 +314,10 @@ onMounted(() => {
             <el-option label="草稿" value="DRAFT" />
             <el-option label="已隐藏" value="HIDDEN" />
           </el-select>
+        </el-form-item>
+        <el-form-item label="显示时间">
+          <el-date-picker v-model="formData.displayAt" type="datetime" value-format="YYYY-MM-DDTHH:mm:ss" placeholder="默认创建时间（UTC）" :clearable="!editingAnnouncement" />
+          <div style="font-size:12px;color:#777">用户看到的公告日期（UTC），不修改创建时间或弹窗倒计时。</div>
         </el-form-item>
         <el-form-item label="不可点击秒数">
           <el-input-number v-model="formData.countdownSeconds" :min="0" :max="2147483647" :precision="0" :step="1" step-strictly />

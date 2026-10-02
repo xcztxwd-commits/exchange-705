@@ -34,6 +34,10 @@ public class AuthService {
     @org.springframework.beans.factory.annotation.Autowired
     private com.gtcfesk.exchange.security.RegistrationSecurity registrationSecurity;
 
+    @org.springframework.beans.factory.annotation.Autowired private com.gtcfesk.exchange.control.TenantPolicyService tenantPolicy;
+
+    @org.springframework.beans.factory.annotation.Autowired private com.gtcfesk.exchange.admin.SystemConfigService systemConfigService;
+
     private final VerifyCodeRepository verifyCodeRepository;
     private final EmailService emailService;
     private final UserAccountRepository userAccountRepository;
@@ -54,7 +58,9 @@ public class AuthService {
 
     @org.springframework.transaction.annotation.Transactional
     public AuthResponse login(LoginRequest req) {
-        UserAccount user = userAccountRepository.findByEmail(req.getAccount())
+        req.setAccount(req.getAccount().trim().toLowerCase(java.util.Locale.ROOT));
+        tenantPolicy.requireLogin(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId());
+        UserAccount user = userAccountRepository.findByTenantIdAndEmail(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), req.getAccount())
                 .orElseThrow(() -> new BusinessException("user not found"));
 
         // 允许 normal 和 active 状态的用户登录，排除 disabled, frozen, banned
@@ -94,6 +100,7 @@ public class AuthService {
 
         Map<String, Object> userMap = new HashMap<>();
         userMap.put("id", user.getId());
+        userMap.put("tenantId", com.gtcfesk.exchange.tenant.TenantContext.requireTenantId());
         userMap.put("email", user.getEmail());
         userMap.put("nickname", user.getNickname());
         userMap.put("status", user.getStatus());
@@ -114,13 +121,17 @@ public class AuthService {
         return attributes != null ? attributes.getRequest() : null;
     }
 
-    @org.springframework.transaction.annotation.Transactional(noRollbackFor = BusinessException.class)
+    @org.springframework.transaction.annotation.Transactional
     public AuthResponse register(RegisterRequest req) {
+        tenantPolicy.requireNewBusiness("registration");
+        String normalizedEmail = req.getEmail().trim().toLowerCase(java.util.Locale.ROOT);
+        if (normalizedEmail.length() > 128) throw new BusinessException("email too long");
+        req.setEmail(normalizedEmail);
         registrationSecurity.verifyAndConsume(req.getCaptchaSession(), req.getCaptchaId(), req.getCaptchaCode());
         if (!java.util.Objects.equals(req.getPassword(), req.getConfirmPassword())) {
             throw new BusinessException("两次密码不一致");
         }
-        if (userAccountRepository.existsByEmail(req.getEmail())) {
+        if (userAccountRepository.existsByTenantIdAndEmail(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), req.getEmail())) {
             throw new BusinessException("email exists");
         }
 
@@ -129,11 +140,16 @@ public class AuthService {
         user.setEmail(req.getEmail());
         user.setPasswordHash(passwordEncoder.encode(req.getPassword()));
         user.setInviteCode(req.getInvitationCode());
-        user.setNickname(req.getEmail());
+        int nicknameEnd = normalizedEmail.offsetByCodePoints(0, Math.min(50, normalizedEmail.codePointCount(0, normalizedEmail.length())));
+        user.setNickname(normalizedEmail.substring(0, nicknameEnd));
+        systemConfigService.registrationFields().apply(req, user);
+        if (user.getPhone() != null && userAccountRepository.findByTenantIdAndPhone(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), user.getPhone()).isPresent()) {
+            throw new BusinessException("phone exists");
+        }
         
         // 处理邀请码：如果提供了邀请码，查找上级用户并记录
         if (req.getInvitationCode() != null && !req.getInvitationCode().isEmpty()) {
-            userAccountRepository.findByMyInviteCode(req.getInvitationCode())
+            userAccountRepository.findByTenantIdAndMyInviteCode(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), req.getInvitationCode())
                     .ifPresent(parentUser -> {
                         user.setParentUserId(parentUser.getId());
                     });
@@ -142,7 +158,17 @@ public class AuthService {
         // 生成用户自己的邀请码
         user.setMyInviteCode(generateInviteCode());
         
-        userAccountRepository.save(user);
+        try {
+            // Flush identity constraints before any account/session side effects; repository ownership guards remain active.
+            userAccountRepository.saveAndFlush(user);
+        } catch (org.springframework.dao.DataIntegrityViolationException conflict) {
+            if (registrationIdentityConflict(conflict)) {
+                BusinessException denied = new BusinessException("registration identity exists");
+                denied.initCause(conflict); // Preserve the actual database category internally, never in the HTTP response.
+                throw denied;
+            }
+            throw conflict; // Foreign-key and other integrity failures are not disguised as duplicate registration.
+        }
 
         // 初始化三类资产账户：资金 / 合约 / 期权
         createIfNotExists(user.getId(), "FUND");
@@ -158,6 +184,7 @@ public class AuthService {
 
         Map<String, Object> userMap = new HashMap<>();
         userMap.put("id", user.getId());
+        userMap.put("tenantId", com.gtcfesk.exchange.tenant.TenantContext.requireTenantId());
         userMap.put("email", user.getEmail());
         userMap.put("nickname", user.getNickname());
         // 签名会话绑定当前凭据和单设备会话标识
@@ -169,7 +196,20 @@ public class AuthService {
         return new AuthResponse(signedToken, System.currentTimeMillis() + jwtUtil.getExpireSeconds() * 1000, userMap);
     }
 
+    private static boolean registrationIdentityConflict(Throwable failure) {
+        java.util.Set<Throwable> seen = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<Throwable, Boolean>());
+        for (Throwable cause = failure; cause != null && seen.size() < 12 && seen.add(cause); cause = cause.getCause()) {
+            if (cause instanceof java.sql.SQLException && ((java.sql.SQLException) cause).getErrorCode() == 1062) return true;
+            if (cause instanceof org.hibernate.exception.ConstraintViolationException) {
+                String constraint = ((org.hibernate.exception.ConstraintViolationException) cause).getConstraintName();
+                if ("uk_tenant_normalized_email".equals(constraint) || "uk_tenant_normalized_phone".equals(constraint)) return true;
+            }
+        }
+        return false;
+    }
+
     public void sendEmailCode(SendCodeRequest req) {
+        req.setEmail(req.getEmail().trim().toLowerCase(java.util.Locale.ROOT));
         if (!java.util.Arrays.asList("forget_password", "change_password").contains(req.getScene())) {
             throw new BusinessException("验证码用途无效");
         }
@@ -180,14 +220,14 @@ public class AuthService {
         vc.setScene(req.getScene());
         vc.setCode(code);
         vc.setExpireAt(LocalDateTime.now().plusMinutes(10));
-        verifyCodeRepository.save(vc);
-
-        // 发送邮件
+        // Validate outbound policy/rate limits and deliver before persisting an unusable code.
         emailService.sendVerificationCode(req.getEmail(), code);
+        verifyCodeRepository.save(vc);
     }
 
     @org.springframework.transaction.annotation.Transactional(noRollbackFor = BusinessException.class)
     public void resetPassword(ResetPasswordRequest req) {
+        req.setEmail(req.getEmail().trim().toLowerCase(java.util.Locale.ROOT));
         if (!req.getPassword().equals(req.getConfirmPassword())) {
             throw new BusinessException("两次密码不一致");
         }
@@ -198,13 +238,12 @@ public class AuthService {
         if (!"forget_password".equals(scene) && !"change_password".equals(scene)) {
             throw new BusinessException("验证码用途无效");
         }
-        VerifyCode latest = verifyCodeRepository
-                .findTopByEmailAndSceneOrderByIdDesc(req.getEmail(), scene)
+        VerifyCode latest = verifyCodeRepository.findTopByTenantIdAndEmailAndSceneOrderByIdDesc(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), req.getEmail(), scene)
                 .orElseThrow(() -> new BusinessException("验证码不存在，请重新发送"));
 
         validateCode(latest, req.getVerifyCode());
 
-        UserAccount user = userAccountRepository.findByEmail(req.getEmail())
+        UserAccount user = userAccountRepository.findByTenantIdAndEmail(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), req.getEmail())
                 .orElseThrow(() -> new BusinessException("user not found"));
         user.setPasswordHash(passwordEncoder.encode(req.getPassword()));
         user.setCurrentToken(null);
@@ -226,7 +265,7 @@ public class AuthService {
     }
 
     private void createIfNotExists(Long userId, String coin) {
-        assetAccountRepository.findByUserIdAndCoin(userId, coin)
+        assetAccountRepository.findByTenantIdAndUserIdAndCoin(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), userId, coin)
                 .orElseGet(() -> {
                     AssetAccount a = new AssetAccount();
                     a.setUserId(userId);
@@ -251,7 +290,7 @@ public class AuthService {
         String baseCode = code.toString();
         String finalCode = baseCode;
         int suffix = 0;
-        while (userAccountRepository.findByMyInviteCode(finalCode).isPresent()) {
+        while (userAccountRepository.findByTenantIdAndMyInviteCode(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), finalCode).isPresent()) {
             suffix++;
             finalCode = baseCode.substring(0, 5) + chars.charAt(suffix % chars.length());
         }

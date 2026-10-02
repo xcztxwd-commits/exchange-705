@@ -13,19 +13,21 @@ class ManualOrderLeverageBoundsTest {
         ManualOrderGenerator.Request r=new ManualOrderGenerator.Request();r.leverage=target==null?null:n(target);
         return ManualOrderGenerator.solve(r,ManualOrderToleranceTest.candles(n("110")),ManualOrderToleranceTest.OPEN,ManualOrderToleranceTest.CLOSE,n("1000"),BigDecimal.ONE,n("2"),1,n("0.01"),n("0.01"),BigDecimal.ZERO,n(max));
     }
-    @ParameterizedTest @ValueSource(strings={"0.5","0.95","5.27","10"})
+    @ParameterizedTest @ValueSource(strings={"0.5","0.95","0.96","5.26","5.27","10"})
     void disjointTargetIsRejected(String target){assertThrows(BusinessException.class,()->solve(target,"5"));}
-    @ParameterizedTest @ValueSource(strings={"0.96","1","4.99","5","5.26"})
-    void intersectionIsSearchedNotClampedAfterCalculation(String target){
+    @ParameterizedTest @ValueSource(strings={"1","4.99","5"})
+    void exactTargetIsAcceptedWithoutClamping(String target){
         ManualOrderGenerator.Candidate c=solve(target,"5");
         assertTrue(c.leverage.compareTo(BigDecimal.ONE)>=0);assertTrue(c.leverage.compareTo(n("5"))<=0);
-        ManualOrderToleranceTest.within(c.leverage,n(target));
+        assertEquals(0,c.leverage.compareTo(n(target)));
         assertEquals(0,c.calculation.get("margin").compareTo(c.calculation.get("quantity").multiply(n("100")).divide(c.leverage,16,java.math.RoundingMode.CEILING)));
     }
-    @Test void exactFivePercentIntersectionAndOutside(){
-        assertEquals(0,solve("20","19").leverage.compareTo(n("19")));
+    @Test void fixedLeverageCannotCrossInstrumentBoundsEvenByFivePercent(){
+        assertThrows(BusinessException.class,()->solve("20","19"));
+        assertEquals(0,solve("19","19").leverage.compareTo(n("19")));
         assertThrows(BusinessException.class,()->solve("20.01","19"));
-        assertEquals(0,solve("1.05","1").leverage.compareTo(BigDecimal.ONE));
+        assertThrows(BusinessException.class,()->solve("1.05","1"));
+        assertEquals(0,solve("1","1").leverage.compareTo(BigDecimal.ONE));
         assertThrows(BusinessException.class,()->solve("1.06","1"));
     }
     @Test void freeLeverageCanUseOneAndFractionalMaximum(){

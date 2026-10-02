@@ -31,7 +31,7 @@ public class DepositReviewService {
         // 如果是代理，只返回下级用户的充值记录
         if (agentId != null) {
             // 获取所有下级用户ID
-            List<UserAccount> subordinates = userAccountRepository.findByParentUserId(agentId);
+            List<UserAccount> subordinates = userAccountRepository.findByTenantIdAndParentUserId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), agentId);
             Set<Long> subordinateUserIds = subordinates.stream()
                     .map(UserAccount::getId)
                     .collect(Collectors.toSet());
@@ -42,12 +42,12 @@ public class DepositReviewService {
             }
             
             // 只查询下级用户的充值记录
-            allRecords = depositRecordRepository.findAll().stream()
+            allRecords = depositRecordRepository.findAllByTenantId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId()).stream()
                     .filter(record -> subordinateUserIds.contains(record.getUserId()))
                     .collect(Collectors.toList());
         } else {
             // 管理员查看所有记录
-            allRecords = depositRecordRepository.findAll().stream()
+            allRecords = depositRecordRepository.findAllByTenantId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId()).stream()
                     .collect(Collectors.toList());
         }
         
@@ -65,7 +65,7 @@ public class DepositReviewService {
         // 按用户邮箱过滤
         if (userEmail != null && !userEmail.trim().isEmpty()) {
             // 先通过邮箱查找用户ID
-            Optional<UserAccount> userOpt = userAccountRepository.findByEmail(userEmail.trim());
+            Optional<UserAccount> userOpt = userAccountRepository.findByTenantIdAndEmail(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), userEmail.trim());
             if (userOpt.isPresent()) {
                 Long targetUserId = userOpt.get().getId();
                 filteredStream = filteredStream.filter(record -> record.getUserId() != null && record.getUserId().equals(targetUserId));
@@ -102,14 +102,14 @@ public class DepositReviewService {
         }
         
         // 查找用户信息
-        UserAccount user = userAccountRepository.findById(record.getUserId()).orElse(null);
+        UserAccount user = userAccountRepository.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), record.getUserId()).orElse(null);
         if (user == null) {
             return;
         }
         
         // 如果用户有上级代理，填充代理信息
         if (user.getParentUserId() != null) {
-            UserAccount agent = userAccountRepository.findById(user.getParentUserId()).orElse(null);
+            UserAccount agent = userAccountRepository.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), user.getParentUserId()).orElse(null);
             if (agent != null) {
                 // 格式：所属代理:用户名（优先使用昵称，没有则使用邮箱）
                 String agentName = agent.getNickname();

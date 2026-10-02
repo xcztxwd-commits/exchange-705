@@ -11,7 +11,7 @@ import java.util.*;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
-class CryptoPerpetualTest {
+class CryptoPerpetualTest extends TenantMarketTestContext {
     static String instrument(String code,String base,String type,String underlying,String status) {
         return "{\"symbol\":\""+code+"\",\"baseAsset\":\""+base+"\",\"quoteAsset\":\"USDT\",\"contractType\":\""+type+"\",\"underlyingType\":\""+underlying+"\",\"status\":\""+status+"\"}";
     }
@@ -19,7 +19,7 @@ class CryptoPerpetualTest {
         MarketInstrumentCatalog catalog=new MarketInstrumentCatalog();
         catalog.exchange=new ExchangeQuoteSource();catalog.http=mock(MarketHttp.class);catalog.symbols=mock(TradingSymbolRepository.class);
         TradingSymbol spot=new TradingSymbol();spot.setSymbol("BTCUSDT");spot.setAlltickSymbol("BTCUSDT");spot.setSourceCategory("Crypto");spot.setMarketSource("binance");
-        when(catalog.symbols.findAll()).thenReturn(Collections.singletonList(spot));
+        when(catalog.symbols.findAllByTenantId(1L)).thenReturn(Collections.singletonList(spot));
         String body="{\"symbols\":["+String.join(",",
             instrument("BTCUSDT","BTC","PERPETUAL","COIN","TRADING"),
             instrument("XAUUSDT","XAU","PERPETUAL","COIN","TRADING"),
@@ -33,7 +33,7 @@ class CryptoPerpetualTest {
         TradingSymbol perpetual=catalog.resolve("binance","CryptoPerpetual","BTCUSDT");
         assertEquals("BTCUSDT_PERP",perpetual.getSymbol());assertEquals("BTCUSDT",perpetual.getAlltickSymbol());
         assertEquals("binance:CryptoPerpetual:BTCUSDT",perpetual.getMarketInstrumentKey());
-        when(catalog.symbols.findAll()).thenReturn(Arrays.asList(spot,perpetual));
+        when(catalog.symbols.findAllByTenantId(1L)).thenReturn(Arrays.asList(spot,perpetual));
         rows=(List<Map<String,Object>>)catalog.list("binance","CryptoPerpetual","",0).get("list");
         assertEquals(true,rows.get(0).get("added"));assertFalse(rows.get(0).containsKey("unavailableReason"));
         verify(catalog.http).get(argThat(uri->uri.toString().equals("https://fapi.binance.com/fapi/v1/exchangeInfo")),anyInt());
@@ -63,7 +63,7 @@ class CryptoPerpetualTest {
         TradingSymbol spot=new TradingSymbol(),perpetual=new TradingSymbol();
         spot.setId(1L);spot.setSymbol("BTCUSDT");spot.setSourceCategory("Crypto");spot.setMarketSource("binance");spot.setQuoteCurrency("USDT");
         perpetual.setId(2L);perpetual.setSymbol("BTCUSDT_PERP");perpetual.setAlltickSymbol("BTCUSDT");perpetual.setSourceCategory("CryptoPerpetual");perpetual.setMarketSource("binance");perpetual.setQuoteCurrency("USDT");
-        TradingSymbolRepository symbols=mock(TradingSymbolRepository.class);when(symbols.findAll()).thenReturn(Arrays.asList(perpetual,spot));
+        TradingSymbolRepository symbols=mock(TradingSymbolRepository.class);when(symbols.findAllByTenantId(1L)).thenReturn(Arrays.asList(perpetual,spot));
         RedisMarketService redis=mock(RedisMarketService.class);
         ReflectionTestUtils.setField(market,"symbols",symbols);ReflectionTestUtils.setField(market,"redis",redis);ReflectionTestUtils.setField(market,"exchangeStream",stream);
         try {

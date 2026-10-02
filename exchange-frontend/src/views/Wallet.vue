@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useTrialWallet } from '@/utils/useTrialWallet'
 import { useRouter } from 'vue-router'
 import TrialAccountCard from '@/components/TrialAccountCard.vue'
 import Tabbar from '@/components/Tabbar.vue'
@@ -9,6 +10,7 @@ import { useLocaleStore } from '@/store/locale'
 
 const router = useRouter()
 const auth = useAuthStore()
+const trialWallet = useTrialWallet()
 auth.load()
 
 const localeStore = useLocaleStore()
@@ -37,7 +39,10 @@ function toggleBalance() {
 async function loadAssets() {
   loading.value = true
   try {
+    const owner = auth.token, started = performance.now()
     const res: any = await request.get('/user/assets')
+    if (owner !== auth.token) return
+    trialWallet.accept(res, started)
     
     if (res && res.success !== false) {
       fundBalance.value = Number(res.fundBalance || 0)

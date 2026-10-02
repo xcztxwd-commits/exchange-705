@@ -19,10 +19,12 @@ import java.util.*;
 /** Internal read dispatch reuses original table query contracts, not duplicate SQL/DTOs. */
 @Component @Order(Ordered.HIGHEST_PRECEDENCE+8) @RequiredArgsConstructor
 public class SimulationAdminQueryBoundary extends OncePerRequestFilter {
-    private static final Object READ_DISPATCH = new Object();
+    private static final class VerifiedRead { final Long tenant; VerifiedRead(Long tenant){this.tenant=tenant;} }
     public static boolean internalRead(HttpServletRequest request) {
-        return request.getAttribute(SimulationAdminQueryBoundary.class.getName()) == READ_DISPATCH;
+        return request.getAttribute(SimulationAdminQueryBoundary.class.getName()) instanceof VerifiedRead;
     }
+    public static Long internalTenant(HttpServletRequest request){Object proof=request.getAttribute(SimulationAdminQueryBoundary.class.getName());return proof instanceof VerifiedRead?((VerifiedRead)proof).tenant:null;}
+    private final com.gtcfesk.exchange.control.TenantRepository tenants;
     private final SimulationEnvironment environment;
     private final ObjectMapper mapper;
     @Value("${simulation.inspection-key:}") private String key;
@@ -32,6 +34,9 @@ public class SimulationAdminQueryBoundary extends OncePerRequestFilter {
         String supplied=req.getHeader("X-Simulation-Inspection-Key");
         if(!environment.enabled() || key.length()<32 || supplied==null || !MessageDigest.isEqual(key.getBytes(StandardCharsets.UTF_8),supplied.getBytes(StandardCharsets.UTF_8))){res.setStatus(403);return;}
         if(!"POST".equals(req.getMethod())){res.setStatus(405);return;}
+        Long tenant;
+        try{tenant=Long.valueOf(req.getHeader("X-Simulation-Tenant-Id"));if(tenant<=0||!tenants.existsById(tenant))throw new IllegalArgumentException();}
+        catch(Exception e){res.setStatus(403);return;}
         AdminReadRoutes.Query q;
         try{q=mapper.readValue(req.getInputStream(),AdminReadRoutes.Query.class);AdminReadRoutes.permission(q.method,q.path);}catch(Exception e){res.setStatus(400);return;}
         byte[] bytes=mapper.writeValueAsBytes(q.body==null?Collections.emptyMap():q.body);
@@ -56,7 +61,7 @@ public class SimulationAdminQueryBoundary extends OncePerRequestFilter {
         // Only fixed read handlers can be reached; real service checked the human's live permissions.
         context.setAuthentication(new UsernamePasswordAuthenticationToken("-1",null,Collections.singletonList(new SimpleGrantedAuthority("ROLE_SUPER_ADMIN"))));
         SecurityContextHolder.setContext(context);
-        req.setAttribute(SimulationAdminQueryBoundary.class.getName(),READ_DISPATCH);
-        try{req.getRequestDispatcher(q.path).forward(wrapped,res);}finally{req.removeAttribute(SimulationAdminQueryBoundary.class.getName());SecurityContextHolder.setContext(previous);}
+        req.setAttribute(SimulationAdminQueryBoundary.class.getName(),new VerifiedRead(tenant));
+        try(com.gtcfesk.exchange.tenant.TenantContext.Scope scope=com.gtcfesk.exchange.tenant.TenantContext.open(tenant)){req.getRequestDispatcher(q.path).forward(wrapped,res);}finally{req.removeAttribute(SimulationAdminQueryBoundary.class.getName());SecurityContextHolder.setContext(previous);}
     }
 }

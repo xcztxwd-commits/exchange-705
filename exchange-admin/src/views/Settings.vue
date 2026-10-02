@@ -2,13 +2,24 @@
 import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import request from '@/utils/request'
-import { getAudioUrl } from '@/utils/audioUrl'
-import ShareTemplateSettings from '@/components/ShareTemplateSettings.vue'
+import { useTenantPolicies } from '@/composables/useTenantPolicies'
+import TenantPolicyNotice from '@/components/TenantPolicyNotice.vue'
+const {snapshot,policyError,policyReady,reloadPolicies,editable,policyLabel}=useTenantPolicies('settings')
+import { playProtectedAudio } from '@/utils/audioUrl'
 
 interface ConfigItem {
   key: string
   value: string
   description: string
+}
+
+type RegistrationFieldPolicy = { enabled: boolean; required: boolean }
+const registrationFields = ref<{ phone: RegistrationFieldPolicy; annualIncome: RegistrationFieldPolicy }>({
+  phone: { enabled: true, required: false }, annualIncome: { enabled: true, required: false },
+})
+function setRegistrationEnabled(field: RegistrationFieldPolicy, enabled: boolean) {
+  field.enabled = enabled
+  if (!enabled) field.required = false
 }
 
 const loading = ref(false)
@@ -23,6 +34,16 @@ const mailConfig = ref<ConfigItem[]>([
   { key: 'mail.from', value: '', description: '发件人邮箱' },
 ])
 
+const smsConfig = ref<ConfigItem[]>([
+  { key: 'sms.provider', value: 'disabled', description: '短信供应商' },
+  { key: 'sms.api_key', value: '', description: '供应商密钥（加密存储，未实现真实发送）' },
+  { key: 'sms.template_code', value: '', description: '供应商模板（未验收，不用于登录或注册）' },
+])
+const smsStatus=ref<any>(null), smsBusy=ref(false), smsError=ref(''), smsRequest=ref(''), smsCode=ref('')
+const smsRecipient=ref('+12025550100')
+async function checkSms(){smsError.value='';try{smsStatus.value=await request.get('/admin/config/sms/status')}catch(e:any){smsError.value=e.message||'短信配置状态不可用'}}
+async function testSms(){if(smsBusy.value)return;smsBusy.value=true;smsError.value='';smsRequest.value='';smsCode.value='';try{await checkSms();const r:any=await request.post('/admin/config/sms/test',{recipient:smsRecipient.value,purpose:'CONFIG_TEST'});smsRequest.value=r.requestId;ElMessage.success('仅写入受限本地 sink；未向真实用户发送短信')}catch(e:any){smsError.value=e.message||'本地短信契约未就绪'}finally{smsBusy.value=false}}
+async function consumeSms(){if(smsBusy.value||!smsRequest.value)return;smsBusy.value=true;smsError.value='';try{await request.post('/admin/config/sms/consume',{requestId:smsRequest.value,recipient:smsRecipient.value,purpose:'CONFIG_TEST',code:smsCode.value});smsRequest.value='';smsCode.value='';ElMessage.success('CONFIG_TEST 单次消费通过；不代表真实供应商已验收')}catch(e:any){smsError.value=e.message||'验证码未通过'}finally{smsBusy.value=false}}
 const riskConfig = ref<ConfigItem[]>([
   { key: 'risk.withdraw.min', value: '', description: '最小提现金额' },
   { key: 'risk.withdraw.max', value: '', description: '最大提现金额' },
@@ -35,6 +56,7 @@ const marketConfig = ref<ConfigItem[]>([
   // API基础地址：由后端使用 Forex 行情接口统一配置
 ])
 
+const advancedEntryEnabled = ref(true)
 const tradeKycRequired = ref(true)
 const conversionHours = ref(8)
 const defaultConversionCurrencies = ['USD', 'EUR', 'JPY', 'GBP', 'CNY', 'CHF', 'AUD', 'CAD', 'HKD', 'SGD']
@@ -65,6 +87,7 @@ const domainConfig = ref<ConfigItem[]>([
 ])
 
 const systemConfig = ref<ConfigItem[]>([
+  { key: 'site.name', value: '', description: '平台名称' },
   { key: 'system.timezone', value: 'Europe/London', description: '系统 K 线图时区（如 Europe/London 或 Asia/Shanghai）' },
 ])
 
@@ -78,9 +101,20 @@ const realtimeUpdate = ref({
 const loadConfigs = async () => {
   loading.value = true
   try {
+    await reloadPolicies()
     const res: any = await request.get('/admin/config/list')
+    const registrationConfig: any = await request.get('/admin/config/get', { params: { key: 'registration.fields' } })
+    if (registrationConfig?.value) {
+      const value = JSON.parse(registrationConfig.value)
+      if (typeof value?.phone?.enabled !== 'boolean' || typeof value?.phone?.required !== 'boolean'
+        || typeof value?.annualIncome?.enabled !== 'boolean' || typeof value?.annualIncome?.required !== 'boolean'
+        || value.phone.required && !value.phone.enabled || value.annualIncome.required && !value.annualIncome.enabled)
+        throw new Error('注册字段配置无效')
+      registrationFields.value = value
+    }
     if (Array.isArray(res)) {
       res.forEach((item: any) => {
+        if (item.configKey === 'ui.advanced.enabled') advancedEntryEnabled.value = item.configValue !== 'false'
         if (item.configKey === 'trade.kyc.required') tradeKycRequired.value = item.configValue !== 'false'
         if (item.configKey === 'market.conversion.currencies') conversionCurrencies.value = [...new Set(['USD', ...String(item.configValue || '').split(',').filter(Boolean)])]
         if (item.configKey === 'market.conversion.cache-hours') conversionHours.value = Number(item.configValue) || 8
@@ -88,6 +122,8 @@ const loadConfigs = async () => {
         if (mailItem) {
           mailItem.value = item.configValue || ''
         }
+        const smsItem = smsConfig.value.find((c) => c.key === item.configKey)
+        if (smsItem) smsItem.value = item.configValue || ''
         const riskItem = riskConfig.value.find((c) => c.key === item.configKey)
         if (riskItem) {
           riskItem.value = item.configValue || ''
@@ -110,7 +146,7 @@ const loadConfigs = async () => {
         }
         const systemItem = systemConfig.value.find((c) => c.key === item.configKey)
         if (systemItem) {
-          systemItem.value = item.configValue || 'Europe/London'
+          systemItem.value = item.configValue || (item.configKey === 'system.timezone' ? 'Europe/London' : '')
         }
       })
     }
@@ -123,29 +159,30 @@ const loadConfigs = async () => {
 
 // 上传提示音文件
 const handleSoundUpload = async (configKey: string, file: File) => {
+  if (!editable(configKey)) return
   uploadingSound.value = configKey
   try {
     const formData = new FormData()
     formData.append('file', file)
-    
+
     // 检查文件类型
     if (!file.type.startsWith('audio/')) {
       ElMessage.error('只能上传音频文件')
       return
     }
-    
+
     // 检查文件大小（5MB）
     if (file.size > 5 * 1024 * 1024) {
       ElMessage.error('文件大小不能超过5MB')
       return
     }
-    
+
     const res: any = await request.post('/upload/audio', formData, {
       headers: {
         'Content-Type': 'multipart/form-data'
       }
     })
-    
+
     if (res && res.success && res.url) {
       const soundItem = soundConfig.value.find((c) => c.key === configKey)
       if (soundItem) {
@@ -163,33 +200,15 @@ const handleSoundUpload = async (configKey: string, file: File) => {
 }
 
 // 测试播放提示音
-const testSound = (soundUrl: string) => {
-  if (!soundUrl || soundUrl.trim() === '') {
-    ElMessage.warning('请先上传提示音文件')
-    return
-  }
-  try {
-    // 使用工具函数获取完整的音频URL（生产环境需要完整URL）
-    const fullAudioUrl = getAudioUrl(soundUrl)
-    const audio = new Audio(fullAudioUrl)
-    audio.volume = 0.7
-    audio.play().catch(err => {
-      // 忽略用户未交互的错误（浏览器安全策略）
-      if (err.name !== 'NotAllowedError') {
-        console.error('播放音频失败:', err, 'URL:', fullAudioUrl)
-        ElMessage.error('播放失败: ' + err.message)
-      } else {
-        ElMessage.warning('请先点击页面任意位置后再试听')
-      }
-    })
-  } catch (e: any) {
-    console.error('创建音频对象失败:', e)
-    ElMessage.error('播放失败: ' + e.message)
-  }
+const testSound = async (soundUrl: string) => {
+  if (!soundUrl?.trim()) { ElMessage.warning('请先上传提示音文件'); return }
+  try { await playProtectedAudio(soundUrl) }
+  catch (error: any) { ElMessage.error(error.name === 'NotAllowedError' ? '请先点击页面任意位置后再试听' : (error.message || '音频不可用')) }
 }
 
 // 清除提示音（关闭提示音）
 const clearSound = (configKey: string) => {
+  if (!editable(configKey)) return
   const soundItem = soundConfig.value.find((c) => c.key === configKey)
   if (soundItem) {
     soundItem.value = ''
@@ -198,6 +217,7 @@ const clearSound = (configKey: string) => {
 }
 
 const saveConfigs = async () => {
+  if (!policyReady.value) return
   conversionCurrencies.value = [...new Set(['USD', ...conversionCurrencies.value.map(code => code.trim().toUpperCase())])]
   if (conversionCurrencies.value.length > 30 || conversionCurrencies.value.some(code => !/^[A-Z]{3}$/.test(code))) {
     ElMessage.error('最多选择 30 种货币，请使用三位货币代码')
@@ -207,28 +227,36 @@ const saveConfigs = async () => {
     ElMessage.error('汇率更新间隔请输入 1–168 的整数小时')
     return
   }
+  if (registrationFields.value.phone.required && !registrationFields.value.phone.enabled
+    || registrationFields.value.annualIncome.required && !registrationFields.value.annualIncome.enabled) {
+    ElMessage.error('请先开启字段，再设为必填')
+    return
+  }
   loading.value = true
   try {
     // 过滤掉ws_url配置（前端会自动根据分类选择WebSocket地址）
     const allConfigs = [
+      { key: 'ui.advanced.enabled', value: String(advancedEntryEnabled.value), description: '高级版入口' },
       { key: 'trade.kyc.required', value: String(tradeKycRequired.value), description: '未实名不可交易' },
+      { key: 'registration.fields', value: JSON.stringify(registrationFields.value), description: '注册业务资料字段' },
       { key: 'market.conversion.currencies', value: conversionCurrencies.value.join(','), description: '预缓存币种（兑美元）' },
       { key: 'market.conversion.cache-hours', value: String(conversionHours.value), description: '结算汇率更新间隔（小时）' },
-      ...mailConfig.value, 
-      ...riskConfig.value, 
-      ...marketConfig.value, 
+      ...mailConfig.value,
+      ...smsConfig.value,
+      ...riskConfig.value,
+      ...marketConfig.value,
       ...serviceConfig.value,
       ...soundConfig.value,
       ...domainConfig.value,
       ...systemConfig.value
-    ].filter((c) => c.key !== 'market.alltick.ws_url' && c.key !== 'market.alltick.api_key') // 过滤已废弃的配置项
-    
+    ].filter((c) => editable(c.key) && c.key !== 'market.alltick.ws_url' && c.key !== 'market.alltick.api_key') // 过滤已废弃的配置项
+
     const payload = allConfigs.map((c) => ({
       key: c.key,
       value: c.value,
       description: c.description,
     }))
-    
+
     await request.post('/admin/config/saveBatch', payload)
     ElMessage.success('配置保存成功')
   } catch (e: any) {
@@ -245,18 +273,17 @@ onMounted(() => {
 
 <template>
   <div class="settings-page">
-    <el-card shadow="never">
+    <TenantPolicyNotice :snapshot="snapshot" :error="policyError"/><el-card shadow="never">
       <el-tabs v-model="activeTab">
-        <el-tab-pane label="持仓分享模板" name="share"><ShareTemplateSettings /></el-tab-pane>
         <el-tab-pane label="邮件配置" name="mail">
           <el-form label-width="150px">
             <el-form-item
               v-for="cfg in mailConfig"
               :key="cfg.key"
-              :label="cfg.description"
+              :label="cfg.description + policyLabel(cfg.key)"
             >
               <el-input
-                v-model="cfg.value"
+                v-model="cfg.value" :disabled="!editable(cfg.key)"
                 :type="cfg.key.includes('password') ? 'password' : 'text'"
                 :placeholder="'请输入' + cfg.description"
                 clearable
@@ -268,29 +295,38 @@ onMounted(() => {
 
         <el-tab-pane label="结算汇率" name="conversion">
           <el-form label-width="180px">
-            <el-form-item label="缓存币种（兑美元）">
-              <el-select v-model="conversionCurrencies" multiple filterable allow-create :multiple-limit="30" aria-label="缓存币种（兑美元）" style="width: min(720px, 100%)">
+            <el-form-item :label="'缓存币种（兑美元）' + policyLabel('market.conversion.currencies')">
+              <el-select v-model="conversionCurrencies" :disabled="!editable('market.conversion.currencies')" multiple filterable allow-create :multiple-limit="30" :aria-label="'缓存币种（兑美元）' + policyLabel('market.conversion.currencies')" style="width: min(720px, 100%)">
                 <el-option v-for="[code, name] in currencyOptions" :key="code" :label="`${code} · ${name}`" :value="code" :disabled="code === 'USD'" />
               </el-select>
-              <el-button v-permission="'settings:save'" link @click="conversionCurrencies = [...defaultConversionCurrencies]">恢复默认币种</el-button>
+              <el-button v-permission="'settings:save'" link :disabled="!editable('market.conversion.currencies')" @click="conversionCurrencies = [...defaultConversionCurrencies]">恢复默认币种</el-button>
             </el-form-item>
             <p>美元为基准：1 单位所选币种 = 对应美元金额，USD 固定为 1。默认包含人民币和新加坡元，可搜索选择或输入三位货币代码。现有交易及充值所需汇率仍自动缓存；未被业务使用的取消币种停止预热，旧缓存到期失效。</p>
-            <el-form-item label="汇率更新间隔（小时）">
-              <el-input-number v-model="conversionHours" :min="1" :max="168" :step="1" :precision="0" aria-label="汇率更新间隔（小时）" />
+            <el-form-item :label="'汇率更新间隔（小时）' + policyLabel('market.conversion.cache-hours')">
+              <el-input-number v-model="conversionHours" :disabled="!editable('market.conversion.cache-hours')" :min="1" :max="168" :step="1" :precision="0" :aria-label="'汇率更新间隔（小时）' + policyLabel('market.conversion.cache-hours')" />
             </el-form-item>
             <el-alert type="info" :closable="false" title="法币充值/提现固定换汇缓存：默认 8 小时，范围 1–168 小时，保存后按原始时间戳判断到期。合约保证金、盈亏和权益使用独立的实时汇率，超过 60 秒或行情不可用时暂停相关计算，不使用此长周期缓存。" />
           </el-form>
         </el-tab-pane>
 
+        <el-tab-pane label="版本设置" name="edition">
+          <el-form label-width="180px">
+            <el-form-item :label="'高级版入口' + policyLabel('ui.advanced.enabled')">
+              <el-switch v-permission="'settings:save'" v-model="advancedEntryEnabled"
+                :disabled="loading || !editable('ui.advanced.enabled')" active-text="开启" inactive-text="关闭" />
+            </el-form-item>
+            <el-alert type="info" :closable="false" title="关闭后，经典版「我的」不再显示高级版入口；已进入高级版的用户仍可返回经典版。修改后请保存配置，用户重新进入「我的」时生效。" />
+          </el-form>
+        </el-tab-pane>
         <el-tab-pane label="时区设置" name="timezone">
           <el-form label-width="450px" label-position="left">
             <el-form-item
               v-for="cfg in systemConfig"
               :key="cfg.key"
-              :label="cfg.description"
+              :label="cfg.description + policyLabel(cfg.key)"
             >
               <el-input
-                v-model="cfg.value"
+                v-model="cfg.value" :disabled="!editable(cfg.key)"
                 :placeholder="'请输入' + cfg.description"
                 clearable
                 style="width: 300px;"
@@ -313,21 +349,34 @@ onMounted(() => {
           </el-form>
         </el-tab-pane>
 
+        <el-tab-pane label="注册字段" name="registration">
+          <el-alert type="info" :closable="false" title="邮箱、密码、图形验证码和租户校验始终保留；手机号和年收入默认开启、选填。" />
+          <el-form label-width="140px" style="margin-top: 18px">
+            <el-form-item v-for="(field, name) in registrationFields" :key="name"
+              :label="(name === 'phone' ? '手机号' : '年收入') + policyLabel('registration.fields')">
+              <el-switch v-permission="'settings:save'" :model-value="field.enabled" :disabled="loading || !editable('registration.fields')"
+                active-text="开启" inactive-text="关闭" @update:model-value="setRegistrationEnabled(field, $event)" />
+              <el-checkbox v-model="field.required" style="margin-left: 22px"
+                :disabled="loading || !field.enabled || !editable('registration.fields')">注册必填</el-checkbox>
+            </el-form-item>
+          </el-form>
+        </el-tab-pane>
+
         <el-tab-pane label="风控配置" name="risk">
           <el-form label-width="200px">
-            <el-form-item label="未实名不可交易">
-              <el-switch v-model="tradeKycRequired" :disabled="loading" active-text="开启" inactive-text="关闭" />
+            <el-form-item :label="'未实名不可交易' + policyLabel('trade.kyc.required')">
+              <el-switch v-permission="'settings:save'" v-model="tradeKycRequired" :disabled="loading || !editable('trade.kyc.required')" active-text="开启" inactive-text="关闭" />
             </el-form-item>
-            <el-alert type="info" :closable="false" title="开启后真实账户须通过实名审核才能交易，体验金不豁免；关闭仅取消交易实名门槛，不影响提现和贷款实名要求。保存后生效。" />
+            <el-alert type="info" :closable="false" title="开启后，真实账户必须通过实名审核才能执行交易操作，体验金不豁免；未实名将跳转实名页并弹窗提示。关闭仅取消交易实名门槛，不影响提现、贷款实名要求。保存后生效。" />
           </el-form>
           <el-form label-width="150px">
             <el-form-item
               v-for="cfg in riskConfig"
               :key="cfg.key"
-              :label="cfg.description"
+              :label="cfg.description + policyLabel(cfg.key)"
             >
               <el-input
-                v-model="cfg.value"
+                v-model="cfg.value" :disabled="!editable(cfg.key)"
                 :placeholder="'请输入' + cfg.description"
                 clearable
               />
@@ -340,10 +389,10 @@ onMounted(() => {
             <el-form-item
               v-for="cfg in marketConfig"
               :key="cfg.key"
-              :label="cfg.description"
+              :label="cfg.description + policyLabel(cfg.key)"
             >
               <el-input
-                v-model="cfg.value"
+                v-model="cfg.value" :disabled="!editable(cfg.key)"
                 :type="cfg.key.includes('appcode') || cfg.key.includes('api_key') ? 'password' : 'text'"
                 :placeholder="'请输入' + cfg.description"
                 clearable
@@ -374,10 +423,10 @@ onMounted(() => {
             <el-form-item
               v-for="cfg in serviceConfig"
               :key="cfg.key"
-              :label="cfg.description"
+              :label="cfg.description + policyLabel(cfg.key)"
             >
               <el-input
-                v-model="cfg.value"
+                v-model="cfg.value" :disabled="!editable(cfg.key)"
                 :type="cfg.key.includes('email') ? 'email' : 'text'"
                 :placeholder="'请输入' + cfg.description"
                 clearable
@@ -391,7 +440,7 @@ onMounted(() => {
               <template #title>
                 <div style="line-height: 1.6">
                   <p><strong>客服配置说明：</strong></p>
-                  <p>• <strong>客服链接</strong>：在线客服的URL地址，用户点击后会打开此链接。可以是完整的URL（如 https://example.com）或相对路径</p>
+                  <p>• <strong>客服链接</strong>：只允许运维已授权的 HTTPS 公共域名与端口；不接受无协议地址、相对路径、内网地址或未授权域名</p>
                   <p>• <strong>投诉邮箱</strong>：接收用户投诉的邮箱地址，用户可以在投诉邮箱页面复制此邮箱</p>
                   <p>• 配置保存后，用户端页面将自动显示相应的客服信息</p>
                 </div>
@@ -400,15 +449,23 @@ onMounted(() => {
           </el-form>
         </el-tab-pane>
 
+        <el-tab-pane label="短信契约 / 未正式发送" name="sms">
+          <el-alert type="warning" :closable="false" title="真实供应商未指定，正式发送 blocked。仅 CONFIG_TEST 本地 sink，不用于注册、登录或真实用户；须运维显式启用并预建受限目录。"/>
+          <el-form label-width="180px"><el-form-item label="供应商"><el-select v-model="smsConfig[0]!.value" :disabled="!editable('sms.provider')"><el-option value="disabled" label="关闭"/><el-option value="local-sink" label="本地测试 sink（不外发）"/><el-option value="external-blocked" label="真实供应商待指定 / blocked"/></el-select></el-form-item><el-form-item v-for="cfg in smsConfig.slice(1)" :key="cfg.key" :label="cfg.description+policyLabel(cfg.key)"><el-input v-model="cfg.value" :disabled="!editable(cfg.key)" :type="cfg.key==='sms.api_key'?'password':'text'" autocomplete="off"/></el-form-item></el-form>
+          <p>先保存配置，再查询实际服务端状态。API 返回值和审计均不含验证码或完整号码；仅运维可读受限 sink。</p>
+          <el-button v-permission="'settings:view'" @click="checkSms">核查服务端状态</el-button><p v-if="smsStatus">{{smsStatus.status}}；真实供应商已验收：{{smsStatus.realSupplierVerified?'是':'否'}}</p><el-alert v-if="smsError" :title="smsError" type="error" :closable="false"/>
+          <el-form label-width="180px"><el-form-item label="合成测试号码"><el-input v-model="smsRecipient" maxlength="12" placeholder="+12025550100 至 +12025550199"/></el-form-item><el-button v-permission="'settings:save'" :loading="smsBusy" @click="testSms">仅发送到本地 sink</el-button><template v-if="smsRequest"><p>请求编号 {{smsRequest}}；180 秒过期，单次消费，不外发。</p><el-form-item label="sink 验证码"><el-input v-model="smsCode" type="password" maxlength="6" autocomplete="off"/></el-form-item><el-button v-permission="'settings:save'" :loading="smsBusy" @click="consumeSms">消费 CONFIG_TEST</el-button></template></el-form>
+        </el-tab-pane>
+
         <el-tab-pane label="域名检测" name="domain">
           <el-form label-width="200px">
             <el-form-item
               v-for="cfg in domainConfig"
               :key="cfg.key"
-              :label="cfg.description"
+              :label="cfg.description + policyLabel(cfg.key)"
             >
               <el-input
-                v-model="cfg.value"
+                v-model="cfg.value" :disabled="!editable(cfg.key)"
                 type="textarea"
                 :rows="10"
                 placeholder="请输入域名白名单，每行一个域名&#10;例如：&#10;example.com&#10;www.example.com&#10;*.example.com"
@@ -440,31 +497,31 @@ onMounted(() => {
             <el-form-item
               v-for="cfg in soundConfig"
               :key="cfg.key"
-              :label="cfg.description"
+              :label="cfg.description + policyLabel(cfg.key)"
             >
               <div style="display: flex; gap: 12px; align-items: center; width: 100%;">
                 <el-input
-                  v-model="cfg.value"
+                  v-model="cfg.value" :disabled="!editable(cfg.key)"
                   placeholder="提示音文件URL（上传后自动填充）"
                   clearable
                   style="flex: 1"
                   readonly
                 />
-                <el-upload v-permission="'settings:save'"
+                <el-upload v-permission="'settings:save'" :disabled="!editable(cfg.key)"
                   :http-request="(options: any) => handleSoundUpload(cfg.key, options.file)"
                   :show-file-list="false"
                   accept="audio/*"
                 >
                   <el-button v-permission="'settings:save'"
-                    type="primary" 
-                    :loading="uploadingSound === cfg.key"
+                    type="primary"
+                    :loading="uploadingSound === cfg.key" :disabled="!editable(cfg.key)"
                     size="default"
                   >
                     上传提示音
                   </el-button>
                 </el-upload>
                 <el-button v-permission="'settings:sound_preview'"
-                  type="success" 
+                  type="success"
                   @click="testSound(cfg.value)"
                   :disabled="!cfg.value || cfg.value.trim() === ''"
                 >
@@ -472,8 +529,8 @@ onMounted(() => {
                 </el-button>
                 <el-button v-permission="'settings:save'"
                   v-if="cfg.value && cfg.value.trim() !== ''"
-                  type="danger" 
-                  @click="clearSound(cfg.key)"
+                  type="danger"
+                  @click="clearSound(cfg.key)" :disabled="!editable(cfg.key)"
                   size="default"
                 >
                   清除
@@ -515,7 +572,7 @@ onMounted(() => {
       </el-tabs>
 
       <div style="margin-top: 20px; text-align: center">
-        <el-button v-permission="'settings:save'" type="primary" :loading="loading" @click="saveConfigs">
+        <el-button v-permission="'settings:save'" type="primary" :loading="loading" :disabled="!policyReady" @click="saveConfigs">
           保存配置
         </el-button>
       </div>

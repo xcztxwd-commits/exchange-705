@@ -2,6 +2,14 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { settledShareOrder, shareReturn, shareNumber, historyWindow, coveredCandles, recentShareChart, drawSharePoster, shareCopy, shareTemplates, shareNeedsChart, shareBackgrounds } from './orderShare.ts'
 
+// Only import location and admin price precision may differ across the three clients.
+const rendererSource = url => readFileSync(url, 'utf8').replace(/\r\n/g, '\n')
+  .replace(/from '[^']*shareTemplateDesign\.ts'/, "from './shareTemplateDesign.ts'")
+  .replace("import { formatPrice } from './formatPrice.ts'\n", '')
+  .replace('// Order data stays shared with mobile and PC; admin price display uses three decimals.', '// Kept identical in mobile, PC and admin builds.')
+  .replace(/^  const price = \((?:n|value): number\) => new Intl\.NumberFormat\('en-US', \{ maximumFractionDigits: 16 \}\)\.format\((?:n|value)\)\n/gm, '')
+  .replace(/\bprice\(order\./g, 'formatPrice(order.')
+
 const raw = { id: 3391, symbol: 'USDJPY', status: 'CLOSED', side: 'SELL', profit: -50,
   openPrice: 161.24, closePrice: 161.305, margin: 1000, quantity: 78, fee: 3,
   openTime: '2026-06-19T12:00:00+08:00', closeTime: '2026-06-19T12:53:00+08:00', userId: 'private-user' }
@@ -63,7 +71,7 @@ for (const template of shareTemplates) {
   if (shareBackgrounds[template]) assert.throws(() => drawSharePoster(canvas, order, { ...options, template }, shareCopy('en'), 'DEMO', 'UTC', undefined, chart))
 }
 assert.equal(coveredCandles([{ ...rows[0], volume: 0 }, ...rows.slice(1)], window)[0].volume, 0)
-assert.equal(readFileSync(new URL('./orderShare.ts', import.meta.url), 'utf8'), readFileSync(new URL('../../../exchange-pc/src/utils/orderShare.ts', import.meta.url), 'utf8'))
+assert.equal(rendererSource(new URL('./orderShare.ts', import.meta.url)), rendererSource(new URL('../../../exchange-pc/src/utils/orderShare.ts', import.meta.url)))
 console.log('Order share: settlement, returns, privacy, history coverage and renderer checks passed')
 
 // Old orders must still render against recent market candles, without historical coverage.
@@ -102,11 +110,12 @@ for (const locale of Object.keys(posterLocales)) {
   for (const template of shareTemplates) {
     for (const mode of ['amount', 'rate', 'both', 'none']) {
       printed.length = 0
-      drawSharePoster(canvas, order, { ...options, template, mode }, copy, 'DEMO', 'UTC', undefined, recent, {})
+      drawSharePoster(canvas, { ...order, leverage: 10 }, { ...options, template, mode }, copy, 'DEMO', 'UTC', undefined, recent, {})
+      assert.ok(printed.some(text => text.includes(copy.leverage) && text.includes('10×')), `${locale}/${template}: leverage is required`)
       for (const text of printed) {
         let remainder = text.replaceAll('USDJPY', '').replaceAll('USD/JPY', '').replaceAll('USD / JPY', '').replaceAll('DEMO', '').replaceAll('UTC', '').replaceAll('Test', '').replaceAll('USD', '')
         for (const word of [...dictionary].sort((a, b) => b.length - a.length)) remainder = remainder.replaceAll(word, '')
-        remainder = remainder.replaceAll('1m', '').replace(/[0-9\s.,:·()+#%/*—→T-]/g, '')
+        remainder = remainder.replaceAll('1m', '').replace(/[0-9\s.,:·()+#%/*—→×T-]/g, '')
         assert.equal(remainder, '', `${locale}/${template}/${mode} unlocalized text: ${text}`)
       }
       if (locale !== 'ja') assert.ok(!printed.some(text => /[\u3040-\u30ff]/.test(text)), `${locale}/${template} leaked Japanese`)
@@ -148,5 +157,5 @@ for (const template of shareTemplates) {
 assert.equal(shareCopy('ja').entry, '新規約定価格')
 assert.equal(shareCopy('ja').exit, '決済約定価格')
 assert.equal(shareCopy('ja').pnl, '実現損益')
-assert.equal(readFileSync(new URL('./orderShare.ts', import.meta.url), 'utf8'), readFileSync(new URL('../../../exchange-admin/src/utils/orderShare.ts', import.meta.url), 'utf8'))
+assert.equal(rendererSource(new URL('./orderShare.ts', import.meta.url)), rendererSource(new URL('../../../exchange-admin/src/utils/orderShare.ts', import.meta.url)))
 console.log('Redesign: all 16 templates, both emphasis modes, positive/negative/zero, privacy and Japanese terminology passed')

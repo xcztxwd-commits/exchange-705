@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ProtectedImage from '../../../exchange-frontend/src/components/ProtectedImage.vue'
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import Tabbar from '@/components/Tabbar.vue'
@@ -1405,7 +1406,7 @@ onUnmounted(() => {
       </div>
       <div class="price-display">
         <span v-if="!isMarketClosed" class="price-value" :style="{ color: (change24h?.changePct || 0) >= 0 ? '#85bd00' : '#ef5350' }">
-          {{ formatPrice(currentPrice, 2) }}
+          {{ formatPrice(currentPrice, currentDisplayInfo?.pricePrecision ?? 2) }}
         </span>
         <span v-else class="price-value market-closed" style="color: #999;">{{ localeStore.t('marketClosed') }}</span>
         <span
@@ -1484,7 +1485,7 @@ onUnmounted(() => {
           :class="{ active: symbol.symbol === currentSymbol }"
           @click="selectSymbolFromDropdown(symbol)"
         >
-          <span class="symbol-item-name" style="display:flex;align-items:center;gap:8px"><img v-if="symbol.iconUrl" :src="getImageUrl(symbol.iconUrl)" alt="" width="28" height="28" />{{ displaySymbol(symbol) }}</span>
+          <span class="symbol-item-name" style="display:flex;align-items:center;gap:8px"><ProtectedImage v-if="symbol.iconUrl" :src="getImageUrl(symbol.iconUrl)" alt="" width="28" height="28" />{{ displaySymbol(symbol) }}</span>
           <span
             class="symbol-item-price"
             :style="{ color: (getSymbolChange(symbol.symbol)?.changePct || 0) >= 0 ? '#26a69a' : '#ef5350' }"

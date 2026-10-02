@@ -33,14 +33,14 @@ class AdminPermissionLoginAuditTest extends AdminPermissionIntegrationTest {
         assertEquals(403,call("GET","/api/admin/durations",null,live));
         role.setStatus("active");roles.saveAndFlush(role);
         assertEquals(200,call("GET","/api/admin/durations",null,live));
-        grants.deleteAll(grants.findByRoleId(role.getId()));grants.flush();
+        grants.deleteAllByTenantId(1L, grants.findByTenantIdAndRoleId(1L, role.getId()));grants.flush();
         assertEquals(403,call("GET","/api/admin/durations",null,live));
     }
     @Test void secondLoginDisabledAccountAndPasswordResetInvalidateSessions() throws Exception {
         grant("durations"); String first=login(actor), second=passwordLogin(actor);
         assertEquals(401,call("GET","/api/admin/durations",null,first));
         assertEquals(200,call("GET","/api/admin/durations",null,second));
-        AdminUser fresh=admins.findById(actor.getId()).get(); fresh.setEnabled(false); fresh=admins.saveAndFlush(fresh);
+        AdminUser fresh=admins.findByTenantIdAndId(1L, actor.getId()).get(); fresh.setEnabled(false); fresh=admins.saveAndFlush(fresh);
         assertEquals(401,call("GET","/api/admin/durations",null,second));
         fresh.setEnabled(true); fresh.setPasswordHash(encoder.encode(password+"changed")); admins.saveAndFlush(fresh);
         assertEquals(401,call("GET","/api/admin/durations",null,second));
@@ -62,12 +62,12 @@ class AdminPermissionLoginAuditTest extends AdminPermissionIntegrationTest {
         org.springframework.mock.web.MockHttpServletResponse response=mvc.perform(
             org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete(path).header("Authorization","Bearer "+superToken)).andReturn().getResponse();
         assertFalse(json.readTree(response.getContentAsString()).path("success").asBoolean());
-        assertTrue(roles.findById(role.getId()).isPresent());
+        assertTrue(roles.findByTenantIdAndId(1L, role.getId()).isPresent());
         for(String body:new String[]{"{\"menuIds\":[-123456]}","{\"menuIds\":["+menu("durations:create").getId()+"]}"}) {
             response=mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post(path+"/menus")
                 .header("Authorization","Bearer "+superToken).contentType("application/json").content(body)).andReturn().getResponse();
             assertFalse(json.readTree(response.getContentAsString()).path("success").asBoolean());
-            assertEquals(1,grants.findByRoleId(role.getId()).size());
+            assertEquals(1,grants.findByTenantIdAndRoleId(1L, role.getId()).size());
         }
     }
 }

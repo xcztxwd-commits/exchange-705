@@ -120,7 +120,7 @@ public class MarketInstrumentCatalog {
         else{JsonNode result=lookup(category,query,page);JsonNode documents=result.path("documents");rows=yahooRows(documents,category);
             more=documents.size()==PAGE_SIZE && page<199 && (page+1)*PAGE_SIZE<result.path("lookupTotals").path(yahooType(category)).asInt(10000);}
         Set<String> existing=new HashSet<>(),names=new HashSet<>();
-        for(TradingSymbol symbol:symbols.findAll()){names.add(symbol.getSymbol());try{existing.add(identity(symbol));}catch(RuntimeException ignored){}}
+        for(TradingSymbol symbol:symbols.findAllByTenantId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId())){names.add(symbol.getSymbol());try{existing.add(identity(symbol));}catch(RuntimeException ignored){}}
         for(Map<String,Object> row:rows){String code=(String)row.get("symbol");row.put("added",existing.contains(source+":"+category+":"+code));
             row.put("displayName",ForexDisplayName.of(code,category,(String)row.get("baseCurrency"),(String)row.get("quoteCurrency"),(String)row.get("name")));
             TradingSymbol preview=new TradingSymbol();preview.setSymbol(code);preview.setSourceCategory(category);preview.setBaseCurrency(Objects.toString(row.get("baseCurrency"),code));preview.setQuoteCurrency(Objects.toString(row.get("quoteCurrency"),"USD"));

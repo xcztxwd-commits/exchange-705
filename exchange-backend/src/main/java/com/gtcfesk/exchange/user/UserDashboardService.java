@@ -60,7 +60,7 @@ public class UserDashboardService {
      * 计算用户总资产
      */
     private BigDecimal calculateTotalAssets(Long userId) {
-        List<AssetAccount> accounts = assetAccountRepository.findByUserId(userId);
+        List<AssetAccount> accounts = assetAccountRepository.findByTenantIdAndUserId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), userId);
         BigDecimal total = BigDecimal.ZERO;
         
         for (AssetAccount account : accounts) {
@@ -76,7 +76,7 @@ public class UserDashboardService {
      * 计算指定日期的收益（已发放的收益）
      */
     private BigDecimal calculateTodayYield(Long userId, LocalDate date) {
-        List<FinancialYieldRecord> records = yieldRecordRepository.findByUserIdOrderByYieldDateDesc(userId);
+        List<FinancialYieldRecord> records = yieldRecordRepository.findByTenantIdAndUserIdOrderByYieldDateDesc(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), userId);
         
         BigDecimal totalYield = BigDecimal.ZERO;
         for (FinancialYieldRecord record : records) {

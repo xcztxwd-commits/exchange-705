@@ -1,7 +1,8 @@
+import { drawShareDesign, type ShareDesign } from '../../../exchange-frontend/src/utils/shareTemplateDesign.ts'
 import { posterLocales, shareLanguage } from './orderShareLocales.ts'
 import { formatPrice } from './formatPrice.ts'
 export { shareLanguage } from './orderShareLocales.ts'
-// Kept identical in mobile, PC and admin builds.
+// Order data stays shared with mobile and PC; admin price display uses three decimals.
 export type ShareKind = 'contract' | 'option'
 export const shareTemplates = ['light', 'dark', 'chart', 'gold', 'globe', 'architecture', 'city', 'referenceGold', 'referenceWhite', 'referenceTerminal', 'launch', 'aurora', 'racing', 'receipt', 'journal', 'voyage'] as const
 export type ShareTemplate = typeof shareTemplates[number]
@@ -13,12 +14,14 @@ export const shareBackgrounds: Partial<Record<ShareTemplate, string>> = {
 export type ShareFocus = 'amount' | 'rate'
 export type ShareMode = 'amount' | 'rate' | 'both' | 'none'
 export interface ShareOrder {
+  userName?: string; userEmail?: string
   id: string; symbol: string; kind: ShareKind; buy: boolean
   profit: number; openPrice: number; closePrice: number
   quantityUnit?: string; quantity: number | null; leverage: number | null; margin: number | null; fee: number | null; amount: number | null
   openTime: string; closeTime: string; currency: string
 }
 export interface ShareOptions {
+  design?: ShareDesign; language?: string; personal?: boolean
   template: ShareTemplate; mode: ShareMode; focus?: ShareFocus; quantity: boolean; capital: boolean
   fee: boolean; leverage: boolean; orderId: boolean; openTime: boolean
 }
@@ -193,7 +196,8 @@ export function recentShareChart(rows: Array<Record<string, unknown>>, source = 
 }
 
 export function drawSharePoster(canvas: HTMLCanvasElement, order: ShareOrder, options: ShareOptions,
-  copy: ShareCopy, brand: string, timezone: string, qr?: HTMLImageElement, chart?: ShareChart, background?: HTMLImageElement): void {
+  copy: ShareCopy, brand: string, timezone: string, qr?: HTMLImageElement, chart?: ShareChart, background?: HTMLImageElement, assets?: Map<string, HTMLImageElement>): void {
+  if (options.design) { drawShareDesign(canvas, options.design, order, copy, brand, timezone, shareReturn(order), options.mode, options.language || 'en', options.personal, qr, background, assets); return }
   const theme = options.template, review = shareNeedsChart(theme)
   if (review && !chart?.candles.length) throw new Error(copy.chartError)
   if (shareBackgrounds[theme] && !background) throw new Error(copy.backgroundError)
@@ -270,11 +274,10 @@ export function drawSharePoster(canvas: HTMLCanvasElement, order: ShareOrder, op
   text(copy.closed, 393, 60, 12, muted, 500, 108)
   text(copy.record, 39, 89, 12, muted, 600)
   text(order.symbol, 37, 146, 43, ink, 750)
-  const side = order.kind === 'contract' ? (order.buy ? copy.buy : copy.sell) : order.buy ? copy.up : copy.down
+  const direction = order.kind === 'contract' ? (order.buy ? copy.buy : copy.sell) : order.buy ? copy.up : copy.down
+  const side = `${direction}${order.kind === 'contract' ? ` · ${copy.leverage} ${order.leverage === null ? '—' : shareNumber(order.leverage, 0) + '×'}` : ''}`
   // Direction does not reuse profit colors: a short trade can make a profit.
   text(side, 39, 177, 16, muted, 500)
-  if (options.leverage && order.kind === 'contract' && order.leverage !== null)
-    text(`${copy.leverage} ${shareNumber(order.leverage, 0)}`, 300, 177, 13, muted, 500, 200)
 
   const amountVisible = options.mode === 'amount' || options.mode === 'both'
   const rateVisible = options.mode === 'rate' || options.mode === 'both'
@@ -317,11 +320,10 @@ export function drawSharePoster(canvas: HTMLCanvasElement, order: ShareOrder, op
     ctx.fillStyle = shade; ctx.fillRect(0, 440, 540, 204)
   }
   line(42, 460, 498, 460, scenic ? '#ffffff55' : border)
-  const price = (n: number) => formatPrice(n)
   text(copy.entry, 42, 484, 12, priceMuted, 500, 212)
   text(copy.exit, 287, 484, 12, priceMuted, 500, 211)
-  text(price(order.openPrice), 42, 514, 25, priceInk, 600, 212)
-  text(price(order.closePrice), 287, 514, 25, priceInk, 600, 211)
+  text(formatPrice(order.openPrice), 42, 514, 25, priceInk, 600, 212)
+  text(formatPrice(order.closePrice), 287, 514, 25, priceInk, 600, 211)
   if (review && chart) {
     const candles = chart.candles, first = candles[0]!.timestamp, last = candles[candles.length - 1]!.timestamp + chart.step
     const low = Math.min(...(chart.recent ? [] : [order.openPrice, order.closePrice]), ...candles.map(c => c.low))
@@ -402,7 +404,8 @@ function drawDistinctPoster(canvas: HTMLCanvasElement, order: ShareOrder, option
   const polygon = (points: number[][], fill: string) => {
     ctx.beginPath(); points.forEach(([x, y], i) => i ? ctx.lineTo(x!, y!) : ctx.moveTo(x!, y!)); ctx.closePath(); ctx.fillStyle = fill; ctx.fill()
   }
-  const side = order.kind === 'contract' ? order.buy ? copy.buy : copy.sell : order.buy ? copy.up : copy.down
+  const direction = order.kind === 'contract' ? order.buy ? copy.buy : copy.sell : order.buy ? copy.up : copy.down
+  const side = `${direction}${order.kind === 'contract' ? ` · ${copy.leverage} ${order.leverage === null ? '—' : shareNumber(order.leverage, 0) + '×'}` : ''}`
   const amountVisible = options.mode === 'amount' || options.mode === 'both'
   const rateVisible = options.mode === 'rate' || options.mode === 'both'
   const rate = shareReturn(order), currency = order.currency || copy.units
@@ -422,13 +425,12 @@ function drawDistinctPoster(canvas: HTMLCanvasElement, order: ShareOrder, option
     const color = theme === 'racing' ? secondary.color === '#17804c' ? '#69d8a3' : secondary.color === '#c43d4b' ? '#ff828b' : '#b2c1ce' : secondary.color
     t(secondary.value, x, y, Math.min(size, primarySize * .58), color, 700, width, align)
   }
-  const price = (value: number) => formatPrice(value)
   const pricePair = (x: number, y: number, width: number, fill = ink, caption = muted) => {
     const cell = (width - 26) / 2
     t(copy.entry, x, y, 11, caption, 500, cell)
-    t(price(order.openPrice), x, y + 29, 23, fill, 600, cell)
+    t(formatPrice(order.openPrice), x, y + 29, 23, fill, 600, cell)
     t(copy.exit, x + cell + 26, y, 11, caption, 500, cell)
-    t(price(order.closePrice), x + cell + 26, y + 29, 23, fill, 600, cell)
+    t(formatPrice(order.closePrice), x + cell + 26, y + 29, 23, fill, 600, cell)
   }
   const footer = (x: number, y: number, width: number, fill = muted) => {
     const available = width - (qr ? 68 : 0)

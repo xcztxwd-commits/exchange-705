@@ -23,3 +23,22 @@ export function moveColumn<T>(columns: T[], from: number, to: number): T[] {
   result.splice(to, 0, column!)
   return result
 }
+
+// The two entry points inject separate credentials and endpoints. The table never imports Pinia.
+export const TABLE_PREFERENCES = Symbol('table-preferences')
+export type TablePreferenceClient = {
+  identityKey: () => string
+  load: (table: string, signal: AbortSignal) => Promise<unknown>
+  save: (table: string, columns: ColumnPreference[], signal: AbortSignal) => Promise<unknown>
+}
+export function preferenceRequests() {
+  let current: AbortController | undefined
+  return {
+    next() {
+      current?.abort()
+      const controller = new AbortController(); current = controller
+      return { signal: controller.signal, active: () => current === controller && !controller.signal.aborted }
+    },
+    stop() { current?.abort(); current = undefined },
+  }
+}

@@ -17,14 +17,14 @@ public class OptionDurationService {
      * 获取启用的期限选项列表
      */
     public List<OptionDuration> getEnabledDurations() {
-        return optionDurationRepository.findByEnabledTrueOrderBySortOrderAsc();
+        return optionDurationRepository.findByTenantIdAndEnabledTrueOrderBySortOrderAsc(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId());
     }
 
     /**
      * 获取所有期限选项列表
      */
     public List<OptionDuration> getAllDurations() {
-        return optionDurationRepository.findAllByOrderBySortOrderAsc();
+        return optionDurationRepository.findAllByTenantIdOrderBySortOrderAsc(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId());
     }
 }
 

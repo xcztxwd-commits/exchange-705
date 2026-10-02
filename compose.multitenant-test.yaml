@@ -1,0 +1,28 @@
+name: mt705-20260929-test
+services:
+  mysql:
+    image: mysql:5.7
+    container_name: mt705-20260929-test-mysql
+    labels:
+      com.gtcfesk.multitenant.test: "true"
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MT_TEST_MYSQL_PASSWORD:?Use scripts/multitenant/mysql_migration.py rehearse}
+      MYSQL_DATABASE: mt705_fixture
+    command: ["--character-set-server=utf8mb4", "--collation-server=utf8mb4_unicode_ci", "--sql-mode=STRICT_TRANS_TABLES,NO_ENGINE_SUBSTITUTION"]
+    ports:
+      - "127.0.0.1:64029:3306"
+    volumes:
+      - mysql-test-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "MYSQL_PWD=$$MYSQL_ROOT_PASSWORD mysqladmin -uroot ping --silent"]
+      interval: 2s
+      timeout: 3s
+      retries: 60
+    restart: "no"
+volumes:
+  mysql-test-data:
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: 10.235.73.0/24

@@ -1,26 +1,30 @@
 import { computed, onMounted, onUnmounted, ref, watch, type Ref } from 'vue'
 import { useAuthStore } from '@/store/auth'
+import { useTrialWallet } from './useTrialWallet'
+import { accountMode } from './accountMode'
+import { selectedAvailable, fundingPositions, type FundingSource } from './trialLifecycle'
 import { useMarketStore } from '@/store/market'
 import request from '@/utils/request'
 import marketWebSocket from '@/utils/marketWebSocket'
 import { contractMargin, estimateLiquidationPrice, quantityFromAllocation, validQuantity, decimalProduct, decimalSum } from './contract'
 
 export function useOrderSizing(input: {
-  catalog: Ref<any[]>; quantity: Ref<number>; leverage: Ref<number>; available: Ref<number>; active: Ref<boolean>;
+  fundingSource?: Ref<FundingSource>; catalog: Ref<any[]>; quantity: Ref<number>; leverage: Ref<number>; available: Ref<number>; active: Ref<boolean>;
   symbol: Ref<string>; price: Ref<number>; lotSize: Ref<number>; feePerLot: Ref<number>; currency: Ref<string>;
 }) {
   const auth = useAuthStore()
-  const market = useMarketStore()
+  const market = useMarketStore(), wallet = useTrialWallet()
+  const source = input.fundingSource || ref<FundingSource>('CONTRACT')
   const positions = ref<any[]>([])
   const loadedAt = ref(0)
   const now = ref(Date.now())
   const requestedPercent = ref<number | null>(null)
   let writingQuantity = false
-  let lastAttempt = 0
+  let lastAttempt = 0, disposed = false
   let requestVersion = 0
   let pending: Promise<void> | null = null
   let timer: ReturnType<typeof setInterval> | undefined
-  const accountReady = computed(() => !!auth.token && loadedAt.value > 0 && now.value - loadedAt.value < 30000)
+  const accountReady = computed(() => !!auth.token && wallet.ready && loadedAt.value > 0 && performance.now() - loadedAt.value < 30000 && (source.value !== 'TRIAL' || wallet.state.eligible))
   const conversionRate = computed(() => {
     void now.value
     return market.getConversionRate(input.symbol.value, input.currency.value)
@@ -54,34 +58,35 @@ export function useOrderSizing(input: {
   watch([costPerLot, input.available, canAllocate], applyAllocation)
   watch(input.symbol, () => { requestedPercent.value = null }, { flush: 'sync' })
 
+  let accountAbort: AbortController | null = null
   async function refreshAccount() {
-    if (!auth.token || !input.active.value) return
+    if (disposed || !auth.token || !input.active.value || document.visibilityState !== 'visible') return
     if (pending) return pending
-    lastAttempt = Date.now()
-    const token = auth.token
-    const version = ++requestVersion
+    lastAttempt = performance.now()
+    const token = auth.token, funding = source.value, mode = accountMode(), version = ++requestVersion
+    const controller = new AbortController(); accountAbort = controller
     pending = (async () => {
       try {
-        const [account, orders]: any[] = await Promise.all([
-          request.get('/trade/contract/balance'),
-          request.get('/trade/contract/orders', { params: { status: 'OPEN' } }),
+        const [, orders]: any[] = await Promise.all([
+          wallet.refresh(),
+          request.get('/trade/contract/orders', { params: { status: 'OPEN' }, signal: controller.signal }),
         ])
-        if (version !== requestVersion || auth.token !== token) return
-        const available = Number(account?.available ?? account?.balance)
-        if (account?.success === false || !Number.isFinite(available) || !Array.isArray(orders?.list) || orders?.success === false) throw new Error('Invalid account snapshot')
-        positions.value = orders.list.filter((order: any) => order.status === 'OPEN')
+        if (version !== requestVersion || auth.token !== token || source.value !== funding || accountMode() !== mode) return
+        const available = selectedAvailable(wallet.snapshot, funding, wallet.state)
+        if (!wallet.ready || !Number.isFinite(available) || !Array.isArray(orders?.list) || orders?.success === false) throw new Error('Invalid account snapshot')
+        positions.value = fundingPositions(orders.list, funding)
         input.available.value = available
-        loadedAt.value = Date.now()
+        loadedAt.value = performance.now()
         now.value = Date.now()
-
       } catch {
-        if (version === requestVersion) loadedAt.value = 0
-      } finally {
-        if (version === requestVersion) pending = null
-      }
+        if (version === requestVersion) { loadedAt.value = 0; input.available.value = NaN }
+      } finally { if (version === requestVersion) { pending = null; accountAbort = null } }
     })()
     return pending
   }
+  watch([() => wallet.snapshot, () => wallet.state.available, () => wallet.state.eligible], () => {
+    input.available.value = selectedAvailable(wallet.snapshot, source.value, wallet.state)
+  }, { flush: 'sync' })
 
   watch([positions, input.catalog], () => {
     const names = new Set(positions.value.map(order => order.symbol))
@@ -90,7 +95,7 @@ export function useOrderSizing(input: {
 
   const liquidation = computed(() => {
     const unavailable = { buy: null, sell: null }
-    if (!orderReady.value) return unavailable
+    if (!orderReady.value || positions.value.some(order => order.fundingSource == null && Number(order.trialReserved) > 0)) return unavailable
     const livePositions = positions.value.map(order => ({
       ...order, quantity: Number(order.quantity), openPrice: Number(order.openPrice),
       currentPrice: market.getQuoteStatus(order.symbol, now.value) === 'available' ? Number(market.priceMap[order.symbol]?.price) : NaN,
@@ -106,7 +111,10 @@ export function useOrderSizing(input: {
     }
   })
 
-  watch([() => auth.token, input.active], () => {
+  watch([() => auth.token, () => auth.user?.id, () => auth.user?.tenantId, input.active, source], () => {
+    accountAbort?.abort()
+    requestedPercent.value = null
+    input.available.value = NaN
     requestVersion++
     pending = null
     loadedAt.value = 0
@@ -119,14 +127,18 @@ export function useOrderSizing(input: {
   onMounted(() => {
     timer = setInterval(() => {
       now.value = Date.now()
-      if (input.active.value && document.visibilityState === 'visible' && (now.value - lastAttempt >= 15000)) void refreshAccount()
+      if (input.active.value && document.visibilityState === 'visible' && (performance.now() - lastAttempt >= 15000)) void refreshAccount()
     }, 1000)
     window.addEventListener('focus', onFocus)
+    document.addEventListener('visibilitychange', onFocus)
   })
   onUnmounted(() => {
+    disposed = true
+    accountAbort?.abort()
     requestVersion++
     if (timer) clearInterval(timer)
     window.removeEventListener('focus', onFocus)
+    document.removeEventListener('visibilitychange', onFocus)
     marketWebSocket.release('order-sizing')
   })
   return { allocationPercent, setAllocation, canAllocate, orderReady, liquidation, refreshAccount }

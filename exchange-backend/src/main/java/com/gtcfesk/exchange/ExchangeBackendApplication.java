@@ -6,6 +6,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 
 @SpringBootApplication
 @EnableScheduling
+@org.springframework.data.jpa.repository.config.EnableJpaRepositories(repositoryFactoryBeanClass = com.gtcfesk.exchange.tenant.TenantRepositoryFactoryBean.class)
 public class ExchangeBackendApplication {
 
     public static void main(String[] args) {

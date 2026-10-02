@@ -10,11 +10,12 @@ import java.time.LocalDateTime;
 
 @Getter
 @Setter
+@org.hibernate.annotations.Persister(impl = com.gtcfesk.exchange.tenant.TenantEntityPersister.class)
 @Entity
 @Table(name = "financial_yield_record", uniqueConstraints = {
-    @UniqueConstraint(columnNames = {"order_id", "yield_date"})
+    @UniqueConstraint(columnNames={"tenant_id", "order_id", "yield_date"})
 })
-public class FinancialYieldRecord {
+public class FinancialYieldRecord extends com.gtcfesk.exchange.tenant.TenantOwnedEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;

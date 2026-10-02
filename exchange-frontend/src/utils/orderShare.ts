@@ -1,3 +1,4 @@
+import { drawShareDesign, type ShareDesign } from './shareTemplateDesign.ts'
 import { posterLocales, shareLanguage } from './orderShareLocales.ts'
 export { shareLanguage } from './orderShareLocales.ts'
 // Kept identical in mobile, PC and admin builds.
@@ -12,12 +13,14 @@ export const shareBackgrounds: Partial<Record<ShareTemplate, string>> = {
 export type ShareFocus = 'amount' | 'rate'
 export type ShareMode = 'amount' | 'rate' | 'both' | 'none'
 export interface ShareOrder {
+  userName?: string; userEmail?: string
   id: string; symbol: string; kind: ShareKind; buy: boolean
   profit: number; openPrice: number; closePrice: number
   quantityUnit?: string; quantity: number | null; leverage: number | null; margin: number | null; fee: number | null; amount: number | null
   openTime: string; closeTime: string; currency: string
 }
 export interface ShareOptions {
+  design?: ShareDesign; language?: string; personal?: boolean
   template: ShareTemplate; mode: ShareMode; focus?: ShareFocus; quantity: boolean; capital: boolean
   fee: boolean; leverage: boolean; orderId: boolean; openTime: boolean
 }
@@ -192,7 +195,8 @@ export function recentShareChart(rows: Array<Record<string, unknown>>, source = 
 }
 
 export function drawSharePoster(canvas: HTMLCanvasElement, order: ShareOrder, options: ShareOptions,
-  copy: ShareCopy, brand: string, timezone: string, qr?: HTMLImageElement, chart?: ShareChart, background?: HTMLImageElement): void {
+  copy: ShareCopy, brand: string, timezone: string, qr?: HTMLImageElement, chart?: ShareChart, background?: HTMLImageElement, assets?: Map<string, HTMLImageElement>): void {
+  if (options.design) { drawShareDesign(canvas, options.design, order, copy, brand, timezone, shareReturn(order), options.mode, options.language || 'en', options.personal, qr, background, assets); return }
   const theme = options.template, review = shareNeedsChart(theme)
   if (review && !chart?.candles.length) throw new Error(copy.chartError)
   if (shareBackgrounds[theme] && !background) throw new Error(copy.backgroundError)
@@ -269,11 +273,10 @@ export function drawSharePoster(canvas: HTMLCanvasElement, order: ShareOrder, op
   text(copy.closed, 393, 60, 12, muted, 500, 108)
   text(copy.record, 39, 89, 12, muted, 600)
   text(order.symbol, 37, 146, 43, ink, 750)
-  const side = order.kind === 'contract' ? (order.buy ? copy.buy : copy.sell) : order.buy ? copy.up : copy.down
+  const direction = order.kind === 'contract' ? (order.buy ? copy.buy : copy.sell) : order.buy ? copy.up : copy.down
+  const side = `${direction}${order.kind === 'contract' ? ` · ${copy.leverage} ${order.leverage === null ? '—' : shareNumber(order.leverage, 0) + '×'}` : ''}`
   // Direction does not reuse profit colors: a short trade can make a profit.
   text(side, 39, 177, 16, muted, 500)
-  if (options.leverage && order.kind === 'contract' && order.leverage !== null)
-    text(`${copy.leverage} ${shareNumber(order.leverage, 0)}`, 300, 177, 13, muted, 500, 200)
 
   const amountVisible = options.mode === 'amount' || options.mode === 'both'
   const rateVisible = options.mode === 'rate' || options.mode === 'both'
@@ -401,7 +404,8 @@ function drawDistinctPoster(canvas: HTMLCanvasElement, order: ShareOrder, option
   const polygon = (points: number[][], fill: string) => {
     ctx.beginPath(); points.forEach(([x, y], i) => i ? ctx.lineTo(x!, y!) : ctx.moveTo(x!, y!)); ctx.closePath(); ctx.fillStyle = fill; ctx.fill()
   }
-  const side = order.kind === 'contract' ? order.buy ? copy.buy : copy.sell : order.buy ? copy.up : copy.down
+  const direction = order.kind === 'contract' ? order.buy ? copy.buy : copy.sell : order.buy ? copy.up : copy.down
+  const side = `${direction}${order.kind === 'contract' ? ` · ${copy.leverage} ${order.leverage === null ? '—' : shareNumber(order.leverage, 0) + '×'}` : ''}`
   const amountVisible = options.mode === 'amount' || options.mode === 'both'
   const rateVisible = options.mode === 'rate' || options.mode === 'both'
   const rate = shareReturn(order), currency = order.currency || copy.units

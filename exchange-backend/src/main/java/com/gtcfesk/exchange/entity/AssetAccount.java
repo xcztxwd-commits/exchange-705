@@ -9,9 +9,10 @@ import java.time.LocalDateTime;
 
 @Getter
 @Setter
+@org.hibernate.annotations.Persister(impl = com.gtcfesk.exchange.tenant.TenantEntityPersister.class)
 @Entity
-@Table(name = "asset_account", uniqueConstraints = @UniqueConstraint(name = "uk_asset_user_coin", columnNames = {"user_id", "coin"}))
-public class AssetAccount {
+@Table(name = "asset_account", uniqueConstraints = @UniqueConstraint(name = "uk_asset_user_coin", columnNames={"tenant_id", "user_id", "coin"}))
+public class AssetAccount extends com.gtcfesk.exchange.tenant.TenantOwnedEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

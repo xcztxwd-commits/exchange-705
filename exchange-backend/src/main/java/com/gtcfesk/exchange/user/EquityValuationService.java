@@ -79,7 +79,7 @@ public class EquityValuationService {
     public Batch prepare(List<Long> ids) {
         Batch batch=new Batch();
         if(ids.isEmpty()) return batch;
-        jdbc.query("select distinct symbol,quote_currency,quote_source from contract_order where status='OPEN' and user_id in ("+placeholders(ids)+")",
+        jdbc.query("select distinct symbol,quote_currency,quote_source from contract_order where tenant_id="+com.gtcfesk.exchange.tenant.TenantContext.requireTenantId()+" and status='OPEN' and user_id in ("+placeholders(ids)+")",
                 rs -> {
                     String symbol=rs.getString(1), currency=rs.getString(2), source=rs.getString(3);
                     batch.quotes.computeIfAbsent(symbol,k->snapshot(()->market.snapshotPrice(k)));
@@ -99,10 +99,10 @@ public class EquityValuationService {
         Map<Long,Value> values=new LinkedHashMap<>();
         ids.forEach(id->values.put(id,new Value(id,observedAt)));
         if(ids.isEmpty()) return values;
-        String users=" user_id in ("+placeholders(ids)+")";
-        snapshot.query("select user_id,available,frozen from asset_account where upper(coin) in ('FUND','CONTRACT','OPTION') and"+users,
+        String users=" tenant_id="+com.gtcfesk.exchange.tenant.TenantContext.requireTenantId()+" and user_id in ("+placeholders(ids)+")";
+        snapshot.query("select user_id,available,frozen from asset_account where tenant_id="+com.gtcfesk.exchange.tenant.TenantContext.requireTenantId()+" and upper(coin) in ('FUND','CONTRACT','OPTION') and"+users,
                 rs->{ Value v=values.get(rs.getLong(1)); v.add("wallet_balance",rs.getBigDecimal(2)); v.add("wallet_balance",rs.getBigDecimal(3)); },ids.toArray());
-        List<ContractOrder> orders=snapshot.query("select id,user_id,symbol,side,quantity,open_price,lot_size,leverage,fee,quote_currency,quote_source from contract_order where status='OPEN' and"+users,
+        List<ContractOrder> orders=snapshot.query("select id,user_id,symbol,side,quantity,open_price,lot_size,leverage,fee,quote_currency,quote_source from contract_order where tenant_id="+com.gtcfesk.exchange.tenant.TenantContext.requireTenantId()+" and status='OPEN' and"+users,
                 new BeanPropertyRowMapper<>(ContractOrder.class),ids.toArray());
         for(ContractOrder order:orders) {
             Value v=values.get(order.getUserId());
@@ -111,7 +111,7 @@ public class EquityValuationService {
             v.evidence.put("contract_"+order.getId(),input);
             contract(v,order,batch,observedAt,maxAgeMs);
         }
-        snapshot.query("select user_id,amount from option_order where status='TRADING' and"+users,
+        snapshot.query("select user_id,amount from option_order where tenant_id="+com.gtcfesk.exchange.tenant.TenantContext.requireTenantId()+" and status='TRADING' and"+users,
                 rs->{ Value v=values.get(rs.getLong(1)); BigDecimal cost=rs.getBigDecimal(2);
                     if(cost==null || cost.signum()<=0)v.missing("option_unrealized_pnl","INVALID_OPTION_COST");
                     else v.evidence.put("costValuedOptionPrincipal",((BigDecimal)v.evidence.getOrDefault("costValuedOptionPrincipal",BigDecimal.ZERO)).add(cost));
@@ -125,7 +125,7 @@ public class EquityValuationService {
             v.evidence.put("loan_"+loan.getId(),input);loan(v,loan,at);
         }
         // Generated contractual daily yield has no rejection/approval path; payout only transfers it to cash.
-        snapshot.query("select user_id,daily_yield from financial_yield_record where status='PENDING' and"+users,
+        snapshot.query("select user_id,daily_yield from financial_yield_record where tenant_id="+com.gtcfesk.exchange.tenant.TenantContext.requireTenantId()+" and status='PENDING' and"+users,
                 rs->{values.get(rs.getLong(1)).add("receivables",rs.getBigDecimal(2));},ids.toArray());
         values.values().forEach(v->{v.evidence.put("quoteBatchId",batch.id);v.evidence.put("method","server_execution_last_price;contract_v1;option_principal_cost_not_fair_value;loan_used_whole_days_v1;recorded_effective_unpaid_overdue_fee;confirmed_pending_yield");v.finish();});
         return values;

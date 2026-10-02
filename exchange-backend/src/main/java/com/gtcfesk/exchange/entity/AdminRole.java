@@ -8,17 +8,18 @@ import java.time.LocalDateTime;
 
 @Getter
 @Setter
+@org.hibernate.annotations.Persister(impl = com.gtcfesk.exchange.tenant.TenantEntityPersister.class)
 @Entity
 @Table(name = "admin_role")
-public class AdminRole {
+public class AdminRole extends com.gtcfesk.exchange.tenant.TenantOwnedEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "role_name", nullable = false, unique = true, length = 50)
+    @Column(name = "role_name", nullable = false, length = 50)
     private String roleName;
 
-    @Column(name = "role_code", nullable = false, unique = true, length = 50)
+    @Column(name = "role_code", nullable = false, length = 50)
     private String roleCode;
 
     @Column(length = 200)

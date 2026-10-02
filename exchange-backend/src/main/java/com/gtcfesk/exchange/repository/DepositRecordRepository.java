@@ -10,13 +10,19 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 @Repository
-public interface DepositRecordRepository extends JpaRepository<DepositRecord, Long>, org.springframework.data.jpa.repository.JpaSpecificationExecutor<DepositRecord> {
-    java.util.Optional<DepositRecord> findByCreatedByTypeAndCreatedByIdAndIdempotencyKey(String type, Long id, String key);
+public interface DepositRecordRepository extends com.gtcfesk.exchange.tenant.TenantRepository<DepositRecord, Long> {
+    @org.springframework.transaction.annotation.Transactional(readOnly=true)
+    @org.springframework.data.jpa.repository.Lock(javax.persistence.LockModeType.PESSIMISTIC_READ)
+    java.util.Optional<DepositRecord> findByTenantIdAndCreatedByTypeAndCreatedByIdAndIdempotencyKey(Long tenantId, String type, Long id, String key);
 
-    List<DepositRecord> findByUserIdOrderByCreatedAtDesc(Long userId);
-    List<DepositRecord> findByStatusOrderByCreatedAtDesc(String status);
+    @org.springframework.data.jpa.repository.Lock(javax.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("select d from DepositRecord d where d.tenantId=:#{T(com.gtcfesk.exchange.tenant.TenantContext).requireTenantId()} and d.id=:id")
+    java.util.Optional<DepositRecord> lockById(@Param("id") Long id);
+
+    List<DepositRecord> findByTenantIdAndUserIdOrderByCreatedAtDesc(Long tenantId, Long userId);
+    List<DepositRecord> findByTenantIdAndStatusOrderByCreatedAtDesc(Long tenantId, String status);
     
-    @Query("SELECT SUM(d.amount) FROM DepositRecord d WHERE (d.source IS NULL OR d.source <> 'ADMIN_MANUAL') AND d.status = :status AND d.createdAt >= :start AND d.createdAt <= :end")
+    @org.springframework.data.jpa.repository.Query("SELECT SUM(d.amount) FROM DepositRecord d WHERE d.tenantId = :#{T(com.gtcfesk.exchange.tenant.TenantContext).requireTenantId()} AND ((d.source IS NULL OR d.source <> 'ADMIN_MANUAL') AND d.status = :status AND d.createdAt >= :start AND d.createdAt <= :end)")
     java.math.BigDecimal sumAmountByStatusAndCreatedAtBetween(
         @Param("status") String status,
         @Param("start") LocalDateTime start,

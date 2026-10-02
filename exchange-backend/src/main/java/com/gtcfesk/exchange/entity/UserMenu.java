@@ -8,11 +8,12 @@ import java.time.LocalDateTime;
 
 @Getter
 @Setter
+@org.hibernate.annotations.Persister(impl = com.gtcfesk.exchange.tenant.TenantEntityPersister.class)
 @Entity
 @Table(name = "user_menu", uniqueConstraints = {
-    @UniqueConstraint(columnNames = {"user_id", "menu_id"})
+    @UniqueConstraint(columnNames={"tenant_id", "user_id", "menu_id"})
 })
-public class UserMenu {
+public class UserMenu extends com.gtcfesk.exchange.tenant.TenantOwnedEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;

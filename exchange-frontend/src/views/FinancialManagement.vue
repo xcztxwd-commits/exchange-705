@@ -28,7 +28,7 @@
           <div class="product-header">
             <div class="product-name">{{ product.name }}</div>
             <div class="product-image" v-if="product.imageUrl">
-              <img :src="getImageUrl(product.imageUrl)" :alt="localeStore.t('productImage')" @error="handleImageError" />
+              <ProtectedImage :src="getImageUrl(product.imageUrl)" :alt="localeStore.t('productImage')" @error="handleImageError" />
             </div>
           </div>
           <div class="product-info">
@@ -56,6 +56,7 @@
 </template>
 
 <script setup lang="ts">
+import ProtectedImage from '@/components/ProtectedImage.vue'
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import request from '@/utils/request'

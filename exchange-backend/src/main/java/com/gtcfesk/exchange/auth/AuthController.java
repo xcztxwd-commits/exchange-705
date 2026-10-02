@@ -20,6 +20,7 @@ import java.util.Map;
 public class AuthController {
 
     private final AuthService authService;
+    @org.springframework.beans.factory.annotation.Autowired(required=false) private com.gtcfesk.exchange.activity.ActivityService activities;
     private final com.gtcfesk.exchange.security.RegistrationSecurity registrationSecurity;
 
     @lombok.Data
@@ -37,12 +38,16 @@ public class AuthController {
 
     @PostMapping("/login")
     public ResponseEntity<AuthResponse> login(@Validated @RequestBody LoginRequest req) {
-        return ResponseEntity.ok(authService.login(req));
+        AuthResponse response=authService.login(req);
+        if(activities!=null)activities.trigger(Long.valueOf(((Map<?,?>)response.getUser()).get("id").toString()),"LOGIN","AUTH_HOME");
+        return ResponseEntity.ok(response);
     }
 
     @PostMapping("/register")
     public ResponseEntity<AuthResponse> register(@Validated @RequestBody RegisterRequest req) {
-        return ResponseEntity.ok(authService.register(req));
+        AuthResponse response=authService.register(req);
+        if(activities!=null)activities.trigger(Long.valueOf(((Map<?,?>)response.getUser()).get("id").toString()),"LOGIN","AUTH_HOME");
+        return ResponseEntity.ok(response);
     }
 
     @PostMapping("/sendEmailCode")

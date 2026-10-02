@@ -52,7 +52,7 @@ public class LoanPersonalInfoService {
             info.setPhone("SIMULATION"); info.setAddress("SIMULATION — NO REAL LOAN");
             info.setStatus("SIMULATION_EXEMPT"); return info;
         }
-        LoanPersonalInfo info = loanPersonalInfoRepository.findByUserId(userId)
+        LoanPersonalInfo info = loanPersonalInfoRepository.findByTenantIdAndUserId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), userId)
                 .filter(record -> "APPROVED".equals(record.getStatus()))
                 .orElseThrow(() -> new BusinessException("请先完成贷款资料审核"));
         validateForReview(info);
@@ -62,7 +62,7 @@ public class LoanPersonalInfoService {
     @Transactional
     public LoanPersonalInfo submitPersonalInfo(Long userId, String phone, String address, String handheldImage) {
         KycRecord identity = requireApprovedKyc(userId);
-        LoanPersonalInfo info = loanPersonalInfoRepository.findByUserId(userId).orElseGet(LoanPersonalInfo::new);
+        LoanPersonalInfo info = loanPersonalInfoRepository.findByTenantIdAndUserId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), userId).orElseGet(LoanPersonalInfo::new);
         // Legacy identity columns are audit snapshots, never an independent identity source.
         boolean current = matchesIdentity(info, identity) && validContact(info);
         if (current && ("APPROVED".equals(info.getStatus()) || "PENDING".equals(info.getStatus()))) {
@@ -103,7 +103,7 @@ public class LoanPersonalInfoService {
             result.put("data", requireApprovedPersonalInfo(userId)); return result;
         }
         KycRecord identity = identityService.latestRecord(userId).orElse(null);
-        LoanPersonalInfo info = loanPersonalInfoRepository.findByUserId(userId).orElse(null);
+        LoanPersonalInfo info = loanPersonalInfoRepository.findByTenantIdAndUserId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), userId).orElse(null);
         boolean kycVerified = identity != null && "APPROVED".equals(identity.getStatus());
         boolean current = info != null && matchesIdentity(info, identity) && validContact(info);
         Map<String, Object> result = new HashMap<>();

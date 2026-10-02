@@ -26,7 +26,7 @@ public class AdminAnnouncementController {
     @GetMapping("/list")
     @com.gtcfesk.exchange.config.AdminPermission(menu = "announcement", action = "")
     public ResponseEntity<?> getAllAnnouncements() {
-        List<Announcement> announcements = announcementRepository.findAllByOrderByCreatedAtDesc();
+        List<Announcement> announcements = announcementRepository.findAllByTenantIdOrderByCreatedAtDesc(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId());
         return ResponseEntity.ok(announcements);
     }
     
@@ -36,7 +36,7 @@ public class AdminAnnouncementController {
     @GetMapping("/{id}")
     @com.gtcfesk.exchange.config.AdminPermission(menu = "announcement", action = "detail")
     public ResponseEntity<?> getAnnouncement(@PathVariable Long id) {
-        return announcementRepository.findById(id)
+        return announcementRepository.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), id)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }
@@ -50,6 +50,7 @@ public class AdminAnnouncementController {
         Announcement announcement = new Announcement();
         announcement.setTitle(req.getTitle());
         announcement.setContent(req.getContent());
+        announcement.setDisplayAt(req.getDisplayAt());
         announcement.setStatus(req.getStatus() != null ? req.getStatus() : "PUBLISHED");
         announcement.setPriority(req.getPriority() != null ? req.getPriority() : 0);
         announcement.setLanguage(req.getLanguage() != null && !req.getLanguage().trim().isEmpty() ? req.getLanguage() : "en");
@@ -73,7 +74,7 @@ public class AdminAnnouncementController {
             @PathVariable Long id,
             @Valid @RequestBody AnnouncementRequest req) {
         
-        return announcementRepository.findById(id)
+        return announcementRepository.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), id)
                 .map(announcement -> {
                     if (req.getTitle() != null) {
                         announcement.setTitle(req.getTitle());
@@ -94,6 +95,7 @@ public class AdminAnnouncementController {
                     if (req.getCountdownSeconds() != null) {
                         announcement.setCountdownSeconds(req.getCountdownSeconds());
                     }
+                    if (req.getDisplayAt() != null) announcement.setDisplayAt(req.getDisplayAt());
                     announcementRepository.save(announcement);
                     
                     Map<String, Object> result = new HashMap<>();
@@ -106,13 +108,18 @@ public class AdminAnnouncementController {
     /**
      * 删除公告
      */
+    @org.springframework.transaction.annotation.Transactional
     @DeleteMapping("/{id}")
     @com.gtcfesk.exchange.config.AdminPermission(menu = "announcement", action = "delete")
     public ResponseEntity<?> deleteAnnouncement(@PathVariable Long id) {
-        if (announcementRepository.existsById(id)) {
-            announcementRepository.deleteById(id);
+        java.util.Optional<Announcement> existing = announcementRepository.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), id);
+        if (existing.isPresent()) {
+            // Published history and read receipts remain linked; public queries already require PUBLISHED.
+            Announcement announcement = existing.get();
+            announcement.setStatus("HIDDEN");
+            announcementRepository.saveAndFlush(announcement);
             Map<String, Object> result = new HashMap<>();
-            result.put("message", "公告删除成功");
+            result.put("message", "公告已下架，历史及已读记录保留");
             return ResponseEntity.ok(result);
         } else {
             Map<String, Object> result = new HashMap<>();
@@ -123,6 +130,7 @@ public class AdminAnnouncementController {
     
     @Data
     public static class AnnouncementRequest {
+        private java.time.LocalDateTime displayAt;
         private String title;
         private String content;
         private String status; // PUBLISHED, DRAFT, HIDDEN

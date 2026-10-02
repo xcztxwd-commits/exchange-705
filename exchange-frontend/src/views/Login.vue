@@ -1,100 +1,48 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed, watch, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import { useLocaleStore } from '@/store/locale'
 import { useAuthStore } from '@/store/auth'
 import request from '@/utils/request'
+import { loginAccountText, loginText, type LoginReason } from '@/utils/loginFeedback'
 
 const router = useRouter()
 const localeStore = useLocaleStore()
 localeStore.loadLocale()
 const auth = useAuthStore()
 
-const email = ref('')
+const account = ref('')
 const password = ref('')
 const showPwd = ref(false)
 const loading = ref(false)
-// 显示提示消息（与其他页面样式一致）
-function showToastMessage(message: string, type: 'success' | 'error' = 'error') {
-  // 移除之前的提示
-  const existingToasts = document.querySelectorAll('.toast-message')
-  existingToasts.forEach(toast => {
-    if (document.body.contains(toast)) {
-      document.body.removeChild(toast)
-    }
-  })
-  
-  // 创建新的提示
-  const toast = document.createElement('div')
-  toast.className = `toast-message ${type}`
-  toast.textContent = message
-  
-  // 直接设置内联样式，确保样式生效
-  toast.style.cssText = `
-    position: fixed !important;
-    top: 50% !important;
-    left: 50% !important;
-    transform: translate(-50%, -50%) !important;
-    padding: 18px 36px !important;
-    border-radius: 12px !important;
-    font-size: 18px !important;
-    font-weight: 600 !important;
-    z-index: 99999 !important;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3) !important;
-    pointer-events: none !important;
-    white-space: nowrap !important;
-    min-width: 200px !important;
-    text-align: center !important;
-    opacity: 0 !important;
-    transition: opacity 0.3s ease-in-out !important;
-    ${type === 'success' ? 'background: #73b100 !important; color: #fff !important;' : 'background: #ff4444 !important; color: #fff !important;'}
-  `
-  
-  document.body.appendChild(toast)
-  
-  // 强制重排，确保样式应用
-  void toast.offsetHeight
-  
-  // 触发动画 - 使用双重 requestAnimationFrame 确保动画执行
-  requestAnimationFrame(() => {
-    requestAnimationFrame(() => {
-      toast.style.opacity = '1'
-    })
-  })
-  
-  // 自动移除
-  setTimeout(() => {
-    toast.style.opacity = '0'
-    setTimeout(() => {
-      if (document.body.contains(toast)) {
-        document.body.removeChild(toast)
-      }
-    }, 300)
-  }, 3000) // 显示3秒
-}
-
+const feedback = ref<LoginReason | null>(null)
+const feedbackText = computed(() => {
+  const keys = { disabled: 'accountDisabled', network: 'networkError', success: 'loginSuccess' } as const
+  const reason = feedback.value
+  return reason === 'missing' ? loginAccountText(localeStore.locale, 'missing') : reason && reason in keys ? localeStore.t(keys[reason as keyof typeof keys]) : loginText(localeStore.locale, reason || 'failed')
+})
+watch([account, password], () => { if (!loading.value) feedback.value = null })
+let disposed = false
+let redirectTimer: ReturnType<typeof setTimeout> | undefined
+onBeforeUnmount(() => { disposed = true; clearTimeout(redirectTimer) })
 const onSubmit = async () => {
   if (loading.value) return
-  if (!email.value || !password.value) {
-    showToastMessage(localeStore.t('pleaseEnterEmailAndPassword'), 'error')
-    return
-  }
+  if (!account.value.trim() || !password.value) { feedback.value = 'missing'; return }
+  feedback.value = null
   loading.value = true
   try {
     const res: any = await request.post('/auth/login', {
-      account: email.value,
-      password: password.value,
-      loginType: 'email',
+      account: account.value.trim(), password: password.value, loginType: 'account',
     })
+    if (disposed) return
+    if (typeof res?.token !== 'string' || !res.token.trim() || !res.user?.id || res.success === false) throw new Error('Invalid login response')
     auth.setAuth(res.token, res.user)
-    showToastMessage(localeStore.t('loginSuccess'), 'success')
-    setTimeout(() => {
-      router.replace('/home')
-    }, 500)
+    feedback.value = 'success'
+    redirectTimer = setTimeout(() => { void router.replace('/home') }, 500)
   } catch (e: any) {
-    showToastMessage(e?.message || localeStore.t('loginFail'), 'error')
+    if (!disposed) feedback.value = e?.loginReason || 'failed'
   } finally {
-    loading.value = false
+    if (!disposed && feedback.value !== 'success') loading.value = false
   }
 }
 
@@ -121,23 +69,25 @@ const togglePwd = () => {
         </button>
       </div>
 
-      <div class="auth-title">{{ localeStore.t('emailLogin') }}</div>
+      <div class="auth-title">{{ loginAccountText(localeStore.locale, 'title') }}</div>
 
+      <form novalidate @submit.prevent="onSubmit">
       <div class="form-group">
-        <div class="form-label">{{ localeStore.t('emailLogin') }}</div>
-        <input v-model="email" class="input-box" :placeholder="localeStore.t('emailPlaceholder')" type="email" />
+        <label for="login-account" class="form-label">{{ loginAccountText(localeStore.locale, 'title') }}</label>
+        <input id="login-account" autocomplete="username" :disabled="loading" :aria-describedby="feedback ? 'login-feedback' : undefined" :aria-invalid="feedback === 'credentials'" v-model="account" class="input-box" :placeholder="loginAccountText(localeStore.locale, 'placeholder')" type="text" />
       </div>
 
       <div class="form-group">
-        <div class="form-label">{{ localeStore.t('password') }}</div>
+        <label for="login-password" class="form-label">{{ localeStore.t('password') }}</label>
         <div class="input-with-icon">
           <input
+            id="login-password" autocomplete="current-password" :disabled="loading" :aria-describedby="feedback ? 'login-feedback' : undefined" :aria-invalid="feedback === 'credentials'"
             v-model="password"
             class="input-box"
             :placeholder="localeStore.t('passwordPlaceholder')"
             :type="showPwd ? 'text' : 'password'"
           />
-          <button class="input-icon-btn" type="button" @click="togglePwd">
+          <button :aria-label="localeStore.t('password')" :aria-pressed="showPwd" class="input-icon-btn" type="button" @click="togglePwd">
             <svg v-if="showPwd" width="20" height="20" viewBox="0 0 24 24" fill="none">
               <path
                 d="M3 12C3 12 6.5 5 12 5C17.5 5 21 12 21 12C21 12 17.5 19 12 19C6.5 19 3 12 3 12Z"
@@ -169,10 +119,15 @@ const togglePwd = () => {
         <a class="link-primary" @click="router.push('/forgot-password')">{{ localeStore.t('forgotPassword') }}</a>
       </div>
 
-      <button class="primary-btn" :disabled="loading" @click="onSubmit">
+      <div v-if="feedback" id="login-feedback" class="login-feedback" :class="{ success: feedback === 'success' }" :role="feedback === 'success' ? 'status' : 'alert'">
+        <span class="feedback-icon" aria-hidden="true">{{ feedback === 'success' ? '✓' : '!' }}</span>
+        <span>{{ feedbackText }}</span>
+      </div>
+      <button class="primary-btn" type="submit" :disabled="loading" :aria-busy="loading">
         {{ loading ? localeStore.t('pleaseWait') : localeStore.t('login') }}
       </button>
 
+      </form>
       <!-- <div class="section-tip">{{ localeStore.t('noAccountTip') }}</div> -->
     </div>
   </div>
@@ -314,33 +269,29 @@ const togglePwd = () => {
   font-weight: 700;
 }
 
-/* Toast消息样式（与其他页面一致） */
-.toast-message {
-  position: fixed;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  padding: 18px 36px;
+.login-feedback {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  border: 1px solid #f0d6cc;
   border-radius: 12px;
-  font-size: 18px;
-  font-weight: 600;
-  z-index: 99999;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
-  pointer-events: none;
-  white-space: nowrap;
-  min-width: 200px;
-  text-align: center;
+  background: #fff6f2;
+  color: #98452e;
+  font-size: 14px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+  text-align: start;
 }
-
-.toast-message.success {
-  background: #73b100;
-  color: #fff;
-}
-
-.toast-message.error {
-  background: #ff4444;
-  color: #fff;
-}
+.feedback-icon { flex: 0 0 20px; width: 20px; height: 20px; margin-top: 1px; border: 1px solid currentColor; border-radius: 50%; text-align: center; font-weight: 700; line-height: 18px; }
+.login-feedback.success { background: #f3f8ec; border-color: #d5e7bf; color: #4b721e; }
+.input-box[aria-invalid="true"] { border-color: #bd765f; }
+.input-box::-ms-reveal, .input-box::-ms-clear { display: none; }
+.input-with-icon .input-box { padding-inline-end: 44px; }
+.input-icon-btn { left: auto; right: auto; inset-inline-end: 12px; }
+.form-label { display: block; }
+.primary-btn:disabled { opacity: .65; cursor: wait; }
 
 @media (max-width: 520px) {
   .auth-card {

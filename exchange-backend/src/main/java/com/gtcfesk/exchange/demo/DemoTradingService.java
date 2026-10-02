@@ -19,6 +19,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 @Transactional
 public class DemoTradingService {
+    @org.springframework.beans.factory.annotation.Autowired private com.gtcfesk.exchange.control.TenantPolicyService tenantPolicy;
     public static final BigDecimal SEED = new BigDecimal("100000.00000000");
     public static final BigDecimal FEE = new BigDecimal("0.001");
     private final UserAccountRepository users;
@@ -36,7 +37,7 @@ public class DemoTradingService {
     }
     private static BusinessException fail(String message) { return new BusinessException(message); }
     private DemoAccount account(Long userId) {
-        return accounts.findById(userId).orElseThrow(() -> fail("请先开通模拟账户"));
+        return accounts.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), userId).orElseThrow(() -> fail("请先开通模拟账户"));
     }
     private void generation(DemoAccount account, int generation) {
         if (account.generation != generation) throw fail("模拟账户已重置，请刷新后重试");
@@ -50,7 +51,7 @@ public class DemoTradingService {
     }
     public DemoAccount initialize(Long userId) {
         lock(userId);
-        Optional<DemoAccount> existing = accounts.findById(userId);
+        Optional<DemoAccount> existing = accounts.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), userId);
         if (existing.isPresent()) return existing.get();
         DemoAccount account = new DemoAccount(); account.userId = userId; account.cash = SEED;
         accounts.save(account); record(account, "SEED", SEED, null);
@@ -62,7 +63,7 @@ public class DemoTradingService {
     }
     public List<Map<String, Object>> instruments(Long userId) {
         lock(userId);
-        return symbols.findByIsEnabledTrueOrderBySortOrderDesc().stream().filter(DemoTradingService::supported)
+        return symbols.findByTenantIdAndIsEnabledTrueOrderBySortOrderDesc(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId()).stream().filter(DemoTradingService::supported)
             .map(s -> {
                 Map<String, Object> row = new LinkedHashMap<>(); row.put("symbol", s.getSymbol());
                 row.put("base", s.getBaseCurrency()); row.put("quote", quote(ForexQuoteMarketService.marketCode(s)));
@@ -86,19 +87,20 @@ public class DemoTradingService {
         return price.setScale(16, RoundingMode.HALF_UP);
     }
     public DemoOrder buy(Long userId, String key, int generation, String symbol, BigDecimal amount) {
+        tenantPolicy.requireNewBusiness("simulation");
         lock(userId); DemoAccount account = account(userId); generation(account, generation);
         if (amount == null || amount.scale() > 2 || amount.compareTo(BigDecimal.TEN) < 0 || amount.compareTo(SEED) > 0)
             throw fail("模拟买入金额须为 10 至 100000 USDT，最多两位小数");
-        Optional<DemoOrder> existing = orders.findByUserIdAndRequestKey(userId, key);
+        Optional<DemoOrder> existing = orders.findByTenantIdAndUserIdAndRequestKey(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), userId, key);
         if (existing.isPresent()) {
             DemoOrder order = existing.get();
             if (!order.symbol.equals(symbol) || order.amount.compareTo(amount) != 0 || order.generation != generation)
                 throw fail("请求编号已用于其他订单");
             return order;
         }
-        TradingSymbol config = symbols.findBySymbol(symbol).filter(DemoTradingService::supported)
+        TradingSymbol config = symbols.findByTenantIdAndSymbol(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), symbol).filter(DemoTradingService::supported)
             .orElseThrow(() -> fail("该品种暂不支持模拟现货交易"));
-        if (orders.findByUserIdAndStatusOrderByCreatedAtDesc(userId, "OPEN").size() >= 50)
+        if (orders.findByTenantIdAndUserIdAndStatusOrderByCreatedAtDesc(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), userId, "OPEN").size() >= 50)
             throw fail("最多同时持有 50 笔模拟仓位");
         BigDecimal openPrice = price(ForexQuoteMarketService.marketCode(config));
         BigDecimal fee = amount.multiply(FEE).setScale(8, RoundingMode.HALF_UP);
@@ -116,7 +118,7 @@ public class DemoTradingService {
     }
     public DemoOrder close(Long userId, String id, int generation) {
         lock(userId); DemoAccount account = account(userId); generation(account, generation);
-        DemoOrder order = orders.findByIdAndUserId(id, userId).orElseThrow(() -> fail("模拟订单不存在"));
+        DemoOrder order = orders.findByTenantIdAndIdAndUserId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), id, userId).orElseThrow(() -> fail("模拟订单不存在"));
         if (order.generation != generation) throw fail("不能操作已重置账户的订单");
         if ("CLOSED".equals(order.status)) return order; // Retrying a lost response never credits twice.
         BigDecimal price = price(order.marketCode);
@@ -132,7 +134,7 @@ public class DemoTradingService {
         lock(userId); DemoAccount account = account(userId);
         if (key.equals(account.lastResetKey)) return account;
         generation(account, generation);
-        if (!orders.findByUserIdAndStatusOrderByCreatedAtDesc(userId, "OPEN").isEmpty())
+        if (!orders.findByTenantIdAndUserIdAndStatusOrderByCreatedAtDesc(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), userId, "OPEN").isEmpty())
             throw fail("请先卖出全部模拟持仓再重置");
         if (account.lastResetAt != null && account.lastResetAt.plus(Duration.ofHours(24)).isAfter(Instant.now()))
             throw fail("模拟资金每 24 小时仅可重置一次");
@@ -142,7 +144,7 @@ public class DemoTradingService {
     }
     public Map<String, Object> snapshot(Long userId) {
         lock(userId); DemoAccount account = account(userId);
-        List<DemoOrder> open = orders.findByUserIdAndStatusOrderByCreatedAtDesc(userId, "OPEN");
+        List<DemoOrder> open = orders.findByTenantIdAndUserIdAndStatusOrderByCreatedAtDesc(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), userId, "OPEN");
         BigDecimal value = BigDecimal.ZERO, cost = BigDecimal.ZERO; boolean complete = true;
         List<Map<String, Object>> positions = new ArrayList<>();
         for (DemoOrder order : open) {
@@ -163,10 +165,10 @@ public class DemoTradingService {
         result.put("serverTime", Instant.now()); return result;
     }
     public Page<DemoOrder> history(Long userId, int page) {
-        lock(userId); return orders.findByUserIdAndStatus(userId, "CLOSED", page(page));
+        lock(userId); return orders.findByTenantIdAndUserIdAndStatus(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), userId, "CLOSED", page(page));
     }
     public Page<DemoLedger> ledger(Long userId, int page) {
-        lock(userId); return ledger.findByUserId(userId, page(page));
+        lock(userId); return ledger.findByTenantIdAndUserId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), userId, page(page));
     }
     private Pageable page(int page) {
         if (page < 0 || page > 10000) throw fail("分页参数无效");

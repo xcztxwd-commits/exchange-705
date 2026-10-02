@@ -7,9 +7,10 @@ import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import java.util.*;
 import java.util.concurrent.*;
 import static org.junit.jupiter.api.Assertions.*;
+import static com.gtcfesk.exchange.market.MarketSqlFixture.inTenant;
 
 /** Differential final-state and rollback checks against the pre-optimization writer. */
-class SourceCandlesBatchRegressionTest {
+class SourceCandlesBatchRegressionTest extends TenantMarketTestContext {
     ControlHistoryStore store;
     CountingJdbc db;
     static final long NOW=1700000400000L;
@@ -27,9 +28,9 @@ class SourceCandlesBatchRegressionTest {
         DriverManagerDataSource ds=new DriverManagerDataSource(url==null ? "jdbc:h2:mem:"+UUID.randomUUID()+";MODE=MySQL;DB_CLOSE_DELAY=-1" : url,
             url==null?"sa":"root",url==null?"":"performance-test-only");
         db=new CountingJdbc(ds);store=new ControlHistoryStore(db,new DataSourceTransactionManager(ds));
-        db.execute("CREATE TABLE IF NOT EXISTS trading_symbol(id BIGINT PRIMARY KEY)");
+        MarketSqlFixture.schema(db);
         for(long id:new long[]{99001,99002}) {
-            if(db.queryForObject("SELECT COUNT(*) FROM trading_symbol WHERE id=?",Integer.class,id)==0) db.update("INSERT INTO trading_symbol VALUES(?)",id);
+            if(db.queryForObject("SELECT COUNT(*) FROM trading_symbol WHERE id=?",Integer.class,id)==0) db.update("INSERT INTO trading_symbol(id,tenant_id) VALUES(?,1)",id);
         }
         store.migrate();db.update("DELETE FROM market_source_candle WHERE symbol_id IN (99001,99002)");
     }
@@ -46,7 +47,7 @@ class SourceCandlesBatchRegressionTest {
         store.locked(99001,()->{
             for(Map<String,Object> row:rows) {
                 Map<String,Object> copy=new LinkedHashMap<>(row);copy.put("timestamp",ControlHistoryStore.time(row));
-                db.update("INSERT INTO market_source_candle(symbol_id,period,candle_at,body,received_at) VALUES(?,?,?,?,?) "
+                db.update("INSERT INTO market_source_candle(tenant_id,symbol_id,period,candle_at,body,received_at) VALUES(1,?,?,?,?,?) "
                     +"ON DUPLICATE KEY UPDATE body=VALUES(body),received_at=VALUES(received_at)",99001,"1m",ControlHistoryStore.time(row),store.encode(copy),now);
             }return null;
         });
@@ -89,7 +90,7 @@ class SourceCandlesBatchRegressionTest {
     }
     @Test void concurrentIdenticalRetryKeepsOneRowPerKey() throws Exception {
         ExecutorService pool=Executors.newFixedThreadPool(4);
-        try {List<Callable<Void>> jobs=new ArrayList<>();for(int i=0;i<4;i++)jobs.add(()->{store.sourceCandles(99002,"1m",rows(501),NOW);return null;});
+        try {List<Callable<Void>> jobs=new ArrayList<>();for(int i=0;i<4;i++)jobs.add(inTenant(()->{store.sourceCandles(99002,"1m",rows(501),NOW);return null;}));
             for(Future<Void> f:pool.invokeAll(jobs))f.get(20,TimeUnit.SECONDS);
             before(rows(501),NOW);assertEquals(state(99001),state(99002));
         } finally {pool.shutdownNow();}

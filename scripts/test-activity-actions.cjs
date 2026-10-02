@@ -1,5 +1,5 @@
 const assert=require('node:assert/strict');const fs=require('node:fs');const vm=require('node:vm');const {transformSync}=require('../exchange-admin/node_modules/esbuild');
-const source=fs.readFileSync('exchange-frontend/src/utils/activityActions.ts','utf8').replace(/^import .*$/gm,'').replace(/export /g,'');const sandbox={};vm.createContext(sandbox);vm.runInContext(transformSync(source+';globalThis.api={nodeActions,validateActions,runDesignActions}',{loader:'ts',target:'es2020'}).code,sandbox);const {runDesignActions,validateActions,nodeActions}=sandbox.api;
+const source=fs.readFileSync(require('node:path').join(__dirname,'../exchange-frontend/src/utils/activityActions.ts'),'utf8').replace(/^import .*$/gm,'').replace(/export /g,'');const sandbox={};vm.createContext(sandbox);vm.runInContext(transformSync(source+';globalThis.api={nodeActions,validateActions,runDesignActions}',{loader:'ts',target:'es2020'}).code,sandbox);const {runDesignActions,validateActions,nodeActions}=sandbox.api;
 const pages=['gift','detail','success','extra'].map(id=>({id}));
 (async()=>{
  let log=[],active=true;const context=()=>({pages,current:'gift',claimed:false,eligible:true,active:()=>active,call:async(t)=>{log.push(t)},navigate:p=>log.push('page:'+p)});

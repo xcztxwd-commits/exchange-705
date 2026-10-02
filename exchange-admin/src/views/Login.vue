@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, reactive } from 'vue'
+import { ref, reactive, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/store/auth'
 import { ElMessage } from 'element-plus'
@@ -15,6 +15,19 @@ const loginForm = reactive({
 })
 
 const loading = ref(false)
+const changeRequired = computed(() => auth.user?.mustChangePassword === true)
+const passwordForm = reactive({ oldPassword: '', newPassword: '', confirmPassword: '' })
+async function changeInitialPassword() {
+  if (loading.value) return
+  if (passwordForm.newPassword.length < 12 || passwordForm.newPassword !== passwordForm.confirmPassword) { ElMessage.error('新密码至少 12 位且两次输入一致'); return }
+  loading.value = true
+  try {
+    await request.put('/admin/auth/profile/password', { oldPassword: passwordForm.oldPassword, newPassword: passwordForm.newPassword })
+    auth.logout(); Object.assign(passwordForm, { oldPassword: '', newPassword: '', confirmPassword: '' }); loginForm.password = ''
+    ElMessage.success('密码已更新，请重新登录')
+  } catch (error: any) { ElMessage.error(error.message || '密码修改失败') } finally { loading.value = false }
+}
+
 
 const onSubmit = async () => {
   if (loading.value) return
@@ -29,9 +42,10 @@ const onSubmit = async () => {
     const res: any = await request.post('/admin/auth/login', {
       account: loginForm.account,
       password: loginForm.password,
-      loginType: 'email',
+      loginType: 'account',
     })
     auth.setAuth(res.token, res.user)
+    if (res.user?.mustChangePassword) { loginForm.password=''; return }
     ElMessage.success('登录成功')
     // 延迟一下，确保 auth store 更新完成
     setTimeout(() => {
@@ -53,11 +67,18 @@ const onSubmit = async () => {
         <p>交易所管理系统</p>
       </div>
 
-      <el-form :model="loginForm" @submit.prevent="onSubmit">
+      <el-form v-if="changeRequired" @submit.prevent="changeInitialPassword">
+        <el-alert title="首次登录必须修改初始密码，修改前不能访问业务。" type="warning" :closable="false" />
+        <el-form-item label="初始密码"><el-input v-model="passwordForm.oldPassword" type="password" autocomplete="current-password" /></el-form-item>
+        <el-form-item label="新密码"><el-input v-model="passwordForm.newPassword" type="password" autocomplete="new-password" /></el-form-item>
+        <el-form-item label="再次输入"><el-input v-model="passwordForm.confirmPassword" type="password" autocomplete="new-password" /></el-form-item>
+        <el-button native-type="submit" type="primary" :loading="loading">更新密码并重新登录</el-button>
+      </el-form>
+      <el-form v-else :model="loginForm" @submit.prevent="onSubmit">
         <el-form-item>
           <el-input
             v-model="loginForm.account"
-            placeholder="输入账号或邮箱"
+            placeholder="输入后台账号"
             size="large"
             clearable
           >

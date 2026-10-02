@@ -49,8 +49,8 @@ const formRules = {
         // 如果是编辑模式（有id），密码是可选的
         if (formData.value.id) {
           // 编辑时，如果提供了密码，则验证长度
-          if (value && value.trim() && value.length < 6) {
-            callback(new Error('密码长度至少6个字符'))
+          if (value && value.trim() && value.length < 12) {
+            callback(new Error('密码长度至少12个字符'))
           } else {
             callback()
           }
@@ -58,8 +58,8 @@ const formRules = {
           // 新增时，密码必填
           if (!value || !value.trim()) {
             callback(new Error('请输入密码'))
-          } else if (value.length < 6) {
-            callback(new Error('密码长度至少6个字符'))
+          } else if (value.length < 12) {
+            callback(new Error('密码长度至少12个字符'))
           } else {
             callback()
           }

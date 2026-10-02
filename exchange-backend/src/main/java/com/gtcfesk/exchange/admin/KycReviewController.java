@@ -29,6 +29,9 @@ import java.util.stream.Collectors;
 @RequestMapping("/api/admin/kyc")
 @RequiredArgsConstructor
 public class KycReviewController {
+    private void auditControl(String action,String object,String detail,String reason){if(com.gtcfesk.exchange.control.ControlIdentity.isAccess())controlAudit.recordCurrent(action,object,detail,reason); }
+    @javax.persistence.PersistenceContext private javax.persistence.EntityManager em;
+    @org.springframework.beans.factory.annotation.Autowired private com.gtcfesk.exchange.control.ControlAuditService controlAudit;
     
     private final KycRecordRepository kycRecordRepository;
     private final UserAccountRepository userAccountRepository;
@@ -55,15 +58,15 @@ public class KycReviewController {
         
         Page<KycRecord> records;
         if (status != null && !status.isEmpty()) {
-            records = kycRecordRepository.findByStatus(status, pageable);
+            records = kycRecordRepository.findByTenantIdAndStatus(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), status, pageable);
         } else {
-            records = kycRecordRepository.findAll(pageable);
+            records = kycRecordRepository.findAllByTenantId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), pageable);
         }
         
         // 如果指定了代理ID（代理登录或管理员筛选），只返回该代理下级用户的记录
         List<KycRecord> filteredRecords = records.getContent();
         if (targetAgentId != null) {
-            List<UserAccount> subordinates = userAccountRepository.findByParentUserId(targetAgentId);
+            List<UserAccount> subordinates = userAccountRepository.findByTenantIdAndParentUserId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), targetAgentId);
             Set<Long> subordinateUserIds = subordinates.stream()
                     .map(UserAccount::getId)
                     .collect(Collectors.toSet());
@@ -86,7 +89,7 @@ public class KycReviewController {
         
         // 按用户邮箱过滤
         if (userEmail != null && !userEmail.trim().isEmpty()) {
-            Optional<UserAccount> userOpt = userAccountRepository.findByEmail(userEmail.trim());
+            Optional<UserAccount> userOpt = userAccountRepository.findByTenantIdAndEmail(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), userEmail.trim());
             if (userOpt.isPresent()) {
                 Long targetUserId = userOpt.get().getId();
                 filteredRecords = filteredRecords.stream()
@@ -103,6 +106,7 @@ public class KycReviewController {
             Map<String, Object> recordMap = new HashMap<>();
             recordMap.put("id", record.getId());
             recordMap.put("userId", record.getUserId());
+                AdminUserIdentity.put(recordMap, null);
             recordMap.put("realName", record.getRealName());
             recordMap.put("idNumber", record.getIdNumber());
             recordMap.put("idFrontImage", record.getIdFrontImage());
@@ -113,14 +117,14 @@ public class KycReviewController {
             recordMap.put("reviewedAt", record.getReviewedAt());
             
             // 填充代理信息和用户备注
-            UserAccount user = userAccountRepository.findById(record.getUserId()).orElse(null);
+            UserAccount user = userAccountRepository.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), record.getUserId()).orElse(null);
             if (user != null) {
                 // 添加用户备注
-                recordMap.put("userRemark", user.getRemark());
+                AdminUserIdentity.put(recordMap, user);
                 
                 // 填充代理信息
                 if (user.getParentUserId() != null) {
-                    UserAccount agent = userAccountRepository.findById(user.getParentUserId()).orElse(null);
+                    UserAccount agent = userAccountRepository.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), user.getParentUserId()).orElse(null);
                     if (agent != null) {
                         String agentName = (agent.getNickname() != null && !agent.getNickname().isEmpty()) 
                                 ? agent.getNickname() : agent.getEmail();
@@ -133,7 +137,7 @@ public class KycReviewController {
                 }
             } else {
                 recordMap.put("agentInfo", null);
-                recordMap.put("userRemark", null);
+                AdminUserIdentity.put(recordMap, null);
             }
             
             return recordMap;
@@ -204,7 +208,7 @@ public class KycReviewController {
     @GetMapping("/{id}")
     @com.gtcfesk.exchange.config.AdminPermission(menu = "kyc_review", action = "detail")
     public ResponseEntity<?> getKycDetail(@PathVariable Long id) {
-        KycRecord record = kycRecordRepository.findById(id)
+        KycRecord record = kycRecordRepository.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), id)
                 .orElseThrow(() -> new BusinessException("申请不存在"));
         
         Map<String, Object> result = new HashMap<>();
@@ -222,7 +226,7 @@ public class KycReviewController {
             @PathVariable Long id,
             @RequestBody(required = false) Map<String, String> req) {
         
-        KycRecord record = kycRecordRepository.findById(id)
+        KycRecord record = java.util.Optional.ofNullable(com.gtcfesk.exchange.tenant.TenantEntities.find(em,KycRecord.class,id,javax.persistence.LockModeType.PESSIMISTIC_WRITE))
                 .orElseThrow(() -> new BusinessException("申请不存在"));
         
         if (!"PENDING".equals(record.getStatus())) {
@@ -241,15 +245,16 @@ public class KycReviewController {
         
         // 更新申请记录
         record.setStatus("APPROVED");
-        record.setReviewedBy(reviewerId);
+        record.setReviewedBy(com.gtcfesk.exchange.control.ControlIdentity.isAccess()?null:reviewerId);
         record.setReviewedAt(LocalDateTime.now());
         if (req != null && req.containsKey("remark")) {
             record.setReviewRemark(req.get("remark"));
         }
         kycRecordRepository.save(record);
+        auditControl("KYC_"+record.getStatus(),String.valueOf(id),"status="+record.getStatus(),record.getReviewRemark());
         
         // 更新用户实名状态
-        UserAccount user = userAccountRepository.findById(record.getUserId())
+        UserAccount user = userAccountRepository.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), record.getUserId())
                 .orElseThrow(() -> new BusinessException("用户不存在"));
         user.setKycStatus("VERIFIED");
         user.setKycLevel(1);
@@ -270,7 +275,7 @@ public class KycReviewController {
             @PathVariable Long id,
             @RequestBody Map<String, String> req) {
         
-        KycRecord record = kycRecordRepository.findById(id)
+        KycRecord record = java.util.Optional.ofNullable(com.gtcfesk.exchange.tenant.TenantEntities.find(em,KycRecord.class,id,javax.persistence.LockModeType.PESSIMISTIC_WRITE))
                 .orElseThrow(() -> new BusinessException("申请不存在"));
         
         if (!"PENDING".equals(record.getStatus())) {
@@ -294,10 +299,11 @@ public class KycReviewController {
         
         // 更新申请记录
         record.setStatus("REJECTED");
-        record.setReviewedBy(reviewerId);
+        record.setReviewedBy(com.gtcfesk.exchange.control.ControlIdentity.isAccess()?null:reviewerId);
         record.setReviewedAt(LocalDateTime.now());
         record.setReviewRemark(remark);
         kycRecordRepository.save(record);
+        auditControl("KYC_"+record.getStatus(),String.valueOf(id),"status="+record.getStatus(),record.getReviewRemark());
         
         Map<String, Object> result = new HashMap<>();
         result.put("success", true);

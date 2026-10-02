@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { canStartBusiness } from '@/utils/tenantFeatures'
+import ProtectedImage from '@/components/ProtectedImage.vue'
 import { ref, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import request from '@/utils/request'
@@ -167,7 +169,7 @@ onMounted(() => {
       <!-- 产品信息 -->
       <div class="product-info">
         <div class="product-image" v-if="product.imageUrl">
-          <img :src="getImageUrl(product.imageUrl)" :alt="localeStore.t('productImage')" @error="handleImageError" />
+          <ProtectedImage :src="getImageUrl(product.imageUrl)" :alt="localeStore.t('productImage')" @error="handleImageError" />
         </div>
         <div class="product-name">{{ product.name }}</div>
         <div class="product-currency">{{ product.currency }}</div>
@@ -206,7 +208,7 @@ onMounted(() => {
       </div>
 
       <!-- 申购按钮 -->
-      <button class="purchase-btn" @click="showConfirm">{{ localeStore.t('purchase') }}</button>
+      <button v-if="canStartBusiness('financial')" class="purchase-btn" @click="showConfirm">{{ localeStore.t('purchase') }}</button>
 
       <!-- 产品介绍 -->
       <div class="product-description">
@@ -249,7 +251,7 @@ onMounted(() => {
           </div>
         </div>
         <div class="dialog-footer">
-          <button class="confirm-btn" @click="confirmPurchase">{{ localeStore.t('purchase') }}</button>
+          <button v-if="canStartBusiness('financial')" class="confirm-btn" @click="confirmPurchase">{{ localeStore.t('purchase') }}</button>
         </div>
       </div>
     </div>

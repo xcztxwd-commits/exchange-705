@@ -7,10 +7,10 @@ import org.springframework.stereotype.Repository;
 import java.util.List;
 
 @Repository
-public interface UserMenuRepository extends JpaRepository<UserMenu, Long> {
-    List<UserMenu> findByUserId(Long userId);
-    void deleteByUserId(Long userId);
-    void deleteByUserIdAndMenuId(Long userId, Long menuId);
-    boolean existsByUserIdAndMenuId(Long userId, Long menuId);
+public interface UserMenuRepository extends com.gtcfesk.exchange.tenant.TenantRepository<UserMenu, Long> {
+    List<UserMenu> findByTenantIdAndUserId(Long tenantId, Long userId);
+    void deleteByTenantIdAndUserId(Long tenantId, Long userId);
+    void deleteByTenantIdAndUserIdAndMenuId(Long tenantId, Long userId, Long menuId);
+    boolean existsByTenantIdAndUserIdAndMenuId(Long tenantId, Long userId, Long menuId);
 }
 

@@ -20,10 +20,10 @@ assert.deepEqual(moveColumn(columns, 2, 0).map(c => c.id), ['action', 'id', 'ema
 assert.deepEqual(moveColumn(columns, -1, 0), columns)
 assert.equal(mergeColumns(columns.slice(0, 1), [{ id: 'id', visible: false, fixed: '' }])[0].visible, true)
 assert.deepEqual(mergeColumns(columns, []), columns)
-const keys = [], files = []
+const keys = [], files = [], sites = []
 function walk(dir) { for (const entry of fs.readdirSync(dir, { withFileTypes: true })) { const p = path.join(dir, entry.name); if (entry.isDirectory()) walk(p); else if (p.endsWith('.vue')) files.push(p) } }
 walk(fileURLToPath(new URL('../src', import.meta.url)))
-for (const file of files) {
+for (const file of files.sort()) {
   const text = fs.readFileSync(file, 'utf8')
   assert.ok(!/<el-table[\s>]/.test(text), `Unconverted table: ${file}`)
   const ast = parse(text).descriptor.template?.ast
@@ -32,12 +32,22 @@ for (const file of files) {
       const key = node.props.find(p => p.name === 'table-key' || (p.name === 'bind' && p.arg?.content === 'table-key'))
       assert.ok(key, 'Missing table-key: ' + file)
       if (key.name === 'table-key') keys.push(key.value.content)
-      else assert.ok(file.endsWith('AccountInspection.vue') && key.exp.content.includes('kind'), 'Unexpected dynamic table-key: ' + file)
+      sites.push({ file: path.relative(fileURLToPath(new URL('..', import.meta.url)), file).replaceAll('\\', '/'), binding: key.name === 'table-key' ? 'table-key' : ':table-key', key: key.name === 'table-key' ? key.value.content : key.exp.content })
     }
     for (const child of node.children || []) visit(child)
   }
   if (ast) visit(ast)
 }
 assert.equal(new Set(keys).size, keys.length)
-assert.equal(keys.length, 42) // AccountInspection uses a separate dynamic key per data category.
-console.log('PASS: visibility/order/fixed/defaults/schema changes; all 43 tables integrated with distinct keys')
+assert.deepEqual(sites, JSON.parse(fs.readFileSync(new URL('./table-preference-sites.json', import.meta.url), 'utf8')), 'Reviewed table sites changed; review and extend inventory before acceptance')
+const requests = exports.preferenceRequests()
+const first = requests.next(), second = requests.next()
+assert.equal(first.signal.aborted, true); assert.equal(first.active(), false); assert.equal(second.active(), true)
+requests.stop(); assert.equal(second.signal.aborted, true); assert.equal(second.active(), false)
+const component = fs.readFileSync(new URL('../src/components/AdminTable.ts', import.meta.url), 'utf8')
+assert.ok(!component.includes('useAuthStore') && !component.includes('@/utils/request'), 'Shared table must not pull ordinary credentials into independent control')
+assert.ok(component.includes('draft.value = []') && component.includes('ticket.active()') && component.includes('onUnmounted'))
+const independent = fs.readFileSync(new URL('../control/main.ts', import.meta.url), 'utf8')
+assert.ok(independent.includes('/control/table-preferences/') && !independent.includes('pinia') && !independent.includes('useAuthStore'))
+console.log(`PASS: merge/order/visibility/fixed defaults, identity cancellation, two credential domains, ${sites.length} reviewed table sites`)
+

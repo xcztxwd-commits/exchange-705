@@ -1,0 +1,10 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="Graphic">
+<path id="Arrow/Buy" opacity="0" d="M5 4.5H23M19.5 8L23 4.5L19.5 1" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+<path id="Arrow/Sell" opacity="0" d="M19 19.5H1M4.5 23L1 19.5L4.5 16" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+<g id="Orbit">
+<path id="Orbit/Clockwise" d="M4 10C4 5.5 7.5 2 12 2C15 2 17.8 3.5 19.4 5.8M16.4 4.2L19.4 5.8L19.3 2.4" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+<path id="Orbit/Counterclockwise" d="M19.4 12C19.4 16.5 15.9 20 11.4 20C8.4 20 5.6 18.5 4 16.2M7 17.8L4 16.2L4.1 19.6" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+</g>
+</svg>

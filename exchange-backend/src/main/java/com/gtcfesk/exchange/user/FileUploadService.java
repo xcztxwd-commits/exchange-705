@@ -5,69 +5,16 @@ import com.gtcfesk.exchange.common.BusinessException;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.File;
 import java.io.IOException;
-import java.net.URLDecoder;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.Base64;
-import java.util.UUID;
 
 @Service
 public class FileUploadService {
     @org.springframework.beans.factory.annotation.Autowired(required=false) private com.gtcfesk.exchange.simulation.SimulationEnvironment simulation;
     
-    private static final String IMAGE_DIR = "uploads/images/";
-    private static final Path IMAGE_DIR_PATH;
-    
-    static {
-        Path imageDirPath;
-        try {
-            // 使用与FileUploadController相同的路径逻辑
-            // 尝试获取jar包所在目录
-            String jarPath = FileUploadService.class.getProtectionDomain()
-                    .getCodeSource().getLocation().getPath();
-            
-            // 解码URL编码的路径（处理空格等特殊字符）
-            try {
-                jarPath = URLDecoder.decode(jarPath, StandardCharsets.UTF_8.toString());
-            } catch (Exception e) {
-                // 解码失败，使用原始路径
-            }
-            
-            Path basePath;
-            if (jarPath != null && jarPath.endsWith(".jar")) {
-                // 如果是jar包，使用jar包所在目录
-                File jarFile = new File(jarPath);
-                basePath = jarFile.getParentFile().toPath();
-            } else {
-                // 否则使用当前工作目录
-                basePath = Paths.get("").toAbsolutePath();
-            }
-            
-            // 如果basePath为null，使用当前工作目录
-            if (basePath == null) {
-                basePath = Paths.get("").toAbsolutePath();
-            }
-            
-            imageDirPath = basePath.resolve(IMAGE_DIR).toAbsolutePath();
-            Files.createDirectories(imageDirPath);
-            System.out.println("[FileUploadService] 图片上传目录: " + imageDirPath);
-        } catch (Exception e) {
-            // 如果上述方法失败，使用简单的相对路径
-            try {
-                imageDirPath = Paths.get(IMAGE_DIR).toAbsolutePath();
-                Files.createDirectories(imageDirPath);
-                System.out.println("[FileUploadService] 图片上传目录（备用）: " + imageDirPath);
-            } catch (IOException ex) {
-                throw new RuntimeException("无法创建上传目录: " + IMAGE_DIR, ex);
-            }
-        }
-        IMAGE_DIR_PATH = imageDirPath;
-    }
-    
+    @org.springframework.beans.factory.annotation.Autowired private com.gtcfesk.exchange.common.UploadStorage storage;
+
     /**
      * 上传base64格式的图片
      */
@@ -120,8 +67,8 @@ public class FileUploadService {
         }
         
         try {
-            Path filePath = com.gtcfesk.exchange.common.ImageFiles.save(file, IMAGE_DIR_PATH);
-            String filename = filePath.getFileName().toString();
+            Path filePath = com.gtcfesk.exchange.common.ImageFiles.save(file, com.gtcfesk.exchange.tenant.TenantFiles.directory(storage.images()));
+            String filename = com.gtcfesk.exchange.tenant.TenantFiles.ownerPath()+"/"+filePath.getFileName().toString();
 
             // 返回文件URL，使用 /api/uploads/images/ 确保通过后端Controller处理
             return (simulation != null && simulation.enabled() ? "/demo-uploads/images/" : "/api/uploads/images/") + filename;

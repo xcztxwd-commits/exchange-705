@@ -8,7 +8,7 @@ import java.util.*;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
-class KlineSchedulingTest {
+class KlineSchedulingTest extends TenantMarketTestContext {
     @Test void quotePriorityDoesNotStarveKlinesAndLargerCacheCoversSmallerRequest() {
         ForexQuoteMarketService market = new ForexQuoteMarketService();
         MarketQuoteSource source = mock(MarketQuoteSource.class);
@@ -16,7 +16,7 @@ class KlineSchedulingTest {
         TradingSymbol symbol = new TradingSymbol();
         symbol.setId(1L); symbol.setSymbol("BABA"); symbol.setAlltickSymbol("BABA");
         symbol.setCategory("US"); symbol.setSourceCategory("US"); symbol.setMarketSource("yahoo");
-        when(repository.findAll()).thenReturn(Collections.singletonList(symbol));
+        when(repository.findAllByTenantId(1L)).thenReturn(Collections.singletonList(symbol));
         long now = System.currentTimeMillis();
         Map<String, Object> quote = new HashMap<>(); quote.put("timestamp", now); quote.put("price", 81d);
         when(source.getBatchPrices(anyList(), eq("US"))).thenReturn(Collections.singletonMap("BABA", quote));
@@ -42,7 +42,7 @@ class KlineSchedulingTest {
             assertEquals(true, ((Map<?, ?>) coveredPending.get("data")).get("pending"));
             assertEquals(1, ((Number) market.sourceStatus().stream().filter(item -> "US".equals(item.get("category")))
                     .findFirst().get().get("pendingKlines")).intValue(), "a covering in-flight page is shared");
-            Map<?, ?> groups = (Map<?, ?>) ReflectionTestUtils.getField(market, "groups");
+            Map<?, ?> groups = (Map<?, ?>) ReflectionTestUtils.getField(marketState(market), "groups");
             ReflectionTestUtils.invokeMethod(market, "tick", groups.get("US"));
             verify(source).getBatchPrices(anyList(), eq("US"));
             verify(source).getKline("BABA", "1m", 500, "US");
