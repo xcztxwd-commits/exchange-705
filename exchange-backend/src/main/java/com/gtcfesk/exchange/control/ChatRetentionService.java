@@ -140,8 +140,8 @@ public class ChatRetentionService {
     @SuppressWarnings("unchecked") private void verifyMessageChain(Long tenant,Long conversation,Map<String,Object> data){
         String previous="";Map<Long,Map<String,Object>> images=new HashMap<>();
         for(Map<String,Object> message:(List<Map<String,Object>>)data.get("messages")){
-            Object time=message.get("created_at");if(!(time instanceof java.sql.Timestamp))throw new IllegalStateException("消息时间格式无效");
-            String created=((java.sql.Timestamp)time).toInstant().toString();
+            Object time=message.get("created_at");if(!(time instanceof java.sql.Timestamp)&&!(time instanceof java.time.LocalDateTime))throw new IllegalStateException("消息时间格式无效");
+            String created=(String)ChatArchiveService.archiveValue(time);
             String expected;
             try{expected=SupportService.sha256(json.writeValueAsBytes(Arrays.asList(conversation,message.get("sender"),((Number)message.get("sender_id")).longValue(),message.get("sender_name"),message.get("request_id"),message.get("text"),message.get("image_hash"),created,previous)));}catch(java.io.IOException e){throw new IllegalStateException("消息链序列化失败",e);}
             if(!previous.equals(message.get("previous_hash"))||!expected.equals(message.get("hash")))throw new IllegalStateException("消息链无效，保留会话");previous=expected;
