@@ -7973,7 +7973,7 @@
         }
       ],
       "classification": "private_scoped",
-      "review_reason": "Scoped read/existence/locking criteria and owner-checked writes. Hibernate merge/remove still generates id(+version)-only dirty writes: ORM_DIRTY_WRITE_PREDICATE is an unresolved production blocker, not an all-SQL tenant guarantee."
+      "review_reason": "Scoped read/existence/locking criteria and owner-checked writes. TenantEntityPersister constrains physical dirty UPDATE/DELETE to verified tenant plus id/version; FORCE has its own parameterized tenant predicate. Local runtime evidence is indexed in reports/stage5-closeout/evidence.json. Native/bulk entries bypass the persister and are reviewed/tested separately; retained release blockers are not production approval."
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/tenant/TenantSecrets.java": {
       "sha256": "fdeb111b80f284bf968f608b8d93ad8b51cae7e07dde1f48a3b392694672b8de",
@@ -11471,7 +11471,7 @@
     {
       "id": "ORM_DIRTY_WRITE_PREDICATE",
       "resolved": false,
-      "detail": "TenantRepository read lookup includes tenant, but Hibernate dirty UPDATE/DELETE generated from global @Id may only predicate id(+version). Ownership callbacks are defence-in-depth, not tenant+id SQL. Must choose and verify explicit write-boundary design before production activation."
+      "detail": "Local ORM write-boundary verification completed in reports/stage5-closeout/evidence.json: current private runtime mappings, ordinary DML, FORCE and discovered repository/EntityManager native/bulk entries, with cross-tenant all-column and rollback evidence. The former default-Hibernate-only description is obsolete. resolved remains false because isolation_gate --release consumes it; this local conclusion does not authorize production release."
     },
     {
       "id": "PRODUCTION_LEGACY_ORPHANS",
@@ -11481,7 +11481,7 @@
     {
       "id": "RUNTIME_ACCEPTANCE_PENDING",
       "resolved": false,
-      "detail": "Component/MySQL probes and source review are not complete application/browser release acceptance; DB activation remains disabled."
+      "detail": "Stage5 local requirement matrix and same-input runtime evidence have been reviewed in reports/stage5-closeout/evidence.json. Local engineering acceptance is complete; production legacy data, production integrations/TLS/long-duration capacity and formal release approval remain unverified. resolved remains false because this field participates in the production release gate."
     }
   ]
 }

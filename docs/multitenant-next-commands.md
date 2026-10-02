@@ -1,40 +1,18 @@
-# 多租户阶段3、4：并行执行命令
+# 阶段5收口后的接手边界
 
-统一基线：`codex/tenant-stage34-baseline-20261002-232106`。资源与精确路径：`C:\workspace\fx\705\reports\tenant-stage34-baseline-20261002-232106\baseline.json`。先读工作树内`docs/multitenant-current.md`与本文，不重读全部历史。
+当前工作树：`C:\Users\徐乾妖\.codex\worktrees\tenant-stage34-integration-20261003\705`。阶段5本地验收完成；生产发布未批准。**当前应停止，不自动进入下一阶段。**
 
-## 共用规则（两条命令都执行）
+## 只读接手
 
-1. 这是用户拥有并授权维护的本地工程。只在baseline.json给本阶段的工作树/分支操作；核对当前HEAD、逐文件输入及写入归属。保留UI回滚、阶段2模式头修正与已有资金规则。禁止修改原工作区、对方文件、reset/clean、生产部署、push、真实外部支付、自动新会话/恢复旧任务。默认中文，ponytail full、caveman full。
-2. 先按本阶段需求列最小覆盖/输入影响清单；已有同输入、同运行契约且覆盖该需求的通过证据直接引用，区分PASS_REUSED和PASS_FRESH。新需求未覆盖、数据/schema/配置/依赖/代码/行为变化才补对应验证；提交SHA改变但源码字节不变不单独触发全套。不得无理由重跑阶段1/2或提前阶段5容量测试。
-3. 只读既有摘要、索引、哈希；再读取本次涉及代码与失败片段，必要时追实际调用链，不反复完整读取所有文件/日志。无关历史失败不当成本轮缺陷，但原记录不删除。修检查脚本只补该检查/受其有效性影响的条目，应用业务变化才重跑影响链；不从第一步重新启动整套。
-4. 运行只用本阶段独立MySQL/Redis/网络/卷/私有文件/构建目录与manifest中的候选端口。启动前复查占用及完整ID、镜像、标签、挂载、PID/命令/启动时间；端口不能单独证明归属。阶段2最终备份经哈希核验后可只读共享，各自恢复到新实例；已有独立恢复证明不反复为同一未变备份造新证明。恢复源必须不变，自有恢复目标的新ID/UUID/数据与本阶段结果仍须核验。bootstrap关闭，不覆盖现有数据、不重置账本。
-5. 首次业务写入前校准采样：读取实际表列，覆盖主键、tenant/模式、幂等字段（含实际idempotency_key/请求回执）、状态/版本、余额/冻结/手续费/订单与真实审计；Decimal对账，业务对账和审计事件分别判定。不得以遗漏字段的快照认定重复请求；合法在途冻结不强行归零。
-6. Docker挂载按Type、Source、Destination、RW、Mode、Propagation等实际字段规范化排序，再比较内容；顺序变化不算变更，ID/镜像/权限/挂载内容变化不能忽略。页面金额规范空格/不换行空格和币种显示，先等具体渲染状态，再读可见元素；弹窗关闭后等待隐藏，不检查已隐藏副本，不以固定sleep或截图代替业务断言。保持错误、空值与精度检查，不能用归一化掩盖真实问题。
-7. 复用现有测试/恢复/对账助手，先读取其输入契约并适配本阶段目录，不复制历史before修正版或盲跑旧runner。测试用真实MySQL/Redis和后端浏览器；不把mock响应当联调。必要资金、权限、文件授权、独立恢复验收不删除。
-8. 每阶段固定交付`handoff.md`和`evidence.json`两份汇总，原始日志/截图另存；evidence内合并需求矩阵、版本/输入哈希、FRESH/REUSED、真实命令/退出码/计数、对账/恢复/资源归属与清理证明。不增加层层报告生成脚本；用短Python文件/标准库json一次生成、一轮校验；只修失败条目。脱敏后仅新增/变化交付文件做增量扫描，保留原全量扫描证明；禁止公开凭证/原始SQL。
-9. 只停止自己的服务，保留卷、备份和证据；记录相较基线的源码增量与实际阻塞。需要提交时仅审核后提交本阶段源码到自己的分支，不盲目git add -A、不提交运行数据/密钥。完成候选后停止，不自行下一阶段、互相merge或改批准标记。
+1. 先核对分支 `codex/tenant-stage34-integration-20261003`、HEAD及工作区归属；本次最终提交见 `C:\Users\徐乾妖\.codex\worktrees\tenant-stage34-integration-20261003\705\reports\stage5-closeout\evidence.json` 的 `finalCommit`。
+2. 只读 `C:\Users\徐乾妖\.codex\worktrees\tenant-stage34-integration-20261003\705\reports\stage5-closeout\handoff.md`、`C:\Users\徐乾妖\.codex\worktrees\tenant-stage34-integration-20261003\705\reports\stage5-closeout\evidence.json`。按具体缺口定位原报告；不要重新完整阅读历史或无理由重跑全部阶段。
+3. 本地 ORM 结论详见 `C:\Users\徐乾妖\.codex\worktrees\tenant-stage34-integration-20261003\705\reports\stage5-closeout\orm-coverage.json`；需求逐项复核详见 `C:\Users\徐乾妖\.codex\worktrees\tenant-stage34-integration-20261003\705\reports\stage5-closeout\requirements-review.json`。复用与补测分别列明，结构检查未替代缺失运行时证明。
 
-## 阶段3：运营应用闭环
+## 仅在后续明确指令下开展
 
-在baseline.json的stage3Worktree执行，仅负责应用源码/测试及必要应用DDL、自己的`scripts/stage3`助手；迁移工具与表清单由阶段4负责。先核查现有实现和已有证据，只补下面未覆盖部分：
+- 对真正变化的代码、schema或运行契约，只补受影响检查；新增改动先确认归属，不覆盖、不自动合并。
+- 生产相关事项必须另行明确范围并取得真实材料与审批；本轮没有批准这些操作。
+- 保持 `release_approved=false`、`business_activation_ready=0`、`PRODUCTION_LEGACY_ORPHANS` 及现有生产门禁原值。不要仅为门禁通过改变 `resolved`。
+- 不启动旧阶段服务，不覆盖源库/原工作区/其他会话；保留卷、备份、失败记录与原JUnit跳过/替代证明。
 
-- 活动/公告/站内信按当前发布、筛选派发、阅读领取、回执和试用奖励语义走完整生命周期；不恢复已移除的历史定时群发、不扩展新功能。
-- 客服排队/接待/转接、私有附件、真实角色监督只读及导出；最近5分钟真实在线、白名单最近页面、REAL/DEMO去重。
-- 365天留存、默认清理关闭、保全、归档独立恢复与有界故障重试；清理只在自己的数据副本演练。
-- 私有缓存、WebSocket推送、模拟任务的租户/模式归属；用default/A/B及实际角色验证相关权限撤销、无副作用监督、幂等、恢复和不串账。只对运营变动触及的资金链补对账，不重做全部阶段2。
-
-保持共享schema改动最小，新增/改变实体、约束或应用DDL必须记录影响的表与迁移契约，交付给调度供阶段4合并后复核。完成必要目标测试与受影响页面构建/真实联调，提交“阶段3完成候选”，交付两份汇总后停止。
-
-## 阶段4：迁移/恢复并行演练
-
-在baseline.json的stage4Worktree执行，仅负责`scripts/multitenant`迁移恢复工具/表清单/工具测试及自己的`scripts/stage4`助手；不写应用、前端、共享DDL、schema epoch或批准字段。先复用已有controlled_migration、mysql_migration、orphan_quarantine、private_files、retention_archive及工具测试。
-
-用可追溯的独立旧schema/历史数据副本实际验证plan、备份审核、受控apply与必要resume，完成默认租户归属、后台名称冲突、孤儿隔离及明确处理、私有文件授权、完整约束。阶段2当前新schema备份用于资金/关系/恢复基准，不能用已迁移的新schema空跑冒充旧库迁移通过；缺少旧版本检材则明确记录该缺口，不制造PASS。
-
-以自己的源/恢复实例核对DDL、完整行/关系、资金、消息链与附件；验证DDL结果不确定时对账和前向恢复、必要重启补偿、旧包/旧身份防护。只跑本阶段尚未覆盖的工具和数据演练，不跑全部四端资金生命周期，不修改生产数据。应用写边界/实体/DDL问题交给调度归阶段3处理。
-
-提交“阶段4基线版演练候选”，两份汇总注明该基线提交、已通过范围及等待阶段3合并的表/契约；随后停止。最终阶段4验收待合并后，只根据实际实体/DDL/迁移工具差异补复核，未变化的证明复用。
-
-## 收口（由调度另行派发，不在两条并行命令中执行）
-
-审核两个分支相较统一基线的增量后，在新的整合分支合并。先检查文件责任与schema差异，阶段4补受影响迁移/恢复验证；若无相关变化，核验输入后复用演练证据。统一版本验收阶段3/4，再执行阶段5。禁止为了新提交SHA而重复所有已通过业务。
+复现增量探针：`C:\Users\徐乾妖\.codex\worktrees\tenant-stage34-integration-20261003\705\scripts\stage5\OrmCloseoutProbe.java`。必须使用新建且经完整ID/标签/UUID核验的本地MySQL克隆、相同验收JAR及表清单；连接文件仅置受限目录。不能拿生产或其他会话的连接文件运行。
