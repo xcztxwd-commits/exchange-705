@@ -242,6 +242,9 @@ def apply(db,proposal,proof,restore_db,approval,ledger,resume=False,after_phase=
             raise ValueError('Complete current-version acceptance is absent')
         if core.file_hash(Path(approval['payload']['acceptance_file']))!=approval['payload'].get('acceptance_sha256'):raise ValueError('Acceptance hash differs from approval')
     ledger.policy.verify(approval,binding(proposal,proof),scope)
+    if proposal.get('recovery'):
+        from forward_recovery import validate_apply
+        validate_apply(proposal,approval,ledger.policy)
     if proof['result']!='PASS' or proof['plan_sha256']!=digest(proposal) or proof['source']!=proposal['target'] or core.file_hash(Path(proof['backup']['path']))!=proof['backup']['sha256']:
         raise ValueError('Full backup proof/hash is not bound to this plan')
     if core.file_hash(Path(proof['restore_input']['path']))!=proof['restore_input']['sha256']:raise ValueError('Bound restore input changed')

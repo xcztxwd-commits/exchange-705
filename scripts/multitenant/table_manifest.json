@@ -95,6 +95,7 @@
     "tenant",
     "tenant_domain_binding",
     "tenant_domain_history",
+    "tenant_migration_history",
     "tenant_policy",
     "tenant_schema_version",
     "user_id_sequence"

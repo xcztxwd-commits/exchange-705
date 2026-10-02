@@ -99,6 +99,20 @@ class Database:
         temporary.replace(path)
         return {'path':str(path),'sha256':file_hash(path),'bytes':path.stat().st_size,'schema_only':schema_only}
 
+def require_fixture(db, fixture_container_id=None):
+    """Keep legacy default; explicit new fixtures bind a full live container ID, never a port."""
+    if not db.test or not db.database.startswith('mt705_'):
+        raise ValueError('Explicit isolated fixture database required')
+    if fixture_container_id is None:
+        if db.container != TEST_CONTAINER:raise ValueError('Dedicated fixture or explicit full container ID required')
+        return
+    if not re.fullmatch(r'[0-9a-f]{64}', fixture_container_id) or fixture_container_id != db.identity['container_id']:
+        raise ValueError('Fixture container identity mismatch')
+    info=json.loads(run(['docker','inspect',db.container]).stdout)[0]
+    if info['Id'] != fixture_container_id or info['Config'].get('Labels',{}).get('com.gtcfesk.multitenant.test') != 'true':
+        raise ValueError('Live fixture identity/label changed')
+
+
 def file_hash(path):
     digest=hashlib.sha256()
     with path.open('rb') as f:
