@@ -16,7 +16,7 @@ import secrets
 import shutil
 import sys
 from urllib.parse import urlsplit, unquote
-from mysql_migration import Database, TEST_CONTAINER, ROOT, ident, literal, file_hash, restrict_directory, atomic_json
+from mysql_migration import Database, TEST_CONTAINER, ROOT, ident, literal, file_hash, restrict_directory, atomic_json, require_fixture
 
 # table, column, business category, authoritative owner field (None means tenant-owned, uploader unknown)
 REFERENCES = [
@@ -130,9 +130,10 @@ def summary(plan):
     return {'files':len(plan['files']),'status_counts':dict(collections.Counter(x['status'] for x in plan['files'])),'unreferenced_count':len(plan['unreferenced']),
             'exceptions':dict(collections.Counter(x['status'] for x in plan['exceptions'])),'support_blob_count':len(plan['database_support_blobs'])}
 
-def apply_fixture(db,plan,destination,backup):
+def apply_fixture(db,plan,destination,backup,*,fixture_container_id=None):
+    require_fixture(db,fixture_container_id)
     marker=destination/'.multitenant-file-fixture.json'
-    if not db.test or db.container!=TEST_CONTAINER or not db.database.startswith('mt705_') or not marker.is_file():raise ValueError('Apply is limited to explicitly marked isolated fixtures')
+    if not marker.is_file():raise ValueError('Apply is limited to explicitly marked isolated fixtures')
     mark=json.loads(marker.read_text(encoding='utf-8'))
     if mark!={'container_id':db.identity['container_id'],'database':db.database}:raise ValueError('Fixture target mismatch')
     if plan['database']['container_id']!=db.identity['container_id'] or plan['database']['database']!=db.database:raise ValueError('Inventory target mismatch')

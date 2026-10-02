@@ -10,7 +10,7 @@ import json
 from pathlib import Path
 import secrets
 import sys
-from mysql_migration import ROOT, TEST_CONTAINER, Database, ident, literal, fingerprint, file_hash, atomic_json, restrict_directory, ensure_test
+from mysql_migration import ROOT, TEST_CONTAINER, Database, ident, literal, fingerprint, file_hash, atomic_json, restrict_directory, ensure_test, require_fixture
 
 TABLES = ('asset_account','asset_snapshot','financial_yield_record','transfer_record','user_digital_address','user_menu')
 MONEY = {'asset_account':('available','frozen'), 'asset_snapshot':('total',),
@@ -71,9 +71,13 @@ def restore_sql(plan):
     return '\n'.join(sql)+'\n'
 
 
-def apply_fixture(db,plan,out):
-    if not db.test or db.container!=TEST_CONTAINER or not db.database.startswith('mt705_'):
-        raise ValueError('Cleanup apply is restricted to the dedicated isolated fixture')
+def apply_fixture(db,plan,out,*,fixture_container_id=None,restore_db=None):
+    require_fixture(db,fixture_container_id)
+    if fixture_container_id is not None:
+        if restore_db is None:raise ValueError('Explicit independent restore target required')
+        require_fixture(restore_db,restore_db.identity['container_id'])
+        if restore_db.identity['container_id']==db.identity['container_id'] or restore_db.sql('SELECT @@server_uuid',database=False).stdout==db.sql('SELECT @@server_uuid',database=False).stdout:
+            raise ValueError('Independent restore instance required')
     if plan['target']!=db.identity or tuple(plan['tables'])!=TABLES:raise ValueError('Reviewed inventory target differs')
     protected(out)
     if (out/'result.json').exists():
@@ -86,7 +90,7 @@ def apply_fixture(db,plan,out):
     before=fingerprint(db,all_columns)
     if (out/'before.sql').exists():raise ValueError('Interrupted attempt preserved; choose fresh evidence directory')
     backup=db.dump(out/'before.sql')
-    restored=Database(TEST_CONTAINER,'mt705_quarantine_restore_'+secrets.token_hex(5));restored.create_empty()
+    restored=restore_db if restore_db is not None else Database(TEST_CONTAINER,'mt705_quarantine_restore_'+secrets.token_hex(5));restored.create_empty()
     restored.sql((out/'before.sql').read_text(encoding='utf-8'))
     if fingerprint(restored,all_columns)!=before:raise ValueError('Full backup restoration mismatch; no deletions')
     atomic_json(out/'archive.json',plan)
@@ -115,7 +119,7 @@ def apply_fixture(db,plan,out):
     if db.query('\n'.join(sql))[-1:]!=['1']:raise ValueError('Concurrent owner/row change; entire cleanup rolled back')
     after=fingerprint(db,all_columns)
     if after!=expected:raise ValueError('Unexpected non-target change; retain maintenance and recovery evidence')
-    result={'target':db.identity,'counts_and_amounts':summary(plan),'backup':backup,'restore_verified':True,'restore_database':restored.database,
+    result={'target':db.identity,'counts_and_amounts':summary(plan),'backup':backup,'restore_verified':True,'restore_database':restored.database,'restore_identity':restored.identity,
             'inventory_sha256':hashlib.sha256(json.dumps(plan,sort_keys=True).encode()).hexdigest(),'archive_sha256':file_hash(out/'archive.json'),
             'row_restore_sha256':file_hash(out/'restore-rows.sql'),'before':before,'after':after,'unrelated_rows_identical':True,'passed':True}
     atomic_json(out/'result.json',result)
