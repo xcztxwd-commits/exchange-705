@@ -32,6 +32,7 @@ const performance = ref<any>({})
 const loading = ref(false)
 
 // 下级用户列表
+const subordinateEmail = ref('')
 const subordinates = ref<any[]>([])
 const subordinatesLoading = ref(false)
 
@@ -77,7 +78,7 @@ const fetchSubordinates = async () => {
   subordinates.value=[]
   subordinatesLoading.value = true
   try {
-    const response = await Promise.resolve({data: await accountTable.query(`/admin/users/${agentId.value}/subordinates`)})
+    const response = await Promise.resolve({data: await accountTable.query(`/admin/users/${agentId.value}/subordinates`, { email: subordinateEmail.value.trim() || undefined })})
     if (response.data && response.data.list) {
       subordinates.value = response.data.list
     } else if (Array.isArray(response.data)) {
@@ -197,11 +198,13 @@ onMounted(() => {
       <el-divider />
       <h3 style="margin-bottom: 20px;">下级用户列表</h3>
       
+      <el-form inline @submit.prevent="fetchSubordinates"><el-form-item label="用户邮箱"><el-input v-model="subordinateEmail" clearable maxlength="254" placeholder="用户邮箱" @clear="fetchSubordinates" /></el-form-item><el-button v-permission="'agents:performance'" native-type="submit">搜索</el-button></el-form>
       <AccountTypeFilter v-model="accountModes" @change="fetchPerformance();fetchSubordinates()" />
 <admin-table :row-key="(row: any) => `${row.accountMode || 'REAL'}:${row.id ?? row.userId}:${row.type || ''}`" table-key="AgentPerformance.1" :data="subordinates" v-loading="subordinatesLoading" stripe border>
 <el-table-column prop="accountModeLabel" label="账户类型" width="110" />
         <el-table-column prop="id" label="ID" width="80" />
         <el-table-column prop="email" label="邮箱" min-width="180" />
+          <el-table-column prop="remark" label="用户备注" min-width="150" show-overflow-tooltip><template #default="{ row }">{{ row.remark || '-' }}</template></el-table-column>
         <el-table-column prop="nickname" label="昵称" width="120">
           <template #default="{ row }">
             {{ row.nickname || '-' }}

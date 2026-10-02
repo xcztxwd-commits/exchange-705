@@ -12,6 +12,9 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 
 
 import { can } from '@/utils/access'
+import { useTenantPolicies } from '@/composables/useTenantPolicies'
+import TenantPolicyNotice from '@/components/TenantPolicyNotice.vue'
+const {snapshot,policyError,reloadPolicies,editable}=useTenantPolicies('agents')
 
 // 开发环境使用空字符串，让Vite代理处理；生产环境使用生产API域名（不包含/api后缀）
 const getApiBase = () => {
@@ -51,6 +54,7 @@ const expandedMenus = ref<Set<number>>(new Set()) // 展开的菜单ID集合
 
 // 查看下级代理对话框
 const subordinatesDialogVisible = ref(false)
+const subordinateEmail = ref('')
 const subordinates = ref<any[]>([])
 const subordinatesLoading = ref(false)
 const currentSubordinateAgentId = ref<number | null>(null)
@@ -82,7 +86,7 @@ const fetchAgents = async () => {
       keyword: searchForm.value.keyword || undefined,
       status: searchForm.value.status || undefined
     }
-    
+
     const response = await axios.get(`${API_BASE}/api/admin/users`, { params })
     if (response.data.success) {
       agents.value = response.data.list || []
@@ -141,6 +145,7 @@ const handleStatusChange = async (row: any) => {
 const handleViewSubAgents = async (row: any) => {
   accountTable.selectRow(row)
   subModes.value = [row.accountMode || 'REAL']
+  subordinateEmail.value = ''
   currentSubordinateAgentId.value = row.id
   currentSubordinateAgentName.value = row.nickname || row.email
   subordinatesDialogVisible.value = true
@@ -150,11 +155,11 @@ const handleViewSubAgents = async (row: any) => {
 // 加载下级用户列表
 const loadSubordinates = async () => {
   if (!currentSubordinateAgentId.value) return
-  
+
   subordinates.value = []
   subordinatesLoading.value = true
   try {
-    const response = { data: await subTable.query(`/admin/users/${currentSubordinateAgentId.value}/subordinates`) }
+    const response = { data: await subTable.query(`/admin/users/${currentSubordinateAgentId.value}/subordinates`, { email: subordinateEmail.value.trim() || undefined }) }
     if (response.data.list) {
       subordinates.value = response.data.list
     } else if (Array.isArray(response.data)) {
@@ -182,7 +187,7 @@ const handleAssignMenus = async (row: any) => {
   accountTable.selectRow(row)
   currentAgentId.value = row.id
   currentAgentName.value = row.nickname || row.email
-  
+
   try {
     // 获取所有菜单（扁平列表）
     const menusResponse = await axios.get(`${API_BASE}/api/admin/menus/list`)
@@ -206,13 +211,13 @@ const handleAssignMenus = async (row: any) => {
         allMenus.value = flattenMenus(treeResponse.data.list || []).filter((m: any) => m.menuType === 'menu')
       }
     }
-    
+
     // 获取当前代理的菜单权限和操作权限
     const agentMenusResponse = await axios.get(`${API_BASE}/api/admin/users/${row.id}/menus`)
     if (agentMenusResponse.data.success) {
       const existingMenuIds = agentMenusResponse.data.menuIds || []
       const existingActions = agentMenusResponse.data.actions || {}
-      
+
       checkedMenuIds.value = existingMenuIds
       checkedActionsMap.value = new Map(Object.entries(existingActions).map(([id, actions]) => [Number(id), actions as string[]]))
     } else {
@@ -221,7 +226,7 @@ const handleAssignMenus = async (row: any) => {
 
     // 加载每个菜单的操作列表
     await loadMenuActions()
-    
+
     permissionDialogVisible.value = true
   } catch (error: any) {
     console.error('获取菜单数据失败:', error)
@@ -258,7 +263,7 @@ const handleMenuCheckChange = (checkedMenuIds: number[]) => {
   // 判断是默认权限对话框还是分配权限对话框
   const isDefaultDialog = defaultPermissionDialogVisible.value
   const currentActionsMap = isDefaultDialog ? defaultCheckedActionsMap.value : checkedActionsMap.value
-  
+
   // 当菜单被选中且有操作时，自动展开
   for (const menuId of checkedMenuIds) {
     const actions = menuActionsMap.value.get(menuId)
@@ -281,7 +286,7 @@ const handleMenuCheckChange = (checkedMenuIds: number[]) => {
 // 保存菜单权限和操作权限
 const handleSavePermission = async () => {
   if (!currentAgentId.value) return
-  
+
   loading.value = true
   try {
     // 构建操作权限对象 {menuId: [actionCode1, actionCode2, ...]}
@@ -291,15 +296,15 @@ const handleSavePermission = async () => {
         actions[menuId] = actionCodes
       }
     }
-    
+
     const response = await axios.post(
       `${API_BASE}/api/admin/users/${currentAgentId.value}/menus`,
-      { 
+      {
         menuIds: checkedMenuIds.value,
         actions: actions
       }
     )
-    
+
     if (response.data.success) {
       ElMessage.success(response.data.message || '权限分配成功')
       permissionDialogVisible.value = false
@@ -350,6 +355,7 @@ const loadDefaultPermissions = async () => {
 
 // 打开设置默认权限对话框
 const handleSetDefaultPermissions = async () => {
+  try { await reloadPolicies() } catch { /* Keep the lock notice visible and editing disabled. */ }
   try {
     // 获取所有菜单（扁平列表）
     const menusResponse = await axios.get(`${API_BASE}/api/admin/menus/list`)
@@ -373,13 +379,13 @@ const handleSetDefaultPermissions = async () => {
         allMenus.value = flattenMenus(treeResponse.data.list || []).filter((m: any) => m.menuType === 'menu')
       }
     }
-    
+
     // 加载默认权限配置
     await loadDefaultPermissions()
-    
+
     // 加载每个菜单的操作列表
     await loadMenuActions()
-    
+
     defaultPermissionDialogVisible.value = true
   } catch (error: any) {
     console.error('获取菜单数据失败:', error)
@@ -389,6 +395,7 @@ const handleSetDefaultPermissions = async () => {
 
 // 保存默认权限配置
 const handleSaveDefaultPermissions = async () => {
+  if (!editable('agent.default.permissions')) return
   loading.value = true
   try {
     // 构建操作权限对象 {menuId: [actionCode1, actionCode2, ...]}
@@ -398,20 +405,20 @@ const handleSaveDefaultPermissions = async () => {
         actions[menuId] = actionCodes
       }
     }
-    
+
     // 构建默认权限配置对象
     const defaultPerms = {
       menuIds: defaultCheckedMenuIds.value,
       actions: actions
     }
-    
+
     // 保存到系统配置
     const response = await axios.post(`${API_BASE}/api/admin/config/save`, {
       key: 'agent.default.permissions',
       value: JSON.stringify(defaultPerms),
       description: '代理默认权限配置（菜单ID列表和操作权限）'
     })
-    
+
     if (response.data) {
       ElMessage.success('默认权限配置保存成功！新创建的代理将自动应用这些权限。')
       defaultPermissionDialogVisible.value = false
@@ -441,13 +448,13 @@ const handleEditRemark = (row: any) => {
 // 保存备注
 const handleSaveRemark = async () => {
   if (!remarkForm.value.userId) return
-  
+
   loading.value = true
   try {
     await request.post(`/admin/users/${remarkForm.value.userId}/update-remark`, {
       remark: remarkForm.value.newRemark || ''
     })
-    
+
     ElMessage.success('备注保存成功')
     remarkDialogVisible.value = false
     fetchAgents()
@@ -511,9 +518,9 @@ onMounted(() => {
             <div style="display: flex; align-items: center; gap: 8px;">
               <span>{{ row.nickname || '-' }}</span>
               <el-button v-permission="'agents:modify_remark'"
-                link 
-                type="primary" 
-                size="small" 
+                link
+                type="primary"
+                size="small"
                 @click="handleEditRemark(row)"
                 title="编辑备注"
                :disabled="accountModes.includes('DEMO') || !accountModes.length">
@@ -593,15 +600,15 @@ onMounted(() => {
     </el-card>
 
     <!-- 权限分配对话框 -->
-    <el-dialog 
-      v-model="permissionDialogVisible" 
-      title="分配菜单权限" 
+    <el-dialog
+      v-model="permissionDialogVisible"
+      title="分配菜单权限"
       width="500px"
     >
       <div style="margin-bottom: 15px; color: #606266;">
         为代理 <strong>{{ currentAgentName }}</strong> 分配菜单权限：
       </div>
-      
+
       <el-checkbox-group v-model="checkedMenuIds" @change="handleMenuCheckChange">
         <div v-for="menu in allMenus" :key="menu.id" style="margin-bottom: 15px; border: 1px solid #e4e7ed; border-radius: 4px; padding: 10px;">
           <div style="display: flex; align-items: center; justify-content: space-between;">
@@ -610,28 +617,28 @@ onMounted(() => {
             </el-checkbox>
             <el-button v-permission="'agents:assign_permission'"
               v-if="(menuActionsMap.get(menu.id)?.length ?? 0) > 0 && checkedMenuIds.includes(menu.id)"
-              link 
-              type="primary" 
+              link
+              type="primary"
               size="small"
               @click="toggleMenuExpanded(menu.id)"
              :disabled="accountModes.includes('DEMO') || !accountModes.length">
               {{ expandedMenus.has(menu.id) ? '收起操作' : '展开操作' }}
             </el-button>
           </div>
-          
+
           <!-- 操作权限选择（当菜单被选中且展开时显示） -->
-          <div 
+          <div
             v-if="checkedMenuIds.includes(menu.id) && expandedMenus.has(menu.id) && (menuActionsMap.get(menu.id)?.length ?? 0) > 0"
             style="margin-top: 10px; margin-left: 24px; padding: 10px; background: #f5f7fa; border-radius: 4px;"
           >
             <div style="margin-bottom: 8px; font-size: 12px; color: #606266;">选择操作权限：</div>
-            <el-checkbox-group 
+            <el-checkbox-group
               :model-value="checkedActionsMap.get(menu.id) || []"
               @update:model-value="(val: string[]) => checkedActionsMap.set(menu.id, val)"
             >
-              <div 
-                v-for="action in menuActionsMap.get(menu.id)" 
-                :key="action.id" 
+              <div
+                v-for="action in menuActionsMap.get(menu.id)"
+                :key="action.id"
                 style="margin-bottom: 8px;"
               >
                 <el-checkbox :label="action.actionCode">
@@ -642,7 +649,7 @@ onMounted(() => {
           </div>
         </div>
       </el-checkbox-group>
-      
+
       <template #footer>
         <el-button v-permission="'session:close'" @click="permissionDialogVisible = false">取消</el-button>
         <el-button v-permission="'agents:assign_permission'" type="primary" @click="handleSavePermission" :loading="loading" :disabled="accountModes.includes('DEMO') || !accountModes.length">保存</el-button>
@@ -650,16 +657,16 @@ onMounted(() => {
     </el-dialog>
 
     <!-- 设置默认权限对话框 -->
-    <el-dialog 
-      v-model="defaultPermissionDialogVisible" 
-      title="设置代理默认权限" 
+    <el-dialog
+      v-model="defaultPermissionDialogVisible"
+      title="设置代理默认权限"
       width="500px"
     >
-      <div style="margin-bottom: 15px; color: #606266;">
+      <TenantPolicyNotice :snapshot="snapshot" :error="policyError"/><div style="margin-bottom: 15px; color: #606266;">
         设置新代理的默认菜单权限和操作权限。仅在创建新代理时应用；已撤销权限的代理不会自动恢复默认授权。
       </div>
-      
-      <el-checkbox-group v-model="defaultCheckedMenuIds" @change="handleMenuCheckChange">
+
+      <el-checkbox-group :disabled="!editable('agent.default.permissions')" v-model="defaultCheckedMenuIds" @change="handleMenuCheckChange">
         <div v-for="menu in allMenus" :key="menu.id" style="margin-bottom: 15px; border: 1px solid #e4e7ed; border-radius: 4px; padding: 10px;">
           <div style="display: flex; align-items: center; justify-content: space-between;">
             <el-checkbox :label="menu.id">
@@ -667,28 +674,28 @@ onMounted(() => {
             </el-checkbox>
             <el-button v-permission="'agents:assign_permission'"
               v-if="(menuActionsMap.get(menu.id)?.length ?? 0) > 0 && defaultCheckedMenuIds.includes(menu.id)"
-              link 
-              type="primary" 
+              link
+              type="primary"
               size="small"
               @click="toggleMenuExpanded(menu.id)"
              :disabled="accountModes.includes('DEMO') || !accountModes.length">
               {{ expandedMenus.has(menu.id) ? '收起操作' : '展开操作' }}
             </el-button>
           </div>
-          
+
           <!-- 操作权限选择（当菜单被选中且展开时显示） -->
-          <div 
+          <div
             v-if="defaultCheckedMenuIds.includes(menu.id) && expandedMenus.has(menu.id) && (menuActionsMap.get(menu.id)?.length ?? 0) > 0"
             style="margin-top: 10px; margin-left: 24px; padding: 10px; background: #f5f7fa; border-radius: 4px;"
           >
             <div style="margin-bottom: 8px; font-size: 12px; color: #606266;">选择操作权限：</div>
-            <el-checkbox-group 
+            <el-checkbox-group :disabled="!editable('agent.default.permissions')"
               :model-value="defaultCheckedActionsMap.get(menu.id) || []"
               @update:model-value="(val: string[]) => defaultCheckedActionsMap.set(menu.id, val)"
             >
-              <div 
-                v-for="action in menuActionsMap.get(menu.id)" 
-                :key="action.id" 
+              <div
+                v-for="action in menuActionsMap.get(menu.id)"
+                :key="action.id"
                 style="margin-bottom: 8px;"
               >
                 <el-checkbox :label="action.actionCode">
@@ -699,17 +706,17 @@ onMounted(() => {
           </div>
         </div>
       </el-checkbox-group>
-      
+
       <template #footer>
         <el-button v-permission="'session:close'" @click="defaultPermissionDialogVisible = false">取消</el-button>
-        <el-button v-permission="'agents:defaults'" type="primary" @click="handleSaveDefaultPermissions" :loading="loading" :disabled="accountModes.includes('DEMO') || !accountModes.length">保存默认权限</el-button>
+        <el-button v-permission="'agents:defaults'" type="primary" @click="handleSaveDefaultPermissions" :loading="loading" :disabled="!editable('agent.default.permissions') || accountModes.includes('DEMO') || !accountModes.length">保存默认权限</el-button>
       </template>
     </el-dialog>
 
     <!-- 编辑备注对话框 -->
-    <el-dialog 
-      v-model="remarkDialogVisible" 
-      title="编辑备注" 
+    <el-dialog
+      v-model="remarkDialogVisible"
+      title="编辑备注"
       width="500px"
     >
       <el-form label-width="100px">
@@ -737,16 +744,18 @@ onMounted(() => {
     </el-dialog>
 
     <!-- 查看下级代理对话框 -->
-    <el-dialog 
-      v-model="subordinatesDialogVisible" 
-      :title="`查看代理 ${currentSubordinateAgentName} 的下级`" 
+    <el-dialog
+      v-model="subordinatesDialogVisible"
+      :title="`查看代理 ${currentSubordinateAgentName} 的下级`"
       width="900px"
     >
+      <el-form inline @submit.prevent="loadSubordinates"><el-form-item label="用户邮箱"><el-input v-model="subordinateEmail" clearable maxlength="254" placeholder="用户邮箱" @clear="loadSubordinates" /></el-form-item><el-button v-permission="'agents:view_subordinates'" native-type="submit">搜索</el-button></el-form>
       <AccountTypeFilter v-model="subModes" @change="loadSubordinates()" />
 <admin-table :row-key="(row: any) => `${row.accountMode || 'REAL'}:${row.id ?? row.userId}:${row.type || ''}`" table-key="AgentManagement.2" :data="subordinates" stripe border v-loading="subordinatesLoading">
 <el-table-column prop="accountModeLabel" label="账户类型" width="110" />
         <el-table-column prop="id" label="ID" width="80" />
         <el-table-column prop="email" label="邮箱" width="180" />
+          <el-table-column prop="remark" label="用户备注" min-width="150" show-overflow-tooltip><template #default="{ row }">{{ row.remark || '-' }}</template></el-table-column>
         <el-table-column prop="nickname" label="昵称" width="120">
           <template #default="{ row }">
             {{ row.nickname || '-' }}
@@ -773,9 +782,9 @@ onMounted(() => {
         </el-table-column>
         <el-table-column prop="createdAt" label="注册时间" width="180" />
       </admin-table>
-      
+
       <el-empty v-if="!subordinatesLoading && subordinates.length === 0" description="暂无下级用户" />
-      
+
       <template #footer>
         <el-button v-permission="'session:close'" @click="subordinatesDialogVisible = false">关闭</el-button>
       </template>

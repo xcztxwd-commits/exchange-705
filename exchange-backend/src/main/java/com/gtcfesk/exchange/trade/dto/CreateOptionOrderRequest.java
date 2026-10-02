@@ -8,6 +8,8 @@ import java.math.BigDecimal;
 @Getter
 @Setter
 public class CreateOptionOrderRequest {
+    private String requestId;
+    private String fundingSource; // TRIAL or OPTION; omitted legacy clients use OPTION only
     private String symbol; // 交易对
     private String direction; // UP 买涨, DOWN 买跌
     private BigDecimal amount; // 金额

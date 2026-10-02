@@ -29,10 +29,11 @@ import java.time.Instant;
 import static org.junit.jupiter.api.Assertions.*;
 
 @SpringJUnitConfig(SupportServiceTest.Config.class)
+@org.junit.jupiter.api.extension.ExtendWith(com.gtcfesk.exchange.tenant.TenantOneFixture.class)
 class SupportServiceTest {
     static { ((ch.qos.logback.classic.Logger)org.slf4j.LoggerFactory.getLogger(org.slf4j.Logger.ROOT_LOGGER_NAME)).setLevel(ch.qos.logback.classic.Level.WARN); }
     @Configuration @EnableTransactionManagement(proxyTargetClass = true)
-    @EnableJpaRepositories(basePackages={"com.gtcfesk.exchange.repository", "com.gtcfesk.exchange.admin"})
+    @EnableJpaRepositories(repositoryFactoryBeanClass=com.gtcfesk.exchange.tenant.TenantRepositoryFactoryBean.class,basePackages={"com.gtcfesk.exchange.repository", "com.gtcfesk.exchange.admin", "com.gtcfesk.exchange.control"})
     @Import({SupportService.class, SupportSettings.class, SystemConfigService.class, AdminPermissionService.class, SupportPermissionCatalog.class})
     static class Config {
         @Bean DataSource dataSource() {
@@ -46,10 +47,15 @@ class SupportServiceTest {
             return new DriverManagerDataSource("jdbc:mysql://127.0.0.1:"+port+"/"+database
                 +"?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&characterEncoding=UTF-8", "root", password);
         }
+        @Bean com.gtcfesk.exchange.control.TenantPolicyService tenantPolicy(){com.gtcfesk.exchange.control.TenantPolicyService p=org.mockito.Mockito.mock(com.gtcfesk.exchange.control.TenantPolicyService.class);org.mockito.Mockito.when(p.featureEnabled(org.mockito.ArgumentMatchers.anyString())).thenReturn(true);org.mockito.Mockito.when(p.effectiveConfig(org.mockito.ArgumentMatchers.anyString(),org.mockito.ArgumentMatchers.nullable(String.class))).thenAnswer(c->c.getArgument(1));return p;}
+        @Bean com.gtcfesk.exchange.security.OutboundEndpointPolicy outbound(){return org.mockito.Mockito.mock(com.gtcfesk.exchange.security.OutboundEndpointPolicy.class);}
+        @Bean com.gtcfesk.exchange.tenant.TenantSecrets secrets(){return org.mockito.Mockito.mock(com.gtcfesk.exchange.tenant.TenantSecrets.class);}
+        @Bean com.gtcfesk.exchange.control.TenantReadinessService readiness(){return org.mockito.Mockito.mock(com.gtcfesk.exchange.control.TenantReadinessService.class);}
+        @Bean com.gtcfesk.exchange.control.ControlAuditService controlAudit(){return org.mockito.Mockito.mock(com.gtcfesk.exchange.control.ControlAuditService.class);}
         @Bean ObjectMapper objectMapper() { return new ObjectMapper().findAndRegisterModules(); }
         @Bean LocalContainerEntityManagerFactoryBean entityManagerFactory(DataSource ds) {
             LocalContainerEntityManagerFactoryBean f = new LocalContainerEntityManagerFactoryBean(); f.setDataSource(ds);
-            f.setPackagesToScan("com.gtcfesk.exchange.entity", "com.gtcfesk.exchange.admin", "com.gtcfesk.exchange.support");
+            f.setPackagesToScan("com.gtcfesk.exchange.entity", "com.gtcfesk.exchange.admin", "com.gtcfesk.exchange.support", "com.gtcfesk.exchange.control");
             f.setJpaVendorAdapter(new HibernateJpaVendorAdapter());
             Properties p = new Properties(); p.setProperty("hibernate.hbm2ddl.auto", "create-drop");
             p.setProperty("hibernate.physical_naming_strategy", "org.springframework.boot.orm.jpa.hibernate.SpringPhysicalNamingStrategy");
@@ -150,7 +156,7 @@ class SupportServiceTest {
     boolean tryClaim(long id, Long who) { asAdmin(who); try { service.claim(id); return true; } catch (ResponseStatusException e) { assertEquals(409,e.getRawStatusCode()); return false; } }
     static <T> List<T> race(Callable<T> a,Callable<T> b) throws Exception {
         ExecutorService pool=Executors.newFixedThreadPool(2); CountDownLatch gate=new CountDownLatch(1);
-        try { Future<T> x=pool.submit(()->{gate.await();try{return a.call();}finally{SecurityContextHolder.clearContext();}}); Future<T> y=pool.submit(()->{gate.await();try{return b.call();}finally{SecurityContextHolder.clearContext();}}); gate.countDown(); return Arrays.asList(x.get(20,TimeUnit.SECONDS),y.get(20,TimeUnit.SECONDS)); }
+        try { Future<T> x=pool.submit(()->{gate.await();try(com.gtcfesk.exchange.tenant.TenantContext.Scope ignored=com.gtcfesk.exchange.tenant.TenantContext.open(1L)){return a.call();}finally{SecurityContextHolder.clearContext();}}); Future<T> y=pool.submit(()->{gate.await();try(com.gtcfesk.exchange.tenant.TenantContext.Scope ignored=com.gtcfesk.exchange.tenant.TenantContext.open(1L)){return b.call();}finally{SecurityContextHolder.clearContext();}}); gate.countDown(); return Arrays.asList(x.get(20,TimeUnit.SECONDS),y.get(20,TimeUnit.SECONDS)); }
         finally { pool.shutdownNow(); }
     }
     @Test void capacityOfflineTransferAndRevocation() {
@@ -160,7 +166,7 @@ class SupportServiceTest {
         service.transfer(id,otherAdmin); assertThrows(AccessDeniedException.class,()->service.detail(id,true,0)); service.claim(second);
         asAdmin(otherAdmin); assertEquals(admin, messages(id,true).get(messages(id,true).size()-1).getSenderId());
         service.presence(false); asAdmin(admin); assertThrows(ResponseStatusException.class,()->service.transfer(second,otherAdmin));
-        AdminRole r=roles.findByRoleCode(role).get(); r.setStatus("disabled");roles.saveAndFlush(r);
+        AdminRole r=roles.findByTenantIdAndRoleCode(1L, role).get(); r.setStatus("disabled");roles.saveAndFlush(r);
         assertThrows(AccessDeniedException.class,()->service.send(second,true,key(),"revoked",null));
     }
     @Test void stalePresenceCannotReceive() {
@@ -174,6 +180,20 @@ class SupportServiceTest {
         assertFalse(service.sessions(false,"mine",0).isEmpty()); assertFalse(messages(id,false).isEmpty());
         assertThrows(ResponseStatusException.class,()->service.inbox(false,0));
         asAdmin(admin);assertThrows(ResponseStatusException.class,()->service.sendLetters(key(),Collections.singletonList(user),"title","body"));
+    }
+    @Test void adminEmailSearchEnrichesOnlyScopedSessionsAndInbox() {
+        UserAccount owner=users.findByTenantIdAndId(1L,user).get();owner.setEmail("Alpha_%!"+user+"@test.invalid");owner.setRemark("客户内部备注");users.saveAndFlush(owner);
+        long conversation=start();take(conversation);
+        asAdmin(admin);service.sendLetters(key(),Arrays.asList(user,otherUser),"title","body");
+        AdminUserIdentity identity=new AdminUserIdentity(users,new ObjectMapper().findAndRegisterModules());
+        List<Map<String,Object>> sessions=identity.rows(service.sessions(true,"mine",0," ALPHA_%! "));
+        assertEquals(1,sessions.size());assertEquals("客户内部备注",sessions.get(0).get("userRemark"));assertEquals(owner.getEmail(),sessions.get(0).get("userEmail"));
+        List<Map<String,Object>> inbox=identity.rows(service.inbox(true,0," ALPHA_%! "));
+        assertEquals(1,inbox.size());assertEquals(owner.getEmail(),inbox.get(0).get("userEmail"));assertEquals("客户内部备注",inbox.get(0).get("userRemark"));
+        assertTrue(service.inbox(true,0,"no-match").isEmpty());assertTrue(service.sessions(true,"mine",0,"no-match").isEmpty());
+        asAdmin(otherAdmin);assertTrue(service.inbox(true,0,owner.getEmail()).isEmpty());assertTrue(service.sessions(true,"mine",0,owner.getEmail()).isEmpty());
+        asUser(user);Map<?,?> publicSession=new ObjectMapper().findAndRegisterModules().convertValue(service.sessions(false,"mine",0).get(0),Map.class);
+        assertFalse(publicSession.containsKey("userEmail"));assertFalse(publicSession.containsKey("userRemark"));
     }
     @Test void inboxAtomicBatchIdempotencyAndReadIsolation() {
         asAdmin(admin);String k=key();assertEquals(2,service.sendLetters(k,Arrays.asList(user,otherUser),"通知","正文"));
@@ -231,14 +251,14 @@ class SupportServiceTest {
         ExecutorService pool = Executors.newFixedThreadPool(3);
         CountDownLatch held = new CountDownLatch(1), attempted = new CountDownLatch(2), release = new CountDownLatch(1);
         try {
-            Future<?> holder = pool.submit(() -> new TransactionTemplate(manager).execute(status -> {
+            Future<?> holder = pool.submit(com.gtcfesk.exchange.tenant.TenantOneFixture.worker(() -> new TransactionTemplate(manager).execute(status -> {
                 assertNotNull(em.find(owner, id, LockModeType.PESSIMISTIC_WRITE));
                 held.countDown();
                 try { assertTrue(release.await(20, TimeUnit.SECONDS), "release owner mutex"); }
                 catch (InterruptedException e) { Thread.currentThread().interrupt(); throw new IllegalStateException(e); }
                 beforeCommit.run();
                 return null;
-            }));
+            })));
             assertTrue(held.await(20, TimeUnit.SECONDS), "owner mutex acquired");
             Callable<T> first = observed(a, attempted), second = observed(b, attempted);
             Future<T> x = pool.submit(first), y = pool.submit(second);
@@ -250,7 +270,7 @@ class SupportServiceTest {
     <T> Callable<T> observed(Callable<T> work, CountDownLatch attempted) {
         return () -> {
             LockAttemptInspector.attempts.set(attempted);
-            try { return work.call(); }
+            try(com.gtcfesk.exchange.tenant.TenantContext.Scope ignored=com.gtcfesk.exchange.tenant.TenantContext.open(1L)) { return work.call(); }
             finally { LockAttemptInspector.attempts.remove(); SecurityContextHolder.clearContext(); }
         };
     }

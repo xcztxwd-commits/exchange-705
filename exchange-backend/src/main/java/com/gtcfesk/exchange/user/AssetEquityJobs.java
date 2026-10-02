@@ -14,6 +14,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 /** Independent bounded single-worker channels; duplicate ticks coalesce, database locks fence replicas. */
 @Slf4j @Service @RequiredArgsConstructor
 public class AssetEquityJobs {
+    @org.springframework.beans.factory.annotation.Autowired private com.gtcfesk.exchange.tenant.TenantJobRunner tenantJobs;
     private final AssetEquityStore store;
     private final EquityValuationService valuation;
     @Value("${asset.history.equity.collect-enabled:false}") private boolean enabled;
@@ -30,7 +31,7 @@ public class AssetEquityJobs {
     static boolean withinCaptureMinute(long boundary,long observed){return observed>=boundary && observed<boundary+60000;}
     private void submit(ExecutorService executor,AtomicBoolean busy,Runnable work){
         if(!enabled || !busy.compareAndSet(false,true))return;
-        executor.submit(()->{try{work.run();}catch(Exception e){
+        executor.submit(()->{try{tenantJobs.each(executor==collector?"equity-capture":"equity-rollup",tenant -> work.run());}catch(Exception e){
             log.error("Equity history task failed",e);
             try{store.error(executor==collector?"capture":"rollup",e);}catch(Exception recordFailure){log.error("Cannot record equity task failure",recordFailure);}
         }finally{busy.set(false);}});
@@ -46,7 +47,7 @@ public class AssetEquityJobs {
             s.commit();
             for(int batch=0;batch<1000;batch++) {
                 if(!withinCaptureMinute(boundary,System.currentTimeMillis()))break;
-                List<Long> ids=s.db.query("select id from user_account where id>? order by id limit 100",(rs,n)->rs.getLong(1),cursor);
+                List<Long> ids=s.db.query("select id from user_account where tenant_id="+com.gtcfesk.exchange.tenant.TenantContext.requireTenantId()+" and id>? order by id limit 100",(rs,n)->rs.getLong(1),cursor);
                 s.commit();if(ids.isEmpty())break;
                 EquityValuationService.Batch quotes=valuation.prepare(ids);
                 long observed=System.currentTimeMillis();
@@ -64,8 +65,8 @@ public class AssetEquityJobs {
     void aggregate(int onlyLevel){
         store.locked("rollup",s->{
             // Do not seal while a collector may still be committing closing snapshots.
-            if(!Integer.valueOf(1).equals(s.db.queryForObject("select is_free_lock('equity_v1_capture')",Integer.class)))return;
-            Long first=s.db.queryForObject("select min(bucket_start) from asset_history_1m where basis_version=?",Long.class,BASIS);
+            if(!Integer.valueOf(1).equals(s.db.queryForObject("select is_free_lock('tenant_"+com.gtcfesk.exchange.tenant.TenantContext.requireTenantId()+"_equity_v1_capture')",Integer.class)))return;
+            Long first=s.db.queryForObject("select min(bucket_start) from asset_history_1m where tenant_id="+com.gtcfesk.exchange.tenant.TenantContext.requireTenantId()+" and basis_version=?",Long.class,BASIS);
             s.commit();if(first==null)return;
             long now=System.currentTimeMillis();
             for(int level=1;level<=3;level++)if(onlyLevel==0 || onlyLevel==level)finalizeLevel(s,level,first,now);
@@ -87,7 +88,7 @@ public class AssetEquityJobs {
         }
     }
     List<Long> users(JdbcTemplate db,int level,long start,long end,long cursor){
-        return db.query("select distinct user_id from "+AssetEquityStore.TABLES[level]+" where basis_version=? and bucket_start>=? and bucket_start<? and user_id>? order by user_id limit 100",(rs,n)->rs.getLong(1),BASIS,start,end,cursor);
+        return db.query("select distinct user_id from "+AssetEquityStore.TABLES[level]+" where tenant_id="+com.gtcfesk.exchange.tenant.TenantContext.requireTenantId()+" and basis_version=? and bucket_start>=? and bucket_start<? and user_id>? order by user_id limit 100",(rs,n)->rs.getLong(1),BASIS,start,end,cursor);
     }
     void reduce(JdbcTemplate db,int level,List<Long> ids,long start,long end,long now,boolean finalized){
         Map<Long,AssetHistoryBucket> buckets=new LinkedHashMap<>();ids.forEach(id->buckets.put(id,new AssetHistoryBucket(id,start,end)));

@@ -8,12 +8,13 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+@org.junit.jupiter.api.extension.ExtendWith(com.gtcfesk.exchange.tenant.TenantOneFixture.class)
 class AnnouncementCountdownTest {
  @Test void countdownValidationAndPersistence() throws Exception {
   AnnouncementRepository repo = mock(AnnouncementRepository.class);
   Announcement item = new Announcement();
   assertEquals(2, item.getCountdownSeconds());
-  when(repo.findById(1L)).thenReturn(Optional.of(item));
+  when(repo.findByTenantIdAndId(1L, 1L)).thenReturn(Optional.of(item));
   when(repo.save(any())).thenAnswer(i -> i.getArgument(0));
   org.springframework.test.web.servlet.MockMvc mvc = MockMvcBuilders.standaloneSetup(new AdminAnnouncementController(repo)).build();
   mvc.perform(post("/api/admin/announcement/create").contentType("application/json").content("{\"countdownSeconds\":0}")).andExpect(status().isOk());

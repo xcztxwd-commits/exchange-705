@@ -49,7 +49,7 @@
               :show-file-list="false"
               :before-upload="beforeUpload"
             >
-              <img v-if="row.qrCode" :src="getImageUrl(row.qrCode)" class="qr-image" />
+              <ProtectedImage v-if="row.qrCode" :src="getImageUrl(row.qrCode)" class="qr-image" />
               <el-button v-permission="editingItem ? 'deposit_settings:edit' : 'deposit_settings:create'" v-else size="small" type="primary">上传</el-button>
             </el-upload>
             <span v-else>-</span>
@@ -100,7 +100,7 @@
               :show-file-list="false"
               :before-upload="beforeUpload"
             >
-              <img v-if="formData.qrCode" :src="getImageUrl(formData.qrCode)" class="qr-image" />
+              <ProtectedImage v-if="formData.qrCode" :src="getImageUrl(formData.qrCode)" class="qr-image" />
               <el-button v-permission="editingItem ? 'deposit_settings:edit' : 'deposit_settings:create'" v-else size="small" type="primary">上传二维码</el-button>
             </el-upload>
           </el-form-item>
@@ -132,6 +132,7 @@
 </template>
 
 <script setup lang="ts">
+import ProtectedImage from '../../../exchange-frontend/src/components/ProtectedImage.vue'
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import request from '@/utils/request'

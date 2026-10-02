@@ -8,14 +8,15 @@ import java.time.LocalDateTime;
 
 @Getter
 @Setter
+@org.hibernate.annotations.Persister(impl = com.gtcfesk.exchange.tenant.TenantEntityPersister.class)
 @Entity
 @Table(name = "loan_personal_info")
-public class LoanPersonalInfo {
+public class LoanPersonalInfo extends com.gtcfesk.exchange.tenant.TenantOwnedEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "user_id", nullable = false, unique = true)
+    @Column(name = "user_id", nullable = false)
     private Long userId;
 
     @Column(name = "real_name", nullable = false, length = 100)

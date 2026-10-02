@@ -1,6 +1,7 @@
 package com.gtcfesk.exchange.auth.dto;
 
 import lombok.Data;
+import java.math.BigDecimal;
 
 import javax.validation.constraints.Email;
 import javax.validation.constraints.NotBlank;
@@ -11,6 +12,7 @@ public class RegisterRequest {
 
     @Email
     @NotBlank
+    @Size(max = 128, message = "email too long")
     private String email;
 
     @NotBlank
@@ -25,6 +27,11 @@ public class RegisterRequest {
 
     @Size(max = 100)
     private String invitationCode;
+
+    private String countryCode;
+    private String phone;
+    private BigDecimal annualIncome;
+    private String annualIncomeCurrency;
 
     @NotBlank
     @javax.validation.constraints.Pattern(regexp = "[a-f0-9]{32}")

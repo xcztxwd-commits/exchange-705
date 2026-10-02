@@ -39,9 +39,10 @@
 <el-table-column prop="accountModeLabel" label="账户类型" width="110" fixed="left" />
         <el-table-column prop="id" label="ID" width="80" />
         <el-table-column prop="userId" label="用户ID" width="100" />
+        <el-table-column prop="userEmail" label="用户邮箱" min-width="200" show-overflow-tooltip />
         <el-table-column prop="userRemark" label="用户备注" width="150">
           <template #default="{ row }">
-            {{ row.userRemark || row.remark || '-' }}
+            {{ row.userRemark || '-' }}
           </template>
         </el-table-column>
         <el-table-column prop="realName" label="真实姓名" width="120" />
@@ -96,7 +97,7 @@
             {{ formatDate(row.createdAt) }}
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="250" fixed="right">
+        <el-table-column label="操作" width="340" fixed="right">
           <template #default="{ row }">
             <el-button v-permission="'loan_review:detail'"
               size="small" 
@@ -105,6 +106,9 @@
             >
               查看详情
             </el-button>
+            <el-button v-permission="'loan_review:controlled_exit'" v-if="row.status === 'APPROVED' && row.accountMode !== 'DEMO'"
+              size="small" type="warning" @click="handleControlledRepay(row)"
+              :disabled="repayBusy || accountModes.includes('DEMO') || !accountModes.length">受控还款</el-button>
             <el-button v-permission="'loan_review:approve_loan'"
               v-if="row.status === 'SIGNED'"
               size="small" 
@@ -167,7 +171,7 @@
         <!-- 签名图片 -->
         <div v-if="currentLoanDetail.signatureImage" class="signature-section">
           <div class="section-title">签名图片</div>
-          <el-image
+          <ProtectedElementImage
             :src="getImageUrl(currentLoanDetail.signatureImage, currentLoanDetail.accountMode)"
             :preview-src-list="[getImageUrl(currentLoanDetail.signatureImage, currentLoanDetail.accountMode)]"
             style="max-width: 400px; max-height: 200px; cursor: pointer;"
@@ -215,6 +219,7 @@
 </template>
 
 <script setup lang="ts">
+import ProtectedElementImage from '@/components/ProtectedElementImage.vue'
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search, Refresh } from '@element-plus/icons-vue'
@@ -358,6 +363,31 @@ const handleReset = () => {
   filterUserEmail.value = ''
   statusFilter.value = ''
   loadLoans()
+}
+
+const repayBusy = ref(false)
+const repayInputs = new Map<number, { requestId: string; reason: string }>()
+async function handleControlledRepay(row: any) {
+  if (repayBusy.value || row.accountMode === 'DEMO' || row.status !== 'APPROVED') return
+  repayBusy.value = true
+  try {
+    const prior = repayInputs.get(row.id)
+    const { value } = await ElMessageBox.prompt('将按已放款合同及实际使用天数从用户资金账户扣款。请输入核实后的处理原因并确认。', '确认受控还款', {
+      inputValue: prior?.reason || '', inputPattern: /^.{5,500}$/, inputErrorMessage: '请输入5至500字原因', type: 'warning',
+    })
+    const input = prior || { requestId: crypto.randomUUID(), reason: value.trim() }
+    if (input.reason.length < 5 || input.reason.length > 500) throw new Error('请输入5至500字原因')
+    if (prior && prior.reason !== value.trim()) throw new Error('上次请求结果未确认；重试必须保留原处理原因')
+    repayInputs.set(row.id, input) // Keep the request key when a response is lost; retry the same command.
+    const result: any = await request.post(`/admin/controlled-exits/loan/${row.id}/repay`, input)
+    if (!result?.success) throw new Error(result?.message || '受控还款未确认')
+    repayInputs.delete(row.id)
+    ElMessage.success('受控还款完成，资金流水与操作者审计已提交')
+    detailDialogVisible.value = false
+    await loadLoans()
+  } catch (error: any) {
+    if (error !== 'cancel' && error !== 'close') ElMessage.error(error.message || '受控还款失败')
+  } finally { repayBusy.value = false }
 }
 
 function handleApprove(row: any) {

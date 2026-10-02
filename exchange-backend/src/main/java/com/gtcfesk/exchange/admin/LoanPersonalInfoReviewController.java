@@ -24,6 +24,9 @@ import java.util.stream.Collectors;
 @RequestMapping("/api/admin/loan/personal-info")
 @RequiredArgsConstructor
 public class LoanPersonalInfoReviewController {
+    private void auditControl(String action,String object,String detail,String reason){if(com.gtcfesk.exchange.control.ControlIdentity.isAccess())controlAudit.recordCurrent(action,object,detail,reason); }
+    @javax.persistence.PersistenceContext private javax.persistence.EntityManager em;
+    @org.springframework.beans.factory.annotation.Autowired private com.gtcfesk.exchange.control.ControlAuditService controlAudit;
     
     private final LoanPersonalInfoRepository loanPersonalInfoRepository;
     private final UserAccountRepository userAccountRepository;
@@ -45,14 +48,14 @@ public class LoanPersonalInfoReviewController {
             
             List<LoanPersonalInfo> list;
             if (status != null && !status.isEmpty()) {
-                list = loanPersonalInfoRepository.findByStatusOrderByCreatedAtDesc(status);
+                list = loanPersonalInfoRepository.findByTenantIdAndStatusOrderByCreatedAtDesc(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), status);
             } else {
-                list = loanPersonalInfoRepository.findAllByOrderByCreatedAtDesc();
+                list = loanPersonalInfoRepository.findAllByTenantIdOrderByCreatedAtDesc(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId());
             }
             
             // 如果指定了代理ID（代理登录或管理员筛选），只返回该代理下级用户的记录
             if (targetAgentId != null) {
-                List<UserAccount> subordinates = userAccountRepository.findByParentUserId(targetAgentId);
+                List<UserAccount> subordinates = userAccountRepository.findByTenantIdAndParentUserId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), targetAgentId);
                 Set<Long> subordinateUserIds = subordinates.stream()
                         .map(UserAccount::getId)
                         .collect(Collectors.toSet());
@@ -75,7 +78,7 @@ public class LoanPersonalInfoReviewController {
             
             // 按用户邮箱过滤
             if (userEmail != null && !userEmail.trim().isEmpty()) {
-                Optional<UserAccount> userOpt = userAccountRepository.findByEmail(userEmail.trim());
+                Optional<UserAccount> userOpt = userAccountRepository.findByTenantIdAndEmail(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), userEmail.trim());
                 if (userOpt.isPresent()) {
                     Long targetUserId = userOpt.get().getId();
                     list = list.stream()
@@ -92,6 +95,7 @@ public class LoanPersonalInfoReviewController {
                 Map<String, Object> infoMap = new HashMap<>();
                 infoMap.put("id", info.getId());
                 infoMap.put("userId", info.getUserId());
+                AdminUserIdentity.put(infoMap, null);
                 infoMap.put("realName", info.getRealName());
                 infoMap.put("idNumber", info.getIdNumber());
                 infoMap.put("phone", info.getPhone());
@@ -105,14 +109,14 @@ public class LoanPersonalInfoReviewController {
                 infoMap.put("reviewedAt", info.getReviewedAt());
                 
                 // 填充代理信息和用户备注
-                UserAccount user = userAccountRepository.findById(info.getUserId()).orElse(null);
+                UserAccount user = userAccountRepository.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), info.getUserId()).orElse(null);
                 if (user != null) {
                     // 添加用户备注
-                    infoMap.put("userRemark", user.getRemark());
+                    AdminUserIdentity.put(infoMap, user);
                     
                     // 填充代理信息
                     if (user.getParentUserId() != null) {
-                        UserAccount agent = userAccountRepository.findById(user.getParentUserId()).orElse(null);
+                        UserAccount agent = userAccountRepository.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), user.getParentUserId()).orElse(null);
                         if (agent != null) {
                             String agentName = (agent.getNickname() != null && !agent.getNickname().isEmpty()) 
                                     ? agent.getNickname() : agent.getEmail();
@@ -125,7 +129,7 @@ public class LoanPersonalInfoReviewController {
                     }
                 } else {
                     infoMap.put("agentInfo", null);
-                    infoMap.put("userRemark", null);
+                    AdminUserIdentity.put(infoMap, null);
                 }
                 
                 return infoMap;
@@ -202,7 +206,7 @@ public class LoanPersonalInfoReviewController {
             Authentication auth,
             @PathVariable Long id) {
         try {
-            LoanPersonalInfo info = loanPersonalInfoRepository.findById(id)
+            LoanPersonalInfo info = java.util.Optional.ofNullable(com.gtcfesk.exchange.tenant.TenantEntities.find(em,LoanPersonalInfo.class,id,javax.persistence.LockModeType.PESSIMISTIC_WRITE))
                     .orElseThrow(() -> new RuntimeException("记录不存在"));
             
             if (!"PENDING".equals(info.getStatus())) {
@@ -220,15 +224,17 @@ public class LoanPersonalInfoReviewController {
             
             loanPersonalInfoService.validateForReview(info);
             info.setStatus("APPROVED");
-            info.setReviewedBy(reviewerId);
+            info.setReviewedBy(com.gtcfesk.exchange.control.ControlIdentity.isAccess()?null:reviewerId);
             info.setReviewedAt(LocalDateTime.now());
             loanPersonalInfoRepository.save(info);
+            auditControl("LOAN_PERSONAL_REVIEW",String.valueOf(id),"status="+info.getStatus(),info.getReviewRemark());
             
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", true);
             resp.put("message", "审核通过");
             return ResponseEntity.ok(resp);
         } catch (Exception e) {
+            org.springframework.transaction.interceptor.TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", false);
             resp.put("message", "操作失败: " + com.gtcfesk.exchange.common.SafeErrors.message(e));
@@ -244,7 +250,7 @@ public class LoanPersonalInfoReviewController {
             @PathVariable Long id,
             @RequestBody(required = false) Map<String, String> request) {
         try {
-            LoanPersonalInfo info = loanPersonalInfoRepository.findById(id)
+            LoanPersonalInfo info = java.util.Optional.ofNullable(com.gtcfesk.exchange.tenant.TenantEntities.find(em,LoanPersonalInfo.class,id,javax.persistence.LockModeType.PESSIMISTIC_WRITE))
                     .orElseThrow(() -> new RuntimeException("记录不存在"));
             
             if (!"PENDING".equals(info.getStatus())) {
@@ -261,18 +267,20 @@ public class LoanPersonalInfoReviewController {
             }
             
             info.setStatus("REJECTED");
-            info.setReviewedBy(reviewerId);
+            info.setReviewedBy(com.gtcfesk.exchange.control.ControlIdentity.isAccess()?null:reviewerId);
             info.setReviewedAt(LocalDateTime.now());
             if (request != null && request.containsKey("remark")) {
                 info.setReviewRemark(request.get("remark"));
             }
             loanPersonalInfoRepository.save(info);
+            auditControl("LOAN_PERSONAL_REVIEW",String.valueOf(id),"status="+info.getStatus(),info.getReviewRemark());
             
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", true);
             resp.put("message", "审核拒绝");
             return ResponseEntity.ok(resp);
         } catch (Exception e) {
+            org.springframework.transaction.interceptor.TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", false);
             resp.put("message", "操作失败: " + com.gtcfesk.exchange.common.SafeErrors.message(e));

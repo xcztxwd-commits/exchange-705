@@ -15,7 +15,7 @@ public class LoanSettingService {
     private final LoanSettingRepository loanSettingRepository;
 
     public List<LoanSetting> getAllSettings() {
-        return loanSettingRepository.findAll();
+        return loanSettingRepository.findAllByTenantId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId());
     }
 
     public LoanSetting createSetting(LoanSetting setting) {
@@ -24,7 +24,7 @@ public class LoanSettingService {
 
     @Transactional
     public LoanSetting updateSetting(Long id, LoanSetting setting) {
-        LoanSetting existing = loanSettingRepository.findById(id)
+        LoanSetting existing = loanSettingRepository.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), id)
                 .orElseThrow(() -> new RuntimeException("贷款设置不存在"));
         existing.setDays(setting.getDays());
         existing.setDailyRate(setting.getDailyRate());
@@ -38,7 +38,7 @@ public class LoanSettingService {
 
     @Transactional
     public void deleteSetting(Long id) {
-        loanSettingRepository.deleteById(id);
+        loanSettingRepository.deleteByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), id);
     }
 }
 

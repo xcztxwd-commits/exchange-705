@@ -1,0 +1,336 @@
+{
+  "date": "2026-09-29",
+  "scope": "analysis and next-stage design only",
+  "production_operations_performed": false,
+  "current_source_gate": {
+    "exit_code": 1,
+    "issues": 20
+  },
+  "current_release_gate": {
+    "exit_code": 1,
+    "issues": 24
+  },
+  "current_table_preference_test": {
+    "exit_code": 1,
+    "first_failure": "BackendAccounts.vue"
+  },
+  "historical_full_suite": {
+    "tests": 2393,
+    "passed": 2141,
+    "failures": 8,
+    "errors": 213,
+    "skipped": 31,
+    "current_version_verified": false
+  },
+  "changes_after_historical_suite": {
+    "modified_backend_src_files": 14,
+    "new_backend_src_files": 7
+  },
+  "source_drift_during_analysis": [
+    "exchange-frontend/src/views/Deposit.vue",
+    "exchange-pc/src/views/Deposit.vue",
+    "exchange-pc/src/views/DesktopTrade.vue"
+  ],
+  "evidence_directory": "C:\\workspace\\fx\\new\\mt705-next-design-20260929",
+  "gaps": [
+    {
+      "id": "G01",
+      "priority": "P0",
+      "classification": "整合缺口",
+      "title": "当前源码登记、新表与迁移整合",
+      "stages": [
+        "S0",
+        "S1"
+      ],
+      "prerequisites": [],
+      "test_groups": [
+        "T05",
+        "T10",
+        "T17"
+      ],
+      "status": "open",
+      "runtime_proven": false
+    },
+    {
+      "id": "G02",
+      "priority": "P0",
+      "classification": "规则待定",
+      "title": "KYC与存量退出契约",
+      "stages": [
+        "S1"
+      ],
+      "prerequisites": [
+        "G01"
+      ],
+      "test_groups": [
+        "T06",
+        "T07",
+        "T08",
+        "T09",
+        "T13"
+      ],
+      "status": "open",
+      "runtime_proven": false
+    },
+    {
+      "id": "G03",
+      "priority": "P1",
+      "classification": "代码缺口",
+      "title": "三类身份表格偏好",
+      "stages": [
+        "S2"
+      ],
+      "prerequisites": [
+        "G01"
+      ],
+      "test_groups": [
+        "T02",
+        "T04",
+        "T15"
+      ],
+      "status": "open",
+      "runtime_proven": false
+    },
+    {
+      "id": "G04",
+      "priority": "P1",
+      "classification": "代码缺口",
+      "title": "域名先验证后激活",
+      "stages": [
+        "S2"
+      ],
+      "prerequisites": [
+        "G01"
+      ],
+      "test_groups": [
+        "T03",
+        "T13",
+        "T17"
+      ],
+      "status": "open",
+      "runtime_proven": false
+    },
+    {
+      "id": "G05",
+      "priority": "P1",
+      "classification": "代码缺口",
+      "title": "客服监管时间检索",
+      "stages": [
+        "S2"
+      ],
+      "prerequisites": [
+        "G01"
+      ],
+      "test_groups": [
+        "T10",
+        "T15"
+      ],
+      "status": "open",
+      "runtime_proven": false
+    },
+    {
+      "id": "G06",
+      "priority": "P1",
+      "classification": "代码及运营闭环",
+      "title": "大会话、清理推进、恢复",
+      "stages": [
+        "S2",
+        "S5"
+      ],
+      "prerequisites": [
+        "G01"
+      ],
+      "test_groups": [
+        "T10",
+        "T11",
+        "T12",
+        "T16"
+      ],
+      "status": "open",
+      "runtime_proven": false
+    },
+    {
+      "id": "G07",
+      "priority": "P0",
+      "classification": "工具闭环及运营前置",
+      "title": "正式数据文件处理编排",
+      "stages": [
+        "S6",
+        "S7"
+      ],
+      "prerequisites": [
+        "G01",
+        "G11",
+        "G12"
+      ],
+      "test_groups": [
+        "T17"
+      ],
+      "status": "open",
+      "runtime_proven": false
+    },
+    {
+      "id": "G08",
+      "priority": "P1",
+      "classification": "配置闭环及范围决策",
+      "title": "新租户开通和短信范围",
+      "stages": [
+        "S2"
+      ],
+      "prerequisites": [
+        "G01",
+        "G04"
+      ],
+      "test_groups": [
+        "T01",
+        "T13",
+        "T16"
+      ],
+      "status": "open",
+      "runtime_proven": false
+    },
+    {
+      "id": "G09",
+      "priority": "P1",
+      "classification": "运营闭环",
+      "title": "异常发现处置复核",
+      "stages": [
+        "S2",
+        "S5"
+      ],
+      "prerequisites": [
+        "G01"
+      ],
+      "test_groups": [
+        "T12",
+        "T16",
+        "T18"
+      ],
+      "status": "open",
+      "runtime_proven": false
+    },
+    {
+      "id": "G10",
+      "priority": "P0",
+      "classification": "测试缺口",
+      "title": "夹具与新规则回归",
+      "stages": [
+        "S3"
+      ],
+      "prerequisites": [
+        "G01",
+        "G02"
+      ],
+      "test_groups": [
+        "T01",
+        "T02",
+        "T05",
+        "T06",
+        "T07",
+        "T08",
+        "T09",
+        "T10"
+      ],
+      "status": "open",
+      "runtime_proven": false
+    },
+    {
+      "id": "G11",
+      "priority": "P0",
+      "classification": "验收缺口",
+      "title": "数据资金模拟任务同版本链路",
+      "stages": [
+        "S3",
+        "S4",
+        "S5"
+      ],
+      "prerequisites": [
+        "G02",
+        "G10"
+      ],
+      "test_groups": [
+        "T01",
+        "T02",
+        "T04",
+        "T05",
+        "T06",
+        "T07",
+        "T08",
+        "T09",
+        "T10",
+        "T11",
+        "T13",
+        "T14",
+        "T16"
+      ],
+      "status": "open",
+      "runtime_proven": false
+    },
+    {
+      "id": "G12",
+      "priority": "P0",
+      "classification": "验收及部署闭环",
+      "title": "四端容量发布恢复",
+      "stages": [
+        "S4",
+        "S5",
+        "S6",
+        "S7"
+      ],
+      "prerequisites": [
+        "G03",
+        "G04",
+        "G05",
+        "G06",
+        "G08",
+        "G09",
+        "G10",
+        "G11"
+      ],
+      "test_groups": [
+        "T03",
+        "T04",
+        "T15",
+        "T17",
+        "T18"
+      ],
+      "status": "open",
+      "runtime_proven": false
+    }
+  ],
+  "dependency_note": "Prerequisites describe implementation/local acceptance. G07 formal execution waits for G12 local acceptance; S7 final sign-off requires both. This is not an executable task scheduler.",
+  "decisions": [
+    {
+      "id": "D01",
+      "topic": "KYC versus existing-position exit",
+      "status": "needs_confirmation_if_not_resolved_by_later_user_requirement"
+    },
+    {
+      "id": "D02",
+      "topic": "SMS sending scope and provider",
+      "status": "needs_scope_and_provider"
+    },
+    {
+      "id": "D03",
+      "topic": "capacity acceptance budget",
+      "status": "proposed_not_approved"
+    }
+  ],
+  "documents": [
+    {
+      "path": "C:\\workspace\\fx\\705\\docs\\multitenant-next-gap-analysis-20260929.md",
+      "sha256": "1127cfd3ed8949b1a79fac15663f3126ed3e03291d4b3891837d1f41afbeb023",
+      "lines": 154
+    },
+    {
+      "path": "C:\\workspace\\fx\\705\\docs\\multitenant-next-implementation-plan-20260929.md",
+      "sha256": "24f9b7a740312106a1ae04d4498de4252ca46d495a08789e5c8c414c6d81853e",
+      "lines": 229
+    },
+    {
+      "path": "C:\\workspace\\fx\\705\\docs\\multitenant-next-session-prompt-20260929.md",
+      "sha256": "e2088ea7564376aff6b2d38d9975b18cca5e59e27b28251169f32ac0357e1b60",
+      "lines": 59
+    }
+  ]
+}

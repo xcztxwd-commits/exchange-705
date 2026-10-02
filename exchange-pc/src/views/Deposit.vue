@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { canStartBusiness } from '@/utils/tenantFeatures'
+import ProtectedImage from '../../../exchange-frontend/src/components/ProtectedImage.vue'
 import { accountMode } from "@/utils/accountMode"
 const simulation = accountMode() === "DEMO"
 import { ref, onMounted } from 'vue'
@@ -399,7 +401,7 @@ onMounted(() => {
       <!-- 二维码和地址 -->
       <div class="qr-section">
         <div class="qr-code" v-if="qrCodeUrl">
-          <img :src="qrCodeUrl" :alt="localeStore.t('qrCode')" />
+          <ProtectedImage :src="qrCodeUrl" :alt="localeStore.t('qrCode')" />
         </div>
         <div class="qr-code-placeholder" v-else>
           <svg class="placeholder-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -464,14 +466,14 @@ onMounted(() => {
             <div class="upload-text">{{ localeStore.t('clickToUpload') }}</div>
           </div>
           <div v-else class="upload-preview">
-            <img :src="proofPreview" :alt="localeStore.t('uploadPaymentVoucher')" />
+            <ProtectedImage :src="proofPreview" :alt="localeStore.t('uploadPaymentVoucher')" />
             <button class="remove-button" @click="removeProof">×</button>
           </div>
         </div>
       </div>
 
       <!-- 提交按钮 -->
-      <button 
+      <button v-if="canStartBusiness('deposit')"
         class="submit-button" 
         @click="submitDeposit"
         :disabled="uploading || rate === null || !depositAmount || (!simulation && !proofFile)"
@@ -545,14 +547,14 @@ onMounted(() => {
               <div class="upload-text">{{ localeStore.t('clickToUpload') }}</div>
             </div>
             <div v-else class="upload-preview">
-              <img :src="proofPreview" :alt="localeStore.t('uploadPaymentVoucher')" />
+              <ProtectedImage :src="proofPreview" :alt="localeStore.t('uploadPaymentVoucher')" />
               <button class="remove-button" @click="removeProof">×</button>
             </div>
           </div>
         </div>
         
         <!-- 提交按钮 -->
-        <button 
+        <button v-if="canStartBusiness('deposit')"
           class="submit-button" 
           @click="submitDeposit"
           :disabled="uploading || rate === null || !depositAmount || (!simulation && !proofFile)"

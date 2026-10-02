@@ -11,15 +11,15 @@ import java.util.List;
 import java.util.Optional;
 
 @Repository
-public interface KycRecordRepository extends JpaRepository<KycRecord, Long>, JpaSpecificationExecutor<KycRecord> {
-    Optional<KycRecord> findByUserId(Long userId);
+public interface KycRecordRepository extends com.gtcfesk.exchange.tenant.TenantRepository<KycRecord, Long> {
+    Optional<KycRecord> findByTenantIdAndUserId(Long tenantId, Long userId);
     
-    Optional<KycRecord> findFirstByUserIdOrderByCreatedAtDesc(Long userId);
+    Optional<KycRecord> findFirstByTenantIdAndUserIdOrderByCreatedAtDesc(Long tenantId, Long userId);
     
-    List<KycRecord> findByStatus(String status);
+    List<KycRecord> findByTenantIdAndStatus(Long tenantId, String status);
     
-    List<KycRecord> findByStatusOrderByCreatedAtDesc(String status);
+    List<KycRecord> findByTenantIdAndStatusOrderByCreatedAtDesc(Long tenantId, String status);
     
-    Page<KycRecord> findByStatus(String status, Pageable pageable);
+    Page<KycRecord> findByTenantIdAndStatus(Long tenantId, String status, Pageable pageable);
 }
 

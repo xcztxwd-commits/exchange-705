@@ -30,11 +30,11 @@ public class AssetHistoryCache {
             throw new IllegalArgumentException("History cache requires an environment-specific namespace and TTLs between 1 and 604800 seconds");
     }
     String key(int level,long user,long start,long end,long revision){
-        return namespace+":equity:history:v2:"+EquityValuationService.BASIS+":"+user+":"+level+":"+start+":"+end+":"+revision;
+        return namespace+":tenant:"+com.gtcfesk.exchange.tenant.TenantContext.requireTenantId()+":equity:history:v2:"+EquityValuationService.BASIS+":"+user+":"+level+":"+start+":"+end+":"+revision;
     }
     List<AssetHistoryBucket> read(JdbcTemplate db,int level,long user,long start,long end,Supplier<List<AssetHistoryBucket>> loader){
         // Never catch MySQL errors here. No Redis invalidation/notification is needed after commit.
-        List<Long> revisions=db.query("select revision from asset_history_revision where user_id=? and basis_version=? and level=?",(r,n)->r.getLong(1),user,EquityValuationService.BASIS,level);
+        List<Long> revisions=db.query("select revision from asset_history_revision where tenant_id="+com.gtcfesk.exchange.tenant.TenantContext.requireTenantId()+" and user_id=? and basis_version=? and level=?",(r,n)->r.getLong(1),user,EquityValuationService.BASIS,level);
         long revision=revisions.isEmpty()?0:revisions.get(0);
         String key=key(level,user,start,end,revision);boolean reachable=true;
         String raw=null;

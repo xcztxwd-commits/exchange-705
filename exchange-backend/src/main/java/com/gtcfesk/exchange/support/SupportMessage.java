@@ -5,10 +5,11 @@ import lombok.Setter;
 import javax.persistence.*;
 import java.time.Instant;
 
+@org.hibernate.annotations.Persister(impl = com.gtcfesk.exchange.tenant.TenantEntityPersister.class)
 @Entity @Getter @Setter
-@Table(name = "support_message", uniqueConstraints = @UniqueConstraint(columnNames = {"conversationId", "sender", "senderId", "requestId"}),
+@Table(name = "support_message", uniqueConstraints = @UniqueConstraint(columnNames={"tenant_id", "conversationId", "sender", "senderId", "requestId"}),
     indexes = @Index(name = "support_message_cursor", columnList = "conversationId,id"))
-public class SupportMessage {
+public class SupportMessage extends com.gtcfesk.exchange.tenant.TenantOwnedEntity {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY) private Long id;
     @Column(nullable = false, updatable = false) private Long conversationId;
     @Column(nullable = false, updatable = false, length = 12) private String sender;

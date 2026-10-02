@@ -2,6 +2,7 @@
 import marketWebSocket from '@/utils/marketWebSocket'
 import { ref, computed, onMounted, watch, onUnmounted } from 'vue'
 import Tabbar from '@/components/Tabbar.vue'
+import AppSelect from '@/components/AppSelect.vue'
 import OrderShareModal from '@/components/OrderShareModal.vue'
 import { shareCopy, type ShareKind } from '@/utils/orderShare'
 import request from '@/utils/request'
@@ -97,11 +98,7 @@ function transformContractOrder(order: any) {
   const leverage = Number(order.leverage ?? 1)
   const calculatedProfit = calculateContractProfit(order, displayPrice, marketStore.getConversionRate(order.symbol, order.quoteCurrency))
 
-  // 对于挂单（PENDING），使用 createdAt 作为创建时间；对于持仓（OPEN），使用 openTime
-  const displayTime = order.status === 'PENDING' 
-    ? (order.createdAt || order.openTime) 
-    : (order.openTime || order.createdAt)
-  const rawOpenTime = order.manualOpenTimeUtc != null ? new Date(order.manualOpenTimeUtc).toISOString() : displayTime
+  const rawOpenTime = order.manualOpenTimeUtc != null ? new Date(order.manualOpenTimeUtc).toISOString() : order.openTime
   const rawCloseTime = order.manualCloseTimeUtc != null ? new Date(order.manualCloseTimeUtc).toISOString() : order.closeTime
   
   return {
@@ -122,7 +119,8 @@ function transformContractOrder(order: any) {
     fee: Number(order.fee || 0),
     orderSource: order.orderSource,
     manualCloseTime: order.manualCloseTimeUtc != null ? formatDateTime(new Date(order.manualCloseTimeUtc).toISOString()) : '',
-    openTime: formatOrderTime(rawOpenTime), // 使用创建时间或开仓时间
+    createdTime: formatOrderTime(order.createdAt),
+    openTime: formatOrderTime(rawOpenTime),
     closeTime: formatOrderTime(rawCloseTime),
     openTimeRaw: rawOpenTime,
     closeTimeRaw: rawCloseTime,
@@ -698,6 +696,16 @@ const currentRows = computed<any[]>(() => mainTab.value === 'contract'
 
 const availableSymbols = computed(() => [...new Set(currentRows.value.map(order => order.symbol).filter(Boolean))])
 const isHistory = computed(() => mainTab.value === 'contract' ? subTab.value === 'history' : termSubTab.value === 'closed')
+const symbolOptions = computed(() => [{ value: 'all', label: copy('全部幣種', 'All symbols') }, ...availableSymbols.value.map(symbol => ({ value: symbol, label: orderLabel(symbol) }))])
+const periodOptions = computed(() => [
+  { value: 30, label: copy('近30天', 'Last 30 days') }, { value: 7, label: copy('近7天', 'Last 7 days') },
+  { value: 90, label: copy('近90天', 'Last 90 days') }, { value: 0, label: copy('全部時間', 'All time') },
+])
+const directionOptions = computed(() => [
+  { value: 'all', label: copy('全部方向', 'All directions') },
+  { value: 'buy', label: mainTab.value === 'term' ? copy('看漲', 'Up') : copy('買入 / 多', 'Buy / Long') },
+  { value: 'sell', label: mainTab.value === 'term' ? copy('看跌', 'Down') : copy('賣出 / 空', 'Sell / Short') },
+])
 const visibleRows = computed(() => {
   const rows = currentRows.value.filter(order =>
     (symbolFilter.value === 'all' || order.symbol === symbolFilter.value)
@@ -827,7 +835,7 @@ function cardRate(order: any): string {
 }
 
 function cardTime(order: any): string {
-  return isHistory.value ? order.closeTime || '--' : order.openTime || '--'
+  return cardKind.value === 'pending' ? order.createdTime || '--' : isHistory.value ? order.closeTime || '--' : order.openTime || '--'
 }
 
 function cardTimeLabel(): string {
@@ -976,9 +984,9 @@ function formatPrice(v: number | string | undefined | null) {
       </section>
 
       <div class="orders-filters">
-        <label class="filter-select"><span class="sr-only">{{ copy('幣種', 'Symbol') }}</span><select v-model="symbolFilter"><option value="all">{{ copy('全部幣種', 'All symbols') }}</option><option v-for="symbol in availableSymbols" :key="symbol" :value="symbol">{{ orderLabel(symbol) }}</option></select></label>
-        <label v-if="isHistory" class="filter-select"><span class="sr-only">{{ copy('時間範圍', 'Period') }}</span><select v-model.number="periodFilter"><option :value="30">{{ copy('近30天', 'Last 30 days') }}</option><option :value="7">{{ copy('近7天', 'Last 7 days') }}</option><option :value="90">{{ copy('近90天', 'Last 90 days') }}</option><option :value="0">{{ copy('全部時間', 'All time') }}</option></select></label>
-        <label v-else class="filter-select"><span class="sr-only">{{ copy('方向', 'Direction') }}</span><select v-model="directionFilter"><option value="all">{{ copy('全部方向', 'All directions') }}</option><option value="buy">{{ mainTab === 'term' ? copy('看漲', 'Up') : copy('買入 / 多', 'Buy / Long') }}</option><option value="sell">{{ mainTab === 'term' ? copy('看跌', 'Down') : copy('賣出 / 空', 'Sell / Short') }}</option></select></label>
+        <AppSelect class="filter-select" v-model="symbolFilter" :options="symbolOptions" :label="copy('幣種', 'Symbol')" />
+        <AppSelect v-if="isHistory" class="filter-select" v-model="periodFilter" :options="periodOptions" :label="copy('時間範圍', 'Period')" />
+        <AppSelect v-else class="filter-select" v-model="directionFilter" :options="directionOptions" :label="copy('方向', 'Direction')" />
         <span class="filter-count">{{ copy('共', 'Total') }} {{ visibleRows.length }}</span>
       </div>
 
@@ -998,6 +1006,7 @@ function formatPrice(v: number | string | undefined | null) {
           </div>
           <div v-if="cardKind === 'trading'" class="countdown-block"><div class="countdown-caption"><span>{{ copy('距離結算', 'To settlement') }}</span><strong>{{ countdown(order) }}</strong></div><div class="countdown-track"><span :style="{ width: `${countdownProgress(order)}%` }"></span></div></div>
           <div class="card-metrics"><div v-for="(metric, index) in cardMetrics(order)" :key="index" class="metric" :class="{ right: index % 3 === 2 }"><span>{{ metric.label }}</span><strong>{{ metric.value }}</strong></div></div>
+          <div v-if="isHistory" class="card-footer"><span>{{ localeStore.t('openTime') }}</span><div><time>{{ order.openTime || '--' }}</time></div></div>
           <div class="card-footer"><span>{{ cardTimeLabel() }}</span><div><time>{{ cardTime(order) }}</time><button v-if="isHistory" type="button" class="order-share-entry" :aria-label="shareLabel" :title="shareLabel" @click="shareOrder = { id: order.id, kind: mainTab === 'contract' ? 'contract' : 'option' }"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 16V3m-4 4 4-4 4 4M5 13v7h14v-7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" /></svg></button></div></div>
           <div v-if="cardKind === 'positions' || cardKind === 'pending'" class="card-actions">
             <template v-if="cardKind === 'positions'"><button type="button" class="subtle-action" @click="openOrderDetailModal(order, true)">{{ copy('止盈止損', 'TP / SL') }}</button><button type="button" class="primary-action" @click="openOrderDetailModal(order)">{{ copy('平倉', 'Close') }}</button></template>
@@ -1027,7 +1036,7 @@ function formatPrice(v: number | string | undefined | null) {
 .orders-header{background:#fff}.orders-titlebar{height:58px;display:flex;justify-content:center;align-items:center;position:relative}.orders-titlebar h1{margin:0;font-size:19px;font-weight:700}.history-shortcut{position:absolute;right:13px;top:9px;width:40px;height:40px;display:grid;place-items:center;border:0;background:none;color:#5f6b79;cursor:pointer}
 .main-tabs,.sub-tabs{display:flex;align-items:stretch;gap:34px;padding:0 25px;border-bottom:1px solid #eef0f2}.main-tabs{height:45px}.sub-tabs{height:44px;gap:28px;overflow-x:auto;scrollbar-width:none}.sub-tabs::-webkit-scrollbar{display:none}.main-tab,.sub-tab{position:relative;flex:none;padding:0;border:0;background:none;color:#8995a3;white-space:nowrap;cursor:pointer}.main-tab{font-size:17px;font-weight:700}.sub-tab{font-size:14px;font-weight:600}.main-tab.active,.sub-tab.active{color:#101b28}.main-tab.active:after,.sub-tab.active:after{content:'';position:absolute;left:0;right:0;bottom:-1px;height:3px;border-radius:3px 3px 0 0;background:#73b100}
 .orders-content{max-width:650px;margin:auto;padding:12px 12px 24px}.summary-card,.order-card{background:#fff;border:1px solid #e8ecf0;border-radius:15px;box-shadow:0 2px 12px #17212d05}.summary-card{padding:16px 15px 14px}.summary-heading{display:flex;justify-content:space-between;gap:12px;color:#8491a0;font-size:12px}.summary-primary{margin-top:8px;font-size:30px;line-height:1.15;font-weight:700;letter-spacing:-.6px;font-variant-numeric:tabular-nums}.summary-primary small{margin-left:5px;color:#758395;font-size:12px;font-weight:600;letter-spacing:0}.positive{color:#66aa00!important}.negative{color:#ee5264!important}.summary-stats{display:flex;justify-content:space-between;gap:12px;border-top:1px solid #e9edf1;margin-top:14px;padding-top:12px}.summary-stats>div{min-width:0}.summary-stats>div:last-child{text-align:right}.summary-stats span,.metric span,.detail-grid span{display:block;color:#8a96a4;font-size:11px;line-height:1.35}.summary-stats strong{display:block;margin-top:3px;font-size:12px;font-weight:650;white-space:nowrap;font-variant-numeric:tabular-nums}
-.orders-filters{display:flex;align-items:center;gap:6px;padding:14px 0 9px}.filter-select{position:relative;display:block}.filter-select:after{content:'';position:absolute;right:11px;top:14px;width:6px;height:6px;border-right:1.5px solid #394655;border-bottom:1.5px solid #394655;transform:rotate(45deg);pointer-events:none}.filter-select select{appearance:none;max-width:150px;height:35px;padding:0 26px 0 10px;border:1px solid #e1e6eb;border-radius:8px;background:#fff;color:#253444;font-family:inherit;font-size:12px;font-weight:600;cursor:pointer}.filter-count{margin-left:auto;color:#95a0ac;font-size:11px}.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+.orders-filters{display:flex;align-items:center;gap:6px;padding:14px 0 9px}.filter-select{width:auto;min-width:0;max-width:45%}.filter-count{margin-left:auto;color:#95a0ac;font-size:11px}.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 .orders-list{display:flex;flex-direction:column;gap:9px}.order-card{padding:15px 14px 0}.card-heading{display:flex;justify-content:space-between;gap:8px}.card-identity{min-width:0}.card-identity h2,.detail-identity h3{margin:0;font-size:17px;line-height:1.25;font-weight:750;letter-spacing:-.2px;white-space:nowrap}.card-tags{display:flex;align-items:center;flex-wrap:wrap;gap:4px;margin-top:5px}.card-tags span{display:inline-flex;align-items:center;min-height:18px;padding:1px 5px;border-radius:4px;font-size:10px;font-weight:700;line-height:1.2;white-space:nowrap}.direction-tag.long{background:#ecf7e8;color:#4da537}.direction-tag.short{background:#fff0f2;color:#e94c62}.card-tags .neutral-tag,.card-tags .status-tag{background:#f0f3f5;color:#637182}.card-tags .pending-tag,.card-tags .status-tag.pending-tag{background:#fff7e8;color:#bd8a1b}.card-tags .live-tag,.card-tags .status-tag.live-tag{background:#eff8e8;color:#63a500}.card-pnl{text-align:right;min-width:95px;font-variant-numeric:tabular-nums}.card-pnl strong{display:block;font-size:19px;line-height:1.1;font-weight:750}.card-pnl small{display:block;margin-top:3px;font-size:11px;font-weight:700}.card-pending{padding-top:2px;color:#bd8a1b;font-size:11px;font-weight:700}
 .card-metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px 6px;border-top:1px solid #edf0f2;margin-top:12px;padding:12px 0}.metric{min-width:0}.metric.right{text-align:right}.metric strong{display:block;margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;font-weight:650;font-variant-numeric:tabular-nums}.countdown-block{margin-top:12px}.countdown-caption{display:flex;justify-content:space-between;font-size:11px;color:#8793a0}.countdown-caption strong{color:#6ca900;font-variant-numeric:tabular-nums}.countdown-track{height:3px;margin-top:5px;border-radius:3px;background:#edf1e8;overflow:hidden}.countdown-track span{display:block;height:100%;background:#78b500}.card-footer{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:39px;border-top:1px solid #edf0f2;color:#8793a0;font-size:11px}.card-footer>div{display:flex;align-items:center;gap:7px}.card-footer time{color:#506071;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}.order-share-entry{display:grid;place-items:center;width:28px;height:30px;padding:0;border:0;background:none;color:#8695a5;cursor:pointer}.card-actions{display:flex;gap:6px;border-top:1px solid #edf0f2;padding:8px 0 10px}.card-actions button,.detail-actions button{flex:1;height:33px;border-radius:7px;font:600 11px inherit;cursor:pointer}.subtle-action{border:1px solid #e1e6e9;background:#fff;color:#253341}.primary-action{border:1px solid #73b100;background:#73b100;color:#fff}.quiet-action{border:1px solid transparent;background:#f3f5f6;color:#4f5c69}.list-state{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:180px;color:#8d9aa6;font-size:13px}.empty-icon{font-size:30px;margin-bottom:8px;color:#c6cfd6}
 .order-detail-modal-overlay{position:fixed;z-index:1100;inset:0;display:flex;align-items:flex-end;justify-content:center;background:#141d26a6}.order-detail-modal{display:flex;flex-direction:column;width:100%;max-width:650px;max-height:88dvh;overflow:hidden;border-radius:20px 20px 0 0;background:#fff;box-shadow:0 -10px 35px #10182024}.sheet-handle{width:34px;height:4px;margin:8px auto 0;border-radius:3px;background:#dce2e5}.detail-header{position:relative;display:flex;align-items:center;justify-content:space-between;min-height:45px;padding:0 18px}.detail-header h2{font-size:15px;margin:0}.order-detail-modal-close{display:grid;place-items:center;width:28px;height:28px;border:0;border-radius:50%;background:#f2f4f6;color:#798694;font-size:21px;cursor:pointer}.detail-body{overflow:auto;padding:6px 18px 18px}.detail-identity{padding:4px 0 13px}.detail-focus{border-bottom:1px solid #edf0f2;padding-bottom:13px}.detail-focus>span{display:block;color:#8793a0;font-size:11px}.detail-focus strong{display:inline-block;margin-top:4px;font-size:27px;font-weight:750;font-variant-numeric:tabular-nums}.detail-focus small{margin-left:6px;font-size:11px;color:#82909c}.detail-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px 10px;padding:14px 0}.detail-grid strong{display:block;margin-top:3px;font-size:12px;font-weight:650;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.tpsl-section{border-top:1px solid #edf0f2;padding-top:13px}.tpsl-section h4{margin:0 0 8px;font-size:12px}.tpsl-row{display:flex;align-items:center;justify-content:space-between;min-height:32px;color:#8995a0;font-size:11px}.tpsl-row strong{color:#243240;font-size:12px}.tpsl-row input{accent-color:#73b100}.stepper{display:flex;align-items:center;margin:3px 0 7px;border:1px solid #e1e7e9;border-radius:7px;overflow:hidden}.stepper button{width:32px;height:32px;border:0;background:#f6f8f9;color:#61707d;font-size:17px}.stepper input{flex:1;min-width:0;height:32px;border:0;text-align:center;font-size:12px;outline:none}.detail-actions{display:flex;gap:6px;padding:11px 18px max(17px,env(safe-area-inset-bottom));border-top:1px solid #edf0f2}.detail-actions button{height:38px;font-size:12px}

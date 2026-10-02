@@ -10,10 +10,21 @@ import java.time.LocalDateTime;
 
 @Getter
 @Setter
+@org.hibernate.annotations.Persister(impl = com.gtcfesk.exchange.tenant.TenantEntityPersister.class)
 @Entity
-@Table(name = "contract_order")
-public class ContractOrder {
+@Table(name = "contract_order", uniqueConstraints = @UniqueConstraint(name="uk_contract_order_request", columnNames={"tenant_id","user_id","request_key"}))
+public class ContractOrder extends com.gtcfesk.exchange.tenant.TenantOwnedEntity {
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    @Column(name="request_key", length=64, updatable=false)
+    private String requestKey;
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    @Column(name="request_hash", length=64, updatable=false)
+    private String requestHash;
 
+
+    // NULL is historical mixed funding. New orders always persist a single source.
+    @Column(name="funding_source",length=16) private String fundingSource;
+    @Column(name="trial_allocations",length=4000) private String trialAllocations;
     @Column(name="trial_reserved", precision=32, scale=16)
     private java.math.BigDecimal trialReserved;
 
@@ -74,7 +85,7 @@ public class ContractOrder {
     @Column(name = "limit_match_enabled", nullable = false)
     private boolean limitMatchEnabled;
 
-    @Column(name = "user_id", nullable = false)
+    @Column(name = "user_id")
     private Long userId;
 
     @Column(nullable = false, length = 32)

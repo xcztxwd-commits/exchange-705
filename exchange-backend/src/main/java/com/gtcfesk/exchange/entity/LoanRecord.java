@@ -9,9 +9,17 @@ import java.time.LocalDateTime;
 
 @Getter
 @Setter
+@org.hibernate.annotations.Persister(impl = com.gtcfesk.exchange.tenant.TenantEntityPersister.class)
 @Entity
-@Table(name = "loan_record")
-public class LoanRecord {
+@Table(name = "loan_record", uniqueConstraints = @UniqueConstraint(name="uk_loan_record_request", columnNames={"tenant_id","user_id","request_key"}))
+public class LoanRecord extends com.gtcfesk.exchange.tenant.TenantOwnedEntity {
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    @Column(name="request_key", length=64, updatable=false)
+    private String requestKey;
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    @Column(name="request_hash", length=64, updatable=false)
+    private String requestHash;
+
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

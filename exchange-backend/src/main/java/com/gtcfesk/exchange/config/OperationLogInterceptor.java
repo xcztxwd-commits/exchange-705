@@ -52,7 +52,7 @@ public class OperationLogInterceptor implements HandlerInterceptor {
                 return; // 不是管理员操作，不记录
             }
 
-            AdminUser admin = adminUserRepository.findById(adminId).orElse(null);
+            AdminUser admin = adminUserRepository.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), adminId).orElse(null);
             if (admin == null) {
                 return;
             }
@@ -135,6 +135,7 @@ public class OperationLogInterceptor implements HandlerInterceptor {
      */
     private Long getAdminIdFromRequest(HttpServletRequest request) {
         org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        if (com.gtcfesk.exchange.control.ControlIdentity.isAccess()) return null;
         if (auth != null && auth.getAuthorities().stream().anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN") || a.getAuthority().equals("ROLE_SUPER_ADMIN"))) {
             return Long.valueOf(auth.getName());
         }

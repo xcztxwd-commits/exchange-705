@@ -14,6 +14,7 @@ import java.time.Duration;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+@org.junit.jupiter.api.extension.ExtendWith(com.gtcfesk.exchange.tenant.TenantOneFixture.class)
 class RegistrationSecurityTest {
     @Test void combinedImageAndGeneratorBounds() {
         Set<Integer> lines = new HashSet<>(), circles = new HashSet<>(), warps = new HashSet<>();
@@ -78,7 +79,10 @@ class RegistrationSecurityTest {
         // Explicit opt-in dedicated Redis only. Never point this test at a production database.
         String port = System.getProperty("security.test.redis.port");
         Assumptions.assumeTrue(port != null, "Run with -Dsecurity.test.redis.port=<isolated redis port>");
-        LettuceConnectionFactory connection = new LettuceConnectionFactory("127.0.0.1", Integer.parseInt(port));
+        org.springframework.data.redis.connection.RedisStandaloneConfiguration isolated = new org.springframework.data.redis.connection.RedisStandaloneConfiguration("127.0.0.1", Integer.parseInt(port));
+        String password=System.getenv("MT705_TEST_REDIS_PASSWORD");
+        if(password!=null && !password.isBlank())isolated.setPassword(password);
+        LettuceConnectionFactory connection = new LettuceConnectionFactory(isolated);
         connection.afterPropertiesSet();
         StringRedisTemplate redis = new StringRedisTemplate(connection);
         WebsiteSecuritySettings settings = mock(WebsiteSecuritySettings.class);
@@ -87,7 +91,7 @@ class RegistrationSecurityTest {
         RegistrationSecurity service = new RegistrationSecurity(redis, settings);
         ExecutorService pool = Executors.newFixedThreadPool(12);
         try {
-            String session=id(), key=RegistrationSecurity.PREFIX+"challenge:"+session;
+            String session=id(), key=RegistrationSecurity.prefix()+"challenge:"+session;
             Map<String,Object> first=service.create(session), second=service.create(session); final String initialSession=session;
             assertFalse(second.containsKey("code")); assertTrue(second.get("image").toString().startsWith("data:image/png;base64,"));
             assertTrue(redis.getExpire(key)>0 && redis.getExpire(key)<=120);
@@ -96,22 +100,22 @@ class RegistrationSecurityTest {
             service.verifyAndConsume(session,(String)second.get("captchaId"),answer.toLowerCase(Locale.ROOT));
             assertThrows(SecurityFailure.class,()->service.verifyAndConsume(initialSession,(String)second.get("captchaId"),answer));
 
-            session=id(); key=RegistrationSecurity.PREFIX+"challenge:"+session;
+            session=id(); key=RegistrationSecurity.prefix()+"challenge:"+session;
             Map<String,Object> challenge=service.create(session);
             final String wrongSession=session, wrongId=(String)challenge.get("captchaId");
             assertThrows(SecurityFailure.class,()->service.verifyAndConsume(wrongSession,wrongId,"XXXX"));
             assertNull(redis.opsForValue().get(key));
 
-            final String concurrentSession=id(), concurrentKey=RegistrationSecurity.PREFIX+"challenge:"+concurrentSession;
+            final String concurrentSession=id(), concurrentKey=RegistrationSecurity.prefix()+"challenge:"+concurrentSession;
             Map<String,Object> concurrent=service.create(concurrentSession);
             String concurrentAnswer=redis.opsForValue().get(concurrentKey).substring(33);
             CountDownLatch start=new CountDownLatch(1);
             List<Future<Boolean>> outcomes=new ArrayList<>();
-            for(int i=0;i<12;i++) outcomes.add(pool.submit(()->{start.await();try{service.verifyAndConsume(concurrentSession,(String)concurrent.get("captchaId"),concurrentAnswer);return true;}catch(SecurityFailure e){return false;}}));
+            for(int i=0;i<12;i++) outcomes.add(pool.submit(()->{try(com.gtcfesk.exchange.tenant.TenantContext.Scope scope=com.gtcfesk.exchange.tenant.TenantContext.open(1L)){start.await();try{service.verifyAndConsume(concurrentSession,(String)concurrent.get("captchaId"),concurrentAnswer);return true;}catch(SecurityFailure e){return false;}}}));
             start.countDown(); int success=0; for(Future<Boolean> result:outcomes) if(result.get())success++;
             assertEquals(1,success);
 
-            final String expiredSession=id(), expiredKey=RegistrationSecurity.PREFIX+"challenge:"+expiredSession;
+            final String expiredSession=id(), expiredKey=RegistrationSecurity.prefix()+"challenge:"+expiredSession;
             Map<String,Object> expired=service.create(expiredSession);
             redis.expire(expiredKey,Duration.ofMillis(5)); Thread.sleep(30);
             assertThrows(SecurityFailure.class,()->service.verifyAndConsume(expiredSession,(String)expired.get("captchaId"),"A2B3"));
@@ -124,7 +128,7 @@ class RegistrationSecurityTest {
             assertThrows(SecurityFailure.class,()->service.limitNetwork("register",ip));
 
             // Older image generation cannot publish over a newer refresh marker.
-            String raceKey=RegistrationSecurity.PREFIX+"challenge:"+id(); redis.opsForValue().set(raceKey,"new|pending");
+            String raceKey=RegistrationSecurity.prefix()+"challenge:"+id(); redis.opsForValue().set(raceKey,"new|pending");
             assertEquals(0L,redis.execute(RegistrationSecurity.PUBLISH,Collections.singletonList(raceKey),"old|pending","old|A2B3"));
             assertEquals("new|pending",redis.opsForValue().get(raceKey)); redis.delete(raceKey);
         } finally { pool.shutdownNow(); connection.destroy(); }

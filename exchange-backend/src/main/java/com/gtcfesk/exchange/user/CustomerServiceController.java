@@ -19,6 +19,7 @@ public class CustomerServiceController {
     /**
      * 获取客服链接
      */
+
     @GetMapping("/customer-service/link")
     public ResponseEntity<?> getCustomerServiceLink() {
         String link = supportSettings.externalLink();
@@ -58,6 +59,7 @@ public class CustomerServiceController {
         Map<String, Object> result = new HashMap<>();
         result.put("templates", templates);
         result.put("focus", SystemConfigService.shareFocus(value));
+        result.put("definitions", SystemConfigService.shareTemplateDefinitions(value, locale));
         return ResponseEntity.ok(result);
     }
 

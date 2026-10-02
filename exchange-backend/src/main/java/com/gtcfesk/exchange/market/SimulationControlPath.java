@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gtcfesk.exchange.entity.TradingSymbol;
+import com.gtcfesk.exchange.tenant.TenantContext;
 import java.math.BigDecimal;
 import java.util.*;
 
@@ -20,42 +21,56 @@ public final class SimulationControlPath {
         public int duration, intensity, precision, algorithmVersion;
         public boolean oscillation;
         public BigDecimal start, target, offset;
-        @JsonIgnore public TradingSymbol plan;
-        public synchronized TradingSymbol plan() {
-            if (plan == null) {
-                TradingSymbol p = new TradingSymbol();
-                p.setSymbol(symbol); p.setPricePrecision(precision); p.setControlStartedAt(startedAt);
-                p.setControlStartPrice(start); p.setControlTargetPrice(target); p.setControlPriceOffset(offset);
-                p.setControlDurationSeconds(duration); p.setControlIntensity(intensity); p.setControlRandomOscillation(oscillation);
-                plan = p;
-            }
-            return plan;
+        @JsonIgnore private Long tenantId;
+        public TradingSymbol plan() {
+            TenantContext.require(tenantId);
+            TradingSymbol p = new TradingSymbol();
+            p.setTenantId(tenantId);
+            p.setSymbol(symbol); p.setPricePrecision(precision); p.setControlStartedAt(startedAt);
+            p.setControlStartPrice(start); p.setControlTargetPrice(target); p.setControlPriceOffset(offset);
+            p.setControlDurationSeconds(duration); p.setControlIntensity(intensity); p.setControlRandomOscillation(oscillation);
+            return p; // Never expose a shared mutable cached plan.
+        }
+        private Event copy(Long tenant) {
+            Event copy = new Event(); copy.tenantId = tenant;
+            copy.at = at; copy.startedAt = startedAt; copy.mode = mode; copy.symbol = symbol; copy.planId = planId;
+            copy.duration = duration; copy.intensity = intensity; copy.precision = precision; copy.algorithmVersion = algorithmVersion;
+            copy.oscillation = oscillation; copy.start = start; copy.target = target; copy.offset = offset;
+            return copy;
         }
         public long endsAt() { return (startedAt + duration * 1000L + 999) / 1000 * 1000; }
     }
 
     public static synchronized List<Event> events(TradingSymbol symbol) {
+        TenantContext.require(symbol.getTenantId());
+        Long tenant = TenantContext.requireTenantId();
         String json = symbol.getRandomMarketControls();
         if (json == null || json.isEmpty()) return Collections.emptyList();
-        List<Event> events = CACHE.get(json);
+        String key = tenant + ":" + json;
+        List<Event> events = CACHE.get(key);
         if (events == null) {
             try { events = JSON.readValue(json, new TypeReference<List<Event>>() {}); }
             catch (Exception invalid) { throw new IllegalStateException("Invalid virtual control history", invalid); }
-            CACHE.put(json, events);
+            CACHE.put(key, events);
         }
-        return events;
+        List<Event> copies = new ArrayList<>(events.size());
+        for (Event event : events) copies.add(event.copy(tenant));
+        return Collections.unmodifiableList(copies);
     }
 
     public static void record(TradingSymbol symbol, long now) { record(symbol, now, null); }
-    /** Durable V3 events reference the plan; the market merger reads committed samples, not future points. */
+    /** Durable target events reference the plan; the market merger reads committed samples, not future points. */
     public static void record(TradingSymbol symbol, long now, String planId) {
+        record(symbol, now, planId, 3);
+    }
+    public static void record(TradingSymbol symbol, long now, String planId, int algorithmVersion) {
         Event event = new Event();
         event.algorithmVersion = 2; // Missing version on saved events denotes the original algorithm.
         event.at = planId == null ? now / 1000 * 1000 : now;
         event.symbol = symbol.getSymbol(); event.precision = PriceControlPath.precision(symbol);
         event.offset = symbol.getControlPriceOffset() == null ? BigDecimal.ZERO : symbol.getControlPriceOffset();
         event.mode = planId == null ? "offset" : "durable"; event.planId = planId;
-        if (planId != null) event.algorithmVersion = 3;
+        if (planId != null) event.algorithmVersion = algorithmVersion;
         if (PriceControlPath.running(symbol)) {
             event.mode = Boolean.TRUE.equals(symbol.getControlRestoring()) ? "restore" : "target";
             event.startedAt = symbol.getControlStartedAt(); event.duration = symbol.getControlDurationSeconds();

@@ -29,9 +29,12 @@ public class SimulationInspectionBoundary extends OncePerRequestFilter {
         String supplied=req.getHeader("X-Simulation-Inspection-Key");
         if(!environment.enabled() || key.length()<32 || supplied==null || !MessageDigest.isEqual(key.getBytes(StandardCharsets.UTF_8),supplied.getBytes(StandardCharsets.UTF_8))) {res.setStatus(403);return;}
         if(!"GET".equals(req.getMethod())){res.setStatus(405);return;}
-        try {
-            Map<String,Object> result=inspection.read(req.getParameter("kind"),req.getParameter("userId")==null?null:Long.valueOf(req.getParameter("userId")),req.getParameter("status"),Integer.parseInt(req.getParameter("page")),Integer.parseInt(req.getParameter("size")));
-            result.put("environment","DEMO");mapper.writeValue(res.getWriter(),result);
+        Long tenant;
+        try { tenant=Long.valueOf(req.getHeader("X-Simulation-Tenant-Id"));if(tenant<=0)throw new IllegalArgumentException(); }
+        catch(Exception e){res.setStatus(403);return;}
+        try (com.gtcfesk.exchange.tenant.TenantContext.Scope scope=com.gtcfesk.exchange.tenant.TenantContext.open(tenant)) {
+            Map<String,Object> result=inspection.read(req.getParameter("kind"),req.getParameter("userId")==null?null:Long.valueOf(req.getParameter("userId")),req.getParameter("userEmail"),req.getParameter("status"),Integer.parseInt(req.getParameter("page")),Integer.parseInt(req.getParameter("size")));
+            result.put("environment","DEMO");result.put("tenantId",tenant);mapper.writeValue(res.getWriter(),result);
         } catch(IllegalArgumentException e){res.setStatus(400);mapper.writeValue(res.getWriter(),java.util.Collections.singletonMap("message","筛选参数无效"));}
     }
 }

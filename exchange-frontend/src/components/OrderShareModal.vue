@@ -4,6 +4,9 @@ import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } 
 import QRCode from 'qrcode'
 import request from '@/utils/request'
 import { useLocaleStore } from '@/store/locale'
+import { useAuthStore } from '@/store/auth'
+import { validateShareDesign, shareProfileCopy, type ShareTemplateRule } from '../utils/shareTemplateDesign'
+import { createShareAssetLoader, fetchShareImage } from '../utils/shareTemplateAssets'
 import { formatDateTime, getSystemTimezone, systemTimezoneReady } from '@/utils/dateTime'
 import { orderTimestamp } from '@/utils/orderView'
 import { displaySymbol } from '@/utils/displaySymbol'
@@ -34,13 +37,21 @@ function loadBackground(template: ShareTemplate) {
   return backgrounds.get(template)
 }
 const options = reactive<ShareOptions>({ template: 'light', mode: 'both', focus: 'amount', quantity: false, capital: false, fee: false, leverage: false, orderId: false, openTime: false })
-const templates = ref<ShareTemplate[]>([])
+const templates = ref<string[]>([])
+const selectedTemplate = ref('light'), definitions = ref<Record<string, ShareTemplateRule>>({}), showPersonal = ref(false)
+const auth = useAuthStore()
+const assets = createShareAssetLoader(src => fetchShareImage(src, auth.token), () => auth.token || '')
+let profile: { userName: string; userEmail: string } | undefined
+const needsProfile = computed(() => definitions.value[selectedTemplate.value]?.design?.boxes.some(box => box.visible && ['userName','userEmail'].includes(box.field)))
+const profileLabel = computed(() => shareProfileCopy(shareLanguage(locale.locale))[2])
+const templateBase = (id: string): ShareTemplate => definitions.value[id]?.base || id as ShareTemplate
+const templateName = (id: string) => id.startsWith('custom-') ? definitions.value[id]?.name || id : copy.value[templateBase(id)]
 const templateList = ref<HTMLElement>()
-const templateIndex = computed(() => templates.value.indexOf(options.template))
+const templateIndex = computed(() => templates.value.indexOf(selectedTemplate.value))
 let touch: { x: number; y: number; time: number } | null = null
 function changeTemplate(offset: number) {
   if (busy.value || !templates.value.length) return
-  options.template = templates.value[(templateIndex.value + offset + templates.value.length) % templates.value.length]!
+  selectedTemplate.value = templates.value[(templateIndex.value + offset + templates.value.length) % templates.value.length]!
 }
 function startSwipe(event: TouchEvent) {
   const point = event.touches[0]
@@ -68,7 +79,7 @@ function closeOnBackdrop(event: MouseEvent) {
 async function loadOrder() {
   busy.value = true; error.value = ''; order.value = null; chart = undefined; blob = null; canShare.value = false
   if (preview.value) URL.revokeObjectURL(preview.value)
-  preview.value = ''; templates.value = []
+  preview.value = ''; templates.value = []; definitions.value = {}; showPersonal.value = false; profile = undefined
   const run = ++generation
   try {
     const [result, , configured] = await Promise.all([
@@ -76,18 +87,24 @@ async function loadOrder() {
       request.get('/user/share-templates', { params: { locale: shareLanguage(locale.locale), details: true } }),
     ])
     if (disposed || run !== generation) return
-    const config = configured as unknown as { templates: unknown; focus?: string }
+    const config = configured as unknown as { templates: unknown; focus?: string; definitions?: ShareTemplateRule[] }
     const enabled = Array.isArray(config) ? config : config.templates
     options.focus = config.focus === 'rate' ? 'rate' : 'amount'
     if (!Array.isArray(enabled)) throw new Error('Templates unavailable')
-    templates.value = [...new Set(enabled.filter((id): id is ShareTemplate => shareTemplates.includes(id)))]
+    if (Array.isArray(config.definitions)) for (const rule of config.definitions) {
+      if (!rule || typeof rule.id !== 'string' || !shareTemplates.includes(rule.base) || typeof rule.name !== 'string' || !['amount','rate'].includes(rule.focus)) throw new Error('Templates unavailable')
+      if (rule.design) validateShareDesign(rule.design)
+      if (rule.id.startsWith('custom-') && !rule.design) throw new Error('Templates unavailable')
+      definitions.value[rule.id] = rule
+    }
+    templates.value = [...new Set(enabled.filter((id): id is string => typeof id === 'string' && (shareTemplates.includes(id as ShareTemplate) || !!definitions.value[id])))]
     if (!templates.value.length) throw new Error('Templates unavailable')
     let selected = templates.value[0]!
     try {
       const saved = localStorage.getItem(`order-share-template:${shareLanguage(locale.locale)}`) as ShareTemplate
       if (templates.value.includes(saved)) selected = saved
     } catch { /* Storage is optional. */ }
-    options.template = selected
+    selectedTemplate.value = selected; options.template = templateBase(selected)
     await nextTick()
     if (disposed || run !== generation) return
     const response = result as unknown as { list?: Record<string, unknown>[] }
@@ -131,7 +148,9 @@ async function render() {
   busy.value = true; error.value = ''; notice.value = ''; blob = null; canShare.value = false
   if (preview.value) URL.revokeObjectURL(preview.value)
   preview.value = ''
-  const value = { ...order.value }, settings = { ...options }
+  const value = { ...order.value }, definition = definitions.value[selectedTemplate.value]
+  const settings = { ...options, template: templateBase(selectedTemplate.value), focus: definition?.focus || options.focus, design: definition?.design,
+    language: shareLanguage(locale.locale), personal: showPersonal.value }
   const rateVisible = showRate.value && shareReturn(value) !== null
   settings.mode = showAmount.value ? (rateVisible ? 'both' : 'amount') : (rateVisible ? 'rate' : 'none')
   try {
@@ -139,8 +158,19 @@ async function render() {
     if (showQr.value && !qrImage) {
       try { qrImage = await loadQr() } catch { throw new Error(copy.value.qrError) }
     }
-    const background = await loadBackground(settings.template)
-    if (shareNeedsChart(settings.template) && !chart) {
+    if (showPersonal.value && needsProfile.value) {
+      if (!profile) {
+        const userId = auth.user?.id || auth.user?.userId
+        if (!userId) throw new Error(copy.value.error)
+        const info = await request.get('/user/' + userId + '/info') as unknown as { nickname?: string; email?: string }
+        if (disposed || run !== generation) return
+        profile = { userName: info.nickname || '', userEmail: info.email || '' }
+      }
+      Object.assign(value, profile)
+    }
+    const background = !settings.design || settings.design.artwork ? await loadBackground(settings.template) : undefined
+    const images = await assets.images(settings.design).catch(() => { throw new Error(copy.value.backgroundError) })
+    if (!settings.design && shareNeedsChart(settings.template) && !chart) {
       try {
         const loaded = await loadChart(value, run)
         if (disposed || run !== generation) return
@@ -154,20 +184,20 @@ async function render() {
     }
     const display = { ...value, symbol: displaySymbol(value), openTime: displayTime(value.openTime), closeTime: displayTime(value.closeTime) }
     const canvas = document.createElement('canvas')
-    drawSharePoster(canvas, display, settings, copy.value, props.brand, timezone, showQr.value ? qrImage : undefined, chart, background)
+    drawSharePoster(canvas, display, settings, copy.value, props.brand, timezone, showQr.value ? qrImage : undefined, chart, background, images)
     markSimulationExport(canvas)
     const result = await new Promise<Blob>((resolve, reject) => canvas.toBlob(data => data ? resolve(data) : reject(new Error(copy.value.error)), 'image/png'))
     if (disposed || run !== generation) return
     blob = result; previewRatio.value = `${canvas.width} / ${canvas.height}`; preview.value = URL.createObjectURL(result)
     canShare.value = !!navigator.canShare?.({ files: [new File([result], 'trade.png', { type: 'image/png' })] })
-    try { localStorage.setItem(`order-share-template:${shareLanguage(locale.locale)}`, settings.template) } catch { /* Storage is optional. */ }
+    try { localStorage.setItem(`order-share-template:${shareLanguage(locale.locale)}`, selectedTemplate.value) } catch { /* Storage is optional. */ }
   } catch (failure) {
     if (!disposed && run === generation) error.value = failure instanceof Error ? failure.message : copy.value.error
   } finally {
     if (!disposed && run === generation) busy.value = false
   }
 }
-function filename() { return `trade-${props.kind}-${displaySymbol(order.value).replace(/\//g, '-').replace(/[^a-z0-9_-]/gi, '')}-${options.template}.png` }
+function filename() { return `trade-${props.kind}-${displaySymbol(order.value).replace(/\//g, '-').replace(/[^a-z0-9_-]/gi, '')}-${selectedTemplate.value}.png` }
 function save() {
   if (!blob || busy.value) return
   try {
@@ -191,8 +221,9 @@ async function systemShare() {
 }
 function retry() { if (order.value) void render(); else void loadOrder() }
 watch(() => locale.locale, () => { void loadOrder() }, { flush: 'sync' })
-watch([options, showQr, showAmount, showRate], () => { void render() }, { deep: true })
-watch(() => options.template, async () => {
+watch(() => auth.token, () => { void loadOrder() }, { flush: 'sync' })
+watch([options, selectedTemplate, showQr, showAmount, showRate, showPersonal], () => { void render() }, { deep: true })
+watch(selectedTemplate, async () => {
   await nextTick()
   const list = templateList.value, selected = list?.querySelector<HTMLElement>('[aria-pressed="true"]')
   if (list && selected) list.scrollLeft = selected.offsetLeft - (list.clientWidth - selected.clientWidth) / 2
@@ -204,7 +235,7 @@ onMounted(async () => {
   await nextTick(); dialog.value?.showModal(); void loadOrder()
 })
 onBeforeUnmount(() => {
-  disposed = true; generation++; dialog.value?.close()
+  disposed = true; generation++; assets.dispose(); dialog.value?.close()
   if (preview.value) URL.revokeObjectURL(preview.value)
   document.body.style.overflow = previousBodyOverflow
   previousFocus?.focus()
@@ -221,11 +252,11 @@ onBeforeUnmount(() => {
         </button>
       </header>
       <div class="pnl-content">
-        <section class="pnl-preview" :aria-label="`${copy.preview} · ${copy[options.template]}`" :aria-busy="busy" tabindex="0"
+        <section class="pnl-preview" :aria-label="`${copy.preview} · ${templateName(selectedTemplate)}`" :aria-busy="busy" tabindex="0"
           @touchstart.passive="startSwipe" @touchend.passive="endSwipe" @touchcancel="touch = null"
           @touchmove.passive="event => { if (event.touches.length > 1) touch = null }"
           @keydown.left.prevent="changeTemplate(-1)" @keydown.right.prevent="changeTemplate(1)">
-          <img v-if="preview" :src="preview" :alt="`${displaySymbol(order)} · ${copy[options.template]}`" class="poster-preview" :style="{ aspectRatio: previewRatio }" draggable="false" />
+          <img v-if="preview" :src="preview" :alt="`${displaySymbol(order)} · ${templateName(selectedTemplate)}`" class="poster-preview" :style="{ aspectRatio: previewRatio }" draggable="false" />
           <div v-else class="pnl-placeholder" role="status">
             <span v-if="busy" class="pnl-spinner"></span>
             <p>{{ busy ? copy.loading : error }}</p>
@@ -237,8 +268,8 @@ onBeforeUnmount(() => {
           <div class="pnl-template-picker">
           <button type="button" class="pnl-template-arrow" :aria-label="copy.previousTemplate" @click="changeTemplate(-1)"><span class="ui-chevron ui-chevron--left" aria-hidden="true"></span></button>
           <div ref="templateList" class="pnl-templates" role="group" :aria-label="copy.template">
-            <button v-for="name in templates" :key="name" type="button" :aria-label="copy[name]" :aria-pressed="options.template === name" :class="['pnl-template', { selected: options.template === name }]" @click="options.template = name">
-              <span :class="['pnl-swatch', name]" aria-hidden="true"></span><span>{{ copy[name] }}</span>
+            <button v-for="name in templates" :key="name" type="button" :aria-label="templateName(name)" :aria-pressed="selectedTemplate === name" :class="['pnl-template', { selected: selectedTemplate === name }]" @click="selectedTemplate = name">
+              <span :class="['pnl-swatch', templateBase(name)]" aria-hidden="true"></span><span>{{ templateName(name) }}</span>
             </button>
           </div>
           <button type="button" class="pnl-template-arrow" :aria-label="copy.nextTemplate" @click="changeTemplate(1)"><span class="ui-chevron" aria-hidden="true"></span></button>
@@ -248,6 +279,7 @@ onBeforeUnmount(() => {
             <label :class="{ unavailable: !returnAvailable }" :title="copy.rateNote"><input v-model="showRate" type="checkbox" :disabled="!returnAvailable" /><span>{{ copy.rate }}</span></label>
             <label><input v-model="showAmount" type="checkbox" /><span>{{ copy.amount }}</span></label>
           </div>
+          <label v-if="needsProfile" class="pnl-personal"><input v-model="showPersonal" type="checkbox" /><span>{{ profileLabel }}</span></label>
         </section>
       </div>
       <footer class="pnl-actions">
@@ -264,6 +296,7 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+.pnl-personal{display:flex;align-items:center;gap:6px;min-height:32px;font-size:11px;color:#697386;cursor:pointer}.pnl-personal input{accent-color:#709f00;flex-shrink:0}
 .order-share{box-sizing:border-box;width:min(440px,calc(100vw - 32px));height:min(780px,calc(100dvh - 48px));max-width:none;max-height:none;margin:auto;padding:0;border:1px solid #e6e8ed;border-radius:24px;color:#17202c;background:#f5f7fb;box-shadow:0 28px 90px #0004;font:14px 'Microsoft YaHei',system-ui,sans-serif;overflow:hidden;overscroll-behavior:contain}
 .order-share[open]{display:flex;flex-direction:column}.order-share::backdrop{background:#10151e99;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
 .order-share button{font:inherit;cursor:pointer;box-sizing:border-box}.order-share button:disabled{opacity:.45;cursor:default}.order-share button:focus-visible,.order-share input:focus-visible{outline:3px solid #85bd00;outline-offset:2px}

@@ -1,9 +1,9 @@
 import { accountMode, getAccountApiBase, realApiBase } from './accountMode'
 import axios from 'axios'
+import { redirectTradeKyc } from './tradeKycRedirect'
 import { trackAccountWrite, finishAccountWrite } from './accountRequests'
 import { useAuthStore } from '@/store/auth'
 import { useLocaleStore } from '@/store/locale'
-import { redirectTradeKyc } from './tradeKycRedirect'
 
 const instance = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
@@ -15,15 +15,19 @@ instance.interceptors.request.use((config) => {
   const mode = sharedIdentity ? 'REAL' : accountMode()
   config.baseURL = sharedIdentity ? realApiBase() : getAccountApiBase()
   config.headers.set('X-Account-Mode', mode)
+  const target = new URL(instance.getUri(config), location.origin)
+  if (target.origin !== location.origin || target.username || target.password || !/^\/(api|demo-api)\//.test(target.pathname)) throw new Error('Refusing a non-tenant API destination')
   try {
     const auth = useAuthStore()
     if (!auth.token) auth.load()
-    if (config.url === '/transfer/submit' && config.data) {
-      const key = 'pending-transfer:' + mode + ':' + JSON.stringify([auth.user?.id, config.data.fromAccount, config.data.toAccount, config.data.amount])
+    const creations = ['/deposit/submit', '/transfer/submit', '/withdraw/submit', '/trade/contract/order', '/trade/option/order', '/financial/purchase', '/loan/apply']
+    if (String(config.method).toLowerCase() === 'post' && creations.includes(config.url || '') && config.data) {
+      const body = Object.fromEntries(Object.keys(config.data).filter(n => n !== 'requestId' && n !== 'currentPrice').sort().map(n => [n, config.data[n]]))
+      const key = 'pending-funds:' + JSON.stringify([location.origin, mode, auth.user?.tenantId, auth.user?.id, config.url, body])
       const requestId = sessionStorage.getItem(key) || Array.from(crypto.getRandomValues(new Uint8Array(16)), n => n.toString(16).padStart(2, '0')).join('')
       sessionStorage.setItem(key, requestId)
       config.data.requestId = requestId
-      ;(config as any).transferRetryKey = key
+      ;(config as any).fundsRetryKey = key
     }
     if (auth.token) {
       config.headers = config.headers || {}
@@ -39,13 +43,17 @@ instance.interceptors.request.use((config) => {
 instance.interceptors.response.use(
   (res) => {
     finishAccountWrite(res.config)
-    const key = (res.config as any).transferRetryKey
+    const sent = res.config.headers?.Authorization
+    if (sent && sent !== `Bearer ${useAuthStore().token}`) throw new Error('The account changed; discarded stale response')
+    const key = (res.config as any).fundsRetryKey
     if (key) sessionStorage.removeItem(key)
     if (typeof res.data?.message === 'string') res.data.message = useLocaleStore().backendMessage(res.data.message, res.data?.success === false)
     return res.data
   },
   (err) => {
     finishAccountWrite(err.config)
+    const sent = err.config?.headers?.Authorization
+    if (sent && sent !== `Bearer ${useAuthStore().token}`) return Promise.reject(new Error('The account changed; discarded stale response'))
     if (err.response?.status === 403 && err.response?.data?.errorCode === 'KYC_REQUIRED') {
       void redirectTradeKyc()
       return Promise.reject(Object.assign(new Error(err.response.data.message || 'Identity verification required'), {
@@ -60,7 +68,7 @@ instance.interceptors.response.use(
       failure.retryAfter = Number(err.response?.headers?.['retry-after'] || err.response?.data?.retryAfter || 0)
       return Promise.reject(failure)
     }
-    const key = err.config?.transferRetryKey
+    const key = err.config?.fundsRetryKey
     if (key && err.response?.status >= 400 && err.response?.status < 500) sessionStorage.removeItem(key)
     // 检测token失效（单设备登录：其他设备登录导致当前设备token失效）
     if (err?.response?.status === 401 || 

@@ -4,6 +4,8 @@ import com.gtcfesk.exchange.entity.*;
 import com.gtcfesk.exchange.repository.*;
 import com.gtcfesk.exchange.market.ForexQuoteMarketService;
 import org.junit.jupiter.api.*;
+import com.gtcfesk.exchange.tenant.TenantContext;
+import com.gtcfesk.exchange.control.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
@@ -32,12 +34,16 @@ import static org.mockito.Mockito.*;
 @Import(DemoTradingService.class)
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 class DemoPersistenceTest {
+ private TenantContext.Scope tenantScope;
+ @AfterEach void closeTenantScope(){ if(tenantScope!=null)tenantScope.close(); }
     @Configuration
-    @EnableJpaRepositories(basePackageClasses = DemoAccountRepository.class)
+    @EnableJpaRepositories(basePackages={"com.gtcfesk.exchange.demo","com.gtcfesk.exchange.repository"}, repositoryFactoryBeanClass=com.gtcfesk.exchange.tenant.TenantRepositoryFactoryBean.class)
     @EntityScan(basePackageClasses = {DemoAccount.class, UserAccount.class})
     static class Config {
-        @Bean UserAccountRepository users(EntityManager em) { return new JpaRepositoryFactory(em).getRepository(UserAccountRepository.class); }
-        @Bean TradingSymbolRepository symbols(EntityManager em) { return new JpaRepositoryFactory(em).getRepository(TradingSymbolRepository.class); }
+        @Bean com.gtcfesk.exchange.security.OutboundEndpointPolicy outbound(){return mock(com.gtcfesk.exchange.security.OutboundEndpointPolicy.class);}
+        @Bean TenantReadinessService readiness(){return mock(TenantReadinessService.class);}
+
+        @Bean TenantPolicyService tenantPolicy(){return mock(TenantPolicyService.class);}
     }
     @Autowired DemoTradingService service;
     @Autowired DemoAccountRepository accounts;
@@ -49,8 +55,9 @@ class DemoPersistenceTest {
     @MockBean ForexQuoteMarketService quotes;
     Long userId;
     @BeforeEach void setup() {
+        tenantScope = TenantContext.open(1L);
         new TransactionTemplate(transactions).execute(status -> {
-            ledger.deleteAll(); orders.deleteAll(); accounts.deleteAll(); symbols.deleteAll(); users.deleteAll(); users.flush();
+            ledger.deleteAllByTenantId(1L); orders.deleteAllByTenantId(1L); accounts.deleteAllByTenantId(1L); symbols.deleteAllByTenantId(1L); users.deleteAllByTenantId(1L); users.flush();
             UserAccount user = new UserAccount(); user.setEmail("demo@example.invalid"); user.setPasswordHash("not-a-login");
             userId = users.saveAndFlush(user).getId();
             TradingSymbol symbol = new TradingSymbol(); symbol.setSymbol("BTCUSDT"); symbol.setName("Bitcoin");
@@ -67,26 +74,26 @@ class DemoPersistenceTest {
         ExecutorService pool = Executors.newFixedThreadPool(6); CountDownLatch start = new CountDownLatch(1);
         try {
             List<Future<?>> work = new ArrayList<>();
-            for (int i=0;i<6;i++) work.add(pool.submit(() -> { try { start.await(); action.run(); } catch (InterruptedException e) { throw new RuntimeException(e); } }));
+            for (int i=0;i<6;i++) work.add(pool.submit(() -> { try(TenantContext.Scope ignored=TenantContext.open(1L)) { start.await(); action.run(); } catch (InterruptedException e) { throw new RuntimeException(e); } }));
             start.countDown(); for (Future<?> f : work) f.get(20, TimeUnit.SECONDS);
         } finally { pool.shutdownNow(); }
     }
     @Test void simultaneousInitializationAndDuplicateBuyCloseStayAtomic() throws Exception {
-        race(() -> service.initialize(userId)); assertEquals(1, accounts.count()); assertEquals(1, ledger.count());
+        race(() -> service.initialize(userId)); assertEquals(1, accounts.countByTenantId(1L)); assertEquals(1, ledger.countByTenantId(1L));
         String key = UUID.randomUUID().toString();
         race(() -> service.buy(userId, key, 1, "BTCUSDT", new BigDecimal("1000")));
-        assertEquals(1, orders.count()); assertEquals(2, ledger.count());
-        assertEquals(0, new BigDecimal("98999").compareTo(accounts.findById(userId).get().cash));
-        String id = orders.findAll().get(0).id; race(() -> service.close(userId, id, 1));
-        assertEquals(3, ledger.count());
-        assertEquals(0, new BigDecimal("99998").compareTo(accounts.findById(userId).get().cash));
+        assertEquals(1, orders.countByTenantId(1L)); assertEquals(2, ledger.countByTenantId(1L));
+        assertEquals(0, new BigDecimal("98999").compareTo(accounts.findByTenantIdAndId(1L, userId).get().cash));
+        String id = orders.findAllByTenantId(1L).get(0).id; race(() -> service.close(userId, id, 1));
+        assertEquals(3, ledger.countByTenantId(1L));
+        assertEquals(0, new BigDecimal("99998").compareTo(accounts.findByTenantIdAndId(1L, userId).get().cash));
     }
     @Test void ledgerFailureRollsBackCashAndOrder() {
         service.initialize(userId);
         doThrow(new IllegalStateException("injected ledger failure")).when(ledger).save(any(DemoLedger.class));
         assertThrows(IllegalStateException.class, () -> service.buy(userId, UUID.randomUUID().toString(), 1, "BTCUSDT", new BigDecimal("1000")));
-        assertEquals(0, orders.count()); assertEquals(1, ledger.count());
-        assertEquals(0, DemoTradingService.SEED.compareTo(accounts.findById(userId).get().cash));
+        assertEquals(0, orders.countByTenantId(1L)); assertEquals(1, ledger.countByTenantId(1L));
+        assertEquals(0, DemoTradingService.SEED.compareTo(accounts.findByTenantIdAndId(1L, userId).get().cash));
     }
     @Test void competingSpendsNeverOverdraw() throws Exception {
         service.initialize(userId); java.util.concurrent.atomic.AtomicInteger accepted = new java.util.concurrent.atomic.AtomicInteger();
@@ -94,7 +101,7 @@ class DemoPersistenceTest {
             try { service.buy(userId, UUID.randomUUID().toString(), 1, "BTCUSDT", new BigDecimal("60000")); accepted.incrementAndGet(); }
             catch (com.gtcfesk.exchange.common.BusinessException expected) { assertTrue(expected.getMessage().contains("余额不足")); }
         });
-        assertEquals(1, accepted.get()); assertEquals(1, orders.count());
-        assertEquals(0, new BigDecimal("39940").compareTo(accounts.findById(userId).get().cash));
+        assertEquals(1, accepted.get()); assertEquals(1, orders.countByTenantId(1L));
+        assertEquals(0, new BigDecimal("39940").compareTo(accounts.findByTenantIdAndId(1L, userId).get().cash));
     }
 }

@@ -10,6 +10,7 @@ import static com.gtcfesk.exchange.trade.FeeCalculationAuditTest.*;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 import static com.gtcfesk.exchange.trade.CryptoQuantityRulesTest.*;
+@org.junit.jupiter.api.extension.ExtendWith(CalculationTenantExtension.class)
 class CryptoQuantityCompatibilityTest {
  @Test void oldAndNewExposureAndNullSnapshotStayDistinct() {
   Fixture old=new Fixture("BTCUSDT","BTC","USDT","80000","1");old.symbol.setSourceCategory("Crypto");

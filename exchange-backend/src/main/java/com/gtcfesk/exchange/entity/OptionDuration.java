@@ -8,9 +8,10 @@ import java.time.LocalDateTime;
 
 @Getter
 @Setter
+@org.hibernate.annotations.Persister(impl = com.gtcfesk.exchange.tenant.TenantEntityPersister.class)
 @Entity
 @Table(name = "option_duration")
-public class OptionDuration {
+public class OptionDuration extends com.gtcfesk.exchange.tenant.TenantOwnedEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

@@ -3,23 +3,25 @@ import { computed, reactive, ref, watch, onBeforeUnmount, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
 import request from '@/utils/request'
 import MarketMinutePicker from './MarketMinutePicker.vue'
+import ManualOrderChart from './ManualOrderChart.vue'
+import { orderMinuteTimestamp, type OrderChartRange } from '@/utils/manualOrderChart'
 import { manualOrderEstimate } from '@/utils/manualOrderEstimate'
 import { formatPrice } from '@/utils/formatPrice'
 import { generationConstraints, generationRequest, generationConstraintError } from '@/utils/manualOrderGeneration'
 
 const emit = defineEmits<{ created: [] }>()
-const visible = ref(false), busy = ref(false), saving = ref(false), error = ref('')
+const visible = ref(false), busy = ref(false), saving = ref(false), historyLoading = ref(false), error = ref('')
 const users = ref<any[]>([]), symbols = ref<any[]>([]), account = ref<any>(null), result = ref<any>(null)
 const selectedZone = ref('UTC')
 const details = ref<string[]>([]), basis = ref<any>(null), basisKey = ref(''), verifiedKey = ref('')
-const initial = () => ({ specVersion: null as number | null, quantityUnitType: null as string | null, userId: null as number | null, symbol: '', timezone: 'UTC', openLocal: '', closeLocal: '', openOffset: '', closeOffset: '', side: '', leverage: '', driver: 'QUANTITY', input: '', targetNet: null as string | null, walletEnabled: false, historyEnabled: false })
+const initial = () => ({ specVersion: null as number | null, quantityUnitType: null as string | null, userId: null as number | null, symbol: '', timezone: 'UTC', openLocal: '', closeLocal: '', openOffset: '', closeOffset: '', side: '', leverage: '100', driver: 'QUANTITY', input: '', targetNet: null as string | null, walletEnabled: false, historyEnabled: false })
 const form = reactive(initial())
 const conditions = reactive(generationConstraints())
 const generating = ref(false), generation = ref<any>(null)
 let timer: ReturnType<typeof setTimeout> | undefined, revision = 0, userRevision = 0, lastToken = '', key = '', ready = false
 const path = '/admin/orders/contract/manual'
 watch(visible, (value) => {
-  if (!value) { revision++; userRevision++; clearTimeout(timer); ready = false; busy.value = false; generating.value = false }
+  if (!value) { revision++; userRevision++; clearTimeout(timer); ready = false; busy.value = false; generating.value = false; historyLoading.value = false }
 })
 const quoteKey = () => JSON.stringify([form.userId, form.symbol, form.timezone, form.openLocal, form.closeLocal, form.openOffset, form.closeOffset])
 const previewCurrent = computed(() => result.value && verifiedKey.value === JSON.stringify(form))
@@ -32,10 +34,10 @@ const netInput = computed(() => conditions.net || (calculation.value?.net == nul
 const generatedAdjustments = computed(() => {
   if (!generation.value || !result.value) return ''
   const g = generation.value, c = result.value.calculation, items: string[] = []
-  if (g.leverageTarget != null) items.push(`目标杠杆 ${g.leverageTarget}，实际 ${form.leverage}，偏差 ${Number(g.leverageErrorPercent).toFixed(4)}%`)
+  if (g.leverageTarget != null) items.push(`固定杠杆 ${form.leverage}×`)
   if (g.quantityTarget != null) items.push(`目标数量 ${g.quantityTarget}，实际 ${c.quantity}，偏差 ${Number(g.quantityErrorPercent).toFixed(4)}%`)
   if (g.percentTarget != null) items.push(`目标仓位 ${g.percentTarget}%，实际 ${c.percent}%，偏差 ${Number(g.percentErrorPercent).toFixed(4)}%`)
-  if (g.closePriceTarget != null) items.push(`目标平仓价 ${g.closePriceTarget}，实际 ${result.value.quotes.closePrice}，偏差 ${Number(g.closePriceErrorPercent).toFixed(4)}%`)
+  if (g.closePriceTarget != null) items.push(`目标平仓价 ${formatPrice(g.closePriceTarget)}，实际 ${formatPrice(result.value.quotes.closePrice)}，偏差 ${Number(g.closePriceErrorPercent).toFixed(4)}%`)
   return items.join('；')
 })
 const balanceBefore = computed(() => basisKey.value === quoteKey() && basis.value ? basis.value.walletBefore : account.value?.available)
@@ -51,7 +53,7 @@ async function search(search = '') {
 }
 async function open() {
   details.value = []; basis.value = null; basisKey.value = ''; verifiedKey.value = ''
-  Object.assign(conditions, generationConstraints()); generation.value = null
+  Object.assign(conditions, generationConstraints(), { leverage: '100' }); generation.value = null
   ready = false; revision++; clearTimeout(timer); busy.value = false; generating.value = false; Object.assign(form, initial()); result.value = null; account.value = null; error.value = ''; lastToken = ''; key = crypto.randomUUID(); visible.value = true
   const data = await search()
   if (data) { form.timezone = data.timezone; selectedZone.value = data.timezone }
@@ -72,21 +74,42 @@ function drive(driver: 'QUANTITY' | 'PERCENT' | 'NET', value: string | number) {
 function setSide(value: string) { conditions.side = value || ''; form.side = conditions.side }
 function setLeverage(value: string | number) { conditions.leverage = String(value); form.leverage = conditions.leverage }
 function clearFields() {
-  Object.assign(conditions, generationConstraints())
-  Object.assign(form, { openLocal: '', closeLocal: '', openOffset: '', closeOffset: '', side: '', leverage: '', driver: 'QUANTITY', input: '', targetNet: null })
+  Object.assign(conditions, generationConstraints(), { leverage: '100' })
+  Object.assign(form, { openLocal: '', closeLocal: '', openOffset: '', closeOffset: '', side: '', leverage: '100', driver: 'QUANTITY', input: '', targetNet: null })
   result.value = null; basis.value = null; generation.value = null; lastToken = ''
 }
 function selectMinute(field: 'open' | 'close', local: string, offset: string) {
   conditions[`${field}Local`] = local; conditions[`${field}Offset`] = offset
   form[`${field}Local`] = local; form[`${field}Offset`] = offset
 }
+function selectChart(range: OrderChartRange) {
+  selectMinute('open', range.open.local, range.open.offset)
+  selectMinute('close', range.close.local, range.close.offset)
+  conditions.closePrice = range.close.price
+  ElMessage.success('已填写开平仓分钟和对应开盘价，其他固定条件保持不变')
+}
+function clearChart() { selectMinute('open', '', ''); selectMinute('close', '', '') }
+async function marketRequest(action: 'preview' | 'generate', payload: Record<string, unknown>, id: number) {
+  for (let attempt = 0; attempt < 20; attempt++) {
+    if (id !== revision || !visible.value) return null
+    try { return await request.post(`${path}/${action}`, payload, { timeout: action === 'generate' ? 120000 : 30000 }) }
+    catch (e: any) {
+      if (id !== revision || !visible.value) return null
+      const pending = e.response?.data?.code === 425 || /^历史行情正在加载/.test(e.message || '')
+      if (!pending) throw e
+      if (attempt === 19) throw new Error('历史行情加载超时，请稍后重新预览；不使用邻近价格')
+      historyLoading.value = true
+      await new Promise(resolve => setTimeout(resolve, 1500))
+    }
+  }
+}
 async function generate() {
   if (generating.value || saving.value) return
   let payload: Record<string, unknown>
-  try { payload = { ...generationRequest(form, conditions), specVersion: form.specVersion, quantityUnitType: form.quantityUnitType } } catch (e: any) { error.value = e.message; return }
+  try { payload = { ...generationRequest(form, conditions), leverage: form.leverage.trim() || '100', specVersion: form.specVersion, quantityUnitType: form.quantityUnitType } } catch (e: any) { error.value = e.message; return }
   clearTimeout(timer); const id = ++revision; generating.value = true; busy.value = false; result.value = null; error.value = ''; generation.value = null
   try {
-    const response: any = await request.post(`${path}/generate`, payload, { timeout: 120000 })
+    const response: any = await marketRequest('generate', payload, id)
     if (id !== revision || !visible.value) return
     ready = false
     for (const field of Object.keys(initial()) as Array<keyof ReturnType<typeof initial>>) (form as any)[field] = response.request[field]
@@ -96,7 +119,7 @@ async function generate() {
     basis.value = response; basisKey.value = quoteKey(); generation.value = response.generation
     key = crypto.randomUUID(); ElMessage.success('已生成并完成预览，确认前不会创建订单或调整资金')
   } catch (e: any) { if (id === revision) error.value = e.message }
-  finally { if (id === revision) { ready = true; generating.value = false } }
+  finally { if (id === revision) { ready = true; generating.value = false; historyLoading.value = false } }
 }
 const percent = computed(() => Number(percentInput.value) || 0)
 const sliderMax = computed(() => Math.max(200, Math.ceil(Math.max(0, percent.value) / 100) * 100))
@@ -106,17 +129,17 @@ async function preview() {
   const id = ++revision; busy.value = true; result.value = null; error.value = ''
   const requestKey = JSON.stringify(form), priceKey = quoteKey()
   try {
-    const response: any = await request.post(`${path}/preview`, { ...form, previewToken: lastToken || undefined }, { timeout: 30000 })
+    const response: any = await marketRequest('preview', { ...form, previewToken: lastToken || undefined }, id)
     if (id !== revision || !visible.value) return
     result.value = response; lastToken = response.previewToken; verifiedKey.value = requestKey
     basis.value = response; basisKey.value = priceKey
   } catch (e: any) { if (id === revision) error.value = e.code === 'ECONNABORTED' ? '预览请求超时，请重试' : e.message }
-  finally { if (id === revision) busy.value = false }
+  finally { if (id === revision) { busy.value = false; historyLoading.value = false } }
 }
 watch(form, () => {
   if (!ready || saving.value || generating.value) return
   generation.value = null
-  revision++; result.value = null; error.value = ''; busy.value = false; clearTimeout(timer)
+  revision++; result.value = null; error.value = ''; busy.value = false; historyLoading.value = false; clearTimeout(timer)
   if (form.userId && form.symbol && form.openLocal && form.closeLocal && form.side && form.leverage.trim() && form.input.trim()) timer = setTimeout(preview, 400)
 })
 function historyChanged(value: unknown) { if (value) form.walletEnabled = true }
@@ -144,13 +167,14 @@ async function submit() {
   } catch (e: any) { error.value = `${e.message}；网络失败可用本表单原幂等键重试。` }
   finally { saving.value = false }
 }
-onBeforeUnmount(() => clearTimeout(timer))
+onBeforeUnmount(() => { revision++; userRevision++; clearTimeout(timer) })
 defineExpose({ open })
 </script>
 
 <template>
   <el-dialog v-model="visible" title="生成订单" width="min(820px, calc(100vw - 24px))" top="5vh" :close-on-click-modal="false" :close-on-press-escape="!saving" :show-close="!saving">
-    <el-alert class="generation-hint" title="平仓分钟留空时取最近有行情的分钟，并在此前最多 7 天找开仓时间。杠杆、数量、仓位、净收益、目标平仓价可同时设置 ±5% 目标；已填时间、方向及开关保持不变；真实行情价不会被修改。" type="info" :closable="false" />
+    <el-alert class="generation-hint" title="平仓分钟留空时取最近有行情的分钟，并在此前最多 7 天找开仓时间。杠杆默认 100×，固定不浮动；数量、仓位、净收益、目标平仓价可设置 ±5% 目标；已填时间、方向及开关保持不变；真实行情价不会被修改。" type="info" :closable="false" />
+    <ManualOrderChart :symbol="form.symbol" :timezone="form.timezone" :active="visible" :disabled="saving || generating" :open-time="orderMinuteTimestamp(conditions.openLocal, conditions.openOffset)" :close-time="orderMinuteTimestamp(conditions.closeLocal, conditions.closeOffset)" @select="selectChart" @clear="clearChart" />
     <el-form class="manual-form" label-position="top" :disabled="saving || generating">
       <el-form-item label="用户 ID / 邮箱"><el-select v-model="form.userId" filterable remote :remote-method="search" placeholder="输入 ID 或邮箱" style="width:100%" @change="chooseUser"><el-option v-for="u in users" :key="u.id" :value="u.id" :label="`${u.id} · ${u.email}`" /></el-select></el-form-item>
       <el-form-item class="balance" label="合约可用余额"><span>{{ balanceBefore ?? '请选择用户' }}<template v-if="walletAfter !== null"> {{ form.walletEnabled && Number(calculation.net) < 0 ? '−' : '+' }} {{ form.walletEnabled ? Math.abs(Number(calculation.net)) : 0 }} = <strong>{{ verified ? result.walletAfter : walletAfter }}</strong></template></span><small v-if="calculation">{{ form.walletEnabled ? '预计入账后余额' : '未开启入钱包，余额不变' }}{{ verified ? '' : ' · 实时估算' }}</small></el-form-item>
@@ -160,14 +184,15 @@ defineExpose({ open })
       <el-form-item label="平仓分钟"><MarketMinutePicker :model-value="conditions.closeLocal" :offset="conditions.closeOffset" :symbol="form.symbol" :category="marketCategory" :timezone="form.timezone" :active="visible && !generating" :price="conditions.closeLocal ? result?.quotes.closePrice : undefined" label="平仓分钟" @confirm="(local, offset) => selectMinute('close', local, offset)" /><el-button v-permission="'orders:manual_order'" v-if="conditions.closeLocal" text @click="selectMinute('close', '', '')">清空时间</el-button><small v-if="result && !conditions.closeLocal">自动结果：{{ form.closeLocal.replace('T', ' ') }}</small></el-form-item>
       <el-form-item label="目标平仓价（允许 ±5%）"><el-input v-model="conditions.closePrice" clearable placeholder="留空不限；价格取平仓分钟 K 线 open" aria-label="目标平仓价" /><small v-if="result && !conditions.closePrice">实际价格：{{ formatPrice(result.quotes.closePrice) }}</small></el-form-item>
       <el-form-item class="third" label="方向"><el-select :model-value="conditions.side" clearable placeholder="自动决定" aria-label="方向" @update:model-value="(v: string) => setSide(v)"><el-option value="BUY" label="做多" /><el-option value="SELL" label="做空" /></el-select><small v-if="result && !conditions.side">自动结果：{{ form.side === 'BUY' ? '做多' : '做空' }}</small></el-form-item>
-      <el-form-item class="third" label="目标杠杆（允许 ±5%）"><el-input :model-value="conditions.leverage" clearable placeholder="自动决定" aria-label="杠杆" @update:model-value="(v: string) => setLeverage(v)" /><small v-if="result && !conditions.leverage">自动结果：{{ form.leverage }}</small></el-form-item>
+      <el-form-item class="third" label="杠杆（固定，默认 100×）"><el-input :model-value="conditions.leverage" clearable placeholder="默认 100×，不自动浮动" aria-label="杠杆" @update:model-value="(v: string) => setLeverage(v)" @blur="() => { if (!conditions.leverage.trim()) setLeverage(100) }" /><small v-if="result && !conditions.leverage">自动结果：{{ form.leverage }}</small></el-form-item>
       <el-form-item class="third" :label="'数量（' + unitLabel + '）'"><el-input :model-value="quantityInput" clearable placeholder="自动决定" :aria-label="'数量（' + unitLabel + '）'" @update:model-value="(v: string | number) => drive('QUANTITY',v)" /></el-form-item>
       <el-form-item label="仓位比例 %"><el-input :model-value="percentInput" clearable placeholder="自动决定" :disabled="saving || generating || percentDisabled" aria-label="仓位比例" @update:model-value="(v: string | number) => drive('PERCENT',v)" /><el-slider :model-value="percent" :min="0" :max="sliderMax" :disabled="saving || generating || percentDisabled" aria-label="仓位滑块" @update:model-value="(v: number | number[]) => drive('PERCENT',Number(v))" /><small>{{ percentDisabled ? '余额不为正，比例不可计算；仍可输入数量或净收益' : '允许 120% 及更高比例；拖动滑块会填写比例，清空数字则交给生成器' }}</small></el-form-item>
-      <el-form-item label="目标净收益"><el-input :model-value="netInput" clearable placeholder="留空表示不限" aria-label="目标净收益" @update:model-value="(v: string | number) => drive('NET',v)" /><small v-if="calculation">毛盈亏 {{ calculation.profit }} − 手续费 {{ calculation.fee }} = 净收益 <strong>{{ calculation.net }}</strong>{{ verified ? '' : '（实时估算，最终以后端为准）' }}</small><small v-else>可先填写目标净收益，点击一键生成；也可手动选时间预览。</small></el-form-item>
+      <el-form-item label="目标净收益（允许 ±5%）"><el-input :model-value="netInput" clearable placeholder="留空表示不限" aria-label="目标净收益" @update:model-value="(v: string | number) => drive('NET',v)" /><small v-if="calculation" aria-live="polite">毛盈亏 {{ calculation.profit }} − 手续费 {{ calculation.fee }} = 实时净收益 <strong>{{ calculation.net }}</strong>{{ verified ? '' : '（实时估算，最终以后端为准）' }}</small><small v-else>选好时间、方向后，调整仓位即可自动预览；手填净收益为固定 ±5% 目标。</small></el-form-item>
       <el-form-item class="toggle" label="净收益入钱包"><el-switch v-permission="'orders:view'" v-model="form.walletEnabled" :disabled="saving || generating || form.historyEnabled" aria-label="净收益入钱包" /></el-form-item>
       <el-form-item class="toggle" label="回填历史权益"><el-switch v-permission="'orders:manual_order'" v-model="form.historyEnabled" aria-label="回填历史权益" @change="historyChanged" /></el-form-item>
       <small class="history-hint">开启历史同时开启钱包，仅调整四张权益表；未来采样直接读取钱包。</small>
     </el-form>
+    <el-alert v-if="historyLoading" title="历史分钟价格或换算汇率正在加载，将自动重试；加载完成后净收益自动更新。" type="info" :closable="false" />
     <el-alert v-if="error" :title="error" type="error" :closable="false" />
     <el-alert v-else-if="constraintError" :title="constraintError" type="warning" :closable="false" />
     <el-alert v-if="generation" class="generation-result" :title="`已生成 · 持仓 ${generation.durationMinutes} 分钟 · ${generation.targetNet == null ? '实际净收益 ' + result.calculation.net : '目标净收益 ' + generation.targetNet + '，实际 ' + result.calculation.net + '，误差 ' + Number(generation.errorPercent).toFixed(4) + '%'}`" :description="[generation.closeAutomaticallySelected ? '平仓取最近有效分钟 ' + form.closeLocal.replace('T',' ') : '', generatedAdjustments, generation.warning, '搜索范围 ' + localAt(generation.from, form.timezone).replace('T',' ') + ' 至 ' + localAt(generation.to, form.timezone).replace('T',' ')].filter(Boolean).join('；')" type="success" :closable="false" />

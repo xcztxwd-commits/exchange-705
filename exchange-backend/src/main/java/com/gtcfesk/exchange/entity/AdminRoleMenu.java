@@ -8,9 +8,10 @@ import java.time.LocalDateTime;
 
 @Getter
 @Setter
+@org.hibernate.annotations.Persister(impl = com.gtcfesk.exchange.tenant.TenantEntityPersister.class)
 @Entity
 @Table(name = "admin_role_menu")
-public class AdminRoleMenu {
+public class AdminRoleMenu extends com.gtcfesk.exchange.tenant.TenantOwnedEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;

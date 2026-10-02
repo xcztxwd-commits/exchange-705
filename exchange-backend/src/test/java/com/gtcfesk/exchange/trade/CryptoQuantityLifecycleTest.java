@@ -10,6 +10,7 @@ import static com.gtcfesk.exchange.trade.FeeCalculationAuditTest.*;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 import static com.gtcfesk.exchange.trade.CryptoQuantityRulesTest.*;
+@org.junit.jupiter.api.extension.ExtendWith(CalculationTenantExtension.class)
 class CryptoQuantityLifecycleTest {
  @Test void closeBothSidesAndCancelConserveFunds() {
   for(String side:Arrays.asList("BUY","SELL")) {
@@ -27,7 +28,7 @@ class CryptoQuantityLifecycleTest {
   when(f.quotes.freshPrice("BTCUSDT")).thenReturn(d("80100"));
   com.gtcfesk.exchange.repository.KycRecordRepository records=mock(com.gtcfesk.exchange.repository.KycRecordRepository.class);
   KycRecord approved=new KycRecord();approved.setUserId(1L);approved.setStatus("APPROVED");
-  when(records.findFirstByUserIdOrderByCreatedAtDesc(1L)).thenReturn(Optional.of(approved));
+  when(records.findFirstByTenantIdAndUserIdOrderByCreatedAtDesc(1L, 1L)).thenReturn(Optional.of(approved));
   com.gtcfesk.exchange.user.KycIdentityService k=new com.gtcfesk.exchange.user.KycIdentityService(records);
   org.springframework.test.util.ReflectionTestUtils.setField(f.service,"identityService",k);
   assertFalse(k.simulationExempt());assertTrue(k.canUseTradingFunds(1L));
@@ -40,7 +41,7 @@ class CryptoQuantityLifecycleTest {
    Fixture f=fixture("BTC","80000","0.001");ContractOrder o=f.service.createOrder(1L,request(f,"0.01","100","SELL","LIMIT"));
    KycRecord record=new KycRecord();record.setUserId(1L);record.setStatus(status);
    com.gtcfesk.exchange.repository.KycRecordRepository records=mock(com.gtcfesk.exchange.repository.KycRecordRepository.class);
-   when(records.findFirstByUserIdOrderByCreatedAtDesc(1L)).thenReturn(Optional.of(record));
+   when(records.findFirstByTenantIdAndUserIdOrderByCreatedAtDesc(1L, 1L)).thenReturn(Optional.of(record));
    com.gtcfesk.exchange.user.KycIdentityService k=new com.gtcfesk.exchange.user.KycIdentityService(records);
    org.springframework.test.util.ReflectionTestUtils.setField(f.service,"identityService",k);
    assertFalse(k.simulationExempt());assertFalse(k.canUseTradingFunds(1L));

@@ -10,14 +10,14 @@ for (const app of ['exchange-frontend', 'exchange-pc']) {
       assert.equal(new URL(url).hostname, 'ipwho.is')
       assert.equal(options.credentials, 'omit')
       assert.equal(options.referrerPolicy, 'no-referrer')
-      return { ok: true, json: async () => ({ success: true, country_code: 'JP', timezone: { id: 'Asia/Tokyo' } }) }
+      return { ok: true, json: async () => ({ success: true, country_code: 'JP', calling_code: '81', currency: { code: 'JPY' }, timezone: { id: 'Asia/Tokyo' } }) }
     }
     try {
       const modulePath = `../../${app}/src/utils/visitorRegion.ts`
       const region = await import(modulePath)
       await Promise.all([region.initVisitorRegion(), region.initVisitorRegion()])
       assert.equal(calls, 1)
-      assert.deepEqual(region.visitorRegion.value, { locale: 'ja', timezone: 'Asia/Tokyo', source: 'ip' })
+      assert.deepEqual(region.visitorRegion.value, { locale: 'ja', timezone: 'Asia/Tokyo', source: 'ip', countryCode: 'JP', dialCode: '+81', currency: 'JPY' })
       for (const [country, locale] of [['JP','ja'], ['US','en'], ['SG','en'], ['TW','zh-TW'], ['FR','fr'], ['KR','ko'], ['xx','en']]) {
         assert.equal(region.localeForCountry(country), locale)
       }

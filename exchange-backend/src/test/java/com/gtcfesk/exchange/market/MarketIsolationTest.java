@@ -176,7 +176,7 @@ class MarketIsolationTest {
             // fail-closed settlement separately, without changing that production contract.
             assertFalse(Boolean.TRUE.equals(quotes.getPrice("XAUUSD", "Metal").get("available")));
             assertNotNull(quotes.freshPrice("XAUUSD"), "active control retains its execution lease");
-            TradingSymbol metal = symbols.findBySymbol("XAUUSD").get();
+            TradingSymbol metal = symbols.findByTenantIdAndSymbol(1L, "XAUUSD").get();
             metal.setControlEnabled(false); symbols.save(metal); quotes.refreshSymbols();
             recovery();
             for (String mode : Arrays.asList("500", "invalid", "429")) {
@@ -206,7 +206,7 @@ class MarketIsolationTest {
             order.setAmount(BigDecimal.TEN); order.setOpenPrice(BigDecimal.ONE); order.setDuration(1); order.setOpenTime(LocalDateTime.now().minusSeconds(30)); order.setStatus("TRADING");
             order = options.save(order);
             optionService.settleExpiredOrders(Collections.singletonMap("XAUUSD", new BigDecimal("999")));
-            assertEquals("TRADING", options.findById(order.getId()).get().getStatus());
+            assertEquals("TRADING", options.findByTenantIdAndId(1L, order.getId()).get().getStatus());
             System.out.println("PASS all sources failed: retained timestamps and last price; stale option stays TRADING");
             // Recover only the healthy group. A mixed account must not liquidate its healthy losing position.
             allMode = "ok"; metalMode = "500";
@@ -218,12 +218,12 @@ class MarketIsolationTest {
                 c.setStatus("OPEN"); c.setMargin(BigDecimal.ONE); c.setFee(BigDecimal.ZERO); c.setLeverage(BigDecimal.ONE); contracts.save(c);
             }
             contractService.checkAndForceCloseOrders(quotes.freshPrices());
-            assertEquals(2, contracts.findByStatus("OPEN").size());
-            assertEquals(0, accounts.findByUserIdAndCoin(99002L, "CONTRACT").get().getFrozen().compareTo(BigDecimal.TEN));
+            assertEquals(2, contracts.findByTenantIdAndStatus(1L, "OPEN").size());
+            assertEquals(0, accounts.findByTenantIdAndUserIdAndCoin(1L, 99002L, "CONTRACT").get().getFrozen().compareTo(BigDecimal.TEN));
             System.out.println("PASS incomplete account skipped despite stored currentPrice and losing healthy position");
             // Remove only synthetic fixtures before normal recovery resumes automatic settlement.
-            contracts.deleteAll(); options.deleteAll(); recovery();
-            metal = symbols.findBySymbol("XAUUSD").get();
+            contracts.deleteAllByTenantId(1L); options.deleteAllByTenantId(1L); recovery();
+            metal = symbols.findByTenantIdAndSymbol(1L, "XAUUSD").get();
             metal.setControlEnabled(true); symbols.save(metal); quotes.refreshSymbols();
             until(() -> "available".equals(quotes.getKline("XAUUSD", "1m", 1, "Metal").get("status")), 15000);
             Map<String, Object> kline = quotes.internalKline("XAUUSD", "1m", 1);

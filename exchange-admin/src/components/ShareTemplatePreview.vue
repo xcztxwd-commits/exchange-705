@@ -2,9 +2,14 @@
 import { onBeforeUnmount, ref, watch } from 'vue'
 import { drawSharePoster, shareBackgrounds, shareCopy, shareTemplates,
   type ShareChart, type ShareOrder, type ShareTemplate } from '@/utils/orderShare'
+import type { ShareDesign } from '../../../exchange-frontend/src/utils/shareTemplateDesign'
+import { createShareAssetLoader, fetchShareImage } from '../../../exchange-frontend/src/utils/shareTemplateAssets'
+import { useAuthStore } from '@/store/auth'
 
-const props = defineProps<{ template: string; name: string; language: string; focus?: 'amount' | 'rate' }>()
+const props = defineProps<{ template: string; name: string; language: string; focus?: 'amount' | 'rate'; design?: ShareDesign }>()
 const open = ref(false), loading = ref(false), error = ref(''), image = ref('')
+const auth = useAuthStore()
+const assets = createShareAssetLoader(src => fetchShareImage(src, auth.token), () => auth.token || '')
 let generation = 0
 // Design fixtures only: never query or expose a customer's real order or market data.
 const order: ShareOrder = {
@@ -28,18 +33,19 @@ async function render() {
     if (!shareTemplates.includes(template)) throw new Error('未知模板')
     await document.fonts.ready
     let background: HTMLImageElement | undefined
-    const file = shareBackgrounds[template]
+    const file = (!props.design || props.design.artwork) && shareBackgrounds[template]
     if (file) {
       background = new Image()
       background.src = `${import.meta.env.BASE_URL}share-templates/${file}`
       await background.decode()
     }
+    const images = await assets.images(props.design)
     if (run !== generation) return
     const canvas = document.createElement('canvas')
     drawSharePoster(canvas, order, {
-      template, mode: 'both', focus: props.focus, quantity: false, capital: false, fee: false,
-      leverage: false, orderId: false, openTime: true,
-    }, shareCopy(language), 'DEMO', 'UTC', undefined, chart, background)
+      template, design: props.design, language, personal: true, mode: 'both', focus: props.focus, quantity: false, capital: false, fee: false,
+      leverage: true, orderId: false, openTime: true,
+    }, shareCopy(language), 'DEMO', 'UTC', undefined, chart, background, images)
     image.value = canvas.toDataURL('image/png')
   } catch {
     if (run === generation) error.value = '预览加载失败，请重试'
@@ -47,13 +53,13 @@ async function render() {
     if (run === generation) loading.value = false
   }
 }
-watch(() => [props.template, props.language, props.focus], render, { immediate: true })
-onBeforeUnmount(() => { generation++ })
+watch(() => [props.template, props.language, props.focus, props.design, auth.token], render, { immediate: true, deep: true })
+onBeforeUnmount(() => { generation++; assets.dispose() })
 </script>
 
 <template>
   <div class="share-template-preview">
-    <button v-permission="'settings:view'" v-if="!error" type="button" class="preview-thumbnail" :disabled="loading || !image"
+    <button v-permission="'share_templates:view'" v-if="!error" type="button" class="preview-thumbnail" :disabled="loading || !image"
       :aria-label="`预览${name}`" aria-haspopup="dialog" @click="open = true">
       <img v-if="image" :src="image" :alt="`${name} · ${language}示例图`" />
       <span v-else role="status">生成中…</span>
@@ -61,14 +67,14 @@ onBeforeUnmount(() => { generation++ })
     </button>
     <div v-else role="status">
       <span>{{ error }}</span>
-      <el-button v-permission="'settings:view'" link type="primary" @click="render">重试</el-button>
+      <el-button v-permission="'share_templates:view'" link type="primary" @click="render">重试</el-button>
     </div>
     <el-dialog v-model="open" :title="`${name} · 图片预览`" width="min(560px, calc(100vw - 32px))"
       top="4vh" append-to-body destroy-on-close class="share-preview-dialog">
       <p class="preview-caption">语言：{{ language }} · 示例数据，仅用于展示模板，不代表真实交易。</p>
       <div class="preview-stage" v-loading="loading">
         <img v-if="image" :src="image" :alt="`${name} · ${language}完整预览`" />
-        <div v-else-if="error" role="alert">{{ error }} <el-button v-permission="'settings:view'" @click="render">重试</el-button></div>
+        <div v-else-if="error" role="alert">{{ error }} <el-button v-permission="'share_templates:view'" @click="render">重试</el-button></div>
       </div>
       <template #footer><el-button v-permission="'session:close'" @click="open = false">关闭预览</el-button></template>
     </el-dialog>

@@ -2,8 +2,11 @@
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import request from '@/utils/request'
+import { useTenantPolicies } from '@/composables/useTenantPolicies'
+import TenantPolicyNotice from '@/components/TenantPolicyNotice.vue'
+const {snapshot,policyError,policyReady,reloadPolicies,editable,policyLabel}=useTenantPolicies('support')
 import { can } from '@/utils/access'
-import { supportUrl } from '@/utils/support'
+import { playProtectedAudio } from '@/utils/audioUrl'
 const settings = ref<any>(),
   busy = ref(false),
   error = ref('')
@@ -37,6 +40,7 @@ const sounds = [
 ]
 async function load() {
   try {
+    await reloadPolicies()
     settings.value = await request.get('/admin/support/settings')
     settings.value.replies ||= {}
     settings.value.fallbackLocale ||= ''
@@ -45,7 +49,7 @@ async function load() {
   }
 }
 async function save() {
-  if (busy.value) return
+  if (busy.value || !editable('support.settings')) return
   busy.value = true
   try {
     await request.post('/admin/support/settings', settings.value)
@@ -59,7 +63,7 @@ async function save() {
 async function preview(value: string) {
   if (!value) return
   try {
-    await new Audio(supportUrl(value)).play()
+    await playProtectedAudio(value)
   } catch {
     ElMessage.warning('浏览器未允许播放，或音频不可用')
   }
@@ -73,20 +77,20 @@ onMounted(load)
       <h1>客服与消息设置</h1>
       <p>保留原客服入口，按业务需要切换服务方式。</p>
     </header>
-    <el-alert v-if="error" :title="error" type="error" :closable="false" />
+    <TenantPolicyNotice :snapshot="snapshot" :error="policyError"/><el-alert v-if="error" :title="error" type="error" :closable="false" />
     <el-form
       v-if="settings"
       label-position="top"
-      :disabled="!can('support_settings:save')"
+      :disabled="!can('support_settings:save') || !editable('support.settings')"
       @submit.prevent="save"
     >
       <div class="setting-card">
         <h2>01 / 服务渠道</h2>
         <el-form-item label="客服模式"
-          ><el-radio-group v-model="settings.mode"
+          ><el-radio-group v-model="settings.mode" :disabled="!editable('support.channel')"
             ><el-radio-button value="off" label="off">关闭客服</el-radio-button
-            ><el-radio-button value="external" label="external">外部客服</el-radio-button
-            ><el-radio-button value="internal" label="internal">站内客服</el-radio-button></el-radio-group
+            ><el-radio-button value="external" label="external" :disabled="!snapshot?.features.external_support">外部客服</el-radio-button
+            ><el-radio-button value="internal" label="internal" :disabled="!snapshot?.features.support">站内客服</el-radio-button></el-radio-group
           ></el-form-item
         >
         <p class="hint">
@@ -96,7 +100,7 @@ onMounted(load)
         <el-form-item label="站内信"
           ><el-switch
             v-permission="'support_settings:save'"
-            v-model="settings.inboxEnabled"
+            v-model="settings.inboxEnabled" :disabled="!snapshot?.features.inbox"
             active-text="开放站内信入口及发送"
             inactive-text="关闭" /></el-form-item
         ><el-form-item label="每位客服同时接待上限"

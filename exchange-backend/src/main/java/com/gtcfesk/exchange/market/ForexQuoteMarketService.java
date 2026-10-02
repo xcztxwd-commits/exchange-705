@@ -1,6 +1,8 @@
 package com.gtcfesk.exchange.market;
 
 import com.gtcfesk.exchange.entity.TradingSymbol;
+import com.gtcfesk.exchange.tenant.TenantContext;
+import com.gtcfesk.exchange.tenant.TenantJobRunner;
 import com.gtcfesk.exchange.common.BusinessException;
 import com.gtcfesk.exchange.repository.TradingSymbolRepository;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -21,16 +23,69 @@ import java.util.concurrent.*;
 @Service
 public class ForexQuoteMarketService {
     private static final Logger log = LoggerFactory.getLogger(ForexQuoteMarketService.class);
+    @Autowired private TenantJobRunner tenantJobs;
+    private volatile boolean running;
+    private final ConcurrentMap<Long, TenantState> tenantStates = new ConcurrentHashMap<>();
+    private static class TenantState {
+        final String epoch = UUID.randomUUID().toString();
+        final Map<String, Map<String,Object>> published = new HashMap<>();
+        final Map<String, Long> publishedAt = new HashMap<>();
+        final Map<String, Group> groups = new LinkedHashMap<>();
+        volatile Map<String, TradingSymbol> registry = Collections.emptyMap();
+        long quoteVersion;
+        boolean started;
+        TenantState() {
+            for (String category : Arrays.asList("Crypto", "CryptoPerpetual", "Metal", "Forex", "US", "CFD", "Oil", "Other")) groups.put(category, new Group(category));
+        }
+    }
+    private TenantState state() { return tenantStates.computeIfAbsent(TenantContext.requireTenantId(), id -> new TenantState()); }
+    private void tenantJob(Long tenant, Runnable action) {
+        try { tenantJobs.one("market-tick",tenant, action); }
+        catch (RuntimeException failure) { log.error("Tenant market job failed: tenant={}, type={}", tenant, failure.getClass().getSimpleName()); }
+    }
+    private void allTenants(Runnable action) {
+        try { tenantJobs.each("market-registry",id -> action.run()); }
+        catch (RuntimeException failure) { log.error("Market tenant enumeration failed: {}", failure.getClass().getSimpleName()); }
+    }
+    private void startTenantGroups() {
+        if (!running) return;
+        TenantState state = state(); final Long tenant = TenantContext.requireTenantId();
+        if (state.started) return;
+        state.started = true;
+        // ponytail: bounded lane per tenant/category; consolidate executors if tenant count grows beyond this small deployment.
+        for (Group group : state.groups.values()) group.executor.scheduleWithFixedDelay(() -> tenantJob(tenant, () -> tick(group)), 0, 100, TimeUnit.MILLISECONDS);
+    }
+    private void refreshStreamSubscriptions() {
+        // Only raw public provider symbols are shared, never tenant configuration or display history.
+        if (exchangeStream != null) for (String category : Arrays.asList("Crypto", "CryptoPerpetual", "Metal")) {
+            Set<String> codes = new HashSet<>();
+            for (TenantState tenant : tenantStates.values()) codes.addAll(tenant.groups.get(category).codes);
+            exchangeStream.subscriptions(category, codes, (code, quote) -> {
+                for (Long tenant : new ArrayList<>(tenantStates.keySet())) tenantJob(tenant,
+                    () -> acceptQuote(code, category, quote, "ws", QuoteState.time(quote.get("fetchedAt"))));
+            });
+        }
+        if (yahoo != null) {
+            Set<String> subscribed = new HashSet<>();
+            for (TenantState tenant : tenantStates.values()) for (Group item : tenant.groups.values())
+                if ("Yahoo".equals(provider(item.category))) for (String code : item.codes) subscribed.add(MarketQuoteSource.mapSymbolToYahoo(code, item.category));
+            yahoo.subscriptions(subscribed, subscribed, (code, quote) -> {
+                for (Long tenant : new ArrayList<>(tenantStates.keySet())) tenantJob(tenant, () -> receiveYahoo(code, quote));
+            });
+        }
+    }
+    private Map<String,Object> publicStreamStatus(Map<String,Object> source) {
+        Map<String,Object> safe = new LinkedHashMap<>();
+        for (String key : Arrays.asList("enabled","activeProvider","connected","connectedAt","retryAt","error","lastFrame"))
+            if (source.containsKey(key)) safe.put(key, source.get(key));
+        return safe;
+    }
     @Autowired private MarketQuoteSource source;
     @Autowired(required = false) private com.gtcfesk.exchange.admin.SystemConfigService systemConfigs;
     @Autowired private MarketHttp http;
     @Autowired(required = false) private YahooQuoteStream yahoo;
     @Autowired(required = false) private ExchangeQuoteStream exchangeStream;
     @Autowired(required = false) private ExchangeQuoteSource exchangeSource;
-    private final String epoch = UUID.randomUUID().toString();
-    private final Map<String, Map<String,Object>> published = new HashMap<>();
-    private final Map<String, Long> publishedAt = new HashMap<>();
-    private long quoteVersion;
     @Autowired private RedisMarketService redis;
     @Autowired private TradingSymbolRepository symbols;
     @Autowired private PersistentPriceControl controls;
@@ -38,11 +93,10 @@ public class ForexQuoteMarketService {
     @Autowired private ControlledKlineMerger klineMerger;
     @Value("${market.quote.max-age-ms:60000}") private long maxAgeMs = 60000;
     @Value("${market.quote.poll-ms:3000}") private long pollMs = 3000;
-    private final Map<String, Group> groups = new LinkedHashMap<>();
-    private volatile Map<String, TradingSymbol> registry = Collections.emptyMap();
     private final ScheduledExecutorService metadata = Executors.newSingleThreadScheduledExecutor(r -> new Thread(r, "market-symbols"));
     @Value("${market.virtual-trading.enabled:false}") private boolean virtualTrading;
     @Value("${market.control.v3.enabled:true}") private boolean v3Enabled = true;
+    @Value("${market.control.v4.enabled:true}") private boolean v4Enabled = true;
     private static final int MAX_KLINES = 128, MAX_PENDING = 32;
     private static class KlineRequest {
         final String code, interval, key;
@@ -101,14 +155,13 @@ public class ForexQuoteMarketService {
             executor.setRemoveOnCancelPolicy(true);
         }
     }
-    public ForexQuoteMarketService() {
-        for (String category : Arrays.asList("Crypto", "CryptoPerpetual", "Metal", "Forex", "US", "CFD", "Oil", "Other"))
-            groups.put(category, new Group(category));
+    public void requestSymbolRefresh() {
+        final Long tenant = TenantContext.requireTenantId();
+        metadata.execute(() -> tenantJob(tenant, this::refreshSymbols));
     }
-    public void requestSymbolRefresh() { metadata.execute(this::refreshSymbols); }
     private Group group(String category) {
-        for (Group group : groups.values()) if (group.category.equalsIgnoreCase(category)) return group;
-        return groups.get(category == null ? "Crypto" : "Other");
+        for (Group group : state().groups.values()) if (group.category.equalsIgnoreCase(category)) return group;
+        return state().groups.get(category == null ? "Crypto" : "Other");
     }
     public static String sourceCategory(TradingSymbol symbol) {
         return symbol.getSourceCategory();
@@ -117,16 +170,16 @@ public class ForexQuoteMarketService {
         return symbol.getAlltickSymbol() == null || symbol.getAlltickSymbol().isEmpty() ? symbol.getSymbol() : symbol.getAlltickSymbol();
     }
     @PostConstruct public void start() {
-        metadata.scheduleWithFixedDelay(this::refreshSymbols, 0, 30, TimeUnit.SECONDS);
-        metadata.scheduleWithFixedDelay(this::completeControls, 1, 1, TimeUnit.SECONDS);
-        for (Group group : groups.values())
-            group.executor.scheduleWithFixedDelay(() -> tick(group), 0, 100, TimeUnit.MILLISECONDS);
+        running = true;
+        metadata.scheduleWithFixedDelay(() -> allTenants(this::refreshSymbols), 0, 30, TimeUnit.SECONDS);
+        metadata.scheduleWithFixedDelay(() -> allTenants(this::completeControls), 1, 1, TimeUnit.SECONDS);
     }
     public synchronized void refreshSymbols() {
+        TenantContext.requireTenantId();
         try {
             Map<String, TradingSymbol> updated = new HashMap<>();
             Map<Group, Set<String>> codes = new HashMap<>();
-            for (TradingSymbol symbol : symbols.findAll()) {
+            for (TradingSymbol symbol : symbols.findAllByTenantId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId())) {
                 if (controls != null && !RandomMarketPath.enabled(symbol) && PriceControlPath.running(symbol)) {
                     controls.importLegacy(symbol);
                     clearControl(symbol); symbol.setControlEnabled(false); symbol.setControlPriceOffset(BigDecimal.ZERO);
@@ -154,7 +207,7 @@ public class ForexQuoteMarketService {
                 QuoteCurrencyConversion route = QuoteCurrencyConversion.route(currency, "yahoo");
                 if (route != null) codes.computeIfAbsent(group(route.category), g -> new LinkedHashSet<>()).add(route.code);
             }
-            for (Group group : groups.values()) {
+            for (Group group : state().groups.values()) {
                 List<String> list = new ArrayList<>(codes.getOrDefault(group, Collections.emptySet()));
                 for (String code : list) if (!group.quotes.containsKey(code)) {
                     Map<String, Object> saved = redis.getPrice(group.category + ":" + code);
@@ -165,24 +218,13 @@ public class ForexQuoteMarketService {
                 }
                 group.codes = Collections.unmodifiableList(list);
             }
-            if (exchangeStream != null) for (String category : Arrays.asList("Crypto", "CryptoPerpetual", "Metal"))
-                exchangeStream.subscriptions(category, new HashSet<>(groups.get(category).codes),
-                    (code, quote) -> acceptQuote(code, category, quote, "ws", QuoteState.time(quote.get("fetchedAt"))));
-            registry = Collections.unmodifiableMap(updated);
+
+            state().registry = Collections.unmodifiableMap(updated);
             for (TradingSymbol symbol : new HashSet<>(updated.values())) conversion(symbol.getQuoteCurrency(),symbol.getMarketSource());
             for (String currency : conversionCurrencies) conversion(currency, "yahoo");
-            published.keySet().retainAll(updated.keySet()); publishedAt.keySet().retainAll(updated.keySet());
-            if (yahoo != null) {
-                Set<String> subscribed = new HashSet<>();
-                Set<String> preferred = new HashSet<>();
-                for (Group item : groups.values()) if ("Yahoo".equals(provider(item.category)))
-                    for (String code : item.codes) {
-                        String external = MarketQuoteSource.mapSymbolToYahoo(code, item.category);
-                        subscribed.add(external);
-                        preferred.add(external);
-                    }
-                yahoo.subscriptions(subscribed, preferred, this::receiveYahoo);
-            }
+            state().published.keySet().retainAll(updated.keySet()); state().publishedAt.keySet().retainAll(updated.keySet());
+            startTenantGroups();
+            refreshStreamSubscriptions();
         } catch (Exception failure) { log.warn("Market symbol refresh failed ({})", failure.getClass().getSimpleName()); }
     }
     private void tick(Group group) {
@@ -226,7 +268,7 @@ public class ForexQuoteMarketService {
                 validateKline(result);
                 result.put("fetchedAt", System.currentTimeMillis());
                 result.put("status", "available");
-                for (TradingSymbol config : new HashSet<>(registry.values()))
+                for (TradingSymbol config : new HashSet<>(state().registry.values()))
                     if (controlHistory != null && marketCode(config).equals(request.code) && group(sourceCategory(config)) == group)
                         controlHistory.sourceCandles(config.getId(), request.interval, ControlHistoryStore.rows(result), System.currentTimeMillis());
                 synchronized (group) { group.klines.put(request.key, result); }
@@ -248,7 +290,7 @@ public class ForexQuoteMarketService {
         } catch (Exception failure) { fail(group, failure, true); }
     }
     private void receiveYahoo(String yahooSymbol, Map<String,Object> quote) {
-        for (Group group : groups.values()) if ("Yahoo".equals(provider(group.category)))
+        for (Group group : state().groups.values()) if ("Yahoo".equals(provider(group.category)))
             for (String code : group.codes) if (yahooSymbol.equals(MarketQuoteSource.mapSymbolToYahoo(code, group.category)))
                 acceptQuote(code, group.category, quote, "ws", QuoteState.time(quote.get("fetchedAt")));
     }
@@ -270,7 +312,7 @@ public class ForexQuoteMarketService {
             if (!duplicate || group.processingFailed.contains(code)) {
                 try {
                     List<TradingSymbol> targets = new ArrayList<>();
-                    for (TradingSymbol config : new HashSet<>(registry.values()))
+                    for (TradingSymbol config : new HashSet<>(state().registry.values()))
                         if (controls != null && marketCode(config).equals(code) && group(sourceCategory(config)) == group && !RandomMarketPath.enabled(config))
                             targets.add(config);
                     if (!targets.isEmpty()) controls.sourceQuotes(targets, QuoteState.view(saved, maxAgeMs), receivedAt);
@@ -355,12 +397,13 @@ public class ForexQuoteMarketService {
     }
     public Map<String, Map<String, Object>> getBatchPrices(List<String> codes) { return getBatchPrices(codes, "Crypto"); }
     public Map<String, Map<String, Object>> getBatchPrices(List<String> codes, String category) {
+        TenantContext.requireTenantId();
         Map<String, Map<String, Object>> result = new HashMap<>();
         if (codes != null) for (String code : codes) result.put(code, getPrice(code, category));
         return result;
     }
     public Map<String, Object> internalPrice(String code) {
-        TradingSymbol config = registry.get(code);
+        TradingSymbol config = state().registry.get(code);
         if (RandomMarketPath.enabled(config)) {
             Map<String, Object> simulated = RandomMarketPath.quote(config, System.currentTimeMillis());
             if (durableFlow(config)) simulated = controls.display(config, simulationBaseQuote(config, System.currentTimeMillis()), System.currentTimeMillis());
@@ -397,6 +440,7 @@ public class ForexQuoteMarketService {
         return quote;
     }
     public Map<String,Object> conversion(String currency,String source) {
+        TenantContext.requireTenantId();
         Map<String,Object> result=new HashMap<>();
         if(QuoteCurrencyConversion.fixed(currency)) {
             result.put("quoteToUsdRate",BigDecimal.ONE);result.put("conversionAvailable",true);result.put("conversionExpiresAt",Long.MAX_VALUE);return result;
@@ -419,6 +463,7 @@ public class ForexQuoteMarketService {
 
     /** Trading P&L must use a fresh, uncontrolled rate; fiat deposits retain their fixed-rate cache. */
     public Map<String,Object> contractConversion(String currency,String source) {
+        TenantContext.requireTenantId();
         if(QuoteCurrencyConversion.fixed(currency)) return conversion(currency,source);
         Map<String,Object> result=new HashMap<>();
         result.put("conversionAvailable",false);result.put("quoteToUsdRate",null);result.put("conversionExpiresAt",0L);
@@ -448,20 +493,21 @@ public class ForexQuoteMarketService {
 
     /** Standard FX margin is in BASE currency; never use the hours-long settlement cache here. */
     public BigDecimal fxMarginRate(String base, String quote, BigDecimal orderPrice) {
+        TenantContext.requireTenantId();
         if ("USD".equals(base)) return BigDecimal.ONE;
         if ("USD".equals(quote) && orderPrice != null && orderPrice.signum() > 0) return orderPrice;
         return requireContractConversionRate(base,"yahoo");
     }
-    public boolean knownSymbol(String symbol) { return registry.containsKey(symbol); }
+    public boolean knownSymbol(String symbol) { return state().registry.containsKey(symbol); }
     /** Shared, versioned display snapshot. Trading always revalidates via freshPrice(). */
     public synchronized Map<String,Object> snapshotPrice(String symbol) {
         if (!knownSymbol(symbol)) return internalPrice(symbol);
         long now = System.currentTimeMillis();
-        Map<String,Object> previous = published.get(symbol);
-        if (previous != null && now - publishedAt.getOrDefault(symbol, 0L) < 100
+        Map<String,Object> previous = state().published.get(symbol);
+        if (previous != null && now - state().publishedAt.getOrDefault(symbol, 0L) < 100
                 && now < QuoteState.time(previous.get("expiresAt"))) return previous;
         Map<String,Object> next = new HashMap<>(internalPrice(symbol));
-        TradingSymbol config=registry.get(symbol);
+        TradingSymbol config=state().registry.get(symbol);
         next.putAll(contractConversion(config.getQuoteCurrency(),config.getMarketSource()));
         if (com.gtcfesk.exchange.trade.FxContractRules.isForex(config)) {
             try {
@@ -472,11 +518,11 @@ public class ForexQuoteMarketService {
             }
         }
         next.put("quoteCurrency",config.getQuoteCurrency());
-        next.put("epoch", epoch);
+        next.put("epoch", state().epoch);
         next.put("quoteVersion", previous == null ? 0L : previous.get("quoteVersion"));
-        if (previous == null || !next.equals(previous)) next.put("quoteVersion", ++quoteVersion);
+        if (previous == null || !next.equals(previous)) next.put("quoteVersion", ++state().quoteVersion);
         Map<String,Object> result = Collections.unmodifiableMap(next);
-        published.put(symbol, result); publishedAt.put(symbol, now); return result;
+        state().published.put(symbol, result); state().publishedAt.put(symbol, now); return result;
     }
     public BigDecimal freshPrice(String code) {
         Map<String, Object> quote = internalPrice(code);
@@ -484,7 +530,7 @@ public class ForexQuoteMarketService {
     }
     public Map<String, BigDecimal> freshPrices() {
         Map<String, BigDecimal> result = new HashMap<>();
-        for (TradingSymbol config : registry.values()) {
+        for (TradingSymbol config : state().registry.values()) {
             BigDecimal price = freshPrice(config.getSymbol());
             if (price != null) result.put(config.getSymbol(), price);
         }
@@ -562,7 +608,7 @@ public class ForexQuoteMarketService {
     }
     @SuppressWarnings("unchecked")
     public Map<String, Object> internalKline(String symbol, String interval, Integer limit) {
-        TradingSymbol config = registry.get(symbol);
+        TradingSymbol config = state().registry.get(symbol);
         if (virtualTrading && RandomMarketPath.enabled(config))
             return durableSimulationKline(config, interval, limit, null);
         Map<String, Object> result = getKline(config == null ? symbol : marketCode(config), interval, limit, config == null ? "Crypto" : sourceCategory(config));
@@ -571,7 +617,7 @@ public class ForexQuoteMarketService {
     /** Historical source candles are not rewritten using today's configured price offset. */
     @SuppressWarnings("unchecked")
     public Map<String, Object> historicalKline(String symbol, String interval, int limit, long endTime) {
-        TradingSymbol config = registry.get(symbol);
+        TradingSymbol config = state().registry.get(symbol);
         if (config == null) throw new IllegalArgumentException("Unknown symbol");
         if (virtualTrading && RandomMarketPath.enabled(config))
             return durableSimulationKline(config, interval, limit, endTime);
@@ -594,7 +640,7 @@ public class ForexQuoteMarketService {
         Map<String,Object> result = simulationKline(config, interval, limit, endTime);
         if (!durableFlow(config) || klineMerger == null) return result;
         return klineMerger.merge(config.getId(), interval, limit == null ? 100 : limit, endTime, result, null, true,
-            (from, to) -> controlHistory.db.query("SELECT body FROM market_simulation_source_candle WHERE symbol_id=? AND session_at=? AND period='1m' AND candle_at>=? AND candle_at<=? ORDER BY candle_at",
+            (from, to) -> controlHistory.db.query("SELECT body FROM market_simulation_source_candle WHERE tenant_id=" + TenantContext.requireTenantId() + " AND symbol_id=? AND session_at=? AND period='1m' AND candle_at>=? AND candle_at<=? ORDER BY candle_at",
                 (r,n) -> controlHistory.decode(r.getString(1)), config.getId(), config.getRandomMarketStartedAt(), from, to));
     }
     private String simulationHistoryKey(TradingSymbol config) {
@@ -658,10 +704,10 @@ public class ForexQuoteMarketService {
 
     public List<Map<String, Object>> sourceStatus() {
         List<Map<String, Object>> result = new ArrayList<>();
-        for (Group group : groups.values()) {
+        for (Group group : state().groups.values()) {
             Map<String, Object> item = new LinkedHashMap<>();
-            if (yahoo != null && "Yahoo".equals(provider(group.category))) item.put("stream", yahoo.status());
-            if (exchangeStream != null && ExchangeQuoteSource.supports(group.category)) item.put("stream", exchangeStream.status(group.category));
+            if (yahoo != null && "Yahoo".equals(provider(group.category))) item.put("stream", publicStreamStatus(yahoo.status()));
+            if (exchangeStream != null && ExchangeQuoteSource.supports(group.category)) item.put("stream", publicStreamStatus(exchangeStream.status(group.category)));
             item.put("provider", provider(group.category)); item.put("category", group.category); item.put("symbols", group.codes.size());
             item.put("failures", group.failures); item.put("error", group.error); item.put("retryAt", group.nextAllowed);
             item.put("klineFailures", group.klineFailures); item.put("klineError", group.klineError); item.put("klineRetryAt", group.nextKlines);
@@ -689,7 +735,7 @@ public class ForexQuoteMarketService {
     }
 
     private TradingSymbol controlSymbol(Long id) {
-        return symbols.findById(id).orElseThrow(() -> new BusinessException("币种不存在"));
+        return symbols.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), id).orElseThrow(() -> new BusinessException("币种不存在"));
     }
 
     private Map<String, Object> requireControlQuote(TradingSymbol config) {
@@ -722,7 +768,7 @@ public class ForexQuoteMarketService {
 
     public List<Map<String, Object>> controlSymbols() {
         List<Map<String, Object>> result = new ArrayList<>();
-        for (TradingSymbol symbol : symbols.findAll()) {
+        for (TradingSymbol symbol : symbols.findAllByTenantId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId())) {
             Map<String, Object> row = new LinkedHashMap<>();
             row.put("id", symbol.getId()); row.put("symbol", symbol.getSymbol()); row.put("name", symbol.getName());
             row.put("displayName", symbol.getDisplayName());
@@ -747,7 +793,7 @@ public class ForexQuoteMarketService {
         boolean running = PriceControlPath.running(config);
         BigDecimal price = quote.get("price") instanceof Number ? controlledPrice(config, quote, now) : null;
         result.put("id", config.getId()); result.put("enabled", Boolean.TRUE.equals(config.getControlEnabled()));
-        result.put("v3Enabled", v3Enabled);
+        result.put("v3Enabled", v3Enabled); result.put("v4Enabled", v3Enabled && v4Enabled);
         result.put("running", running); result.put("available", Boolean.TRUE.equals(quote.get("available")) && price != null && price.signum() > 0);
         result.put("rawPrice", quote.get("price")); result.put("currentPrice", price);
         result.put("offset", price == null ? config.getControlPriceOffset() : price.subtract(rawPrice(quote)));
@@ -799,6 +845,57 @@ public class ForexQuoteMarketService {
             result.put("feasible", false); result.put("errorCode", failure.code); result.put("message", failure.getMessage());
         }
         return result;
+    }
+
+    public Map<String, Object> controlFormula(Long id) {
+        controlSymbol(id); // Validates tenant-owned symbol before reading a tenant-scoped config key.
+        String stored = systemConfigs == null ? null : systemConfigs.getConfigValue("market.control.step-formula." + id);
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("stepFormula", stored == null ? TargetControlSettings.DEFAULT_FORMULA : stored);
+        result.put("defaultFormula", TargetControlSettings.DEFAULT_FORMULA);
+        return result;
+    }
+    private void resolveFormula(Long id, TargetControlOptions options) {
+        if (options.getStepFormula() == null) options.setStepFormula((String) controlFormula(id).get("stepFormula"));
+    }
+    private void requireV4() {
+        if (!v3Enabled || !v4Enabled || controls == null) throw new BalancedControlPlan.Failure("ALGORITHM_DISABLED", "V4目标轨迹已暂停；不会退回无偏差带约束的旧算法");
+    }
+    public Map<String, Object> previewControl(Long id, int duration, BigDecimal target, int intensity, boolean oscillation, TargetControlOptions options) {
+        requireV4(); resolveFormula(id, options);
+        TradingSymbol config = controlSymbol(id);
+        if (target == null || target.stripTrailingZeros().scale() > PriceControlPath.precision(config)) throw new BalancedControlPlan.Failure("INVALID_PARAMETERS", "目标价格超出品种精度");
+        long now = System.currentTimeMillis();
+        Map<String, Object> raw = RandomMarketPath.enabled(config) ? simulationBaseQuote(config, now) : getPrice(marketCode(config), sourceCategory(config));
+        BigDecimal displayed = raw.get("price") instanceof Number ? controlledPrice(config, raw, now) : null;
+        BigDecimal start = controls.previewStart(config, raw, displayed);
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("algorithmVersion", 4); result.put("startPrice", start.toPlainString()); result.put("targetPrice", target.toPlainString()); result.put("preview", true);
+        try {
+            TargetControlSettings settings = new TargetControlSettings(start, target, duration, PriceControlPath.precision(config), intensity, options);
+            StabilizedControlPlan.Parameters p = new StabilizedControlPlan.Parameters(start, target, duration, PriceControlPath.precision(config), intensity, StabilizedControlPlan.DEFAULT_RATIO, settings);
+            result.putAll(StabilizedControlPlan.feasibility(p));
+            result.putAll(controls.prepare(config, raw, displayed, duration, target, intensity, oscillation, options).preview());
+        } catch (BalancedControlPlan.Failure failure) {
+            result.put("feasible", false); result.put("errorCode", failure.code); result.put("message", failure.getMessage());
+        }
+        return result;
+    }
+    public Map<String, Object> saveControlFormula(Long id, int duration, BigDecimal target, int intensity, TargetControlOptions options) {
+        requireV4();
+        if (options.getStepFormula() == null) throw new BalancedControlPlan.Failure("INVALID_FORMULA", "请输入单步典型幅度公式");
+        TradingSymbol config = controlSymbol(id);
+        long now = System.currentTimeMillis();
+        Map<String, Object> raw = RandomMarketPath.enabled(config) ? simulationBaseQuote(config, now) : getPrice(marketCode(config), sourceCategory(config));
+        BigDecimal displayed = raw.get("price") instanceof Number ? controlledPrice(config, raw, now) : null;
+        BigDecimal start = controls.previewStart(config, raw, displayed);
+        TargetControlSettings settings = new TargetControlSettings(start, target, duration, PriceControlPath.precision(config), intensity, options);
+        StabilizedControlPlan.Parameters p = new StabilizedControlPlan.Parameters(start, target, duration, PriceControlPath.precision(config), intensity, StabilizedControlPlan.DEFAULT_RATIO, settings);
+        Map<String, Object> result = StabilizedControlPlan.feasibility(p);
+        if (!Boolean.TRUE.equals(result.get("feasible"))) throw new BalancedControlPlan.Failure((String) result.get("errorCode"), (String) result.get("message"));
+        if (systemConfigs == null) throw new BusinessException("公式保存服务不可用");
+        systemConfigs.saveConfig("market.control.step-formula." + id, settings.formula, "目标价格控盘单步典型幅度公式");
+        return controlFormula(id); // Saves settings only; never starts or rewrites a task.
     }
 
     @Transactional
@@ -854,6 +951,11 @@ public class ForexQuoteMarketService {
 
     public Map<String, Object> startControl(Long id, int duration, BigDecimal target, int intensity,
             boolean randomOscillation, String requestKey, RecoveryOptions options) {
+        return startControl(id, duration, target, intensity, randomOscillation, requestKey, options, null);
+    }
+    public Map<String, Object> startControl(Long id, int duration, BigDecimal target, int intensity,
+            boolean randomOscillation, String requestKey, RecoveryOptions options, TargetControlOptions targetOptions) {
+        if (targetOptions != null) { requireV4(); resolveFormula(id, targetOptions); }
         if (duration < 1 || duration > 86400 || intensity < 1 || intensity > 10 || target == null
                 || target.signum() <= 0 || target.compareTo(new BigDecimal("10000000000000000")) >= 0)
             throw new BusinessException("控盘参数无效");
@@ -875,13 +977,14 @@ public class ForexQuoteMarketService {
             config.setControlPriceOffset(start.subtract(rawPrice(quote)));
             recordSimulationControl(config, at); return saveControl(config);
         }
-        PersistentPriceControl.Task previous = controls.existingTarget(id, requestKey, duration, target, intensity, randomOscillation, options);
+        PersistentPriceControl.Task previous = controls.existingTarget(id, requestKey, duration, target, intensity, randomOscillation, options, targetOptions);
         if (previous != null) return controlStatus(config);
         long now = System.currentTimeMillis();
         Map<String,Object> raw = RandomMarketPath.enabled(config) ? simulationBaseQuote(config, now) : getPrice(marketCode(config), sourceCategory(config));
         Map<String,Object> view = controls.display(config, raw, now);
         BigDecimal displayed = view.get("price") instanceof Number ? ControlHistoryStore.number(view.get("price")) : null;
-        PersistentPriceControl.Prepared prepared = v3Enabled ? controls.prepare(config, raw, displayed, duration, target, intensity, randomOscillation) : null;
+        PersistentPriceControl.Prepared prepared = v3Enabled ? targetOptions == null ? controls.prepare(config, raw, displayed, duration, target, intensity, randomOscillation)
+                : controls.prepare(config, raw, displayed, duration, target, intensity, randomOscillation, targetOptions) : null;
         return controlHistory.transaction(() -> {
             TradingSymbol fresh = controlSymbol(id);
             long commitTime = System.currentTimeMillis();
@@ -895,7 +998,7 @@ public class ForexQuoteMarketService {
                     : controls.startPrepared(fresh, currentRaw, currentDisplay, duration, target, intensity, randomOscillation, requestKey, options, prepared);
             clearControl(fresh); fresh.setControlEnabled(false); fresh.setControlPriceOffset(BigDecimal.ZERO);
             if (RandomMarketPath.enabled(fresh) && SimulationControlPath.events(fresh).stream().noneMatch(e -> Objects.equals(e.planId, created.id)))
-                SimulationControlPath.record(fresh, created.startedAt, created.algorithmVersion == 3 ? created.id : null);
+                SimulationControlPath.record(fresh, created.startedAt, created.algorithmVersion >= 3 ? created.id : null, created.algorithmVersion);
             return saveControl(fresh);
         });
     }
@@ -974,17 +1077,15 @@ public class ForexQuoteMarketService {
         TradingSymbol saved = symbols.saveAndFlush(config);
         Runnable publish = () -> {
             synchronized (this) {
-                TradingSymbol current = registry.get(saved.getSymbol());
+                TradingSymbol current = state().registry.get(saved.getSymbol());
                 if (current != null && current.getRowVersion() > saved.getRowVersion()) return;
                 // Publish only committed settings; a failed transaction must not change execution prices.
-                Map<String, TradingSymbol> updated = new HashMap<>(registry);
+                Map<String, TradingSymbol> updated = new HashMap<>(state().registry);
                 updated.put(saved.getSymbol(), saved);
                 String alias = marketCode(saved);
                 if (!"CryptoPerpetual".equals(sourceCategory(saved)) && (!updated.containsKey(alias) || Objects.equals(updated.get(alias).getId(), saved.getId()))) updated.put(alias, saved);
-                if (exchangeStream != null) for (String category : Arrays.asList("Crypto", "CryptoPerpetual", "Metal"))
-                exchangeStream.subscriptions(category, new HashSet<>(groups.get(category).codes),
-                    (code, quote) -> acceptQuote(code, category, quote, "ws", QuoteState.time(quote.get("fetchedAt"))));
-            registry = Collections.unmodifiableMap(updated);
+
+            state().registry = Collections.unmodifiableMap(updated);
             }
         };
         if (TransactionSynchronizationManager.isSynchronizationActive()) {
@@ -1008,7 +1109,7 @@ public class ForexQuoteMarketService {
                             base.put("eventId", "simulation-" + config.getRandomMarketStartedAt() + "-" + now / 1000);
                             controls.sourceQuote(config, base, now);
                             for (Map<String,Object> bar : ControlHistoryStore.rows(RandomMarketPath.klines(config, "1m", 2, null, now)))
-                                controlHistory.db.update("INSERT INTO market_simulation_source_candle(symbol_id,session_at,period,candle_at,body) VALUES(?,?,'1m',?,?) ON DUPLICATE KEY UPDATE body=VALUES(body)",
+                                controlHistory.db.update("INSERT INTO market_simulation_source_candle(tenant_id,symbol_id,session_at,period,candle_at,body) VALUES(" + TenantContext.requireTenantId() + ",?,?,'1m',?,?) ON DUPLICATE KEY UPDATE body=VALUES(body)",
                                     id, config.getRandomMarketStartedAt(), ControlHistoryStore.time(bar), controlHistory.encode(bar));
                         }
                         controls.display(config, base, now);
@@ -1018,7 +1119,7 @@ public class ForexQuoteMarketService {
             } catch (Exception failure) { log.error("Cannot read persistent control tasks", failure); }
         }
         Set<Long> visited = new HashSet<>();
-        for (TradingSymbol snapshot : registry.values()) {
+        for (TradingSymbol snapshot : state().registry.values()) {
             if (!PriceControlPath.running(snapshot) || now < PriceControlPath.endsAt(snapshot) || !visited.add(snapshot.getId())) continue;
             try {
                 TradingSymbol config = controlSymbol(snapshot.getId());
@@ -1037,5 +1138,9 @@ public class ForexQuoteMarketService {
             }
         }
     }
-    @PreDestroy public void stop() { if (yahoo != null) yahoo.stop(); if (exchangeStream != null) exchangeStream.stop(); metadata.shutdownNow(); for (Group group : groups.values()) group.executor.shutdownNow(); }
+    @PreDestroy public void stop() {
+        running = false;
+        if (yahoo != null) yahoo.stop(); if (exchangeStream != null) exchangeStream.stop(); metadata.shutdownNow();
+        for (TenantState state : tenantStates.values()) for (Group group : state.groups.values()) group.executor.shutdownNow();
+    }
 }

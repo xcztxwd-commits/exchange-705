@@ -37,6 +37,8 @@ const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
     { path: '/login', component: Login },
+    { path: '/control-exchange', component: () => import('@/views/ControlExchange.vue') },
+    { path: '/access-ended', component: () => import('@/views/AccessEnded.vue') },
     { path: '/forbidden', component: () => import('@/views/Forbidden.vue') },
     {
       path: '/',
@@ -66,9 +68,10 @@ const router = createRouter({
         { path: 'admin-list', component: AdminList },
         { path: 'website-security', component: () => import('@/views/WebsiteSecurity.vue') },
         { path: 'settings', component: Settings },
+        { path: 'share-templates', component: () => import('@/components/ShareTemplateSettings.vue') },
         { path: 'support', component: () => import('@/views/SupportDesk.vue') },
         { path: 'support-settings', component: () => import('@/views/SupportSettings.vue') },
-        { path: 'inbox', component: () => import('@/views/InboxManagement.vue') },
+        { path: 'inbox', component: AnnouncementManagement, props: { initialTab: 'letters' } },
         { path: 'operation-log', component: OperationLog },
         { path: 'statistics', component: Statistics },
       ],
@@ -77,13 +80,20 @@ const router = createRouter({
 })
 
 router.beforeEach(async (to) => {
+  if (['/control-exchange', '/access-ended'].includes(to.path)) return true
   const auth = useAuthStore()
   if (!auth.token || !auth.user) auth.load()
-  if (!auth.token) return to.path === '/login' ? true : '/login'
-  try { await loadAccess(true) } catch { return to.path === '/forbidden' ? true : '/forbidden' }
+  const ended = auth.isControl ? '/access-ended' : '/login'
+  if (!auth.ensureValid()) return to.path === '/login' ? true : ended
+  if (auth.user?.mustChangePassword) return to.path === '/login' ? true : '/login'
+  try { await loadAccess(true) } catch {
+    if (!auth.token) return ended
+    return to.path === '/forbidden' ? true : '/forbidden'
+  }
+  if (!auth.token) return ended
   const first = access.menus[0]?.path || '/forbidden'
   if (to.path === '/login' || to.path === '/') return first
-  if (to.path === '/forbidden') return true
+  if (to.path === '/forbidden') return first === '/forbidden' ? true : first
   if (!canRoute(to.path)) return first === to.path ? '/forbidden' : first
   return true
 })

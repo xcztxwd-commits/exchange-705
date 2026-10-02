@@ -6,6 +6,8 @@ import path from 'node:path'
 export default defineConfig({
   plugins: [vue()],
   resolve: {
+    // Sibling SFCs must share this application's router and store provider identities.
+    dedupe: ['vue', 'vue-router', 'pinia'],
     alias: {
       '@': path.resolve(__dirname, './src'),
       '@img': path.resolve(__dirname, './public/img'),
@@ -23,16 +25,16 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      '/demo-api': { target: 'http://localhost:8081', changeOrigin: true, ws: true, rewrite: (path) => path.replace(/^\/demo-api/, '/api') },
-      '/demo-uploads': { target: 'http://localhost:8081', changeOrigin: true, rewrite: (path) => path.replace(/^\/demo-uploads/, '/uploads') },
+      '/demo-api': { target: 'http://localhost:8081', changeOrigin: false, ws: true, rewrite: (path) => path.replace(/^\/demo-api/, '/api') },
+      '/demo-uploads': { target: 'http://localhost:8081', changeOrigin: false, rewrite: (path) => path.replace(/^\/demo-uploads/, '/uploads') },
       '/api': {
         ws: true,
         target: 'http://localhost:8080',
-        changeOrigin: true,
+        changeOrigin: false,
       },
       '/uploads': {
         target: 'http://localhost:8080',
-        changeOrigin: true,
+        changeOrigin: false,
       },
     },
   },

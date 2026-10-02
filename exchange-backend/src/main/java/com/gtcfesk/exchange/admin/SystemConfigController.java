@@ -12,6 +12,8 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/admin/config")
 public class SystemConfigController {
+    private void auditControl(String action,String object,String detail,String reason){if(com.gtcfesk.exchange.control.ControlIdentity.isAccess())controlAudit.recordCurrent(action,object,detail,reason); }
+    @org.springframework.beans.factory.annotation.Autowired private com.gtcfesk.exchange.control.ControlAuditService controlAudit;
     @Autowired
     private SystemConfigService systemConfigService;
     @Autowired
@@ -33,12 +35,14 @@ public class SystemConfigController {
         return ResponseEntity.ok(configs);
     }
 
+    @org.springframework.transaction.annotation.Transactional
     @PostMapping("/save")
     public ResponseEntity<?> saveConfig(@RequestBody Map<String, String> req) {
         String key = req.get("key");
         String value = req.get("value");
         String description = req.get("description");
         systemConfigService.saveConfig(key, value, description);
+        auditControl("CONFIG_UPDATE",key,"value changed (redacted)",req.get("reason"));
         if ("market.conversion.currencies".equals(key)) refreshCurrenciesAfterCommit();
         Map<String, String> result = new HashMap<>();
         result.put("message", "配置保存成功");
@@ -55,6 +59,7 @@ public class SystemConfigController {
                 cfg.get("value"), 
                 cfg.get("description")
             );
+            auditControl("CONFIG_UPDATE",cfg.get("key"),"value changed (redacted)",cfg.get("reason"));
             currenciesChanged |= "market.conversion.currencies".equals(cfg.get("key"));
         }
         if (currenciesChanged) refreshCurrenciesAfterCommit();
@@ -65,7 +70,7 @@ public class SystemConfigController {
 
     @GetMapping("/get")
     public ResponseEntity<?> getConfig(@RequestParam String key) {
-        String value = systemConfigService.getConfigValue(key);
+        String value = com.gtcfesk.exchange.tenant.TenantSecrets.secret(key) ? com.gtcfesk.exchange.tenant.TenantSecrets.MASK : systemConfigService.getConfigValue(key);
         Map<String, String> result = new HashMap<>();
         result.put("key", key);
         result.put("value", value);

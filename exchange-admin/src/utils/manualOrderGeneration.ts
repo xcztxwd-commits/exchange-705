@@ -14,7 +14,7 @@ export function generationConstraintError(calculation: Record<string, unknown>, 
   }
   if (values.leverage.trim()) {
     const actual = Number(leverage), expected = Number(values.leverage)
-    const tolerance = generated ? Math.abs(expected) * 0.05 : 0
+    const tolerance = 0
     if (leverage == null || !Number.isFinite(actual) || !Number.isFinite(expected) || Math.abs(actual - expected) > tolerance + Number.EPSILON * Math.max(Math.abs(actual), Math.abs(expected)))
       return '当前预览不满足填写的杠杆，请一键生成或清空该条件'
   }

@@ -14,14 +14,17 @@ import java.util.*;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+@org.junit.jupiter.api.extension.ExtendWith(com.gtcfesk.exchange.tenant.TenantOneFixture.class)
 class AccountInspectionTest {
     AccountInspection data;
     JdbcTemplate jdbc;
     @BeforeEach void setup(){
         jdbc=new JdbcTemplate(new DriverManagerDataSource("jdbc:h2:mem:"+UUID.randomUUID()+";MODE=MySQL;DB_CLOSE_DELAY=-1","sa",""));
         data=new AccountInspection(jdbc);
-        jdbc.execute("create table asset_account(id bigint,user_id bigint,coin varchar(32),available decimal(32,16),frozen decimal(32,16),updated_at timestamp)");
-        jdbc.update("insert into asset_account values (1,101,'FUND',123.45,2,CURRENT_TIMESTAMP),(2,102,'FUND',900,0,CURRENT_TIMESTAMP)");
+        jdbc.execute("create table user_account(tenant_id bigint NOT NULL,id bigint,email varchar(254),remark varchar(500),nickname varchar(128),status varchar(32),kyc_status varchar(32),created_at timestamp)");
+        jdbc.update("insert into user_account(tenant_id,id,email,remark) values (1,101,'Alpha_%!@example.com','用户A备注'),(1,102,'beta@example.com',null),(2,101,'foreign@example.com','其它租户备注')");
+        jdbc.execute("create table asset_account(tenant_id bigint NOT NULL,id bigint,user_id bigint,coin varchar(32),available decimal(32,16),frozen decimal(32,16),updated_at timestamp)");
+        jdbc.update("insert into asset_account values (1,1,101,'FUND',123.45,2,CURRENT_TIMESTAMP),(1,2,102,'FUND',900,0,CURRENT_TIMESTAMP)");
     }
     @AfterEach void clear(){SecurityContextHolder.clearContext();}
     @Test void userFilterAndPagination(){
@@ -39,11 +42,27 @@ class AccountInspectionTest {
     }
     @Test void allCategoryProjectionsAreReadOnlyAndBounded(){
         for(Map.Entry<String,String[]> e:AccountInspection.TYPES.entrySet()) {
-            if(e.getKey().equals("wallets"))continue;
+            if(e.getKey().equals("wallets") || e.getKey().equals("users"))continue;
             String[] spec=e.getValue();
-            jdbc.execute("create table "+spec[0]+" ("+String.join(",",Arrays.stream(spec[2].split(",")).map(c->c+" varchar(128)").toArray(String[]::new))+")");
+            jdbc.execute("create table "+spec[0]+" (tenant_id bigint NOT NULL,"+String.join(",",Arrays.stream(spec[2].split(",")).map(c->c+" varchar(128)").toArray(String[]::new))+")");
             assertEquals(0L,data.read(e.getKey(),null,null,1,20).get("total"));
         }
+    }
+    @Test void identitiesEmailSearchAndOrphansRemainTenantScoped(){
+        Map<String,Object> result=data.read("wallets",null," ALPHA_%! ",null,1,1);
+        assertEquals(1L,result.get("total"));
+        Map<?,?> row=(Map<?,?>)((List<?>)result.get("rows")).get(0);
+        assertEquals("Alpha_%!@example.com",row.get("user_email"));assertEquals("用户A备注",row.get("user_remark"));
+        assertTrue(Arrays.asList((String[])result.get("columns")).containsAll(Arrays.asList("user_email","user_remark")));
+        assertEquals(0L,data.read("wallets",101L,"beta",null,1,20).get("total"));
+        assertEquals(0L,data.read("wallets",null,"foreign",null,1,20).get("total"));
+        assertEquals(2L,data.read("wallets",null,"EXAMPLE.COM",null,2,1).get("total"));
+        jdbc.update("insert into asset_account values (1,3,999,'FUND',0,0,CURRENT_TIMESTAMP)");
+        Map<?,?> orphan=(Map<?,?>)((List<?>)data.read("wallets",999L,null,1,20).get("rows")).get(0);
+        assertNull(orphan.get("user_email"));assertNull(orphan.get("user_remark"));
+        Map<String,Object> users=data.read("users",null,"alpha",null,1,20);
+        assertEquals(1L,users.get("total"));assertEquals("用户A备注",((Map<?,?>)((List<?>)users.get("rows")).get(0)).get("remark"));
+        assertThrows(IllegalArgumentException.class,()->data.read("wallets",null,String.join("",Collections.nCopies(255,"x")),null,1,20));
     }
     SimulationInspectionBoundary boundary(boolean demo){
         SimulationEnvironment env=mock(SimulationEnvironment.class);when(env.enabled()).thenReturn(demo);
@@ -52,7 +71,7 @@ class AccountInspectionTest {
     }
     MockHttpServletResponse call(SimulationInspectionBoundary filter,String method,String key) throws Exception {
         MockHttpServletRequest req=new MockHttpServletRequest(method,"/api/simulation/inspection");
-        req.addParameter("kind","wallets");req.addParameter("page","1");req.addParameter("size","20");
+        req.addHeader("X-Simulation-Tenant-Id","1");req.addParameter("kind","wallets");req.addParameter("page","1");req.addParameter("size","20");
         if(key!=null)req.addHeader("X-Simulation-Inspection-Key",key);
         MockHttpServletResponse res=new MockHttpServletResponse();filter.doFilter(req,res,new MockFilterChain());return res;
     }
@@ -81,7 +100,7 @@ class AccountInspectionTest {
     }
     @Test void demoQueryUsesSeparateServerAndRejectsWrongEnvironment() throws Exception {
         com.sun.net.httpserver.HttpServer server=com.sun.net.httpserver.HttpServer.create(new java.net.InetSocketAddress("127.0.0.1",0),0);
-        java.util.concurrent.atomic.AtomicReference<String> response=new java.util.concurrent.atomic.AtomicReference<>("{\"environment\":\"DEMO\",\"rows\":[{\"available\":77}],\"total\":1}");
+        java.util.concurrent.atomic.AtomicReference<String> response=new java.util.concurrent.atomic.AtomicReference<>("{\"environment\":\"DEMO\",\"tenantId\":1,\"rows\":[{\"available\":77}],\"total\":1}");
         java.util.concurrent.atomic.AtomicReference<String> received=new java.util.concurrent.atomic.AtomicReference<>();
         server.createContext("/inspection",exchange->{
             received.set(exchange.getRequestHeaders().getFirst("X-Simulation-Inspection-Key"));
@@ -96,6 +115,7 @@ class AccountInspectionTest {
             Map<String,Object> result=c.read("DEMO","wallets",101L,null,1,20);
             assertEquals("DEMO",result.get("environment"));assertEquals(77,((Map<?,?>)((List<?>)result.get("rows")).get(0)).get("available"));
             assertEquals("12345678901234567890123456789012",received.get());
+            response.set("{\"environment\":\"DEMO\",\"tenantId\":2}");assertThrows(org.springframework.web.server.ResponseStatusException.class,()->c.read("DEMO","wallets",101L,null,1,20));
             response.set("{\"environment\":\"REAL\"}");
             assertThrows(org.springframework.web.server.ResponseStatusException.class,()->c.read("DEMO","wallets",101L,null,1,20));
         }finally{server.stop(0);}

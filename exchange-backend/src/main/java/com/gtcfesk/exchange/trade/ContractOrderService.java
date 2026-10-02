@@ -1,6 +1,7 @@
 package com.gtcfesk.exchange.trade;
 
 import com.gtcfesk.exchange.common.BusinessException;
+import com.gtcfesk.exchange.common.OrderRequest;
 import com.gtcfesk.exchange.common.TradeValidation;
 import com.gtcfesk.exchange.entity.AssetAccount;
 import com.gtcfesk.exchange.entity.ContractOrder;
@@ -25,8 +26,11 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 public class ContractOrderService {
+    @org.springframework.beans.factory.annotation.Autowired private com.gtcfesk.exchange.repository.UserAccountRepository users;
+    @org.springframework.beans.factory.annotation.Autowired private com.gtcfesk.exchange.control.TenantPolicyService tenantPolicy;
     @org.springframework.beans.factory.annotation.Autowired
     private com.gtcfesk.exchange.activity.TrialFunds trialFunds;
+    @org.springframework.beans.factory.annotation.Autowired(required=false) private com.gtcfesk.exchange.activity.ActivityService activities;
     private static BigDecimal trial(BigDecimal value) { return value == null ? BigDecimal.ZERO : value; }
 
     private final com.gtcfesk.exchange.user.KycIdentityService identityService;
@@ -47,8 +51,17 @@ public class ContractOrderService {
      */
     @Transactional
     public ContractOrder createOrder(Long userId, CreateContractOrderRequest req) {
+        tenantPolicy.requireNewBusiness("contract");
         if (trialFunds != null) { trialFunds.lock(userId); trialFunds.requireTrade(userId); }
         else identityService.requireTradingApproved(userId);
+        String requestKey=OrderRequest.optional(req==null?null:req.getRequestId());
+        String requestHash=requestKey==null?null:OrderRequest.hash("contract",req.getSymbol(),req.getSide(),req.getType(),req.getQuantity(),req.getLeverage(),"LIMIT".equals(req.getType())?req.getPrice():null,req.getStopLoss(),req.getTakeProfit(),req.getSpecVersion(),req.getQuantityUnitType(),OrderRequest.source(req.getFundingSource(),"CONTRACT"));
+        if(requestKey!=null) {
+            users.lockById(userId).orElseThrow(()->new BusinessException("用户不存在"));
+            ContractOrder previous=contractOrderRepository.findByTenantIdAndUserIdAndRequestKey(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(),userId,requestKey).orElse(null);
+            if(previous!=null) { OrderRequest.same(previous.getRequestHash(),requestHash); return previous; }
+        }
+
         if (req == null || req.getSymbol() == null || req.getSymbol().trim().isEmpty()
                 || !("BUY".equals(req.getSide()) || "SELL".equals(req.getSide()))
                 || !("MARKET".equals(req.getType()) || "LIMIT".equals(req.getType()))) {
@@ -59,7 +72,7 @@ public class ContractOrderService {
         com.gtcfesk.exchange.common.TradeValidation.optionalPositive(req.getStopLoss(), "止损价格");
         com.gtcfesk.exchange.common.TradeValidation.optionalPositive(req.getTakeProfit(), "止盈价格");
         // 获取交易对信息
-        TradingSymbol symbol = tradingSymbolRepository.findBySymbol(req.getSymbol())
+        TradingSymbol symbol = tradingSymbolRepository.findByTenantIdAndSymbol(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), req.getSymbol())
                 .orElseThrow(() -> new BusinessException("交易对不存在"));
         
         if (entityManager != null) entityManager.refresh(symbol, javax.persistence.LockModeType.PESSIMISTIC_READ);
@@ -84,8 +97,7 @@ public class ContractOrderService {
         if (feeMultiplier.signum() < 0) throw new BusinessException("手续费设置无效");
         
         // 获取或创建合约资产账户
-        AssetAccount contractAccount = assetAccountRepository
-                .findByUserIdAndCoin(userId, "CONTRACT")
+        AssetAccount contractAccount = assetAccountRepository.findByTenantIdAndUserIdAndCoin(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), userId, "CONTRACT")
                 .orElseGet(() -> {
                     AssetAccount newAccount = new AssetAccount();
                     newAccount.setUserId(userId);
@@ -108,8 +120,10 @@ public class ContractOrderService {
         // 总费用 = 预计保证金 + 预计手续费
         BigDecimal totalCost = money(requiredMargin.add(fee), RoundingMode.UNNECESSARY);
 
-        BigDecimal trialReserved = BigDecimal.ZERO;
-        if (trialFunds != null) trialReserved = trialFunds.reserve(userId, contractAccount, totalCost, "CONTRACT_RESERVE");
+        String fundingSource = trialFunds == null ? (req.getFundingSource() == null ? "CONTRACT" : req.getFundingSource()) : trialFunds.source(req.getFundingSource(),"CONTRACT");
+        if(trialFunds==null&&"TRIAL".equals(fundingSource))throw new BusinessException("体验金账户不可用");
+        BigDecimal trialReserved = BigDecimal.ZERO;String trialAllocations=null;
+        if (trialFunds != null) {com.gtcfesk.exchange.activity.TrialFunds.Reservation reservation=trialFunds.reserve(userId, contractAccount, totalCost, fundingSource,"CONTRACT","CONTRACT_RESERVE");trialReserved=reservation.trial;trialAllocations=reservation.allocations;}
         else {
             BigDecimal available = contractAccount.getAvailable();
             if (available.compareTo(totalCost) < 0) throw new BusinessException("合约资产余额不足");
@@ -120,8 +134,9 @@ public class ContractOrderService {
 
         // 创建订单
         ContractOrder order = new ContractOrder();
+        order.setRequestKey(requestKey);order.setRequestHash(requestHash);
         order.setUserId(userId);
-        order.setTrialReserved(trialReserved);
+        order.setTrialReserved(trialReserved);order.setFundingSource(fundingSource);order.setTrialAllocations(trialAllocations);
         order.setSymbol(req.getSymbol());
         order.setSide(req.getSide()); // BUY or SELL
         order.setType(req.getType()); // MARKET or LIMIT
@@ -153,14 +168,14 @@ public class ContractOrderService {
             order.setOpenPrice(req.getPrice());
         }
 
-        return contractOrderRepository.save(order);
+        ContractOrder saved=contractOrderRepository.save(order);if(activities!=null)activities.trigger(userId,"API_CONTRACT_ORDER","AUTH_TRADE");return saved;
     }
 
     /** Each fill and its margin adjustment commit together; an unfunded sell limit stays pending. */
     public int matchPendingLimitOrders() {
         int filled = 0;
         TransactionTemplate transaction = new TransactionTemplate(transactionManager);
-        for (ContractOrder order : contractOrderRepository.findByStatusAndTypeAndLimitMatchEnabledTrue("PENDING", "LIMIT")) {
+        for (ContractOrder order : contractOrderRepository.findByTenantIdAndStatusAndTypeAndLimitMatchEnabledTrue(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), "PENDING", "LIMIT")) {
             try {
                 if (!identityService.canUseTradingFunds(order.getUserId())) continue;
                 if (order.getLotSize() != null) {
@@ -179,11 +194,14 @@ public class ContractOrderService {
     }
 
     private int matchPendingLimitOrder(Long id) {
-        ContractOrder order = contractOrderRepository.findById(id).orElse(null);
+        ContractOrder order = contractOrderRepository.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), id).orElse(null);
         if (order == null || !"PENDING".equals(order.getStatus()) || !order.isLimitMatchEnabled()) return 0;
         if (!identityService.canUseTradingFunds(order.getUserId())) return 0;
         if (trialFunds != null) trialFunds.lock(order.getUserId());
-        TradingSymbol symbol = tradingSymbolRepository.findBySymbol(order.getSymbol()).orElse(null);
+        if(entityManager!=null)entityManager.refresh(order,javax.persistence.LockModeType.PESSIMISTIC_WRITE);
+        if(!"PENDING".equals(order.getStatus()))return 0;
+        if(trialFunds!=null&&"TRIAL".equals(order.getFundingSource())&&trialFunds.reservationExpired(order.getTrialAllocations()))return 0;
+        TradingSymbol symbol = tradingSymbolRepository.findByTenantIdAndSymbol(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), order.getSymbol()).orElse(null);
         if (symbol == null || (!categories.leverageEnabled(symbol.getCategory()) && order.getLeverage().compareTo(BigDecimal.ONE)>0)) return 0;
         BigDecimal price = quotes.freshPrice(order.getSymbol());
         if (price == null || price.signum() <= 0
@@ -196,14 +214,14 @@ public class ContractOrderService {
         BigDecimal margin = calculateMargin(order.getQuantity(), order.getLotSize(), forex ? BigDecimal.ONE : price, order.getLeverage(),conversionRate);
         BigDecimal difference = margin.subtract(order.getMargin());
         if (trialFunds != null) trialFunds.lock(order.getUserId());
-        AssetAccount account = assetAccountRepository.findByUserIdAndCoin(order.getUserId(), "CONTRACT")
+        AssetAccount account = assetAccountRepository.findByTenantIdAndUserIdAndCoin(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), order.getUserId(), "CONTRACT")
                 .orElseThrow(() -> new BusinessException("合约资产账户不存在"));
         if (trialFunds != null) {
-            BigDecimal balance = trialFunds.tradingBalance(order.getUserId(), account.getAvailable());
+            BigDecimal balance = order.getFundingSource()==null ? trialFunds.tradingBalance(order.getUserId(),account.getAvailable()) : trialFunds.selectedBalance(order.getUserId(),account.getAvailable(),order.getFundingSource());
             if (difference.signum() > 0 && balance.compareTo(difference) < 0) return 0;
             BigDecimal oldCost = order.getMargin().add(order.getFee());
-            trialFunds.settle(order.getUserId(), account, oldCost, trial(order.getTrialReserved()), BigDecimal.ZERO, "CONTRACT_RESIZE:"+id);
-            order.setTrialReserved(trialFunds.reserve(order.getUserId(), account, margin.add(order.getFee()), "CONTRACT_RESERVE:"+id));
+            com.gtcfesk.exchange.activity.TrialFunds.Reservation resized=trialFunds.resize(order.getUserId(),account,oldCost,margin.add(order.getFee()),trial(order.getTrialReserved()),order.getTrialAllocations(),order.getFundingSource(),"CONTRACT","CONTRACT_RESIZE:"+id);
+            order.setTrialReserved(resized.trial);order.setTrialAllocations(resized.allocations);
         } else {
             if (difference.signum() > 0 && account.getAvailable().compareTo(difference) < 0) return 0;
             account.setAvailable(account.getAvailable().subtract(difference));
@@ -225,17 +243,16 @@ public class ContractOrderService {
      */
     public List<ContractOrder> getUserOrders(Long userId, String status) {
         if (status != null && !status.isEmpty()) {
-            return contractOrderRepository.findByUserIdAndStatusAndDeletedAtIsNullOrderByCreatedAtDesc(userId, status);
+            return contractOrderRepository.findByTenantIdAndUserIdAndStatusAndDeletedAtIsNullOrderByCreatedAtDesc(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), userId, status);
         }
-        return contractOrderRepository.findByUserIdAndDeletedAtIsNullOrderByCreatedAtDesc(userId);
+        return contractOrderRepository.findByTenantIdAndUserIdAndDeletedAtIsNullOrderByCreatedAtDesc(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), userId);
     }
 
     /**
      * 获取合约资产余额
      */
     public BigDecimal getContractBalance(Long userId) {
-        AssetAccount contractAccount = assetAccountRepository
-                .findByUserIdAndCoin(userId, "CONTRACT")
+        AssetAccount contractAccount = assetAccountRepository.findByTenantIdAndUserIdAndCoin(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), userId, "CONTRACT")
                 .orElseGet(() -> {
                     // 如果账户不存在，自动创建
                     AssetAccount newAccount = new AssetAccount();
@@ -246,13 +263,13 @@ public class ContractOrderService {
                     return assetAccountRepository.save(newAccount);
                 });
         BigDecimal real = contractAccount.getAvailable() != null ? contractAccount.getAvailable() : BigDecimal.ZERO;
-        return trialFunds == null ? real : trialFunds.tradingBalance(userId, real);
+        return real;
     }
 
     /** 平仓始终使用服务端新鲜行情。 */
     @Transactional
     public ContractOrder closeOrder(Long userId, Long orderId, BigDecimal closePrice) {
-        ContractOrder order = contractOrderRepository.findById(orderId)
+        ContractOrder order = contractOrderRepository.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), orderId)
                 .orElseThrow(() -> new BusinessException("订单不存在"));
         if (!order.getUserId().equals(userId)) throw new BusinessException("无权操作此订单");
         return settleOrder(order);
@@ -260,7 +277,7 @@ public class ContractOrderService {
 
     @Transactional
     public ContractOrder adminCloseOrder(Long orderId, BigDecimal closePrice) {
-        return settleOrder(contractOrderRepository.findById(orderId)
+        return settleOrder(contractOrderRepository.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), orderId)
                 .orElseThrow(() -> new BusinessException("订单不存在")));
     }
 
@@ -273,12 +290,12 @@ public class ContractOrderService {
         if (entityManager != null) entityManager.refresh(order, javax.persistence.LockModeType.PESSIMISTIC_WRITE);
         if (!"OPEN".equals(order.getStatus())) throw new BusinessException("只能平仓持仓中的订单");
         BigDecimal profit = money(calculateQuoteProfit(order,closePrice).multiply(settlementRate),RoundingMode.HALF_UP);
-        AssetAccount account = assetAccountRepository.findByUserIdAndCoin(order.getUserId(), "CONTRACT")
+        AssetAccount account = assetAccountRepository.findByTenantIdAndUserIdAndCoin(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), order.getUserId(), "CONTRACT")
                 .orElseThrow(() -> new BusinessException("合约资产账户不存在"));
         BigDecimal totalFrozen = order.getMargin().add(order.getFee());
         if (trialFunds != null) {
             BigDecimal net = order.getLotSize() == null ? profit : profit.subtract(order.getFee());
-            trialFunds.settle(order.getUserId(), account, totalFrozen, trial(order.getTrialReserved()), net, "CONTRACT_SETTLE:"+order.getId());
+            trialFunds.settle(order.getUserId(), account, totalFrozen, trial(order.getTrialReserved()), order.getTrialAllocations(),order.getFundingSource(),net, "CONTRACT_SETTLE:"+order.getId());
         } else {
         BigDecimal frozen = account.getFrozen() != null ? account.getFrozen() : BigDecimal.ZERO;
         if (frozen.compareTo(totalFrozen) < 0) throw new BusinessException("冻结金额不足");
@@ -303,7 +320,7 @@ public class ContractOrderService {
      */
     @Transactional
     public ContractOrder cancelOrder(Long userId, Long orderId) {
-        ContractOrder order = contractOrderRepository.findById(orderId)
+        ContractOrder order = contractOrderRepository.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), orderId)
                 .orElseThrow(() -> new BusinessException("订单不存在"));
 
         // 检查订单是否属于该用户
@@ -312,22 +329,21 @@ public class ContractOrderService {
         }
 
         // 检查订单状态
-        if (!"PENDING".equals(order.getStatus())) {
-            throw new BusinessException("只能取消挂单中的订单");
-        }
-
-        // 更新订单状态
-        order.setStatus("CANCELLED");
+        if (!"PENDING".equals(order.getStatus())) throw new BusinessException("只能取消挂单中的订单");
+        // Expiry may cancel the pending order while the user lock is acquired below.
 
         // 获取合约资产账户
         if (trialFunds != null) trialFunds.lock(userId);
-        AssetAccount contractAccount = assetAccountRepository
-                .findByUserIdAndCoin(userId, "CONTRACT")
+        if(entityManager!=null)entityManager.refresh(order,javax.persistence.LockModeType.PESSIMISTIC_WRITE);
+        if("CANCELLED".equals(order.getStatus()))return order;
+        if(!"PENDING".equals(order.getStatus()))throw new BusinessException("只能取消挂单中的订单");
+        order.setStatus("CANCELLED");
+        AssetAccount contractAccount = assetAccountRepository.findByTenantIdAndUserIdAndCoin(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), userId, "CONTRACT")
                 .orElseThrow(() -> new BusinessException("合约资产账户不存在"));
 
         // 解冻保证金和手续费
         BigDecimal totalFrozen = order.getMargin().add(order.getFee());
-        if (trialFunds != null) trialFunds.settle(userId, contractAccount, totalFrozen, trial(order.getTrialReserved()), BigDecimal.ZERO, "CONTRACT_CANCEL:"+order.getId());
+        if (trialFunds != null) trialFunds.settle(userId, contractAccount, totalFrozen, trial(order.getTrialReserved()),order.getTrialAllocations(),order.getFundingSource(), BigDecimal.ZERO, "CONTRACT_CANCEL:"+order.getId());
         else {
         BigDecimal frozen = contractAccount.getFrozen() != null ? contractAccount.getFrozen() : BigDecimal.ZERO;
         if (frozen.compareTo(totalFrozen) < 0) {
@@ -350,7 +366,7 @@ public class ContractOrderService {
      */
     @Transactional
     public ContractOrder adminCancelOrder(Long orderId) {
-        ContractOrder order = contractOrderRepository.findById(orderId)
+        ContractOrder order = contractOrderRepository.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), orderId)
                 .orElseThrow(() -> new BusinessException("订单不存在"));
 
         // 检查订单状态
@@ -360,18 +376,20 @@ public class ContractOrderService {
 
         Long userId = order.getUserId();
 
-        // 更新订单状态
-        order.setStatus("CANCELLED");
+        // Acquire funding locks before changing status; expiry must still find this pending order.
 
         // 获取合约资产账户
         if (trialFunds != null) trialFunds.lock(userId);
-        AssetAccount contractAccount = assetAccountRepository
-                .findByUserIdAndCoin(userId, "CONTRACT")
+        if(entityManager!=null)entityManager.refresh(order,javax.persistence.LockModeType.PESSIMISTIC_WRITE);
+        if("CANCELLED".equals(order.getStatus()))return order;
+        if(!"PENDING".equals(order.getStatus()))throw new BusinessException("只能取消挂单中的订单");
+        order.setStatus("CANCELLED");
+        AssetAccount contractAccount = assetAccountRepository.findByTenantIdAndUserIdAndCoin(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), userId, "CONTRACT")
                 .orElseThrow(() -> new BusinessException("合约资产账户不存在"));
 
         // 解冻保证金和手续费
         BigDecimal totalFrozen = order.getMargin().add(order.getFee());
-        if (trialFunds != null) trialFunds.settle(userId, contractAccount, totalFrozen, trial(order.getTrialReserved()), BigDecimal.ZERO, "CONTRACT_CANCEL:"+order.getId());
+        if (trialFunds != null) trialFunds.settle(userId, contractAccount, totalFrozen, trial(order.getTrialReserved()),order.getTrialAllocations(),order.getFundingSource(), BigDecimal.ZERO, "CONTRACT_CANCEL:"+order.getId());
         else {
         BigDecimal frozen = contractAccount.getFrozen() != null ? contractAccount.getFrozen() : BigDecimal.ZERO;
         if (frozen.compareTo(totalFrozen) < 0) {
@@ -396,7 +414,7 @@ public class ContractOrderService {
     public ContractOrder updateStopLossTakeProfit(Long userId, Long orderId, BigDecimal stopLoss, BigDecimal takeProfit) {
         com.gtcfesk.exchange.common.TradeValidation.optionalPositive(stopLoss, "止损价格");
         com.gtcfesk.exchange.common.TradeValidation.optionalPositive(takeProfit, "止盈价格");
-        ContractOrder order = contractOrderRepository.findById(orderId)
+        ContractOrder order = contractOrderRepository.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), orderId)
                 .orElseThrow(() -> new BusinessException("订单不存在"));
 
         // 检查订单是否属于该用户
@@ -436,9 +454,9 @@ public class ContractOrderService {
         // 获取需要检查的订单列表
         List<ContractOrder> ordersToCheck;
         if (symbol != null && !symbol.isEmpty()) {
-            ordersToCheck = contractOrderRepository.findBySymbolAndStatus(symbol, "OPEN");
+            ordersToCheck = contractOrderRepository.findByTenantIdAndSymbolAndStatus(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), symbol, "OPEN");
         } else {
-            ordersToCheck = contractOrderRepository.findByStatus("OPEN");
+            ordersToCheck = contractOrderRepository.findByTenantIdAndStatus(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), "OPEN");
         }
         
         for (ContractOrder order : ordersToCheck) {
@@ -483,8 +501,9 @@ public class ContractOrderService {
                 if (shouldClose) {
                     adminCloseOrder(order.getId(), null);
                 }
-            } catch (Exception e) {
-                // 静默处理异常，避免日志输出
+            } catch (RuntimeException failure) {
+                // The tenant batch is atomic: never commit a partial cash/trial settlement.
+                throw failure;
             }
         }
     }
@@ -497,18 +516,17 @@ public class ContractOrderService {
     public void checkAndForceCloseOrders(Map<String, BigDecimal> symbolPriceMap) {
         symbolPriceMap = quotes.freshPrices();
         // 获取所有持仓订单
-        List<ContractOrder> openOrders = contractOrderRepository.findByStatus("OPEN");
+        List<ContractOrder> openOrders = contractOrderRepository.findByTenantIdAndStatus(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), "OPEN");
         if (openOrders.isEmpty()) {
             return;
         }
         
         // 按用户分组
-        Map<Long, List<ContractOrder>> ordersByUser = openOrders.stream()
-                .collect(Collectors.groupingBy(ContractOrder::getUserId));
+        Map<String,List<ContractOrder>> ordersByUser=openOrders.stream().collect(Collectors.groupingBy(o->o.getUserId()+":"+(o.getFundingSource()==null?"LEGACY":o.getFundingSource())));
         
         // 对每个用户检查强制平仓条件
-        for (Map.Entry<Long, List<ContractOrder>> entry : ordersByUser.entrySet()) {
-            Long userId = entry.getKey();
+        for (Map.Entry<String, List<ContractOrder>> entry : ordersByUser.entrySet()) {
+            Long userId = entry.getValue().get(0).getUserId();
             List<ContractOrder> userOrders = entry.getValue();
             // An account-level calculation requires every open position, using current valid snapshots only.
             boolean complete = true;
@@ -521,8 +539,7 @@ public class ContractOrderService {
             
             try {
                 // 获取合约资产账户
-                AssetAccount contractAccount = assetAccountRepository
-                        .findByUserIdAndCoin(userId, "CONTRACT")
+                AssetAccount contractAccount = assetAccountRepository.findByTenantIdAndUserIdAndCoin(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), userId, "CONTRACT")
                         .orElse(null);
                 
                 if (contractAccount == null) {
@@ -564,7 +581,9 @@ public class ContractOrderService {
                 // 总亏损 = -totalProfit（如果totalProfit为负数）
                 if (totalProfit.compareTo(BigDecimal.ZERO) < 0) {
                     BigDecimal totalLoss = totalProfit.negate(); // 转换为正数（亏损金额）
-                    BigDecimal availablePlusMargin = (trialFunds == null ? available : trialFunds.tradingBalance(userId, available)).add(totalMarginAndFee);
+                    String source=userOrders.get(0).getFundingSource();
+                    BigDecimal selected=trialFunds==null?available:source==null?trialFunds.tradingBalance(userId,available):trialFunds.selectedBalance(userId,available,source);
+                    BigDecimal availablePlusMargin=selected.add(totalMarginAndFee);
                     
                     // 如果总亏损 >= (余额 + 保证金)，强制平仓所有订单
                     if (totalLoss.compareTo(availablePlusMargin) >= 0) {
@@ -580,8 +599,8 @@ public class ContractOrderService {
                                 } else {
                                     allClosed = false;
                                 }
-                            } catch (Exception e) {
-                                allClosed = false;
+                            } catch (RuntimeException failure) {
+                                throw failure;
                             }
                         }
                         // 只在所有持仓结算成功后处理穿仓；挂单冻结资金保持不变。
@@ -591,8 +610,9 @@ public class ContractOrderService {
                         }
                     }
                 }
-            } catch (Exception e) {
-                // 静默处理异常，避免日志输出
+            } catch (RuntimeException failure) {
+                // The tenant batch is atomic: never commit a partial cash/trial settlement.
+                throw failure;
             }
         }
     }

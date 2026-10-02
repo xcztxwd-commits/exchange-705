@@ -6,9 +6,9 @@ import java.util.*;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
-class SimulationControlPathTest {
+class SimulationControlPathTest extends TenantMarketTestContext {
     TradingSymbol symbol() {
-        TradingSymbol s = new TradingSymbol(); s.setSymbol("VIRTUAL"); s.setPricePrecision(3);
+        TradingSymbol s = new TradingSymbol(); s.setTenantId(1L); s.setSymbol("VIRTUAL"); s.setPricePrecision(3);
         s.setRandomMarketEnabled(true); s.setRandomMarketStartedAt(1800000000000L);
         s.setRandomMarketBasePrice(new BigDecimal("100")); return s;
     }

@@ -14,6 +14,9 @@ public class SupportSettings {
     public static final String KEY = "support.settings";
     private final SystemConfigService configs;
     private final ObjectMapper mapper;
+    @org.springframework.beans.factory.annotation.Autowired private com.gtcfesk.exchange.control.TenantPolicyService policy;
+
+    @org.springframework.beans.factory.annotation.Autowired private com.gtcfesk.exchange.security.OutboundEndpointPolicy outbound;
 
 
     public static class Rule {
@@ -41,7 +44,13 @@ public class SupportSettings {
     }
     public Settings get() {
         String raw = configs.getConfigValue(KEY);
-        return raw == null ? new Settings() : parse(raw);
+        Settings s = raw == null ? new Settings() : parse(raw);
+        String forced = policy.effectiveConfig("support.channel", null);
+        if (forced != null) s.mode = forced;
+        if ("internal".equals(s.mode) && !policy.featureEnabled("support")) s.mode = "off";
+        if ("external".equals(s.mode) && !policy.featureEnabled("external_support")) s.mode = "off";
+        if (!policy.featureEnabled("inbox")) s.inboxEnabled = false;
+        return s;
     }
     public static Settings parse(String raw) {
         try {
@@ -66,9 +75,11 @@ public class SupportSettings {
     private static void text(String s, int length) { if (s == null || s.length() > length) throw new IllegalArgumentException(); }
     private static void sound(String s) {
         text(s, 500);
-        if (!s.isEmpty() && !s.matches("/api/(user/support/tones/[a-z]+\\.wav|uploads/audio/[a-zA-Z0-9_.-]+)")) throw new IllegalArgumentException();
+        if (!s.isEmpty() && !s.matches("/api/(user/support/tones/[a-z]+\\.wav|uploads/audio/(?:[0-9]+/staff/(?:agent-)?-?[0-9]+/)?[a-zA-Z0-9_.-]+)")) throw new IllegalArgumentException();
     }
     public void save(Settings s) {
+        policy.requireConfigChange("support.channel", s.mode);
+        if ("internal".equals(s.mode) && !policy.featureEnabled("support") || "external".equals(s.mode) && !policy.featureEnabled("external_support") || s.inboxEnabled && !policy.featureEnabled("inbox")) throw new org.springframework.security.access.AccessDeniedException("客服或站内信功能未获授权");
         try { String raw = mapper.writeValueAsString(s); parse(raw); configs.saveConfig(KEY, raw, "站内客服与站内信配置"); }
         catch (java.io.IOException e) { throw new IllegalArgumentException(e); }
     }
@@ -97,12 +108,11 @@ public class SupportSettings {
         return tag.split("-", 2)[0];
     }
     public String externalLink() {
+        if (!"external".equals(get().mode) || !policy.featureEnabled("external_support")) return "";
         String link = configs.getConfigValue("customer.service.link");
         if (link == null || link.trim().isEmpty()) return "";
-        link = link.trim();
-        if (!link.contains("://")) link = "https://" + link;
-        try { URI uri = URI.create(link); return Arrays.asList("http", "https").contains(uri.getScheme()) && uri.getHost() != null && uri.getUserInfo() == null ? link : ""; }
-        catch (IllegalArgumentException e) { return ""; }
+        try { return outbound.https(link,"support").toString(); }
+        catch (BusinessException e) { return ""; } // Stale invalid configuration is never exposed as a clickable URL.
     }
     public Map<String,Object> publicConfig() { return publicConfig(null); }
     public Map<String,Object> publicConfig(String locale) {

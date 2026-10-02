@@ -29,6 +29,9 @@ public class AnnouncementController {
         // 如果提供了语言参数，按语言过滤；否则返回所有语言的公告
         if (language != null && !language.trim().isEmpty()) {
             announcements = announcementRepository.findAllPublishedByLanguage(language.trim());
+            if (announcements.isEmpty() && !"en".equals(language.trim())) {
+                announcements = announcementRepository.findAllPublishedByLanguage("en");
+            }
         } else {
             announcements = announcementRepository.findAllPublished();
         }
@@ -50,6 +53,9 @@ public class AnnouncementController {
         // 如果提供了语言参数，按语言过滤；否则返回所有语言的最新公告
         if (language != null && !language.trim().isEmpty()) {
             announcementOpt = announcementRepository.findLatestPublishedByLanguage(language.trim());
+            if (!announcementOpt.isPresent() && !"en".equals(language.trim())) {
+                announcementOpt = announcementRepository.findLatestPublishedByLanguage("en");
+            }
         } else {
             announcementOpt = announcementRepository.findLatestPublished();
         }
@@ -68,7 +74,7 @@ public class AnnouncementController {
      */
     @GetMapping("/announcements/{id}")
     public ResponseEntity<?> getAnnouncement(@PathVariable Long id) {
-        return announcementRepository.findById(id)
+        return announcementRepository.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), id)
                 .map(announcement -> {
                     // 只返回已发布的公告
                     if (!"PUBLISHED".equals(announcement.getStatus())) {

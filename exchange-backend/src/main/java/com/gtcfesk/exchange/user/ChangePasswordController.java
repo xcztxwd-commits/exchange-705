@@ -34,7 +34,7 @@ public class ChangePasswordController {
         }
         
         Long userId = Long.parseLong(auth.getName());
-        UserAccount user = userAccountRepository.findById(userId)
+        UserAccount user = userAccountRepository.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), userId)
                 .orElseThrow(() -> new BusinessException("用户不存在"));
         
         SendCodeRequest req = new SendCodeRequest();
@@ -63,7 +63,7 @@ public class ChangePasswordController {
         }
         
         Long userId = Long.parseLong(auth.getName());
-        UserAccount user = userAccountRepository.findById(userId)
+        UserAccount user = userAccountRepository.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), userId)
                 .orElseThrow(() -> new BusinessException("用户不存在"));
         
         // 验证密码一致性

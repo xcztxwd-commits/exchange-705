@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useTrialWallet } from '@/utils/useTrialWallet'
 import TrialAccountCard from '@/components/TrialAccountCard.vue'
 import CurrencyPicker from '@/components/CurrencyPicker.vue'
 import { useFiatCurrency } from '@/utils/fiatCurrency'
@@ -12,6 +13,7 @@ import { useLocaleStore } from '@/store/locale'
 
 const router = useRouter()
 const auth = useAuthStore()
+const trialWallet = useTrialWallet()
 auth.load()
 const localeStore = useLocaleStore()
 localeStore.loadLocale()
@@ -40,7 +42,10 @@ async function loadAssets() {
     const userId = user?.id
     if (!userId) return
 
+    const owner = auth.token, started = performance.now()
     const res: any = await request.get('/user/assets')
+    if (owner !== auth.token) return
+    trialWallet.accept(res, started)
     
     if (res && res.success !== false) {
       // 资金账户

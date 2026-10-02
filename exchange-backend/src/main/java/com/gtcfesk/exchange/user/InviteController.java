@@ -35,7 +35,7 @@ public class InviteController {
         }
 
         Long userId = Long.parseLong(auth.getName());
-        UserAccount user = userAccountRepository.findById(userId)
+        UserAccount user = userAccountRepository.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), userId)
                 .orElseThrow(() -> new IllegalArgumentException("用户不存在"));
 
         // 如果用户还没有自己的邀请码，生成一个
@@ -63,7 +63,7 @@ public class InviteController {
         }
 
         Long userId = Long.parseLong(auth.getName());
-        List<UserAccount> subordinates = userAccountRepository.findByParentUserId(userId);
+        List<UserAccount> subordinates = userAccountRepository.findByTenantIdAndParentUserId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), userId);
 
         List<Map<String, Object>> list = subordinates.stream().map(u -> {
             Map<String, Object> item = new HashMap<>();
@@ -99,7 +99,7 @@ public class InviteController {
         String baseCode = code.toString();
         String finalCode = baseCode;
         int suffix = 0;
-        while (userAccountRepository.findByMyInviteCode(finalCode).isPresent()) {
+        while (userAccountRepository.findByTenantIdAndMyInviteCode(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), finalCode).isPresent()) {
             suffix++;
             finalCode = baseCode.substring(0, 5) + chars.charAt(suffix % chars.length());
         }

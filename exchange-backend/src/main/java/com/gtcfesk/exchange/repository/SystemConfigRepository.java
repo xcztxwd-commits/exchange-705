@@ -5,8 +5,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.Optional;
 
-public interface SystemConfigRepository extends JpaRepository<SystemConfig, Long> {
-    Optional<SystemConfig> findByConfigKey(String configKey);
+public interface SystemConfigRepository extends com.gtcfesk.exchange.tenant.TenantRepository<SystemConfig, Long> {
+    Optional<SystemConfig> findByTenantIdAndConfigKey(Long tenantId, String configKey);
 }
 
 

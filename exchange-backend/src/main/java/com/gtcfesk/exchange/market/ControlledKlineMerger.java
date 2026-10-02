@@ -1,5 +1,7 @@
 package com.gtcfesk.exchange.market;
 
+import static com.gtcfesk.exchange.market.ControlHistoryStore.tenant;
+
 import org.springframework.stereotype.Service;
 import java.util.*;
 import java.util.function.LongConsumer;
@@ -28,7 +30,7 @@ public class ControlledKlineMerger {
         long width = RandomMarketPath.duration(interval);
         long end = cursor == null ? System.currentTimeMillis() : cursor;
         TreeMap<Long, Map<String, Object>> bars = new TreeMap<>();
-        List<Map<String, Object>> source = store.db.query("SELECT body FROM market_source_candle WHERE symbol_id=? AND period=? AND candle_at<=? ORDER BY candle_at DESC LIMIT ?",
+        List<Map<String, Object>> source = store.db.query("SELECT body FROM market_source_candle WHERE tenant_id=" + tenant() + " AND symbol_id=? AND period=? AND candle_at<=? ORDER BY candle_at DESC LIMIT ?",
             (rs, n) -> store.decode(rs.getString(1)), symbol, interval, end, limit);
         for (Map<String, Object> row : baseMinutes == null ? source : Collections.<Map<String,Object>>emptyList())
             if (ControlHistoryStore.periodCandle(row, interval)) bars.put(ControlHistoryStore.time(row), row);
@@ -40,7 +42,7 @@ public class ControlledKlineMerger {
         for (Map<String, Object> row : store.candles(symbol, interval, end + 1, end + width - 1))
             anchors.put(ControlHistoryStore.time(row), row);
         // Bound rows by the requested number of occupied periods, never by a seven-day window.
-        List<Long> recentBuckets = monthly ? Collections.emptyList() : store.db.queryForList("SELECT MIN(minute_at) AS bucket_start FROM market_mixed_minute WHERE symbol_id=? AND minute_at<=? GROUP BY FLOOR(minute_at / ?) ORDER BY bucket_start DESC LIMIT ?",
+        List<Long> recentBuckets = monthly ? Collections.emptyList() : store.db.queryForList("SELECT MIN(minute_at) AS bucket_start FROM market_mixed_minute WHERE tenant_id=" + tenant() + " AND symbol_id=? AND minute_at<=? GROUP BY FLOOR(minute_at / ?) ORDER BY bucket_start DESC LIMIT ?",
             Long.class, symbol, end + width - 1, width, limit + 2);
         // A short provider page must not hide older controls that still fit in the requested page.
         long from = monthly ? RandomMarketPath.monthStart(end - (limit + 2L) * 32 * 86400000L) : recentBuckets.isEmpty() ? 0
@@ -80,7 +82,7 @@ public class ControlledKlineMerger {
             Map<String, Object> bar = aggregate(start, minutes.values());
             bar.put("partial", true); // Tick coverage and minute OHLC cannot prove a full second-by-second path.
             bar.put("controlled", true); bar.put("minuteCount", minutes.size());
-            Integer publications = store.db.queryForObject("SELECT COUNT(*) FROM market_control_publication p JOIN market_control_task t ON t.id=p.task_id WHERE t.symbol_id=? AND p.from_at<? AND p.to_at>=?",
+            Integer publications = store.db.queryForObject("SELECT COUNT(*) FROM market_control_publication p JOIN market_control_task t ON t.tenant_id=p.tenant_id AND t.id=p.task_id WHERE t.tenant_id=" + tenant() + " AND t.symbol_id=? AND p.from_at<? AND p.to_at>=?",
                 Integer.class, symbol, bucketEnd, start);
             if (publications != null && publications > 0) bar.put("historyReplaced", true);
             bars.put(start, bar);
@@ -90,7 +92,7 @@ public class ControlledKlineMerger {
         Map<String, Object> data = new HashMap<>((Map<String, Object>) external.get("data"));
         data.put("kline_list", new ArrayList<>(bars.values())); data.put("merged", true);
         if (missingAnchor) data.put("missingData", "source_period_anchor");
-        Integer missingSource = store.db.queryForObject("SELECT COUNT(*) FROM market_control_sample s JOIN market_control_task t ON t.id=s.task_id JOIN market_control_flow f ON f.task_id=t.id LEFT JOIN market_control_publication p ON p.task_id=t.id WHERE t.symbol_id=? AND f.state='SOURCE' AND s.generated_at>=? AND s.generated_at<=? AND (p.task_id IS NULL OR s.generated_at>p.to_at) AND NOT EXISTS (SELECT 1 FROM market_source_candle c WHERE c.symbol_id=t.symbol_id AND c.period='1m' AND c.candle_at=FLOOR(s.generated_at/60000)*60000)", Integer.class, symbol, from, end + width - 1);
+        Integer missingSource = store.db.queryForObject("SELECT COUNT(*) FROM market_control_sample s JOIN market_control_task t ON t.tenant_id=s.tenant_id AND t.id=s.task_id JOIN market_control_flow f ON f.tenant_id=t.tenant_id AND f.task_id=t.id LEFT JOIN market_control_publication p ON p.tenant_id=t.tenant_id AND p.task_id=t.id WHERE t.tenant_id=" + tenant() + " AND t.symbol_id=? AND f.state='SOURCE' AND s.generated_at>=? AND s.generated_at<=? AND (p.task_id IS NULL OR s.generated_at>p.to_at) AND NOT EXISTS (SELECT 1 FROM market_source_candle c WHERE c.tenant_id=" + tenant() + " AND c.symbol_id=t.symbol_id AND c.period='1m' AND c.candle_at=FLOOR(s.generated_at/60000)*60000)", Integer.class, symbol, from, end + width - 1);
         if (missingSource > 0 && baseMinutes == null) data.put("missingData", "original_source_candles");
         if (!bars.isEmpty()) { result.put("ret", 200); data.put("status", "available"); }
         result.put("data", data); return result;

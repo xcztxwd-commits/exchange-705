@@ -26,7 +26,7 @@ public class AdminFinancialService {
      * 获取所有理财产品
      */
     public List<FinancialProduct> getAllProducts() {
-        return productRepository.findAll();
+        return productRepository.findAllByTenantId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId());
     }
     
     /**
@@ -42,7 +42,7 @@ public class AdminFinancialService {
      */
     @Transactional
     public FinancialProduct updateProduct(FinancialProduct product) {
-        FinancialProduct existing = productRepository.findById(product.getId())
+        FinancialProduct existing = productRepository.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), product.getId())
                 .orElseThrow(() -> new BusinessException("产品不存在"));
         
         existing.setName(product.getName());
@@ -67,11 +67,11 @@ public class AdminFinancialService {
     @Transactional
     public void deleteProduct(Long id) {
         // 检查是否有订单
-        List<FinancialOrder> orders = orderRepository.findByProductId(id);
+        List<FinancialOrder> orders = orderRepository.findByTenantIdAndProductId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), id);
         if (!orders.isEmpty()) {
             throw new BusinessException("该产品已有订单，无法删除");
         }
-        productRepository.deleteById(id);
+        productRepository.deleteByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), id);
     }
     
     /**
@@ -80,14 +80,14 @@ public class AdminFinancialService {
     public List<FinancialOrder> getOrders(String status, Long userId, String userEmail) {
         List<FinancialOrder> orders;
         if (status != null && !status.isEmpty()) {
-            orders = orderRepository.findByStatusOrderByPurchaseTimeDesc(status);
+            orders = orderRepository.findByTenantIdAndStatusOrderByPurchaseTimeDesc(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), status);
         } else {
-            orders = orderRepository.findAllByOrderByPurchaseTimeDesc();
+            orders = orderRepository.findAllByTenantIdOrderByPurchaseTimeDesc(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId());
         }
         
         Long agent = com.gtcfesk.exchange.config.BackendAccess.agentId();
         if (agent != null) {
-            java.util.Set<Long> allowed = userAccountRepository.findByParentUserId(agent).stream().map(UserAccount::getId).collect(java.util.stream.Collectors.toSet());
+            java.util.Set<Long> allowed = userAccountRepository.findByTenantIdAndParentUserId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), agent).stream().map(UserAccount::getId).collect(java.util.stream.Collectors.toSet());
             orders = orders.stream().filter(o -> allowed.contains(o.getUserId())).collect(java.util.stream.Collectors.toList());
         }
         // 按用户ID过滤
@@ -99,7 +99,7 @@ public class AdminFinancialService {
         
         // 按用户邮箱过滤
         if (userEmail != null && !userEmail.trim().isEmpty()) {
-            Optional<UserAccount> userOpt = userAccountRepository.findByEmail(userEmail.trim());
+            Optional<UserAccount> userOpt = userAccountRepository.findByTenantIdAndEmail(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), userEmail.trim());
             if (userOpt.isPresent()) {
                 Long targetUserId = userOpt.get().getId();
                 orders = orders.stream()

@@ -9,6 +9,7 @@ import java.util.stream.Stream;
 import static com.gtcfesk.exchange.trade.FeeCalculationAuditTest.*;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
+@org.junit.jupiter.api.extension.ExtendWith(CalculationTenantExtension.class)
 class CryptoQuantityRulesTest {
  static Fixture fixture(String base,String price,String step) {
   Fixture f=new Fixture(base+"USDT",base,"USDT",price,"1");

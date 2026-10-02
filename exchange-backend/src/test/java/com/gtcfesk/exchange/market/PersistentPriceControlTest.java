@@ -16,11 +16,12 @@ import java.math.BigDecimal;
 import java.util.*;
 import java.util.concurrent.*;
 import static org.junit.jupiter.api.Assertions.*;
+import static com.gtcfesk.exchange.market.MarketSqlFixture.inTenant;
 import static org.mockito.Mockito.*;
 
-class PersistentPriceControlTest {
+class PersistentPriceControlTest extends TenantMarketTestContext {
     @Test void sharedSourceAliasesRollbackTogether() {
-        TradingSymbol missing = new TradingSymbol(); missing.setId(2L); missing.setSymbol("MISSING");
+        TradingSymbol missing = new TradingSymbol(); missing.setTenantId(1L); missing.setId(2L); missing.setSymbol("MISSING");
         long now = System.currentTimeMillis();
         assertThrows(Exception.class, () -> controls.sourceQuotes(new ArrayList<>(Arrays.asList(symbol, missing)), raw(now, true), now));
         assertEquals(0, store.db.queryForObject("SELECT COUNT(*) FROM market_source_event", Integer.class));
@@ -50,9 +51,9 @@ class PersistentPriceControlTest {
     @BeforeEach void setup() {
         DriverManagerDataSource data = new DriverManagerDataSource("jdbc:h2:mem:" + UUID.randomUUID() + ";MODE=MySQL;DB_CLOSE_DELAY=-1", "sa", "");
         store = new ControlHistoryStore(new JdbcTemplate(data), new DataSourceTransactionManager(data));
-        store.db.execute("CREATE TABLE trading_symbol(id BIGINT PRIMARY KEY)"); store.db.update("INSERT INTO trading_symbol VALUES(1)");
+        MarketSqlFixture.schema(store.db); store.db.update("INSERT INTO trading_symbol(id,tenant_id) VALUES(1,1)");
         store.migrate(); controls = new PersistentPriceControl(store); merger = new ControlledKlineMerger(store);
-        symbol = new TradingSymbol(); symbol.setId(1L); symbol.setSymbol("TEST"); symbol.setPricePrecision(2);
+        symbol = new TradingSymbol(); symbol.setTenantId(1L); symbol.setId(1L); symbol.setSymbol("TEST"); symbol.setPricePrecision(2);
     }
     Map<String,Object> raw(long time, boolean available) {
         Map<String,Object> q = new HashMap<>(); q.put("price", 90); q.put("timestamp", time); q.put("sourceTimestamp", time);
@@ -118,7 +119,7 @@ class PersistentPriceControlTest {
         ExecutorService pool = Executors.newFixedThreadPool(4);
         try {
             List<Callable<Void>> calls = new ArrayList<>();
-            for (int i=0;i<12;i++) calls.add(() -> { controls.importLegacy(symbol); controls.advance(1, start+10000); return null; });
+            for (int i=0;i<12;i++) calls.add(inTenant(() -> { controls.importLegacy(symbol); controls.advance(1, start+10000); return null; }));
             for (Future<Void> call : pool.invokeAll(calls)) call.get();
         } finally { pool.shutdownNow(); }
         assertEquals(1, count("market_control_task")); assertEquals(11, count("market_control_sample"));
@@ -197,8 +198,8 @@ class PersistentPriceControlTest {
         ForexQuoteMarketService market = new ForexQuoteMarketService();
         com.gtcfesk.exchange.repository.TradingSymbolRepository repository = org.mockito.Mockito.mock(com.gtcfesk.exchange.repository.TradingSymbolRepository.class);
         symbol.setCategory("Metal"); symbol.setSourceCategory("Metal"); symbol.setMarketSource(com.gtcfesk.exchange.market.MarketInstrumentCatalog.inferredSource("Metal"));
-        org.mockito.Mockito.when(repository.findById(1L)).thenReturn(Optional.of(symbol));
-        org.mockito.Mockito.when(repository.findAll()).thenReturn(Collections.singletonList(symbol));
+        org.mockito.Mockito.when(repository.findByTenantIdAndId(1L, 1L)).thenReturn(Optional.of(symbol));
+        org.mockito.Mockito.when(repository.findAllByTenantId(1L)).thenReturn(Collections.singletonList(symbol));
         org.mockito.Mockito.when(repository.saveAndFlush(org.mockito.ArgumentMatchers.any())).thenAnswer(call -> call.getArgument(0));
         org.springframework.test.util.ReflectionTestUtils.setField(market,"symbols",repository);
         org.springframework.test.util.ReflectionTestUtils.setField(market,"redis",org.mockito.Mockito.mock(RedisMarketService.class));
@@ -209,22 +210,23 @@ class PersistentPriceControlTest {
         org.springframework.test.util.ReflectionTestUtils.setField(market,"v3Enabled",false);
         try {
             market.refreshSymbols(); long now=System.currentTimeMillis(); seed(now/60000*60000-60000);
-            Map<String,Object> groups=(Map<String,Object>)org.springframework.test.util.ReflectionTestUtils.getField(market,"groups");
+            Map<String,Object> groups=(Map<String,Object>)org.springframework.test.util.ReflectionTestUtils.getField(marketState(market),"groups");
             Map<String,Map<String,Object>> quotes=(Map<String,Map<String,Object>>)org.springframework.test.util.ReflectionTestUtils.getField(groups.get("Metal"),"quotes");
             Map<String,Object> live=raw(now,true); live.put("fetchedAt",now); live.put("sourceAvailable",true); quotes.put("TEST",live);
             symbol.setIsEnabled(true); symbol.setQuoteCurrency("USD"); symbol.setLotSize(BigDecimal.ONE); symbol.setFeeMultiplier(BigDecimal.ZERO);
-            when(repository.findBySymbol("TEST")).thenReturn(Optional.of(symbol));
+            when(repository.findByTenantIdAndSymbol(1L, "TEST")).thenReturn(Optional.of(symbol));
             ContractOrderRepository orders=mock(ContractOrderRepository.class);
             AssetAccountRepository accounts=mock(AssetAccountRepository.class);
-            AssetAccount account=new AssetAccount(); account.setAvailable(BigDecimal.valueOf(1000)); account.setFrozen(BigDecimal.ZERO);
-            when(accounts.findByUserIdAndCoin(1L,"CONTRACT")).thenReturn(Optional.of(account));
+            AssetAccount account=new AssetAccount(); account.setTenantId(1L); account.setAvailable(BigDecimal.valueOf(1000)); account.setFrozen(BigDecimal.ZERO);
+            when(accounts.findByTenantIdAndUserIdAndCoin(1L, 1L,"CONTRACT")).thenReturn(Optional.of(account));
             when(orders.save(any(ContractOrder.class))).thenAnswer(call -> call.getArgument(0));
             ContractOrderService trading=new ContractOrderService(mock(com.gtcfesk.exchange.user.KycIdentityService.class),orders,accounts,repository,market,null,mock(MarketCategoryService.class));
+            org.springframework.test.util.ReflectionTestUtils.setField(trading,"tenantPolicy",mock(com.gtcfesk.exchange.control.TenantPolicyService.class));
             CreateContractOrderRequest request=new CreateContractOrderRequest(); request.setSymbol("TEST"); request.setSide("BUY");
             request.setType("MARKET"); request.setQuantity(BigDecimal.ONE); request.setLeverage(BigDecimal.ONE);
             ContractOrder opened=trading.createOrder(1L,request);
             assertEquals(0,BigDecimal.valueOf(90).compareTo(opened.getOpenPrice()));
-            when(orders.findById(1L)).thenReturn(Optional.of(opened));
+            when(orders.findByTenantIdAndId(1L, 1L)).thenReturn(Optional.of(opened));
             live.put("timestamp",now-60000); live.put("sourceTimestamp",now-60000);
             assertThrows(BusinessException.class,()->trading.closeOrder(1L,1L,BigDecimal.ONE));
             Map<String,Object> status=market.startControl(1L,10,BigDecimal.valueOf(100),1,false,"integration");
@@ -257,7 +259,7 @@ class PersistentPriceControlTest {
             assertEquals(oldSample,held.get("timestamp")); assertEquals(true,held.get("tradeAvailable"));
             assertTrue(QuoteState.time(held.get("executionExpiresAt"))>System.currentTimeMillis());
             assertEquals(samples,count("market_control_sample"),"Renewing execution must not manufacture history");
-            when(orders.findById(2L)).thenReturn(Optional.of(duringControl));
+            when(orders.findByTenantIdAndId(1L, 2L)).thenReturn(Optional.of(duringControl));
             assertEquals(0,heldPrice.compareTo(trading.closeOrder(1L,2L,BigDecimal.ONE).getClosePrice()));
             assertEquals(0,heldPrice.compareTo(trading.createOrder(1L,request).getOpenPrice()));
             market.stopControl(1L); assertEquals(0,heldPrice.compareTo(market.freshPrice("TEST")));
@@ -388,7 +390,7 @@ class PersistentPriceControlTest {
         ExecutorService pool=Executors.newFixedThreadPool(4);
         try {
             List<Callable<Void>> calls=new ArrayList<>();
-            for(int i=0;i<12;i++) calls.add(()->{controls.sourceQuote(symbol,after,start+11000);return null;});
+            for(int i=0;i<12;i++) calls.add(inTenant(()->{controls.sourceQuote(symbol,after,start+11000);return null;}));
             for(Future<Void> call:pool.invokeAll(calls))call.get();
         } finally {pool.shutdownNow();}
         Map<String,Object> held=controls.display(symbol,after,start+12000);
@@ -450,8 +452,8 @@ class PersistentPriceControlTest {
         PersistentPriceControl.Prepared second = controls.prepare(symbol, quote, start, 60, target, 10, true);
         ExecutorService pool = Executors.newFixedThreadPool(2);
         try {
-            Future<String> a = pool.submit(() -> controls.startPrepared(symbol, quote, start, 60, target, 10, true, "same-v3", null, first).id);
-            Future<String> b = pool.submit(() -> controls.startPrepared(symbol, quote, start, 60, target, 10, true, "same-v3", null, second).id);
+            Future<String> a = pool.submit(inTenant(() -> controls.startPrepared(symbol, quote, start, 60, target, 10, true, "same-v3", null, first).id));
+            Future<String> b = pool.submit(inTenant(() -> controls.startPrepared(symbol, quote, start, 60, target, 10, true, "same-v3", null, second).id));
             assertEquals(a.get(10, TimeUnit.SECONDS), b.get(10, TimeUnit.SECONDS));
         } finally { pool.shutdownNow(); }
         assertEquals(1, count("market_control_task"));
@@ -519,4 +521,53 @@ class PersistentPriceControlTest {
         }
         assertEquals(published.historyReplacedAt,new PersistentPriceControl(store).history(1,null).get(0).historyReplacedAt);
     }
+    @Test void v4PercentageFormulaSnapshotReplaysAfterColdRestartAndCannotCrossTenants() throws Exception {
+        Map<String,Object> quote = raw(System.currentTimeMillis(), true); quote.put("price", new BigDecimal("100000.00"));
+        BigDecimal start = new BigDecimal("100000.00"), target = new BigDecimal("100300.00");
+        TargetControlOptions options = StabilizedControlPlanTest.options(null, "AUTO", null);
+        PersistentPriceControl.Prepared prepared = controls.prepare(symbol, quote, start, 300, target, 10, false, options);
+        PersistentPriceControl.Task task = controls.startPrepared(symbol, quote, start, 300, target, 10, false, "v4-snapshot", null, prepared);
+        assertEquals(4, task.algorithmVersion); assertEquals(1, count("market_control_plan"));
+        Map<String,Object> snapshot = store.plan(task.id).snapshot();
+        assertEquals("0.04", snapshot.get("deviationBandPercent")); assertEquals("40.00", snapshot.get("corridorAmount"));
+        assertEquals(task.id, controls.existingTarget(1, "v4-snapshot", 300, target, 10, false, null, options).id);
+        assertThrows(BusinessException.class, () -> controls.existingTarget(1, "v4-snapshot", 300, target, 10, false, null,
+                StabilizedControlPlanTest.options("5", "AUTO", null)));
+        assertThrows(BusinessException.class, () -> controls.existingTarget(1, "v4-snapshot", 300, target, 10, false, null,
+                StabilizedControlPlanTest.options(null, "MANUAL", "0.02")));
+        ControlHistoryStore cold = new ControlHistoryStore(new JdbcTemplate(store.db.getDataSource()), new DataSourceTransactionManager(store.db.getDataSource()));
+        PersistentPriceControl restarted = new PersistentPriceControl(cold);
+        assertEquals(snapshot, cold.plan(task.id).snapshot());
+        for (int second : new int[] {0, 1, 30, 100, 200, 300}) assertEquals(task.price(task.startedAt + second * 1000L), restarted.latest(1).price(task.startedAt + second * 1000L));
+        // Mutable symbol precision must not reinterpret an existing durable plan.
+        symbol.setPricePrecision(8); assertEquals(task.price(task.startedAt + 9000), restarted.latest(1).price(task.startedAt + 9000));
+        assertThrows(org.springframework.security.access.AccessDeniedException.class, () -> com.gtcfesk.exchange.tenant.TenantContext.open(2L));
+        CompletableFuture.runAsync(() -> {
+            try (com.gtcfesk.exchange.tenant.TenantContext.Scope ignored = com.gtcfesk.exchange.tenant.TenantContext.open(2L)) {
+                assertNull(restarted.latest(1));
+                assertThrows(org.springframework.security.access.AccessDeniedException.class, () -> task.price(task.startedAt));
+                assertThrows(BalancedControlPlan.Failure.class, () -> cold.plan(task.id));
+            }
+        }).get(10, TimeUnit.SECONDS);
+        assertEquals(1, count("market_control_task"));
+    }
+    @Test void v4InvalidNewDraftDoesNotPersistTaskOrRewriteRunningSnapshot() {
+        Map<String,Object> quote = raw(System.currentTimeMillis(), true); quote.put("price", new BigDecimal("100000.00"));
+        BigDecimal start = new BigDecimal("100000.00"), target = new BigDecimal("100300.00");
+        assertThrows(BalancedControlPlan.Failure.class, () -> controls.prepare(symbol, quote, start, 300, target, 10, false,
+                StabilizedControlPlanTest.options("start / 0", "AUTO", null)));
+        assertEquals(0, count("market_control_task")); assertEquals(0, count("market_control_plan"));
+        assertThrows(BalancedControlPlan.Failure.class, () -> controls.prepare(symbol, quote, start, 300, target, 10, false,
+                StabilizedControlPlanTest.options(null, "MANUAL", "0.004")));
+        assertEquals(0, count("market_control_task"));
+        PersistentPriceControl.Prepared prepared = controls.prepare(symbol, quote, start, 300, target, 10, false, new TargetControlOptions());
+        PersistentPriceControl.Task task = controls.startPrepared(symbol, quote, start, 300, target, 10, false, "v4-current", null, prepared);
+        String checksum = store.plan(task.id).checksum();
+        assertThrows(BusinessException.class, () -> controls.startPrepared(symbol, quote, start, 300, target, 5, false, "bad-start", null, prepared));
+        assertEquals(checksum, store.plan(task.id).checksum()); assertEquals(1, count("market_control_task"));
+        store.db.update("UPDATE market_control_plan SET checksum='bad' WHERE task_id=?", task.id);
+        ControlHistoryStore damaged = new ControlHistoryStore(new JdbcTemplate(store.db.getDataSource()), new DataSourceTransactionManager(store.db.getDataSource()));
+        assertEquals("PLAN_CORRUPTED", assertThrows(BalancedControlPlan.Failure.class, () -> new PersistentPriceControl(damaged).latest(1).price(task.startedAt + 1000)).code);
+    }
+
 }

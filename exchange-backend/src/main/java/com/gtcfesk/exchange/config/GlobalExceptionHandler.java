@@ -20,6 +20,7 @@ public class GlobalExceptionHandler {
         result.put("errorCode", "KYC_REQUIRED");
         result.put("kycStatus", e.getKycStatus());
         result.put("message", e.getMessage());
+        result.put("exitHandling", "KYC开启时普通用户存量手动退出仍拦截。请联系客服提交订单号；管理员或总控通过受控退出核实原因并处理。自动到期结算不停止。处理时限按客服服务约定，未配置时不承诺固定时限。");
         return ResponseEntity.status(HttpStatus.FORBIDDEN).header("Cache-Control", "no-store").body(result);
     }
 
@@ -98,6 +99,13 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Map<String,Object>> handleStatus(org.springframework.web.server.ResponseStatusException e) {
         Map<String,Object> result=new HashMap<>(); result.put("success",false); result.put("message",e.getReason());
         return ResponseEntity.status(e.getStatus()).body(result);
+    }
+    @ExceptionHandler(org.springframework.web.HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<Map<String,Object>> handleMethod(org.springframework.web.HttpRequestMethodNotSupportedException e) {
+        Map<String,Object> result=new HashMap<>();result.put("success",false);result.put("message","请求方法不支持");
+        org.springframework.http.HttpHeaders headers=new org.springframework.http.HttpHeaders();headers.setCacheControl("no-store");
+        if(e.getSupportedHttpMethods()!=null)headers.setAllow(e.getSupportedHttpMethods());
+        return new ResponseEntity<>(result,headers,HttpStatus.METHOD_NOT_ALLOWED);
     }
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, Object>> handleException(Exception e) {

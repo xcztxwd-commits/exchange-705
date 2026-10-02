@@ -20,14 +20,14 @@ public class AdminFinancialYieldService {
      * 获取订单的收益列表
      */
     public List<FinancialYieldRecord> getOrderYields(Long orderId) {
-        return yieldRecordRepository.findByOrderIdOrderByYieldDateDesc(orderId);
+        return yieldRecordRepository.findByTenantIdAndOrderIdOrderByYieldDateDesc(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), orderId);
     }
     
     /**
      * 获取订单的收益统计
      */
     public FinancialYieldStats getOrderYieldStats(Long orderId) {
-        List<FinancialYieldRecord> records = yieldRecordRepository.findByOrderIdOrderByYieldDateDesc(orderId);
+        List<FinancialYieldRecord> records = yieldRecordRepository.findByTenantIdAndOrderIdOrderByYieldDateDesc(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), orderId);
         
         BigDecimal totalYield = BigDecimal.ZERO;
         BigDecimal paidYield = BigDecimal.ZERO;

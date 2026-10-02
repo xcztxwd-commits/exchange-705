@@ -21,9 +21,10 @@ public final class ManualOrderGenerator {
     }
     public static final class Candle {
         public final long time;
-        public final BigDecimal price,rate,marginRate;
+        public final BigDecimal price,rate,marginRate,low,high,closePrice;
         public Candle(long time,BigDecimal price,BigDecimal rate) {this(time,price,rate,price.multiply(rate));}
-        public Candle(long time,BigDecimal price,BigDecimal rate,BigDecimal marginRate) {this.time=time;this.price=price;this.rate=rate;this.marginRate=marginRate;}
+        public Candle(long time,BigDecimal price,BigDecimal rate,BigDecimal marginRate) {this(time,price,rate,marginRate,null,null,null);}
+        public Candle(long time,BigDecimal price,BigDecimal rate,BigDecimal marginRate,BigDecimal low,BigDecimal high,BigDecimal closePrice) {this.time=time;this.price=price;this.rate=rate;this.marginRate=marginRate;this.low=low;this.high=high;this.closePrice=closePrice;}
     }
     public static final class Candidate {
         public Candle open,close;
@@ -53,7 +54,7 @@ public final class ManualOrderGenerator {
     }
     public static boolean matches(Request r,Map<String,BigDecimal> c,BigDecimal leverage) {
         return withinTarget(c.get("quantity"),r.quantity)
-            && withinTarget(leverage,r.leverage)
+            && (r.leverage==null || leverage.compareTo(r.leverage)==0)
             && (r.percent==null || c.get("percent")!=null && withinTarget(c.get("percent"),r.percent));
     }
     private static void addRounded(Set<BigDecimal> options,BigDecimal ideal,BigDecimal step) {
@@ -79,8 +80,7 @@ public final class ManualOrderGenerator {
                                   BigDecimal available,BigDecimal lot,BigDecimal fee,long seed,BigDecimal step,BigDecimal minimum,BigDecimal notional,BigDecimal configuredMax) {
         validate(r,available);
         BigDecimal max=ManualOrderCalculation.maxLeverage(configuredMax);
-        if(r.leverage!=null && (r.leverage.multiply(UPPER).compareTo(BigDecimal.ONE)<0 || r.leverage.multiply(LOWER).compareTo(max)>0))
-            throw new BusinessException("目标杠杆 ±5% 与品种允许范围 1 至 "+max.toPlainString()+" 无交集");
+        if(r.leverage!=null)ManualOrderCalculation.leverage(r.leverage,max);
         if(candles.size()<1)throw new BusinessException("搜索范围没有可用分钟行情，请稍后重试或选择其他时间");
         if(fixedOpen!=null && !candles.containsKey(fixedOpen) || fixedClose!=null && !candles.containsKey(fixedClose))
             throw new BusinessException("固定分钟缺少有效开盘价或历史换算率，不使用邻近价格");
@@ -108,9 +108,9 @@ public final class ManualOrderGenerator {
         List<String> sides=r.side==null?Arrays.asList("BUY","SELL"):Collections.singletonList(r.side);
         Set<BigDecimal> leverages=new LinkedHashSet<>();
         if(r.leverage==null)leverages.addAll(Arrays.asList(new BigDecimal("5"),new BigDecimal("10"),new BigDecimal("20"),new BigDecimal("50"),new BigDecimal("100")));
-        else {leverages.add(r.leverage);addTarget(leverages,r.leverage,STEP);leverages.removeIf(l->!withinTarget(l,r.leverage));}
-        leverages.add(BigDecimal.ONE);leverages.add(max);
-        leverages.removeIf(l->l.compareTo(BigDecimal.ONE)<0 || l.compareTo(max)>0 || !withinTarget(l,r.leverage));
+        else leverages.add(r.leverage);
+        if(r.leverage==null) {leverages.add(BigDecimal.ONE);leverages.add(max);}
+        leverages.removeIf(l->l.compareTo(BigDecimal.ONE)<0 || l.compareTo(max)>0);
         for(Candle[] pair:pairs)for(String side:sides)for(BigDecimal leverage:leverages) {
             Candle a=pair[0],b=pair[1];if(a.time>b.time || !withinTarget(b.price,r.targetClosePrice))continue;
             try {
@@ -131,7 +131,7 @@ public final class ManualOrderGenerator {
                 for(BigDecimal q:quantities) {
                     if(q.compareTo(minimum)<0 || q.multiply(lot).multiply(a.price).multiply(a.rate).compareTo(notional)<0)continue;
                     Set<BigDecimal> levels=new LinkedHashSet<>();levels.add(leverage);
-                    if(r.percent!=null) {
+                    if(r.percent!=null && r.leverage==null) {
                         BigDecimal numerator=q.multiply(lot).multiply(a.marginRate);
                         for(BigDecimal factor:new BigDecimal[]{LOWER,BigDecimal.ONE,UPPER}) {
                             BigDecimal budget=available.multiply(r.percent).multiply(factor).divide(HUNDRED).subtract(q.multiply(fee));
@@ -140,7 +140,7 @@ public final class ManualOrderGenerator {
                         }
                     }
                     for(BigDecimal l:levels)try {
-                        if(l.compareTo(BigDecimal.ONE)<0 || l.compareTo(max)>0 || !withinTarget(l,r.leverage))continue;
+                        if(l.compareTo(BigDecimal.ONE)<0 || l.compareTo(max)>0 || r.leverage!=null && l.compareTo(r.leverage)!=0)continue;
                         Map<String,BigDecimal> c=ManualOrderCalculation.calculate("QUANTITY",q,side,available,a.price,b.price,lot,l,a.rate,b.rate,fee,a.marginRate,step);
                         if(!matches(r,c,l))continue;
                         Candidate choice=new Candidate();choice.open=a;choice.close=b;choice.side=side;choice.leverage=l;choice.calculation=c;

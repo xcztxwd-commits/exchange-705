@@ -1,5 +1,7 @@
-import { getAccountApiBase } from '@/utils/accountMode'
+import { accountMode, getAccountApiBase } from '@/utils/accountMode'
 import { defineStore } from 'pinia'
+import request from '@/utils/request'
+import { createHomeSparklineClient, emptyHomeSparkline, homeSparklineScope, type HomeSparklineState } from '@/utils/homeSparklineCache'
 import { ref, computed } from 'vue'
 import marketWebSocket, { normalizeQuote, type PriceUpdate } from '@/utils/marketWebSocket'
 import type { TickData, KlineData } from '@/utils/ws'
@@ -7,8 +9,10 @@ import { convertIntervalToKlineType, getStockCompatibleInterval } from '@/utils/
 
 // Cold K-line requests are queued by the backend. Briefly poll only while work is pending.
 async function fetchMarketKline(url: string, options?: RequestInit): Promise<Response> {
+  const headers = new Headers(options?.headers)
+  headers.set('X-Account-Mode', accountMode())
   for (let attempt = 0; ; attempt++) {
-    const response = await fetch(url, options)
+    const response = await fetch(url, { ...options, headers })
     const body = await response.clone().json().catch(() => ({}))
     const items = Array.isArray(body.data) ? body.data : [body.data]
     if (attempt >= 5 || !items.some((item: any) => item?.pending)) return response
@@ -23,6 +27,16 @@ async function fetchMarketKline(url: string, options?: RequestInit): Promise<Res
 export const useMarketStore = defineStore('market', () => {
   // 当前选中的交易对
   const currentSymbol = ref<string>('')
+  const homeSparklineState = ref<HomeSparklineState>({ scope: '', items: {} })
+  const homeSparklineClient = createHomeSparklineClient(
+    symbols => request.post('/market/home-sparkline/batch', { symbols }),
+    () => ({ key: homeSparklineScope(getAccountApiBase()), mode: accountMode() }),
+    state => { homeSparklineState.value = state },
+  )
+  const loadHomeSparklineSnapshot = (symbols: string[]) => homeSparklineClient.refresh(symbols)
+  const getHomeSparkline = (symbol: string) => homeSparklineState.value.scope === homeSparklineScope(getAccountApiBase())
+    ? homeSparklineState.value.items[symbol] || emptyHomeSparkline(symbol) : emptyHomeSparkline(symbol)
+
   const quoteStatusMap = ref<Record<string, { status: string, fetchedAt: number, expiresAt: number, timestamp: number, epoch?: string, quoteVersion?: number, simulated?: boolean, simulationSession?: number, marketRevision?: number, controlSourceResumed?: boolean, controlHistory?: boolean, controlHistoryRevision?: string, controlState?: string, controlTaskId?: string, sourceAvailable?: boolean, sourceConnectionFailed?: boolean, controlActive?: boolean, quoteToUsdRate?: number | null, conversionAvailable?: boolean, conversionExpiresAt?: number, marginBaseToUsdRate?: number, marginRateExpiresAt?: number }>>({})
   let activeQuoteEpoch: string | undefined
   const retiredQuoteEpochs = new Set<string>()
@@ -154,7 +168,7 @@ export const useMarketStore = defineStore('market', () => {
   const loadAllSymbols = async (category: string = 'Crypto', owner = `category:${category}`) => {
     try {
       const apiBaseUrl = getAccountApiBase()
-      const res: any = await fetch(`${apiBaseUrl}/market/all`)
+      const res: any = await fetch(`${apiBaseUrl}/market/all`, { headers: { 'X-Account-Mode': accountMode() } })
       const data = await res.json()
       const symbols = data.list || []
       
@@ -369,6 +383,7 @@ export const useMarketStore = defineStore('market', () => {
       const response = await fetch(`${apiBaseUrl}/market/redis/price/batch`, {
         method: 'POST',
         headers: {
+          'X-Account-Mode': accountMode(),
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ symbols: alltickSymbols }),
@@ -984,6 +999,8 @@ export const useMarketStore = defineStore('market', () => {
     getChange24h,
     getKlines,
     getSparklineData,
+    loadHomeSparklineSnapshot,
+    getHomeSparkline,
     fetchKlines,
     fetchBatchKlines,
     fetchBatchPricesFromRedis,

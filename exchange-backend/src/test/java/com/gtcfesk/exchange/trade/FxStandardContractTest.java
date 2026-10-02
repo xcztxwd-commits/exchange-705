@@ -11,6 +11,7 @@ import static com.gtcfesk.exchange.trade.FeeCalculationAuditTest.*;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+@org.junit.jupiter.api.extension.ExtendWith(CalculationTenantExtension.class)
 class FxStandardContractTest {
     static Fixture fx(String name,String base,String quote,String price,String quoteRate) {
         Fixture f=new Fixture(name,base,quote,price,quoteRate);

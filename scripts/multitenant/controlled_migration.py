@@ -1,0 +1,327 @@
+"""Approval-bound forward-only schema migration. Never restores over a source database.
+
+The older fixture/orphan/file tools retain their restrictions. This entry point only
+handles the reviewed schema migration set; it does not approve cleanup or release.
+"""
+import argparse
+import datetime as dt
+import hashlib
+import hmac
+import json
+import os
+from pathlib import Path
+import re
+import secrets
+import sys
+import zipfile
+import mysql_migration as core
+import isolation_gate
+
+POLICY = core.ROOT/'deployment/multitenant/approval-policy.json'
+
+def canonical(value):
+    return json.dumps(value,sort_keys=True,separators=(',',':'),ensure_ascii=False).encode('utf-8')
+
+def digest(value): return hashlib.sha256(canonical(value)).hexdigest()
+def now(): return dt.datetime.now(dt.timezone.utc)
+def read(path):
+    path=Path(path)
+    if path.is_symlink() or not path.is_file() or path.stat().st_size>16*1024*1024:raise ValueError('Regular bounded receipt required')
+    return json.loads(path.read_text(encoding='utf-8'))
+
+def publish(path,value):
+    """Exclusive, durable publication: a previous plan/receipt is never overwritten."""
+    path=Path(path);path.parent.mkdir(parents=True,exist_ok=True)
+    if path.exists() or path.is_symlink():raise ValueError('Evidence already exists; never overwrite')
+    temp=path.with_name(path.name+'.'+secrets.token_hex(6)+'.tmp')
+    with temp.open('xb') as out:out.write(canonical(value)+b'\n');out.flush();os.fsync(out.fileno())
+    os.link(temp,path);temp.unlink()
+    return core.file_hash(path)
+
+def target(db):
+    row=db.sql('SELECT @@server_uuid,@@datadir,@@port,VERSION()',database=False).stdout.decode('utf-8').strip().split('\t')
+    if not row[3].startswith('5.7.'):raise ValueError('Reviewed migration requires MySQL 5.7')
+    identity=dict(db.identity)
+    if identity.get('adapter')!='this-run-native-only':
+        item=json.loads(core.run(['docker','inspect',db.container]).stdout)[0]
+        if item['Id']!=identity['container_id']:raise ValueError('Container identity changed')
+        identity['image_id']=item['Image'];identity['mounts']=item.get('Mounts',[])
+    return {'physical':identity,'server_uuid':row[0],'datadir':row[1],'port':int(row[2]),'version':row[3],'database':db.database}
+
+def schema(db):
+    # Object definitions may contain sensitive defaults or routines; retain hashes only.
+    objects={}
+    for table in db.tables():
+        definition=db.query('SHOW CREATE TABLE '+core.ident(table))
+        if not definition:raise ValueError('Missing SHOW CREATE TABLE metadata; restoration evidence is incomplete')
+        objects['table:'+table]=digest(definition)
+    definitions={
+        'trigger':('TRIGGERS','TRIGGER_SCHEMA',['TRIGGER_NAME','EVENT_MANIPULATION','EVENT_OBJECT_TABLE','ACTION_ORDER','ACTION_TIMING','ACTION_STATEMENT','SQL_MODE','DEFINER','CHARACTER_SET_CLIENT','COLLATION_CONNECTION','DATABASE_COLLATION']),
+        'routine':('ROUTINES','ROUTINE_SCHEMA',['ROUTINE_NAME','ROUTINE_TYPE','DTD_IDENTIFIER','ROUTINE_DEFINITION','SQL_MODE','SECURITY_TYPE','SQL_DATA_ACCESS','IS_DETERMINISTIC','DEFINER','CHARACTER_SET_CLIENT','COLLATION_CONNECTION','DATABASE_COLLATION']),
+        'parameter':('PARAMETERS','SPECIFIC_SCHEMA',['SPECIFIC_NAME','ORDINAL_POSITION','PARAMETER_MODE','PARAMETER_NAME','DTD_IDENTIFIER']),
+        'event':('EVENTS','EVENT_SCHEMA',['EVENT_NAME','EVENT_DEFINITION','EVENT_TYPE','EXECUTE_AT','INTERVAL_VALUE','INTERVAL_FIELD','STARTS','ENDS','STATUS','ON_COMPLETION','DEFINER','SQL_MODE','TIME_ZONE'])
+    }
+    for kind,(table,scope,fields) in definitions.items():
+        expression=','.join(core.literal(field)+','+core.ident(field) for field in fields)
+        rows=db.query('SELECT JSON_OBJECT('+expression+') FROM information_schema.'+table+' WHERE '+scope+'=DATABASE()')
+        # JSON escapes embedded newlines/tabs, unlike raw SHOW CREATE output splitting.
+        normalized=[]
+        for row in rows:
+            value=json.loads(row)
+            value={k:(v.replace('`'+db.database+'`.','`__SOURCE__`.') if isinstance(v,str) else v) for k,v in value.items()}
+            normalized.append(value)
+        objects[kind+'-definitions']=digest(sorted(normalized,key=lambda x:canonical(x)))
+    return {'objects':objects,'sha256':digest(objects)}
+
+def all_fields(db): return core.fingerprint(db,{t:[f[0] for f in fs] for t,fs in db.columns().items()})
+def state(db): return {'schema':schema(db),'data':all_fields(db)}
+def migrations(): return [{'name':p.name,'sha256':core.file_hash(p)} for p in core.MIGRATIONS]
+
+def sources():
+    files={}
+    for top in ['exchange-backend/src','scripts/multitenant']:
+        for path in sorted((core.ROOT/top).rglob('*')):
+            if path.is_file() and not path.is_symlink() and '__pycache__' not in path.parts and path.suffix not in ('.class','.pyc','.log'):
+                files[path.relative_to(core.ROOT).as_posix()]=core.file_hash(path)
+    for top in ['exchange-admin','exchange-frontend','exchange-pc']:
+        for name in ['package.json','package-lock.json','pnpm-lock.yaml']:
+            path=core.ROOT/top/name
+            if path.is_file():files[path.relative_to(core.ROOT).as_posix()]=core.file_hash(path)
+    return digest(files)
+
+def maintenance(db):
+    if db.query('SELECT @@global.read_only')!=['1']:raise ValueError('Actual MySQL read_only=1 required; a command-line stop flag is insufficient')
+    if db.query('SELECT COUNT(*) FROM information_schema.PROCESSLIST WHERE ID<>CONNECTION_ID()')!=['0']:
+        raise ValueError('Target has active sessions; preserve maintenance and drain writers')
+
+def preserved(db,columns):
+    queries=[];groups={t:[] for t in columns}
+    for table,fields in columns.items():
+        expr=[]
+        for field in fields:
+            value=core.ident(field)
+            if field=='current_token':value='NULL' # Explicitly reviewed old-session revocation, never business facts.
+            if table=='deposit_record':
+                if field=='source':value="COALESCE(source,'LEGACY_UNKNOWN')"
+                if field=='order_no':value="COALESCE(order_no,CONCAT('LEGACY-DEP-',id))"
+                if field=='account_type':value="COALESCE(account_type,'FUND')"
+            expr.append('HEX(CAST('+value+' AS BINARY))')
+        queries.append('SELECT '+core.literal(table)+',SHA2(JSON_ARRAY('+','.join(expr)+'),256) FROM '+core.ident(table)+';')
+    for row in db.query('START TRANSACTION WITH CONSISTENT SNAPSHOT;\n'+'\n'.join(queries)+'\nCOMMIT;'):
+        table,sha=row.split('\t');groups[table].append(sha)
+    return {t:{'rows':len(rows),'sha256':hashlib.sha256('\n'.join(sorted(rows)).encode()).hexdigest()} for t,rows in groups.items()}
+
+def plan(db,output,baseline=None):
+    if isolation_gate.check()[0]:raise ValueError('Current source review gate failed')
+    current=state(db);start=0
+    if 'tenant_schema_version' in db.tables():
+        if baseline is None:raise ValueError('Already scoped/partly migrated target requires a verified completed ledger; never infer completed DDL from object names')
+        previous=baseline.latest()
+        if previous['kind']!='COMPLETE' or previous['target']!=target(db) or previous['state']!=current:raise ValueError('Completed baseline ledger or current data differs')
+        old=previous['migrations'];new=migrations()
+        if new[:len(old)]!=old:raise ValueError('Previously applied migration checksums changed')
+        start=len(old)
+    else:
+        checked=core.preflight(db)
+        if not checked['passed']:raise ValueError('Current legacy inventory failed; no automatic orphan deletion or owner inference')
+    columns=current['data']['columns']
+    value={'format':1,'id':secrets.token_hex(16),'created_at':now().isoformat(),'target':target(db),'initial':current,
+           'source_sha256':sources(),'migrations':migrations(),'start':start,'schema_epoch':core.EPOCH,
+           'preservation_columns':columns,'preserved_sha256':digest(preserved(db,columns)),
+           'allowed_transforms':['old current_token revocation','only NULL legacy deposit source/order_no/account_type deterministic markers'],
+           'restore_policy':'new isolated physical instance only; never overwrite source or new increments','business_activation_ready':False}
+    if start>=len(value['migrations']):raise ValueError('No forward migration to apply')
+    publish(output,value);return value
+
+
+def restore_trigger_sql_modes(sql,modes):
+    """MySQL 5.7.44 mysqldump strips NO_AUTO_CREATE_USER from stored trigger modes.
+
+    Correct only its recognized trigger header, using the actual source metadata.
+    Original dump/body/data stay untouched; unknown layouts or mode changes fail closed.
+    """
+    header=re.compile(r"(^/\*!50003 SET sql_mode\s*=\s*')([^']*)(' \*/ ;\nDELIMITER [^\n]+\n/\*!50003 CREATE\*/ /\*!50017 DEFINER=[^\n]*?\*/ /\*!50003 TRIGGER (`?[A-Za-z0-9_]+`?)(?=\s))",re.M)
+    found=[]
+    def correct(match):
+        name=match[4].strip("`");found.append(name)
+        if name not in modes:raise ValueError('Unknown trigger in restore input')
+        actual=modes[name]
+        if not re.fullmatch(r'[A-Z0-9_,]*',actual):raise ValueError('Unrecognized source trigger SQL mode')
+        stripped=','.join(x for x in actual.split(',') if x!='NO_AUTO_CREATE_USER')
+        if match[2] not in (actual,stripped):raise ValueError('Unexpected dump/source trigger SQL mode difference')
+        return match[1]+actual+match[3]
+    result=header.sub(correct,sql.replace('\r\n','\n'))
+    headers=re.findall(r'/\*!50003 TRIGGER (`?[A-Za-z0-9_]+`?)(?=\s)',sql)
+    headers=[x.strip('`') for x in headers]
+    if headers!=found or len(found)!=len(set(found)) or set(found)!=set(modes):raise ValueError('Missing/duplicate trigger restore header')
+    return result
+
+def restore_input(db,backup,path):
+    rows=db.query("SELECT JSON_OBJECT('name',TRIGGER_NAME,'mode',SQL_MODE) FROM information_schema.TRIGGERS WHERE TRIGGER_SCHEMA=DATABASE()")
+    modes={x['name']:x['mode'] for x in map(json.loads,rows)}
+    text=restore_trigger_sql_modes(Path(backup['path']).read_text(encoding='utf-8'),modes)
+    with Path(path).open('x',encoding='utf-8',newline='') as out:
+        out.write(text);out.flush();os.fsync(out.fileno())
+    return {'path':str(path),'sha256':core.file_hash(Path(path)),'source_trigger_modes_sha256':digest(modes),'correction':'only recognized MySQL 5.7 trigger SQL_MODE headers; original dump unmodified'}
+
+def verify_backup(db,proposal,restore_db,output,ledger=None):
+    expected=proposal['initial'];tip=None;next_phase=proposal['start']
+    if ledger is not None:
+        last=ledger.latest()
+        if last['kind'] not in ('BEGIN','PHASE_COMPLETE','RESUME_VERIFIED') or last['plan_sha256']!=digest(proposal) or last['target']!=proposal['target']:raise ValueError('No certain approved phase boundary for newest backup')
+        expected=last['state'];tip=digest(last);next_phase=last['next']
+    if target(db)!=proposal['target'] or sources()!=proposal['source_sha256'] or state(db)!=expected:raise ValueError('Plan/source/target changed; replan before backup')
+    maintenance(db);other=target(restore_db)
+    if not restore_db.test or other['server_uuid']==proposal['target']['server_uuid'] or other['datadir']==proposal['target']['datadir']:
+        raise ValueError('Different labelled isolated MySQL process/datadir required')
+    output=Path(output)
+    if output.exists():raise ValueError('Restore receipt already exists')
+    backup=db.dump(output.with_suffix('.sql'))
+    restored_input=restore_input(db,backup,output.with_name(output.stem+'-restore-input.sql'))
+    restore_db.create_empty();restore_db.sql(Path(restored_input['path']).read_text(encoding='utf-8'))
+    restored=state(restore_db)
+    if restored!=expected or state(db)!=expected:raise ValueError('Full restore or newest source changed; first DDL prohibited')
+    value={'format':1,'result':'PASS','plan_sha256':digest(proposal),'source':target(db),'backup':backup,'restore_input':restored_input,'restore':other,'restored':restored,'ledger_tip':tip,'next':next_phase,'created_at':now().isoformat()}
+    publish(output,value);return value
+
+class Policy:
+    """Keys are preconfigured by operators; this tool never creates approvals or policy keys."""
+    def __init__(self,path,fixture=False):
+        self.path=Path(path).resolve();self.fixture=fixture;self.value=read(self.path)
+        if fixture and self.value.get('scope')!='isolated-fixture':raise ValueError('Fixture-only approval policy required')
+        if not fixture and self.path!=POLICY.resolve():raise ValueError('Fixed independently managed business approval policy required')
+    def key(self,name):
+        path=Path(self.value['keys'][name]['key_file'])
+        if not path.is_absolute() or path.is_symlink():raise ValueError('Restricted absolute approval key reference required')
+        key=path.read_bytes()
+        if len(key)<32:raise ValueError('Approval key too short')
+        return key
+    def verify(self,approval,expected,scope):
+        payload=approval['payload']
+        if payload.get('binding')!=expected or payload.get('scope')!=scope:raise ValueError('Approval is for another plan/backup/target/source/scope')
+        if dt.datetime.fromisoformat(payload['expires_at'])<=now():raise ValueError('Approval expired')
+        if payload.get('stopped_writers') is None or not payload['stopped_writers'] or not payload.get('recovery_owner'):raise ValueError('Writer inventory and recovery responsibility missing')
+        signers=set();roles=set()
+        for signed in approval['signatures']:
+            signer=signed['signer'];role=self.value['keys'][signer]['role']
+            actual=hmac.new(self.key(signer),canonical(payload),hashlib.sha256).hexdigest()
+            if not hmac.compare_digest(actual,signed['sha256']):raise ValueError('Approval signature invalid')
+            signers.add(signer);roles.add(role)
+        if len(signers)<2 or not {'operator','approver'}.issubset(roles):raise ValueError('Distinct trusted operator and approver signatures required')
+
+class Ledger:
+    def __init__(self,directory,policy):self.directory=Path(directory);self.policy=policy
+    def rows(self):
+        rows=[];previous='0'*64
+        for i,path in enumerate(sorted(self.directory.glob('*.json'))):
+            item=read(path);body=item['body'];signature=hmac.new(self.policy.key(self.policy.value['journal_key']),canonical(body),hashlib.sha256).hexdigest()
+            if body['sequence']!=i or body['previous']!=previous or not hmac.compare_digest(signature,item['sha256']):raise ValueError('Ledger incomplete, reordered or tampered; retain maintenance')
+            previous=digest(item);rows.append(body)
+        return rows
+    def latest(self):
+        rows=self.rows()
+        if not rows:raise ValueError('No migration ledger')
+        return rows[-1]
+    def append(self,body):
+        rows=self.rows();previous=digest(read(self.directory/(f'{len(rows)-1:06d}.json'))) if rows else '0'*64
+        body={'sequence':len(rows),'previous':previous,'at':now().isoformat(),**body}
+        signature=hmac.new(self.policy.key(self.policy.value['journal_key']),canonical(body),hashlib.sha256).hexdigest()
+        publish(self.directory/(f'{len(rows):06d}.json'),{'body':body,'sha256':signature})
+
+def binding(proposal,proof):
+    return {'plan_sha256':digest(proposal),'restore_proof_sha256':digest(proof),'backup_sha256':proof['backup']['sha256'],'target_sha256':digest(proposal['target']),'source_sha256':proposal['source_sha256']}
+
+def apply(db,proposal,proof,restore_db,approval,ledger,resume=False,after_phase=None):
+    if sources()!=proposal['source_sha256'] or migrations()!=proposal['migrations'] or target(db)!=proposal['target']:raise ValueError('Source/DDL/physical target differs from the immutable plan')
+    scope='isolated-fixture' if db.test else 'business'
+    if ledger.policy.fixture and not db.test:raise ValueError('Fixture approval cannot authorize a business target')
+    if not db.test:
+        if isolation_gate.check(release=True)[0]:raise ValueError('Production acceptance/release blockers remain; no migration')
+        acceptance=read(approval['payload']['acceptance_file'])
+        if acceptance.get('result')!='PASS' or acceptance.get('source_sha256')!=proposal['source_sha256'] or acceptance.get('required_failures')!=0 or acceptance.get('blocked')!=[]:
+            raise ValueError('Complete current-version acceptance is absent')
+        if core.file_hash(Path(approval['payload']['acceptance_file']))!=approval['payload'].get('acceptance_sha256'):raise ValueError('Acceptance hash differs from approval')
+    ledger.policy.verify(approval,binding(proposal,proof),scope)
+    if proof['result']!='PASS' or proof['plan_sha256']!=digest(proposal) or proof['source']!=proposal['target'] or core.file_hash(Path(proof['backup']['path']))!=proof['backup']['sha256']:
+        raise ValueError('Full backup proof/hash is not bound to this plan')
+    if core.file_hash(Path(proof['restore_input']['path']))!=proof['restore_input']['sha256']:raise ValueError('Bound restore input changed')
+    other=target(restore_db)
+    if other!=proof['restore'] or other['server_uuid']==proposal['target']['server_uuid'] or other['datadir']==proposal['target']['datadir'] or state(restore_db)!=proof['restored']:
+        raise ValueError('Independent restore evidence no longer matches')
+    maintenance(db);rows=ledger.rows()
+    if resume:
+        if not rows or rows[-1]['kind'] not in ('BEGIN','PHASE_COMPLETE','RESUME_VERIFIED'):raise ValueError('Uncertain/incomplete/failed/complete DDL cannot be resumed or blindly replayed')
+        last=rows[-1]
+        tip_matches=proof.get('ledger_tip')==digest(last) or (last['kind']=='RESUME_VERIFIED' and last['binding']==binding(proposal,proof) and proof.get('ledger_tip')==last['previous_tip'])
+        if last['plan_sha256']!=digest(proposal) or last['target']!=target(db) or state(db)!=last['state'] or proof['restored']!=last['state'] or proof.get('next')!=last['next'] or not tip_matches:raise ValueError('Receipt/plan/latest source differs; preserve all increments and use a new reviewed forward plan')
+        start=last['next']
+        ledger.append({'kind':'RESUME_VERIFIED','plan_sha256':digest(proposal),'target':target(db),'state':last['state'],'next':start,'binding':binding(proposal,proof),'previous_tip':proof['ledger_tip']})
+    else:
+        if rows or state(db)!=proposal['initial'] or proof['restored']!=proposal['initial'] or proof.get('ledger_tip') is not None:raise ValueError('Source changed or receipt exists; never replay apply')
+        start=proposal['start'];ledger.append({'kind':'BEGIN','plan_sha256':digest(proposal),'target':target(db),'state':proposal['initial'],'next':start,'binding':binding(proposal,proof)})
+    for index in range(start,len(core.MIGRATIONS)):
+        maintenance(db)
+        expected=ledger.latest()['state']
+        if state(db)!=expected:raise ValueError('New writes detected; no restore/replay or further DDL')
+        ledger.append({'kind':'INTENT','plan_sha256':digest(proposal),'target':target(db),'migration':proposal['migrations'][index],'index':index,'before':expected})
+        try:
+            core_path=core.MIGRATIONS[index];db.sql(core_path.read_text(encoding='utf-8'))
+            if digest(preserved(db,proposal['preservation_columns']))!=proposal['preserved_sha256']:raise ValueError('Original money/order/chat/actor facts changed; preserve maintenance and forward-repair only')
+            ledger.append({'kind':'PHASE_COMPLETE','plan_sha256':digest(proposal),'target':target(db),'state':state(db),'next':index+1,'binding':binding(proposal,proof),'migration':proposal['migrations'][index]})
+        except BaseException as error:
+            ledger.append({'kind':'FAILED_UNCERTAIN','plan_sha256':digest(proposal),'target':target(db),'index':index,'failure_type':type(error).__name__})
+            raise
+        if after_phase:after_phase(index+1) # Test harness or controlled boundary interruption; never a DDL retry.
+    core.guard(db,proposal['schema_epoch'])
+    result={'kind':'COMPLETE','plan_sha256':digest(proposal),'target':target(db),'state':state(db),'migrations':proposal['migrations'],'activation_ready':False,'binding':binding(proposal,proof)}
+    ledger.append(result);return result
+
+def package_epoch(path):
+    with zipfile.ZipFile(path) as jar:
+        candidates=[n for n in jar.namelist() if n in ('META-INF/mt705-schema-epoch','BOOT-INF/classes/META-INF/mt705-schema-epoch')]
+        if not candidates:return 0
+        if len(candidates)!=1 or jar.getinfo(candidates[0]).file_size>32:raise ValueError('Ambiguous/bounded package epoch required')
+        value=jar.read(candidates[0]).decode('ascii').strip()
+        if not re.fullmatch(r'20[0-9]{8}',value):raise ValueError('Invalid packaged schema epoch')
+        return int(value)
+
+def main():
+    parser=argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('action',choices=['plan','verify-backup','apply','resume','package-check'])
+    parser.add_argument('--container',required=True);parser.add_argument('--database',required=True)
+    parser.add_argument('--plan',type=Path);parser.add_argument('--proof',type=Path);parser.add_argument('--output',type=Path)
+    parser.add_argument('--restore-container');parser.add_argument('--restore-database');parser.add_argument('--approval',type=Path);parser.add_argument('--ledger',type=Path)
+    parser.add_argument('--fixture-policy',type=Path,help='Only on an actually labelled isolated target; never a production bypass')
+    parser.add_argument('--artifact',type=Path)
+    args=parser.parse_args();db=core.Database(args.container,args.database)
+    if args.action=='package-check':
+        if args.artifact is None:raise ValueError('Actual artifact required; no caller-supplied epoch override')
+        result=core.guard(db,package_epoch(args.artifact),not db.test);result['artifact_sha256']=core.file_hash(args.artifact);print(json.dumps(result));return
+    if args.action=='plan':
+        if args.output is None:raise ValueError('--output required')
+        baseline=None
+        if args.ledger:
+            if args.fixture_policy and not db.test:raise ValueError('Fixture policy cannot authorize business target')
+            baseline=Ledger(args.ledger,Policy(args.fixture_policy or POLICY,bool(args.fixture_policy)))
+        result=plan(db,args.output,baseline);print(json.dumps({'plan_sha256':digest(result),'target_sha256':digest(result['target']),'first_phase':result['start']}));return
+    if not args.plan:raise ValueError('Immutable --plan required')
+    proposal=read(args.plan)
+    if not args.restore_container or not args.restore_database:raise ValueError('Exact independent restore target required')
+    restore=core.Database(args.restore_container,args.restore_database)
+    if args.action=='verify-backup':
+        if not args.output:raise ValueError('--output required')
+        baseline=None
+        if args.ledger:
+            if args.fixture_policy and not db.test:raise ValueError('Fixture policy cannot authorize business target')
+            baseline=Ledger(args.ledger,Policy(args.fixture_policy or POLICY,bool(args.fixture_policy)))
+        result=verify_backup(db,proposal,restore,args.output,baseline);print(json.dumps({'result':result['result'],'backup_sha256':result['backup']['sha256'],'restore_proof_sha256':digest(result)}));return
+    if not args.proof or not args.approval or not args.ledger:raise ValueError('Bound proof, independent approval and ledger required')
+    if args.fixture_policy and not db.test:raise ValueError('Fixture policy cannot authorize business target')
+    policy=Policy(args.fixture_policy or POLICY,bool(args.fixture_policy))
+    result=apply(db,proposal,read(args.proof),restore,read(args.approval),Ledger(args.ledger,policy),args.action=='resume')
+    print(json.dumps({'result':result['kind'],'activation_ready':False,'production_deployed':False}))
+
+if __name__=='__main__':
+    try:main()
+    except Exception as error:
+        print(type(error).__name__+': '+str(error),file=sys.stderr);sys.exit(1)

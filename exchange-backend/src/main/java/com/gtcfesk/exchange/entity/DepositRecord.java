@@ -9,11 +9,12 @@ import java.time.LocalDateTime;
 
 @Getter
 @Setter
+@org.hibernate.annotations.Persister(impl = com.gtcfesk.exchange.tenant.TenantEntityPersister.class)
 @Entity
 @Table(name = "deposit_record", uniqueConstraints = {
-    @UniqueConstraint(name="uk_deposit_order_no", columnNames="order_no"),
-    @UniqueConstraint(name="uk_deposit_request", columnNames={"created_by_type","created_by_id","idempotency_key"})})
-public class DepositRecord {
+    @UniqueConstraint(name="uk_deposit_order_no", columnNames={"tenant_id", "order_no"}),
+    @UniqueConstraint(name="uk_deposit_request", columnNames={"tenant_id", "created_by_type","created_by_id","idempotency_key"})})
+public class DepositRecord extends com.gtcfesk.exchange.tenant.TenantOwnedEntity {
 
     @Column(name="order_no", length=64)
     private String orderNo;

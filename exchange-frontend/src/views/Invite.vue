@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ProtectedImage from '@/components/ProtectedImage.vue'
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import Tabbar from '@/components/Tabbar.vue'
@@ -95,7 +96,7 @@ onMounted(() => {
       <!-- 二维码 -->
       <div class="qr-section">
         <div v-if="qrCodeUrl" class="qr-code">
-          <img :src="qrCodeUrl" :alt="localeStore.t('inviteQRCode')" />
+          <ProtectedImage :src="qrCodeUrl" :alt="localeStore.t('inviteQRCode')" />
         </div>
         <div v-else class="qr-loading">{{ localeStore.t('generatingQRCode') }}</div>
       </div>

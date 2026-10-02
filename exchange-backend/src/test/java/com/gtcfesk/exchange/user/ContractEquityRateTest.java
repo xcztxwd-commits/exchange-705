@@ -10,11 +10,12 @@ import java.util.*;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+@org.junit.jupiter.api.extension.ExtendWith(com.gtcfesk.exchange.tenant.TenantOneFixture.class)
 class ContractEquityRateTest {
     @Test void equityPreparationUsesSameLiveConversionAsTradingNotFiatCache() {
         JdbcTemplate db=new JdbcTemplate(new DriverManagerDataSource("jdbc:h2:mem:equity_rate_"+UUID.randomUUID()+";DB_CLOSE_DELAY=-1","sa",""));
-        db.execute("create table contract_order(symbol varchar(32),quote_currency varchar(16),quote_source varchar(16),status varchar(16),user_id bigint)");
-        db.update("insert into contract_order values('JPY=X','JPY','yahoo','OPEN',1)");
+        db.execute("create table contract_order(tenant_id bigint NOT NULL,symbol varchar(32),quote_currency varchar(16),quote_source varchar(16),status varchar(16),user_id bigint)");
+        db.update("insert into contract_order values(1,'JPY=X','JPY','yahoo','OPEN',1)");
         ForexQuoteMarketService market=mock(ForexQuoteMarketService.class);
         long now=System.currentTimeMillis();
         Map<String,Object> q=new HashMap<>(),r=new HashMap<>();

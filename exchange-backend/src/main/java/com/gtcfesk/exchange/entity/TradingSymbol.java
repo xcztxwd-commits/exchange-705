@@ -12,9 +12,10 @@ import java.time.LocalDateTime;
 
 @Getter
 @Setter
+@org.hibernate.annotations.Persister(impl = com.gtcfesk.exchange.tenant.TenantEntityPersister.class)
 @Entity
 @Table(name = "trading_symbol")
-public class TradingSymbol {
+public class TradingSymbol extends com.gtcfesk.exchange.tenant.TenantOwnedEntity {
     @Transient
     private Boolean leverageEnabled = true;
 
@@ -22,7 +23,7 @@ public class TradingSymbol {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false, unique = true, length = 32)
+    @Column(nullable = false, length = 32)
     private String symbol; // BTCUSD, XAUUSD
 
     @Column(name = "base_currency", nullable = false, length = 16)
@@ -46,10 +47,10 @@ public class TradingSymbol {
     @Column(name = "flag_url", length = 255)
     private String flagUrl;
 
-    @Column(name = "is_hot", nullable = false)
+    @Column(name = "is_hot", nullable = false, columnDefinition = "TINYINT")
     private Boolean isHot = false;
 
-    @Column(name = "is_enabled", nullable = false)
+    @Column(name = "is_enabled", nullable = false, columnDefinition = "TINYINT")
     private Boolean isEnabled = true;
 
     @Column(name = "sort_order", nullable = false)
@@ -74,7 +75,7 @@ public class TradingSymbol {
     private String sourceCategory;
 
     @JsonIgnore
-    @Column(name = "market_instrument_key", length = 128, unique = true)
+    @Column(name = "market_instrument_key", length = 128)
     private String marketInstrumentKey;
 
     @Column(name = "current_price", precision = 32, scale = 16)

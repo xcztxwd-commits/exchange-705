@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ProtectedImage from '@/components/ProtectedImage.vue'
 import { computed, nextTick, onBeforeUnmount, ref, useId, watch, type CSSProperties } from 'vue'
 
 type Option = { value: string | number; label: string; description?: string; icon?: string; iconSrc?: string }
@@ -136,7 +137,7 @@ onBeforeUnmount(() => { disposed = true; close() })
       @click="open ? close() : show()"
       @keydown="onKeydown"
     >
-      <span class="app-select__value" :class="{ 'is-placeholder': !selected }"><img v-if="selected?.iconSrc" class="app-select__icon-image" :src="selected.iconSrc" alt=""><span v-else-if="selected?.icon" class="app-select__icon">{{ selected.icon }}</span>{{ selected ? (displayLabel ?? selected.label) : placeholder }}</span>
+      <span class="app-select__value" :class="{ 'is-placeholder': !selected }"><ProtectedImage v-if="selected?.iconSrc" class="app-select__icon-image" :src="selected.iconSrc" alt=""/><span v-else-if="selected?.icon" class="app-select__icon">{{ selected.icon }}</span>{{ selected ? (displayLabel ?? selected.label) : placeholder }}</span>
       <svg class="app-select__chevron" viewBox="0 0 20 20" aria-hidden="true"><path d="m5 7.5 5 5 5-5" /></svg>
     </button>
     <Teleport :to="portalTarget">
@@ -158,7 +159,7 @@ onBeforeUnmount(() => { disposed = true; close() })
           @mouseenter="activeIndex = index"
           @click="choose(option)"
         >
-          <img v-if="option.iconSrc" class="app-select__icon-image" :src="option.iconSrc" alt=""><span v-else-if="option.icon" class="app-select__icon">{{ option.icon }}</span>
+          <ProtectedImage v-if="option.iconSrc" class="app-select__icon-image" :src="option.iconSrc" alt=""/><span v-else-if="option.icon" class="app-select__icon">{{ option.icon }}</span>
           <span class="app-select__option-text"><strong>{{ option.label }}</strong><small v-if="option.description">{{ option.description }}</small></span>
           <span v-if="option === selected" class="app-select__check" aria-hidden="true">✓</span>
         </button>

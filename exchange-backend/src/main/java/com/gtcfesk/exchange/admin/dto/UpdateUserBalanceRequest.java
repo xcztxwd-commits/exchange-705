@@ -12,6 +12,7 @@ public class UpdateUserBalanceRequest {
     private BigDecimal amount;
     private String idempotencyKey;
     private String remark;
+    private boolean confirm;
 
     /** 资金账户余额 */
     private BigDecimal fundBalance;

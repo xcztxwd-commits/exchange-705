@@ -10,6 +10,7 @@ import java.util.*;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+@org.junit.jupiter.api.extension.ExtendWith(com.gtcfesk.exchange.tenant.TenantOneFixture.class)
 class DepositRecipientTest {
  @Test void lookupByIdAndEmailPreservesPermissions() {
   UserAccountRepository users=mock(UserAccountRepository.class);
@@ -17,9 +18,9 @@ class DepositRecipientTest {
   BackendAccess access=mock(BackendAccess.class);
   DepositOrderController controller=new DepositOrderController(null,null,null,users,assets,access,null,null);
   UserAccount user=new UserAccount();user.setId(7L);user.setEmail("test@example.com");
-  when(users.findById(7L)).thenReturn(Optional.of(user));
-  when(users.findByEmail("test@example.com")).thenReturn(Optional.of(user));
-  when(assets.findByUserId(7L)).thenReturn(Collections.emptyList());
+  when(users.findByTenantIdAndId(1L, 7L)).thenReturn(Optional.of(user));
+  when(users.findByTenantIdAndEmail(1L, "test@example.com")).thenReturn(Optional.of(user));
+  when(assets.findByTenantIdAndUserId(1L, 7L)).thenReturn(Collections.emptyList());
   assertEquals(7L,controller.findRecipient(" 7 ").get("userId"));
   assertEquals(7L,controller.findRecipient(" test@example.com ").get("userId"));
   verify(access,times(2)).checkUser(7L);

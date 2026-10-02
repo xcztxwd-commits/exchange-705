@@ -30,6 +30,8 @@ import java.util.stream.Collectors;
 @RequestMapping("/api/admin/withdraw")
 @RequiredArgsConstructor
 public class WithdrawReviewController {
+    private void auditControl(String action,String object,String detail,String reason){if(com.gtcfesk.exchange.control.ControlIdentity.isAccess())controlAudit.recordCurrent(action,object,detail,reason); }
+    @org.springframework.beans.factory.annotation.Autowired private com.gtcfesk.exchange.control.ControlAuditService controlAudit;
     
     private final WithdrawRecordRepository withdrawRecordRepository;
     private final AssetAccountRepository assetAccountRepository;
@@ -38,10 +40,12 @@ public class WithdrawReviewController {
     private final AgentActionService agentActionService;
     private final AdminMenuRepository adminMenuRepository;
     private final JwtUtil jwtUtil;
+    @javax.persistence.PersistenceContext private javax.persistence.EntityManager em;
     
     /**
      * 获取提现记录列表
      */
+    @com.gtcfesk.exchange.config.AdminPermission(menu="withdraw_review")
     @GetMapping("/list")
     public ResponseEntity<?> getWithdrawList(
             @RequestParam(required = false) String status,
@@ -58,17 +62,17 @@ public class WithdrawReviewController {
             List<WithdrawRecord> records;
             if (status != null && !status.isEmpty()) {
                 if (type != null && !type.isEmpty()) {
-                    records = withdrawRecordRepository.findByStatusAndTypeOrderByCreatedAtDesc(status, type);
+                    records = withdrawRecordRepository.findByTenantIdAndStatusAndTypeOrderByCreatedAtDesc(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), status, type);
                 } else {
-                    records = withdrawRecordRepository.findByStatusOrderByCreatedAtDesc(status);
+                    records = withdrawRecordRepository.findByTenantIdAndStatusOrderByCreatedAtDesc(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), status);
                 }
             } else {
-                records = withdrawRecordRepository.findAllByOrderByCreatedAtDesc();
+                records = withdrawRecordRepository.findAllByTenantIdOrderByCreatedAtDesc(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId());
             }
             
             // 如果指定了代理ID（代理登录或管理员筛选），只返回该代理下级用户的提现记录
             if (targetAgentId != null) {
-                List<UserAccount> subordinates = userAccountRepository.findByParentUserId(targetAgentId);
+                List<UserAccount> subordinates = userAccountRepository.findByTenantIdAndParentUserId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), targetAgentId);
                 Set<Long> subordinateUserIds = subordinates.stream()
                         .map(UserAccount::getId)
                         .collect(Collectors.toSet());
@@ -91,7 +95,7 @@ public class WithdrawReviewController {
             
             // 按用户邮箱过滤
             if (userEmail != null && !userEmail.trim().isEmpty()) {
-                Optional<UserAccount> userOpt = userAccountRepository.findByEmail(userEmail.trim());
+                Optional<UserAccount> userOpt = userAccountRepository.findByTenantIdAndEmail(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), userEmail.trim());
                 if (userOpt.isPresent()) {
                     Long targetUserId = userOpt.get().getId();
                     records = records.stream()
@@ -108,6 +112,7 @@ public class WithdrawReviewController {
                 Map<String, Object> recordMap = new HashMap<>();
                 recordMap.put("id", record.getId());
                 recordMap.put("userId", record.getUserId());
+                AdminUserIdentity.put(recordMap, null);
                 recordMap.put("type", record.getType());
                 recordMap.put("network", record.getNetwork());
                 recordMap.put("amount", record.getAmount());
@@ -129,15 +134,15 @@ public class WithdrawReviewController {
                 
                 // 添加用户备注
                 if (record.getUserId() != null) {
-                    UserAccount user = userAccountRepository.findById(record.getUserId()).orElse(null);
+                    UserAccount user = userAccountRepository.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), record.getUserId()).orElse(null);
                     if (user != null) {
-                        recordMap.put("userRemark", user.getRemark());
+                        AdminUserIdentity.put(recordMap, user);
                     }
                 }
                 
                 // 如果是银行卡类型，查询银行卡详细信息
                 if ("bank".equals(record.getType())) {
-                    List<UserBankCard> bankCards = userBankCardRepository.findByUserId(record.getUserId());
+                    List<UserBankCard> bankCards = userBankCardRepository.findByTenantIdAndUserId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), record.getUserId());
                     Optional<UserBankCard> matchedCard = bankCards.stream()
                             .filter(card -> record.getAddress().equals(card.getRecipientAccount()))
                             .findFirst();
@@ -175,14 +180,14 @@ public class WithdrawReviewController {
         }
         
         // 查找用户信息
-        UserAccount user = userAccountRepository.findById(record.getUserId()).orElse(null);
+        UserAccount user = userAccountRepository.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), record.getUserId()).orElse(null);
         if (user == null) {
             return;
         }
         
         // 如果用户有上级代理，填充代理信息
         if (user.getParentUserId() != null) {
-            UserAccount agent = userAccountRepository.findById(user.getParentUserId()).orElse(null);
+            UserAccount agent = userAccountRepository.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), user.getParentUserId()).orElse(null);
             if (agent != null) {
                 // 格式：所属代理:用户名（优先使用昵称，没有则使用邮箱）
                 String agentName = agent.getNickname();
@@ -197,6 +202,7 @@ public class WithdrawReviewController {
     /**
      * 审核通过
      */
+    @com.gtcfesk.exchange.config.AdminPermission(menu="withdraw_review",action="approve_withdraw")
     @PostMapping("/{id}/approve")
     @Transactional
     public ResponseEntity<?> approveWithdraw(
@@ -218,7 +224,7 @@ public class WithdrawReviewController {
                     return ResponseEntity.status(403).body(resp);
                 }
             }
-            Optional<WithdrawRecord> recordOpt = withdrawRecordRepository.findById(id);
+            Optional<WithdrawRecord> recordOpt = Optional.ofNullable(com.gtcfesk.exchange.tenant.TenantEntities.find(em,WithdrawRecord.class,id,javax.persistence.LockModeType.PESSIMISTIC_WRITE));
             if (!recordOpt.isPresent()) {
                 Map<String, Object> resp = new HashMap<>();
                 resp.put("error", "提现记录不存在");
@@ -237,6 +243,7 @@ public class WithdrawReviewController {
             record.setReviewRemark(req != null ? req.getRemark() : null);
             record.setReviewedAt(LocalDateTime.now());
             withdrawRecordRepository.save(record);
+            auditControl("WITHDRAW_"+record.getStatus(),String.valueOf(record.getId()),"status="+record.getStatus(),record.getReviewRemark());
             
             // 实际到账金额已在提交时计算，这里只需将冻结金额扣除即可
             // 注意：实际到账应该在实际转出后设置为COMPLETED，这里只是审核通过
@@ -258,6 +265,7 @@ public class WithdrawReviewController {
     /**
      * 审核拒绝
      */
+    @com.gtcfesk.exchange.config.AdminPermission(menu="withdraw_review",action="reject_withdraw")
     @PostMapping("/{id}/reject")
     @Transactional
     public ResponseEntity<?> rejectWithdraw(
@@ -279,7 +287,7 @@ public class WithdrawReviewController {
                     return ResponseEntity.status(403).body(resp);
                 }
             }
-            Optional<WithdrawRecord> recordOpt = withdrawRecordRepository.findById(id);
+            Optional<WithdrawRecord> recordOpt = Optional.ofNullable(com.gtcfesk.exchange.tenant.TenantEntities.find(em,WithdrawRecord.class,id,javax.persistence.LockModeType.PESSIMISTIC_WRITE));
             if (!recordOpt.isPresent()) {
                 Map<String, Object> resp = new HashMap<>();
                 resp.put("error", "提现记录不存在");
@@ -294,10 +302,10 @@ public class WithdrawReviewController {
             }
             
             // 退回冻结的金额
-            AssetAccount fundAccount = assetAccountRepository.findByUserIdAndCoin(record.getUserId(), "FUND")
-                    .orElse(null);
+            AssetAccount fundAccount = assetAccountRepository.lockByUserId(record.getUserId()).stream().filter(a->"FUND".equals(a.getCoin())).findFirst().orElseThrow(()->new IllegalArgumentException("资金账户不存在"));
             if (fundAccount != null) {
                 BigDecimal totalAmount = record.getAmount().add(record.getFee());
+                if(fundAccount.getFrozen()==null||fundAccount.getFrozen().compareTo(totalAmount)<0)throw new IllegalArgumentException("冻结金额不足，未变更资金");
                 fundAccount.setFrozen(fundAccount.getFrozen().subtract(totalAmount));
                 fundAccount.setAvailable(fundAccount.getAvailable().add(totalAmount));
                 assetAccountRepository.save(fundAccount);
@@ -308,6 +316,7 @@ public class WithdrawReviewController {
             record.setReviewRemark(req.getRemark());
             record.setReviewedAt(LocalDateTime.now());
             withdrawRecordRepository.save(record);
+            auditControl("WITHDRAW_"+record.getStatus(),String.valueOf(record.getId()),"status="+record.getStatus(),record.getReviewRemark());
             
             Map<String, Object> resp = new HashMap<>();
             resp.put("message", "已拒绝");
@@ -326,6 +335,7 @@ public class WithdrawReviewController {
     /**
      * 标记为已完成（实际转账完成）
      */
+    @com.gtcfesk.exchange.config.AdminPermission(menu="withdraw_review",action="complete_withdraw")
     @PostMapping("/{id}/complete")
     @Transactional
     public ResponseEntity<?> completeWithdraw(
@@ -346,7 +356,7 @@ public class WithdrawReviewController {
                     return ResponseEntity.status(403).body(resp);
                 }
             }
-            Optional<WithdrawRecord> recordOpt = withdrawRecordRepository.findById(id);
+            Optional<WithdrawRecord> recordOpt = Optional.ofNullable(com.gtcfesk.exchange.tenant.TenantEntities.find(em,WithdrawRecord.class,id,javax.persistence.LockModeType.PESSIMISTIC_WRITE));
             if (!recordOpt.isPresent()) {
                 Map<String, Object> resp = new HashMap<>();
                 resp.put("error", "提现记录不存在");
@@ -361,10 +371,10 @@ public class WithdrawReviewController {
             }
             
             // 扣除冻结金额（实际转出）
-            AssetAccount fundAccount = assetAccountRepository.findByUserIdAndCoin(record.getUserId(), "FUND")
-                    .orElse(null);
+            AssetAccount fundAccount = assetAccountRepository.lockByUserId(record.getUserId()).stream().filter(a->"FUND".equals(a.getCoin())).findFirst().orElseThrow(()->new IllegalArgumentException("资金账户不存在"));
             if (fundAccount != null) {
                 BigDecimal totalAmount = record.getAmount().add(record.getFee());
+                if(fundAccount.getFrozen()==null||fundAccount.getFrozen().compareTo(totalAmount)<0)throw new IllegalArgumentException("冻结金额不足，未变更资金");
                 fundAccount.setFrozen(fundAccount.getFrozen().subtract(totalAmount));
                 assetAccountRepository.save(fundAccount);
             }
@@ -372,6 +382,7 @@ public class WithdrawReviewController {
             // 更新记录状态
             record.setStatus("COMPLETED");
             withdrawRecordRepository.save(record);
+            auditControl("WITHDRAW_"+record.getStatus(),String.valueOf(record.getId()),"status="+record.getStatus(),record.getReviewRemark());
             
             Map<String, Object> resp = new HashMap<>();
             resp.put("message", "标记为已完成");

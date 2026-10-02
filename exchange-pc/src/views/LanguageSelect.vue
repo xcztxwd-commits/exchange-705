@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ProtectedImage from '../../../exchange-frontend/src/components/ProtectedImage.vue'
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useLocaleStore } from '@/store/locale'
@@ -43,7 +44,7 @@ const selectLang = (item: LangItem) => {
           @click="selectLang(item)"
         >
           <div class="lang-left">
-            <img class="flag" :src="item.flag" :alt="item.label" />
+            <ProtectedImage class="flag" :src="item.flag" :alt="item.label" />
             <div>
               <div class="lang-name">{{ item.label }}</div>
             </div>

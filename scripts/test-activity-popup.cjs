@@ -58,4 +58,4 @@ async function check(app) {
   rows=[item(10)];rows[0].campaign.hasQuota=true;subject.selected.value=rows[0];deferredClaim=true;const pending=subject.designAction('claim');subject.selected.value=null;pendingClaim();await assert.rejects(pending,/变更/);assert.equal(rows[0].delivery.claimedAt,undefined)
   console.log(`PASS ${app}: unread retry, same-page suppression, read/claim/disabled guards`)
 }
-;(async () => { for (const app of ['exchange-frontend', 'exchange-pc']) await check(app) })().catch(error => { console.error(error); process.exitCode = 1 })
+;(async () => { for (const app of ['exchange-frontend', 'exchange-pc']) await check(app); if(process.argv.includes('--browser')) await require('./test-activity-admin-ui.cjs') })().catch(error => { console.error(error); process.exitCode = 1 })

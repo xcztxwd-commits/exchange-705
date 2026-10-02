@@ -1,8 +1,6 @@
-import { cloneVNode, defineComponent, Fragment, h, ref, watch, type VNode } from 'vue'
+import { cloneVNode, defineComponent, Fragment, h, ref, watch, inject, onUnmounted, type VNode } from 'vue'
 import { ElTable, ElDialog, ElButton, ElMessage } from 'element-plus'
-import { useAuthStore } from '@/store/auth'
-import request from '@/utils/request'
-import { mergeColumns, moveColumn, type ColumnPreference, type TableColumn } from '@/utils/tablePreferences'
+import { mergeColumns, moveColumn, TABLE_PREFERENCES, preferenceRequests, type TablePreferenceClient, type ColumnPreference, type TableColumn } from '@/utils/tablePreferences'
 import './adminTable.css'
 
 function flatten(nodes: VNode[]): VNode[] {
@@ -14,36 +12,40 @@ export default defineComponent({
   inheritAttrs: false,
   props: { tableKey: { type: String, required: true } },
   setup(props, { slots, attrs }) {
-    const auth = useAuthStore()
+    const client = inject<TablePreferenceClient | null>(TABLE_PREFERENCES, null)
+    const requests = preferenceRequests()
+    let current: ReturnType<typeof requests.next> | undefined
+    onUnmounted(() => requests.stop())
     const saved = ref<ColumnPreference[]>([]), draft = ref<TableColumn[]>([])
     const editing = ref(false), saving = ref(false), ready = ref(false), error = ref('')
     const reload = ref(0)
     let dragged = -1
-    watch([() => props.tableKey, () => auth.token, reload], async ([table, token], _, cleanup) => {
-      let active = true
-      cleanup(() => { active = false })
-      saved.value = []; editing.value = false; ready.value = false; error.value = ''
-      if (!token) return
+    watch([() => props.tableKey, () => client?.identityKey() || '', reload], async ([table, identity], _, cleanup) => {
+      const ticket = requests.next(); current = ticket
+      cleanup(() => requests.stop())
+      saved.value = []; draft.value = []; editing.value = false; saving.value = false; ready.value = false; error.value = ''
+      if (!client) { error.value = '当前身份未配置列设置入口'; return }
+      if (!identity) return
       try {
-        const result: any = await request.get(`/admin/table-preferences/${table}`)
-        if (active) { saved.value = Array.isArray(result) ? result : []; ready.value = true }
+        const result = await client.load(String(table), ticket.signal)
+        if (ticket.active()) { saved.value = Array.isArray(result) ? result : []; ready.value = true }
       } catch (e: any) {
-        if (active) error.value = e.message || '列配置加载失败'
+        if (ticket.active()) error.value = e.message || '列配置加载失败'
       }
-    }, { immediate: true })
+    }, { immediate: true, flush: 'sync' })
     async function save() {
-      if (!ready.value || saving.value) return
-      const token = auth.token, table = props.tableKey
+      if (!client || !current?.active() || !ready.value || saving.value) return
+      const ticket = current, table = props.tableKey
       const columns = draft.value.map(({ id, visible, fixed }) => ({ id, visible, fixed }))
       if (!columns.some(column => column.visible)) { ElMessage.warning('至少保留一列'); return }
       saving.value = true
       try {
-        await request.put(`/admin/table-preferences/${table}`, columns)
-        if (auth.token !== token || props.tableKey !== table) return
+        await client.save(table, columns, ticket.signal)
+        if (!ticket.active()) return
         saved.value = columns; editing.value = false
         ElMessage.success('列设置已保存至当前账号')
-      } catch (e: any) { ElMessage.error(e.message || '保存失败，请重试') }
-      finally { saving.value = false }
+      } catch (e: any) { if (ticket.active()) ElMessage.error(e.message || '保存失败，请重试') }
+      finally { if (ticket.active()) saving.value = false }
     }
     return () => {
       // Evaluate the original slot during render so reactive and permission-gated columns stay current.

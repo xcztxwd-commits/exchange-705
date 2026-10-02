@@ -13,7 +13,7 @@ public class RegistrationSecurity {
     private final StringRedisTemplate redis;
     private final WebsiteSecuritySettings settings;
     // Shared hash tag makes multi-key scripts work on Redis Cluster as well.
-    static final String PREFIX = "security:{registration}:";
+    static String prefix() { return "security:{registration}:tenant:" + com.gtcfesk.exchange.tenant.TenantContext.requireTenantId() + ":"; }
     static final DefaultRedisScript<Long> LIMIT = new DefaultRedisScript<>(
         "local wait=0; for i,k in ipairs(KEYS) do " +
         "local n=tonumber(redis.call('GET',k) or '0'); if n>=tonumber(ARGV[i]) then " +
@@ -32,13 +32,27 @@ public class RegistrationSecurity {
     public void limitNetwork(String action, String address) {
         WebsiteSecuritySettings.Policy p = settings.read();
         boolean captcha = "captcha".equals(action);
-        limit(Arrays.asList(PREFIX+"rate:"+action+":global", PREFIX+"rate:"+action+":ip:"+address),
+        limit(Arrays.asList(prefix()+"rate:"+action+":global", prefix()+"rate:"+action+":ip:"+address),
             captcha ? p.getCaptchaGlobalPerMinute() : p.getRegisterGlobalPerMinute(),
             captcha ? p.getCaptchaIpPerMinute() : p.getRegisterIpPerMinute());
     }
+    public void limitEmail(String recipient) {
+        try {
+            String digest=Base64.getUrlEncoder().withoutPadding().encodeToString(java.security.MessageDigest.getInstance("SHA-256").digest(recipient.trim().toLowerCase(Locale.ROOT).getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+            limit(Arrays.asList(prefix()+"mail:global",prefix()+"mail:recipient:"+digest),60,1);
+        }catch(SecurityFailure e){throw e;}catch(Exception e){throw SecurityFailure.unavailable();}
+    }
+    /** Separate fixed-purpose SMS contract, not wired into registration or login. */
+    public void limitSms(String recipientDigest){
+        if(recipientDigest==null||!recipientDigest.matches("[a-f0-9]{64}"))throw new IllegalArgumentException("短信收件人摘要无效");
+        limit(Arrays.asList(prefix()+"sms:issue:global",prefix()+"sms:issue:recipient:"+recipientDigest),30,1);
+    }
+    public void limitSmsVerify(String requestId){
+        validateId(requestId);limit(Collections.singletonList(prefix()+"sms:consume:"+requestId),5);
+    }
     private void limitSession(String action, String session) {
         WebsiteSecuritySettings.Policy p = settings.read();
-        limit(Collections.singletonList(PREFIX+"rate:"+action+":session:"+session),
+        limit(Collections.singletonList(prefix()+"rate:"+action+":session:"+session),
             "captcha".equals(action) ? p.getCaptchaSessionPerMinute() : p.getRegisterSessionPerMinute());
     }
     private void limit(List<String> keys, Integer... limits) {
@@ -57,7 +71,7 @@ public class RegistrationSecurity {
         validateId(session);
         limitSession("captcha", session);
         String id = UUID.randomUUID().toString().replace("-", "");
-        String key = PREFIX+"challenge:"+session, pending = id+"|pending";
+        String key = prefix()+"challenge:"+session, pending = id+"|pending";
         try {
             // Invalidate the previous answer BEFORE image generation, even if generation fails.
             redis.opsForValue().set(key, pending, Duration.ofSeconds(120));
@@ -77,7 +91,7 @@ public class RegistrationSecurity {
         validateId(session); validateId(id);
         limitSession("register", session);
         try {
-            String answer = redis.execute(CONSUME, Collections.singletonList(PREFIX+"challenge:"+session), id);
+            String answer = redis.execute(CONSUME, Collections.singletonList(prefix()+"challenge:"+session), id);
             String actual = input == null ? "" : input.trim().toUpperCase(Locale.ROOT);
             if (answer == null || !actual.matches("[A-Z0-9]{4}") || !answer.equals(actual)) throw SecurityFailure.invalid();
         } catch (SecurityFailure e) { throw e; }

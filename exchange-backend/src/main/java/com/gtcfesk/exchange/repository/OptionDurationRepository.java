@@ -7,12 +7,12 @@ import org.springframework.stereotype.Repository;
 import java.util.List;
 
 @Repository
-public interface OptionDurationRepository extends JpaRepository<OptionDuration, Long> {
+public interface OptionDurationRepository extends com.gtcfesk.exchange.tenant.TenantRepository<OptionDuration, Long> {
     
-    List<OptionDuration> findByEnabledTrueOrderBySortOrderAsc();
+    List<OptionDuration> findByTenantIdAndEnabledTrueOrderBySortOrderAsc(Long tenantId);
     
-    List<OptionDuration> findAllByOrderBySortOrderAsc();
+    List<OptionDuration> findAllByTenantIdOrderBySortOrderAsc(Long tenantId);
     
-    java.util.Optional<OptionDuration> findByDuration(Integer duration);
+    java.util.Optional<OptionDuration> findByTenantIdAndDuration(Long tenantId, Integer duration);
 }
 

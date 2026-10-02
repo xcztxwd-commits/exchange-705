@@ -7,8 +7,8 @@ import org.springframework.stereotype.Repository;
 import java.util.List;
 
 @Repository
-public interface LoanSettingRepository extends JpaRepository<LoanSetting, Long> {
-    List<LoanSetting> findByEnabledTrueOrderByDaysAsc();
+public interface LoanSettingRepository extends com.gtcfesk.exchange.tenant.TenantRepository<LoanSetting, Long> {
+    List<LoanSetting> findByTenantIdAndEnabledTrueOrderByDaysAsc(Long tenantId);
 }
 
 

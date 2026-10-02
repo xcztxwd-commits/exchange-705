@@ -22,7 +22,10 @@ import java.security.MessageDigest;
 
 @Service
 public class DepositOrderService {
+ @org.springframework.beans.factory.annotation.Autowired private com.gtcfesk.exchange.control.TenantPolicyService tenantPolicy;
+ @org.springframework.beans.factory.annotation.Autowired private com.gtcfesk.exchange.control.ControlAuditService controlAudit;
  @org.springframework.beans.factory.annotation.Autowired(required=false) private com.gtcfesk.exchange.simulation.SimulationEnvironment simulation;
+ @org.springframework.beans.factory.annotation.Autowired private DepositSettingRepository channels;
  private final DepositRecordRepository records;
  private final DepositCreditRecordRepository credits;
  private final AssetAccountRepository assets;
@@ -49,9 +52,10 @@ public class DepositOrderService {
  private String[] actor() {
   Authentication a=SecurityContextHolder.getContext().getAuthentication();
   if(a==null || !a.isAuthenticated()) throw error(401,"请先登录");
+  if(com.gtcfesk.exchange.control.ControlIdentity.isAccess()) return new String[]{"CONTROL",com.gtcfesk.exchange.control.ControlIdentity.current().getActorId().toString(),"总控管理"};
   Long agent=BackendAccess.agentId();
-  if(agent!=null) return new String[]{"AGENT",agent.toString(),users.findById(agent).map(UserAccount::getEmail).orElseThrow(()->error(401,"操作人不存在"))};
-  return new String[]{"ADMIN",a.getName(),admins.findById(Long.valueOf(a.getName())).map(u->u.getAccount()).orElseThrow(()->error(401,"操作人不存在"))};
+  if(agent!=null) return new String[]{"AGENT",agent.toString(),users.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), agent).map(UserAccount::getEmail).orElseThrow(()->error(401,"操作人不存在"))};
+  return new String[]{"ADMIN",a.getName(),admins.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), Long.valueOf(a.getName())).map(u->u.getAccount()).orElseThrow(()->error(401,"操作人不存在"))};
  }
  private String normalize(DepositOrderRequest r,boolean manual) {
   if(r.userId==null || r.userId<=0) throw error(400,"UID 无效");
@@ -74,7 +78,7 @@ public class DepositOrderService {
  }
  private DepositRecord existing(String[] actor,DepositOrderRequest r,String hash) {
   if(r.idempotencyKey==null)return null;
-  DepositRecord d=records.findByCreatedByTypeAndCreatedByIdAndIdempotencyKey(actor[0],Long.valueOf(actor[1]),r.idempotencyKey).orElse(null);
+  DepositRecord d=records.findByTenantIdAndCreatedByTypeAndCreatedByIdAndIdempotencyKey(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), actor[0],Long.valueOf(actor[1]),r.idempotencyKey).orElse(null);
   if(d!=null && !hash.equals(d.getRequestHash()))throw error(409,"幂等键已用于不同参数");if(d!=null)d.setIdempotentReplay(true);return d;
  }
  public DepositRecord manual(DepositOrderRequest r) {
@@ -82,6 +86,7 @@ public class DepositOrderService {
   return create(r,true,actor());
  }
  public DepositRecord submit(Long userId,DepositOrderRequest r) {
+  tenantPolicy.requireNewBusiness("deposit");
   r.userId=userId; return create(r,false,new String[]{"USER",userId.toString(),null});
  }
  private DepositRecord create(DepositOrderRequest r,boolean manual,String[] actor) {
@@ -92,6 +97,12 @@ public class DepositOrderService {
     // Serialize with physical user deletion; money writers retain account optimistic locking.
     UserAccount customer=users.lockById(r.userId).orElseThrow(()->error(404,"客户不存在"));
     DepositRecord retry=existing(actor,r,hash); if(retry!=null)return retry;
+    if(!manual){
+     boolean channel=channels.findByTenantIdAndTypeAndEnabled(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(),r.type,true).stream().anyMatch(c->
+       "bank".equals(r.type)?"BANK".equals(r.network)&&!r.address.isEmpty()&&r.address.equals(c.getBankAccount()):
+       !r.network.isEmpty()&&!r.address.isEmpty()&&r.network.equals(c.getNetwork())&&r.address.equals(c.getAddress()));
+     if(!channel)throw error(400,"收款渠道不存在、已停用或不属于当前租户");
+    }
     BigDecimal rate;
     try {rate=fiat.rate(r.currency);}catch(com.gtcfesk.exchange.common.BusinessException e){throw error(503,"汇率暂不可用");}
     TradeValidation.positive(rate,"汇率");
@@ -104,32 +115,43 @@ public class DepositOrderService {
     d.setIdempotencyKey(r.idempotencyKey);d.setRequestHash(hash);
     records.saveAndFlush(d); checkpoint("order");
     if(manual || (simulation != null && simulation.enabled())) credit(d, simulation != null && simulation.enabled() ? new String[]{"SIMULATION","0","Virtual credit; no real payment"} : actor);
-    records.flush(); checkpoint("flush");return d;
+    records.flush(); controlAudit.recordCurrent("DEPOSIT_CREATE",d.getId().toString(),"amount="+d.getAmount(),d.getRemark()); checkpoint("flush");return d;
    });
   }catch(org.springframework.dao.DataIntegrityViolationException e){
    DepositRecord retry=tx.execute(s->existing(actor,r,hash));if(retry!=null)return retry;
    throw error(409,"账户或订单并发冲突，请使用原幂等键重试");
   }
  }
+ public DepositRecord cancel(Long userId,Long id){
+  return tx.execute(s->{
+   DepositRecord d=records.lockById(id).orElseThrow(()->error(404,"订单不存在"));
+   if(!userId.equals(d.getUserId())||!"USER_SUBMITTED".equals(d.getSource()))throw error(404,"订单不存在");
+   if("CANCELLED".equals(d.getStatus()))return d;
+   if(!"PENDING".equals(d.getStatus()))throw error(409,"订单已处理，不能取消");
+   users.lockById(userId).orElseThrow(()->error(404,"客户不存在"));
+   d.setStatus("CANCELLED");d.setReviewRemark("Cancelled by submitting user; no payment credited");
+   records.saveAndFlush(d);checkpoint("flush");return d;
+  });
+ }
  public static BigDecimal fee(BigDecimal amount,BigDecimal rate) {return amount.multiply(rate).setScale(16,RoundingMode.HALF_UP);}
  public DepositRecord review(Long id,boolean approve,String remark) {
   access.checkDepositReview(approve?"approve_deposit":"reject_deposit");
   String note=text(remark,500,!approve);String[] operator=actor();
   try { return tx.execute(s->{
-   DepositRecord d=records.findById(id).orElseThrow(()->error(404,"订单不存在"));access.checkUser(d.getUserId());
+   DepositRecord d=records.lockById(id).orElseThrow(()->error(404,"订单不存在"));access.checkUser(d.getUserId());
    if(!"PENDING".equals(d.getStatus()))throw error(409,"订单已处理");
    if("ADMIN_MANUAL".equals(d.getSource()))throw error(409,"手动订单无需审核");
    users.lockById(d.getUserId()).orElseThrow(()->error(404,"客户不存在"));
    d.setReviewedByType(operator[0]);d.setReviewedById(Long.valueOf(operator[1]));d.setReviewedByName(operator[2]);
    d.setReviewedAt(LocalDateTime.now());d.setReviewRemark(note);
    if(approve)credit(d,operator);else d.setStatus("REJECTED");
-   records.saveAndFlush(d); checkpoint("flush");return d;
+   records.saveAndFlush(d); controlAudit.recordCurrent("DEPOSIT_REVIEW",d.getId().toString(),"approved="+approve,note); checkpoint("flush");return d;
   }); } catch(org.springframework.dao.DataIntegrityViolationException e) { throw error(409,"订单或账户已变更，请刷新后重试"); }
  }
  private void credit(DepositRecord d,String[] operator) {
   TradeValidation.positive(d.getAmount(),"入账金额");
   String account=d.getAccountType()==null?"FUND":choice(d.getAccountType(),"FUND","CONTRACT","OPTION");
-  AssetAccount a=assets.findByUserIdAndCoin(d.getUserId(),account).orElseGet(()->{AssetAccount n=new AssetAccount();n.setUserId(d.getUserId());n.setCoin(account);return n;});
+  AssetAccount a=assets.findByTenantIdAndUserIdAndCoin(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), d.getUserId(),account).orElseGet(()->{AssetAccount n=new AssetAccount();n.setUserId(d.getUserId());n.setCoin(account);return n;});
   BigDecimal before=a.getAvailable(), after=before.add(d.getAmount());TradeValidation.positive(after,"入账后余额");
   a.setAvailable(after);assets.saveAndFlush(a);checkpoint("account");
   LocalDateTime now=LocalDateTime.now();DepositCreditRecord c=new DepositCreditRecord();

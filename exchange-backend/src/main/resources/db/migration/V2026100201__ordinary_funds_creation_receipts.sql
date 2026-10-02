@@ -1,0 +1,8 @@
+-- Phase 2 owned backup + independent restore required before DDL. MySQL 5.7.
+-- Historical rows stay unchanged with NULL receipt fields; no funds are rewritten.
+ALTER TABLE contract_order ADD COLUMN request_key VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NULL, ADD COLUMN request_hash VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NULL, ADD UNIQUE KEY uk_contract_order_request(tenant_id,user_id,request_key);
+ALTER TABLE option_order ADD COLUMN request_key VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NULL, ADD COLUMN request_hash VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NULL, ADD UNIQUE KEY uk_option_order_request(tenant_id,user_id,request_key);
+ALTER TABLE financial_order ADD COLUMN request_key VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NULL, ADD COLUMN request_hash VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NULL, ADD UNIQUE KEY uk_financial_order_request(tenant_id,user_id,request_key);
+ALTER TABLE loan_record ADD COLUMN request_key VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NULL, ADD COLUMN request_hash VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NULL, ADD UNIQUE KEY uk_loan_record_request(tenant_id,user_id,request_key);
+ALTER TABLE withdraw_record ADD COLUMN request_key VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NULL, ADD COLUMN request_hash VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NULL, ADD UNIQUE KEY uk_withdraw_record_request(tenant_id,user_id,request_key);
+INSERT INTO tenant_schema_version(version,applied_at,minimum_application_epoch,business_activation_ready) VALUES(2026100201,UTC_TIMESTAMP(6),2026100201,0);

@@ -12,6 +12,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 /** All 14 configured symbols; synthetic prices, real order service, no live account writes. */
+@org.junit.jupiter.api.extension.ExtendWith(CalculationTenantExtension.class)
 class AllInstrumentCalculationTest {
     static final String[][] SYMBOLS={
         {"JPY=X","Forex","USD","JPY","157.2"},{"CAD=X","Forex","USD","CAD","1.4"},

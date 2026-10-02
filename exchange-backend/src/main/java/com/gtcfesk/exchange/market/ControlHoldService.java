@@ -1,5 +1,7 @@
 package com.gtcfesk.exchange.market;
 
+import static com.gtcfesk.exchange.market.ControlHistoryStore.tenant;
+
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.*;
@@ -11,7 +13,7 @@ final class ControlHoldService {
 
     Map<String,Object> active(String task) {
         List<Map<String,Object>> rows = store.db.queryForList(
-            "SELECT * FROM market_control_hold WHERE task_id=? AND activated_at IS NOT NULL AND released_at IS NULL", task);
+            "SELECT * FROM market_control_hold WHERE tenant_id=" + tenant() + " AND task_id=? AND activated_at IS NOT NULL AND released_at IS NULL", task);
         return rows.isEmpty() ? Collections.emptyMap() : rows.get(0);
     }
     void prepare(PersistentPriceControl.Task task, Map<String,Object> raw) {
@@ -20,7 +22,7 @@ final class ControlHoldService {
         // With candles only, their recorded start basis is the explicit reference, never an invented quote.
         Object price = reference.getOrDefault("price", task.startPrice);
         long time = QuoteState.time(reference.getOrDefault("timestamp", task.sourceTime));
-        store.db.update("INSERT INTO market_control_hold(task_id,reference_price,reference_time,last_price,generated_at,source_time) VALUES(?,?,?,?,?,?)",
+        store.db.update("INSERT INTO market_control_hold(tenant_id,task_id,reference_price,reference_time,last_price,generated_at,source_time) VALUES(" + tenant() + ",?,?,?,?,?,?)",
             task.id, price, time, task.startPrice, task.startedAt, time);
     }
     void activate(PersistentPriceControl.Task task) {
@@ -28,7 +30,7 @@ final class ControlHoldService {
     }
     void activate(PersistentPriceControl.Task task, long at, BigDecimal displayedPrice) {
         List<Map<String,Object>> pending = store.db.queryForList(
-            "SELECT * FROM market_control_hold WHERE task_id=? AND activated_at IS NULL AND released_at IS NULL", task.id);
+            "SELECT * FROM market_control_hold WHERE tenant_id=" + tenant() + " AND task_id=? AND activated_at IS NULL AND released_at IS NULL", task.id);
         if (pending.isEmpty()) return;
         Map<String,Object> reference = pending.get(0);
         List<Map<String,Object>> ticks = store.db.queryForList(
@@ -40,7 +42,7 @@ final class ControlHoldService {
             price = ControlHistoryStore.number(ticks.get(0).get("price"));
             time = ((Number) ticks.get(0).get("source_time")).longValue();
         }
-        store.db.update("UPDATE market_control_hold SET reference_price=?,reference_time=?,offset_price=?,activated_at=?,last_price=?,generated_at=?,source_time=? WHERE task_id=?",
+        store.db.update("UPDATE market_control_hold SET reference_price=?,reference_time=?,offset_price=?,activated_at=?,last_price=?,generated_at=?,source_time=? WHERE tenant_id=" + tenant() + " AND task_id=?",
             price, time, displayedPrice.subtract(price), at, displayedPrice, at, time, task.id);
     }
     Map<String,Object> observe(PersistentPriceControl.Task task, Map<String,Object> raw, long now) {
@@ -56,12 +58,12 @@ final class ControlHoldService {
                     && price.compareTo(ControlHistoryStore.number(hold.get("last_price"))) == 0) return hold;
             long generated = Math.max(now, ((Number) hold.get("generated_at")).longValue() + 1);
             store.generatedPoints(task.id, task.symbolId, Collections.singletonList(new ControlHistoryStore.PricePoint(generated, price)));
-            store.db.update("UPDATE market_control_hold SET last_price=?,generated_at=?,source_time=? WHERE task_id=?",
+            store.db.update("UPDATE market_control_hold SET last_price=?,generated_at=?,source_time=? WHERE tenant_id=" + tenant() + " AND task_id=?",
                 price, generated, sourceTime, task.id);
             return active(task.id);
         });
     }
     void release(String task, long now) {
-        store.db.update("UPDATE market_control_hold SET released_at=? WHERE task_id=? AND released_at IS NULL", now, task);
+        store.db.update("UPDATE market_control_hold SET released_at=? WHERE tenant_id=" + tenant() + " AND task_id=? AND released_at IS NULL", now, task);
     }
 }

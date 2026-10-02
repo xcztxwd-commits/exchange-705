@@ -23,16 +23,16 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      '/demo-api': { target: 'http://localhost:8081', changeOrigin: true, ws: true, rewrite: (path) => path.replace(/^\/demo-api/, '/api') },
-      '/demo-uploads': { target: 'http://localhost:8081', changeOrigin: true, rewrite: (path) => path.replace(/^\/demo-uploads/, '/uploads') },
+      '/demo-api': { target: 'http://localhost:8081', changeOrigin: false, ws: true, rewrite: (path) => path.replace(/^\/demo-api/, '/api') },
+      '/demo-uploads': { target: 'http://localhost:8081', changeOrigin: false, rewrite: (path) => path.replace(/^\/demo-uploads/, '/uploads') },
       '/api': {
         ws: true,
         target: 'http://localhost:8080',
-        changeOrigin: true,
+        changeOrigin: false,
       },
       '/uploads': {
         target: 'http://localhost:8080',
-        changeOrigin: true,
+        changeOrigin: false,
       },
     },
   },

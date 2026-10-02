@@ -10,26 +10,28 @@ import java.nio.file.*;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 import static org.junit.jupiter.api.Assertions.*;
+import static com.gtcfesk.exchange.market.MarketSqlFixture.inTenant;
 
 @EnabledIfEnvironmentVariable(named="PERF_TEST_JDBC",matches="jdbc:mysql://127\\.0\\.0\\.1:[0-9]+/performance_test.*")
-class ReceivedIndexRegressionTest {
+class ReceivedIndexRegressionTest extends TenantMarketTestContext {
     @Test void sameResultsAcrossIndexesAndEquivalentPrefixSkips() throws Exception {
         DriverManagerDataSource ds=new DriverManagerDataSource(System.getenv("PERF_TEST_JDBC"),"root","performance-test-only");
         try(java.sql.Connection jdbcConnection=ds.getConnection()) {
             SingleConnectionDataSource connection=new SingleConnectionDataSource(jdbcConnection,true);
             JdbcTemplate db=new JdbcTemplate(connection);
+            MarketSqlFixture.schema(db);
             ControlHistoryStore store=new ControlHistoryStore(db,new DataSourceTransactionManager(connection));store.migrate();
             // The test database is newly created by the dedicated perf705 container, never the application database.
             for(String table:Arrays.asList("market_source_event","market_source_tick")) assertEquals(0L,db.queryForObject("SELECT COUNT(*) FROM "+table,Long.class));
             db.execute("CREATE TABLE perf_digit(n INT PRIMARY KEY)");
             db.update("INSERT INTO perf_digit VALUES (0),(1),(2),(3),(4),(5),(6),(7),(8),(9)");
             String numbers="SELECT a.n+10*b.n+100*c.n+1000*d.n+10000*e.n AS n FROM perf_digit a CROSS JOIN perf_digit b CROSS JOIN perf_digit c CROSS JOIN perf_digit d CROSS JOIN perf_digit e";
-            db.update("INSERT INTO market_source_event(event_id,symbol_id,source_time,received_at,price) SELECT CONCAT('perf-',n),61+MOD(n,2),1700000000000+n*1000,1700000000000+n*1000+MOD(n,7),100+MOD(n,100)/100 FROM ("+numbers+") numbers");
-            db.update("INSERT INTO market_source_tick(symbol_id,source_time,received_at,price) SELECT symbol_id,source_time,received_at,price FROM market_source_event");
+            db.update("INSERT INTO market_source_event(tenant_id,event_id,symbol_id,source_time,received_at,price) SELECT 1, CONCAT('perf-',n),61+MOD(n,2),1700000000000+n*1000,1700000000000+n*1000+MOD(n,7),100+MOD(n,100)/100 FROM ("+numbers+") numbers");
+            db.update("INSERT INTO market_source_tick(tenant_id,symbol_id,source_time,received_at,price) SELECT tenant_id, symbol_id,source_time,received_at,price FROM market_source_event");
             // Legacy-only rows, out-of-order arrivals and duplicate source timestamps with distinct prices.
             db.update("DELETE FROM market_source_event WHERE MOD(event_sequence,13)=0");
-            db.update("INSERT INTO market_source_event(event_id,symbol_id,source_time,received_at,price) VALUES ('extra',61,1700000002000,1700000099000,120.1234567890123456)");
-            String query="SELECT e.received_at,e.price,e.event_sequence FROM market_source_event e WHERE e.symbol_id=61 AND e.received_at>=1700000090000 AND e.received_at<1700000100000 UNION ALL SELECT t.received_at,t.price,0 FROM market_source_tick t WHERE t.symbol_id=61 AND t.received_at>=1700000090000 AND t.received_at<1700000100000 AND NOT EXISTS(SELECT 1 FROM market_source_event e WHERE e.symbol_id=t.symbol_id AND e.source_time=t.source_time AND e.received_at=t.received_at AND e.price=t.price) ORDER BY received_at,event_sequence";
+            db.update("INSERT INTO market_source_event(tenant_id,event_id,symbol_id,source_time,received_at,price) VALUES (1,'extra',61,1700000002000,1700000099000,120.1234567890123456)");
+            String query="SELECT e.received_at,e.price,e.event_sequence FROM market_source_event e WHERE e.tenant_id=1 AND e.symbol_id=61 AND e.received_at>=1700000090000 AND e.received_at<1700000100000 UNION ALL SELECT t.received_at,t.price,0 FROM market_source_tick t WHERE t.tenant_id=1 AND t.symbol_id=61 AND t.received_at>=1700000090000 AND t.received_at<1700000100000 AND NOT EXISTS(SELECT 1 FROM market_source_event e WHERE e.tenant_id=t.tenant_id AND e.symbol_id=t.symbol_id AND e.source_time=t.source_time AND e.received_at=t.received_at AND e.price=t.price) ORDER BY received_at,event_sequence";
             System.out.println("INDEX_BEFORE "+db.queryForList("EXPLAIN "+query));
             List<Map<String,Object>> expected=db.queryForList(query);assertFalse(expected.isEmpty());
             sample(db,query,"before");

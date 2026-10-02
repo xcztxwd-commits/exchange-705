@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ProtectedImage from '../../../exchange-frontend/src/components/ProtectedImage.vue'
 import { computed, ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import request from '@/utils/request'
@@ -85,14 +86,14 @@ onMounted(load)
         <div class="form-section"><label class="form-label">{{ localeStore.t('realName') }}<input :value="form.realName" class="form-input" readonly /></label></div>
         <div class="form-section"><label class="form-label">{{ localeStore.t('idNumber') }}<input :value="form.idNumber" class="form-input" readonly /></label></div>
         <div class="upload-section">
-          <img v-if="form.idFrontImage" :src="getImageUrl(form.idFrontImage)" :alt="localeStore.t('uploadIdFront')" style="width:45%;object-fit:contain" />
-          <img v-if="form.idBackImage" :src="getImageUrl(form.idBackImage)" :alt="localeStore.t('uploadIdBack')" style="width:45%;object-fit:contain" />
+          <ProtectedImage v-if="form.idFrontImage" :src="getImageUrl(form.idFrontImage)" :alt="localeStore.t('uploadIdFront')" style="width:45%;object-fit:contain" />
+          <ProtectedImage v-if="form.idBackImage" :src="getImageUrl(form.idBackImage)" :alt="localeStore.t('uploadIdBack')" style="width:45%;object-fit:contain" />
         </div>
         <div class="form-section"><label class="form-label">{{ localeStore.t('phoneNumber') }}<input v-model="form.phone" type="tel" maxlength="32" class="form-input" :disabled="locked" :placeholder="localeStore.text('含國家區號，例如 +81…', 'Include country code, e.g. +81…')" /></label></div>
         <div class="form-section"><label class="form-label">{{ localeStore.t('homeAddress') }}<textarea v-model="form.address" maxlength="500" class="form-textarea" :disabled="locked"></textarea></label></div>
         <div class="form-section">
           <label class="form-label">{{ localeStore.t('uploadHandheldId') }}<input type="file" accept="image/*" :disabled="locked" @change="selectHandheld" /></label>
-          <img v-if="form.handheldImage" :src="getImageUrl(form.handheldImage)" :alt="localeStore.t('uploadHandheldId')" style="max-width:100%;max-height:180px" />
+          <ProtectedImage v-if="form.handheldImage" :src="getImageUrl(form.handheldImage)" :alt="localeStore.t('uploadHandheldId')" style="max-width:100%;max-height:180px" />
         </div>
         <button v-if="!locked" class="submit-btn" :disabled="submitting" @click="submit">{{ submitting ? localeStore.t('submitting') : localeStore.t('submitReview') }}</button>
       </template>

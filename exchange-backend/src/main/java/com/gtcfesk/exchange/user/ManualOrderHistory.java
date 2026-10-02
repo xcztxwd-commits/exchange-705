@@ -17,14 +17,14 @@ public class ManualOrderHistory {
     private static final String BASIS=EquityValuationService.BASIS;
     public Map<String,Object> inspect(JdbcTemplate db,long user,long minute) {
         // Bound the full day needed by the reducer, not just the directly modified suffix.
-        List<Long> rows=db.query("select bucket_start from asset_history_1m where user_id=? and basis_version=? and bucket_start>=? order by bucket_start limit 10001",
+        List<Long> rows=db.query("select bucket_start from asset_history_1m where tenant_id="+com.gtcfesk.exchange.tenant.TenantContext.requireTenantId()+" and user_id=? and basis_version=? and bucket_start>=? order by bucket_start limit 10001",
                 (r,n)->r.getLong(1),user,BASIS,AssetHistoryBucket.floor(minute,86400000));
-        List<Map<String,Object>> target=db.queryForList("select * from asset_history_1m where user_id=? and basis_version=? and bucket_start=?",user,BASIS,minute);
+        List<Map<String,Object>> target=db.queryForList("select * from asset_history_1m where tenant_id="+com.gtcfesk.exchange.tenant.TenantContext.requireTenantId()+" and user_id=? and basis_version=? and bucket_start=?",user,BASIS,minute);
         if(rows.size()+(target.isEmpty()?1:0)>MAX_ROWS) throw new BusinessException("历史范围超出同步处理上限（含边界日最多 10000 点）");
         BigDecimal base=target.isEmpty()?null:(BigDecimal)target.get(0).get("net_equity");
         String source="EXISTING";Long sourceMinute=minute;
         if(base==null) {
-            List<Map<String,Object>> previous=db.queryForList("select bucket_start,net_equity from asset_history_1m where user_id=? and basis_version=? and bucket_start>=? and bucket_start<? and net_equity is not null order by bucket_start desc limit 1",user,BASIS,minute-86400000,minute);
+            List<Map<String,Object>> previous=db.queryForList("select bucket_start,net_equity from asset_history_1m where tenant_id="+com.gtcfesk.exchange.tenant.TenantContext.requireTenantId()+" and user_id=? and basis_version=? and bucket_start>=? and bucket_start<? and net_equity is not null order by bucket_start desc limit 1",user,BASIS,minute-86400000,minute);
             source=previous.isEmpty()?"ZERO":"CARRY_24H";
             base=previous.isEmpty()?BigDecimal.ZERO:(BigDecimal)previous.get(0).get("net_equity");
             sourceMinute=previous.isEmpty()?null:((Number)previous.get(0).get("bucket_start")).longValue();
@@ -32,7 +32,7 @@ public class ManualOrderHistory {
         Map<String,Object> result=new LinkedHashMap<>();result.put("base",base);result.put("baseSource",source);result.put("sourceMinute",sourceMinute);
         result.put("original",target.isEmpty()?null:target.get(0));result.put("from",minute);
         result.put("through",rows.isEmpty()?minute:Math.max(minute,rows.get(rows.size()-1)));
-        result.put("existingValidCount",db.queryForObject("select count(*) from asset_history_1m where user_id=? and basis_version=? and bucket_start>=? and net_equity is not null",Long.class,user,BASIS,minute));
+        result.put("existingValidCount",db.queryForObject("select count(*) from asset_history_1m where tenant_id="+com.gtcfesk.exchange.tenant.TenantContext.requireTenantId()+" and user_id=? and basis_version=? and bucket_start>=? and net_equity is not null",Long.class,user,BASIS,minute));
         result.put("insertOrRepair",!"EXISTING".equals(source));
         List<Map<String,Object>> periods=new ArrayList<>();long now=System.currentTimeMillis();
         for(int level=1;level<=3;level++) {
@@ -47,25 +47,25 @@ public class ManualOrderHistory {
     public Map<String,Object> apply(JdbcTemplate db,long user,long minute,BigDecimal net,long now,Consumer<String> checkpoint) {
         Map<String,Object> result=inspect(db,user,minute);
         // Strict DECIMAL overflow checks also apply to stored historical adjustments.
-        db.query("select net_equity,manual_adjustment from asset_history_1m where user_id=? and basis_version=? and bucket_start>=? and net_equity is not null",r->{
+        db.query("select net_equity,manual_adjustment from asset_history_1m where tenant_id="+com.gtcfesk.exchange.tenant.TenantContext.requireTenantId()+" and user_id=? and basis_version=? and bucket_start>=? and net_equity is not null",r->{
             ManualOrderCalculation.money(r.getBigDecimal(1).add(net));ManualOrderCalculation.money(r.getBigDecimal(2).add(net));
         },user,BASIS,minute);
-        int changed=db.update("update asset_history_1m set net_equity=net_equity+?,manual_adjustment=manual_adjustment+? where user_id=? and basis_version=? and bucket_start>=? and net_equity is not null",net,net,user,BASIS,minute);
+        int changed=db.update("update asset_history_1m set net_equity=net_equity+?,manual_adjustment=manual_adjustment+? where tenant_id="+com.gtcfesk.exchange.tenant.TenantContext.requireTenantId()+" and user_id=? and basis_version=? and bucket_start>=? and net_equity is not null",net,net,user,BASIS,minute);
         if(Boolean.TRUE.equals(result.get("insertOrRepair"))) {
             BigDecimal value=ManualOrderCalculation.money(((BigDecimal)result.get("base")).add(net));
             String origin="ZERO".equals(result.get("baseSource"))?"MANUAL_ZERO":"MANUAL_CARRY";
             if(result.get("original")==null) {
-                db.update("insert into asset_history_1m(user_id,basis_version,bucket_start,effective_at,net_equity,manual_adjustment,valuation_status,reason_code,valuation_evidence,origin,created_at) values(?,?,?,?,?,?,'ESTIMATED','MANUAL_ESTIMATE',?,?,?)",
+                db.update("insert into asset_history_1m(tenant_id,user_id,basis_version,bucket_start,effective_at,net_equity,manual_adjustment,valuation_status,reason_code,valuation_evidence,origin,created_at) values("+com.gtcfesk.exchange.tenant.TenantContext.requireTenantId()+",?,?,?,?,?,?,'ESTIMATED','MANUAL_ESTIMATE',?,?,?)",
                         user,BASIS,minute,minute+60000,value,net,store.json(result),origin,now);
             } else {
                 // Keep original observation time, components, failure reason and evidence intact.
-                db.update("update asset_history_1m set net_equity=?,manual_adjustment=manual_adjustment+?,effective_at=?,origin=?,valuation_status='ESTIMATED' where user_id=? and basis_version=? and bucket_start=?",
+                db.update("update asset_history_1m set net_equity=?,manual_adjustment=manual_adjustment+?,effective_at=?,origin=?,valuation_status='ESTIMATED' where tenant_id="+com.gtcfesk.exchange.tenant.TenantContext.requireTenantId()+" and user_id=? and basis_version=? and bucket_start=?",
                         value,net,minute+60000,origin,user,BASIS,minute);
             }
             changed++;
         }
         result.put("changedMinutes",changed);checkpoint.accept("minutes");
-        List<Long> affected=db.query("select bucket_start from asset_history_1m where user_id=? and basis_version=? and bucket_start>=? and net_equity is not null order by bucket_start",(r,n)->r.getLong(1),user,BASIS,minute);
+        List<Long> affected=db.query("select bucket_start from asset_history_1m where tenant_id="+com.gtcfesk.exchange.tenant.TenantContext.requireTenantId()+" and user_id=? and basis_version=? and bucket_start>=? and net_equity is not null order by bucket_start",(r,n)->r.getLong(1),user,BASIS,minute);
         List<String> deferred=new ArrayList<>();int parents=0;
         for(int level=1;level<=3;level++) {
             long size=AssetEquityStore.INTERVALS[level];

@@ -14,12 +14,14 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 class SupportAuditLogTest {
-    @AfterEach void clear() { SecurityContextHolder.clearContext(); }
+    private com.gtcfesk.exchange.tenant.TenantContext.Scope scope;
+    @BeforeEach void tenant() { scope = com.gtcfesk.exchange.tenant.TenantContext.open(1L); }
+    @AfterEach void clear() { SecurityContextHolder.clearContext(); if (scope != null) scope.close(); }
     @Test void ordinaryOperationLogsNeverExposeChatOrLetterBodies() throws Exception {
         OperationLogService logs = mock(OperationLogService.class);
         AdminUserRepository admins = mock(AdminUserRepository.class);
         AdminUser admin = new AdminUser(); admin.setId(1L); admin.setEmail("test@invalid");
-        when(admins.findById(1L)).thenReturn(Optional.of(admin)); SupportServiceTest.auth(1L,"ADMIN");
+        when(admins.findByTenantIdAndId(1L, 1L)).thenReturn(Optional.of(admin)); SupportServiceTest.auth(1L,"ADMIN");
         OperationLogInterceptor interceptor = new OperationLogInterceptor(logs,mock(JwtUtil.class),admins);
         MockHttpServletRequest raw = new MockHttpServletRequest("POST","/api/admin/support/sessions/1/messages");
         raw.setContentType("application/json"); raw.setContent("{\"text\":\"private customer content\"}".getBytes());

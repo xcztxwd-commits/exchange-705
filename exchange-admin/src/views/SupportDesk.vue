@@ -8,6 +8,7 @@ import { supportDate, type Conversation } from '@/utils/support'
 import SupportThread from '@/components/SupportThread.vue'
 const auth = useAuthStore(),
   scope = ref('mine'),
+  userEmail = ref(''),
   rows = ref<Conversation[]>([]),
   selected = ref<Conversation>(),
   accepting = ref(false)
@@ -27,7 +28,7 @@ async function load() {
   pending = true
   try {
     const data: any = await request.get('/admin/support/sessions', {
-      params: { scope: scope.value, page: page.value },
+      params: { scope: scope.value, page: page.value, userEmail: userEmail.value.trim() || undefined },
     })
     const state: any = await request.get('/user/support/config')
     if (disposed) return
@@ -66,7 +67,7 @@ async function claim(row: Conversation) {
     const result: any = await request.post(`/admin/support/sessions/${row.id}/claim`)
     scope.value = 'mine'
     await nextTick()
-    selected.value = result
+    selected.value = { ...row, ...result }
     await load()
   } catch (e: any) {
     ElMessage.error(e.message)
@@ -179,6 +180,7 @@ function changePage(delta: number) {
             监督全部
           </button>
         </div>
+        <el-form @submit.prevent="page=0;load()" style="padding:10px"><el-input v-model="userEmail" placeholder="用户邮箱" aria-label="用户邮箱" clearable maxlength="254" @clear="page=0;load()" /><el-button v-permission="'support:view'" native-type="submit" size="small">搜索</el-button></el-form>
         <div class="list-caption">
           {{ scope === 'queue' ? '按进入顺序排列，点击接待' : '会话记录 · 最近更新'
           }}<button v-permission="'support:view'" @click="load" aria-label="刷新">↻</button>
@@ -197,7 +199,7 @@ function changePage(delta: number) {
           >
             <span class="avatar">{{ String(row.userId).slice(-2) }}</span
             ><span class="session-info"
-              ><strong>客户 {{ row.userId }}</strong
+              ><strong>客户 {{ row.userId }}</strong><small>{{ row.userEmail || '无邮箱' }}</small><small>备注：{{ row.userRemark || '-' }}</small
               ><small>#{{ row.id }} · {{ supportDate(row.updatedAt) }}</small></span
             ><span class="status" :class="row.status.toLowerCase()">{{ status(row) }}</span>
           </button>
@@ -232,7 +234,7 @@ function changePage(delta: number) {
         <template v-if="selected"
           ><div class="chat-heading">
             <div>
-              <strong>客户 {{ selected.userId }}</strong
+              <strong>客户 {{ selected.userId }}</strong><small>{{ selected.userEmail || '无邮箱' }} · 备注：{{ selected.userRemark || '-' }}</small
               ><small
                 >会话 #{{ selected.id }} · {{ selected.clientIp }} · 客服
                 {{ selected.adminId || '待分配' }}</small

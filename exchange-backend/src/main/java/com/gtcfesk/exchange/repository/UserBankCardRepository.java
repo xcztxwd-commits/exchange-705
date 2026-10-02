@@ -7,8 +7,8 @@ import org.springframework.stereotype.Repository;
 import java.util.List;
 
 @Repository
-public interface UserBankCardRepository extends JpaRepository<UserBankCard, Long> {
-    List<UserBankCard> findByUserId(Long userId);
+public interface UserBankCardRepository extends com.gtcfesk.exchange.tenant.TenantRepository<UserBankCard, Long> {
+    List<UserBankCard> findByTenantIdAndUserId(Long tenantId, Long userId);
 }
 
 

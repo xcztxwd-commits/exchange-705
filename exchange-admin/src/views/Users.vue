@@ -24,6 +24,9 @@ const balanceMode = ref('deposit')
 const rechargeAccount = ref('FUND')
 const rechargeAmount = ref<number | undefined>(undefined)
 const balanceSaving = ref(false)
+const balancePending = ref<any>(null)
+const balanceRemark = ref('')
+const balanceKey = computed(() => `balance-pending:${auth.user?.tenantId}:${auth.accessSession?.id || auth.user?.userType}:${auth.user?.id}`)
 import { useAuthStore } from '@/store/auth'
 
 const auth = useAuthStore()
@@ -39,6 +42,9 @@ const permissionsLoaded = ref(false) // 权限是否已加载
 const hasPermission = (menuCode: string, actionCode: string): boolean => can(`${menuCode}:${actionCode}`)
 const canSetBalance = computed(() => can('users:modify_balance'))
 
+const profilePhone = (row: any) => row?.phone ? [row.countryCode, row.phone].filter(Boolean).join(' ') : '未填写'
+const profileIncome = (row: any) => row?.annualIncome != null
+  ? [row.annualIncome, row.annualIncomeCurrency].filter(Boolean).join(' ') : '未填写'
 const users = ref<any[]>([])
 const total = ref(0)
 const loading = ref(false)
@@ -62,6 +68,7 @@ const editingBankCard = ref<any>(null)
 const editingAddress = ref<any>(null)
 
 const subordinatesDialogVisible = ref(false)
+const subordinateEmail = ref('')
 const subordinates = ref<any[]>([])
 const loadingSubordinates = ref(false)
 const currentSubordinateUserId = ref(0)
@@ -216,7 +223,7 @@ const handleUpdateStatus = async (row: any, newStatus: string) => {
     loadUsers()
   } catch (e: any) {
     if (e !== 'cancel') {
-      ElMessage.error(e?.message || '更新失败')
+      if (e !== 'cancel' && e !== 'close') ElMessage.error((balancePending.value ? '结果待确认，请重试原请求；' : '') + (e?.message || '更新失败'))
     }
   }
 }
@@ -246,6 +253,9 @@ const handleSetUserType = async (row: any, userType: string) => {
 
 const handleCommand = (command: string, row: any) => {
   switch (command) {
+    case 'detail':
+      openUserDetailDialog(row)
+      break
     case 'reset_password':
       handleResetPassword(row)
       break
@@ -326,6 +336,15 @@ const openBalanceDialog = (row: any) => {
     contractBalance: row.contractBalance ?? 0,
     optionBalance: row.optionBalance ?? 0,
   }
+  balanceRemark.value = ''
+  const saved = sessionStorage.getItem(balanceKey.value)
+  try { balancePending.value = saved ? JSON.parse(saved) : null } catch { balancePending.value = null }
+  if (balancePending.value) {
+    Object.assign(balanceForm.value, balancePending.value)
+    balanceForm.value.email = `UID ${balancePending.value.userId}（原请求待确认）`
+    balanceRemark.value = balancePending.value.remark
+    balanceMode.value = 'balance'
+  }
   balanceDialogVisible.value = true
 }
 
@@ -335,12 +354,19 @@ const submitBalance = async () => {
   if (!canSetBalance.value) { ElMessage.error('没有设置余额权限'); return }
   balanceSaving.value = true
   try {
-    await request.post('/admin/users/updateBalance', {
-      userId: balanceForm.value.userId,
-      fundBalance: balanceForm.value.fundBalance,
-      contractBalance: balanceForm.value.contractBalance,
-      optionBalance: balanceForm.value.optionBalance,
-    })
+    let payload = balancePending.value
+    if (!payload) {
+      if (!balanceRemark.value.trim()) throw new Error('请填写修改原因')
+      const { userId, fundBalance, contractBalance, optionBalance } = balanceForm.value
+      if (![fundBalance, contractBalance, optionBalance].every(value => Number.isFinite(value) && value >= 0)) throw new Error('余额必须为非负有效数字')
+      await ElMessageBox.confirm(`租户 ${auth.user?.tenantId} · UID ${userId}；将余额设为资金 ${fundBalance} / 合约 ${contractBalance} / 期权 ${optionBalance} USD。原因：${balanceRemark.value}`, '确认覆盖账户余额', { type: 'warning' })
+      payload = { userId, fundBalance, contractBalance, optionBalance, remark: balanceRemark.value.trim(), confirm: true, idempotencyKey: crypto.randomUUID() }
+      sessionStorage.setItem(balanceKey.value, JSON.stringify(payload))
+      balancePending.value = payload
+    }
+    await request.post('/admin/users/updateBalance', payload)
+    sessionStorage.removeItem(balanceKey.value)
+    balancePending.value = null
     ElMessage.success('余额更新成功')
     balanceDialogVisible.value = false
     loadUsers()
@@ -615,6 +641,7 @@ const openUserDetailDialog = async (row: any) => {
 const openSubordinatesDialog = async (row: any) => {
   accountTable.selectRow(row)
   subModes.value = [row.accountMode || "REAL"]
+  subordinateEmail.value = ''
   currentSubordinateUserId.value = row.id
   subordinatesDialogVisible.value = true
   await loadSubordinates()
@@ -624,7 +651,7 @@ const openSubordinatesDialog = async (row: any) => {
 const loadSubordinates = async () => {
   subordinates.value = []; loadingSubordinates.value = true
   try {
-    const res: any = await subTable.query(`/admin/users/${currentSubordinateUserId.value}/subordinates`)
+    const res: any = await subTable.query(`/admin/users/${currentSubordinateUserId.value}/subordinates`, { email: subordinateEmail.value.trim() || undefined })
     subordinates.value = res.list || []
   } catch (e: any) {
     ElMessage.error(e?.message || '加载失败')
@@ -1059,6 +1086,8 @@ onMounted(() => {
           </template>
         </el-table-column>
         <el-table-column prop="email" label="邮箱" min-width="180" />
+        <el-table-column label="手机号" min-width="160"><template #default="{ row }">{{ profilePhone(row) }}</template></el-table-column>
+        <el-table-column label="年收入" min-width="150"><template #default="{ row }">{{ profileIncome(row) }}</template></el-table-column>
         <el-table-column label="登录IP / 地区" width="250">
           <template #default="{ row }">
             <div v-if="row.lastLoginIp">
@@ -1138,6 +1167,7 @@ onMounted(() => {
               </el-button>
               <template #dropdown>
                 <el-dropdown-menu>
+                  <el-dropdown-item v-permission="'users:detail'" :command="'detail'">查看详情</el-dropdown-item>
                   <el-dropdown-item v-permission="'users:reset_password'"
                     v-if="hasPermission('users', 'reset_password')"
                     :command="'reset_password'"
@@ -1242,7 +1272,8 @@ onMounted(() => {
       <el-empty v-if="!loading && users.length === 0" description="暂无数据" />
 
       <el-dialog v-model="balanceDialogVisible" title="用户充值 / 修改余额" width="460px">
-        <el-form label-width="100px">
+        <el-alert v-if="balancePending" title="原请求结果待确认，表单已锁定；重试使用相同请求，不要另建调整。" type="warning" :closable="false" />
+        <el-form label-width="100px" :disabled="balanceSaving || !!balancePending">
           <el-form-item label="用户邮箱">
             <span>{{ balanceForm.email }}</span>
           </el-form-item>
@@ -1257,6 +1288,7 @@ onMounted(() => {
             <el-alert v-else title="没有手动充值权限" type="warning" :closable="false" />
           </template>
           <template v-else>
+          <el-form-item label="修改原因"><el-input v-model="balanceRemark" type="textarea" maxlength="500" /></el-form-item>
           <el-form-item label="资金账户">
             <el-input-number
               v-model="balanceForm.fundBalance"
@@ -1401,7 +1433,8 @@ onMounted(() => {
 
       <!-- 下级用户对话框 -->
       <el-dialog v-model="subordinatesDialogVisible" title="下级用户列表" width="900px">
-        <AccountTypeFilter v-model="subModes" @change="loadSubordinates" />
+        <el-form inline @submit.prevent="loadSubordinates"><el-form-item label="用户邮箱"><el-input v-model="subordinateEmail" clearable maxlength="254" placeholder="用户邮箱" @clear="loadSubordinates" /></el-form-item><el-button v-permission="'users:view_subordinates'" native-type="submit">搜索</el-button></el-form>
+      <AccountTypeFilter v-model="subModes" @change="loadSubordinates" />
 <admin-table :row-key="(row: any) => `${row.accountMode || 'REAL'}:${row.id ?? row.userId}:${row.type || ''}`" table-key="Users.4"
           :data="subordinates"
           v-loading="loadingSubordinates"
@@ -1411,6 +1444,9 @@ onMounted(() => {
 <el-table-column prop="accountModeLabel" label="账户类型" width="110" />
           <el-table-column prop="id" label="ID" width="80" />
           <el-table-column prop="email" label="邮箱" min-width="180" />
+          <el-table-column label="手机号" min-width="160"><template #default="{ row }">{{ profilePhone(row) }}</template></el-table-column>
+          <el-table-column label="年收入" min-width="150"><template #default="{ row }">{{ profileIncome(row) }}</template></el-table-column>
+          <el-table-column prop="remark" label="用户备注" min-width="150" show-overflow-tooltip><template #default="{ row }">{{ row.remark || '-' }}</template></el-table-column>
           <el-table-column prop="nickname" label="昵称" width="120">
             <template #default="{ row }">
               {{ row.nickname || '-' }}
@@ -1854,7 +1890,8 @@ onMounted(() => {
           <el-descriptions-item label="用户ID">{{ userDetail.id }}</el-descriptions-item>
           <el-descriptions-item label="邮箱">{{ userDetail.email }}</el-descriptions-item>
           <el-descriptions-item label="昵称">{{ userDetail.nickname || '-' }}</el-descriptions-item>
-          <el-descriptions-item label="手机号">{{ userDetail.phone || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="手机号">{{ profilePhone(userDetail) }}</el-descriptions-item>
+          <el-descriptions-item label="年收入">{{ profileIncome(userDetail) }}</el-descriptions-item>
           <el-descriptions-item label="用户类型">
             <el-tag v-if="userDetail.userType === 'agent'" type="warning">代理</el-tag>
             <el-tag v-else type="success">普通用户</el-tag>

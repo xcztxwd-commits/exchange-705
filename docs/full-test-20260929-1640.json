@@ -1,0 +1,34 @@
+{
+  "status": "NOT_RELEASE_READY",
+  "snapshot_local_time": "2026-09-29T18:08:00+08:00",
+  "head": "668edcbc72ebda33d0e50172d119bc92ccebb479",
+  "branch": "main",
+  "source_drift_during_run": true,
+  "source_gate": {
+    "initial": {"passed": true, "files": 353, "sensitive_occurrences": 1446},
+    "at_report": {"passed": false, "issues": 16},
+    "mutation_tests_passed": 11
+  },
+  "release_gate": {
+    "passed": false,
+    "blockers": ["PRODUCTION_RELEASE_APPROVAL_ABSENT", "ORM_DIRTY_WRITE_PREDICATE", "PRODUCTION_LEGACY_ORPHANS", "RUNTIME_ACCEPTANCE_PENDING"]
+  },
+  "backend_full_maven": {"tests": 2364, "passed": 1053, "failures": 30, "errors": 1250, "skipped": 31, "exit_code": 1},
+  "backend_targeted_after_fixture_edits": {"tests": 118, "passed": 0, "failures": 0, "errors": 118, "skipped": 0, "exit_code": 1},
+  "frontend_node": {"files": 35, "passed_after_test_fixture_fix": 34, "failed": 1, "remaining_failure": "exchange-admin/tests/tablePreferences.test.mjs"},
+  "frontend_pre_drift": {"typechecks_passed": 3, "vite_builds_passed": 4},
+  "source_inventory_at_report": {"backend_java_files": 355, "backend_test_files": 114, "mapping_annotations": 426, "mapping_annotations_without_literal_path": 27, "frontend_route_literals": 82},
+  "mysql_synthetic": {
+    "v03_migration_checks_passed": 17,
+    "v03_restore_verified": true,
+    "jpa_entities": 54,
+    "jpa_checks_passed": 75,
+    "funds_checks_passed": 63,
+    "private_files_checks_passed": 18,
+    "orphan_quarantine_checks_passed": 11
+  },
+  "https_local": {"smoke_requests": 10, "unknown_host_status": 403, "sni_a_host_b_status": 200},
+  "not_run": ["current_jar_full_api_e2e", "browser_action_level_full_coverage", "mobile_device_viewport", "forceVersionIncrement", "browser_cjs", "bounded_load_performance", "real_payment", "production_migration", "live_deployment"],
+  "evidence_dir": "C:\\Users\\徐乾妖\\AppData\\Local\\Temp\\mt705-fulltest-20260929-1640",
+  "report": "C:\\workspace\\fx\\705\\docs\\full-test-20260929-1640.md"
+}

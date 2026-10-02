@@ -9,8 +9,9 @@ public class ActivityController {
  private final ActivityService service;private final TrialFunds funds;private final TrialLedgerRepository ledger;
  @GetMapping("/inbox") public Object inbox(Authentication a,@RequestParam(defaultValue="0") int page){return service.inbox(Long.valueOf(a.getName()),page);}
  @PostMapping("/messages/{id}/event") public Object event(Authentication a,@PathVariable Long id,@RequestBody Map<String,String> body){return service.event(Long.valueOf(a.getName()),id,body.get("type"));}
- @PostMapping("/messages/{id}/claim") public Object claim(Authentication a,@PathVariable Long id){return service.claim(Long.valueOf(a.getName()),id);}
+ @PostMapping("/messages/{id}/claim") public Object claim(Authentication a,@PathVariable Long id,@RequestHeader(value="Idempotency-Key",required=false) String key){return service.claim(Long.valueOf(a.getName()),id,key);}
+ @PostMapping("/campaigns/{id}/claim") public Object claimPublic(Authentication a,@PathVariable Long id,@RequestHeader("Idempotency-Key") String key){return service.claimPublic(Long.valueOf(a.getName()),id,key);}
  @GetMapping("/messages/{id}") public Object message(Authentication a,@PathVariable Long id){return service.message(Long.valueOf(a.getName()),id);}
- @GetMapping("/account") public Object account(Authentication a){Long user=Long.valueOf(a.getName());Map<String,Object> m=new LinkedHashMap<>();m.put("account",funds.snapshot(user));m.put("canTrade",funds.canTrade(user));return m;}
- @GetMapping("/ledger") public Object ledger(Authentication a,@RequestParam(defaultValue="0") int page){return ledger.findByUserIdOrderByIdDesc(Long.valueOf(a.getName()),PageRequest.of(Math.max(0,page),20));}
+ @GetMapping("/account") public Object account(Authentication a){Long user=Long.valueOf(a.getName());Map<String,Object> m=new LinkedHashMap<>();m.put("account",funds.snapshot(user));m.put("canTrade",funds.canTrade(user));m.putAll(funds.status(user));return m;}
+ @GetMapping("/ledger") public Object ledger(Authentication a,@RequestParam(defaultValue="0") int page){return ledger.findByTenantIdAndUserIdOrderByIdDesc(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), Long.valueOf(a.getName()),PageRequest.of(Math.max(0,page),20));}
 }

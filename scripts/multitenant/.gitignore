@@ -1,0 +1,2 @@
+# Reviewed DDL and synthetic-fixture schema only. Credentials/backups stay outside this tree.
+!*.sql

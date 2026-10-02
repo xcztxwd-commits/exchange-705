@@ -48,8 +48,9 @@ public class BackendAccess extends RequestBodyAdviceAdapter implements HandlerIn
     }
     private void deny() { throw new AccessDeniedException("无权执行此操作"); }
     public void checkUser(Long userId) {
+        if (userId == null || !users.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), userId).isPresent()) deny();
         Long agent = agentId();
-        if (agent != null && (userId == null || !users.findById(userId).map(u -> agent.equals(u.getParentUserId())).orElse(false))) deny();
+        if (agent != null && (userId == null || !users.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), userId).map(u -> agent.equals(u.getParentUserId())).orElse(false))) deny();
     }
     private boolean superAdmin() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
@@ -73,7 +74,9 @@ public class BackendAccess extends RequestBodyAdviceAdapter implements HandlerIn
         if (!(handler instanceof HandlerMethod)) return true;
         HandlerMethod h = (HandlerMethod) handler;
         String c = h.getBeanType().getSimpleName(), m = h.getMethod().getName();
+        if (c.equals("ControlExchangeController")) return true;
         if (c.equals("AdminAuthController")) {
+            if (com.gtcfesk.exchange.control.ControlIdentity.isAccess()) deny();
             if (!m.equals("login") && m.contains("Agent") != (agentId() != null)) deny();
             return true;
         }
@@ -106,7 +109,8 @@ public class BackendAccess extends RequestBodyAdviceAdapter implements HandlerIn
             if (m.equals("getConfig")) {
                 String key = request.getParameter("key");
                 if ("agent.default.permissions".equals(key)) permissions.require("agents", "defaults");
-                else if ("share.templates".equals(key)) permissions.requireAny("settings", "orders");
+                else if ("share.templates".equals(key)) permissions.requireAny("share_templates", "settings", "orders");
+                else if ("share.materials".equals(key)) permissions.require("share_templates", "");
                 else permissions.require("settings", "");
             } else if (m.equals("getAllConfigs")) permissions.require("settings", "");
             // Every write key is checked after body conversion, before the transactional controller runs.
@@ -121,7 +125,7 @@ public class BackendAccess extends RequestBodyAdviceAdapter implements HandlerIn
                 permissions.require("agents", ""); special = true;
             }
             if (Arrays.asList("getSubordinates", "updateRemark", "updateUserStatus").contains(m) && vars.containsKey("userId") &&
-                users.findById(Long.valueOf(vars.get("userId"))).map(u -> "agent".equals(u.getUserType())).orElse(false)) {
+                users.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), Long.valueOf(vars.get("userId"))).map(u -> "agent".equals(u.getUserType())).orElse(false)) {
                 permissions.requireAny("users:" + permission.action(), "agents:" + (m.equals("getSubordinates") ? "view_subordinates" : m.equals("updateRemark") ? "modify_remark" : "status")); special = true;
             }
         }
@@ -139,14 +143,14 @@ public class BackendAccess extends RequestBodyAdviceAdapter implements HandlerIn
             String recordId = vars.getOrDefault("orderId", vars.get("id"));
             if (recordId != null) {
                 Long id = Long.valueOf(recordId), owner = null;
-                if (c.equals("DepositReviewController")) owner = deposits.findById(id).map(DepositRecord::getUserId).orElse(null);
-                else if (c.equals("WithdrawReviewController")) owner = withdrawals.findById(id).map(WithdrawRecord::getUserId).orElse(null);
-                else if (c.equals("LoanReviewController")) owner = loans.findById(id).map(LoanRecord::getUserId).orElse(null);
-                else if (c.equals("KycReviewController")) owner = kycs.findById(id).map(KycRecord::getUserId).orElse(null);
-                else if (c.equals("LoanPersonalInfoReviewController")) owner = personalInfos.findById(id).map(LoanPersonalInfo::getUserId).orElse(null);
+                if (c.equals("DepositReviewController")) owner = deposits.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), id).map(DepositRecord::getUserId).orElse(null);
+                else if (c.equals("WithdrawReviewController")) owner = withdrawals.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), id).map(WithdrawRecord::getUserId).orElse(null);
+                else if (c.equals("LoanReviewController")) owner = loans.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), id).map(LoanRecord::getUserId).orElse(null);
+                else if (c.equals("KycReviewController")) owner = kycs.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), id).map(KycRecord::getUserId).orElse(null);
+                else if (c.equals("LoanPersonalInfoReviewController")) owner = personalInfos.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), id).map(LoanPersonalInfo::getUserId).orElse(null);
                 else if (c.equals("AdminOrderController")) owner = request.getRequestURI().contains("/contract/")
-                        ? contracts.findById(id).map(ContractOrder::getUserId).orElse(null) : options.findById(id).map(OptionOrder::getUserId).orElse(null);
-                else if (c.equals("AdminFinancialYieldController")) owner = financialOrders.findById(id).map(FinancialOrder::getUserId).orElse(null);
+                        ? contracts.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), id).map(ContractOrder::getUserId).orElse(null) : options.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), id).map(OptionOrder::getUserId).orElse(null);
+                else if (c.equals("AdminFinancialYieldController")) owner = financialOrders.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), id).map(FinancialOrder::getUserId).orElse(null);
                 if (owner != null) checkUser(owner);
             }
         }
@@ -178,7 +182,8 @@ public class BackendAccess extends RequestBodyAdviceAdapter implements HandlerIn
                 String key = cfg.path("key").asText();
                 if ("agent.default.permissions".equals(key)) { if (!superAdmin()) deny(); }
                 else if ("support.settings".equals(key)) { if (agent != null) deny(); permissions.require("support_settings", "save"); }
-                else permissions.require("settings", "share.templates".equals(key) ? "share_templates" : "save");
+                else if ("share.templates".equals(key) || "share.materials".equals(key)) { if (agent != null) deny(); permissions.require("share_templates", "save"); }
+                else permissions.require("settings", "save");
             }
         }
         if (method.equals("setPresetProfitType")) {
@@ -197,14 +202,14 @@ public class BackendAccess extends RequestBodyAdviceAdapter implements HandlerIn
                     Map<?,?> vars = (Map<?,?>)attributes.getRequest().getAttribute(HandlerMapping.URI_TEMPLATE_VARIABLES_ATTRIBUTE);
                     if (vars != null && vars.get("userId") != null) target = Long.valueOf(vars.get("userId").toString());
                 }
-                action = target != null && users.findById(target).map(u -> Arrays.asList("banned", "disabled").contains(u.getStatus())).orElse(false) ? "unban_user" : "unfreeze_user";
+                action = target != null && users.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), target).map(u -> Arrays.asList("banned", "disabled").contains(u.getStatus())).orElse(false) ? "unban_user" : "unfreeze_user";
             }
             else if (status.equals("banned") || status.equals("disabled")) action = "ban_user";
             else { deny(); return body; }
             org.springframework.web.context.request.ServletRequestAttributes attrs = (org.springframework.web.context.request.ServletRequestAttributes)org.springframework.web.context.request.RequestContextHolder.getRequestAttributes();
             Map<?,?> path = attrs == null ? null : (Map<?,?>)attrs.getRequest().getAttribute(HandlerMapping.URI_TEMPLATE_VARIABLES_ATTRIBUTE);
             Long target = node.hasNonNull("userId") ? node.get("userId").asLong() : path != null && path.get("userId") != null ? Long.valueOf(path.get("userId").toString()) : null;
-            if (target != null && users.findById(target).map(u -> "agent".equals(u.getUserType())).orElse(false)) permissions.requireAny("users:" + action, "agents:status");
+            if (target != null && users.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), target).map(u -> "agent".equals(u.getUserType())).orElse(false)) permissions.requireAny("users:" + action, "agents:status");
             else checkMenu("users", action);
         }
         return body;

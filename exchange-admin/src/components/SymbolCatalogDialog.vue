@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ProtectedImage from '../../../exchange-frontend/src/components/ProtectedImage.vue'
 import { computed, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import request from '@/utils/request'
@@ -64,7 +65,7 @@ watch(() => props.modelValue, value => { if (value) changeCategory(); else ++gen
     <div class="catalog-search"><el-input v-model="query" aria-label="搜索交易对" placeholder="交易对或名称，如 BTC、AAPL、EURUSD" clearable :disabled="saving" @keyup.enter="search" /><el-button v-permission="'symbols:create'" @click="search" :disabled="saving" :loading="busy">查询</el-button></div>
     <el-alert v-if="error" :title="error" type="error" :closable="false" show-icon><el-button v-permission="'symbols:create'" link @click="load" :disabled="saving">重试加载</el-button></el-alert>
     <admin-table table-key="SymbolCatalogDialog.1" :data="rows" v-loading="busy" height="330" row-key="symbol" border :empty-text="error ? '加载失败，请重试' : '没有匹配结果，请更换关键词'">
-      <el-table-column prop="symbol" label="交易对" min-width="180"><template #default="{ row }"><span style="display:flex;align-items:center;gap:8px"><img v-if="row.iconUrl" :src="getImageUrl(row.iconUrl)" alt="" width="28" height="28" />{{ displaySymbol(row) }}</span></template></el-table-column><el-table-column prop="name" label="名称" min-width="200"><template #default="{ row }">{{ sourceCategory === 'Forex' ? displaySymbol(row) : row.name }}</template></el-table-column><el-table-column prop="exchange" label="市场" min-width="110" />
+      <el-table-column prop="symbol" label="交易对" min-width="180"><template #default="{ row }"><span style="display:flex;align-items:center;gap:8px"><ProtectedImage v-if="row.iconUrl" :src="getImageUrl(row.iconUrl)" alt="" width="28" height="28" />{{ displaySymbol(row) }}</span></template></el-table-column><el-table-column prop="name" label="名称" min-width="200"><template #default="{ row }">{{ sourceCategory === 'Forex' ? displaySymbol(row) : row.name }}</template></el-table-column><el-table-column prop="exchange" label="市场" min-width="110" />
       <el-table-column label="选择" min-width="150" fixed="right"><template #default="{ row }"><el-checkbox :model-value="row.added || selected.includes(row.symbol)" :disabled="saving || row.added || !!row.unavailableReason" :aria-label="displaySymbol(row)" @change="select(row, $event)">{{ row.added ? '已添加' : row.unavailableReason || '选择' }}</el-checkbox></template></el-table-column>
     </admin-table>
     <div class="catalog-pages"><span>第 {{ page + 1 }} 页{{ total !== null ? ` · 共 ${total} 个交易对` : '' }} · 已选 {{ selected.length }} / 20</span><div><el-button v-permission="'symbols:create'" :disabled="page === 0 || busy || saving" @click="turn(-1)">上一页</el-button><el-button v-permission="'symbols:create'" :disabled="!hasMore || busy || saving" @click="turn(1)">下一页</el-button></div></div>

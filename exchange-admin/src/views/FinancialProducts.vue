@@ -71,7 +71,7 @@
             :show-file-list="false"
             :before-upload="beforeUpload"
           >
-            <img v-if="formData.imageUrl" :src="getImageUrl(formData.imageUrl)" class="avatar" />
+            <ProtectedImage v-if="formData.imageUrl" :src="getImageUrl(formData.imageUrl)" class="avatar" />
             <el-icon v-else class="avatar-uploader-icon"><Plus /></el-icon>
           </el-upload>
         </el-form-item>
@@ -112,6 +112,7 @@
 </template>
 
 <script setup lang="ts">
+import ProtectedImage from '../../../exchange-frontend/src/components/ProtectedImage.vue'
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'

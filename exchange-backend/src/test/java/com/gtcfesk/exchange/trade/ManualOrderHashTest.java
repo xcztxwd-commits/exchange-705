@@ -11,6 +11,9 @@ import org.springframework.test.util.ReflectionTestUtils;
 import static org.junit.jupiter.api.Assertions.*;
 
 class ManualOrderHashTest {
+    @org.junit.jupiter.api.BeforeEach void tenant(){com.gtcfesk.exchange.tenant.TenantContext.open(1L);}
+    @org.junit.jupiter.api.AfterEach void clear(){com.gtcfesk.exchange.tenant.TenantContext.clear();}
+    @Test void tenantIsBoundInHash(){String one=hash(request(),1);com.gtcfesk.exchange.tenant.TenantContext.clear();com.gtcfesk.exchange.tenant.TenantContext.open(2L);assertNotEquals(one,hash(request(),1));}
     final ObjectMapper json=new ObjectMapper();
     final ManualOrderService service=new ManualOrderService(null,json,null,null,null,null,null);
     ManualOrderService.Request request() {

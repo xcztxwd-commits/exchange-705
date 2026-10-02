@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, defineComponent, h, ref, watch, onBeforeUnmount } from 'vue'
-import { getImageUrl } from '../utils/imageUrl'
+import { useProtectedImages } from '../utils/useProtectedImages'
 import { parseDesign, safeStyle, designText, designMotionCss, type DesignNode } from '../utils/activityDesign'
 import {nodeActions,runDesignActions} from '../utils/activityActions'
 const props=defineProps<{ design: string; locale: string; fallback: string; stage: string; amount: number|string; days: number; busy?: boolean; eligible?: boolean; claimed?:boolean; runAction?:(action:string,target?:string)=>Promise<void> }>()
@@ -11,7 +11,9 @@ const pages=computed(()=>{const d=parseDesign(props.design);return (d?.locales[p
 // With no success page, close only after the server-confirmed success stage.
 watch([()=>props.stage,pages],()=>{if(props.stage==='success'&&!pages.value.some(p=>p.id==='success'))emit('action','close')},{immediate:true})
 const page=computed(()=>pages.value.find(p=>p.id===pageId.value)||pages.value[0])
-const source=(url?:string)=>getImageUrl(url)
+const assets=computed(()=>{const urls=new Set<string>();const scan=(nodes:DesignNode[])=>nodes.forEach(n=>{if(n.src)urls.add(n.src);if(n.backgroundSrc)urls.add(n.backgroundSrc);scan(n.children||[])});scan(page.value?.nodes||[]);return [...urls]})
+const {sources}=useProtectedImages(()=>assets.value)
+const source=(url?:string)=>url?sources.value[assets.value.indexOf(url)]||'':''
 const running=ref(false),actionError=ref(''),localClaimed=ref(false)
 let alive=true
 onBeforeUnmount(()=>{alive=false})

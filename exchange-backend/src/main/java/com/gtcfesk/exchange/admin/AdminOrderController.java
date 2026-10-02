@@ -38,7 +38,9 @@ public class AdminOrderController {
     private final UserAccountRepository userAccountRepository;
     private final AssetAccountRepository assetAccountRepository;
     private final JwtUtil jwtUtil;
+    @org.springframework.beans.factory.annotation.Autowired private ControlledExitService controlledExits;
     
+    private ControlledExitService.Input exitInput(Map<String,Object> req){ControlledExitService.Input input=new ControlledExitService.Input();if(req!=null){input.requestId=java.util.Objects.toString(req.get("requestId"),null);input.reason=java.util.Objects.toString(req.get("reason"),null);}return input;}
     /**
      * 从JWT中提取代理ID
      */
@@ -64,7 +66,7 @@ public class AdminOrderController {
         Long agent = extractAgentId(authHeader);
         if (agent == null && params.get("filterAgentId") != null && !params.get("filterAgentId").toString().isEmpty())
             agent = Long.valueOf(params.get("filterAgentId").toString());
-        final Set<Long> owners = agent == null ? null : userAccountRepository.findByParentUserId(agent).stream()
+        final Set<Long> owners = agent == null ? null : userAccountRepository.findByTenantIdAndParentUserId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), agent).stream()
                 .map(UserAccount::getId).collect(Collectors.toSet());
         String deletion = String.valueOf(params.getOrDefault("deletion", ""));
         if (!java.util.Arrays.asList("", "active", "deleted").contains(deletion)) throw new BusinessException("删除状态无效");
@@ -79,9 +81,13 @@ public class AdminOrderController {
             if (email != null && !email.toString().trim().isEmpty()) {
                 javax.persistence.criteria.Subquery<Long> users = query.subquery(Long.class);
                 javax.persistence.criteria.Root<UserAccount> user = users.from(UserAccount.class);
-                users.select(user.get("id")).where(cb.equal(user.get("email"), email.toString().trim()));
+                users.select(user.get("id")).where(cb.equal(user.get("tenantId"), com.gtcfesk.exchange.tenant.TenantContext.requireTenantId()), cb.equal(cb.lower(user.get("email")), email.toString().trim().toLowerCase(java.util.Locale.ROOT)));
                 filters.add(root.get("userId").in(users));
             }
+            Object binding=params.get("binding");
+            if("unbound".equals(binding))filters.add(cb.isNull(root.get("userId")));
+            else if("bound".equals(binding))filters.add(cb.isNotNull(root.get("userId")));
+            else if(binding!=null && !binding.toString().isEmpty())throw new BusinessException("绑定状态无效");
             if (deletion.equals("active")) filters.add(cb.isNull(root.get("deletedAt")));
             if (deletion.equals("deleted")) filters.add(cb.isNotNull(root.get("deletedAt")));
             return cb.and(filters.toArray(new javax.persistence.criteria.Predicate[0]));
@@ -94,12 +100,12 @@ public class AdminOrderController {
             @RequestHeader(value = "Authorization", required = false) String authHeader) {
         int page = Math.max(0, Integer.parseInt(params.getOrDefault("page", 0).toString()));
         int size = Math.max(1, Math.min(100, Integer.parseInt(params.getOrDefault("size", 20).toString())));
-        Page<ContractOrder> orders = contractOrderRepository.findAll(orderFilter(params, authHeader),
+        Page<ContractOrder> orders = contractOrderRepository.findAllByTenantId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), orderFilter(params, authHeader),
                 PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt", "id")));
         List<Map<String, Object>> list = orders.getContent().stream().map(order -> {
             fillAgentInfo(order);
             Map<String, Object> item = convertContractOrderToMap(order);
-            userAccountRepository.findById(order.getUserId()).ifPresent(user -> item.put("userRemark", user.getRemark()));
+            AdminUserIdentity.put(item, order.getUserId() == null ? null : userAccountRepository.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), order.getUserId()).orElse(null));
             return item;
         }).collect(Collectors.toList());
         Map<String, Object> result = new HashMap<>();
@@ -114,12 +120,12 @@ public class AdminOrderController {
             @RequestHeader(value = "Authorization", required = false) String authHeader) {
         int page = Math.max(0, Integer.parseInt(params.getOrDefault("page", 0).toString()));
         int size = Math.max(1, Math.min(100, Integer.parseInt(params.getOrDefault("size", 20).toString())));
-        Page<OptionOrder> orders = optionOrderRepository.findAll(orderFilter(params, authHeader),
+        Page<OptionOrder> orders = optionOrderRepository.findAllByTenantId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), orderFilter(params, authHeader),
                 PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt", "id")));
         List<Map<String, Object>> list = orders.getContent().stream().map(order -> {
             fillAgentInfo(order);
             Map<String, Object> item = convertOptionOrderToMap(order);
-            userAccountRepository.findById(order.getUserId()).ifPresent(user -> item.put("userRemark", user.getRemark()));
+            AdminUserIdentity.put(item, order.getUserId() == null ? null : userAccountRepository.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), order.getUserId()).orElse(null));
             return item;
         }).collect(Collectors.toList());
         Map<String, Object> result = new HashMap<>();
@@ -143,6 +149,8 @@ public class AdminOrderController {
         map.put("side", order.getSide());
         map.put("type", order.getType());
         map.put("quantity", order.getQuantity());
+        map.put("orderSource", order.getOrderSource());
+        map.put("bindingStatus",order.getUserId()==null?"UNBOUND":"BOUND");
         map.put("quantityUnitType", order.getQuantityUnitType());
         map.put("quantityAsset", order.getQuantityAsset());
         map.put("specVersion", order.getSpecVersion());
@@ -194,13 +202,13 @@ public class AdminOrderController {
             return;
         }
         
-        UserAccount user = userAccountRepository.findById(order.getUserId()).orElse(null);
+        UserAccount user = userAccountRepository.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), order.getUserId()).orElse(null);
         if (user == null) {
             return;
         }
         
         if (user.getParentUserId() != null) {
-            UserAccount agent = userAccountRepository.findById(user.getParentUserId()).orElse(null);
+            UserAccount agent = userAccountRepository.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), user.getParentUserId()).orElse(null);
             if (agent != null) {
                 String agentName = agent.getNickname();
                 if (agentName == null || agentName.isEmpty()) {
@@ -219,13 +227,13 @@ public class AdminOrderController {
             return;
         }
         
-        UserAccount user = userAccountRepository.findById(order.getUserId()).orElse(null);
+        UserAccount user = userAccountRepository.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), order.getUserId()).orElse(null);
         if (user == null) {
             return;
         }
         
         if (user.getParentUserId() != null) {
-            UserAccount agent = userAccountRepository.findById(user.getParentUserId()).orElse(null);
+            UserAccount agent = userAccountRepository.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), user.getParentUserId()).orElse(null);
             if (agent != null) {
                 String agentName = agent.getNickname();
                 if (agentName == null || agentName.isEmpty()) {
@@ -245,7 +253,7 @@ public class AdminOrderController {
             @PathVariable Long orderId,
             @RequestBody(required = false) Map<String, Object> req) {
         try {
-            ContractOrder order = contractOrderService.adminCloseOrder(orderId, null);
+            Map<String,Object> order = controlledExits.execute("contract",orderId,"close",exitInput(req));
 
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", true);
@@ -275,9 +283,9 @@ public class AdminOrderController {
      */
     @PostMapping("/contract/{orderId}/cancel")
     @com.gtcfesk.exchange.config.AdminPermission(menu = "orders", action = "cancel_order")
-    public ResponseEntity<?> adminCancelOrder(@PathVariable Long orderId) {
+    public ResponseEntity<?> adminCancelOrder(@PathVariable Long orderId,@RequestBody Map<String,Object> req) {
         try {
-            ContractOrder order = contractOrderService.adminCancelOrder(orderId);
+            Map<String,Object> order = controlledExits.execute("contract",orderId,"cancel",exitInput(req));
 
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", true);
@@ -320,7 +328,7 @@ public class AdminOrderController {
                 return ResponseEntity.badRequest().body(resp);
             }
 
-            OptionOrder order = optionOrderRepository.findById(orderId)
+            OptionOrder order = optionOrderRepository.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), orderId)
                     .orElseThrow(() -> new BusinessException("订单不存在"));
 
             if (!"TRADING".equals(order.getStatus())) {
@@ -363,7 +371,7 @@ public class AdminOrderController {
     @com.gtcfesk.exchange.config.AdminPermission(menu = "orders", action = "clear_preset")
     public ResponseEntity<?> clearPresetProfitType(@PathVariable Long orderId) {
         try {
-            OptionOrder order = optionOrderRepository.findById(orderId)
+            OptionOrder order = optionOrderRepository.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), orderId)
                     .orElseThrow(() -> new BusinessException("订单不存在"));
 
             order.setPresetProfitType(null);
@@ -396,7 +404,7 @@ public class AdminOrderController {
     @org.springframework.transaction.annotation.Transactional
     @com.gtcfesk.exchange.config.AdminPermission(menu = "orders", action = "delete_order")
     public ResponseEntity<?> softDeleteContractOrder(@PathVariable Long orderId, org.springframework.security.core.Authentication auth) {
-        ContractOrder order = contractOrderRepository.findById(orderId).orElseThrow(() -> new BusinessException("订单不存在"));
+        ContractOrder order = contractOrderRepository.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), orderId).orElseThrow(() -> new BusinessException("订单不存在"));
         if (!order.isDeleted()) {
             if (!java.util.Arrays.asList("CLOSED", "CANCELLED").contains(order.getStatus()))
                 throw new BusinessException("请先平仓或撤单，再删除订单；删除不会结算或退还资金");
@@ -411,7 +419,7 @@ public class AdminOrderController {
     @org.springframework.transaction.annotation.Transactional
     @com.gtcfesk.exchange.config.AdminPermission(menu = "orders", action = "restore_order")
     public ResponseEntity<?> restoreContractOrder(@PathVariable Long orderId) {
-        ContractOrder order = contractOrderRepository.findById(orderId).orElseThrow(() -> new BusinessException("订单不存在"));
+        ContractOrder order = contractOrderRepository.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), orderId).orElseThrow(() -> new BusinessException("订单不存在"));
         if (order.isDeleted()) {
             // Update metadata only: do not invoke settlement-related entity callbacks.
             if (contractOrderRepository.updateDeletion(orderId, order.getRowVersion(), null, null) != 1)
@@ -424,7 +432,7 @@ public class AdminOrderController {
     @org.springframework.transaction.annotation.Transactional
     @com.gtcfesk.exchange.config.AdminPermission(menu = "orders", action = "delete_order")
     public ResponseEntity<?> softDeleteOptionOrder(@PathVariable Long orderId, org.springframework.security.core.Authentication auth) {
-        OptionOrder order = optionOrderRepository.findById(orderId).orElseThrow(() -> new BusinessException("订单不存在"));
+        OptionOrder order = optionOrderRepository.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), orderId).orElseThrow(() -> new BusinessException("订单不存在"));
         if (!order.isDeleted()) {
             if (!java.util.Arrays.asList("CLOSED", "CANCELLED").contains(order.getStatus()))
                 throw new BusinessException("请先平仓或撤单，再删除订单；删除不会结算或退还资金");
@@ -439,7 +447,7 @@ public class AdminOrderController {
     @org.springframework.transaction.annotation.Transactional
     @com.gtcfesk.exchange.config.AdminPermission(menu = "orders", action = "restore_order")
     public ResponseEntity<?> restoreOptionOrder(@PathVariable Long orderId) {
-        OptionOrder order = optionOrderRepository.findById(orderId).orElseThrow(() -> new BusinessException("订单不存在"));
+        OptionOrder order = optionOrderRepository.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), orderId).orElseThrow(() -> new BusinessException("订单不存在"));
         if (order.isDeleted()) {
             // Update metadata only: do not invoke settlement-related entity callbacks.
             if (optionOrderRepository.updateDeletion(orderId, order.getRowVersion(), null, null) != 1)

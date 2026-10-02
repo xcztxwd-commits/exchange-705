@@ -1,6 +1,7 @@
 package com.gtcfesk.exchange.activity;
 import com.fasterxml.jackson.databind.*;
 import com.gtcfesk.exchange.common.BusinessException;
+import com.gtcfesk.exchange.tenant.TenantContext;
 import java.util.*;
 
 /** Structured templates only: no executable HTML, scripts, arbitrary attributes or CSS URLs. */
@@ -67,6 +68,9 @@ public final class ActivityDesignValidator {
  }
  private static void image(String url){
   if(url.isEmpty())return;
-  if(!url.matches("/(?:api/uploads|uploads|demo-uploads)/images/[a-zA-Z0-9_.-]+")&&!url.matches("https://[a-zA-Z0-9.-]+(?::[0-9]+)?/[^\\s<>\"\\\\]{1,1000}"))throw new IllegalArgumentException("图片须为站内上传素材或HTTPS图片");
+  // Private uploads must use canonical, tenant-checked relative references, never an absolute alias.
+  if(url.startsWith("https://") && java.net.URI.create(url).getPath().contains("/uploads/"))throw new IllegalArgumentException("私有上传图片须使用当前租户的相对路径");
+  String tenant=String.valueOf(TenantContext.requireTenantId());
+  if(!url.matches("/api/uploads/images/"+tenant+"/staff/(?:agent-)?-?[0-9]{1,19}/[a-zA-Z0-9_.-]+")&&!url.matches("https://[a-zA-Z0-9.-]+(?::[0-9]+)?/[^\\s<>\"\\\\]{1,1000}"))throw new IllegalArgumentException("图片须为当前租户上传素材或HTTPS图片");
  }
 }

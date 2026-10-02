@@ -14,7 +14,7 @@ export interface Conversation {
 }
 export interface ChatMessage {
   id: number
-  sender: 'USER' | 'ADMIN' | 'SYSTEM'
+  sender: 'USER' | 'ADMIN' | 'CONTROL' | 'SYSTEM'
   senderId: number
   text: string
   image: boolean

@@ -7,7 +7,7 @@ import java.util.*;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
-class ContractConversionTest {
+class ContractConversionTest extends TenantMarketTestContext {
     static Map<String,Object> quote(double price,long age) {
         Map<String,Object> q=new HashMap<>();q.put("price",price);q.put("timestamp",System.currentTimeMillis()-age);q.put("fetchedAt",System.currentTimeMillis());q.put("sourceAvailable",true);return q;
     }

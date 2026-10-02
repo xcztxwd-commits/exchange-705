@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ProtectedImage from '../../../exchange-frontend/src/components/ProtectedImage.vue'
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import Tabbar from '@/components/Tabbar.vue'
@@ -880,7 +881,7 @@ const logoUrl = `${import.meta.env.BASE_URL}img/logo.svg`
           >
           <div class="market-top">
             <div class="market-icons">
-              <img 
+              <ProtectedImage
                 v-if="s.iconUrl" 
                 class="symbol-icon" 
                 :src="getIconUrl(s.iconUrl)" 
@@ -922,7 +923,7 @@ const logoUrl = `${import.meta.env.BASE_URL}img/logo.svg`
           :key="q.label"
           @click="handleQuickItemClick(q.label)"
         >
-          <img :src="q.icon" class="quick-icon" :alt="q.label" />
+          <ProtectedImage :src="q.icon" class="quick-icon" :alt="q.label" />
           <div class="quick-label">{{ q.label }}</div>
         </div>
       </div> 
@@ -946,7 +947,7 @@ const logoUrl = `${import.meta.env.BASE_URL}img/logo.svg`
       <div class="symbol-list" v-if="categorySymbols.length > 0">
         <div class="symbol-item" v-for="s in categorySymbols" :key="s.id" @click="goToTrade(s)">
           <div class="symbol-icons">
-            <img 
+            <ProtectedImage
               v-if="s.iconUrl" 
               class="symbol-icon" 
               :src="getIconUrl(s.iconUrl)" 

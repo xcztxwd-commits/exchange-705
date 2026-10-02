@@ -6,6 +6,7 @@ import com.gtcfesk.exchange.common.KycRequiredException;
 import com.gtcfesk.exchange.config.TradeKycGate;
 import com.gtcfesk.exchange.entity.KycRecord;
 import com.gtcfesk.exchange.repository.*;
+import com.gtcfesk.exchange.tenant.TenantContext;
 import com.gtcfesk.exchange.user.KycIdentityService;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
@@ -23,19 +24,20 @@ class TradeKycSwitchTest {
         ReflectionTestUtils.setField(identity, "configs", configs);
         TrialAccountRepository trials = mock(TrialAccountRepository.class);
         TrialAccount trial = new TrialAccount(); trial.setAvailable(new java.math.BigDecimal("1000"));
-        when(trials.findById(7L)).thenReturn(Optional.of(trial));
+        when(trials.findByTenantIdAndId(1L, 7L)).thenReturn(Optional.of(trial));
         TrialFunds funds = new TrialFunds(trials, mock(TrialLedgerRepository.class),
                 mock(UserAccountRepository.class), mock(AssetAccountRepository.class), identity);
-            when(records.findFirstByUserIdOrderByCreatedAtDesc(7L)).thenReturn(Optional.empty());
+        try (TenantContext.Scope ignored = TenantContext.open(1L)) {
+            when(records.findFirstByTenantIdAndUserIdOrderByCreatedAtDesc(1L, 7L)).thenReturn(Optional.empty());
             assertEquals(new java.math.BigDecimal("1000"), funds.available(7L));
             assertTrue(identity.tradingKycRequired());
             assertThrows(KycRequiredException.class, () -> funds.requireTrade(7L));
             for (String status : new String[]{"PENDING", "REJECTED", "APPROVED"}) {
                 KycRecord record = new KycRecord(); record.setStatus(status);
-                when(records.findFirstByUserIdOrderByCreatedAtDesc(7L)).thenReturn(Optional.of(record));
+                when(records.findFirstByTenantIdAndUserIdOrderByCreatedAtDesc(1L, 7L)).thenReturn(Optional.of(record));
                 assertEquals("APPROVED".equals(status), funds.canTrade(7L));
             }
-            when(records.findFirstByUserIdOrderByCreatedAtDesc(7L)).thenReturn(Optional.empty());
+            when(records.findFirstByTenantIdAndUserIdOrderByCreatedAtDesc(1L, 7L)).thenReturn(Optional.empty());
             when(configs.getConfigValue(KycIdentityService.TRADE_KYC_KEY)).thenReturn("false");
             assertTrue(funds.canTrade(7L));
             assertDoesNotThrow(() -> funds.requireTrade(7L));
@@ -44,6 +46,7 @@ class TradeKycSwitchTest {
             when(configs.getConfigValue(KycIdentityService.TRADE_KYC_KEY)).thenReturn("true");
             assertFalse(funds.canTrade(7L));
             assertThrows(KycRequiredException.class, () -> funds.requireTrade(7L));
+        }
     }
 
     @Test void tradingWritesAreGuardedWhileReadsAreNot() {
@@ -61,6 +64,7 @@ class TradeKycSwitchTest {
 
     @Test void invalidSwitchValuesCannotBeSaved() {
         SystemConfigService configs = new SystemConfigService();
+        ReflectionTestUtils.setField(configs, "tenantPolicy", mock(com.gtcfesk.exchange.control.TenantPolicyService.class));
         SystemConfigRepository repository = mock(SystemConfigRepository.class);
         ReflectionTestUtils.setField(configs, "systemConfigRepository", repository);
         for (String value : new String[]{null, "", "0", "TRUE", "invalid"}) {
@@ -68,9 +72,11 @@ class TradeKycSwitchTest {
                     () -> configs.saveConfig(KycIdentityService.TRADE_KYC_KEY, value, "未实名不可交易"));
         }
         verifyNoInteractions(repository);
-            when(repository.findByConfigKey(KycIdentityService.TRADE_KYC_KEY)).thenReturn(Optional.empty());
+        try (TenantContext.Scope ignored = TenantContext.open(1L)) {
+            when(repository.findByTenantIdAndConfigKey(1L, KycIdentityService.TRADE_KYC_KEY)).thenReturn(Optional.empty());
             configs.saveConfig(KycIdentityService.TRADE_KYC_KEY, "true", "未实名不可交易");
             configs.saveConfig(KycIdentityService.TRADE_KYC_KEY, "false", "未实名不可交易");
             verify(repository, times(2)).save(any(com.gtcfesk.exchange.entity.SystemConfig.class));
+        }
     }
 }

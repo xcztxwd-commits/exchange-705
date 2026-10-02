@@ -17,6 +17,8 @@ const recipients = ref<Recipient[]>([]),
   busy = ref(false),
   enabled = ref(false),
   error = ref('')
+const historyEmail = ref('')
+function searchHistory() { page.value = 0; void load() }
 const recipientQuery = ref(''), matches = ref<Recipient[]>([]), searching = ref(false), searchError = ref('')
 let searchTimer: ReturnType<typeof setTimeout> | undefined, searchVersion = 0
 watch(recipientQuery, (value) => {
@@ -53,7 +55,7 @@ async function load() {
   try {
     const config: any = await request.get('/user/support/config')
     enabled.value = config.inboxEnabled
-    const data: any = await request.get('/admin/support/inbox', { params: { page: page.value } })
+    const data: any = await request.get('/admin/support/inbox', { params: { page: page.value, userEmail: historyEmail.value.trim() || undefined } })
     rows.value = data
     error.value = ''
   } catch (e: any) {
@@ -163,8 +165,8 @@ function changePage(delta: number) {
             <strong>发送记录</strong
             ><el-button v-permission="'inbox:view'" size="small" @click="load">刷新</el-button>
           </div></template
-        ><AccountTypeFilter v-model="accountModes" @change="page=0;load()" /><admin-table :row-key="(row: any) => `${row.accountMode || 'REAL'}:${row.id ?? row.userId}:${row.type || ''}`" table-key="InboxManagement.1" :data="rows" style="width: 100%"
-          ><el-table-column prop="accountModeLabel" label="账户类型" width="110" /><el-table-column prop="userId" label="收件用户" width="100" /><el-table-column
+        ><el-form inline @submit.prevent="searchHistory"><el-form-item label="用户邮箱"><el-input v-model="historyEmail" clearable maxlength="254" placeholder="用户邮箱" @clear="searchHistory" /></el-form-item><el-button v-permission="'inbox:view'" native-type="submit">搜索</el-button></el-form><AccountTypeFilter v-model="accountModes" @change="page=0;load()" /><admin-table :row-key="(row: any) => `${row.accountMode || 'REAL'}:${row.id ?? row.userId}:${row.type || ''}`" table-key="InboxManagement.1" :data="rows" style="width: 100%"
+          ><el-table-column prop="accountModeLabel" label="账户类型" width="110" /><el-table-column prop="userId" label="收件用户" width="100" /><el-table-column prop="userEmail" label="用户邮箱" min-width="200" show-overflow-tooltip /><el-table-column prop="userRemark" label="用户备注" min-width="150" show-overflow-tooltip><template #default="{ row }">{{ row.userRemark || '-' }}</template></el-table-column><el-table-column
             prop="title"
             label="标题"
             min-width="150"

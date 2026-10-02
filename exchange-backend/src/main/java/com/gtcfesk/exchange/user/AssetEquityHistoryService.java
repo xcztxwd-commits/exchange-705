@@ -43,7 +43,7 @@ public class AssetEquityHistoryService {
                 through=Math.max(through,b.end);
             }
             if(through<asOf)missing.add(gap(through,asOf,"NO_OBSERVATION"));result.put("missingIntervals",missing);
-            List<String> zones=db.query("select config_value from system_config where config_key='system.timezone'",(rs,n)->rs.getString(1));
+            List<String> zones=db.query("select config_value from system_config where tenant_id="+com.gtcfesk.exchange.tenant.TenantContext.requireTenantId()+" and config_key='system.timezone'",(rs,n)->rs.getString(1));
             ZoneId zone;try{zone=ZoneId.of(zones.isEmpty()?"Europe/London":zones.get(0));}catch(RuntimeException e){zone=ZoneId.of("Europe/London");}
             long incomeFrom=AssetHistoryService.periodStart(range,Instant.ofEpochMilli(asOf),zone);
             BigDecimal income=new AssetHistoryService(db).income(user,incomeFrom,asOf);
@@ -57,15 +57,15 @@ public class AssetEquityHistoryService {
     }
     /** Display seed only. Never merge this into OHLC, sample counts, income or missing metadata. */
     Map<String,Object> carryIn(JdbcTemplate db,long user,long from){
-        List<Map<String,Object>> rows=db.query("select coalesce(effective_at,observed_at),net_equity from asset_history_1m where user_id=? and basis_version=? and bucket_start<=? and coalesce(effective_at,observed_at)<? and net_equity is not null order by bucket_start desc limit 1",
+        List<Map<String,Object>> rows=db.query("select coalesce(effective_at,observed_at),net_equity from asset_history_1m where tenant_id="+com.gtcfesk.exchange.tenant.TenantContext.requireTenantId()+" and user_id=? and basis_version=? and bucket_start<=? and coalesce(effective_at,observed_at)<? and net_equity is not null order by bucket_start desc limit 1",
                 (rs,n)->extreme(rs.getLong(1),rs.getBigDecimal(2)),user,EquityValuationService.BASIS,AssetHistoryBucket.floor(from,60000),from);
         return rows.isEmpty()?null:rows.get(0);
     }
     Map<String,Object> opening(JdbcTemplate db,long user,long start,long now){
-        List<Map<String,Object>> found=db.query("select net_equity,coalesce(effective_at,observed_at) from asset_history_1m where user_id=? and basis_version=? and bucket_start>=? and bucket_start<=? and coalesce(effective_at,observed_at)<=? order by bucket_start desc limit 1",
+        List<Map<String,Object>> found=db.query("select net_equity,coalesce(effective_at,observed_at) from asset_history_1m where tenant_id="+com.gtcfesk.exchange.tenant.TenantContext.requireTenantId()+" and user_id=? and basis_version=? and bucket_start>=? and bucket_start<=? and coalesce(effective_at,observed_at)<=? order by bucket_start desc limit 1",
                 (rs,n)->extreme(rs.getLong(2),rs.getBigDecimal(1)),user,EquityValuationService.BASIS,AssetHistoryBucket.floor(start-120000,60000),AssetHistoryBucket.floor(start,60000),Math.min(start,now));
         if(!found.isEmpty() && found.get(0)!=null && new BigDecimal(found.get(0).get("value").toString()).signum()>0){found.get(0).put("source","PERIOD_OPENING");return found.get(0);}
-        found=db.query("select first_positive,first_positive_at from asset_history_baseline where user_id=? and basis_version=? and first_positive>0 and first_positive_at<=?",
+        found=db.query("select first_positive,first_positive_at from asset_history_baseline where tenant_id="+com.gtcfesk.exchange.tenant.TenantContext.requireTenantId()+" and user_id=? and basis_version=? and first_positive>0 and first_positive_at<=?",
                 (rs,n)->extreme(rs.getLong(2),rs.getBigDecimal(1)),user,EquityValuationService.BASIS,now);
         if(found.isEmpty())return null;found.get(0).put("source","EARLIEST_POSITIVE_NET_EQUITY");return found.get(0);
     }

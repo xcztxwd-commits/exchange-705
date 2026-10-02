@@ -10,7 +10,7 @@ import java.util.*;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
-class YahooQuoteStreamTest {
+class YahooQuoteStreamTest extends TenantMarketTestContext {
     ForexQuoteMarketService market;
     PersistentPriceControl controls;
     YahooQuoteStream stream;
@@ -22,7 +22,7 @@ class YahooQuoteStreamTest {
         TradingSymbol index = new TradingSymbol(); index.setId(3L); index.setSymbol("^GSPC"); index.setCategory("CFD"); index.setSourceCategory("CFD"); index.setMarketSource(MarketInstrumentCatalog.inferredSource("CFD"));
         TradingSymbol oil = new TradingSymbol(); oil.setId(4L); oil.setSymbol("CL=F"); oil.setCategory("Oil"); oil.setSourceCategory("Oil"); oil.setMarketSource(MarketInstrumentCatalog.inferredSource("Oil"));
         TradingSymbolRepository repository = mock(TradingSymbolRepository.class);
-        when(repository.findAll()).thenReturn(Arrays.asList(symbol, stock, index, oil));
+        when(repository.findAllByTenantId(1L)).thenReturn(Arrays.asList(symbol, stock, index, oil));
         ReflectionTestUtils.setField(market, "symbols", repository);
         ReflectionTestUtils.setField(market, "redis", mock(RedisMarketService.class));
         ReflectionTestUtils.setField(market, "controls", controls);

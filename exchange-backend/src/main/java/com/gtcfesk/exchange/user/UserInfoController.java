@@ -23,16 +23,17 @@ public class UserInfoController {
 
     private final UserAccountRepository userAccountRepository;
     private final AssetAccountRepository assetAccountRepository;
+    @org.springframework.beans.factory.annotation.Autowired(required=false) private com.gtcfesk.exchange.activity.TrialFunds trialFunds;
 
     @GetMapping("/{userId}/info")
     public ResponseEntity<?> getUserInfo(@PathVariable Long userId, org.springframework.security.core.Authentication auth) {
         if (!userId.toString().equals(auth.getName())) {
             throw new org.springframework.security.access.AccessDeniedException("无权访问该用户信息");
         }
-        UserAccount user = userAccountRepository.findById(userId)
+        UserAccount user = userAccountRepository.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), userId)
                 .orElseThrow(() -> new IllegalArgumentException("用户不存在"));
 
-        List<AssetAccount> assets = assetAccountRepository.findByUserId(userId);
+        List<AssetAccount> assets = assetAccountRepository.findByTenantIdAndUserId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), userId);
         BigDecimal fund = BigDecimal.ZERO;
         BigDecimal contract = BigDecimal.ZERO;
         BigDecimal option = BigDecimal.ZERO;
@@ -64,6 +65,7 @@ public class UserInfoController {
         resp.put("fundBalance", fund);
         resp.put("contractBalance", contract);
         resp.put("optionBalance", option);
+        if(trialFunds!=null)resp.putAll(trialFunds.status(userId));
 
         return ResponseEntity.ok(resp);
     }
@@ -86,7 +88,7 @@ public class UserInfoController {
             }
             
             Long userId = Long.parseLong(auth.getName());
-            List<AssetAccount> assets = assetAccountRepository.findByUserId(userId);
+            List<AssetAccount> assets = assetAccountRepository.findByTenantIdAndUserId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), userId);
             
             BigDecimal fundBalance = BigDecimal.ZERO;
             BigDecimal fundFrozen = BigDecimal.ZERO;
@@ -126,6 +128,7 @@ public class UserInfoController {
             resp.put("contractFrozen", contractFrozen);
             resp.put("optionBalance", optionBalance);
             resp.put("optionFrozen", optionFrozen);
+            if(trialFunds!=null)resp.putAll(trialFunds.status(userId));
             
             return ResponseEntity.ok(resp);
         } catch (Exception e) {

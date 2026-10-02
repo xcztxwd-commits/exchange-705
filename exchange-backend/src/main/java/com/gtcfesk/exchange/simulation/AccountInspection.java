@@ -12,7 +12,7 @@ public class AccountInspection {
     private final JdbcTemplate jdbc;
     static final Map<String,String[]> TYPES = new LinkedHashMap<>();
     static {
-        TYPES.put("users", new String[]{"user_account","users","id,email,nickname,status,kyc_status,created_at","id"});
+        TYPES.put("users", new String[]{"user_account","users","id,email,remark,nickname,status,kyc_status,created_at","id"});
         TYPES.put("wallets", new String[]{"asset_account","users","id,user_id,coin,available,frozen,updated_at","user_id"});
         TYPES.put("contracts", new String[]{"contract_order","orders","id,user_id,symbol,side,type,quantity,open_price,close_price,status,profit,margin,fee,created_at","user_id"});
         TYPES.put("options", new String[]{"option_order","orders","id,user_id,symbol,direction,amount,open_price,close_price,status,profit,duration,created_at","user_id"});
@@ -30,17 +30,27 @@ public class AccountInspection {
     }
     @Transactional(readOnly=true)
     public Map<String,Object> read(String kind, Long userId, String status, int page, int size) {
+        return read(kind,userId,null,status,page,size);
+    }
+    @Transactional(readOnly=true)
+    public Map<String,Object> read(String kind, Long userId, String userEmail, String status, int page, int size) {
         String[] spec=type(kind);
         if(page<1 || page>100000 || size<1 || size>100 || (userId!=null && userId<=0)) throw new IllegalArgumentException("筛选参数无效");
-        String where=" WHERE 1=1"; List<Object> args=new ArrayList<>();
-        if(userId!=null){where+=" AND "+spec[3]+"=?";args.add(userId);}
+        boolean users = "users".equals(kind);
+        String from = spec[0]+" x"+(users ? "" : " LEFT JOIN user_account u ON u.tenant_id=x.tenant_id AND u.id=x."+spec[3]);
+        String where=" WHERE x.tenant_id=?"; List<Object> args=new ArrayList<>(); args.add(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId());
+        String emailPattern=com.gtcfesk.exchange.admin.AdminUserIdentity.emailPattern(userEmail);
+        if(emailPattern!=null){where+=" AND LOWER("+(users?"x":"u")+".email) LIKE ? ESCAPE '!'";args.add(emailPattern);}
+        if(userId!=null){where+=" AND x."+spec[3]+"=?";args.add(userId);}
         if(status!=null && !status.isEmpty()) {
             if(!Arrays.asList(spec[2].split(",")).contains("status") || status.length()>32) throw new IllegalArgumentException("此分类不支持该状态筛选");
-            where+=" AND status=?";args.add(status);
+            where+=" AND x.status=?";args.add(status);
         }
-        Long total=jdbc.queryForObject("SELECT COUNT(*) FROM "+spec[0]+where,Long.class,args.toArray());
+        Long total=jdbc.queryForObject("SELECT COUNT(*) FROM "+from+where,Long.class,args.toArray());
         args.add(size);args.add((page-1)*size);
-        List<Map<String,Object>> rows=jdbc.queryForList("SELECT "+spec[2]+" FROM "+spec[0]+where+" ORDER BY id DESC LIMIT ? OFFSET ?",args.toArray());
-        Map<String,Object> out=new LinkedHashMap<>();out.put("rows",rows);out.put("total",total);out.put("columns",spec[2].split(","));out.put("page",page);out.put("size",size);return out;
+        String select="x."+spec[2].replace(",",",x.");
+        if(!users)select+=",u.email AS user_email,u.remark AS user_remark";
+        List<Map<String,Object>> rows=jdbc.queryForList("SELECT "+select+" FROM "+from+where+" ORDER BY x.id DESC LIMIT ? OFFSET ?",args.toArray());
+        Map<String,Object> out=new LinkedHashMap<>();out.put("rows",rows);out.put("total",total);out.put("columns",(spec[2]+(users?"":",user_email,user_remark")).split(","));out.put("page",page);out.put("size",size);return out;
     }
 }

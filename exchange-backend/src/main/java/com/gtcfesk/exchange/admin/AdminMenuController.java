@@ -23,7 +23,7 @@ public class AdminMenuController {
     public Map<String,Object> roleChoices() {
         permissions.require("admin_list", "");
         List<Map<String,Object>> choices = new java.util.ArrayList<>();
-        for (com.gtcfesk.exchange.entity.AdminRole role : roles.findAll()) {
+        for (com.gtcfesk.exchange.entity.AdminRole role : roles.findAllByTenantId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId())) {
             if (!"active".equals(role.getStatus()) || (!permissions.isSuper() && Boolean.TRUE.equals(role.getIsSuper()))) continue;
             Map<String,Object> row = new HashMap<>(); row.put("roleCode", role.getRoleCode()); row.put("roleName", role.getRoleName()); choices.add(row);
         }

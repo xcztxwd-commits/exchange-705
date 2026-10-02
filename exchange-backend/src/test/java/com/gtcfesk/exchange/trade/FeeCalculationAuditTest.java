@@ -15,6 +15,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 /** Offline legacy-model characterization. Standard FX policy is tested in FxStandardContractTest. */
+@org.junit.jupiter.api.extension.ExtendWith(CalculationTenantExtension.class)
 class FeeCalculationAuditTest {
     static BigDecimal d(String value) { return new BigDecimal(value); }
     static void same(BigDecimal expected, BigDecimal actual) {
@@ -30,22 +31,24 @@ class FeeCalculationAuditTest {
         final TradingSymbol symbol = new TradingSymbol();
         final BigDecimal initial = d("1000000000");
         final ContractOrderService service;
+        final com.gtcfesk.exchange.control.TenantPolicyService tenantPolicy = mock(com.gtcfesk.exchange.control.TenantPolicyService.class);
         Fixture(String name, String base, String quote, String price, String rate) {
             symbol.setSymbol(name); symbol.setBaseCurrency(base); symbol.setQuoteCurrency(quote);
             symbol.setCategory("Forex"); symbol.setMarketSource("yahoo"); symbol.setSourceCategory("US");
             symbol.setMaxLeverage(d("100")); symbol.setVolumePrecision(2); symbol.setMinTradeAmount(d("0.01"));
             account.setUserId(1L); account.setCoin("CONTRACT"); account.setAvailable(initial); account.setFrozen(BigDecimal.ZERO);
             when(categories.leverageEnabled("Forex")).thenReturn(true);
-            when(symbols.findBySymbol(name)).thenReturn(Optional.of(symbol));
-            when(accounts.findByUserIdAndCoin(1L, "CONTRACT")).thenReturn(Optional.of(account));
+            when(symbols.findByTenantIdAndSymbol(1L, name)).thenReturn(Optional.of(symbol));
+            when(accounts.findByTenantIdAndUserIdAndCoin(1L, 1L, "CONTRACT")).thenReturn(Optional.of(account));
             when(quotes.freshPrice(name)).thenReturn(d(price));
             when(quotes.requireContractConversionRate(quote, "yahoo")).thenReturn(d(rate));
             when(orders.save(any(ContractOrder.class))).thenAnswer(call -> {
                 ContractOrder order = call.getArgument(0); order.setId(1L);
-                when(orders.findById(1L)).thenReturn(Optional.of(order)); return order;
+                when(orders.findByTenantIdAndId(1L, 1L)).thenReturn(Optional.of(order)); return order;
             });
             service = new ContractOrderService(mock(com.gtcfesk.exchange.user.KycIdentityService.class), orders, accounts, symbols, quotes,
                     mock(PlatformTransactionManager.class), categories);
+            org.springframework.test.util.ReflectionTestUtils.setField(service, "tenantPolicy", tenantPolicy);
         }
         CreateContractOrderRequest request(String quantity, String leverage, String side, String type) {
             CreateContractOrderRequest request = new CreateContractOrderRequest();

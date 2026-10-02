@@ -65,6 +65,7 @@ public class ContractOrderController {
             }
             
             Long userId = Long.parseLong(auth.getName());
+            com.gtcfesk.exchange.common.OrderRequest.required(req==null?null:req.getRequestId());
             ContractOrder order = contractOrderService.createOrder(userId, req);
             
             Map<String, Object> resp = new HashMap<>();

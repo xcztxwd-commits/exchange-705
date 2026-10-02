@@ -18,6 +18,10 @@ import java.util.stream.Collectors;
 
 @Service
 public class AgentMenuService {
+    @Autowired private com.gtcfesk.exchange.repository.UserAccountRepository scopedUsers;
+    @Autowired private AdminPermissionService scopedPermissions;
+    private void auditControl(String action,String object,String detail,String reason){if(com.gtcfesk.exchange.control.ControlIdentity.isAccess())controlAudit.recordCurrent(action,object,detail,reason); }
+    @org.springframework.beans.factory.annotation.Autowired private com.gtcfesk.exchange.control.ControlAuditService controlAudit;
 
     @Autowired
     private UserMenuRepository userMenuRepository;
@@ -32,7 +36,7 @@ public class AgentMenuService {
      * 获取代理的菜单权限
      */
     public List<AdminMenu> getAgentMenus(Long agentId) {
-        List<UserMenu> userMenus = userMenuRepository.findByUserId(agentId);
+        List<UserMenu> userMenus = userMenuRepository.findByTenantIdAndUserId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), agentId);
         List<Long> menuIds = userMenus.stream()
                 .map(UserMenu::getMenuId)
                 .collect(Collectors.toList());
@@ -100,8 +104,11 @@ public class AgentMenuService {
      */
     @Transactional
     public void assignMenus(Long agentId, List<Long> menuIds) {
+        if(!scopedUsers.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(),agentId).map(u->"agent".equals(u.getUserType())).orElse(false))throw new IllegalArgumentException("代理不存在");
+        scopedPermissions.require("agents","assign_permission");if(menuIds==null)throw new IllegalArgumentException("menuIds 不能为空");scopedPermissions.validateGrant(menuIds);
+        auditControl("AGENT_MENU_GRANTS",String.valueOf(agentId),"menuCount="+menuIds.size(),null);
         // 删除现有权限
-        userMenuRepository.deleteByUserId(agentId);
+        userMenuRepository.deleteByTenantIdAndUserId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), agentId);
         
         // 确保删除操作立即生效（刷新到数据库）
         entityManager.flush();
@@ -113,7 +120,7 @@ public class AgentMenuService {
                 // 验证菜单是否存在
                 if (adminMenuRepository.findById(menuId).isPresent()) {
                     // 检查是否已存在（防止重复）
-                    if (!userMenuRepository.existsByUserIdAndMenuId(agentId, menuId)) {
+                    if (!userMenuRepository.existsByTenantIdAndUserIdAndMenuId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), agentId, menuId)) {
                         UserMenu userMenu = new UserMenu();
                         userMenu.setUserId(agentId);
                         userMenu.setMenuId(menuId);
@@ -132,7 +139,7 @@ public class AgentMenuService {
      * 获取代理的菜单ID列表
      */
     public List<Long> getAgentMenuIds(Long agentId) {
-        List<UserMenu> userMenus = userMenuRepository.findByUserId(agentId);
+        List<UserMenu> userMenus = userMenuRepository.findByTenantIdAndUserId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), agentId);
         return userMenus.stream()
                 .map(UserMenu::getMenuId)
                 .collect(Collectors.toList());

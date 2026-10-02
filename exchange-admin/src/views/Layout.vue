@@ -7,10 +7,15 @@ import { ElMessage } from 'element-plus'
 import request from '@/utils/request'
 import { startReadPolling } from '@/utils/readPolling'
 import { access, can, canRoute, loadAccess } from '@/utils/access'
-import { getAudioUrl } from '@/utils/audioUrl'
+import { playProtectedAudio } from '@/utils/audioUrl'
 import AdminSettings from './AdminSettings.vue'
 import AgentSettings from './AgentSettings.vue'
 import SupportNotifications from '@/components/SupportNotifications.vue'
+import OnlineUsers from '@/components/OnlineUsers.vue'
+import BackendAccounts from '@/components/BackendAccounts.vue'
+const backendAccountsVisible=ref(false)
+const backendAccountsLoad=(userEmail?:string)=>request.get('/admin/backend-accounts', {params:{userEmail}})
+const backendAccountsCreate=(body:any)=>request.post('/admin/backend-accounts',body)
 
 
 const router = useRouter()
@@ -19,7 +24,7 @@ const auth = useAuthStore()
 auth.load()
 
 const isCollapse = ref(false)
-const menuItems = computed(() => access.menus.map(m => ({ ...m, title: m.menuName })))
+const menuItems = computed(() => access.menus.filter(m => m.path !== '/inbox' || !access.menus.some(a => a.path === '/announcement')).map(m => ({ ...m, title: ['/announcement', '/inbox'].includes(m.path) ? '消息与公告' : m.menuName })))
 const menuGroups = computed(() => access.groups.map(g => ({ ...g, children: menuItems.value.filter(m => m.parentId === g.id) })).filter(g => g.children.length))
 const loadingMenus = ref(false)
 
@@ -32,7 +37,9 @@ const pendingCounts = ref({
 })
 
 // 在线用户数
-const onlineUserCount = ref(0)
+const onlineUserCount = ref<number | null>(null)
+const onlineVisible = ref(false)
+const loadOnlineUsers = (page: number, size: number, userEmail?: string) => request.get('/admin/users/online', { params: { page, size, userEmail } })
 
 // 提示音配置
 const soundConfig = ref({
@@ -93,6 +100,7 @@ const loadOnlineUserCount = async () => {
       return true
     }
   } catch (e: any) {
+    onlineUserCount.value = null
     console.error('加载在线用户数失败:', e)
   }
   return false
@@ -102,25 +110,10 @@ const loadOnlineUserCount = async () => {
 // 如果设置了提示音URL（不为空），表示开启提示音，会播放
 // 如果未设置提示音URL（为空），表示关闭提示音，不会播放
 const playSound = (soundUrl: string) => {
-  // 未设置提示音URL或为空，表示关闭提示音，不播放
-  if (!soundUrl || soundUrl.trim() === '') {
-    return
-  }
-  try {
-    // 使用工具函数获取完整的音频URL（生产环境需要完整URL）
-    const fullAudioUrl = getAudioUrl(soundUrl)
-    const audio = new Audio(fullAudioUrl)
-    // 设置音量（可选，避免声音过大）
-    audio.volume = 0.7
-    audio.play().catch(err => {
-      // 忽略用户未交互的错误（浏览器安全策略）
-      if (err.name !== 'NotAllowedError') {
-        console.error('播放提示音失败:', err, 'URL:', fullAudioUrl)
-      }
-    })
-  } catch (e) {
-    console.error('播放提示音失败:', e)
-  }
+  if (!soundUrl?.trim()) return
+  void playProtectedAudio(soundUrl).catch(error => {
+    if (error.name !== 'NotAllowedError') console.warn('提示音不可用')
+  })
 }
 
 // 加载提示音配置
@@ -164,14 +157,34 @@ const goToPage = (type: string) => {
 
 const loadMenus = async () => {
   loadingMenus.value = true
-  try { await loadAccess(true) } finally { loadingMenus.value = false }
+  try { await loadAccess() } finally { loadingMenus.value = false }
 }
 let permissionTimer: number | null = null
+let lastInteraction = Date.now(), lastTouch = 0, ending = false
+let accessTimer: number | undefined
+const controlInteraction = () => {
+  if (!auth.isControl) return
+  lastInteraction = Date.now()
+  if (lastInteraction - lastTouch < 30000) return
+  lastTouch = lastInteraction
+  void request.post('/admin/auth/control-activity').catch(() => {})
+}
+const checkControlDeadline = async () => {
+  if (!auth.isControl || ending || (Date.now() - lastInteraction < 15 * 60000 && Date.now() < (auth.accessSession?.expiresAt || 0))) return
+  ending = true
+  try { await request.post('/admin/auth/control-exit') } catch { /* Server also enforces absolute and idle deadlines. */ }
+  auth.logout()
+  void router.replace('/access-ended')
+}
+
 onMounted(() => {
-  loadMenus().catch(() => router.replace('/forbidden'))
+  window.addEventListener('pointerdown', controlInteraction)
+  window.addEventListener('keydown', controlInteraction)
+  accessTimer = window.setInterval(checkControlDeadline, 5000)
+  loadMenus().catch(() => { if (auth.token) void router.replace('/forbidden') })
   permissionTimer = window.setInterval(async () => {
     try { await loadAccess(true) } catch { /* Failed refresh closes access rather than granting defaults. */ }
-    if (!canRoute(route.path)) router.replace(access.menus[0]?.path || '/forbidden')
+    if (auth.token && !canRoute(route.path)) router.replace(access.menus[0]?.path || '/forbidden')
   }, 30000)
   loadSoundConfig()
   pollingActive = true
@@ -180,18 +193,26 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  window.removeEventListener('pointerdown', controlInteraction)
+  window.removeEventListener('keydown', controlInteraction)
+  clearInterval(accessTimer)
   if (permissionTimer !== null) clearInterval(permissionTimer)
   pollingActive = false
   stopPendingPolling?.()
   stopOnlinePolling?.()
 })
 
-const onLogout = () => {
+const onLogout = async () => {
   pollingActive = false
   stopPendingPolling?.()
   stopOnlinePolling?.()
+  const control = auth.isControl
+  if (control) {
+    try { await request.post('/admin/auth/control-exit') }
+    catch (error: any) { ElMessage.error(error.message || '会话撤销未确认，请重试或在总控安全页撤销'); return }
+  }
   auth.logout()
-  router.replace('/login')
+  router.replace(control ? '/access-ended' : '/login')
 }
 
 const toggleCollapse = () => {
@@ -226,7 +247,7 @@ const handleSettingsUpdated = () => {
         <div class="logo-circle">
           <el-icon><DataLine /></el-icon>
         </div>
-        <span v-if="!isCollapse" class="logo-title">Exchange Admin</span>
+        <span v-if="!isCollapse" class="logo-title">{{ auth.accessSession?.tenantName || auth.user?.tenantName || 'Exchange Admin' }}</span>
       </div>
       
       <el-menu
@@ -259,10 +280,11 @@ const handleSettingsUpdated = () => {
         <div class="header-right">
             
           <SupportNotifications admin :enabled="can('support:view')" />
+          <el-button v-permission="'admin_list:view'" v-if="auth.user?.isSuperAdmin && can('admin_list:view')" @click="backendAccountsVisible=true">后台账号</el-button>
           <!-- 在线用户数 -->
-          <div class="online-count-area">
-            <span class="online-text">在线({{ onlineUserCount }})</span>
-          </div>
+          <el-button v-permission="'users:view'" class="online-count-area" :disabled="!can('users:view')" @click="onlineVisible = true">
+            <span class="online-text">在线({{ onlineUserCount ?? '未知' }})</span>
+          </el-button>
           
           <!-- 待处理消息 -->
           <div class="notification-area">
@@ -301,12 +323,12 @@ const handleSettingsUpdated = () => {
           <el-dropdown>
             <div class="user-info">
               <el-icon><User /></el-icon>
-              <span class="username">{{ auth.user?.userType === 'agent' ? (auth.user?.email || auth.user?.account) : (auth.user?.account || 'admin') }}</span>
+              <span class="username">{{ auth.isControl ? '总控管理' : auth.user?.account || 'admin' }}</span>
             </div>
             <template #dropdown>
               <el-dropdown-menu>
                 <el-dropdown-item v-permission="'session:self'"
-                  v-if="auth.user?.userType === 'admin' || auth.user?.isSuperAdmin"
+                  v-if="!auth.isControl && (auth.user?.userType === 'admin' || auth.user?.isSuperAdmin)"
                   @click="openAdminSettings"
                 >
                   <el-icon><Setting /></el-icon>
@@ -329,6 +351,7 @@ const handleSettingsUpdated = () => {
         </div>
       </el-header>
 
+      <el-alert v-if="auth.isControl" :title="`总控管理 / ${auth.accessSession?.tenantName || ''} · 租户 ID ${auth.user?.tenantId} · 具有本租户业务写权限，操作留审计`" type="warning" :closable="false" show-icon />
       <!-- 内容区 -->
       <el-main class="layout-main">
         <router-view />
@@ -336,9 +359,13 @@ const handleSettingsUpdated = () => {
     </el-container>
   </el-container>
 
+  <el-dialog v-model="backendAccountsVisible" title="本租户后台账号" width="min(800px,95vw)" destroy-on-close><BackendAccounts v-if="backendAccountsVisible" :load="backendAccountsLoad" :create="backendAccountsCreate" /></el-dialog>
+  <el-dialog v-model="onlineVisible" title="在线用户明细" width="min(1100px, 95vw)" destroy-on-close>
+    <OnlineUsers v-if="onlineVisible" :load="loadOnlineUsers" />
+  </el-dialog>
   <!-- 管理员设置对话框 -->
   <AdminSettings 
-    v-if="auth.user?.userType === 'admin' || auth.user?.isSuperAdmin"
+    v-if="!auth.isControl && (auth.user?.userType === 'admin' || auth.user?.isSuperAdmin)"
     v-model="adminSettingsVisible"
     @updated="handleSettingsUpdated"
   />

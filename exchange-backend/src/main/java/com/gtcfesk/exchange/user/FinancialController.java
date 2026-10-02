@@ -73,7 +73,7 @@ public class FinancialController {
             Long productId = Long.parseLong(request.get("productId").toString());
             BigDecimal purchaseAmount = new BigDecimal(request.get("purchaseAmount").toString());
             
-            FinancialOrder order = financialService.purchaseProduct(userId, productId, purchaseAmount);
+            FinancialOrder order = financialService.purchaseProduct(userId, productId, purchaseAmount, com.gtcfesk.exchange.common.OrderRequest.required(request.get("requestId")));
             
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", true);

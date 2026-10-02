@@ -5,9 +5,10 @@ import javax.persistence.*;
 import java.time.LocalDateTime;
 
 @Data
+@org.hibernate.annotations.Persister(impl = com.gtcfesk.exchange.tenant.TenantEntityPersister.class)
 @Entity
 @Table(name = "announcement")
-public class Announcement {
+public class Announcement extends com.gtcfesk.exchange.tenant.TenantOwnedEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -32,6 +33,14 @@ public class Announcement {
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
+
+    // User-facing date; never changes the creation audit timestamp or popup countdown.
+    @Column(name = "display_at")
+    private LocalDateTime displayAt;
+
+    public LocalDateTime getDisplayAt() {
+        return displayAt == null ? createdAt : displayAt;
+    }
 
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;

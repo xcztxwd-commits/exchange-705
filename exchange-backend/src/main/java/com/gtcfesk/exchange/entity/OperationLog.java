@@ -8,6 +8,7 @@ import java.time.LocalDateTime;
 
 @Getter
 @Setter
+@org.hibernate.annotations.Persister(impl = com.gtcfesk.exchange.tenant.TenantEntityPersister.class)
 @Entity
 @Table(name = "operation_log", indexes = {
     @Index(name = "idx_admin_id", columnList = "admin_id"),
@@ -15,7 +16,7 @@ import java.time.LocalDateTime;
     @Index(name = "idx_created_at", columnList = "created_at"),
     @Index(name = "idx_target_type_id", columnList = "target_type,target_id")
 })
-public class OperationLog {
+public class OperationLog extends com.gtcfesk.exchange.tenant.TenantOwnedEntity {
     
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

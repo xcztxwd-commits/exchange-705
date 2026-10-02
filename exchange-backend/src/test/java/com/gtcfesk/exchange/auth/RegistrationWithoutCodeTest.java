@@ -12,6 +12,7 @@ import javax.validation.Validation;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+@org.junit.jupiter.api.extension.ExtendWith(com.gtcfesk.exchange.tenant.TenantOneFixture.class)
 class RegistrationWithoutCodeTest {
     @Test void registrationAllowsMissingInvitationAndEmailCodeButRequiresCaptcha() {
         VerifyCodeRepository codes = mock(VerifyCodeRepository.class);
@@ -22,11 +23,15 @@ class RegistrationWithoutCodeTest {
         AuthService service = new AuthService(codes, email, users, encoder, assets);
         com.gtcfesk.exchange.security.RegistrationSecurity captcha = mock(com.gtcfesk.exchange.security.RegistrationSecurity.class);
         ReflectionTestUtils.setField(service, "registrationSecurity", captcha);
+        ReflectionTestUtils.setField(service,"tenantPolicy",mock(com.gtcfesk.exchange.control.TenantPolicyService.class));
+        com.gtcfesk.exchange.admin.SystemConfigService configs = mock(com.gtcfesk.exchange.admin.SystemConfigService.class);
+        when(configs.registrationFields()).thenReturn(RegistrationFields.defaults());
+        ReflectionTestUtils.setField(service, "systemConfigService", configs);
         JwtUtil jwt = mock(JwtUtil.class);
         when(jwt.getExpireSeconds()).thenReturn(3600L);
         ReflectionTestUtils.setField(service, "jwtUtil", jwt);
         when(encoder.encode(anyString())).thenReturn("hashed");
-        when(users.save(any())).thenAnswer(call -> {
+        when(users.saveAndFlush(any())).thenAnswer(call -> {
             UserAccount user = call.getArgument(0);
             user.setId(123L);
             return user;
@@ -56,7 +61,7 @@ class RegistrationWithoutCodeTest {
         req.setConfirmPassword("different");
         assertThrows(BusinessException.class, () -> service.register(req));
         req.setConfirmPassword(req.getPassword());
-        when(users.existsByEmail(req.getEmail())).thenReturn(true);
+        when(users.existsByTenantIdAndEmail(1L, req.getEmail())).thenReturn(true);
         assertThrows(BusinessException.class, () -> service.register(req));
         SendCodeRequest send = new SendCodeRequest();
         send.setEmail(req.getEmail());

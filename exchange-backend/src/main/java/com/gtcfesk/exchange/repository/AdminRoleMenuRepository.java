@@ -10,12 +10,12 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 
 @Repository
-public interface AdminRoleMenuRepository extends JpaRepository<AdminRoleMenu, Long> {
-    List<AdminRoleMenu> findByRoleId(Long roleId);
+public interface AdminRoleMenuRepository extends com.gtcfesk.exchange.tenant.TenantRepository<AdminRoleMenu, Long> {
+    List<AdminRoleMenu> findByTenantIdAndRoleId(Long tenantId, Long roleId);
     
     @Modifying
     @Transactional
-    @Query("DELETE FROM AdminRoleMenu rm WHERE rm.roleId = ?1")
+    @org.springframework.data.jpa.repository.Query("DELETE FROM AdminRoleMenu rm WHERE rm.tenantId = ?#{T(com.gtcfesk.exchange.tenant.TenantContext).requireTenantId()} AND (rm.roleId = ?1)")
     void deleteByRoleId(Long roleId);
 }
 

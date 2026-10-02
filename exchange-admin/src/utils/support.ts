@@ -1,6 +1,8 @@
 export interface Conversation {
   id: number
   userId: number
+  userEmail?: string | null
+  userRemark?: string | null
   adminId: number | null
   status: 'WAITING' | 'ACTIVE' | 'CLOSED'
   createdAt: string
@@ -11,7 +13,7 @@ export interface Conversation {
 }
 export interface ChatMessage {
   id: number
-  sender: 'USER' | 'ADMIN' | 'SYSTEM'
+  sender: 'USER' | 'ADMIN' | 'CONTROL' | 'SYSTEM'
   senderId: number
   text: string
   image: boolean

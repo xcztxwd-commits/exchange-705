@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ProtectedElementImage from '@/components/ProtectedElementImage.vue'
 import { computed, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import request from '@/utils/request'
@@ -10,7 +11,7 @@ const props = defineProps<{ modelValue: boolean; userId?: number }>()
 const emit = defineEmits(['update:modelValue', 'success'])
 const open = computed({ get: () => props.modelValue, set: v => emit('update:modelValue', v) })
 const auth = useAuthStore()
-const storageKey = computed(() => `deposit-pending:${auth.user?.userType || 'admin'}:${auth.user?.id}`)
+const storageKey = computed(() => `deposit-pending:${auth.user?.tenantId}:${auth.accessSession?.id || auth.user?.userType || 'admin'}:${auth.user?.id}`)
 const { currency, rate } = useFiatCurrency()
 const form = reactive({ userId: '', account: 'FUND', amount: '', type: 'manual', manualPurpose: 'ADJUSTMENT', remark: '', address: '', network: 'MANUAL', proofImage: '' })
 const recipient = ref<any>(null), pending = ref<any>(null), busy = ref(false), querying = ref(false)
@@ -98,7 +99,7 @@ async function submit() {
       <el-form-item v-if="form.type !== 'manual'" :label="form.type === 'bank' ? '收款信息' : '钱包地址'"><el-input v-model="form.address" maxlength="200" /></el-form-item>
       <el-form-item v-if="form.type === 'digital'" label="地址网络"><el-input v-model="form.network" maxlength="50" /></el-form-item>
       <el-form-item label="订单备注" required><el-input v-model="form.remark" type="textarea" maxlength="500" show-word-limit /></el-form-item>
-      <el-form-item label="充值凭证"><el-upload v-permission="'deposit_orders:manual_deposit'" :http-request="upload" :show-file-list="false" accept="image/*"><el-button v-permission="'deposit_orders:manual_deposit'">上传凭证</el-button></el-upload><el-image v-if="form.proofImage" :src="form.proofImage" :preview-src-list="[form.proofImage]" style="width:60px" /></el-form-item>
+      <el-form-item label="充值凭证"><el-upload v-permission="'deposit_orders:manual_deposit'" :http-request="upload" :show-file-list="false" accept="image/*"><el-button v-permission="'deposit_orders:manual_deposit'">上传凭证</el-button></el-upload><ProtectedElementImage v-if="form.proofImage" :src="form.proofImage" :preview-src-list="[form.proofImage]" style="width:60px" /></el-form-item>
     </el-form>
     <template #footer><el-button v-permission="'session:close'" @click="open = false">关闭</el-button><el-button v-permission="'deposit_orders:manual_deposit'" type="primary" :loading="busy" :disabled="!pending && (querying || !recipient)" @click="submit">{{ pending ? '重试原请求' : '确认充值' }}</el-button></template>
   </el-dialog>

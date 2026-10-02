@@ -1,6 +1,9 @@
 package com.gtcfesk.exchange.market;
 
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.gtcfesk.exchange.tenant.TenantContext;
+import com.gtcfesk.exchange.control.Tenant;
+import com.gtcfesk.exchange.control.TenantRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -17,10 +20,14 @@ import java.util.concurrent.atomic.AtomicBoolean;
 @Component
 public class MarketWebSocketHandler extends TextWebSocketHandler {
     @Autowired private ForexQuoteMarketService marketService;
+    @Autowired private TenantRepository tenants;
     @Value("${market.push.interval-ms:1000}") private long intervalMs = 1000;
     @Value("${market.push.delta:false}") private boolean delta;
     private final ObjectMapper mapper = new ObjectMapper();
     private static class Client {
+        final Long tenantId;
+        final String frontendHost;
+        Client(Long tenantId, String frontendHost) { this.tenantId = tenantId; this.frontendHost = frontendHost; }
         final Set<String> symbols = ConcurrentHashMap.newKeySet();
         final Set<String> fastSymbols = ConcurrentHashMap.newKeySet();
         final AtomicBoolean sending = new AtomicBoolean();
@@ -36,17 +43,25 @@ public class MarketWebSocketHandler extends TextWebSocketHandler {
     @PostConstruct public void init() { scheduler.scheduleWithFixedDelay(this::push, 0, Math.max(250, intervalMs), TimeUnit.MILLISECONDS); }
     @PreDestroy public void destroy() { scheduler.shutdownNow(); senders.shutdownNow(); }
     @Override public void afterConnectionEstablished(WebSocketSession session) {
+        Object tenant = session.getAttributes().get("tenantId"), host = session.getAttributes().get("frontendHost");
+        if (!(tenant instanceof Number) || ((Number)tenant).longValue() <= 0 || !(host instanceof String)) {
+            close(session); return;
+        }
+        Client client = new Client(((Number)tenant).longValue(), (String)host);
+        if (!validBinding(client)) { close(session); return; }
         if (session instanceof org.springframework.web.socket.adapter.standard.StandardWebSocketSession) {
             javax.websocket.Session nativeSession = ((org.springframework.web.socket.adapter.standard.StandardWebSocketSession) session).getNativeSession();
             nativeSession.getUserProperties().put("org.apache.tomcat.websocket.BLOCKING_SEND_TIMEOUT", 1000L);
         }
-        clients.put(session, new Client());
+        clients.put(session, client);
     }
     @Override public void afterConnectionClosed(WebSocketSession session, CloseStatus status) { clients.remove(session); }
     @Override public void handleTransportError(WebSocketSession session, Throwable error) { clients.remove(session); }
     @Override protected void handleTextMessage(WebSocketSession session, TextMessage message) throws Exception {
         Client client = clients.get(session);
         if (client == null || message.getPayloadLength() > 16384) return;
+        if (!validBinding(client)) { close(session); return; }
+        try (TenantContext.Scope scope = TenantContext.open(client.tenantId)) {
         Map<String, Object> request = mapper.readValue(message.getPayload(), new TypeReference<Map<String, Object>>() {});
         Object action = request.get("action");
         if ("ping".equals(action)) { send(session, client, Collections.singletonMap("type", "pong")); return; }
@@ -69,20 +84,35 @@ public class MarketWebSocketHandler extends TextWebSocketHandler {
             send(session, client, reply);
             scheduler.execute(this::push);
         }
+        }
+    }
+    private boolean validBinding(Client client) {
+        try {
+            Tenant tenant = tenants.findById(client.tenantId).orElse(null);
+            return tenant != null && client.frontendHost.equals(tenant.getFrontendHost()) && tenant.isDomainVerified()
+                && Arrays.asList("ACTIVE", "STOP_NEW").contains(tenant.getStatus());
+        } catch (RuntimeException failure) { return false; }
+    }
+    private void close(WebSocketSession session) {
+        clients.remove(session);
+        try { session.close(CloseStatus.POLICY_VIOLATION); } catch (Exception ignored) { }
     }
     void push() {
         // Compute a symbol only once per cycle, independent of client count.
         Map<String,Map<String,Object>> snapshots = new HashMap<>();
+        Map<String,Boolean> bindings = new HashMap<>();
         for (Map.Entry<WebSocketSession, Client> entry : clients.entrySet()) {
             WebSocketSession session = entry.getKey(); Client client = entry.getValue();
             if (!session.isOpen()) { clients.remove(session); continue; }
+            if (!bindings.computeIfAbsent(client.tenantId + ":" + client.frontendHost, id -> validBinding(client))) { close(session); continue; }
             if (client.symbols.isEmpty()) continue;
+            try (TenantContext.Scope scope = TenantContext.open(client.tenantId)) {
             Map<String, Object> prices = new HashMap<>();
             boolean listFrame = client.snapshot || System.currentTimeMillis() - client.lastListPush >= 1000;
             for (String symbol : client.symbols) {
                 if (!listFrame && !client.fastSymbols.contains(symbol)) continue;
                 Map<String,Object> quote;
-                try { quote = snapshots.computeIfAbsent(symbol, marketService::snapshotPrice); }
+                try { quote = snapshots.computeIfAbsent(client.tenantId + ":" + symbol, key -> marketService.snapshotPrice(symbol)); }
                 catch (Exception failure) { continue; }
                 if (!delta || client.snapshot || !Objects.equals(client.versions.get(symbol), quote.get("quoteVersion"))) prices.put(symbol, quote);
             }
@@ -91,6 +121,7 @@ public class MarketWebSocketHandler extends TextWebSocketHandler {
             message.put("snapshot", client.snapshot); message.put("serverTime", System.currentTimeMillis());
             message.put("listFrame", listFrame);
             send(session, client, message);
+            }
         }
     }
     private void send(WebSocketSession session, Client client, Map<String, ?> message) {
@@ -103,7 +134,7 @@ public class MarketWebSocketHandler extends TextWebSocketHandler {
         client.busySince = System.currentTimeMillis();
         try {
             senders.execute(() -> {
-                try { if (session.isOpen()) {
+                try { if (session.isOpen() && validBinding(client)) {
                     session.sendMessage(new TextMessage(mapper.writeValueAsString(message)));
                     if ("price".equals(message.get("type"))) {
                         Map<?,?> prices = (Map<?,?>) message.get("data");

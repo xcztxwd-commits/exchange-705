@@ -46,9 +46,10 @@
 <el-table-column prop="accountModeLabel" label="账户类型" width="110" fixed="left" />
         <el-table-column prop="id" label="ID" width="80" />
         <el-table-column prop="userId" label="用户ID" width="100" />
+        <el-table-column prop="userEmail" label="用户邮箱" min-width="200" show-overflow-tooltip />
         <el-table-column prop="userRemark" label="用户备注" width="150">
           <template #default="{ row }">
-            {{ row.userRemark || row.remark || '-' }}
+            {{ row.userRemark || '-' }}
           </template>
         </el-table-column>
         <el-table-column prop="realName" label="姓名" width="120" />
@@ -67,7 +68,7 @@
         </el-table-column>
         <el-table-column label="证件正面" width="120">
           <template #default="{ row }">
-            <el-image
+            <ProtectedElementImage
               v-if="row.idFrontImage"
               :src="getImageUrl(row.idFrontImage, row.accountMode)"
               :preview-src-list="getPreviewImageList(row)"
@@ -83,13 +84,13 @@
                   <span>加载失败</span>
                 </div>
               </template>
-            </el-image>
+            </ProtectedElementImage>
             <span v-else>-</span>
           </template>
         </el-table-column>
         <el-table-column label="证件反面" width="120">
           <template #default="{ row }">
-            <el-image
+            <ProtectedElementImage
               v-if="row.idBackImage"
               :src="getImageUrl(row.idBackImage, row.accountMode)"
               :preview-src-list="getPreviewImageList(row)"
@@ -105,7 +106,7 @@
                   <span>加载失败</span>
                 </div>
               </template>
-            </el-image>
+            </ProtectedElementImage>
             <span v-else>-</span>
           </template>
         </el-table-column>
@@ -181,6 +182,7 @@
 </template>
 
 <script setup lang="ts">
+import ProtectedElementImage from '@/components/ProtectedElementImage.vue'
 import { ref, onMounted } from 'vue'
 import { usePermissions } from '@/composables/usePermissions'
 

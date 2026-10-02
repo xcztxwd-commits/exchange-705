@@ -30,7 +30,7 @@ public class AdminAccountQueryController {
         if ("inbox".equals(grant[0]) && auth.getAuthorities().stream().noneMatch(a->a.getAuthority().equals("ROLE_SUPER_ADMIN"))) throw new AccessDeniedException("跨环境站内信审计仅对超级管理员开放");
         if(key.length()<32)throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,"模拟服务尚未配置");
         SimpleClientHttpRequestFactory f=new SimpleClientHttpRequestFactory();f.setConnectTimeout(2000);f.setReadTimeout(10000);
-        HttpHeaders headers=new HttpHeaders();headers.set("X-Simulation-Inspection-Key",key);
+        HttpHeaders headers=new HttpHeaders();headers.set("X-Simulation-Inspection-Key",key);headers.set("X-Simulation-Tenant-Id",String.valueOf(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId()));
         try {
             ResponseEntity<byte[]> result=new RestTemplate(f).exchange(url.replaceFirst("/inspection$","/admin-query"),HttpMethod.POST,new HttpEntity<>(query,headers),byte[].class);
             if(!"DEMO".equals(result.getHeaders().getFirst("X-Account-Environment")))throw new IllegalStateException();

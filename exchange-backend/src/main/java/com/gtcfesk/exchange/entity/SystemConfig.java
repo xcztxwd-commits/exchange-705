@@ -5,14 +5,15 @@ import javax.persistence.*;
 import java.time.LocalDateTime;
 
 @Data
+@org.hibernate.annotations.Persister(impl = com.gtcfesk.exchange.tenant.TenantEntityPersister.class)
 @Entity
 @Table(name = "system_config")
-public class SystemConfig {
+public class SystemConfig extends com.gtcfesk.exchange.tenant.TenantOwnedEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "config_key", unique = true, nullable = false, length = 100)
+    @Column(name = "config_key", nullable = false, length = 100)
     private String configKey;
 
     @Column(name = "config_value", columnDefinition = "TEXT")

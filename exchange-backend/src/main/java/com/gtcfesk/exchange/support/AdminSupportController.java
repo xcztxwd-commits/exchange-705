@@ -13,6 +13,7 @@ public class AdminSupportController {
     private final SupportService service;
     private final SupportSettings settings;
     private final AdminPermissionService permissions;
+    private final com.gtcfesk.exchange.admin.AdminUserIdentity userIdentity;
     public static class Presence { public boolean accepting; }
     public static class Transfer { public Long target; }
     public static class Letter { public String requestId; public List<Long> users; public String title; public String content; }
@@ -21,9 +22,9 @@ public class AdminSupportController {
     @PostMapping("/settings") @AdminPermission(menu="support_settings", action="save")
     public void save(@RequestBody SupportSettings.Settings body) { service.subject(true); settings.save(body); }
     @GetMapping("/sessions") @AdminPermission(menu="support", action="")
-    public List<SupportConversation> sessions(@RequestParam(defaultValue="mine") String scope, @RequestParam(defaultValue="0") int page) { return service.sessions(true, scope, page); }
+    public List<Map<String,Object>> sessions(@RequestParam(defaultValue="mine") String scope, @RequestParam(defaultValue="0") int page, @RequestParam(required=false) String userEmail) { return userIdentity.rows(service.sessions(true, scope, page, userEmail)); }
     @GetMapping("/sessions/{id}") @AdminPermission(menu="support", action="detail")
-    public Map<String,Object> detail(@PathVariable long id, @RequestParam(defaultValue="0") long after) { return service.detail(id, true, after); }
+    public Map<String,Object> detail(@PathVariable long id, @RequestParam(defaultValue="0") long after) { Map<String,Object> result=service.detail(id, true, after); result.put("conversation",userIdentity.row(result.get("conversation"))); return result; }
     @PostMapping("/presence") @AdminPermission(menu="support", action="claim")
     public SupportPresence presence(@RequestBody Presence body) { return service.presence(body.accepting); }
     @GetMapping("/agents") @AdminPermission(menu="support", action="transfer")
@@ -53,7 +54,7 @@ public class AdminSupportController {
     @GetMapping("/inbox/recipients") @AdminPermission(menu="inbox", action="send")
     public List<Map<String,Object>> recipients(@RequestParam String query) { return service.searchRecipients(query); }
     @GetMapping("/inbox") @AdminPermission(menu="inbox", action="")
-    public List<InboxLetter> inbox(@RequestParam(defaultValue="0") int page) { return service.inbox(true, page); }
+    public List<Map<String,Object>> inbox(@RequestParam(defaultValue="0") int page, @RequestParam(required=false) String userEmail) { return userIdentity.rows(service.inbox(true, page, userEmail)); }
     @PostMapping("/inbox") @AdminPermission(menu="inbox", action="send")
     public Map<String,Integer> sendLetters(@RequestBody Letter body) { return Collections.singletonMap("sent", service.sendLetters(body.requestId, body.users, body.title, body.content)); }
 }

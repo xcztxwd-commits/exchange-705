@@ -63,9 +63,10 @@
             <span v-else>{{ row.userId }}</span>
           </template>
         </el-table-column>
+        <el-table-column prop="userEmail" label="用户邮箱" min-width="200" show-overflow-tooltip />
         <el-table-column prop="userRemark" label="用户备注" width="150">
           <template #default="{ row }">
-            {{ row.userRemark || row.remark || '-' }}
+            {{ row.userRemark || '-' }}
           </template>
         </el-table-column>
         <el-table-column prop="type" label="类型" width="100">
@@ -90,7 +91,7 @@
         </el-table-column>
         <el-table-column prop="proofImage" label="凭证" width="100">
           <template #default="{ row }">
-            <el-image
+            <ProtectedElementImage
               v-if="row.proofImage"
               :src="getImageUrl(row.proofImage, row.accountMode)"
               :preview-src-list="getPreviewImageList(row)"
@@ -106,7 +107,7 @@
                   <span>加载失败</span>
                 </div>
               </template>
-            </el-image>
+            </ProtectedElementImage>
             <span v-else>-</span>
           </template>
         </el-table-column>
@@ -197,7 +198,7 @@
           {{ detailRecord.address || '-' }}
         </el-descriptions-item>
         <el-descriptions-item label="凭证" :span="2">
-          <el-image
+          <ProtectedElementImage
             v-if="detailRecord.proofImage"
             :src="getImageUrl(detailRecord.proofImage, detailRecord.accountMode)"
             :preview-src-list="getPreviewImageList(detailRecord)"
@@ -213,7 +214,7 @@
                 <span>加载失败</span>
               </div>
             </template>
-          </el-image>
+          </ProtectedElementImage>
           <span v-else>-</span>
         </el-descriptions-item>
         <el-descriptions-item label="备注" :span="2">
@@ -234,6 +235,7 @@
 </template>
 
 <script setup lang="ts">
+import ProtectedElementImage from '@/components/ProtectedElementImage.vue'
 import { ref, onMounted, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search, Refresh } from '@element-plus/icons-vue'

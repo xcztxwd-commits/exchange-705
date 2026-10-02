@@ -1,0 +1,4 @@
+# Reviewed multi-tenant migrations contain no production rows or credentials.
+!V20260929*.sql
+!V2026093005__user_id_sequence.sql
+!V2026093001__simple_manual_orders.sql

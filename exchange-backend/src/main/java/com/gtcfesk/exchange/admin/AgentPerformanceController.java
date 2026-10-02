@@ -32,7 +32,7 @@ public class AgentPerformanceController {
     @com.gtcfesk.exchange.config.AdminPermission(menu = "agents", action = "performance")
     public ResponseEntity<?> getAgentPerformance(@PathVariable Long agentId) {
         // 验证代理是否存在
-        userAccountRepository.findById(agentId)
+        userAccountRepository.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), agentId)
                 .orElseThrow(() -> new IllegalArgumentException("代理不存在"));
 
         // 获取所有下级用户ID（包括直接和间接下级）
@@ -40,21 +40,21 @@ public class AgentPerformanceController {
         int subordinateCount = subordinateUserIds.size();
 
         // 统计累计充值（状态为COMPLETED的充值记录）
-        BigDecimal totalDeposit = depositRecordRepository.findAll().stream().filter(d -> !"ADMIN_MANUAL".equals(d.getSource()))
+        BigDecimal totalDeposit = depositRecordRepository.findAllByTenantId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId()).stream().filter(d -> !"ADMIN_MANUAL".equals(d.getSource()))
                 .filter(deposit -> subordinateUserIds.contains(deposit.getUserId()))
                 .filter(deposit -> "COMPLETED".equals(deposit.getStatus()))
                 .map(deposit -> deposit.getAmount() != null ? deposit.getAmount() : BigDecimal.ZERO)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         // 统计累计提现（状态为COMPLETED或APPROVED的提现记录）
-        BigDecimal totalWithdraw = withdrawRecordRepository.findAll().stream()
+        BigDecimal totalWithdraw = withdrawRecordRepository.findAllByTenantId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId()).stream()
                 .filter(withdraw -> subordinateUserIds.contains(withdraw.getUserId()))
                 .filter(withdraw -> "COMPLETED".equals(withdraw.getStatus()) || "APPROVED".equals(withdraw.getStatus()))
                 .map(withdraw -> withdraw.getAmount() != null ? withdraw.getAmount() : BigDecimal.ZERO)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         // 统计累计交易量（已平仓的合约订单的交易量）
-        BigDecimal totalTrade = contractOrderRepository.findAll().stream()
+        BigDecimal totalTrade = contractOrderRepository.findAllByTenantId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId()).stream()
                 .filter(order -> subordinateUserIds.contains(order.getUserId()))
                 .filter(order -> "CLOSED".equals(order.getStatus()))
                 .map(order -> {
@@ -68,7 +68,7 @@ public class AgentPerformanceController {
         Map<String, Object> performance = new HashMap<>();
         performance.put("subordinateCount", subordinateCount);
         Map<String,BigDecimal> depositGroups=new LinkedHashMap<>();
-        for(com.gtcfesk.exchange.entity.DepositRecord d:depositRecordRepository.findAll()) {
+        for(com.gtcfesk.exchange.entity.DepositRecord d:depositRecordRepository.findAllByTenantId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId())) {
             if(!subordinateUserIds.contains(d.getUserId()) || !"COMPLETED".equals(d.getStatus()))continue;
             String source=d.getSource()==null?"LEGACY_UNKNOWN":d.getSource();
             if("ADMIN_MANUAL".equals(source))source+="_"+d.getManualPurpose();
@@ -96,7 +96,7 @@ public class AgentPerformanceController {
 
         while (!queue.isEmpty()) {
             Long currentUserId = queue.poll();
-            List<UserAccount> directSubordinates = userAccountRepository.findByParentUserId(currentUserId);
+            List<UserAccount> directSubordinates = userAccountRepository.findByTenantIdAndParentUserId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), currentUserId);
             
             for (UserAccount subordinate : directSubordinates) {
                 if (!allSubordinateIds.contains(subordinate.getId())) {

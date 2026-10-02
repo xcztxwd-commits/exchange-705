@@ -43,11 +43,11 @@ public class AdminSymbolService {
         }
         Map<String,Object> result=transactions.execute(status -> {
             Set<String> keys=new HashSet<>();
-            for(TradingSymbol row:symbolRepository.findAll()) keys.add(row.getMarketInstrumentKey());
-            long registered=symbolRepository.findAll().stream().filter(row -> source.equals(row.getMarketSource()) && sourceCategory.equals(row.getSourceCategory())).count();
+            for(TradingSymbol row:symbolRepository.findAllByTenantId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId())) keys.add(row.getMarketInstrumentKey());
+            long registered=symbolRepository.findAllByTenantId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId()).stream().filter(row -> source.equals(row.getMarketSource()) && sourceCategory.equals(row.getSourceCategory())).count();
             long newCount=resolved.stream().filter(row -> !keys.contains(row.getMarketInstrumentKey())).count();
             if(registered+newCount>512) throw new BusinessException("每个源分类最多添加 512 个交易对");
-            List<TradingSymbol> subscriptions=new ArrayList<>(symbolRepository.findAll());
+            List<TradingSymbol> subscriptions=new ArrayList<>(symbolRepository.findAllByTenantId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId()));
             subscriptions.addAll(resolved);
             Map<String,Set<String>> channels=new HashMap<>();
             for(TradingSymbol row:subscriptions) {
@@ -60,7 +60,7 @@ public class AdminSymbolService {
             List<String> added=new ArrayList<>(),existing=new ArrayList<>();
             for(TradingSymbol symbol:resolved) {
                 if(keys.contains(symbol.getMarketInstrumentKey())) {existing.add(symbol.getSymbol());continue;}
-                if(symbolRepository.findBySymbol(symbol.getSymbol()).isPresent())
+                if(symbolRepository.findByTenantIdAndSymbol(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), symbol.getSymbol()).isPresent())
                     throw new BusinessException("交易对已被其他源使用："+symbol.getDisplayName());
                 createSymbol(symbol); keys.add(symbol.getMarketInstrumentKey()); added.add(symbol.getSymbol());
             }
@@ -144,7 +144,7 @@ public class AdminSymbolService {
     }
     
     public TradingSymbol getSymbolDetail(Long id) {
-        return symbolRepository.findById(id)
+        return symbolRepository.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), id)
             .orElseThrow(() -> new IllegalArgumentException("币种不存在"));
     }
     
@@ -152,7 +152,7 @@ public class AdminSymbolService {
         com.gtcfesk.exchange.trade.FxContractRules.defaults(symbol);
         if (symbol.getMaxLeverage() == null) symbol.setMaxLeverage(BigDecimal.valueOf(100));
         com.gtcfesk.exchange.common.TradeValidation.leverage(symbol.getMaxLeverage());
-        if (symbolRepository.findBySymbol(symbol.getSymbol()).isPresent()) {
+        if (symbolRepository.findByTenantIdAndSymbol(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), symbol.getSymbol()).isPresent()) {
             throw new IllegalArgumentException("交易对已存在");
         }
         // 确保控盘字段有默认值
@@ -183,7 +183,7 @@ public class AdminSymbolService {
     @org.springframework.transaction.annotation.Transactional
     public TradingSymbol updateSymbol(Long id, TradingSymbol symbol) {
         if (symbol.getMaxLeverage() != null) com.gtcfesk.exchange.common.TradeValidation.leverage(symbol.getMaxLeverage());
-        TradingSymbol existing = symbolRepository.findById(id)
+        TradingSymbol existing = symbolRepository.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), id)
             .orElseThrow(() -> new IllegalArgumentException("币种不存在"));
         
         if(entityManager!=null) entityManager.refresh(existing,javax.persistence.LockModeType.PESSIMISTIC_WRITE);
@@ -241,12 +241,12 @@ public class AdminSymbolService {
     }
     
     public void deleteSymbol(Long id) {
-        symbolRepository.deleteById(id);
+        symbolRepository.deleteByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), id);
         quotes.refreshSymbols();
     }
     
     public void toggleHot(Long id) {
-        TradingSymbol symbol = symbolRepository.findById(id)
+        TradingSymbol symbol = symbolRepository.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), id)
             .orElseThrow(() -> new IllegalArgumentException("币种不存在"));
         symbol.setIsHot(!symbol.getIsHot());
         symbolRepository.save(symbol);
@@ -265,13 +265,13 @@ public class AdminSymbolService {
         
         if (symbolIds != null && !symbolIds.isEmpty()) {
             // 按ID列表设置
-            symbols = symbolRepository.findAllById(symbolIds);
+            symbols = symbolRepository.findAllByTenantIdAndIdIn(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), symbolIds);
         } else if (category != null && !category.isEmpty()) {
             // 按分类设置
-            symbols = symbolRepository.findByCategory(category);
+            symbols = symbolRepository.findByTenantIdAndCategory(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), category);
         } else {
             // 设置所有币种
-            symbols = symbolRepository.findAll();
+            symbols = symbolRepository.findAllByTenantId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId());
         }
         
         for (TradingSymbol symbol : symbols) {

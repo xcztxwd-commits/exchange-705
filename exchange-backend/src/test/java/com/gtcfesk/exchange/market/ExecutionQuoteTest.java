@@ -7,12 +7,12 @@ import java.math.BigDecimal;
 import java.util.*;
 import static org.junit.jupiter.api.Assertions.*;
 
-class ExecutionQuoteTest {
+class ExecutionQuoteTest extends TenantMarketTestContext {
     @Test @SuppressWarnings("unchecked")
     void connectionFailureIsSeparateFromStaleOrMissingQuotesAndClearsOnRecovery() {
         ForexQuoteMarketService quotes = new ForexQuoteMarketService();
         try {
-            Map<String, Object> groups = (Map<String, Object>) ReflectionTestUtils.getField(quotes, "groups");
+            Map<String, Object> groups = (Map<String, Object>) ReflectionTestUtils.getField(marketState(quotes), "groups");
             Object group = groups.get("Forex");
             Map<String, Map<String, Object>> cache = (Map<String, Map<String, Object>>) ReflectionTestUtils.getField(group, "quotes");
             Map<String, Object> raw = new HashMap<>();
@@ -41,8 +41,8 @@ class ExecutionQuoteTest {
             TradingSymbol symbol = new TradingSymbol();
             symbol.setSymbol("XAUUSD"); symbol.setCategory("Metal"); symbol.setSourceCategory("Metal"); symbol.setMarketSource(com.gtcfesk.exchange.market.MarketInstrumentCatalog.inferredSource("Metal")); symbol.setAlltickSymbol("XAUUSD_SOURCE");
             symbol.setControlEnabled(true); symbol.setControlPriceOffset(new BigDecimal("5"));
-            ReflectionTestUtils.setField(quotes, "registry", Collections.singletonMap(symbol.getSymbol(), symbol));
-            Map<String, Object> groups = (Map<String, Object>) ReflectionTestUtils.getField(quotes, "groups");
+            ReflectionTestUtils.setField(marketState(quotes), "registry", Collections.singletonMap(symbol.getSymbol(), symbol));
+            Map<String, Object> groups = (Map<String, Object>) ReflectionTestUtils.getField(marketState(quotes), "groups");
             Map<String, Map<String, Object>> cache = (Map<String, Map<String, Object>>) ReflectionTestUtils.getField(groups.get("Metal"), "quotes");
             Map<String, Object> raw = new HashMap<>();
             raw.put("price", 100d); raw.put("timestamp", System.currentTimeMillis()); raw.put("fetchedAt", System.currentTimeMillis()); raw.put("sourceAvailable", true);

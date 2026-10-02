@@ -1,14 +1,18 @@
 <script setup lang="ts">
+import ProtectedImage from '@/components/ProtectedImage.vue'
 import marketWebSocket from '@/utils/marketWebSocket'
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import Tabbar from '@/components/Tabbar.vue'
+import MessageHeaderActions from '@/components/MessageHeaderActions.vue'
 import LogoGlint from '@/components/LogoGlint.vue'
 import Sparkline from '@/components/Sparkline.vue'
 import request from '@/utils/request'
 import { useAuthStore } from '@/store/auth'
 import { useMarketStore } from '@/store/market'
 import { useLocaleStore } from '@/store/locale'
+import { getAccountApiBase } from '@/utils/accountMode'
+import { HOME_SPARKLINE_REFRESH_MS, homeSparklineScope } from '@/utils/homeSparklineCache'
 import { getImageUrl } from '@/utils/imageUrl'
 import { displaySymbol } from '@/utils/displaySymbol'
 // 市场休市时间判断已移除，改用阿里云市场API返回的数据来判断市场状态
@@ -28,8 +32,8 @@ const latestAnnouncement = ref<{ title?: string; content?: string; countdownSeco
 
 // 价格轮询定时器
 
-// K线轮询定时器
-const klinePollingTimer = ref<number | null>(null)
+// 首页快照读取定时器；报价 WebSocket 保持实时。
+const sparklinePollingTimer = ref<number | null>(null)
 
 // 多语言
 const localeStore = useLocaleStore()
@@ -79,57 +83,12 @@ function formatPrice(price: number | string | null | undefined, precision: numbe
   return n.toLocaleString('en-US', { minimumFractionDigits: precision, maximumFractionDigits: precision })
 }
 
-// 判断K线数据是否已加载
-function hasSparklineData(symbol: any): boolean {
-  const symbolKey = symbol.alltickSymbol || symbol.symbol
-  if (!symbolKey) return false
-  
-  // 检查market store中的实时数据
-  const sparklineData = marketStore.getSparklineData(symbolKey)
-  if (sparklineData && sparklineData.length > 0) {
-    return true
-  }
-  
-  // 检查数据库缓存数据
-  if (symbol.sparklineData) {
-    try {
-      const data = JSON.parse(symbol.sparklineData)
-      if (data && data.length > 0) {
-        return true
-      }
-    } catch (e) {
-      // 忽略解析错误
-    }
-  }
-  
-  return false
+function homeSparkline(symbol: any) {
+  return marketStore.getHomeSparkline(symbol.symbol)
 }
-
-function parseSparklineData(data: string | null | undefined, symbol?: string): number[] {
-  // 优先使用market store中的实时K线数据
-  if (symbol) {
-    // 尝试多种symbol匹配方式
-    const symbolKeys = [symbol].filter(Boolean)
-    
-    for (const key of symbolKeys) {
-      const sparklineData = marketStore.getSparklineData(key)
-      if (sparklineData && sparklineData.length > 0) {
-        console.log(`[Home] Using real-time sparkline data for ${key}, length: ${sparklineData.length}`)
-        return sparklineData
-      }
-    }
-  }
-  
-  // 如果没有实时数据，使用数据库中的缓存数据
-  if (!data) {
-    return []
-  }
-  try {
-    const arr = JSON.parse(data)
-    return Array.isArray(arr) ? arr : []
-  } catch {
-    return []
-  }
+function sparklineDescription(symbol: any): string {
+  const snapshot = homeSparkline(symbol)
+  return [snapshot.status, snapshot.updatedAt == null ? '' : new Date(snapshot.updatedAt).toISOString(), snapshot.reason].filter(Boolean).join(' · ')
 }
 
 // 处理图标URL，确保能正确加载
@@ -192,8 +151,8 @@ function getChangeColor(change: number | null | undefined) {
 }
 
 // 缓存键名
-const SYMBOLS_CACHE_KEY = 'home_symbols_cache'
-const SYMBOLS_CACHE_TIME_KEY = 'home_symbols_cache_time'
+const SYMBOLS_CACHE_KEY = 'home_symbols_cache:' + homeSparklineScope(getAccountApiBase())
+const SYMBOLS_CACHE_TIME_KEY = SYMBOLS_CACHE_KEY + ':time'
 const CACHE_EXPIRE_TIME = 5 * 60 * 1000 // 缓存有效期：5分钟（缩短缓存时间，确保数据及时更新）
 
 // 一次性加载所有币种数据（优先使用API最新数据，缓存仅作为降级方案）
@@ -362,19 +321,6 @@ async function loadAllSymbols(forceRefresh = false) {
       }
     })
     
-    // 批量获取K线数据（按分类分组）
-    // 先准备分组数据
-    const grouped = new Map<string, string[]>()
-    symbolList.forEach((s: { symbol: string; category: string; alltickSymbol?: string }) => {
-      const cat = s.category || 'Crypto'
-      const alltickSymbol = s.alltickSymbol || s.symbol
-      if (!grouped.has(cat)) {
-        grouped.set(cat, [])
-      }
-      // 使用alltickSymbol而不是symbol，因为后端API需要alltickSymbol
-      grouped.get(cat)!.push(alltickSymbol)
-    })
-    
     // 立即批量从 Redis 获取价格和涨幅数据（不等待 WebSocket）
     // 传递完整的 symbol 映射信息（包括 symbol 和 alltickSymbol）
     if (symbolList.length > 0) {
@@ -386,18 +332,8 @@ async function loadAllSymbols(forceRefresh = false) {
       })
     }
     
-    // K线数据异步加载（不等待，在后台加载）
-    // 使用5分钟K线用于预览，获取20条数据用于sparkline显示
-    // 页面会先使用数据库中的sparklineData显示，然后异步更新
-    Array.from(grouped.entries()).forEach(([category, alltickSymbols]) => {
-      marketStore.fetchBatchKlines(alltickSymbols, category, '5m', 20).then(() => {
-        console.log(`[Home] ✅ K-line data loaded for category ${category} (5m interval)`)
-      }).catch((error) => {
-        console.error(`[Home] Failed to load K-line data for category ${category}:`, error)
-      })
-    })
-    console.log('[Home] K-line and price data loading in background...')
-    
+    await loadSparklinePreview()
+
     // 统计各分类的币种数量
     const categoryCounts = new Map<string, number>()
     symbolList.forEach((s: { symbol: string; category: string; alltickSymbol?: string }) => {
@@ -417,10 +353,7 @@ async function loadAllSymbols(forceRefresh = false) {
         console.error('[Home] Batch subscription failed:', error)
       })
       
-      // 启动批量价格轮询（每3秒更新一次，与WebSocket保持一致）
-
-      // 启动K线轮询（每3秒更新一次，与WebSocket保持一致）
-      startKlinePolling()
+      startSparklinePolling()
     }
   } catch (e) {
     console.error('load all symbols error', e)
@@ -666,56 +599,26 @@ onMounted(async () => {
   await loadAllSymbols()
 })
 
-// 启动批量价格轮询（每3秒更新一次，与WebSocket保持一致）
-// 启动K线轮询（每3秒更新一次，与WebSocket保持一致）
-function startKlinePolling() {
-  // 清除之前的定时器
-  if (klinePollingTimer.value) {
-    clearInterval(klinePollingTimer.value)
-  }
-  
-  // 使用 allSymbols.value 的最新数据，按分类分组更新K线
-  const updateKlines = () => {
-    if (document.visibilityState === 'hidden' || allSymbols.value.length === 0) return
-    
-    // 按分类分组
-    const grouped = new Map<string, string[]>()
-    ;[...hotSymbols.value, ...categorySymbols.value].forEach((s: any) => {
-      const category = s.category || 'Crypto'
-      const alltickSymbol = s.alltickSymbol || s.symbol
-      if (!grouped.has(category)) {
-        grouped.set(category, [])
-      }
-      grouped.get(category)!.push(alltickSymbol)
-    })
-    
-    // 为每个分类更新K线数据（使用5分钟K线用于sparkline显示）
-    Array.from(grouped.entries()).forEach(([category, alltickSymbols]) => {
-      marketStore.fetchBatchKlines(alltickSymbols, category, '5m', 20).catch((error) => {
-        console.error(`[Home] Failed to update K-line data for category ${category}:`, error)
-      })
-    })
-  }
-  
-  // 立即执行一次
-  updateKlines()
-  
-  // 每3秒轮询一次（与WebSocket保持一致）
-  klinePollingTimer.value = window.setInterval(() => {
-    updateKlines()
-  }, 30000) // Visible homepage charts only need periodic calibration.
-  
-  console.log('[Home] ✅ Started K-line calibration (every 30 seconds)')
-}
 
-// 停止K线轮询
-function stopKlinePolling() {
-  if (klinePollingTimer.value) {
-    clearInterval(klinePollingTimer.value)
-    klinePollingTimer.value = null
-    console.log('[Home] ✅ Stopped K-line polling')
+async function loadSparklinePreview() {
+  await marketStore.loadHomeSparklineSnapshot(allSymbols.value.filter((s: any) => s.isEnabled !== false).map((s: any) => s.symbol))
+}
+function startSparklinePolling() {
+  stopSparklinePolling()
+  sparklinePollingTimer.value = window.setInterval(() => {
+    if (document.visibilityState !== 'hidden') void loadSparklinePreview()
+  }, HOME_SPARKLINE_REFRESH_MS)
+}
+function stopSparklinePolling() {
+  if (sparklinePollingTimer.value !== null) {
+    clearInterval(sparklinePollingTimer.value)
+    sparklinePollingTimer.value = null
   }
 }
+const refreshVisibleSparkline = () => {
+  if (document.visibilityState === 'visible') void loadSparklinePreview()
+}
+document.addEventListener('visibilitychange', refreshVisibleSparkline)
 
 // 组件卸载时清理定时器
 onUnmounted(() => {
@@ -723,7 +626,8 @@ onUnmounted(() => {
     clearInterval(countdownTimer.value)
   }
   marketWebSocket.release('home')
-  stopKlinePolling()
+  stopSparklinePolling()
+  document.removeEventListener('visibilitychange', refreshVisibleSparkline)
 })
 
 // 监听语言变化，重新加载公告
@@ -763,15 +667,6 @@ watch(
   { deep: true }
 )
 
-// 监听K线数据变化，确保Sparkline能够更新
-watch(
-  () => marketStore.klineDataMap,
-  () => {
-    // K线数据更新时，触发响应式更新
-    console.log('[Home] Kline data updated, symbols:', Object.keys(marketStore.klineDataMap))
-  },
-  { deep: true }
-)
 const logoUrl = '/img/logo.svg'
 </script>
 
@@ -791,15 +686,7 @@ const logoUrl = '/img/logo.svg'
             <div class="user-email">{{ localeStore.t('pleaseLoginFirst') }}</div>
           </template>
         </div>
-        <div class="header-right">
-          <button class="icon-btn" @click="router.push('/customer-service')">
-            <img src="/img/kf.png" :alt="localeStore.t('customerService')" />
-          </button>
-          <span id="header-inbox" class="header-inbox"></span>
-          <button class="icon-btn" @click="router.push('/language')">
-            <img src="/img/yy.png" :alt="localeStore.t('language')" />
-          </button>
-        </div>
+        <MessageHeaderActions />
       </div>
 
       <div class="search-row">
@@ -847,7 +734,7 @@ const logoUrl = '/img/logo.svg'
           >
           <div class="market-top">
             <div class="market-icons">
-              <img 
+              <ProtectedImage
                 v-if="s.iconUrl" 
                 class="symbol-icon" 
                 :src="getIconUrl(s.iconUrl)" 
@@ -857,13 +744,11 @@ const logoUrl = '/img/logo.svg'
             </div>
             <span class="name">{{ displaySymbol(s) }}</span>
           </div>
-          <div class="market-sparkline">
-            <div v-if="!hasSparklineData(s)" class="sparkline-loading">
-              <div class="spinner"></div>
-            </div>
+          <div class="market-sparkline" :data-sparkline-status="homeSparkline(s).status" :data-sparkline-updated-at="homeSparkline(s).updatedAt" :title="sparklineDescription(s)">
+            <span v-if="!homeSparkline(s).points.length" class="sparkline-empty" role="status" :aria-label="sparklineDescription(s)">—</span>
             <Sparkline
               v-else
-              :data="parseSparklineData(s.sparklineData, s.alltickSymbol || s.symbol)"
+              :data="homeSparkline(s).points"
               :color="getChangeColor(getRealTimeChange(s).changePct)"
               :width="100"
               :height="30"
@@ -889,7 +774,7 @@ const logoUrl = '/img/logo.svg'
           :key="q.id"
           @click="handleQuickItemClick(q.id)"
         >
-          <img :src="q.icon" class="quick-icon" :alt="q.label" />
+          <ProtectedImage :src="q.icon" class="quick-icon" :alt="q.label" />
           <div class="quick-label">{{ q.label }}</div>
         </div>
       </div> 
@@ -913,7 +798,7 @@ const logoUrl = '/img/logo.svg'
       <div class="symbol-list" v-if="categorySymbols.length > 0">
         <div class="symbol-item" v-for="s in categorySymbols" :key="s.id" @click="goToTrade(s)">
           <div class="symbol-icons">
-            <img 
+            <ProtectedImage
               v-if="s.iconUrl" 
               class="symbol-icon" 
               :src="getIconUrl(s.iconUrl)" 
@@ -922,13 +807,11 @@ const logoUrl = '/img/logo.svg'
             />
           </div>
           <div class="symbol-ticker">{{ displaySymbol(s) }}</div>
-          <div class="symbol-sparkline">
-            <div v-if="!hasSparklineData(s)" class="sparkline-loading">
-              <div class="spinner"></div>
-            </div>
+          <div class="symbol-sparkline" :data-sparkline-status="homeSparkline(s).status" :data-sparkline-updated-at="homeSparkline(s).updatedAt" :title="sparklineDescription(s)">
+            <span v-if="!homeSparkline(s).points.length" class="sparkline-empty" role="status" :aria-label="sparklineDescription(s)">—</span>
             <Sparkline
               v-else
-              :data="parseSparklineData(s.sparklineData, s.alltickSymbol || s.symbol)"
+              :data="homeSparkline(s).points"
               :color="getChangeColor(getRealTimeChange(s).changePct)"
               :width="80"
               :height="24"
@@ -1010,6 +893,9 @@ const logoUrl = '/img/logo.svg'
   padding-bottom: 4px;
 }
 .user-info {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
   display: flex;
   flex-direction: column;
 }

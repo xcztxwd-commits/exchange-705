@@ -11,7 +11,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 class PermissionGrantRepairTest extends AdminPermissionIntegrationTest {
     @org.springframework.boot.test.mock.mockito.SpyBean com.gtcfesk.exchange.admin.AgentActionService actionWriter;
     String rolePath() { return "/api/admin/roles/" + role.getId(); }
-    Set<Long> roleIds() { return grants.findByRoleId(role.getId()).stream().map(AdminRoleMenu::getMenuId).collect(Collectors.toSet()); }
+    Set<Long> roleIds() { return grants.findByTenantIdAndRoleId(1L, role.getId()).stream().map(AdminRoleMenu::getMenuId).collect(Collectors.toSet()); }
     void success(String method, String path, String body, String tk) throws Exception {
         org.springframework.mock.web.MockHttpServletResponse r = mvc.perform(request(org.springframework.http.HttpMethod.valueOf(method), path)
             .header("Authorization", "Bearer " + tk).contentType("application/json").content(body)).andReturn().getResponse();
@@ -41,8 +41,8 @@ class PermissionGrantRepairTest extends AdminPermissionIntegrationTest {
         UserAccount a = new UserAccount(); a.setEmail("grant_"+UUID.randomUUID()+"@example.invalid");
         a.setUserType("agent"); a.setPasswordHash("test-only"); a.setStatus("normal"); return users.saveAndFlush(a);
     }
-    Set<Long> agentIds(Long id) { return userMenus.findByUserId(id).stream().map(UserMenu::getMenuId).collect(Collectors.toSet()); }
-    Set<String> agentActions(Long id) { return actions.findByUserId(id).stream().map(a -> a.getMenuId()+":"+a.getActionCode()).collect(Collectors.toSet()); }
+    Set<Long> agentIds(Long id) { return userMenus.findByTenantIdAndUserId(1L, id).stream().map(UserMenu::getMenuId).collect(Collectors.toSet()); }
+    Set<String> agentActions(Long id) { return actions.findByTenantIdAndUserId(1L, id).stream().map(a -> a.getMenuId()+":"+a.getActionCode()).collect(Collectors.toSet()); }
     @Test void agentMalformedMenusAndActionsAreAtomicAndOmissionIsExplicit() throws Exception {
         UserAccount a=agent(); long m=menu("users").getId(); String path="/api/admin/users/"+a.getId()+"/menus";
         success("POST",path,"{\"menuIds\":["+m+"],\"actions\":{\""+m+"\":[\"modify_remark\"]}}",superToken);
@@ -84,7 +84,7 @@ class PermissionGrantRepairTest extends AdminPermissionIntegrationTest {
             success("PUT",rolePath(),"{\"roleName\":\"repaired_"+UUID.randomUUID()+"\",\"status\":\"active\"}",superToken);
             assertEquals(Collections.singleton(m.getId()),roleIds());
             admins.delete(actor); admins.flush();
-            success("DELETE",rolePath(),"",superToken); assertFalse(roles.existsById(role.getId())); assertTrue(roleIds().isEmpty());
+            success("DELETE",rolePath(),"",superToken); assertFalse(roles.existsByTenantIdAndId(1L, role.getId())); assertTrue(roleIds().isEmpty());
         } finally { m.setStatus(status); menus.saveAndFlush(m); }
     }
     @Test void delegatedCleanupCannotExpandAuthorityOrManageStrongerActiveRole() throws Exception {
@@ -99,9 +99,9 @@ class PermissionGrantRepairTest extends AdminPermissionIntegrationTest {
             assertEquals(403,call("DELETE",path,null,token));
             dormant.setStatus("disabled");menus.saveAndFlush(dormant);
             assertEquals(403,call("POST",path+"/menus","{\"menuIds\":["+menu("settings").getId()+"]}",token));
-            assertEquals(1,grants.findByRoleId(target.getId()).size());
+            assertEquals(1,grants.findByTenantIdAndRoleId(1L, target.getId()).size());
             success("POST",path+"/menus","{\"menuIds\":[]}",token);
-            assertTrue(grants.findByRoleId(target.getId()).isEmpty());
+            assertTrue(grants.findByTenantIdAndRoleId(1L, target.getId()).isEmpty());
             assertEquals(400,call("POST",path+"/menus","{\"menuIds\":["+dormant.getId()+"]}",token));
         } finally { dormant.setStatus(status);menus.saveAndFlush(dormant); }
     }

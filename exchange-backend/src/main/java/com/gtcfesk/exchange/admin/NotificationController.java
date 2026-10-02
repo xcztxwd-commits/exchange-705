@@ -83,7 +83,7 @@ public class NotificationController {
             
             if (agentId != null) {
                 // 代理：只统计下级用户的待处理消息
-                List<UserAccount> subordinates = userAccountRepository.findByParentUserId(agentId);
+                List<UserAccount> subordinates = userAccountRepository.findByTenantIdAndParentUserId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), agentId);
                 Set<Long> subordinateUserIds = subordinates.stream()
                         .map(UserAccount::getId)
                         .collect(Collectors.toSet());
@@ -95,21 +95,21 @@ public class NotificationController {
                     counts.put("order", 0L);
                 } else {
                     // 充值待审核数量
-                    long depositCount = depositRecordRepository.findAll().stream()
+                    long depositCount = depositRecordRepository.findAllByTenantId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId()).stream()
                             .filter(record -> "PENDING".equals(record.getStatus()))
                             .filter(record -> subordinateUserIds.contains(record.getUserId()))
                             .count();
                     counts.put("deposit", depositCount);
                     
                     // 提现待审核数量
-                    long withdrawCount = withdrawRecordRepository.findAll().stream()
+                    long withdrawCount = withdrawRecordRepository.findAllByTenantId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId()).stream()
                             .filter(record -> "PENDING".equals(record.getStatus()))
                             .filter(record -> subordinateUserIds.contains(record.getUserId()))
                             .count();
                     counts.put("withdraw", withdrawCount);
                     
                     // 实名待审核数量
-                    long kycCount = kycRecordRepository.findAll().stream()
+                    long kycCount = kycRecordRepository.findAllByTenantId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId()).stream()
                             .filter(record -> "PENDING".equals(record.getStatus()))
                             .filter(record -> subordinateUserIds.contains(record.getUserId()))
                             .count();
@@ -117,12 +117,12 @@ public class NotificationController {
                     
                     // 订单数量（合约订单 + 期货订单）- 只统计未平仓的订单
                     // 合约订单：OPEN（持仓中）或 PENDING（挂单中）为未平仓
-                    long contractOrderCount = contractOrderRepository.findAll().stream()
+                    long contractOrderCount = contractOrderRepository.findAllByTenantId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId()).stream()
                             .filter(order -> subordinateUserIds.contains(order.getUserId()))
                             .filter(order -> "OPEN".equals(order.getStatus()) || "PENDING".equals(order.getStatus()))
                             .count();
                     // 期货订单：TRADING（交易中）为未平仓
-                    long optionOrderCount = optionOrderRepository.findAll().stream()
+                    long optionOrderCount = optionOrderRepository.findAllByTenantId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId()).stream()
                             .filter(order -> subordinateUserIds.contains(order.getUserId()))
                             .filter(order -> "TRADING".equals(order.getStatus()))
                             .count();
@@ -131,30 +131,30 @@ public class NotificationController {
             } else {
                 // 管理员：统计所有待处理消息
                 // 充值待审核数量
-                long depositCount = depositRecordRepository.findAll().stream()
+                long depositCount = depositRecordRepository.findAllByTenantId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId()).stream()
                         .filter(record -> "PENDING".equals(record.getStatus()))
                         .count();
                 counts.put("deposit", depositCount);
                 
                 // 提现待审核数量
-                long withdrawCount = withdrawRecordRepository.findAll().stream()
+                long withdrawCount = withdrawRecordRepository.findAllByTenantId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId()).stream()
                         .filter(record -> "PENDING".equals(record.getStatus()))
                         .count();
                 counts.put("withdraw", withdrawCount);
                 
                 // 实名待审核数量
-                long kycCount = kycRecordRepository.findAll().stream()
+                long kycCount = kycRecordRepository.findAllByTenantId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId()).stream()
                         .filter(record -> "PENDING".equals(record.getStatus()))
                         .count();
                 counts.put("kyc", kycCount);
                 
                 // 订单数量（合约订单 + 期货订单）- 只统计未平仓的订单
                 // 合约订单：OPEN（持仓中）或 PENDING（挂单中）为未平仓
-                long contractOrderCount = contractOrderRepository.findAll().stream()
+                long contractOrderCount = contractOrderRepository.findAllByTenantId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId()).stream()
                         .filter(order -> "OPEN".equals(order.getStatus()) || "PENDING".equals(order.getStatus()))
                         .count();
                 // 期货订单：TRADING（交易中）为未平仓
-                long optionOrderCount = optionOrderRepository.findAll().stream()
+                long optionOrderCount = optionOrderRepository.findAllByTenantId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId()).stream()
                         .filter(order -> "TRADING".equals(order.getStatus()))
                         .count();
                 counts.put("order", contractOrderCount + optionOrderCount);
