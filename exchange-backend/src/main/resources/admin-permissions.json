@@ -231,7 +231,8 @@
       "actions": {
         "detail": "查看详情",
         "approve_loan": "审核通过",
-        "reject_loan": "审核拒绝"
+        "reject_loan": "审核拒绝",
+        "controlled_exit": "受控还款"
       }
     },
     {

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { formatPrice } from '../src/utils/formatPrice.ts'
 import { readFileSync } from 'node:fs'
+import ts from 'typescript'
 
 for (const [value, expected] of [
   [0, '0.000'], [12, '12.000'], ['12.3', '12.300'],
@@ -18,10 +19,20 @@ assert.equal(JSON.stringify(quote), original, 'Display must not change raw price
 
 const source = file => readFileSync(new URL(`../src/${file}`, import.meta.url), 'utf8')
 for (const file of [
-  'views/Orders.vue', 'views/Symbols.vue', 'views/AiControl.vue',
+  'views/Orders.vue', 'views/Symbols.vue',
   'components/ManualContractOrder.vue', 'components/MarketMinutePicker.vue',
   'components/AccountInspection.vue', 'utils/orderShare.ts',
 ]) assert.match(source(file), /import \{ formatPrice \}/, `${file} must use shared price formatting`)
+
+// AI control uses instrument precision, not the three-decimal order display policy.
+const priceFunction = source('views/AiControl.vue').match(/function formatPrice\([^]*?\n}/)?.[0]
+assert.ok(priceFunction, 'AI instrument formatter must remain explicit')
+const priceScript = ts.transpileModule(priceFunction, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText
+for (const digits of [0, 3, 5, 8]) {
+  const formatInstrument = new Function('precision', priceScript + '; return formatPrice')({ value: digits })
+  assert.equal(formatInstrument(1.23456789), new Intl.NumberFormat('en-US', { minimumFractionDigits: digits, maximumFractionDigits: digits }).format(1.23456789))
+  for (const value of [null, undefined, '', NaN, Infinity]) assert.equal(formatInstrument(value), '—')
+}
 
 assert.doesNotMatch(source('views/Orders.vue'), /formatMoney\(row\.(?:openPrice|closePrice|stopLoss|takeProfit)/)
 assert.doesNotMatch(source('views/Symbols.vue'), /\{\{ row\.currentPrice/)

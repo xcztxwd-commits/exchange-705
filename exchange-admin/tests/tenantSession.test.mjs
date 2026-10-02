@@ -43,7 +43,7 @@ await report('support');assert(calls[1].sequence>calls[0].sequence)
 for(const app of ['exchange-frontend','exchange-pc']) {
  const source=fs.readFileSync(new URL(`../../${app}/src/App.vue`,import.meta.url),'utf8')
  assertLocalCountdownSafety(readCountdownSources(app))
- assert.match(source,/visibilitychange/);assert.match(source,/route.path/);assert.doesNotMatch(source,/route.fullPath|route.query/)
+ assert.match(source,/visibilitychange/);assert.match(source,/route.path/);assert.doesNotMatch(source,/route\.fullPath|route\.query(?!\.edition\b)/)
 }
 const auth=fs.readFileSync(new URL('../src/store/auth.ts',import.meta.url),'utf8')
 assert.doesNotMatch(auth,/localStorage\.getItem\('admin_token'\)/)

@@ -20,7 +20,7 @@ export function readCountdownSources(app) {
   policy(['exchange-frontend', 'exchange-pc'].includes(app), 'unknown application')
   const read = path => fs.readFileSync(new URL(`../../${app}/src/${path}`, import.meta.url), 'utf8')
   const shared = path => fs.readFileSync(new URL(`../../exchange-frontend/src/utils/${path}`, import.meta.url), 'utf8')
-  return { appName: app, app: read('App.vue'), wallet: read('utils/useTrialWallet.ts'), lifecycle: read('utils/trialLifecycle.ts'), accountMode: read('utils/accountMode.ts'), activity: read('utils/pageActivity.ts'), features: shared('tenantFeatures.ts'), capabilities: shared('tenantCapabilities.ts') }
+  return { appName: app, app: read('App.vue'), wallet: read('utils/useTrialWallet.ts'), lifecycle: read('utils/trialLifecycle.ts'), accountMode: read('utils/accountMode.ts'), activity: read('utils/pageActivity.ts'), features: shared('tenantFeatures.ts'), capabilities: shared('tenantCapabilities.ts'), uiEdition: shared('uiEdition.ts') }
 }
 
 function pureComputed(ast, expected) {
@@ -88,7 +88,9 @@ export function assertLocalCountdownSafety(sources) {
       else policy(ts.isBinaryExpression(member.parent) && member.parent.left === member && member.parent.operatorToken.kind === ts.SyntaxKind.EqualsToken && text(member.parent.right) === 'performance.now()', 'tick cannot invoke an unreviewed getter/helper')
     }
   })
-  pureComputed(app, { activityPlacement: ['activityPosition'] })
+  pureComputed(app, sources.appName === 'exchange-frontend'
+    ? { activityPlacement: ['activityPosition'], presentationEdition: ['routeUiEdition'], viewKey: ['accountMode'] }
+    : { activityPlacement: ['activityPosition'] })
   const wallet = tree(sources.wallet)
   pureComputed(wallet, { serverNow: ['clock.now'], state: ['trialState', 'accountMode'], remaining: ['countdown'], ready: [] })
   for (const [name, source] of Object.entries({ wallet: sources.wallet, lifecycle: sources.lifecycle, accountMode: sources.accountMode, activity: sources.activity })) {
@@ -141,6 +143,9 @@ export async function observeCountdownRuntime(sources) {
       if (name === 'vue-router') return { useRoute: () => route }
       if (name === 'pinia') return pinia
       if (name.endsWith('/auth')) return { useAuthStore: () => auth }
+      if (name === '@/store/uiEdition') return { useUiEditionStore: () => vue.reactive({ edition: 'classic' }) }
+      if (name === '@/utils/uiEdition') return evaluate('uiEdition', sources.uiEdition)
+      if (name === '@/advanced/pageRegistry') return { advancedPageForPath: () => undefined }
       if (name.endsWith('/locale')) return { useLocaleStore: () => ({ locale: 'zh', loadLocale() {} }) }
       if (name.endsWith('/request')) return { __esModule: true, default: request }
       for (const part of ['useTrialWallet', 'trialLifecycle', 'pageActivity', 'tenantFeatures', 'tenantCapabilities']) if (name.endsWith('/' + part)) return evaluate(part, { useTrialWallet: sources.wallet, trialLifecycle: sources.lifecycle, pageActivity: sources.activity, tenantFeatures: sources.features, tenantCapabilities: sources.capabilities }[part])
