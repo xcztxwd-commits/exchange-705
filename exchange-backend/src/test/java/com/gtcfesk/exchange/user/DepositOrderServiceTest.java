@@ -104,7 +104,7 @@ class DepositOrderServiceTest {
  @Test void csvIsQuotedAndFormulaSafe(){assertEquals("\"'=SUM(1)\"",DepositOrderController.csv("=SUM(1)"));assertEquals("\"a\"\"b\"",DepositOrderController.csv("a\"b"));}
 
  @Test void productionTransferAndNewAccountCreationStayAtomic()throws Exception {
-  DepositOrderRequest r=request();TransferController transfer=new TransferController(users,assets,transfers);TransferController.TransferRequest t=new TransferController.TransferRequest();t.setFromAccount("FUND");t.setToAccount("CONTRACT");t.setAmount(BigDecimal.TEN);t.setRequestId(UUID.randomUUID().toString());
+  DepositOrderRequest r=request();TransferController transfer=new TransferController(users,assets,transfers);org.springframework.test.util.ReflectionTestUtils.setField(transfer,"audit",mock(com.gtcfesk.exchange.control.ControlAuditService.class));TransferController.TransferRequest t=new TransferController.TransferRequest();t.setFromAccount("FUND");t.setToAccount("CONTRACT");t.setAmount(BigDecimal.TEN);t.setRequestId(UUID.randomUUID().toString());
   List<Boolean> outcomes=race(()->service.manual(r),()->new TransactionTemplate(manager).execute(s->transfer.transfer(new UsernamePasswordAuthenticationToken(user.getId().toString(),null),t)));
   equal(new BigDecimal("25").add(outcomes.get(0)?new BigDecimal("100"):BigDecimal.ZERO).subtract(outcomes.get(1)?BigDecimal.TEN:BigDecimal.ZERO).toPlainString(),balance("FUND"));
   if(outcomes.get(1))equal("10",balance("CONTRACT"));

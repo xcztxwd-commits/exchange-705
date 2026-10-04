@@ -15,7 +15,7 @@ public class AssetHistoryCacheProcessProbe {
         DriverManagerDataSource source=com.gtcfesk.exchange.tenant.DedicatedMysqlFixture.fromProperty("cache.mysql.fixture");
         com.gtcfesk.exchange.tenant.TenantContext.open(2L);
         ObjectMapper json=new ObjectMapper();
-        RedisProperties p=new RedisProperties();p.setHost("127.0.0.1");p.setPort(Integer.parseInt(System.getenv("CACHE_TEST_REDIS_PORT")));
+        RedisProperties p=new RedisProperties();p.setHost("127.0.0.1");org.springframework.data.redis.connection.RedisStandaloneConfiguration owned=com.gtcfesk.exchange.market.HomeSparklineFixture.ownedRedisConfiguration();p.setPort(owned.getPort());p.setPassword(new String(owned.getPassword().get()));
         AssetHistoryRedisConfig config=new AssetHistoryRedisConfig();
         try{
             StringRedisTemplate redis=config.assetHistoryRedis(p,200);redis.afterPropertiesSet();

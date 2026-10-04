@@ -69,7 +69,7 @@ public class OptionOrderController {
             
             Long userId = Long.parseLong(auth.getName());
             com.gtcfesk.exchange.common.OrderRequest.required(req==null?null:req.getRequestId());
-            OptionOrder order = optionOrderService.createOrder(userId, req);
+            OptionOrder order = optionOrderService.createOrderWithAuthority(userId, req);
             
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", true);
@@ -177,7 +177,7 @@ public class OptionOrderController {
                 ? new BigDecimal(req.get("closePrice").toString()) 
                 : null;
             
-            OptionOrder order = optionOrderService.closeOrder(userId, orderId, closePrice);
+            OptionOrder order = optionOrderService.closeOrderWithAuthority(userId, orderId, closePrice);
             
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", true);

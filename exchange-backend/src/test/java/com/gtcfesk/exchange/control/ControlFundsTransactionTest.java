@@ -45,7 +45,7 @@ class ControlFundsTransactionTest {
   @Bean TenantJobRunner tenantJobs(){return mock(TenantJobRunner.class);}
   // Scheduler is unused in this service-only fixture; keep production failure delivery required.
   @Bean OperationalIssueService operationalIssues(){return mock(OperationalIssueService.class);}
-  @Bean LoanPersonalInfoService personal(){LoanPersonalInfoService s=mock(LoanPersonalInfoService.class);when(s.requireApprovedPersonalInfo(anyLong())).thenAnswer(i->{LoanPersonalInfo p=new LoanPersonalInfo();p.setUserId(i.getArgument(0));p.setRealName("test");p.setIdNumber("TEST-IDENTITY");return p;});return s;}
+  @Bean LoanPersonalInfoService personal(){LoanPersonalInfoService s=mock(LoanPersonalInfoService.class);org.mockito.stubbing.Answer<LoanPersonalInfo> approved=i->{LoanPersonalInfo p=new LoanPersonalInfo();p.setUserId(i.getArgument(0));p.setRealName("test");p.setIdNumber("TEST-IDENTITY");return p;};when(s.requireApprovedPersonalInfo(anyLong())).thenAnswer(approved);when(s.requireApprovedPersonalInfoForFunds(anyLong())).thenAnswer(approved);return s;}
  }
  @Autowired LoanReviewService review; @Autowired LoanService loans; @Autowired FinancialService financial; @Autowired FinancialYieldService yields;
  @Autowired UserAccountRepository users; @Autowired AssetAccountRepository assets; @Autowired LoanRecordRepository records; @Autowired FinancialOrderRepository orders; @Autowired FinancialProductRepository products;

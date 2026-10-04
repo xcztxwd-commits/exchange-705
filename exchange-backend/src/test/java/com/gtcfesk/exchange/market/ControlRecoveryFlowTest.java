@@ -20,7 +20,7 @@ class ControlRecoveryFlowTest extends PersistentPriceControlTest {
     }
     Map<String,Object> display(long now, int price, boolean available) {
         Map<String,Object> q = raw(now, available); q.put("price", price);
-        return controls.display(symbol, q, now);
+        return engineRead(controls, q, now);
     }
     Map<String,Object> flow(PersistentPriceControl.Task t) {
         return store.db.queryForMap("SELECT * FROM market_control_flow WHERE task_id=?", t.id);

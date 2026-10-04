@@ -19,9 +19,11 @@ final class ControlRecoveryFlow {
         store.db.update("INSERT INTO market_control_flow(tenant_id,task_id,options_json,state,last_price,last_at) VALUES(" + tenant() + ",?,?,'TARGET',?,?)",
             t.id, store.encode(options.snapshot()), t.startPrice, t.startedAt);
     }
-    void publish(PersistentPriceControl.Task t, long until) {
+    boolean publish(PersistentPriceControl.Task t, long until) {
+        if (!store.historyOrdering.publicationNeeded(t.symbolId, t.id, t.startedAt, until)) return false;
         store.db.update("INSERT INTO market_control_publication(tenant_id,task_id,published_at,from_at,to_at) VALUES(" + tenant() + ",?,?,?,?) "
             + "ON DUPLICATE KEY UPDATE to_at=GREATEST(to_at,VALUES(to_at))", t.id, System.currentTimeMillis(), t.startedAt, until);
+        return true;
     }
     void cancel(PersistentPriceControl.Task t, long now, boolean hold) {
         if (t == null) return;

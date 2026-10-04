@@ -10,7 +10,7 @@ try {
   $reports=[IO.Path]::GetFullPath((Join-Path $root 'reports'))+[IO.Path]::DirectorySeparatorChar
   $runName=Split-Path -Leaf $RunDir
   if(!$RunDir.StartsWith($reports,[StringComparison]::OrdinalIgnoreCase) -or $runName -notmatch '^stage1-\d{8}-\d{6}$'){throw 'Only an explicit owned stage1 report directory is allowed'}
-  $spec=Get-Content -LiteralPath (Join-Path $RunDir 'environment.json') -Raw | ConvertFrom-Json
+  $spec=Get-Content -Encoding UTF8 -LiteralPath (Join-Path $RunDir 'environment.json') -Raw | ConvertFrom-Json
   if($spec.run -ne $runName){throw 'Run identity mismatch'}
   $file=Join-Path $RunDir 'private/ca.crt'
   foreach($item in @($RunDir,(Join-Path $RunDir 'private'),$file)){
@@ -32,7 +32,7 @@ try {
   $recordFile=Join-Path $RunDir 'fixture-certificate-trust.json'
   $record=$null
   if(Test-Path -LiteralPath $recordFile){
-    $record=Get-Content -LiteralPath $recordFile -Raw | ConvertFrom-Json
+    $record=Get-Content -Encoding UTF8 -LiteralPath $recordFile -Raw | ConvertFrom-Json
     if($record.run -cne $runName -or $record.runDir -ine $RunDir -or $record.caFileSha256 -cne $hash -or $record.certificateSha256 -cne $derHash -or $record.thumbprint -cne $thumbprint -or $record.store -cne 'CurrentUser/Root'){throw 'Trust record or certificate fingerprint mismatch'}
   }
   function Save-Record {

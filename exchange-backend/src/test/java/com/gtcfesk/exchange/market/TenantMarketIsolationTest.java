@@ -52,9 +52,18 @@ class TenantMarketIsolationTest {
         try {
             try (TenantContext.Scope ignored = TenantContext.open(2L)) { redis.savePrice("SAME", quote); }
             try (TenantContext.Scope ignored = TenantContext.open(3L)) { redis.savePrice("SAME", quote); }
-            redis.flushPrices(); // No request context on the deferred writer.
-            verify(values).set(eq("tenant:2:market:price:SAME"), anyString());
-            verify(values).set(eq("tenant:3:market:price:SAME"), anyString());
+            assertNull(TenantContext.currentTenantId());
+            redis.flushPrices(); // No request context on the deferred Lua CAS writer.
+            org.springframework.data.redis.core.script.RedisScript<?> script =
+                    (org.springframework.data.redis.core.script.RedisScript<?>)ReflectionTestUtils.getField(redis, "PRICE_SCRIPT");
+            assertEquals(Long.class, script.getResultType());
+            assertTrue(script.getScriptAsString().contains("writerGeneration"));
+            assertTrue(script.getScriptAsString().contains("quoteVersion"));
+            verify(template).execute(same(script), eq(Collections.singletonList("tenant:2:market:price:SAME")), anyString());
+            verify(template).execute(same(script), eq(Collections.singletonList("tenant:3:market:price:SAME")), anyString());
+            verify(template, times(2)).execute(same(script), anyList(), anyString());
+            verifyNoInteractions(values);
+            assertNull(TenantContext.currentTenantId());
             assertThrows(RuntimeException.class, () -> redis.savePrice("SAME", quote));
             assertThrows(RuntimeException.class, () -> redis.getBatchPrices(Collections.emptyList()));
         } finally { redis.stopPriceWriter(); }
@@ -63,6 +72,7 @@ class TenantMarketIsolationTest {
     @Test void websocketPayloadAndRevocationStayBoundToHandshakeTenant() throws Exception {
         MarketWebSocketHandler handler = new MarketWebSocketHandler();
         ForexQuoteMarketService market = mock(ForexQuoteMarketService.class);
+        when(market.readSnapshot(any())).thenAnswer(call -> ((java.util.function.Supplier<?>) call.getArgument(0)).get());
         TenantRepository tenants = mock(TenantRepository.class);
         ReflectionTestUtils.setField(handler, "marketService", market);
         ReflectionTestUtils.setField(handler, "tenants", tenants);

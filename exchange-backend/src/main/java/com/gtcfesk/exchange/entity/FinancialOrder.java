@@ -5,6 +5,7 @@ import lombok.Setter;
 
 import javax.persistence.*;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Getter
@@ -52,6 +53,15 @@ public class FinancialOrder extends com.gtcfesk.exchange.tenant.TenantOwnedEntit
     @Column(name = "total_yield", nullable = false, precision = 32, scale = 16)
     private BigDecimal totalYield; // 预计总收益
 
+    // Null on legacy orders: rebuild once in bounded date segments, never infer progress from MAX(date).
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    @Column(name = "last_accrued_date")
+    private LocalDate lastAccruedDate;
+
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    @Column(name = "accrued_yield", precision = 32, scale = 16)
+    private BigDecimal accruedYield;
+
     @Column(name = "term_days", nullable = false)
     private Integer termDays; // 理财期限（天数）
 
@@ -94,6 +104,3 @@ public class FinancialOrder extends com.gtcfesk.exchange.tenant.TenantOwnedEntit
         updatedAt = LocalDateTime.now();
     }
 }
-
-
-

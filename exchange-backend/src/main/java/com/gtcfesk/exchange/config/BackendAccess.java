@@ -142,7 +142,9 @@ public class BackendAccess extends RequestBodyAdviceAdapter implements HandlerIn
             }
             if (vars.containsKey("agentId") && !agent.toString().equals(vars.get("agentId"))) deny();
             String recordId = vars.getOrDefault("orderId", vars.get("id"));
-            if (recordId != null) {
+            // Only these owner-record controllers use numeric ids; insight ids are UUIDs.
+            if (recordId != null && Arrays.asList("DepositReviewController", "WithdrawReviewController", "LoanReviewController",
+                    "KycReviewController", "LoanPersonalInfoReviewController", "AdminOrderController", "AdminFinancialYieldController").contains(c)) {
                 Long id = Long.valueOf(recordId), owner = null;
                 if (c.equals("DepositReviewController")) owner = deposits.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), id).map(DepositRecord::getUserId).orElse(null);
                 else if (c.equals("WithdrawReviewController")) owner = withdrawals.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), id).map(WithdrawRecord::getUserId).orElse(null);

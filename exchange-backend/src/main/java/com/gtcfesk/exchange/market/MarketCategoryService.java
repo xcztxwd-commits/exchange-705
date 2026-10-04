@@ -11,8 +11,9 @@ import java.util.*;
 @Service
 public class MarketCategoryService {
     @Autowired SystemConfigService configs;
-    public List<Map<String,Object>> all(){
-        String raw=configs.getConfigValue("home.categories");List<Map<String,Object>> rows=new ArrayList<>();
+    public List<Map<String,Object>> all(){return parse(configs.getConfigValue("home.categories"));}
+    private List<Map<String,Object>> parse(String raw){
+        List<Map<String,Object>> rows=new ArrayList<>();
         if(raw!=null&&!raw.trim().isEmpty())try{rows=ExchangeQuoteSource.JSON.readValue(raw,new TypeReference<List<Map<String,Object>>>(){});}catch(Exception e){throw new BusinessException("分类配置格式无效");}
         if(rows.isEmpty())for(String key:Arrays.asList("US","Forex","Metal","Crypto","CFD","Oil")){
             Map<String,Object> row=new LinkedHashMap<>();row.put("key",key);row.put("label",key);row.put("sortOrder",rows.size()+1);row.put("enabled",true);rows.add(row);
@@ -43,6 +44,9 @@ public class MarketCategoryService {
     }
     public boolean leverageEnabled(String category){
         return all().stream().noneMatch(row->Objects.equals(category,row.get("key")) && Boolean.FALSE.equals(row.get("leverageEnabled")));
+    }
+    public boolean currentLeverageEnabled(String category){
+        return parse(configs.getCurrentConfigValue("home.categories")).stream().noneMatch(row->Objects.equals(category,row.get("key")) && Boolean.FALSE.equals(row.get("leverageEnabled")));
     }
     public String projectCategory(String requested,String source,String sourceCategory){
         List<Map<String,Object>> rows=all();

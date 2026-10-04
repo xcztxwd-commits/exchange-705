@@ -19,6 +19,13 @@ public interface DepositRecordRepository extends com.gtcfesk.exchange.tenant.Ten
     @Query("select d from DepositRecord d where d.tenantId=:#{T(com.gtcfesk.exchange.tenant.TenantContext).requireTenantId()} and d.id=:id")
     java.util.Optional<DepositRecord> lockById(@Param("id") Long id);
 
+    @Query("select d.id from DepositRecord d where d.tenantId=:tenant and d.createdByType=:type and d.createdById=:actor and d.idempotencyKey=:key")
+    java.util.Optional<Long> findReplayId(@Param("tenant") Long tenant,@Param("type") String type,@Param("actor") Long actor,@Param("key") String key);
+
+    // Non-locking scalar routing only. Authorization/state are checked again after the user lock.
+    @Query("select d.userId from DepositRecord d where d.tenantId=:#{T(com.gtcfesk.exchange.tenant.TenantContext).requireTenantId()} and d.id=:id")
+    java.util.Optional<Long> findOwnerIdById(@Param("id") Long id);
+
     List<DepositRecord> findByTenantIdAndUserIdOrderByCreatedAtDesc(Long tenantId, Long userId);
     List<DepositRecord> findByTenantIdAndStatusOrderByCreatedAtDesc(Long tenantId, String status);
     

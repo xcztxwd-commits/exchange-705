@@ -2,7 +2,7 @@ package com.gtcfesk.exchange.market;
 
 import com.gtcfesk.exchange.entity.TradingSymbol;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
+import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
@@ -12,17 +12,16 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.*;
 
 /** Run only against a disposable test database, never the application database. */
-class BalancedControlPlanMySqlTest {
-    @Test @EnabledIfEnvironmentVariable(named = "V3_MYSQL_URL", matches = ".+")
-    void planAndSamplesRoundTripOnMySql() {
-        DriverManagerDataSource data = new DriverManagerDataSource(System.getenv("V3_MYSQL_URL"),
-                System.getenv("V3_MYSQL_USER"), System.getenv("V3_MYSQL_PASSWORD"));
+class BalancedControlPlanMySqlTest extends TenantMarketTestContext {
+    @Test @EnabledIfSystemProperty(named = "v3.mysql.fixture", matches = ".+")
+    void planAndSamplesRoundTripOnMySql() throws Exception {
+        DriverManagerDataSource data = IdentifiedMarketMysqlFixture.open("v3.mysql.fixture");
         ControlHistoryStore store = new ControlHistoryStore(new JdbcTemplate(data), new DataSourceTransactionManager(data));
-        store.db.execute("CREATE TABLE trading_symbol(id BIGINT PRIMARY KEY)");
-        store.db.update("INSERT INTO trading_symbol(id) VALUES(1)");
+        MarketSqlFixture.schema(store.db);
+        IdentifiedMarketMysqlFixture.symbol(store.db,1,"V3MYSQL");
         store.migrate();
         PersistentPriceControl controls = new PersistentPriceControl(store);
-        TradingSymbol symbol = new TradingSymbol(); symbol.setId(1L); symbol.setSymbol("V3MYSQL"); symbol.setPricePrecision(2);
+        TradingSymbol symbol = new TradingSymbol(); symbol.setTenantId(1L);symbol.setRowVersion(0);symbol.setId(1L); symbol.setSymbol("V3MYSQL"); symbol.setPricePrecision(2);
         BigDecimal start = new BigDecimal("100000.00"), target = new BigDecimal("100060.00");
         long now = System.currentTimeMillis();
         Map<String, Object> quote = new HashMap<>(); quote.put("price", start); quote.put("timestamp", now);

@@ -28,11 +28,14 @@ class TargetControlApiTest extends TenantMarketTestContext {
     ControlHistoryStore store;
     PersistentPriceControl controls;
     MockMvc mvc;
+    MarketControlCommands commands;
     static final String INPUT = "\"durationSeconds\":300,\"targetPrice\":100300,\"intensity\":10,\"randomOscillation\":false";
     @BeforeEach @SuppressWarnings("unchecked") void setup() {
         DriverManagerDataSource data = new DriverManagerDataSource("jdbc:h2:mem:" + UUID.randomUUID() + ";MODE=MySQL;DB_CLOSE_DELAY=-1", "sa", "");
         store = new ControlHistoryStore(new JdbcTemplate(data), new DataSourceTransactionManager(data));
         MarketSqlFixture.schema(store.db); store.db.update("INSERT INTO trading_symbol(id,tenant_id) VALUES(1,1)");
+        store.db.execute("CREATE TABLE tenant(id BIGINT PRIMARY KEY,status VARCHAR(16) NOT NULL,config_ready BOOLEAN NOT NULL)");
+        store.db.update("INSERT INTO tenant(id,status,config_ready) VALUES(1,'ACTIVE',TRUE)");
         controls = new PersistentPriceControl(store);
         TradingSymbol symbol = new TradingSymbol(); symbol.setTenantId(1L); symbol.setId(1L); symbol.setSymbol("TEST");
         symbol.setCategory("Metal"); symbol.setSourceCategory("Metal"); symbol.setMarketSource(MarketInstrumentCatalog.inferredSource("Metal"));
@@ -51,11 +54,17 @@ class TargetControlApiTest extends TenantMarketTestContext {
         Map<String,Object> quote = new HashMap<>(); quote.put("price", new BigDecimal("100000.00"));
         quote.put("timestamp", System.currentTimeMillis()); quote.put("fetchedAt", System.currentTimeMillis()); quote.put("sourceAvailable", true);
         quotes.put("TEST", quote);
+        market.completeControls();
+        commands = new MarketControlCommands(store, market, mock(com.gtcfesk.exchange.tenant.TenantJobRunner.class), mock(com.gtcfesk.exchange.control.ControlAuditService.class));
+        org.springframework.security.authentication.UsernamePasswordAuthenticationToken actor = new org.springframework.security.authentication.UsernamePasswordAuthenticationToken("api-fixture", null, Collections.emptyList());
+        actor.setDetails(new com.gtcfesk.exchange.control.ControlIdentity(7L, 1L, "api-fixture-session"));
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(actor);
         AdminAiControlController controller = new AdminAiControlController();
         ReflectionTestUtils.setField(controller, "market", market); ReflectionTestUtils.setField(controller, "controls", controls);
+        ReflectionTestUtils.setField(controller, "commands", commands);
         mvc = MockMvcBuilders.standaloneSetup(controller).setControllerAdvice(new GlobalExceptionHandler()).build();
     }
-    @AfterEach void close() { market.stop(); }
+    @AfterEach void close() { commands.stop(); market.stop(); org.springframework.security.core.context.SecurityContextHolder.clearContext(); }
     @Test void automaticManualFormulaSaveAndRealStartUseSameSnapshot() throws Exception {
         mvc.perform(post("/api/admin/ai-control/1/preview").contentType(MediaType.APPLICATION_JSON).content("{"+INPUT+"}"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.feasible").value(true)).andExpect(jsonPath("$.algorithmVersion").value(4))
@@ -67,7 +76,14 @@ class TargetControlApiTest extends TenantMarketTestContext {
         assertEquals("5", saved.get("market.control.step-formula.1"));
         mvc.perform(get("/api/admin/ai-control/1/formula")).andExpect(status().isOk()).andExpect(jsonPath("$.stepFormula").value("5"));
         mvc.perform(post("/api/admin/ai-control/1/start").contentType(MediaType.APPLICATION_JSON)
-                .content(custom.substring(0, custom.length()-1)+",\"requestKey\":\"api-v4\"}"))
+                .content(custom.substring(0, custom.length()-1)+",\"requestKey\":\"api-v4-request-key-001\"}"))
+                .andExpect(status().isAccepted()).andExpect(jsonPath("$.state").value("ACCEPTED"));
+        assertEquals(0, store.db.queryForObject("SELECT COUNT(*) FROM market_control_task", Integer.class));
+        commands.runOne();
+        mvc.perform(get("/api/admin/ai-control/1/commands").param("requestKey", "api-v4-request-key-001"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.state").value("RUNNING"));
+        market.completeControls();
+        mvc.perform(get("/api/admin/ai-control/1"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.algorithmVersion").value(4))
                 .andExpect(jsonPath("$.stepFormula").value("5")).andExpect(jsonPath("$.corridorAmount").value("20.00"));
         PersistentPriceControl.Task task = controls.latest(1); String checksum = store.plan(task.id).checksum();
@@ -89,8 +105,12 @@ class TargetControlApiTest extends TenantMarketTestContext {
     }
     @Test void disabledV4NeverSilentlyFallsBackToLegacy() throws Exception {
         ReflectionTestUtils.setField(market, "v4Enabled", false);
-        mvc.perform(post("/api/admin/ai-control/1/start").contentType(MediaType.APPLICATION_JSON).content("{"+INPUT+"}"))
-                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.errorCode").value("ALGORITHM_DISABLED"));
+        mvc.perform(post("/api/admin/ai-control/1/start").contentType(MediaType.APPLICATION_JSON).content("{"+INPUT+",\"requestKey\":\"api-v4-disabled-001\"}"))
+                .andExpect(status().isAccepted()).andExpect(jsonPath("$.state").value("ACCEPTED"));
+        commands.runOne();
+        mvc.perform(get("/api/admin/ai-control/1/commands").param("requestKey", "api-v4-disabled-001"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.state").value("FAILED"))
+                .andExpect(jsonPath("$.errorCode").value("ALGORITHM_DISABLED"));
         assertEquals(0, store.db.queryForObject("SELECT COUNT(*) FROM market_control_task", Integer.class));
     }
 }

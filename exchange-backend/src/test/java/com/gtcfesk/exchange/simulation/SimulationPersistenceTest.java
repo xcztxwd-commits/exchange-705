@@ -89,7 +89,7 @@ class SimulationPersistenceTest {
     }
     @Test void sameTransferEngineMovesOnlyDemoSubwalletsAndRejectsReplay() {
         provisioner.user(7010L);
-        TransferController service=new TransferController(repo(UserAccountRepository.class),repo(AssetAccountRepository.class),repo(TransferRecordRepository.class));
+        TransferController service=new TransferController(repo(UserAccountRepository.class),repo(AssetAccountRepository.class),repo(TransferRecordRepository.class));audit(service,"audit");
         TransferController.TransferRequest request=new TransferController.TransferRequest();
         request.setFromAccount("FUND");request.setToAccount("CONTRACT");request.setAmount(new BigDecimal("25"));request.setRequestId("simulation-transfer");
         for(int i=0;i<2;i++) new TransactionTemplate(transactions).execute(status->service.transfer(new UsernamePasswordAuthenticationToken("7010","x"),request));
@@ -148,7 +148,7 @@ class SimulationPersistenceTest {
         provisioner.user(7014L);
         ForexQuoteMarketService quotes=mock(ForexQuoteMarketService.class);
         WithdrawController service=new WithdrawController(repo(WithdrawRecordRepository.class),repo(AssetAccountRepository.class),repo(UserDigitalAddressRepository.class),repo(UserBankCardRepository.class),new FiatCurrencyService(quotes));
-        ReflectionTestUtils.setField(service,"identityService",identity());policy(service);
+        ReflectionTestUtils.setField(service,"identityService",identity());policy(service);audit(service,"audit");
         ReflectionTestUtils.setField(service,"users",repo(UserAccountRepository.class));
         new TransactionTemplate(transactions).execute(status->{
             UserDigitalAddress address=new UserDigitalAddress();address.setUserId(7014L);address.setCurrency("USDT");address.setAddress("SIMULATION-ONLY");address.setNetwork("USDT-TRC20");repo(UserDigitalAddressRepository.class).save(address);

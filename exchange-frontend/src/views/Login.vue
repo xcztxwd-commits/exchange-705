@@ -23,8 +23,7 @@ const feedbackText = computed(() => {
 })
 watch([account, password], () => { if (!loading.value) feedback.value = null })
 let disposed = false
-let redirectTimer: ReturnType<typeof setTimeout> | undefined
-onBeforeUnmount(() => { disposed = true; clearTimeout(redirectTimer) })
+onBeforeUnmount(() => { disposed = true })
 const onSubmit = async () => {
   if (loading.value) return
   if (!account.value.trim() || !password.value) { feedback.value = 'missing'; return }
@@ -38,7 +37,7 @@ const onSubmit = async () => {
     if (typeof res?.token !== 'string' || !res.token.trim() || !res.user?.id || res.success === false) throw new Error('Invalid login response')
     auth.setAuth(res.token, res.user)
     feedback.value = 'success'
-    redirectTimer = setTimeout(() => { void router.replace('/home') }, 500)
+    await router.replace('/home')
   } catch (e: any) {
     if (!disposed) feedback.value = e?.loginReason || 'failed'
   } finally {

@@ -23,6 +23,7 @@ public class FinancialService {
     @org.springframework.beans.factory.annotation.Autowired private com.gtcfesk.exchange.control.ControlAuditService audit;
     @org.springframework.beans.factory.annotation.Autowired private com.gtcfesk.exchange.repository.UserAccountRepository users;
     @org.springframework.beans.factory.annotation.Autowired private com.gtcfesk.exchange.control.TenantPolicyService tenantPolicy;
+    @javax.persistence.PersistenceContext private javax.persistence.EntityManager entityManager;
     
     private final FinancialProductRepository productRepository;
     private final FinancialOrderRepository orderRepository;
@@ -73,32 +74,23 @@ public class FinancialService {
             throw new BusinessException("申购金额不能大于" + product.getMaxPurchase());
         }
         
-        users.lockById(userId).orElseThrow(() -> new BusinessException("用户不存在"));
+        FinancialCurrentLocks.user(entityManager,userId);
+        com.gtcfesk.exchange.entity.UserAccount owner = users.lockById(userId)
+                .orElseThrow(() -> new BusinessException("用户不存在"));
+        com.gtcfesk.exchange.tenant.TenantContext.require(owner.getTenantId());
+        Long agent = com.gtcfesk.exchange.config.BackendAccess.agentId();
+        if (agent != null && !agent.equals(owner.getParentUserId()))
+            throw new org.springframework.security.access.AccessDeniedException("无权操作此用户理财");
+
+        FinancialCurrentLocks.assets(entityManager,userId);
+        List<AssetAccount> lockedAccounts = assetAccountRepository.lockByUserId(userId);
+        // A missing request key must not take an RR gap lock: unrelated first purchases can deadlock.
         if(requestKey!=null) {
-            FinancialOrder previous=orderRepository.findByTenantIdAndUserIdAndRequestKey(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(),userId,requestKey).orElse(null);
-            if(previous!=null) {OrderRequest.same(previous.getRequestHash(),requestHash);return previous;}
+            FinancialOrder previous=entityManager==null
+                    ? orderRepository.findByTenantIdAndUserIdAndRequestKey(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(),userId,requestKey).orElse(null)
+                    : FinancialCurrentLocks.request(entityManager,userId,requestKey);
+            if(previous!=null) return replay(previous,userId,requestKey,requestHash);
         }
-        AssetAccount fundAccount = assetAccountRepository.lockByUserId(userId).stream().filter(a -> "FUND".equals(a.getCoin())).findFirst()
-                .orElseGet(() -> {
-                    AssetAccount account = new AssetAccount();
-                    account.setUserId(userId);
-                    account.setCoin("FUND");
-                    account.setAvailable(BigDecimal.ZERO);
-                    account.setFrozen(BigDecimal.ZERO);
-                    return assetAccountRepository.save(account);
-                });
-        
-        BigDecimal available = fundAccount.getAvailable() != null ? fundAccount.getAvailable() : BigDecimal.ZERO;
-        if (available.compareTo(purchaseAmount) < 0) {
-            throw new BusinessException("资金账户余额不足");
-        }
-        
-        // 冻结资金
-        fundAccount.setAvailable(available.subtract(purchaseAmount));
-        BigDecimal frozen = fundAccount.getFrozen() != null ? fundAccount.getFrozen() : BigDecimal.ZERO;
-        fundAccount.setFrozen(frozen.add(purchaseAmount));
-        assetAccountRepository.save(fundAccount);
-        
         // 计算收益
         BigDecimal dailyYield = purchaseAmount.multiply(product.getDailyYieldRate())
                 .divide(new BigDecimal("100"), 16, RoundingMode.HALF_UP);
@@ -118,14 +110,59 @@ public class FinancialService {
         order.setTermDays(product.getTermDays());
         order.setPenaltyRate(product.getPenaltyRate());
         order.setStatus("IN_PROGRESS");
-        order.setPurchaseTime(LocalDateTime.now());
-        order.setEndTime(LocalDateTime.now().plusDays(product.getTermDays()));
+        LocalDateTime purchasedAt = LocalDateTime.now();
+        order.setPurchaseTime(purchasedAt);
+        order.setEndTime(purchasedAt.plusDays(product.getTermDays()));
+        order.setLastAccruedDate(purchasedAt.toLocalDate().minusDays(1));
+        order.setAccruedYield(BigDecimal.ZERO);
+
+        if(requestKey!=null && entityManager!=null) {
+            // INSERT arbitrates the unique key without locking an absent range. Only the exact
+            // request-constraint duplicate is a replay; every other SQL error aborts this transaction.
+            if(!FinancialCurrentLocks.insertRequest(entityManager,order))
+                return replay(FinancialCurrentLocks.committedRequest(entityManager,userId,requestKey),userId,requestKey,requestHash);
+            FinancialCurrentLocks.order(entityManager,order.getId());
+            order=orderRepository.lockById(order.getId()).orElseThrow(() -> new IllegalStateException("Financial request insert has no current row"));
+        }
+        AssetAccount fundAccount = lockedAccounts.stream().filter(a -> "FUND".equals(a.getCoin())).findFirst()
+                .orElseGet(() -> {
+                    AssetAccount account = new AssetAccount();
+                    account.setUserId(userId);
+                    account.setCoin("FUND");
+                    account.setAvailable(BigDecimal.ZERO);
+                    account.setFrozen(BigDecimal.ZERO);
+                    return assetAccountRepository.save(account);
+                });
+
+        BigDecimal available = fundAccount.getAvailable() != null ? fundAccount.getAvailable() : BigDecimal.ZERO;
+        if (available.compareTo(purchaseAmount) < 0) {
+            throw new BusinessException("资金账户余额不足");
+        }
+
+        // 冻结资金
+        fundAccount.setAvailable(available.subtract(purchaseAmount));
+        BigDecimal frozen = fundAccount.getFrozen() != null ? fundAccount.getFrozen() : BigDecimal.ZERO;
+        fundAccount.setFrozen(frozen.add(purchaseAmount));
+        assetAccountRepository.save(fundAccount);
         
         orderRepository.save(order);
-        audit.recordCurrent("FINANCIAL_PURCHASE",order.getId().toString(),"userId="+userId+"; amount="+purchaseAmount+"; availableBefore="+available+"; availableAfter="+fundAccount.getAvailable()+"; frozenBefore="+frozen+"; frozenAfter="+fundAccount.getFrozen(),null);
+        recordSuccess("FINANCIAL_PURCHASE",order.getId().toString(),"userId="+userId+"; amount="+purchaseAmount+"; availableBefore="+available+"; availableAfter="+fundAccount.getAvailable()+"; frozenBefore="+frozen+"; frozenAfter="+fundAccount.getFrozen(),null);
         return order;
     }
     
+    private FinancialOrder replay(FinancialOrder previous,Long userId,String requestKey,String requestHash) {
+        com.gtcfesk.exchange.tenant.TenantContext.require(previous.getTenantId());
+        if(!userId.equals(previous.getUserId()) || !requestKey.equals(previous.getRequestKey()))
+            throw new IllegalStateException("Financial request receipt owner/key mismatch");
+        OrderRequest.same(previous.getRequestHash(),requestHash);
+        return previous;
+    }
+    private void recordSuccess(String action, String object, String detail, String reason) {
+        if (com.gtcfesk.exchange.control.ControlIdentity.current()!=null)
+            audit.recordCurrent(action, object, detail, reason);
+        else
+            audit.record(null, com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), null, action, object, "SUCCESS", detail, reason);
+    }
     /** Validate the selected product before locking or freezing funds; readiness checks only one product. */
     static void validateProduct(FinancialProduct product) {
         if (product.getTermDays() == null || product.getTermDays() <= 0 || !"USD".equals(product.getCurrency()))
@@ -144,54 +181,44 @@ public class FinancialService {
      */
     @Transactional
     public FinancialOrder earlyRedeem(Long userId, Long orderId) {
+        FinancialCurrentLocks.user(entityManager,userId);
+        com.gtcfesk.exchange.entity.UserAccount owner = users.lockById(userId)
+                .orElseThrow(() -> new BusinessException("用户不存在"));
+        com.gtcfesk.exchange.tenant.TenantContext.require(owner.getTenantId());
+        Long agent = com.gtcfesk.exchange.config.BackendAccess.agentId();
+        if (agent != null && !agent.equals(owner.getParentUserId()))
+            throw new org.springframework.security.access.AccessDeniedException("无权操作此订单");
+        FinancialCurrentLocks.assets(entityManager,userId);
+        List<AssetAccount> accounts = assetAccountRepository.lockByUserId(userId);
+        FinancialCurrentLocks.order(entityManager,orderId);
         FinancialOrder order = orderRepository.lockById(orderId)
                 .orElseThrow(() -> new BusinessException("订单不存在"));
-        
-        if (!order.getUserId().equals(userId)) {
-            throw new BusinessException("无权操作此订单");
-        }
-        
-        users.lockById(userId).orElseThrow(() -> new BusinessException("用户不存在"));
+        com.gtcfesk.exchange.tenant.TenantContext.require(order.getTenantId());
+        if (!userId.equals(order.getUserId())) throw new BusinessException("无权操作此订单");
         if ("REDEEMED".equals(order.getStatus()) && order.getRedeemTime()!=null) return order;
-        if (!"IN_PROGRESS".equals(order.getStatus())) {
-            throw new BusinessException("订单状态不允许赎回");
-        }
-        
+        if (!"IN_PROGRESS".equals(order.getStatus())) throw new BusinessException("订单状态不允许赎回");
+
         com.gtcfesk.exchange.common.TradeValidation.positive(order.getPurchaseAmount(), "申购本金");
-        if(order.getPenaltyRate()==null||order.getPenaltyRate().signum()<0||order.getPenaltyRate().compareTo(new BigDecimal("100"))>0)throw new BusinessException("赎回费率配置异常");
-        // 计算违约金
-        BigDecimal penaltyAmount = order.getPurchaseAmount()
-                .multiply(order.getPenaltyRate())
+        if(order.getPenaltyRate()==null||order.getPenaltyRate().signum()<0||order.getPenaltyRate().compareTo(new BigDecimal("100"))>0)
+            throw new BusinessException("赎回费率配置异常");
+        BigDecimal penaltyAmount = order.getPurchaseAmount().multiply(order.getPenaltyRate())
                 .divide(new BigDecimal("100"), 16, RoundingMode.HALF_UP);
-        
-        // 计算实际返还金额（本金 - 违约金）
         BigDecimal refundAmount = order.getPurchaseAmount().subtract(penaltyAmount);
-        
-        // 解冻并扣除资金
-        AssetAccount fundAccount = assetAccountRepository.lockByUserId(userId).stream().filter(a -> "FUND".equals(a.getCoin())).findFirst()
+        AssetAccount fundAccount = accounts.stream().filter(a -> "FUND".equals(a.getCoin())).findFirst()
                 .orElseThrow(() -> new BusinessException("资金账户不存在"));
-        
         BigDecimal frozen = fundAccount.getFrozen() != null ? fundAccount.getFrozen() : BigDecimal.ZERO;
-        if (frozen.compareTo(order.getPurchaseAmount()) < 0) {
-            throw new BusinessException("冻结资金异常");
-        }
-        
-        // 解冻全部本金，但只返还扣除违约金后的金额
-        fundAccount.setFrozen(frozen.subtract(order.getPurchaseAmount()));
+        if (frozen.compareTo(order.getPurchaseAmount()) < 0) throw new BusinessException("冻结资金异常");
         BigDecimal available = fundAccount.getAvailable() != null ? fundAccount.getAvailable() : BigDecimal.ZERO;
+        fundAccount.setFrozen(frozen.subtract(order.getPurchaseAmount()));
         fundAccount.setAvailable(available.add(refundAmount));
         assetAccountRepository.save(fundAccount);
-        
-        // 更新订单状态
         order.setStatus("REDEEMED");
         order.setPenaltyAmount(penaltyAmount);
         order.setRedeemTime(LocalDateTime.now());
-        
         orderRepository.save(order);
-        audit.recordCurrent("FINANCIAL_REDEEM",orderId.toString(),"userId="+userId+"; refund="+refundAmount+"; penalty="+penaltyAmount+"; availableBefore="+available+"; availableAfter="+fundAccount.getAvailable()+"; frozenBefore="+frozen+"; frozenAfter="+fundAccount.getFrozen()+"; status=IN_PROGRESS/REDEEMED",null);
+        recordSuccess("FINANCIAL_REDEEM",orderId.toString(),"userId="+userId+"; refund="+refundAmount+"; penalty="+penaltyAmount+"; availableBefore="+available+"; availableAfter="+fundAccount.getAvailable()+"; frozenBefore="+frozen+"; frozenAfter="+fundAccount.getFrozen()+"; status=IN_PROGRESS/REDEEMED",null);
         return order;
     }
-    
     /**
      * 获取用户的订单列表
      */
@@ -221,6 +248,3 @@ public class FinancialService {
                 .divide(new BigDecimal("100"), 16, RoundingMode.HALF_UP);
     }
 }
-
-
-

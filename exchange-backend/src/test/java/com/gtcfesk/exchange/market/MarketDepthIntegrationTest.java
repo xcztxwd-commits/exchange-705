@@ -118,6 +118,6 @@ class MarketDepthIntegrationTest {
         depth.read("BTCUSDT",20,null,"rest:browser");depth.tick();MarketDepthTest.until(()->"LIVE".equals(depth.read("BTCUSDT",20,null,"rest:browser").get("status")));
         Map<String,Object> access=new LinkedHashMap<>();access.put("port",port);access.put("writer",writer);access.put("reader",reader);access.put("denied",denied);
         Path directory=Paths.get("../reports/depth-20261003");Files.createDirectories(directory);Files.deleteIfExists(directory.resolve("browser.done"));json.writeValue(directory.resolve("browser-access.json").toFile(),access);
-        long end=System.currentTimeMillis()+480000;while(!Files.exists(directory.resolve("browser.done"))&&System.currentTimeMillis()<end)Thread.sleep(300);assertTrue(Files.exists(directory.resolve("browser.done")),"browser acceptance must report completion");Files.deleteIfExists(directory.resolve("browser-access.json"));
+        long end=System.currentTimeMillis()+480000;try{while(!Files.exists(directory.resolve("browser.done"))&&System.currentTimeMillis()<end)Thread.sleep(300);assertTrue(Files.exists(directory.resolve("browser.done")),"browser acceptance must report completion");assertEquals("passed",new String(Files.readAllBytes(directory.resolve("browser.done")),java.nio.charset.StandardCharsets.UTF_8));}finally{Files.deleteIfExists(directory.resolve("browser-access.json"));}
     }
 }

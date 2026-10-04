@@ -32,7 +32,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class SupportHttpTest {
     @Configuration @EnableWebMvc
     @Import({SecurityConfig.class, JwtFilter.class, JwtUtil.class, BackendAccess.class, GlobalExceptionHandler.class,
-        UserSupportController.class, AdminSupportController.class, SystemConfigController.class,TenantHostService.class,TenantRequestFilter.class,BackendLoginRegistry.class,BootTenantFixture.class})
+        UserSupportController.class, AdminSupportController.class, AdminUserIdentity.class, SystemConfigController.class,TenantHostService.class,TenantRequestFilter.class,BackendLoginRegistry.class,BootTenantFixture.class})
     static class Web implements WebMvcConfigurer {
         @Autowired BackendAccess access;
         @Override public void addInterceptors(InterceptorRegistry registry) { registry.addInterceptor(access).addPathPatterns("/api/admin/**"); }

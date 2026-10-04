@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { clearAccess } from '@/utils/access'
-import { readSession, validSession, clearAdminSession, ADMIN_SESSION_KEY, type AdminSession, type AccessSession } from '@/utils/adminSession'
+import { readSession, validSession, createAdminSession, clearAdminSession, ADMIN_SESSION_KEY, type AdminSession, type AccessSession } from '@/utils/adminSession'
 
 // Never import an old shared token. The server migration revokes it independently.
 localStorage.removeItem('admin_token')
@@ -17,9 +17,10 @@ export const useAuthStore = defineStore('auth', () => {
   const user = computed(() => session.value?.user || null)
   const isControl = computed(() => session.value?.mode === 'control')
   const accessSession = computed(() => session.value?.accessSession)
+  const loginSessionId = computed(() => session.value?.loginSessionId)
   const logout = () => { clearAccess(); session.value = null; clearAdminSession(sessionStorage) }
   const setAuth = (tk: string, info: any, access?: AccessSession) => {
-    const next: AdminSession = { token: tk, user: info, mode: access ? 'control' : 'admin', ...(access ? { accessSession: access } : {}) }
+    const next = createAdminSession(tk, info, access)
     if (!validSession(next)) { logout(); throw new Error('登录响应缺少有效租户或访问会话') }
     if (token.value !== tk) clearAccess()
     sessionStorage.setItem(ADMIN_SESSION_KEY, JSON.stringify(next))
@@ -34,5 +35,5 @@ export const useAuthStore = defineStore('auth', () => {
     if (!validSession(session.value)) { logout(); return false }
     return true
   }
-  return { token, user, isControl, accessSession, setAuth, load, ensureValid, logout }
+  return { token, user, isControl, accessSession, loginSessionId, setAuth, load, ensureValid, logout }
 })

@@ -17,6 +17,12 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.http.*;
+import com.gtcfesk.exchange.tenant.BootTenantFixture;
+import com.gtcfesk.exchange.tenant.TenantContext;
+import com.gtcfesk.exchange.tenant.TenantOneFixture;
+import org.springframework.context.annotation.Import;
+import org.springframework.test.annotation.DirtiesContext;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.web.client.*;
 import org.springframework.data.domain.PageRequest;
 import java.math.BigDecimal;
@@ -32,6 +38,9 @@ import static org.mockito.Mockito.doAnswer;
 @SpringBootTest(webEnvironment=SpringBootTest.WebEnvironment.RANDOM_PORT)
 @EnabledIfEnvironmentVariable(named="MARKET_ISOLATION_TEST",matches="true")
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
+@Import(BootTenantFixture.class)
+@ExtendWith(TenantOneFixture.class)
+@DirtiesContext(classMode=DirtiesContext.ClassMode.AFTER_CLASS)
 class ContractCloseConcurrencyTest {
     @DynamicPropertySource static void properties(DynamicPropertyRegistry r) {
         MarketIsolationTest.properties(r);
@@ -93,7 +102,7 @@ class ContractCloseConcurrencyTest {
     }
     void arm(int threads){arrived=new CountDownLatch(threads);release=new CountDownLatch(1);holds.set(threads);}
     ResponseEntity<String> closeHttp() {
-        HttpHeaders h=new HttpHeaders();h.setBearerAuth(token);h.setContentType(MediaType.APPLICATION_JSON);
+        HttpHeaders h=new HttpHeaders();h.setBearerAuth(token);h.setContentType(MediaType.APPLICATION_JSON);h.set("X-Forwarded-Host",BootTenantFixture.FRONT);
         try {return new RestTemplate().exchange("http://127.0.0.1:"+port+"/api/trade/contract/order/"+orderId+"/close",HttpMethod.POST,new HttpEntity<>("{}",h),String.class);}
         catch(HttpStatusCodeException e){return ResponseEntity.status(e.getRawStatusCode()).body(e.getResponseBodyAsString());}
     }
@@ -152,9 +161,10 @@ class ContractCloseConcurrencyTest {
     @Test @Order(1) void mixedFundsDisplayRefresh() throws Exception {refreshRace(false,true);}
     @Test @Order(1) void adminCloseAfterDisplayRefresh() throws Exception {
         seed(false,false);arm(1);
+        Long capturedTenant=TenantContext.requireTenantId();
         Future<ContractOrder> closing=executor.submit(()->{
             Thread.currentThread().setName("close-race-admin");
-            return service.adminCloseOrder(orderId,null);
+            try(TenantContext.Scope scope=TenantContext.open(capturedTenant)){return service.adminCloseOrder(orderId,null);}
         });
         try {
             assertTrue(arrived.await(10,TimeUnit.SECONDS));

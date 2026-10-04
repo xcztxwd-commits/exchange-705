@@ -25,6 +25,11 @@
     "key": "backend-accounts"
   },
   {
+    "file": "src/components/MarketDepthHealth.vue",
+    "binding": "table-key",
+    "key": "MarketDepthHealth.1"
+  },
+  {
     "file": "src/components/OnlineUsers.vue",
     "binding": "table-key",
     "key": "online-users"
@@ -198,6 +203,16 @@
     "file": "src/views/LoanSettings.vue",
     "binding": "table-key",
     "key": "LoanSettings.1"
+  },
+  {
+    "file": "src/views/MarketHours.vue",
+    "binding": "table-key",
+    "key": "MarketHours.categories"
+  },
+  {
+    "file": "src/views/MarketHours.vue",
+    "binding": "table-key",
+    "key": "MarketHours.symbols"
   },
   {
     "file": "src/views/OperationLog.vue",

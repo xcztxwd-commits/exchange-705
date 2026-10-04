@@ -16,7 +16,7 @@ import static org.junit.jupiter.api.Assertions.*;
 @org.junit.jupiter.api.extension.ExtendWith(com.gtcfesk.exchange.tenant.TenantOneFixture.class)
 @org.springframework.test.context.TestPropertySource(properties={"spring.sql.init.mode=always","spring.sql.init.schema-locations=classpath:multitenant-market-test.sql","security.trusted-proxies=127.0.0.1/32", "platform.base-domain=mt705.test","platform.admin-origin=https://admin.mt705.test","platform.control-origin=https://control.mt705.test"})
 @SpringBootTest(webEnvironment=SpringBootTest.WebEnvironment.RANDOM_PORT,properties={
- "simulation.enabled=true", "spring.datasource.url=jdbc:h2:mem:boot_demo;MODE=MySQL;DB_CLOSE_DELAY=-1", "spring.datasource.driver-class-name=org.h2.Driver", "spring.datasource.username=sa", "spring.datasource.password=", "spring.jpa.hibernate.ddl-auto=create-drop", "spring.jpa.show-sql=false", "market.exchange.stream-enabled=false", "market.exchange.spot-url=http://127.0.0.1:9", "market.exchange.futures-url=http://127.0.0.1:9", "spring.redis.port=1"})
+ "simulation.enabled=true", "spring.datasource.url=jdbc:h2:mem:boot_demo;MODE=MySQL;DB_CLOSE_DELAY=-1", "spring.datasource.driver-class-name=org.h2.Driver", "spring.datasource.username=sa", "spring.datasource.password=", "spring.jpa.hibernate.ddl-auto=create-drop", "spring.jpa.show-sql=false", "market.exchange.stream-enabled=false", "market.depth.enabled=false", "market.exchange.spot-url=http://127.0.0.1:9", "market.exchange.futures-url=http://127.0.0.1:9", "spring.redis.port=1"})
 class SimulationApplicationTest {
  @Autowired TestRestTemplate client;
  @MockBean SimulationGateway gateway;

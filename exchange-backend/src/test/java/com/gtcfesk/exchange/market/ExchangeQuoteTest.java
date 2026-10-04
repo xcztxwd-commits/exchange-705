@@ -11,6 +11,7 @@ class ExchangeQuoteTest {
     @Test void weeklyAndMonthlyHistoryIntervalsAreAccepted() {
         MarketKlineController controller = new MarketKlineController();
         ForexQuoteMarketService market = mock(ForexQuoteMarketService.class);
+        when(market.readSnapshot(any())).thenAnswer(call -> ((java.util.function.Supplier<?>) call.getArgument(0)).get());
         org.springframework.test.util.ReflectionTestUtils.setField(controller, "marketService", market);
         long cursor = System.currentTimeMillis() - 1000;
         for (String interval : Arrays.asList("1w", "1M")) {

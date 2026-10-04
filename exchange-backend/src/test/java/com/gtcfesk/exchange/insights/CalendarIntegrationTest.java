@@ -62,6 +62,8 @@ class CalendarIntegrationTest {
     @Autowired AdminRoleMenuRepository grants;
     @Autowired AdminMenuRepository menus;
     @Autowired UserAccountRepository users;
+    @Autowired UserMenuRepository userMenus;
+    @Autowired UserActionRepository userActions;
     @Autowired JwtUtil jwt;
     @Autowired TenantJobRunner jobs;
     @Autowired com.gtcfesk.exchange.control.BackendLoginRegistry names;
@@ -196,12 +198,46 @@ class CalendarIntegrationTest {
     }
     @Test @Order(13) @org.junit.jupiter.api.condition.EnabledIfSystemProperty(named="calendar.browserHold",matches="true")
     void browserAcceptanceWindow()throws Exception{
-        sync.sync("BEA_CALENDAR");sync.sync("BEA_DATA");sync.sync("FED_CALENDAR");sync.sync("FED_DATA");sync.sync("BLS_CALENDAR");Map<String,Object> a=new LinkedHashMap<>();a.put("port",port);a.put("writer",writer);a.put("reader",reader);a.put("denied",denied);json.writeValue(REPORTS.resolve("browser-access.json").toFile(),a);Files.deleteIfExists(REPORTS.resolve("browser.done"));long end=System.currentTimeMillis()+480000;
+        sync.sync("BEA_CALENDAR");sync.sync("BEA_DATA");sync.sync("FED_CALENDAR");sync.sync("FED_DATA");sync.sync("BLS_CALENDAR");Map<String,Object> a=new LinkedHashMap<>();a.put("port",port);a.put("writer",writer);a.put("reader",reader);a.put("denied",denied);Files.deleteIfExists(REPORTS.resolve("browser.done"));json.writeValue(REPORTS.resolve("browser-access.json").toFile(),a);long end=System.currentTimeMillis()+480000;
         try{while(!Files.exists(REPORTS.resolve("browser.done"))&&System.currentTimeMillis()<end)Thread.sleep(300);assertEquals("passed",new String(Files.readAllBytes(REPORTS.resolve("browser.done")),java.nio.charset.StandardCharsets.UTF_8));}finally{Files.deleteIfExists(REPORTS.resolve("browser-access.json"));}
     }
     @Test @Order(14) void publicReadBudgetDoesNotTriggerOfficialFetch()throws Exception{
         CalendarController controller=context.getBean(CalendarController.class);
         @SuppressWarnings("unchecked") Map<Long,long[]> reads=(Map<Long,long[]>)org.springframework.test.util.ReflectionTestUtils.getField(controller,"reads");
         try{reads.put(1L,new long[]{System.currentTimeMillis()/60000,600});assertEquals(429,send("GET","/api/insights/calendar",null,null).getResponse().getStatus());verify(sync,never()).fetch(anyString(),any(CalendarSource.class));}finally{reads.clear();}
+    }
+
+    private UserAccount insightAgent(){UserAccount agent=user();agent.setUserType("agent");agent.setStatus("normal");agent=users.saveAndFlush(agent);names.register("AGENT",agent.getId(),agent.getEmail());return agent;}
+    private String insightAgentToken(UserAccount agent){return token(agent.getId(),"agent",agent.getCurrentToken(),agent.getPasswordHash());}
+    private void grantInsights(UserAccount agent){
+        for(String code:Arrays.asList("calendar","news","traders")){
+            AdminMenu menu=menus.findByMenuCode(code).orElseThrow(AssertionError::new);UserMenu binding=new UserMenu();binding.setUserId(agent.getId());binding.setMenuId(menu.getId());userMenus.saveAndFlush(binding);
+            // Grant existing catalog actions so write denials prove the unchanged admin-only service boundary.
+            for(AdminMenu button:menus.findByStatusOrderBySortOrderAsc("active"))if("button".equals(button.getMenuType())&&menu.getId().equals(button.getParentId())){UserAction action=new UserAction();action.setUserId(agent.getId());action.setMenuId(menu.getId());action.setActionCode(button.getMenuCode().substring(button.getMenuCode().indexOf(':')+1));userActions.saveAndFlush(action);}
+        }
+    }
+    @Test @Order(15) void grantedAgentUuidInsightReadsAreScopedAndWritesRemainDenied()throws Exception{
+        String calendarId=seed(future("2030-04",Instant.now().plusSeconds(7200)));
+        String newsApi="/api/admin/insights/news",tradersApi="/api/admin/insights/traders";
+        Map<String,Object> material=new LinkedHashMap<>();material.put("sourceId","FED");material.put("format","RSS");material.put("verified",true);material.put("material","TEST_ONLY official headline boundary");material.put("content","<rss><channel><item><title>TEST_ONLY granted agent UUID</title><link>https://www.federalreserve.gov/newsevents/pressreleases/test-agent-uuid.htm</link></item></channel></rss>");ok(send("POST",newsApi+"/import",writer,material));
+        String newsId=ok(send("GET",newsApi,writer,null)).path("content").get(0).path("articleId").asText();
+        Map<String,Object> data=new LinkedHashMap<>();data.put("name","TEST_ONLY granted agent UUID");data.put("currency","USD");data.put("statisticStart","2020-01-01T00:00:00Z");data.put("statisticEnd","2021-01-01T00:00:00Z");
+        Map<String,Object> create=new LinkedHashMap<>();create.put("data",data);create.put("reason","TEST_ONLY agent scope regression");String traderId=ok(send("POST",tradersApi,writer,create)).path("traderId").asText();
+        List<String> details=Arrays.asList(API+"/"+calendarId,newsApi+"/"+newsId,tradersApi+"/"+traderId);
+        UserAccount agent=insightAgent();String agentToken=insightAgentToken(agent);
+        for(String path:details)assertEquals(403,send("GET",path,agentToken,null).getResponse().getStatus(),path);
+        grantInsights(agent);
+        for(String path:Arrays.asList(API,newsApi,tradersApi))ok(send("GET",path,agentToken,null));
+        for(String path:details)ok(send("GET",path,agentToken,null));
+        for(String path:Arrays.asList(API+"/"+calendarId+"/audit",tradersApi+"/"+traderId+"/preview",tradersApi+"/"+traderId+"/equity",tradersApi+"/"+traderId+"/history",tradersApi+"/"+traderId+"/import-template?kind=history",newsApi+"/audit"))ok(send("GET",path,agentToken,null));
+        long calendarAudits=db.queryForObject("SELECT COUNT(*) FROM calendar_audit",Long.class),newsAudits=db.queryForObject("SELECT COUNT(*) FROM news_audit",Long.class),traderAudits=db.queryForObject("SELECT COUNT(*) FROM trader_audit",Long.class);
+        JsonNode calendarBefore=detail(calendarId);Map<String,Object> editCalendar=new LinkedHashMap<>();editCalendar.put("rowVersion",calendarBefore.path("rowVersion").asLong());editCalendar.put("reason","TEST_ONLY agent cannot write");editCalendar.put("manualLock",true);editCalendar.put("data",calendarBefore);assertEquals(403,send("PUT",details.get(0),agentToken,editCalendar).getResponse().getStatus());
+        JsonNode articleBefore=ok(send("GET",details.get(1),writer,null));Map<String,Object> editNews=new LinkedHashMap<>();editNews.put("rowVersion",articleBefore.path("rowVersion").asLong());editNews.put("reason","TEST_ONLY agent cannot write");editNews.put("category","MACRO");editNews.put("hidden",false);assertEquals(403,send("PUT",details.get(1),agentToken,editNews).getResponse().getStatus());
+        assertEquals(403,send("POST",tradersApi,agentToken,create).getResponse().getStatus());
+        assertEquals(calendarBefore.path("rowVersion"),detail(calendarId).path("rowVersion"));assertTrue(ok(send("GET",details.get(1),writer,null)).path("hidden").asBoolean());
+        assertEquals(calendarAudits,db.queryForObject("SELECT COUNT(*) FROM calendar_audit",Long.class));assertEquals(newsAudits,db.queryForObject("SELECT COUNT(*) FROM news_audit",Long.class));assertEquals(traderAudits,db.queryForObject("SELECT COUNT(*) FROM trader_audit",Long.class));
+        String otherToken;TenantContext.clear();try(TenantContext.Scope ignored=TenantContext.open(2L)){UserAccount other=insightAgent();grantInsights(other);otherToken=insightAgentToken(other);}finally{TenantContext.open(1L);}
+        for(String path:details)assertEquals(404,send("GET",path,otherToken,null).getResponse().getStatus(),path);
+        for(UserMenu binding:userMenus.findByTenantIdAndUserId(1L,agent.getId()))userMenus.deleteByTenantIdAndId(1L,binding.getId());userMenus.flush();for(String path:details)assertEquals(403,send("GET",path,agentToken,null).getResponse().getStatus(),path);
     }
 }

@@ -31,6 +31,7 @@ import java.util.stream.Collectors;
 public class KycReviewController {
     private void auditControl(String action,String object,String detail,String reason){if(com.gtcfesk.exchange.control.ControlIdentity.isAccess())controlAudit.recordCurrent(action,object,detail,reason); }
     @javax.persistence.PersistenceContext private javax.persistence.EntityManager em;
+    @org.springframework.beans.factory.annotation.Autowired private com.gtcfesk.exchange.user.KycIdentityService identityService;
     @org.springframework.beans.factory.annotation.Autowired private com.gtcfesk.exchange.control.ControlAuditService controlAudit;
     
     private final KycRecordRepository kycRecordRepository;
@@ -226,8 +227,7 @@ public class KycReviewController {
             @PathVariable Long id,
             @RequestBody(required = false) Map<String, String> req) {
         
-        KycRecord record = java.util.Optional.ofNullable(com.gtcfesk.exchange.tenant.TenantEntities.find(em,KycRecord.class,id,javax.persistence.LockModeType.PESSIMISTIC_WRITE))
-                .orElseThrow(() -> new BusinessException("申请不存在"));
+        KycRecord record = identityService.currentForReview(id);
         
         if (!"PENDING".equals(record.getStatus())) {
             throw new BusinessException("该申请已处理");
@@ -275,8 +275,7 @@ public class KycReviewController {
             @PathVariable Long id,
             @RequestBody Map<String, String> req) {
         
-        KycRecord record = java.util.Optional.ofNullable(com.gtcfesk.exchange.tenant.TenantEntities.find(em,KycRecord.class,id,javax.persistence.LockModeType.PESSIMISTIC_WRITE))
-                .orElseThrow(() -> new BusinessException("申请不存在"));
+        KycRecord record = identityService.currentForReview(id);
         
         if (!"PENDING".equals(record.getStatus())) {
             throw new BusinessException("该申请已处理");

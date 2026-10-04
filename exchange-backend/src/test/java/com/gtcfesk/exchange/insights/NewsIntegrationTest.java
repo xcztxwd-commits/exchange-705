@@ -109,6 +109,6 @@ class NewsIntegrationTest {
     }
     @Test @org.junit.jupiter.api.condition.EnabledIfSystemProperty(named="news.browserHold",matches="true")
     void browserAcceptanceWindow()throws Exception {
-        seed();Map<String,Object> info=new LinkedHashMap<>();info.put("port",port);info.put("writer",writer);info.put("reader",reader);info.put("denied",denied);info.put("testOnly",true);Path p=REPORTS.resolve("browser-access.tmp.json");json.writeValue(p.toFile(),info);try{Thread.sleep(1200000);}finally{Files.deleteIfExists(p);}
+        seed();Map<String,Object> info=new LinkedHashMap<>();info.put("port",port);info.put("writer",writer);info.put("reader",reader);info.put("denied",denied);info.put("testOnly",true);Path p=REPORTS.resolve("browser-access.tmp.json"),done=REPORTS.resolve("browser.done");Files.deleteIfExists(done);json.writeValue(p.toFile(),info);long end=System.currentTimeMillis()+1200000;try{while(!Files.exists(done)&&System.currentTimeMillis()<end)Thread.sleep(300);assertTrue(Files.exists(done),"browser acceptance must report completion");assertEquals("passed",new String(Files.readAllBytes(done),java.nio.charset.StandardCharsets.UTF_8));}finally{Files.deleteIfExists(p);}
     }
 }

@@ -129,50 +129,73 @@ public class MarketWebSocketHandler extends TextWebSocketHandler {
         clients.remove(session); releaseDepth(session);
         try { session.close(CloseStatus.POLICY_VIOLATION); } catch (Exception ignored) { }
     }
+    private static final class PushFrame {
+        final WebSocketSession session; final Client client; final Map<String,Object> depthMessage;
+        final boolean snapshot, listFrame; final List<String> symbols = new ArrayList<>();
+        PushFrame(WebSocketSession session, Client client, Map<String,Object> depthMessage) {
+            this.session = session; this.client = client; this.depthMessage = depthMessage;
+            snapshot = client.snapshot; listFrame = snapshot || System.currentTimeMillis() - client.lastListPush >= 1000;
+            for (String symbol : new ArrayList<>(client.symbols))
+                if (listFrame || client.fastSymbols.contains(symbol)) symbols.add(symbol);
+        }
+    }
     void push() {
-        // Compute a symbol only once per cycle, independent of client count.
-        Map<String,Map<String,Object>> snapshots = new HashMap<>();
+        // Each tenant must own a fresh outer snapshot, never join another caller's cross-tenant transaction.
+        if (org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive()) return;
         Map<String,Boolean> bindings = new HashMap<>();
+        Map<Long,List<Map.Entry<WebSocketSession,Client>>> groups = new LinkedHashMap<>();
         for (Map.Entry<WebSocketSession, Client> entry : clients.entrySet()) {
             WebSocketSession session = entry.getKey(); Client client = entry.getValue();
             if (!session.isOpen()) { clients.remove(session); releaseDepth(session); continue; }
             if (!bindings.computeIfAbsent(client.tenantId + ":" + client.frontendHost, id -> validBinding(client))) { close(session); continue; }
-            Map<String,Object> depthMessage = null;
-            synchronized (client) {
-            String depthSymbol = client.depthSymbol;
-            if (depth != null && depthSymbol != null) {
-                try (TenantContext.Scope scope = TenantContext.open(client.tenantId)) {
-                    long revision = client.depthRevision;
-                    Map<String,Object> data = depth.read(depthSymbol, client.depthLevels, client.depthMarketType, "ws:" + session.getId());
-                    boolean disabled = "DISABLED".equals(data.get("status"));
-                    if ((!disabled || !client.depthDisabledSent) && System.currentTimeMillis() - client.lastDepthPush >= 1000) {
-                        Map<String,Object> message = new HashMap<>(); message.put("type", "depth"); message.put("data", data);
-                        message.put("serverTime", System.currentTimeMillis()); message.put("depthRevision", revision);
-                        depthMessage = message;
+            groups.computeIfAbsent(client.tenantId, ignored -> new ArrayList<>()).add(entry);
+        }
+        for (Map.Entry<Long,List<Map.Entry<WebSocketSession,Client>>> group : groups.entrySet()) {
+            List<PushFrame> frames = new ArrayList<>(); Set<String> symbols = new LinkedHashSet<>(); Map<String,Object> captured;
+            try (TenantContext.Scope scope = TenantContext.open(group.getKey())) {
+                for (Map.Entry<WebSocketSession,Client> entry : group.getValue()) {
+                    WebSocketSession session = entry.getKey(); Client client = entry.getValue(); Map<String,Object> depthMessage = null;
+                    synchronized (client) {
+                    String depthSymbol = client.depthSymbol;
+                    if (depth != null && depthSymbol != null) {
+                        try {
+                            long revision = client.depthRevision;
+                            Map<String,Object> data = depth.read(depthSymbol, client.depthLevels, client.depthMarketType, "ws:" + session.getId());
+                            boolean disabled = "DISABLED".equals(data.get("status"));
+                            if ((!disabled || !client.depthDisabledSent) && System.currentTimeMillis() - client.lastDepthPush >= 1000) {
+                                Map<String,Object> message = new HashMap<>(); message.put("type", "depth"); message.put("data", data);
+                                message.put("serverTime", System.currentTimeMillis()); message.put("depthRevision", revision);
+                                depthMessage = message;
+                            }
+                            if (!disabled) client.depthDisabledSent = false;
+                        } catch (RuntimeException failure) { releaseDepth(session); }
                     }
-                    if (!disabled) client.depthDisabledSent = false;
-                } catch (RuntimeException failure) { releaseDepth(session); }
+                    }
+                    PushFrame frame = new PushFrame(session, client, depthMessage); frames.add(frame); symbols.addAll(frame.symbols);
+                }
+                try {
+                    captured = symbols.isEmpty() ? Collections.emptyMap() : marketService.readSnapshot(() -> {
+                        Map<String,Object> prices = new HashMap<>();
+                        for (String symbol : symbols) prices.put(symbol, Objects.requireNonNull(marketService.snapshotPrice(symbol), "Missing price snapshot"));
+                        return prices;
+                    });
+                } catch (RuntimeException failure) { continue; }
             }
-            }
-            if (client.symbols.isEmpty()) { if (depthMessage != null) send(session, client, depthMessage); continue; }
-            try (TenantContext.Scope scope = TenantContext.open(client.tenantId)) {
-            Map<String, Object> prices = new HashMap<>();
-            boolean listFrame = client.snapshot || System.currentTimeMillis() - client.lastListPush >= 1000;
-            for (String symbol : client.symbols) {
-                if (!listFrame && !client.fastSymbols.contains(symbol)) continue;
-                Map<String,Object> quote;
-                try { quote = snapshots.computeIfAbsent(client.tenantId + ":" + symbol, key -> marketService.snapshotPrice(symbol)); }
-                catch (Exception failure) { continue; }
-                if (!delta || client.snapshot || !Objects.equals(client.versions.get(symbol), quote.get("quoteVersion"))) prices.put(symbol, quote);
-            }
-            if (prices.isEmpty()) { if (depthMessage != null) send(session, client, depthMessage); continue; }
-            Map<String, Object> message = new HashMap<>(); message.put("type", "price"); message.put("data", prices);
-            message.put("snapshot", client.snapshot); message.put("serverTime", System.currentTimeMillis());
-            message.put("listFrame", listFrame);
-            // One bounded send job carries both independent protocols; neither starves the other.
-            List<Map<String,?>> frames = new ArrayList<>();
-            if (depthMessage != null) frames.add(depthMessage);
-            frames.add(message); send(session, client, frames);
+            // Share only this committed tenant batch; all transport work starts after its physical RR transaction ends.
+            if (captured == null) continue;
+            for (PushFrame frame : frames) {
+                Client client = frame.client; Map<String,Object> prices = new HashMap<>();
+                for (String symbol : frame.symbols) {
+                    Map<?,?> quote = (Map<?,?>) captured.get(symbol);
+                    if (!delta || frame.snapshot || !Objects.equals(client.versions.get(symbol), quote.get("quoteVersion"))) prices.put(symbol, quote);
+                }
+                if (prices.isEmpty()) { if (frame.depthMessage != null) send(frame.session, client, frame.depthMessage); continue; }
+                Map<String,Object> message = new HashMap<>(); message.put("type", "price"); message.put("data", prices);
+                message.put("snapshot", frame.snapshot); message.put("serverTime", System.currentTimeMillis()); message.put("listFrame", frame.listFrame);
+                // One bounded send job carries both independent protocols; neither starves the other.
+                List<Map<String,?>> messages = new ArrayList<>();
+                if (frame.depthMessage != null) messages.add(frame.depthMessage);
+                messages.add(message); send(frame.session, client, messages);
             }
         }
     }

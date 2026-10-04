@@ -34,10 +34,11 @@ class FiatWithdrawTest {
             UserBankCard card = new UserBankCard(); card.setRecipientAccount("123"); card.setCurrency("USD");
             when(cards.findByTenantIdAndUserId(1L, 7L)).thenReturn(Collections.singletonList(card));
             WithdrawController controller = new WithdrawController(records, accounts, mock(UserDigitalAddressRepository.class), cards, new FiatCurrencyService(market));
+            org.springframework.test.util.ReflectionTestUtils.setField(controller,"audit",mock(com.gtcfesk.exchange.control.ControlAuditService.class));
             org.springframework.test.util.ReflectionTestUtils.setField(controller,"tenantPolicy",mock(com.gtcfesk.exchange.control.TenantPolicyService.class));
             Map<String, Object> req = new HashMap<>();
             req.put("requestId","fiat-withdraw-test-key");
-            com.gtcfesk.exchange.repository.UserAccountRepository users=mock(com.gtcfesk.exchange.repository.UserAccountRepository.class);when(users.lockById(7L)).thenReturn(Optional.of(new UserAccount()));org.springframework.test.util.ReflectionTestUtils.setField(controller,"users",users);
+            com.gtcfesk.exchange.repository.UserAccountRepository users=mock(com.gtcfesk.exchange.repository.UserAccountRepository.class);UserAccount customer=new UserAccount();customer.setId(7L);when(users.lockById(7L)).thenReturn(Optional.of(customer));when(users.findByTenantIdAndId(1L,7L)).thenReturn(Optional.of(customer));org.springframework.test.util.ReflectionTestUtils.setField(controller,"users",users);
             req.put("type", "bank"); req.put("network", "USD"); req.put("currency", "JPY"); req.put("amount", "16000"); req.put("address", "123");
             Map<?, ?> quote = (Map<?, ?>) controller.calculateAmount(req).getBody();
             assertEquals(0, new BigDecimal("100").compareTo((BigDecimal) quote.get("actualAmount")));
@@ -52,7 +53,10 @@ class FiatWithdrawTest {
             assertEquals(0, new BigDecimal("105").compareTo(fund.getFrozen()));
             when(records.findByTenantIdAndId(1L, 1L)).thenReturn(Optional.of(record));
             when(market.requireConversionRate("JPY", "yahoo")).thenThrow(new BusinessException("expired"));
-            WithdrawReviewController review = new WithdrawReviewController(records, accounts, cards, null, null, null, null);
+            when(records.findOwnerIdById(1L)).thenReturn(Optional.of(7L));
+            when(records.lockById(1L)).thenReturn(Optional.of(record));
+            WithdrawReviewController review = new WithdrawReviewController(records, accounts, cards, users, null, null, null);
+            org.springframework.test.util.ReflectionTestUtils.setField(review,"controlAudit",mock(com.gtcfesk.exchange.control.ControlAuditService.class));
             org.springframework.test.util.ReflectionTestUtils.setField(review,"em",lookup(record));
             if (reject) {
                 WithdrawReviewController.RejectRequest rejection = new WithdrawReviewController.RejectRequest(); rejection.setRemark("test");

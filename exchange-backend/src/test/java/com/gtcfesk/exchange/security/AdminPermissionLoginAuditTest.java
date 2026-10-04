@@ -11,6 +11,9 @@ import static org.junit.jupiter.api.Assertions.*;
 class AdminPermissionLoginAuditTest extends AdminPermissionIntegrationTest {
     @Autowired PasswordEncoder encoder;
     private final String password = "Audit-test-only-705!";
+    // Each method is one client; use the real Redis limit without sharing every suite's loopback quota.
+    private final String clientAddress = "198.18." + java.util.concurrent.ThreadLocalRandom.current().nextInt(1,255)
+            + "." + java.util.concurrent.ThreadLocalRandom.current().nextInt(1,255);
 
     String login(AdminUser user) throws Exception {
         user.setPasswordHash(encoder.encode(password)); admins.saveAndFlush(user);
@@ -19,6 +22,7 @@ class AdminPermissionLoginAuditTest extends AdminPermissionIntegrationTest {
     String passwordLogin(AdminUser user) throws Exception {
         org.springframework.mock.web.MockHttpServletResponse response = mvc.perform(
             org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/api/admin/auth/login")
+                .with(request -> { request.setRemoteAddr(clientAddress); return request; })
                 .contentType("application/json").content(json.writeValueAsString(
                     new java.util.HashMap<String,String>() {{ put("account",user.getAccount()); put("password",password); }})))
             .andReturn().getResponse();

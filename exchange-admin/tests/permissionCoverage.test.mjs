@@ -5,6 +5,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parse } from '@vue/compiler-sfc'
 import { parse as parseTemplate } from '@vue/compiler-dom'
+import { stripTypeScriptTypes } from 'node:module'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 const catalog = JSON.parse(fs.readFileSync(path.join(root, 'exchange-backend/src/main/resources/admin-permissions.json'), 'utf8'))
@@ -83,4 +84,45 @@ test('backend administrator create and reset forms require twelve-character pass
   assert.equal([...source.matchAll(/value\.length < 12/g)].length, 2)
   assert.doesNotMatch(source, /value\.length < 6/)
   assert.equal([...source.matchAll(/密码长度至少12个字符/g)].length, 2)
+})
+
+test('actual insight mutation handlers enforce current grants, including Enter and confirmation revocation', async () => {
+  function setup(file, grants, confirm = async () => {}) {
+    const { descriptor } = parse(fs.readFileSync(path.join(root, 'exchange-admin/src', file), 'utf8'))
+    const script = stripTypeScriptTypes(descriptor.scriptSetup.content.replace(/^import .*$/gm, ''))
+    const calls = [], request = Object.fromEntries(['get', 'post', 'put', 'delete'].map(method => [method, async (url) => { calls.push({method, url}); throw new Error('stop after observing request') }]))
+    const bindings = { ref: value => ({value}), computed: getter => ({get value() {return getter()}}), onMounted: () => {}, onUnmounted: () => {}, can: code => grants.has(code), request, defineProps: () => ({canEdit:true}), ElMessage: {error:()=>{},success:()=>{},info:()=>{},warning:()=>{}}, ElMessageBox: {confirm} }
+    const names = file.includes('Calendar') ? 'sync,importData,verified,material,content' : file.includes('News') ? 'saveArticle,saveSource,sync,importData,editing,sourceEditing,reason' : file.includes('Trader') ? 'save,change,upload,saveChild,remove,importRows,editing,reason,childKind,childData,importKind,importReason,importText' : 'toggle,health'
+    const state = new Function(...Object.keys(bindings), `${script}\nreturn {${names}}`)(...Object.values(bindings))
+    if (state.editing) state.editing.value = {traderId:'trader',articleId:'article',rowVersion:1,data:{strategyTags:[]}}
+    if (state.sourceEditing) state.sourceEditing.value = {sourceId:'source'}
+    if (state.reason) state.reason.value = 'verified reason'
+    if (state.importReason) {state.importReason.value = 'verified import reason';state.importText.value = '{"rows":[]}' }
+    if (state.verified) {state.verified.value=true;state.material.value='material';state.content.value='content'}
+    if (state.health) state.health.value = {globalEnabled:true,enabled:true}
+    return {state,calls}
+  }
+  const cases = [
+    ['views/CalendarManagement.vue','calendar:sync',s=>s.sync({sourceId:'source'})], ['views/CalendarManagement.vue','calendar:import',s=>s.importData()],
+    ['views/NewsManagement.vue','news:edit',s=>s.saveArticle()], ['views/NewsManagement.vue','news:source',s=>s.saveSource()], ['views/NewsManagement.vue','news:sync',s=>s.sync({sourceId:'source'})], ['views/NewsManagement.vue','news:import',s=>s.importData()],
+    ['views/TraderManagement.vue','traders:edit',s=>s.save()], ['views/TraderManagement.vue','traders:edit',s=>s.upload({target:{files:[new Blob(['fixture'])],value:'file'}})],
+    ...[['publication','publish'],['disable','disable'],['recommendation','sort']].map(([endpoint,action])=>['views/TraderManagement.vue',`traders:${action}`,s=>s.change(endpoint,{})]),
+    ...['equity','history'].flatMap(kind=>[
+      ['views/TraderManagement.vue',`traders:${kind}`,s=>{s.childKind.value=kind;return s.saveChild()}],
+      ['views/TraderManagement.vue',`traders:${kind}`,s=>s.remove(kind,{pointId:'point',recordId:'record'})],
+      ['views/TraderManagement.vue',`traders:${kind}`,s=>{s.importKind.value=kind;return s.importRows()}],
+    ]), ['components/MarketDepthHealth.vue','settings:save',s=>s.toggle()],
+  ]
+  for (const [file, capability, invoke] of cases) {
+    const denied = setup(file,new Set(['traders:view','news:view','calendar:view','settings:view']))
+    await invoke(denied.state); assert.deepEqual(denied.calls,[],`${file}: ${capability} denied handler sent a request`)
+    const allowed = setup(file,new Set([capability]))
+    await invoke(allowed.state); assert.equal(allowed.calls.length,1,`${file}: ${capability} allowed handler never reached real request layer`)
+  }
+  const grants = new Set(['traders:equity'])
+  const revoked = setup('views/TraderManagement.vue',grants,async()=>grants.clear())
+  await revoked.state.remove('equity',{pointId:'point'});assert.deepEqual(revoked.calls,[],'revocation while confirmation is open must prevent DELETE')
+  const unknown = setup('views/TraderManagement.vue',new Set(['traders:publish','traders:equity','traders:history']))
+  await unknown.state.change('unknown',{});unknown.state.childKind.value='unknown';await unknown.state.saveChild();unknown.state.importKind.value='unknown';await unknown.state.importRows()
+  assert.deepEqual(unknown.calls,[],'unrecognized mutation kind must fail closed')
 })

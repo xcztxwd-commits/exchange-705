@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import request from '@/utils/request'
+import request, { rawRequest } from '@/utils/request'
+import { useAuthStore } from '@/store/auth'
+import { readSession } from '@/utils/adminSession'
+import { commandScope, commandBlocksStart, readCommandReceipt, readPendingCommand, writePendingCommand, removePendingCommand, savedCommandSymbol, commandNotice, type PendingCommand } from '@/utils/aiControlCommand'
 import { createRequestKey } from '@/utils/requestKey'
 import { displaySymbol } from '@/utils/displaySymbol'
 
@@ -44,7 +47,11 @@ const currentSymbol = computed(() => symbols.value.find(item => item.id === sele
 const precision = computed(() => currentSymbol.value?.pricePrecision ?? 2)
 const precisionReady = computed(() => Number.isInteger(currentSymbol.value?.pricePrecision) && precision.value >= 0 && precision.value <= 8)
 const formulaLoading = ref(false), formulaLoadError = ref('')
-const busy = computed(() => loading.value || saving.value || formulaLoading.value || !status.value || !!statusError.value || !precisionReady.value)
+const auth = useAuthStore()
+const pendingCommand = ref<PendingCommand | null>(null), commandError = ref(''), commandStorageError = ref(''), commandBusy = ref(false), commandProtocol = ref('')
+const commandAwaiting = computed(() => commandBlocksStart(pendingCommand.value))
+const receiptNotice = computed(() => commandNotice(pendingCommand.value))
+const busy = computed(() => loading.value || saving.value || formulaLoading.value || commandAwaiting.value || !!commandStorageError.value || !status.value || !!statusError.value || !precisionReady.value)
 function formatPrice(value: number | string | null | undefined): string {
   if (value == null || value === '' || !Number.isFinite(Number(value))) return '—'
   return new Intl.NumberFormat('en-US', { minimumFractionDigits: precision.value, maximumFractionDigits: precision.value }).format(Number(value))
@@ -120,7 +127,53 @@ let disposed = false, requestVersion = 0, statusRequests = 0
 let historyVersion = 0, historyRequests = 0, lastHistoryRequest = 0, resetPending = false
 const readError = (error: any, label: string) => error?.code === 'ECONNABORTED' || error?.code === 'ETIMEDOUT'
   ? `${label}请求超时，正在自动重试` : `${label}加载失败：${error?.message || '网络异常'}`
-let timedRequest: { signature: string; key: string } | undefined
+let commandVersion = 0, operationVersion = 0
+const currentCommandScope = () => commandScope(readSession(sessionStorage))
+const commandIdentityMatches = (scope: string, token: string | null, id: number) => !disposed && id === selectedId.value && scope === currentCommandScope() && token === auth.token
+function restorePendingCommand() {
+  ++commandVersion; commandBusy.value = false; pendingCommand.value = null; commandError.value = ''; commandStorageError.value = ''; commandProtocol.value = ''
+  const scope = currentCommandScope(), id = selectedId.value
+  if (!scope || id == null) return
+  try { pendingCommand.value = readPendingCommand(sessionStorage, scope, id) }
+  catch (error: any) { commandStorageError.value = error?.message || '本地启动请求读取失败；不会另建命令' }
+}
+function restoreCommandInputs() {
+  const pending = pendingCommand.value
+  if (!pending) return
+  const payload = pending.payload
+  mode.value = pending.action === 'restore' ? 'restore' : 'target'
+  const savedTiming = { durationSeconds: Number(payload.durationSeconds), intensity: Number(payload.intensity), randomOscillation: payload.randomOscillation === true }
+  if (Number.isInteger(savedTiming.durationSeconds) && savedTiming.durationSeconds >= 1 && savedTiming.durationSeconds <= 86400 && Number.isInteger(savedTiming.intensity) && savedTiming.intensity >= 1 && savedTiming.intensity <= 10) {
+    if (pending.action === 'restore') restore.value = savedTiming
+    else target.value = { ...savedTiming, targetPrice: Number(payload.targetPrice) }
+  }
+  if (pending.action === 'start') {
+    for (const key of Object.keys(defaultRecovery()) as (keyof RecoveryOptions)[]) if (payload[key] !== undefined) (recovery.value as any)[key] = payload[key]
+    if (typeof payload.stepFormula === 'string') stepFormula.value = payload.stepFormula
+    bandManual.value = payload.deviationBandMode === 'MANUAL'
+    bandPercent.value = bandManual.value ? String(payload.deviationBandPercent) : automaticBand()
+  }
+}
+function acceptCommandReceipt(value: unknown, pending: PendingCommand, scope: string) {
+  const next = { ...pending, receipt: readCommandReceipt(value, pending) }
+  pendingCommand.value = next; commandError.value = ''; commandProtocol.value = 'S2'
+  try { writePendingCommand(sessionStorage, scope, next); commandStorageError.value = '' }
+  catch { commandStorageError.value = '回执保存失败；原请求仍保留，刷新后只查询原请求' }
+}
+async function fetchCommand(force = false) {
+  const pending = pendingCommand.value, scope = currentCommandScope(), token = auth.token
+  if (!pending || !scope || commandBusy.value || (!force && !commandBlocksStart(pending))) return
+  const version = ++commandVersion, id = pending.symbolId
+  commandBusy.value = true
+  try {
+    const value = await request.get(`/admin/ai-control/${id}/commands`, { params: { requestKey: pending.requestKey } })
+    if (version !== commandVersion || !commandIdentityMatches(scope, token, id) || pendingCommand.value?.requestKey !== pending.requestKey) return
+    acceptCommandReceipt(value, pending, scope)
+    if (pendingCommand.value?.receipt?.state === 'RUNNING') { await fetchStatus(); void fetchHistory(true) }
+  } catch (error: any) {
+    if (version === commandVersion && commandIdentityMatches(scope, token, id)) commandError.value = `原启动请求结果待确认，仅查询，不会重复启动：${error?.message || '网络异常'}`
+  } finally { if (version === commandVersion) commandBusy.value = false }
+}
 function applyStatus(value: ControlStatus, reset = false) {
   status.value = value
   statusError.value = ''
@@ -154,7 +207,7 @@ async function fetchStatus(reset = false) {
 }
 async function fetchPreview() {
   const id = selectedId.value, version = ++previewVersion
-  if (id == null || !(status.value?.v3Enabled || status.value?.v4Enabled) || mode.value !== 'target') return
+  if (id == null || commandAwaiting.value || !(status.value?.v3Enabled || status.value?.v4Enabled) || mode.value !== 'target') return
   const { durationSeconds, intensity, targetPrice, randomOscillation } = target.value
   if (!Number.isInteger(durationSeconds) || !Number.isInteger(intensity) || !Number.isFinite(targetPrice) || targetPrice! <= 0) return
   if (!validBand()) { previewError.value = '偏差带百分比须大于0且不超过100，最多8位小数'; return }
@@ -189,10 +242,20 @@ async function loadSymbols() {
   loading.value = true
   try {
     symbols.value = await request.get('/admin/ai-control/symbols') as unknown as SymbolItem[]
+    const scope = currentCommandScope()
+    let savedId: number | undefined
+    try { if (scope) savedId = savedCommandSymbol(sessionStorage, scope) }
+    catch (error: any) { commandStorageError.value = error?.message || '本地启动请求读取失败' }
+    if (selectedId.value == null && symbols.value.some(item => item.id === savedId)) selectedId.value = savedId
     if (!symbols.value.some(item => item.id === selectedId.value)) selectedId.value = symbols.value.find(item => item.isEnabled)?.id ?? symbols.value[0]?.id
+    const savedError = commandStorageError.value
+    restorePendingCommand()
+    commandStorageError.value ||= savedError
     void fetchHistory(true)
     await fetchStatus(true)
     await fetchFormula()
+    restoreCommandInputs()
+    await fetchCommand(true)
   } catch (error: any) { ElMessage.error(error?.message || '加载币种失败') }
   finally { loading.value = false }
 }
@@ -213,6 +276,7 @@ async function replaceHistory(task: ControlTask) {
   finally { saving.value = false }
 }
 async function selectSymbol() {
+  restorePendingCommand()
   ++formulaLoadVersion; ++formulaVersion; formulaLoading.value = false; formulaOpen.value = false; stepFormula.value = defaultFormula; formulaError.value = ''; formulaLoadError.value = ''; restoreAutomaticBand()
   status.value = null
   statusError.value = ''
@@ -221,36 +285,71 @@ async function selectSymbol() {
   void fetchHistory(true)
   await fetchStatus(true)
   await fetchFormula()
+  restoreCommandInputs()
+  await fetchCommand(true)
 }
 async function poll() {
   if (disposed) return
   if (!saving.value && !loading.value) {
+    await fetchCommand()
     void fetchHistory()
     if (!statusRequests) await fetchStatus()
   }
   if (!disposed) timer = setTimeout(poll, 1000)
 }
 async function submit(action: 'start' | 'restore' | 'manual' | 'stop' | 'random-market', payload?: object) {
-  const id = selectedId.value
+  const id = selectedId.value, scope = currentCommandScope(), token = auth.token
   if (id == null || saving.value) return
+  if (!scope) { ElMessage.error('会话身份无效，请重新登录'); return }
+  const version = ++operationVersion
+  let attempted: PendingCommand | null = null
   saving.value = true
   ++requestVersion
   try {
     if (action === 'start' || action === 'restore') {
-      const signature = JSON.stringify([id, action, payload])
-      if (timedRequest?.signature !== signature) timedRequest = { signature, key: createRequestKey() }
-      payload = { ...payload, requestKey: timedRequest.key }
-    }
-    const value = await request.post(`/admin/ai-control/${id}/${action}`, payload) as unknown as ControlStatus
-    if (!disposed && id === selectedId.value) {
+      if (commandStorageError.value) throw new Error(commandStorageError.value)
+      const previous = readPendingCommand(sessionStorage, scope, id)
+      if (commandBlocksStart(previous)) { pendingCommand.value = previous; await fetchCommand(true); return }
+      const pending: PendingCommand = { symbolId: id, action, requestKey: createRequestKey(), payload: JSON.parse(JSON.stringify(payload || {})) }
+      // Persist the immutable request before sending. Refresh and timeout only query this key.
+      writePendingCommand(sessionStorage, scope, pending)
+      attempted = pending
+      pendingCommand.value = pending; commandError.value = ''; commandProtocol.value = 'S2'
+      const response = await rawRequest.post(`/api/admin/ai-control/${id}/${action}`, { ...pending.payload, requestKey: pending.requestKey })
+      if (!commandIdentityMatches(scope, token, id) || version !== operationVersion) return
+      if (response.status === 202) {
+        acceptCommandReceipt(response.data, pending, scope)
+        if (pendingCommand.value?.receipt?.state === 'RUNNING') { await fetchStatus(); void fetchHistory(true) }
+        ElMessage.info(receiptNotice.value)
+        return
+      }
+      // Explicit legacy protocol: only HTTP 200 with an actual synchronous ControlStatus.
+      const value = response.data as ControlStatus
+      if (response.status !== 200 || value?.id !== id || typeof value.running !== 'boolean' || typeof value.enabled !== 'boolean' || 'commandId' in value) throw new Error('启动响应协议无效；保留原请求，仅查询结果')
       applyStatus(value)
-      if (action === 'start' || action === 'restore') timedRequest = undefined
+      removePendingCommand(sessionStorage, scope, id); pendingCommand.value = null; commandProtocol.value = '旧协议（HTTP 200 同步响应）'
       manual.value = { enabled: value.enabled, offset: Number(value.offset || 0) }
       void fetchHistory(true)
-      ElMessage.success(action === 'random-market' ? (value.randomMarketEnabled ? '随机行情已开启' : '随机行情已关闭') : action === 'start' ? '自动控盘已开始' : action === 'restore' ? '正在逐步恢复原始行情' : action === 'stop' ? '任务已停止，历史已保存' : value.enabled ? '偏移已保存' : '已恢复原始行情')
+      ElMessage.warning('旧协议（HTTP 200 同步响应）：已返回同步控盘状态')
+      return
     }
-  } catch (error: any) { ElMessage.error([error?.response?.data?.errorCode, error?.message || '操作失败'].filter(Boolean).join('：')) }
-  finally { saving.value = false }
+    const pending = pendingCommand.value
+    if (action === 'stop' && commandBlocksStart(pending)) payload = { requestKey: pending!.requestKey }
+    const value = await request.post(`/admin/ai-control/${id}/${action}`, payload) as unknown as ControlStatus
+    if (commandIdentityMatches(scope, token, id) && version === operationVersion) {
+      if (action === 'stop' && pending && 'commandId' in value) acceptCommandReceipt(value, pending, scope)
+      else { applyStatus(value); manual.value = { enabled: value.enabled, offset: Number(value.offset || 0) } }
+      void fetchHistory(true)
+      if (action === 'stop' && commandBlocksStart(pending)) { await fetchCommand(true); ElMessage.info(receiptNotice.value || '停止请求已完成，正在核对原启动命令'); return }
+      ElMessage.success(action === 'random-market' ? (value.randomMarketEnabled ? '随机行情已开启' : '随机行情已关闭') : action === 'stop' ? '任务已停止，历史已保存' : value.enabled ? '偏移已保存' : '已恢复原始行情')
+    }
+  } catch (error: any) {
+    if (commandIdentityMatches(scope, token, id) && version === operationVersion) {
+      const message = [error?.response?.data?.errorCode, error?.message || '操作失败'].filter(Boolean).join('：')
+      if (attempted && pendingCommand.value?.requestKey === attempted.requestKey) { commandError.value = `启动结果待确认；保留原请求，仅查询，不会重复启动：${message}`; ElMessage.warning(commandError.value) }
+      else ElMessage.error(message)
+    }
+  } finally { if (version === operationVersion) saving.value = false }
 }
 function runTimed() {
   const { durationSeconds, randomOscillation } = timing.value
@@ -269,6 +368,12 @@ function saveManual() {
   if (!Number.isFinite(manual.value.offset)) { ElMessage.warning('请输入有效的偏移值'); return }
   void submit('manual', manual.value)
 }
+watch(() => [auth.token, auth.user?.tenantId, auth.user?.id, auth.accessSession?.id, auth.loginSessionId], () => {
+  ++operationVersion; ++requestVersion; ++historyVersion; ++previewVersion; ++formulaVersion; ++formulaLoadVersion
+  saving.value = false; status.value = null; history.value = []; preview.value = null; formulaLoading.value = false
+  selectedId.value = undefined; restorePendingCommand()
+  if (currentCommandScope()) void loadSymbols()
+})
 watch(mode, value => {
   if (value === 'manual' && status.value) manual.value = { enabled: status.value.enabled, offset: Number(status.value.offset || 0) }
 })
@@ -278,10 +383,10 @@ watch(() => [selectedId.value, mode.value, status.value?.v3Enabled, target.value
   target.value.intensity, target.value.targetPrice, target.value.randomOscillation, bandPercent.value, bandManual.value, stepFormula.value], () => {
   preview.value = null; previewError.value = ''; previewBusy.value = false; ++previewVersion
   clearTimeout(previewTimer)
-  if (status.value?.v3Enabled && mode.value === 'target') previewTimer = setTimeout(() => void fetchPreview(), 350)
+  if (!commandAwaiting.value && status.value?.v3Enabled && mode.value === 'target') previewTimer = setTimeout(() => void fetchPreview(), 350)
 })
 onMounted(async () => { await loadSymbols(); void poll() })
-onUnmounted(() => { disposed = true; ++requestVersion; ++previewVersion; ++formulaVersion; ++formulaLoadVersion; clearTimeout(timer); clearTimeout(previewTimer) })
+onUnmounted(() => { disposed = true; ++commandVersion; ++operationVersion; ++requestVersion; ++previewVersion; ++formulaVersion; ++formulaLoadVersion; clearTimeout(timer); clearTimeout(previewTimer) })
 </script>
 <template>
   <div class="ai-control-page">
@@ -302,6 +407,11 @@ onUnmounted(() => { disposed = true; ++requestVersion; ++previewVersion; ++formu
           <el-switch v-permission="'ai_control:random'" :model-value="!!status?.randomMarketEnabled" aria-label="随机行情" :disabled="busy || (!status?.virtualTrading && !status?.randomMarketEnabled)"
             @change="(value: boolean | string | number) => submit('random-market', { enabled: value })" />
         </el-form-item>
+        <el-alert v-if="receiptNotice" :title="receiptNotice" :type="pendingCommand?.receipt?.state === 'FAILED' ? 'error' : pendingCommand?.receipt?.state === 'RUNNING' ? 'success' : 'info'" :closable="false" show-icon />
+        <p v-if="pendingCommand" class="hint">原请求 {{ pendingCommand.requestKey }}；命令 {{ pendingCommand.receipt?.commandId || '待确认' }}；提交时长 {{ pendingCommand.payload.durationSeconds }} 秒。刷新与超时只查询原请求。</p>
+        <el-alert v-if="commandError || commandStorageError" :title="commandStorageError || commandError" type="warning" :closable="false" show-icon />
+        <el-alert v-if="commandProtocol.startsWith('旧协议')" :title="commandProtocol" type="warning" :closable="false" />
+        <el-button v-permission="'ai_control:view'" v-if="pendingCommand" :loading="commandBusy" :disabled="saving" @click="fetchCommand(true)">核对原启动请求</el-button>
         <el-alert v-if="statusError" :title="statusError" type="error" :closable="false" show-icon />
         <el-alert v-else-if="status && !status.available" title="无可用行情源" type="warning" :closable="false" show-icon />
         <div v-if="status" class="quotes">
@@ -315,7 +425,7 @@ onUnmounted(() => { disposed = true; ++requestVersion; ++previewVersion; ++formu
           :title="`稳定轨迹 V4 · TARGET 单秒幅度 ${formatPrice(status.minStepAmount)}～${formatPrice(status.maxStepAmount)}；固定偏差带 ±${formatPrice(status.corridorAmount)}（${status.deviationBandPercent}%）`" />
         <el-progress v-if="status?.running" :percentage="Math.round(progress)" />
         <div class="actions">
-          <el-button v-permission="'ai_control:stop'" v-if="status?.running" :disabled="busy" :loading="saving" @click="submit('stop')">停止任务并保存历史</el-button>
+          <el-button v-permission="'ai_control:stop'" v-if="status?.running || commandAwaiting" :disabled="loading || saving" :loading="saving" @click="submit('stop')">{{ commandAwaiting ? '取消待启动命令' : '停止任务并保存历史' }}</el-button>
           <el-button v-permission="'ai_control:manual'" type="danger" plain :disabled="busy || !status?.enabled" :loading="saving" @click="submit('manual', { enabled: false, offset: 0 })">{{ status?.randomMarketEnabled ? '取消指定并继续随机' : '一键恢复原始行情' }}</el-button>
         </div>
         <el-divider />

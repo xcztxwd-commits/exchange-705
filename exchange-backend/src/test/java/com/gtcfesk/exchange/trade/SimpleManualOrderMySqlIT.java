@@ -49,7 +49,7 @@ class SimpleManualOrderMySqlIT {
     @BeforeAll static void schema() throws Exception {
         source=com.gtcfesk.exchange.tenant.DedicatedMysqlFixture.fromProperty("simple.mysql.fixture");db=new JdbcTemplate(source);
         assertTrue(db.queryForObject("select database()",String.class).startsWith("mt705_probe_"));
-        assertEquals(2026100201L,db.queryForObject("select max(minimum_application_epoch) from tenant_schema_version",Long.class));
+        assertEquals(2026100402L,db.queryForObject("select max(minimum_application_epoch) from tenant_schema_version",Long.class));
         assertEquals("stage2_money_a",db.queryForObject("select code from tenant where id=2",String.class));
         assertEquals(0L,db.queryForObject("select count(*) from user_account where tenant_id IN (2,3)",Long.class),"Use a fresh exclusive simple-suite clone; do not erase another suite's rows");
         System.out.println("Simple fixture MySQL "+db.queryForObject("select version()",String.class));

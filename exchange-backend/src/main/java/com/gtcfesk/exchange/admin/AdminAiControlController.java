@@ -16,6 +16,7 @@ import java.util.*;
 public class AdminAiControlController {
     @Autowired private ForexQuoteMarketService market;
     @Autowired private PersistentPriceControl controls;
+    @Autowired private com.gtcfesk.exchange.market.MarketControlCommands commands;
 
     @Getter @Setter
     public static class StartRequest extends com.gtcfesk.exchange.market.TargetControlOptions {
@@ -68,9 +69,12 @@ public class AdminAiControlController {
 
     @PostMapping("/{id}/start")
     @com.gtcfesk.exchange.config.AdminPermission(menu = "ai_control", action = "start")
-    public Map<String, Object> startControl(@PathVariable Long id, @Valid @RequestBody StartRequest request) {
-        return market.startControl(id, request.getDurationSeconds().intValueExact(), request.getTargetPrice(), request.getIntensity().intValueExact(), request.getRandomOscillation(), request.getRequestKey(), request, request);
+    public org.springframework.http.ResponseEntity<Map<String,Object>> startControl(@PathVariable Long id, @Valid @RequestBody StartRequest request) {
+        return org.springframework.http.ResponseEntity.accepted().body(commands.accept(id, request.getDurationSeconds().intValueExact(), request.getTargetPrice(), request.getIntensity().intValueExact(), request.getRandomOscillation(), request.getRequestKey(), request));
     }
+    @GetMapping("/{id}/commands")
+    @com.gtcfesk.exchange.config.AdminPermission(menu="ai_control",action="")
+    public Map<String,Object> command(@PathVariable Long id,@RequestParam String requestKey){return commands.query(id,requestKey);}
     @PostMapping("/{id}/preview")
     @com.gtcfesk.exchange.config.AdminPermission(menu = "ai_control", action = "preview")
     public Map<String, Object> previewControl(@PathVariable Long id, @Valid @RequestBody StartRequest request) {
@@ -103,7 +107,10 @@ public class AdminAiControlController {
 
     @PostMapping("/{id}/stop")
     @com.gtcfesk.exchange.config.AdminPermission(menu = "ai_control", action = "stop")
-    public Map<String, Object> stopControl(@PathVariable Long id) { return market.stopControl(id); }
+    public Map<String, Object> stopControl(@PathVariable Long id,@RequestBody(required=false) Map<String,Object> body) {
+        String key=body==null || body.get("requestKey")==null?null:com.gtcfesk.exchange.common.OrderRequest.required(body.get("requestKey"));
+        return commands.stopControl(id,key);
+    }
 
     @PostMapping("/{id}/restore")
     @com.gtcfesk.exchange.config.AdminPermission(menu = "ai_control", action = "restore")

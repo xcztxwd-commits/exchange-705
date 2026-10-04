@@ -12,6 +12,7 @@ import java.util.Optional;
 @Service
 public class SystemConfigService {
     @Autowired private com.gtcfesk.exchange.control.TenantPolicyService tenantPolicy;
+    @javax.persistence.PersistenceContext private javax.persistence.EntityManager entityManager;
     @Autowired private com.gtcfesk.exchange.tenant.TenantSecrets secrets;
     @Autowired
     private SystemConfigRepository systemConfigRepository;
@@ -31,6 +32,22 @@ public class SystemConfigService {
     public String getConfigValue(String key) {
         Optional<SystemConfig> config = systemConfigRepository.findByTenantIdAndConfigKey(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), key);
         String value=tenantPolicy.effectiveConfig(key,config.map(SystemConfig::getConfigValue).orElse(null));
+        return com.gtcfesk.exchange.tenant.TenantSecrets.secret(key)?secrets.decrypt(key,value):value;
+    }
+
+    /** Same physical transaction as the caller's funding locks, never the one-second market-hours cache. */
+    public String getCurrentConfigValue(String key) {
+        tenantPolicy.lockCurrentTenant();long tenant=com.gtcfesk.exchange.tenant.TenantContext.requireTenantId();
+        List<?> policies=entityManager.createNativeQuery("SELECT policy_value,locked FROM tenant_policy WHERE tenant_id=?1 AND policy_key=?2 LOCK IN SHARE MODE")
+                .setParameter(1,tenant).setParameter(2,"config."+key).getResultList();
+        List<?> configs=entityManager.createNativeQuery("SELECT config_value FROM system_config WHERE tenant_id=?1 AND config_key=?2 LOCK IN SHARE MODE")
+                .setParameter(1,tenant).setParameter(2,key).getResultList();
+        if(policies.size()>1||configs.size()>1)throw new com.gtcfesk.exchange.common.BusinessException("当前配置不唯一");
+        String value=configs.isEmpty()?null:(String)configs.get(0);
+        if(!policies.isEmpty()){
+            Object[] row=(Object[])policies.get(0);Object locked=row[1];
+            if(Boolean.TRUE.equals(locked)||locked instanceof Number&&((Number)locked).intValue()==1)value=(String)row[0];
+        }
         return com.gtcfesk.exchange.tenant.TenantSecrets.secret(key)?secrets.decrypt(key,value):value;
     }
 
@@ -211,6 +228,7 @@ public class SystemConfigService {
 
     @org.springframework.transaction.annotation.Transactional
     public void saveConfig(String key, String value, String description) {
+        tenantPolicy.lockCurrentTenantForWrite();
         tenantPolicy.requireConfigChange(key,value);
         if (com.gtcfesk.exchange.market.MarketHoursConfig.KEY.equals(key)) com.gtcfesk.exchange.market.MarketHoursConfig.parse(value);
         if (com.gtcfesk.exchange.market.MarketDepthService.ENABLED_KEY.equals(key) && !"true".equals(value) && !"false".equals(value))

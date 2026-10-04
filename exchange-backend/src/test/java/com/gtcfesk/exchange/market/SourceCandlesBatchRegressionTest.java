@@ -10,6 +10,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static com.gtcfesk.exchange.market.MarketSqlFixture.inTenant;
 
 /** Differential final-state and rollback checks against the pre-optimization writer. */
+@TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class SourceCandlesBatchRegressionTest extends TenantMarketTestContext {
     ControlHistoryStore store;
     CountingJdbc db;
@@ -22,17 +23,21 @@ class SourceCandlesBatchRegressionTest extends TenantMarketTestContext {
             return super.update(sql,args);
         }
     }
-    @BeforeEach void setup() {
-        String url=System.getenv("PERF_TEST_JDBC");
-        if(url!=null) assertTrue(url.matches("jdbc:mysql://127\\.0\\.0\\.1:[0-9]+/performance_test(?:\\?.*)?"));
-        DriverManagerDataSource ds=new DriverManagerDataSource(url==null ? "jdbc:h2:mem:"+UUID.randomUUID()+";MODE=MySQL;DB_CLOSE_DELAY=-1" : url,
-            url==null?"sa":"root",url==null?"":"performance-test-only");
-        db=new CountingJdbc(ds);store=new ControlHistoryStore(db,new DataSourceTransactionManager(ds));
-        MarketSqlFixture.schema(db);
-        for(long id:new long[]{99001,99002}) {
-            if(db.queryForObject("SELECT COUNT(*) FROM trading_symbol WHERE id=?",Integer.class,id)==0) db.update("INSERT INTO trading_symbol(id,tenant_id) VALUES(?,1)",id);
+    @BeforeEach void setup() throws Exception {
+        boolean mysql=System.getProperty("performance.candles.mysql.fixture")!=null;
+        // Reuse one writer identity in this exclusive suite DB; every method still cleans under its fence.
+        if(store==null) {
+            DriverManagerDataSource ds=mysql?IdentifiedMarketMysqlFixture.open("performance.candles.mysql.fixture"):
+                new DriverManagerDataSource("jdbc:h2:mem:"+UUID.randomUUID()+";MODE=MySQL;DB_CLOSE_DELAY=-1","sa","");
+            db=new CountingJdbc(ds);store=new ControlHistoryStore(db,new DataSourceTransactionManager(ds));
+            MarketSqlFixture.schema(db);
         }
-        store.migrate();db.update("DELETE FROM market_source_candle WHERE symbol_id IN (99001,99002)");
+        for(long id:new long[]{99001,99002}) {
+            if(mysql)IdentifiedMarketMysqlFixture.symbol(db,id,"CANDLES_"+id);
+            else if(db.queryForObject("SELECT COUNT(*) FROM trading_symbol WHERE id=?",Integer.class,id)==0) db.update("INSERT INTO trading_symbol(id,tenant_id) VALUES(?,1)",id);
+        }
+        store.migrate();for(long id:new long[]{99001,99002})store.locked(id,()->{db.update("DELETE FROM market_source_candle WHERE tenant_id=1 AND symbol_id=?",id);return null;});
+        db.writes=0;
     }
     List<Map<String,Object>> rows(int count) {
         List<Map<String,Object>> rows=new ArrayList<>();
@@ -79,7 +84,7 @@ class SourceCandlesBatchRegressionTest extends TenantMarketTestContext {
         assertEquals(prior,state(99002));assertEquals(state(99001),state(99002));
     }
     @Test void mysqlStatementFailureAfterFirstChunkIsAtomic() {
-        org.junit.jupiter.api.Assumptions.assumeTrue(System.getenv("PERF_TEST_JDBC")!=null,"MySQL strict TEXT limit is not emulated by H2");
+        org.junit.jupiter.api.Assumptions.assumeTrue(System.getProperty("performance.candles.mysql.fixture")!=null,"MySQL strict TEXT limit is not emulated by H2");
         assertTrue(db.queryForObject("SELECT @@sql_mode",String.class).contains("STRICT"));
         before(rows(1),NOW);store.sourceCandles(99002,"1m",rows(1),NOW);
         List<Map<String,Object>> prior=state(99002),bad=rows(501);

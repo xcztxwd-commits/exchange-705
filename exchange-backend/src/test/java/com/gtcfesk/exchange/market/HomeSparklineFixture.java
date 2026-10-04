@@ -23,13 +23,19 @@ import static org.mockito.Mockito.*;
 /** Disposable MySQL/Redis and production cache/controller/quote reader. Only provider candles are synthetic. */
 @org.springframework.boot.test.context.TestConfiguration @EnableTransactionManagement(proxyTargetClass=true)
 public class HomeSparklineFixture {
-    @Bean DataSource dataSource() {
+    @Bean DataSource dataSource() throws Exception {
         requireStack();
-        return new DriverManagerDataSource("jdbc:mysql://127.0.0.1:33405/t05_sparkline?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC",
-            "root",System.getenv("T05_MYSQL_PASSWORD"));
+        // Dedicated empty T05 clone only: create-drop must never touch a full business clone.
+        DataSource data=com.gtcfesk.exchange.tenant.DedicatedMysqlFixture.fromProperty("t05.mysql.fixture");
+        assertEmptyT05(new JdbcTemplate(data));
+        return data;
+    }
+    static void assertEmptyT05(JdbcTemplate db) {
+        if(db.queryForObject("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND table_type='BASE TABLE'",Long.class)!=0)
+            throw new IllegalStateException("T05 requires an exclusive empty restored database; no existing tables may be dropped");
     }
     static void requireStack() {
-        if(!"true".equals(System.getenv("T05_DISPOSABLE_STACK")) || System.getenv("T05_MYSQL_PASSWORD")==null)
+        if(!"true".equals(System.getenv("T05_DISPOSABLE_STACK")) || System.getProperty("t05.mysql.fixture")==null)
             throw new IllegalStateException("Explicit T05 disposable stack opt-in required; shared endpoints are forbidden");
     }
     @Bean LocalContainerEntityManagerFactoryBean entityManagerFactory(DataSource data) {
@@ -51,10 +57,23 @@ public class HomeSparklineFixture {
         jdbc.execute("CREATE TABLE IF NOT EXISTS tenant (id BIGINT PRIMARY KEY)");
         return jdbc;
     }
-    @Bean(destroyMethod="destroy") LettuceConnectionFactory connection() {
+    @Bean(destroyMethod="destroy") LettuceConnectionFactory connection() throws Exception {
         requireStack();
         LettuceClientConfiguration client=LettuceClientConfiguration.builder().commandTimeout(Duration.ofMillis(350)).shutdownTimeout(Duration.ofMillis(100)).build();
-        return new LettuceConnectionFactory(new org.springframework.data.redis.connection.RedisStandaloneConfiguration("127.0.0.1",19405),client);
+        S2RuntimeMysqlTest.identity();S2RuntimeMysqlTest.verifyContainer("redis",true);
+        return new LettuceConnectionFactory(S2RuntimeMysqlTest.ownedRedisConfiguration(),client);
+    }
+    /** Exact current owned Redis only. Shared by real Redis suites; serial execution is required. */
+    public static int ownedRedisPort() throws Exception {
+        S2RuntimeMysqlTest.identity();S2RuntimeMysqlTest.verifyContainer("redis",true);return S2RuntimeMysqlTest.redisPort();
+    }
+    public static org.springframework.data.redis.connection.RedisStandaloneConfiguration ownedRedisConfiguration() throws Exception {
+        ownedRedisPort();return S2RuntimeMysqlTest.ownedRedisConfiguration();
+    }
+    public static String ownedRedisContainer(String action) throws Exception {
+        if(!Set.of("stop","start","restart","pause","unpause").contains(action))throw new IllegalArgumentException("Unsupported test Redis action");
+        if(S2RuntimeMysqlTest.fixture==null)S2RuntimeMysqlTest.identity();
+        return S2RuntimeMysqlTest.verifyContainer("redis",!"start".equals(action));
     }
     @Bean StringRedisTemplate redis(LettuceConnectionFactory connection){return new StringRedisTemplate(connection);}
     @Bean HomeSparklineCacheTest.Time clock(){return new HomeSparklineCacheTest.Time();}

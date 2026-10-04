@@ -66,7 +66,7 @@ public class ContractOrderController {
             
             Long userId = Long.parseLong(auth.getName());
             com.gtcfesk.exchange.common.OrderRequest.required(req==null?null:req.getRequestId());
-            ContractOrder order = contractOrderService.createOrder(userId, req);
+            ContractOrder order = contractOrderService.createOrderWithAuthority(userId, req);
             
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", true);
@@ -176,7 +176,7 @@ public class ContractOrderController {
             }
 
             Long userId = Long.parseLong(auth.getName());
-            ContractOrder order = contractOrderService.closeOrder(userId, orderId, null);
+            ContractOrder order = contractOrderService.closeOrderWithAuthority(userId, orderId, null);
 
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", true);

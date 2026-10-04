@@ -12,6 +12,31 @@ public class TenantPolicyService {
  @org.springframework.beans.factory.annotation.Autowired private com.gtcfesk.exchange.security.OutboundEndpointPolicy outbound;
  @org.springframework.beans.factory.annotation.Autowired private TenantReadinessService readiness;
  private final TenantRepository tenants; private final TenantPolicyRepository policies;
+ @javax.persistence.PersistenceContext private javax.persistence.EntityManager em;
+ /** Readers share the existing tenant anchor; writers already lock it before policy/config changes.
+  * Call only after user/funding locks. No tenant authority writer acquires trading funding locks. */
+ public Tenant lockCurrentTenant(){return lockCurrentTenant(false);}
+ public Tenant lockCurrentTenantForWrite(){return lockCurrentTenant(true);}
+ private Tenant lockCurrentTenant(boolean write){
+  if(!org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive())throw new IllegalStateException("Current tenant authority requires the caller transaction");
+  org.hibernate.query.NativeQuery<?> query=em.createNativeQuery("SELECT * FROM tenant WHERE id=?1 "+(write?"FOR UPDATE":"LOCK IN SHARE MODE")).unwrap(org.hibernate.query.NativeQuery.class);
+  query.addEntity("locked",Tenant.class,org.hibernate.LockMode.NONE);query.setParameter(1,TenantContext.requireTenantId());
+  query.setFlushMode(javax.persistence.FlushModeType.COMMIT);
+  List<?> rows=query.getResultList();if(rows.size()!=1)throw new AccessDeniedException("租户不可用");
+  Tenant tenant=(Tenant)rows.get(0);if(write)em.flush();em.refresh(tenant,write?javax.persistence.LockModeType.PESSIMISTIC_WRITE:javax.persistence.LockModeType.PESSIMISTIC_READ);return tenant;
+ }
+ /** Funding facades use READ_COMMITTED: readiness scalar queries observe this authorization point. */
+ public void requireCurrentNewBusiness(String feature){
+  lockCurrentTenant();
+  org.hibernate.query.NativeQuery<?> policy=em.createNativeQuery("SELECT * FROM tenant_policy WHERE tenant_id=?1 ORDER BY id LOCK IN SHARE MODE").unwrap(org.hibernate.query.NativeQuery.class);
+  policy.addEntity("locked",TenantPolicy.class,org.hibernate.LockMode.NONE);policy.setParameter(1,TenantContext.requireTenantId());
+  for(Object row:policy.getResultList())em.refresh(row,javax.persistence.LockModeType.PESSIMISTIC_READ);
+  // Existing readiness uses entity values for these trade keys. Refresh them under the same shared anchor.
+  org.hibernate.query.NativeQuery<?> config=em.createNativeQuery("SELECT * FROM system_config WHERE tenant_id=?1 AND config_key IN ('site.name','system.timezone','market.quote.token') ORDER BY id LOCK IN SHARE MODE").unwrap(org.hibernate.query.NativeQuery.class);
+  config.addEntity("locked",com.gtcfesk.exchange.entity.SystemConfig.class,org.hibernate.LockMode.NONE);config.setParameter(1,TenantContext.requireTenantId());
+  for(Object row:config.getResultList())em.refresh(row,javax.persistence.LockModeType.PESSIMISTIC_READ);
+  requireNewBusiness(feature);
+ }
  public Tenant current(){return tenants.findById(TenantContext.requireTenantId()).orElseThrow(()->new AccessDeniedException("租户不可用"));}
  public void requireLogin(Long tenant){Tenant t=tenants.findById(tenant).orElseThrow(()->new AccessDeniedException("租户不可用"));if("DISABLED".equals(t.getStatus()))throw new AccessDeniedException("租户已停用");}
  /** Existing settlement, history and controlled exits never call this new-business guard. */

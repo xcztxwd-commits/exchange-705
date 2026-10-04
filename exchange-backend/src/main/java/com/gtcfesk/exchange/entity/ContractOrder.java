@@ -14,6 +14,11 @@ import java.time.LocalDateTime;
 @Entity
 @Table(name = "contract_order", uniqueConstraints = @UniqueConstraint(name="uk_contract_order_request", columnNames={"tenant_id","user_id","request_key"}))
 public class ContractOrder extends com.gtcfesk.exchange.tenant.TenantOwnedEntity {
+    // The order is the durable event and unique processing receipt. Legacy orders default false.
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    @Column(name="promotion_pending", nullable=false)
+    private boolean promotionPending;
+
     @com.fasterxml.jackson.annotation.JsonIgnore
     @Column(name="request_key", length=64, updatable=false)
     private String requestKey;

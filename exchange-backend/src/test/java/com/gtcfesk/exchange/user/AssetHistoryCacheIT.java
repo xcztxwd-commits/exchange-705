@@ -69,7 +69,8 @@ class AssetHistoryCacheIT {
         assertTrue(db.queryForObject("select version()",String.class).startsWith("5.7."));assertTrue(db.queryForObject("select database()",String.class).startsWith("mt705_probe_"));
         db.update("insert into user_account(tenant_id,id,email,password_hash,status,row_version) values(2,1,'cache@fixture.invalid','not-a-login','normal',0),(2,2,'cache-other@fixture.invalid','not-a-login','normal',0) on duplicate key update row_version=row_version");
         assertEquals(2L,db.queryForObject("select count(*) from user_account where tenant_id=2 and id in(1,2)",Long.class));
-        RedisProperties properties=new RedisProperties();properties.setHost("127.0.0.1");properties.setPort(Integer.parseInt(System.getenv("CACHE_TEST_REDIS_PORT")));
+        RedisProperties properties=new RedisProperties();properties.setHost("127.0.0.1");org.springframework.data.redis.connection.RedisStandaloneConfiguration owned=com.gtcfesk.exchange.market.HomeSparklineFixture.ownedRedisConfiguration();properties.setPort(owned.getPort());properties.setPassword(new String(owned.getPassword().get()));
+        if(System.getenv("CACHE_TEST_REDIS_PORT")!=null)assertEquals(properties.getPort(),Integer.parseInt(System.getenv("CACHE_TEST_REDIS_PORT")));
         redisConfig=new AssetHistoryRedisConfig();redis=redisConfig.assetHistoryRedis(properties,200);redis.afterPropertiesSet();
         try(org.springframework.data.redis.connection.RedisConnection connection=redis.getConnectionFactory().getConnection()){
             assertTrue(connection.info("server").getProperty("redis_version").startsWith("7."));
@@ -134,8 +135,7 @@ class AssetHistoryCacheIT {
         try{Future<Object> a=pool.submit(scoped(()->aApi.history(1L,"1W",new EquityValuationService.Batch(),NOW)));assertTrue(read.await(10,TimeUnit.SECONDS));long v=revision(1,1);store.locked("cache_race",s->adjust(s.db,1,1,BigDecimal.TEN));assertTrue(revision(1,1)>v);Object b=response(1,"1W");release.countDown();Object old=a.get(10,TimeUnit.SECONDS);assertNotEquals(encoded(old),encoded(b));equal(b,response(1,"1W"));record("C04","A read V="+v+" paused; writer commit V="+revision(1,1)+"; B new; A old refill; C equals B");}finally{release.countDown();pool.shutdownNow();}
     }
     static void redisContainer(String action)throws Exception{
-        String name=System.getenv("CACHE_TEST_REDIS_CONTAINER");assertNotNull(name);assertTrue(name.matches("ahc-[a-f0-9]+-redis"));
-        Process inspect=new ProcessBuilder("docker","inspect",name).start();JsonNode inspection=json.readTree(readAll(inspect.getInputStream()));assertEquals(0,inspect.waitFor());assertEquals("true",inspection.get(0).path("Config").path("Labels").path("asset-history-cache-fixture").asText());
+        String name=com.gtcfesk.exchange.market.HomeSparklineFixture.ownedRedisContainer(action);
         Process process=new ProcessBuilder("docker",action,name).redirectErrorStream(true).start();String output=new String(readAll(process.getInputStream()),"UTF-8");assertEquals(0,process.waitFor(),output);
     }
     static byte[] readAll(InputStream in)throws IOException{ByteArrayOutputStream out=new ByteArrayOutputStream();byte[] b=new byte[4096];for(int n;(n=in.read(b))!=-1;)out.write(b,0,n);return out.toByteArray();}
@@ -201,14 +201,15 @@ class AssetHistoryCacheIT {
         try{List<Future<Object>> futures=new ArrayList<>();for(int i=0;i<10;i++)futures.add(pool.submit(scoped(()->response(1,"1W"))));for(Future<Object> future:futures)equal(expected,future.get(15,TimeUnit.SECONDS));}finally{pool.shutdownNow();}
         equal(expected,response(1,"1W"));assertEquals(count,db.queryForObject("select count(*) from asset_history_1h where tenant_id=2",Long.class));record("C11","Real TCP refusal + Docker-paused Redis timeout <5s including JDBC; recovery equality; 10 concurrent cold requests no history writes or retries");
     }
-    @Test void S01_productionSpringRedisWiringAndOffSwitch(){
+    @Test void S01_productionSpringRedisWiringAndOffSwitch()throws Exception{
+        org.springframework.data.redis.connection.RedisStandaloneConfiguration owned=com.gtcfesk.exchange.market.HomeSparklineFixture.ownedRedisConfiguration();
         for(boolean enabled:new boolean[]{false,true}){
             try(org.springframework.context.annotation.AnnotationConfigApplicationContext context=new org.springframework.context.annotation.AnnotationConfigApplicationContext()){
                 Map<String,Object> properties=new HashMap<>();properties.put("asset.history.cache.enabled",Boolean.toString(enabled));properties.put("asset.history.cache.namespace","705:wiring");
                 context.getEnvironment().getPropertySources().addFirst(new org.springframework.core.env.MapPropertySource("fixture",properties));
                 context.registerBean(ObjectMapper.class,()->json);
-                context.registerBean(RedisProperties.class,()->{RedisProperties p=new RedisProperties();p.setHost("127.0.0.1");p.setPort(Integer.parseInt(System.getenv("CACHE_TEST_REDIS_PORT")));return p;});
-                context.registerBean("redisConnectionFactory",org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory.class,()->new org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory("127.0.0.1",Integer.parseInt(System.getenv("CACHE_TEST_REDIS_PORT"))));
+                context.registerBean(RedisProperties.class,()->{RedisProperties p=new RedisProperties();p.setHost(owned.getHostName());p.setPort(owned.getPort());p.setPassword(new String(owned.getPassword().get()));return p;});
+                context.registerBean("redisConnectionFactory",org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory.class,()->new org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory(owned));
                 context.register(com.gtcfesk.exchange.config.RedisConfig.class,AssetHistoryRedisConfig.class,AssetHistoryCache.class);context.refresh();
                 assertSame(context.getBean("stringRedisTemplate"),context.getBean(StringRedisTemplate.class));
                 assertEquals(enabled,context.containsBean("assetHistoryRedis"));assertEquals(enabled,!context.getBeansOfType(AssetHistoryCache.class).isEmpty());

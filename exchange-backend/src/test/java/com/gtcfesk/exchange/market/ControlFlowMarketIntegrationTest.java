@@ -13,7 +13,15 @@ class ControlFlowMarketIntegrationTest extends TenantMarketTestContext {
         RecoveryOptions options = new RecoveryOptions(); options.setAutoRestore(true); return options;
     }
 
-    final PriceControlTest fixture = new PriceControlTest();
+    final PriceControlTest fixture = new PriceControlTest() {
+        @Override void raw(double price) {
+            super.raw(price);
+            if(database!=null) {
+                // Provider changes enter through the actual writer, not through a quote GET.
+                database.controls.sourceQuote(saved.get(),market.getPrice("SOURCE","Metal"),System.currentTimeMillis());
+            }
+        }
+    };
     final ForexQuoteMarketService market = fixture.market;
     final java.util.concurrent.atomic.AtomicReference<com.gtcfesk.exchange.entity.TradingSymbol> saved = fixture.saved;
     ControlRecoveryFlowTest database;
@@ -63,6 +71,8 @@ class ControlFlowMarketIntegrationTest extends TenantMarketTestContext {
         assertEquals(3, task.algorithmVersion);
         assertEquals(1, database.count("market_control_plan"));
         assertEquals(task.id, SimulationControlPath.events(saved.get()).get(SimulationControlPath.events(saved.get()).size() - 1).planId);
+        market.completeControls();
+        task = database.controls.latest(1);
         Map<String, Object> quote = market.internalPrice("TEST");
         assertEquals(0, task.price(task.sampledUntil).compareTo(ControlHistoryStore.number(quote.get("price"))));
         assertEquals(0, task.price(task.sampledUntil).compareTo(market.freshPrice("TEST")));

@@ -1,10 +1,15 @@
 export const ADMIN_SESSION_KEY = 'exchange.admin.session.v2'
 export type AccessSession = { id: string; tenantId: number; tenantName: string; expiresAt: number }
-export type AdminSession = { token: string; user: any; mode: 'admin' | 'control'; accessSession?: AccessSession }
+export type AdminSession = { token: string; user: any; mode: 'admin' | 'control'; accessSession?: AccessSession; loginSessionId?: string }
+
+// A successful authentication creates a new local session, even for the same actor/token.
+export function createAdminSession(token: string, user: any, accessSession?: AccessSession): AdminSession {
+  return { token, user, mode: accessSession ? 'control' : 'admin', ...(accessSession ? { accessSession } : { loginSessionId: crypto.randomUUID() }) }
+}
 
 export function validSession(value: any, now = Date.now()): value is AdminSession {
   if (!value || !['admin', 'control'].includes(value.mode) || typeof value.token !== 'string' || !value.token || !Number.isSafeInteger(value.user?.tenantId) || value.user.tenantId <= 0) return false
-  if (value.mode === 'admin') return value.user.userType !== 'control'
+  if (value.mode === 'admin') return value.user.userType !== 'control' && (value.loginSessionId === undefined || (typeof value.loginSessionId === 'string' && /^[0-9a-f-]{36}$/.test(value.loginSessionId)))
   const access = value.accessSession
   return !!access && typeof access.id === 'string' && !!access.id && access.tenantId === value.user.tenantId && Number.isFinite(access.expiresAt) && access.expiresAt > now
 }
@@ -12,7 +17,15 @@ export function validSession(value: any, now = Date.now()): value is AdminSessio
 export function readSession(storage: Storage): AdminSession | null {
   try {
     const value = JSON.parse(storage.getItem(ADMIN_SESSION_KEY) || 'null')
-    if (validSession(value)) return value
+    if (validSession(value)) {
+      if (value.mode === 'admin' && !value.loginSessionId) {
+        const upgraded = { ...value, loginSessionId: crypto.randomUUID() }
+        // Persist once so a refresh keeps the same opaque local login identity.
+        try { storage.setItem(ADMIN_SESSION_KEY, JSON.stringify(upgraded)) } catch { return value }
+        return upgraded
+      }
+      return value
+    }
   } catch { /* Invalid or obsolete sessions never fall back to another identity. */ }
   storage.removeItem(ADMIN_SESSION_KEY)
   return null
@@ -20,8 +33,8 @@ export function readSession(storage: Storage): AdminSession | null {
 
 export function clearAdminSession(storage: Storage) {
   storage.removeItem(ADMIN_SESSION_KEY)
-  // A copied opener must not carry pending money commands into a new session.
-  for (const key of Object.keys(storage)) if (key.startsWith('deposit-pending:') || key.startsWith('balance-pending:')) storage.removeItem(key)
+  // A copied opener must not carry pending mutation commands into a new session.
+  for (const key of Object.keys(storage)) if (key.startsWith('deposit-pending:') || key.startsWith('balance-pending:') || key.startsWith('ai-control-pending:')) storage.removeItem(key)
 }
 
 export function exactOrigin(value: string): string {

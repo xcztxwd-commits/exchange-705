@@ -24,6 +24,10 @@ const auth = useAuthStore()
 auth.load()
 
 const isCollapse = ref(false)
+const mobileMedia = window.matchMedia('(max-width: 600px)')
+const isMobile = ref(mobileMedia.matches), mobileMenuOpen = ref(false)
+const updateViewport = () => { isMobile.value = mobileMedia.matches; mobileMenuOpen.value = false }
+watch(() => route.path, () => { mobileMenuOpen.value = false })
 const menuItems = computed(() => access.menus.filter(m => m.path !== '/inbox' || !access.menus.some(a => a.path === '/announcement')).map(m => ({ ...m, title: ['/announcement', '/inbox'].includes(m.path) ? '消息与公告' : m.menuName })))
 const menuGroups = computed(() => access.groups.map(g => ({ ...g, children: menuItems.value.filter(m => m.parentId === g.id) })).filter(g => g.children.length))
 const loadingMenus = ref(false)
@@ -178,6 +182,7 @@ const checkControlDeadline = async () => {
 }
 
 onMounted(() => {
+  mobileMedia.addEventListener('change', updateViewport)
   window.addEventListener('pointerdown', controlInteraction)
   window.addEventListener('keydown', controlInteraction)
   accessTimer = window.setInterval(checkControlDeadline, 5000)
@@ -193,6 +198,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  mobileMedia.removeEventListener('change', updateViewport)
   window.removeEventListener('pointerdown', controlInteraction)
   window.removeEventListener('keydown', controlInteraction)
   clearInterval(accessTimer)
@@ -216,7 +222,8 @@ const onLogout = async () => {
 }
 
 const toggleCollapse = () => {
-  isCollapse.value = !isCollapse.value
+  if (isMobile.value) mobileMenuOpen.value = !mobileMenuOpen.value
+  else isCollapse.value = !isCollapse.value
 }
 
 // 管理员设置对话框
@@ -242,18 +249,18 @@ const handleSettingsUpdated = () => {
 <template>
   <el-container class="layout-container">
     <!-- 侧边栏 -->
-    <el-aside :width="isCollapse ? '64px' : '228px'" class="layout-aside">
+    <el-aside id="layout-navigation" v-show="!isMobile || mobileMenuOpen" :width="!isMobile && isCollapse ? '64px' : '228px'" class="layout-aside" aria-label="后台导航">
       <div class="logo-box">
         <div class="logo-circle">
           <el-icon><DataLine /></el-icon>
         </div>
-        <span v-if="!isCollapse" class="logo-title">{{ auth.accessSession?.tenantName || auth.user?.tenantName || 'Exchange Admin' }}</span>
+        <span v-if="isMobile || !isCollapse" class="logo-title">{{ auth.accessSession?.tenantName || auth.user?.tenantName || 'Exchange Admin' }}</span>
       </div>
       
       <el-menu
         :default-active="route.path"
         :default-openeds="menuGroups.filter(g => g.children.some((m: any) => m.path === route.path)).map(g => g.menuCode)"
-        :collapse="isCollapse"
+        :collapse="!isMobile && isCollapse"
         :router="true"
         class="menu"
       >
@@ -266,15 +273,15 @@ const handleSettingsUpdated = () => {
       </el-menu>
     </el-aside>
 
+    <button v-if="isMobile && mobileMenuOpen" v-permission="'session:self'" class="navigation-backdrop" aria-label="关闭后台导航" @click="mobileMenuOpen = false" />
     <!-- 主体 -->
-    <el-container>
+    <el-container class="layout-content">
       <!-- 顶部导航 -->
       <el-header class="layout-header">
         <div class="header-left">
-          <el-icon class="collapse-btn" @click="toggleCollapse">
-            <Expand v-if="isCollapse" />
-            <Fold v-else />
-          </el-icon>
+          <button v-permission="'session:self'" class="collapse-btn" :aria-label="isMobile ? (mobileMenuOpen ? '关闭后台导航' : '打开后台导航') : (isCollapse ? '展开后台导航' : '收起后台导航')" :aria-expanded="isMobile ? mobileMenuOpen : !isCollapse" aria-controls="layout-navigation" @click="toggleCollapse">
+            <el-icon><Expand v-if="isMobile || isCollapse" /><Fold v-else /></el-icon>
+          </button>
         </div>
         
         <div class="header-right">
@@ -457,6 +464,14 @@ const handleSettingsUpdated = () => {
 }
 
 .collapse-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  background: transparent;
   font-size: 20px;
   cursor: pointer;
   color: #5a5e66;
@@ -556,5 +571,23 @@ const handleSettingsUpdated = () => {
   background: #f0f2f5;
   padding: 20px;
   overflow-y: auto;
+}
+
+.layout-content { min-width: 0; }
+.collapse-btn:focus-visible { outline: 2px solid #85bd00; outline-offset: 2px; }
+@media (max-width: 600px) {
+  .layout-aside { position: fixed; inset: 0 auto 0 0; z-index: 1001; }
+  .navigation-backdrop { position: fixed; inset: 0; z-index: 1000; border: 0; background: rgb(0 0 0 / 40%); }
+  .layout-header { height: auto; min-height: 60px; flex-shrink: 0; align-items: flex-start; gap: 4px; padding: 8px; }
+  .header-left { flex: 0 0 44px; }
+  .header-right { flex: 1; min-width: 0; flex-wrap: wrap; justify-content: flex-end; gap: 4px; }
+  .header-right > * { max-width: 100%; box-sizing: border-box; }
+  .online-count-area { margin: 0; padding: 8px; }
+  .notification-area { flex: 1 0 100%; min-width: 0; flex-wrap: wrap; gap: 4px; margin: 0; padding: 4px; }
+  .notification-text, .notification-item, .online-text { white-space: nowrap; }
+  .notification-item { min-height: 44px; display: inline-flex; align-items: center; }
+  .user-info { min-width: 0; padding: 8px; }
+  .username { min-width: 0; overflow-wrap: anywhere; }
+  .layout-main { min-width: 0; padding: 8px; }
 }
 </style>

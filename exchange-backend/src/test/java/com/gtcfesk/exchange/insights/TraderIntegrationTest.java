@@ -120,6 +120,6 @@ class TraderIntegrationTest {
     @Test @Order(99) @Timeout(55) void publicBudgetDoesNotAmplifyAnyExternalRequest()throws Exception {int result=0;for(int i=0;i<1201;i++){result=send("GET",PUBLIC,null,null).getResponse().getStatus();if(result==429)break;}assertEquals(429,result);}
     @Test @org.junit.jupiter.api.condition.EnabledIfSystemProperty(named="traders.browserHold",matches="true")
     void browserAcceptanceWindow()throws Exception {
-        Map<String,Object> info=new LinkedHashMap<>();info.put("port",port);info.put("writer",writer);info.put("reader",reader);info.put("denied",denied);info.put("testOnly",true);info.put("environment","REAL");Path p=REPORTS.resolve("browser-access.tmp.json");json.writeValue(p.toFile(),info);try{for(int i=0;i<2400&&!Files.exists(REPORTS.resolve("browser.done"));i++)Thread.sleep(1000);}finally{Files.deleteIfExists(p);}
+        Map<String,Object> info=new LinkedHashMap<>();info.put("port",port);info.put("writer",writer);info.put("reader",reader);info.put("denied",denied);info.put("testOnly",true);info.put("environment","REAL");Path p=REPORTS.resolve("browser-access.tmp.json"),done=REPORTS.resolve("browser.done");Files.deleteIfExists(done);json.writeValue(p.toFile(),info);try{for(int i=0;i<2400&&!Files.exists(done);i++)Thread.sleep(1000);assertTrue(Files.exists(done),"browser acceptance must report completion");assertEquals("passed",new String(Files.readAllBytes(done),java.nio.charset.StandardCharsets.UTF_8));}finally{Files.deleteIfExists(p);}
     }
 }

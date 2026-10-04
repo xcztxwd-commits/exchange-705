@@ -13,6 +13,35 @@ import java.util.List;
 
 @Repository
 public interface ContractOrderRepository extends com.gtcfesk.exchange.tenant.TenantRepository<ContractOrder, Long> {
+    @org.springframework.data.jpa.repository.Lock(javax.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT c FROM ContractOrder c WHERE c.tenantId=:#{T(com.gtcfesk.exchange.tenant.TenantContext).requireTenantId()} AND c.id=:id")
+    java.util.Optional<ContractOrder> lockById(@Param("id") Long id);
+
+    /** No-lock routing only. Funding owner must be checked again after canonical user/asset/trial locks. */
+    interface FundingOwner {
+        Long getUserId();
+        String getFundingSource();
+    }
+
+    @Query("SELECT c.userId AS userId, c.fundingSource AS fundingSource FROM ContractOrder c WHERE c.tenantId=:tenantId AND c.id=:id")
+    java.util.Optional<FundingOwner> findFundingOwner(@Param("tenantId") Long tenantId, @Param("id") Long id);
+
+    @Query("SELECT c.id FROM ContractOrder c WHERE c.tenantId=:tenantId AND c.id>:after AND c.status=:status AND (:pending=false OR (c.type='LIMIT' AND c.limitMatchEnabled=true)) ORDER BY c.id")
+    List<Long> findScheduledIds(@Param("tenantId") Long tenantId, @Param("after") long after,
+                               @Param("status") String status, @Param("pending") boolean pending, Pageable pageable);
+
+    @org.springframework.data.jpa.repository.Lock(javax.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT c FROM ContractOrder c WHERE c.tenantId=:tenantId AND c.id=:id")
+    java.util.Optional<ContractOrder> lockOrderById(@Param("tenantId") Long tenantId, @Param("id") Long id);
+
+    @Query("SELECT c FROM ContractOrder c WHERE c.tenantId=:tenantId AND c.userId=:userId AND c.status='OPEN' AND ((:source IS NULL AND c.fundingSource IS NULL) OR c.fundingSource=:source) ORDER BY c.id")
+    List<ContractOrder> findOpenPortfolio(@Param("tenantId") Long tenantId, @Param("userId") Long userId, @Param("source") String source);
+
+    /** Current complete portfolio read, only after the user and every canonical funding row are locked. */
+    @org.springframework.data.jpa.repository.Lock(javax.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT c FROM ContractOrder c WHERE c.tenantId=:tenantId AND c.userId=:userId AND c.status='OPEN' AND ((:source IS NULL AND c.fundingSource IS NULL) OR c.fundingSource=:source) ORDER BY c.id")
+    List<ContractOrder> lockOpenPortfolio(@Param("tenantId") Long tenantId, @Param("userId") Long userId, @Param("source") String source);
+
     // Current read after the caller locks the user, including under MySQL REPEATABLE_READ.
     @org.springframework.transaction.annotation.Transactional(readOnly=true)
     @org.springframework.data.jpa.repository.Lock(javax.persistence.LockModeType.PESSIMISTIC_READ)

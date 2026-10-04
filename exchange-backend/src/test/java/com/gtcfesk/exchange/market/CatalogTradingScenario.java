@@ -48,8 +48,11 @@ class CatalogTradingScenario {
         else result=map("symbol",q.get("symbol"),"lastPrice","BTCUSDT".equals(q.get("symbol"))?(fxUnavailable?null:fxRate):100,"closeTime",now);
         byte[] bytes=MarketIsolationTest.json.writeValueAsBytes(result);exchange.sendResponseHeaders(200,bytes.length);exchange.getResponseBody().write(bytes);
     }catch(Exception e){throw new RuntimeException(e);}finally{exchange.close();}}
-    JsonNode request(HttpMethod method,String path,String token,Object body){HttpHeaders h=new HttpHeaders();if(token!=null)h.setBearerAuth(token);h.setContentType(MediaType.APPLICATION_JSON);
-        return client.exchange(URI.create("http://127.0.0.1:"+t.port+path),method,new HttpEntity<>(body,h),JsonNode.class).getBody();}
+    HttpHeaders headers(String path,String token){HttpHeaders h=new HttpHeaders();if(token!=null)h.setBearerAuth(token);h.setContentType(MediaType.APPLICATION_JSON);h.set("X-Forwarded-Host",path.startsWith("/api/admin/")?com.gtcfesk.exchange.tenant.BootTenantFixture.ADMIN:com.gtcfesk.exchange.tenant.BootTenantFixture.FRONT);return h;}
+    @SuppressWarnings("unchecked") ResponseEntity<JsonNode> exchange(HttpMethod method,String path,String token,Object body){
+        if(method==HttpMethod.POST&&Arrays.asList("/api/trade/contract/order","/api/trade/option/order").contains(path)&&body instanceof Map){Map<String,Object> keyed=new LinkedHashMap<>((Map<String,Object>)body);keyed.putIfAbsent("requestId",UUID.randomUUID().toString());body=keyed;}
+        return client.exchange(URI.create("http://127.0.0.1:"+t.port+path),method,new HttpEntity<>(body,headers(path,token)),JsonNode.class);}
+    JsonNode request(HttpMethod method,String path,String token,Object body){return exchange(method,path,token,body).getBody();}
     JsonNode post(String path,String token,Object body){return request(HttpMethod.POST,path,token,body);}
     void reject(String path,Object body){assertThrows(org.springframework.web.client.HttpClientErrorException.BadRequest.class,()->post(path,user,body));}
     static void equal(String expected,BigDecimal actual){assertEquals(0,new BigDecimal(expected).compareTo(actual));}
@@ -94,10 +97,24 @@ class CatalogTradingScenario {
         if(symbol.getQuantityUnitType()!=null) {order.put("quantityUnitType",symbol.getQuantityUnitType());order.put("specVersion",symbol.getSpecVersion());}
         return order;
     }
+    JsonNode acceptedStart(String control,Map<String,Object> body){ResponseEntity<JsonNode> response=exchange(HttpMethod.POST,control+"/start",admin,body);assertEquals(202,response.getStatusCodeValue());JsonNode receipt=response.getBody();assertNotNull(receipt);assertFalse(receipt.path("commandId").asText().isEmpty());assertEquals(body.get("requestKey"),receipt.path("requestKey").asText());return receipt;}
+    JsonNode command(String control,String key){return request(HttpMethod.GET,control+"/commands?requestKey="+key,admin,null);}
+    void rejectedStartWithoutEffects(String control,Long symbolId,Map<String,Object> body)throws Exception{
+        org.springframework.jdbc.core.JdbcTemplate db=t.context.getBean(org.springframework.jdbc.core.JdbcTemplate.class);
+        long tasks=db.queryForObject("SELECT COUNT(*) FROM market_control_task WHERE tenant_id=1 AND symbol_id=?",Long.class,symbolId),version=t.symbols.findByTenantIdAndId(1L,symbolId).get().getRowVersion(),orders=t.contracts.countByTenantId(1L);
+        AssetAccount before=t.accounts.findByTenantIdAndUserIdAndCoin(1L,userId,"CONTRACT").get();BigDecimal available=before.getAvailable(),frozen=before.getFrozen();
+        JsonNode accepted=acceptedStart(control,body);String key=(String)body.get("requestKey");MarketIsolationTest.until(()->"FAILED".equals(command(control,key).path("state").asText()),10000);
+        JsonNode failed=command(control,key);assertEquals(accepted.path("commandId"),failed.path("commandId"));assertTrue(failed.path("taskId").isNull());assertTrue(Arrays.asList("CORRIDOR_PRECISION_UNREPRESENTABLE","AMPLITUDE_PRECISION_UNREPRESENTABLE","TARGET_AMPLITUDE_INFEASIBLE").contains(failed.path("errorCode").asText()),failed.toString());
+        assertEquals(tasks,db.queryForObject("SELECT COUNT(*) FROM market_control_task WHERE tenant_id=1 AND symbol_id=?",Long.class,symbolId));assertEquals(version,t.symbols.findByTenantIdAndId(1L,symbolId).get().getRowVersion());assertEquals(orders,t.contracts.countByTenantId(1L));
+        AssetAccount after=t.accounts.findByTenantIdAndUserIdAndCoin(1L,userId,"CONTRACT").get();equal(available.toPlainString(),after.getAvailable());equal(frozen.toPlainString(),after.getFrozen());
+    }
     void run() throws Exception {
-        t.contracts.deleteAllByTenantId(1L);t.options.deleteAllByTenantId(1L);t.symbols.deleteAllByTenantId(1L);t.quotes.refreshSymbols();
-        LoginRequest login=new LoginRequest();login.setAccount("admin");login.setPassword("123456");admin=t.context.getBean(AdminAuthService.class).login(login).getToken();
-        UserAccount account=new UserAccount();account.setEmail("catalog-chain@example.invalid");account.setPasswordHash(t.context.getBean(PasswordEncoder.class).encode("catalog-test-only"));account=t.context.getBean(UserAccountRepository.class).saveAndFlush(account);
+        // The ordered isolation fixture must finish its own order cleanup. Retain its durable source/runtime evidence.
+        assertEquals(0,t.contracts.countByTenantId(1L));assertEquals(0,t.options.countByTenantId(1L));t.quotes.refreshSymbols();
+        t.recovery();
+        String privatePassword=UUID.randomUUID()+"-catalog-only";AdminUser owner=new AdminUser();owner.setAccount("catalog-"+UUID.randomUUID());owner.setEmail(owner.getAccount()+"@example.invalid");owner.setPasswordHash(t.context.getBean(PasswordEncoder.class).encode(privatePassword));owner.setRole("super_admin");owner.setEnabled(true);owner=t.context.getBean(AdminUserRepository.class).saveAndFlush(owner);t.context.getBean(com.gtcfesk.exchange.control.BackendLoginRegistry.class).register("ADMIN",owner.getId(),owner.getAccount());
+        LoginRequest login=new LoginRequest();login.setAccount(owner.getAccount());login.setPassword(privatePassword);admin=t.context.getBean(AdminAuthService.class).login(login).getToken();
+        UserAccount account=new UserAccount();account.setEmail("catalog-"+UUID.randomUUID()+"@example.invalid");account.setPasswordHash(t.context.getBean(PasswordEncoder.class).encode("catalog-test-only"));account=t.context.getBean(UserAccountRepository.class).saveAndFlush(account);
         KycRecord identity=new KycRecord();identity.setUserId(account.getId());identity.setRealName("Catalog fixture");identity.setIdNumber("TEST-ONLY");identity.setStatus("APPROVED");t.context.getBean(KycRecordRepository.class).saveAndFlush(identity);
         userId=account.getId();login.setAccount(account.getEmail());login.setPassword("catalog-test-only");user=t.context.getBean(AuthService.class).login(login).getToken();
         for(String coin:Arrays.asList("CONTRACT","OPTION")){AssetAccount a=new AssetAccount();a.setUserId(account.getId());a.setCoin(coin);a.setAvailable(new BigDecimal("1000000"));t.accounts.saveAndFlush(a);}
@@ -106,7 +123,7 @@ class CatalogTradingScenario {
             String code=product[2],project=product[0].equals("binance")?"US":"Crypto";
             JsonNode added=post("/api/admin/symbols/catalog/add",admin,map("source",product[0],"sourceCategory",product[1],"projectCategory",project,"symbols",Arrays.asList(code)));assertEquals(1,added.path("added").size());
             TradingSymbol symbol=t.symbols.findByTenantIdAndSymbol(1L, code).get();assertNotNull(symbol.getIconUrl());
-            ResponseEntity<String> icon=client.getForEntity(URI.create("http://127.0.0.1:"+t.port+"/api"+symbol.getIconUrl()),String.class);assertEquals(200,icon.getStatusCodeValue());assertTrue(icon.getBody().contains("<svg"));
+            ResponseEntity<String> icon=client.exchange(URI.create("http://127.0.0.1:"+t.port+"/api"+symbol.getIconUrl()),HttpMethod.GET,new HttpEntity<>(null,headers("/api"+symbol.getIconUrl(),null)),String.class);assertEquals(200,icon.getStatusCodeValue());assertTrue(icon.getBody().contains("<svg"));
             boolean forex="Forex".equals(symbol.getSourceCategory()),nativeQuantity=crypto(symbol);
             symbol.setMaxLeverage(new BigDecimal("20"));symbol.setLotSize(new BigDecimal(forex?"100000":nativeQuantity?"1":"10"));symbol.setFeeMultiplier(new BigDecimal(forex?"200":nativeQuantity?"0.2":"2"));
             symbol=configure(symbol);MarketIsolationTest.until(()->t.quotes.freshPrice(code)!=null,12000);
@@ -125,10 +142,11 @@ class CatalogTradingScenario {
             post(control+"/manual",admin,map("enabled",false,"offset",0));
             for(String interval:Arrays.asList("1m","5m","15m","30m","1h","1d"))MarketIsolationTest.until(()->"available".equals(t.quotes.internalKline(code,interval,1).get("status")),15000);
             String encoded=URLEncoder.encode(code,"UTF-8");JsonNode chart=request(HttpMethod.GET,"/api/market/kline/"+encoded+"?interval=1m&limit=1",null,null);assertEquals(200,chart.path("ret").asInt());
-            // V3 requires a representable, bidirectional path; the former 1-second jump is invalid.
-            rejectWithoutWrites(control+"/start",admin,map("durationSeconds",1,"targetPrice",110,"intensity",1,"randomOscillation",false,"requestKey",UUID.randomUUID().toString()));
+            // S2 accepts durably, then rejects an infeasible V4 path without activating any task or changing funds.
+            rejectedStartWithoutEffects(control,symbol.getId(),map("durationSeconds",1,"targetPrice",110,"intensity",1,"randomOscillation",false,"requestKey",UUID.randomUUID().toString()));
             MarketIsolationTest.until(()->new BigDecimal("100").compareTo(t.quotes.freshPrice(code))==0,6000);
-            post(control+"/start",admin,map("durationSeconds",3,"targetPrice",new BigDecimal("100.01"),"intensity",10,"randomOscillation",false,"requestKey",UUID.randomUUID().toString()));
+            String key=UUID.randomUUID().toString();JsonNode accepted=acceptedStart(control,map("durationSeconds",3,"targetPrice",new BigDecimal("100.01"),"intensity",10,"randomOscillation",false,"requestKey",key));
+            MarketIsolationTest.until(()->"RUNNING".equals(command(control,key).path("state").asText()),10000);JsonNode activated=command(control,key);assertEquals(accepted.path("commandId"),activated.path("commandId"));assertFalse(activated.path("taskId").asText().isEmpty());
             MarketIsolationTest.until(()->new BigDecimal("100.01").compareTo(t.quotes.freshPrice(code))==0,8000);
             post(control+"/restore",admin,map("durationSeconds",3,"intensity",10,"randomOscillation",false,"requestKey",UUID.randomUUID().toString()));
             MarketIsolationTest.until(()->new BigDecimal("100").compareTo(t.quotes.freshPrice(code))==0,6000);

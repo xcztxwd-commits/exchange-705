@@ -30,11 +30,11 @@ import static org.mockito.Mockito.*;
 class ControlSupportIsolationTest {
  static { ((ch.qos.logback.classic.Logger)org.slf4j.LoggerFactory.getLogger(org.slf4j.Logger.ROOT_LOGGER_NAME)).setLevel(ch.qos.logback.classic.Level.WARN); }
  @Configuration @EnableTransactionManagement(proxyTargetClass=true)
- @Import({SupportService.class,ControlAuditService.class,com.gtcfesk.exchange.common.PublishedTenantFiles.class})
+ @Import({SupportService.class,ControlAuditService.class,com.gtcfesk.exchange.common.PublishedTenantFiles.class,com.gtcfesk.exchange.simulation.SimulationEnvironment.class})
  static class Config {
   @Bean DataSource dataSource(){return new DriverManagerDataSource("jdbc:h2:mem:control_support_"+UUID.randomUUID()+";MODE=MySQL;DB_CLOSE_DELAY=-1","sa","");}
   @Bean LocalContainerEntityManagerFactoryBean entityManagerFactory(DataSource ds){
-   LocalContainerEntityManagerFactoryBean f=new LocalContainerEntityManagerFactoryBean();f.setDataSource(ds);f.setPackagesToScan("com.gtcfesk.exchange.entity","com.gtcfesk.exchange.admin","com.gtcfesk.exchange.support","com.gtcfesk.exchange.control","com.gtcfesk.exchange.activity");f.setJpaVendorAdapter(new HibernateJpaVendorAdapter());
+   LocalContainerEntityManagerFactoryBean f=new LocalContainerEntityManagerFactoryBean();f.setDataSource(ds);f.setPackagesToScan("com.gtcfesk.exchange.entity","com.gtcfesk.exchange.admin","com.gtcfesk.exchange.support","com.gtcfesk.exchange.control","com.gtcfesk.exchange.activity","com.gtcfesk.exchange.insights");f.setJpaVendorAdapter(new HibernateJpaVendorAdapter());
    Properties p=new Properties();p.setProperty("hibernate.hbm2ddl.auto","create-drop");p.setProperty("hibernate.physical_naming_strategy","org.springframework.boot.orm.jpa.hibernate.SpringPhysicalNamingStrategy");f.setJpaProperties(p);return f;
   }
   @Bean PlatformTransactionManager transactionManager(EntityManagerFactory f){return new JpaTransactionManager(f);}

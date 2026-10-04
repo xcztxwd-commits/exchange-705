@@ -59,6 +59,56 @@ class PersistentPriceControlTest extends TenantMarketTestContext {
         Map<String,Object> q = new HashMap<>(); q.put("price", 90); q.put("timestamp", time); q.put("sourceTimestamp", time);
         q.put("available", available); q.put("status", available ? "available" : "unavailable"); return q;
     }
+    @Test void firstTaskIdentitySourceKeepsLegacyBodyAndRealManualFacts() {
+        long minute = System.currentTimeMillis() / 60000 * 60000;
+        BigDecimal rawPrice = new BigDecimal("100000.1234567890123456");
+        BigDecimal legacyPrice = new BigDecimal("100000.123456789");
+        symbol.setControlEnabled(true); symbol.setPricePrecision(2);
+        assertNull(controls.latest(1));
+        for (int i = 0; i < 2; i++) {
+            long at = minute + (i + 1) * 1000;
+            symbol.setControlPriceOffset(i == 0 ? null : BigDecimal.ZERO);
+            Map<String,Object> quote = raw(at, true); quote.put("price", rawPrice);
+            quote.put("eventId", "first-identity-" + i);
+            assertEquals(legacyPrice, ForexQuoteMarketService.controlledPrice(symbol, quote, at));
+            controls.sourceQuote(symbol, quote, at);
+            Map<String,Object> body = store.mixed(1, minute, minute).get(0);
+            assertFalse(body.containsKey("manualPoints"), "Null/zero identity offset must retain the legacy body shape");
+            for (String field : Arrays.asList("open_price", "high_price", "low_price", "close_price"))
+                assertEquals(legacyPrice, ControlHistoryStore.number(body.get(field)), field);
+            assertEquals(true, body.get("controlled"));
+        }
+        Map<String,Object> original = store.db.queryForMap("SELECT body,last_event FROM market_mixed_minute WHERE tenant_id=1 AND symbol_id=1 AND minute_at=?", minute);
+        assertEquals(minute + 2000, ((Number)original.get("last_event")).longValue());
+        store.locked(1, () -> { store.captureLegacyMinute(1, minute + 3000); return null; });
+        assertEquals(original, store.db.queryForMap("SELECT body,last_event FROM market_legacy_minute_snapshot WHERE tenant_id=1 AND symbol_id=1 AND minute_at=?", minute),
+            "The existing canonical prefix must retain the original body bytes and last_event");
+        symbol.setControlPriceOffset(new BigDecimal("5"));
+        Map<String,Object> shifted = raw(minute + 4000, true); shifted.put("price", rawPrice); shifted.put("eventId", "real-manual-source");
+        controls.sourceQuote(symbol, shifted, minute + 4000);
+        List<?> sourcePoints = (List<?>)store.mixed(1, minute, minute).get(0).get("manualPoints");
+        assertNotNull(sourcePoints); assertEquals(1, sourcePoints.size());
+        Map<?,?> sourcePoint = (Map<?,?>)sourcePoints.get(0);
+        assertEquals(minute + 4000, ((Number)sourcePoint.get("generated_at")).longValue());
+        assertEquals(legacyPrice.add(new BigDecimal("5")), ControlHistoryStore.number(sourcePoint.get("price")));
+        store.locked(1, () -> { controls.recordManualPrice(symbol, shifted, minute + 5000); return null; });
+        symbol.setControlPriceOffset(BigDecimal.ZERO);
+        store.locked(1, () -> { controls.recordManualPrice(symbol, shifted, minute + 6000); return null; });
+        List<?> manualPoints = (List<?>)store.mixed(1, minute, minute).get(0).get("manualPoints");
+        assertNotNull(manualPoints); assertEquals(3, manualPoints.size());
+        for (int i = 0; i < manualPoints.size(); i++) {
+            Map<?,?> point = (Map<?,?>)manualPoints.get(i);
+            assertEquals(minute + (i + 4) * 1000, ((Number)point.get("generated_at")).longValue());
+            assertEquals(i < 2 ? legacyPrice.add(new BigDecimal("5")) : legacyPrice, ControlHistoryStore.number(point.get("price")));
+        }
+        Map<String,Object> identityAgain = raw(minute + 7000, true); identityAgain.put("price", rawPrice); identityAgain.put("eventId", "identity-after-manual");
+        controls.sourceQuote(symbol, identityAgain, minute + 7000);
+        Map<String,Object> finalBody = store.mixed(1, minute, minute).get(0);
+        assertEquals(manualPoints, finalBody.get("manualPoints"), "An identity source point must not delete or rewrite older real manual facts");
+        assertEquals(legacyPrice, ControlHistoryStore.number(finalBody.get("close_price")));
+        assertEquals(original, store.db.queryForMap("SELECT body,last_event FROM market_legacy_minute_snapshot WHERE tenant_id=1 AND symbol_id=1 AND minute_at=?", minute));
+        assertNull(controls.latest(1)); assertEquals(0, count("market_control_task"));
+    }
     Map<String,Object> bar(long time, double open, double high, double low, double close) {
         Map<String,Object> row = new LinkedHashMap<>(); row.put("timestamp", time); row.put("open_price", open);
         row.put("high_price", high); row.put("low_price", low); row.put("close_price", close); row.put("volume", 5); return row;
@@ -68,6 +118,15 @@ class PersistentPriceControlTest extends TenantMarketTestContext {
         symbol.setControlEnabled(true); symbol.setControlStartedAt(start); symbol.setControlStartPrice(BigDecimal.valueOf(90));
         symbol.setControlTargetPrice(BigDecimal.valueOf(100)); symbol.setControlDurationSeconds(seconds); symbol.setControlIntensity(1);
         symbol.setControlRandomOscillation(false); controls.importLegacy(symbol); return controls.latest(1);
+    }
+    /** S2 consumers are pure reads: a test must explicitly run the engine before observing a new event. */
+    Map<String,Object> engineRead(PersistentPriceControl engine, Map<String,Object> source, long now) {
+        TradingSymbol migrated = new TradingSymbol();
+        org.springframework.beans.BeanUtils.copyProperties(symbol, migrated);
+        // Match refreshSymbols' import contract: durable tasks replace the legacy mutable switch.
+        if (PriceControlPath.running(migrated)) migrated.setControlEnabled(false);
+        engine.pump(migrated, source, now, 60000);
+        return engine.display(migrated, source, now);
     }
     long count(String table) { return store.db.queryForObject("SELECT COUNT(*) FROM " + table, Long.class); }
     @Test void outageStartPrefersCompletedCloseThenQuoteAndRejectsEmptyHistory() {
@@ -98,11 +157,11 @@ class PersistentPriceControlTest extends TenantMarketTestContext {
         assertEquals(0, store.db.queryForObject("SELECT price FROM market_control_sample WHERE generated_at=?", BigDecimal.class, start+10000).compareTo(BigDecimal.valueOf(100)));
         List<Map<String,Object>> before = store.mixed(1, 0, Long.MAX_VALUE);
         restarted.advance(1, start+999999); assertEquals(before, store.mixed(1, 0, Long.MAX_VALUE));
-        Map<String,Object> waiting = restarted.display(symbol, raw(start-1000, false), start+120000);
+        Map<String,Object> waiting = engineRead(restarted, raw(start-1000, false), start+120000);
         assertEquals("WAITING_SOURCE", waiting.get("controlState")); assertEquals(start+10000, waiting.get("timestamp"));
         assertEquals(start-1000, waiting.get("sourceTimestamp")); assertEquals(false, waiting.get("tradeAvailable"));
-        assertEquals(90, restarted.display(symbol, raw(start+120000, true), start+120000).get("price"));
-        assertEquals(90, restarted.display(symbol, raw(start+120000, false), start+180000).get("price"), "A later outage retains the resumed source, not an old target");
+        assertEquals(90, ControlHistoryStore.number(engineRead(restarted, raw(start+120000, true), start+120000).get("price")).intValue());
+        assertEquals(90, ControlHistoryStore.number(engineRead(restarted, raw(start+120000, false), start+180000).get("price")).intValue(), "A later outage retains the resumed source, not an old target");
     }
     @Test void stopAndLaterTaskNeverRewritePastAndDoNotExtendToTarget() {
         long start = System.currentTimeMillis()-120000;
@@ -224,12 +283,14 @@ class PersistentPriceControlTest extends TenantMarketTestContext {
             org.springframework.test.util.ReflectionTestUtils.setField(trading,"tenantPolicy",mock(com.gtcfesk.exchange.control.TenantPolicyService.class));
             CreateContractOrderRequest request=new CreateContractOrderRequest(); request.setSymbol("TEST"); request.setSide("BUY");
             request.setType("MARKET"); request.setQuantity(BigDecimal.ONE); request.setLeverage(BigDecimal.ONE);
+            market.completeControls();
             ContractOrder opened=trading.createOrder(1L,request);
             assertEquals(0,BigDecimal.valueOf(90).compareTo(opened.getOpenPrice()));
             when(orders.findByTenantIdAndId(1L, 1L)).thenReturn(Optional.of(opened));
-            live.put("timestamp",now-60000); live.put("sourceTimestamp",now-60000);
+            live.put("timestamp",now-60000); live.put("sourceTimestamp",now-60000);market.completeControls();
             assertThrows(BusinessException.class,()->trading.closeOrder(1L,1L,BigDecimal.ONE));
-            Map<String,Object> status=market.startControl(1L,10,BigDecimal.valueOf(100),1,false,"integration");
+            market.startControl(1L,10,BigDecimal.valueOf(100),1,false,"integration");market.completeControls();
+            Map<String,Object> status=market.controlStatus(1L);
             assertEquals(true,status.get("running")); assertEquals("COMPLETED_CANDLE",status.get("startSource"));
             Map<String,Object> controlled = market.internalPrice("TEST");
             assertEquals(true, controlled.get("available")); assertEquals(true, controlled.get("tradeAvailable"));
@@ -249,12 +310,13 @@ class PersistentPriceControlTest extends TenantMarketTestContext {
             task=controls.latest(1);
             assertEquals(0,task.price(task.sampledUntil).compareTo(duringControl.getOpenPrice()));
             assertFalse(ControlHistoryStore.rows(market.internalKline("TEST","1m",100)).isEmpty());
-            market.stopControl(1L); assertEquals("HOLDING",market.controlStatus(1L).get("controlState"));
+            market.stopControl(1L);market.completeControls(); assertEquals("HOLDING",market.controlStatus(1L).get("controlState"));
             BigDecimal heldPrice=market.freshPrice("TEST");
             long oldSample=System.currentTimeMillis()-60000;
             store.db.update("UPDATE market_control_hold SET generated_at=? WHERE task_id=?",oldSample,task.id);
             long samples=count("market_control_sample");
             org.springframework.test.util.ReflectionTestUtils.setField(market,"controls",new PersistentPriceControl(store));
+            market.completeControls();
             Map<String,Object> held=market.internalPrice("TEST");
             assertEquals(oldSample,held.get("timestamp")); assertEquals(true,held.get("tradeAvailable"));
             assertTrue(QuoteState.time(held.get("executionExpiresAt"))>System.currentTimeMillis());
@@ -263,9 +325,9 @@ class PersistentPriceControlTest extends TenantMarketTestContext {
             assertEquals(0,heldPrice.compareTo(trading.closeOrder(1L,2L,BigDecimal.ONE).getClosePrice()));
             assertEquals(0,heldPrice.compareTo(trading.createOrder(1L,request).getOpenPrice()));
             market.stopControl(1L); assertEquals(0,heldPrice.compareTo(market.freshPrice("TEST")));
-            market.manualControl(1L,false,BigDecimal.ZERO);
+            market.manualControl(1L,false,BigDecimal.ZERO);market.completeControls();
             assertNull(market.freshPrice("TEST"));
-            live=raw(System.currentTimeMillis(),true); live.put("fetchedAt",System.currentTimeMillis()); live.put("sourceAvailable",true); quotes.put("TEST",live);
+            live=raw(System.currentTimeMillis(),true); live.put("fetchedAt",System.currentTimeMillis()); live.put("sourceAvailable",true); quotes.put("TEST",live);market.completeControls();
             assertEquals(0,market.freshPrice("TEST").compareTo(BigDecimal.valueOf(90)));
             assertEquals(1,controls.history(1,null).size());
             org.springframework.test.util.ReflectionTestUtils.setField(market,"virtualTrading",true);
@@ -313,8 +375,10 @@ class PersistentPriceControlTest extends TenantMarketTestContext {
         PersistentPriceControl.Task restore=controls.start(symbol,raw(now,true),BigDecimal.valueOf(110),10,BigDecimal.valueOf(90),1,false,true,"restore");
         assertEquals("RESTORE",restore.kind);assertNotEquals(first.id,restore.id);
         assertEquals("STOPPED",controls.history(1,null).get(1).status);
-        Map<String,Object> lost=controls.display(symbol,raw(now,false),restore.startedAt+5000);
+        Map<String,Object> lost=engineRead(controls,raw(now,false),restore.startedAt+5000);
         assertEquals(0,ControlHistoryStore.number(lost.get("price")).compareTo(BigDecimal.valueOf(102)), "V2 regular wave adds 2 at the fifth second of this recovery");
+        // Provider loss does not revoke an active engine lease. A pure reader cannot renew it.
+        lost=controls.display(symbol,raw(now,false),((Number)lost.get("executionExpiresAt")).longValue()+1);
         assertEquals(false,lost.get("tradeAvailable"));assertEquals("RUNNING",lost.get("controlState"));
         controls.advance(1,restore.plannedEnd);assertEquals(restore.plannedEnd,controls.latest(1).endedAt);
         assertEquals(11,store.db.queryForObject("SELECT COUNT(*) FROM market_control_sample WHERE task_id=?",Integer.class,restore.id));
@@ -322,7 +386,13 @@ class PersistentPriceControlTest extends TenantMarketTestContext {
     }
     @Test void fullDayRecoveryUsesExactEndpointWithoutExtendingTheTask() {
         long start=1700000040000L;
-        legacy(start,86400);controls.advance(1,start+86400000+90000);
+        legacy(start,86400);
+        long until=start+86400000+90000;
+        controls.advance(1,until);assertEquals(512,count("market_control_sample"));
+        while(controls.latest(1).running()) {
+            long previous=count("market_control_sample");controls.advance(1,until);
+            assertTrue(count("market_control_sample")-previous<=512,"Each committed backfill turn remains bounded");
+        }
         assertEquals(86401,count("market_control_sample"));assertEquals(1441,count("market_mixed_minute"));
         assertEquals(start+86400000,controls.latest(1).endedAt);
         List<Map<String,Object>> endpoint=store.mixed(1,start+86400000,start+86400000);
@@ -330,11 +400,11 @@ class PersistentPriceControlTest extends TenantMarketTestContext {
     }
     @Test void returningToCachedSourceSurvivesRestartAndNeverRefreshesItsTimestamp() {
         long start=1700000040000L;legacy(start,10);
-        Map<String,Object> returned=controls.display(symbol,raw(start+8000,true),start+10000);
-        assertEquals(90,returned.get("price"));assertEquals(start+8000,returned.get("sourceTimestamp"));
+        Map<String,Object> returned=engineRead(controls,raw(start+8000,true),start+10000);
+        assertEquals(90,ControlHistoryStore.number(returned.get("price")).intValue());assertEquals(start+8000,returned.get("sourceTimestamp"));
         assertEquals(1,count("market_control_resume"));
-        Map<String,Object> restarted=new PersistentPriceControl(store).display(symbol,raw(start+8000,false),start+60000);
-        assertEquals(90,restarted.get("price"));assertEquals(start+8000,restarted.get("timestamp"));
+        Map<String,Object> restarted=engineRead(new PersistentPriceControl(store),raw(start+8000,false),start+60000);
+        assertEquals(90,ControlHistoryStore.number(restarted.get("price")).intValue());assertEquals(start+8000,restarted.get("timestamp"));
         assertEquals(true,restarted.get("controlSourceResumed"));assertEquals(false,restarted.get("available"));
         assertEquals(1,count("market_control_resume"));assertEquals(1,count("market_mixed_minute"));
         Map<String,Object> minute=store.mixed(1,start,start).get(0);
@@ -362,12 +432,12 @@ class PersistentPriceControlTest extends TenantMarketTestContext {
         long now=System.currentTimeMillis();
         PersistentPriceControl.Task task=controls.start(symbol,raw(now,true),BigDecimal.valueOf(90),1,BigDecimal.valueOf(100),1,false,false,"hold");
         assertThrows(BusinessException.class,()->controls.replaceHistory(1,task.id));
-        Map<String,Object> endpoint=controls.display(symbol,raw(now,true),task.plannedEnd);
+        Map<String,Object> endpoint=engineRead(controls,raw(now,true),task.plannedEnd);
         assertEquals("HOLDING",endpoint.get("controlState"));
         assertEquals(100,ControlHistoryStore.number(endpoint.get("price")).intValue());
         Map<String,Object> moved=raw(task.plannedEnd+1000,true); moved.put("price",95);
         controls.sourceQuote(symbol,moved,task.plannedEnd+1000);
-        Map<String,Object> following=controls.display(symbol,moved,task.plannedEnd+2000);
+        Map<String,Object> following=engineRead(controls,moved,task.plannedEnd+2000);
         assertEquals(105,ControlHistoryStore.number(following.get("price")).intValue());
         assertEquals(task.plannedEnd+1000,following.get("sourceTimestamp"));
         long samples=count("market_control_sample");
@@ -378,7 +448,7 @@ class PersistentPriceControlTest extends TenantMarketTestContext {
         Map<?,?> basis=(Map<?,?>)status.get("startBasis");
         assertEquals("CONTROL_DISPLAY",basis.get("source"));assertEquals(105,ControlHistoryStore.number(basis.get("price")).intValue());
         Map<String,Object> recovery=raw(task.plannedEnd+180000,true);recovery.put("price",96);
-        assertEquals(106,ControlHistoryStore.number(controls.display(symbol,recovery,task.plannedEnd+180000).get("price")).intValue());
+        assertEquals(106,ControlHistoryStore.number(engineRead(controls,recovery,task.plannedEnd+180000).get("price")).intValue());
         assertTrue(controls.latest(1).holding);assertEquals(task.plannedEnd,controls.latest(1).endedAt);
     }
     @Test void holdingReferenceUsesLastObservedQuoteAtEndpointAndDeduplicatesConcurrentTicks() throws Exception {
@@ -393,7 +463,7 @@ class PersistentPriceControlTest extends TenantMarketTestContext {
             for(int i=0;i<12;i++) calls.add(inTenant(()->{controls.sourceQuote(symbol,after,start+11000);return null;}));
             for(Future<Void> call:pool.invokeAll(calls))call.get();
         } finally {pool.shutdownNow();}
-        Map<String,Object> held=controls.display(symbol,after,start+12000);
+        Map<String,Object> held=engineRead(controls,after,start+12000);
         assertEquals(103,ControlHistoryStore.number(held.get("price")).intValue());
         assertEquals(8,ControlHistoryStore.number(held.get("controlOffset")).intValue());
         assertEquals(12,count("market_control_sample"));
@@ -408,11 +478,11 @@ class PersistentPriceControlTest extends TenantMarketTestContext {
         assertEquals("STOPPED",controls.latest(1).status); assertTrue(controls.latest(1).holding);
         symbol.setControlEnabled(false);
         PersistentPriceControl restarted=new PersistentPriceControl(store);
-        Map<String,Object> offline=restarted.display(symbol,raw(start,false),start+6000);
+        Map<String,Object> offline=engineRead(restarted,raw(start,false),start+6000);
         assertEquals("HOLDING",offline.get("controlState"));
         assertEquals(0,stopped.compareTo(ControlHistoryStore.number(offline.get("price"))));
         Map<String,Object> moved=raw(start+7000,true); moved.put("price",92);
-        Map<String,Object> following=restarted.display(symbol,moved,start+7000);
+        Map<String,Object> following=engineRead(restarted,moved,start+7000);
         assertEquals(0,stopped.add(BigDecimal.valueOf(2)).compareTo(ControlHistoryStore.number(following.get("price"))));
         long samples=count("market_control_sample");
         restarted.stopAndHold(1,start+8000);
@@ -490,7 +560,7 @@ class PersistentPriceControlTest extends TenantMarketTestContext {
         PersistentPriceControl.Task restore=controls.start(symbol,raw(System.currentTimeMillis(),true),BigDecimal.valueOf(90),1,BigDecimal.valueOf(90),1,false,true,"restore-held");
         assertEquals(100,restore.startPrice.intValue());controls.advance(1,restore.plannedEnd);
         assertFalse(controls.latest(1).holding);
-        assertNotEquals("HOLDING",controls.display(symbol,raw(restore.plannedEnd,true),restore.plannedEnd).get("controlState"));
+        assertNotEquals("HOLDING",engineRead(controls,raw(restore.plannedEnd,true),restore.plannedEnd).get("controlState"));
     }
     @Test void newRegularWaveVersionSurvivesRestartWithoutRewritingCommittedSamples() {
         long now=System.currentTimeMillis();

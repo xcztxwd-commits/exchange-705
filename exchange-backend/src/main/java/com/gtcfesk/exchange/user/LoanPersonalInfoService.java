@@ -16,6 +16,7 @@ import java.util.Objects;
 public class LoanPersonalInfoService {
     private final LoanPersonalInfoRepository loanPersonalInfoRepository;
     private final KycIdentityService identityService;
+    @javax.persistence.PersistenceContext private javax.persistence.EntityManager entityManager;
 
     public KycRecord requireApprovedKyc(Long userId) {
         return identityService.latestRecord(userId).filter(record -> "APPROVED".equals(record.getStatus()))
@@ -56,6 +57,23 @@ public class LoanPersonalInfoService {
                 .filter(record -> "APPROVED".equals(record.getStatus()))
                 .orElseThrow(() -> new BusinessException("请先完成贷款资料审核"));
         validateForReview(info);
+        return info;
+    }
+
+    /** Current reads for a money writer after its canonical user lock. UI reads remain non-locking. */
+    public LoanPersonalInfo requireApprovedPersonalInfoForFunds(Long userId) {
+        if (identityService.simulationExempt() || entityManager == null) return requireApprovedPersonalInfo(userId);
+        Long tenant = com.gtcfesk.exchange.tenant.TenantContext.requireTenantId();
+        LoanPersonalInfo info = loanPersonalInfoRepository.lockByUserId(userId)
+                .orElseThrow(() -> new BusinessException("请先完成贷款资料审核"));
+        entityManager.refresh(info, javax.persistence.LockModeType.PESSIMISTIC_READ);
+        java.util.List<KycRecord> identities = entityManager.createQuery("select k from KycRecord k where k.tenantId=:tenant and k.userId=:user order by k.createdAt desc,k.id desc", KycRecord.class)
+                .setParameter("tenant", tenant).setParameter("user", userId)
+                .setLockMode(javax.persistence.LockModeType.PESSIMISTIC_READ).setMaxResults(1).getResultList();
+        KycRecord identity = identities.isEmpty() ? null : identities.get(0);
+        if (identity != null) entityManager.refresh(identity, javax.persistence.LockModeType.PESSIMISTIC_READ);
+        if (!"APPROVED".equals(info.getStatus()) || !matchesIdentity(info, identity) || !validContact(info))
+            throw new BusinessException("贷款资料与实名信息不一致或资料不完整，请重新提交贷款资料");
         return info;
     }
 

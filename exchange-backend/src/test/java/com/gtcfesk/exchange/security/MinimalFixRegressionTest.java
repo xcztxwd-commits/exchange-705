@@ -37,9 +37,16 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 @org.springframework.context.annotation.Import(com.gtcfesk.exchange.tenant.BootTenantFixture.class)
 @org.junit.jupiter.api.extension.ExtendWith(com.gtcfesk.exchange.tenant.TenantOneFixture.class)
 @org.springframework.test.context.TestPropertySource(properties={"spring.sql.init.mode=always","spring.sql.init.schema-locations=classpath:multitenant-market-test.sql","spring.redis.host=127.0.0.1", "spring.redis.port=${MT705_TEST_REDIS_PORT:1}", "spring.redis.password=${MT705_TEST_REDIS_PASSWORD:}", "platform.base-domain=mt705.test","platform.admin-origin=https://admin.mt705.test","platform.control-origin=https://control.mt705.test"})
-@SpringBootTest(properties = {"spring.datasource.url=jdbc:h2:mem:minimal_fix;MODE=MySQL;DB_CLOSE_DELAY=-1", "spring.datasource.driver-class-name=org.h2.Driver", "spring.datasource.username=sa", "spring.datasource.password=", "spring.jpa.hibernate.ddl-auto=create-drop", "spring.jpa.show-sql=false", "spring.jpa.open-in-view=false", "logging.level.root=ERROR"})
+@SpringBootTest(properties = {"spring.datasource.url=jdbc:h2:mem:minimal_fix;MODE=MySQL;DB_CLOSE_DELAY=-1", "spring.datasource.driver-class-name=org.h2.Driver", "spring.datasource.username=sa", "spring.datasource.password=", "spring.jpa.hibernate.ddl-auto=create-drop", "spring.jpa.show-sql=false", "spring.jpa.open-in-view=false", "spring.jpa.properties.hibernate.session_factory.statement_inspector=com.gtcfesk.exchange.security.MinimalFixRegressionTest$DmlInspector", "logging.level.root=ERROR"})
 @AutoConfigureMockMvc(print = org.springframework.boot.test.autoconfigure.web.servlet.MockMvcPrint.NONE)
 class MinimalFixRegressionTest {
+    /** Observe this thread's actual Hibernate DML, not method invocations or inferred version stability. */
+    public static class DmlInspector implements org.hibernate.resource.jdbc.spi.StatementInspector {
+        private static final ThreadLocal<Integer> writes=new ThreadLocal<>();
+        public DmlInspector() { }
+        public String inspect(String sql){Integer count=writes.get();if(count!=null&&sql.trim().matches("(?is)^(insert|update|delete|merge)\\b.*"))writes.set(count+1);return sql;}
+        static void begin(){writes.set(0);}static int end(){int count=writes.get();writes.remove();return count;}
+    }
     static final String SECRET = Base64.getEncoder().encodeToString(UUID.randomUUID().toString().getBytes());
     static final String PASSWORD = UUID.randomUUID().toString();
     @DynamicPropertySource static void properties(DynamicPropertyRegistry r) { r.add("jwt.secret", () -> SECRET);
@@ -50,6 +57,7 @@ class MinimalFixRegressionTest {
             r.add("spring.datasource.password", () -> System.getenv("QA_DB_PASSWORD"));
         } }
     @MockBean ForexQuoteMarketService quotes;
+    @MockBean MarketControlCommands controlCommands;
     @MockBean MarketInstrumentCatalog catalog;
     @MockBean MarketOrderProcessor processor;
     @MockBean RedisMarketService redis;
@@ -78,6 +86,7 @@ class MinimalFixRegressionTest {
     @Autowired TransferRecordRepository transfers;
     @Autowired LoanRecordRepository loans;
     @Autowired DepositRecordRepository deposits;
+    @Autowired DepositSettingRepository depositSettings;
     @Autowired FinancialOrderRepository financialOrders;
     @Autowired ContractOrderRepository contracts;
     @Autowired OptionOrderRepository options;
@@ -129,6 +138,21 @@ class MinimalFixRegressionTest {
         return mvc.perform(builder).andReturn();
     }
     int status(MvcResult result){return result.getResponse().getStatus();}
+    // Public order creation requires an idempotency key. Raw request() remains available for key rejection tests.
+    MvcResult createOrder(String kind,String token,Map<String,Object> input) throws Exception {
+        Map<String,Object> keyed=new LinkedHashMap<>(input);keyed.putIfAbsent("requestId",UUID.randomUUID().toString());
+        return request("POST","/api/trade/"+kind+"/order",token,keyed);
+    }
+    MvcResult submitDeposit(Map<String,Object> input) throws Exception {
+        Map<String,Object> keyed=new LinkedHashMap<>(input);keyed.putIfAbsent("requestId",UUID.randomUUID().toString());
+        return request("POST","/api/deposit/submit",ta,keyed);
+    }
+    void depositChannel(String type,String network,String address) {
+        if(depositSettings.findByTenantIdAndTypeAndEnabled(1L,type,true).stream().anyMatch(c->"bank".equals(type)?address.equals(c.getBankAccount()):network.equals(c.getNetwork())&&address.equals(c.getAddress())))return;
+        DepositSetting c=new DepositSetting();c.setType(type);c.setNetwork(network);c.setAddress(address);c.setEnabled(true);
+        if("bank".equals(type)){c.setBankName("Synthetic bank; no real payment");c.setBankAccount(address);c.setAccountName("Disposable fixture");}
+        depositSettings.saveAndFlush(c);
+    }
     JsonNode body(MvcResult result)throws Exception{return json.readTree(result.getResponse().getContentAsByteArray());}
     BigDecimal balance(UserAccount u,String coin){return assets.findByTenantIdAndUserIdAndCoin(1L, u.getId(),coin).get().getAvailable();}
     void same(BigDecimal expected,BigDecimal actual){assertEquals(0,expected.compareTo(actual));}
@@ -287,7 +311,24 @@ class MinimalFixRegressionTest {
         assertEquals(400,status(request("POST","/api/transfer/submit",ta,map("fromAccount","FUND","toAccount","fund","amount",1))));
         assertFalse(transfer("FUND","CONTRACT",20000,null));same(before.subtract(new BigDecimal("97")),balance(a,"FUND"));
     }
-    boolean transfer(String from,String to,int amount,String key){try{return status(request("POST","/api/transfer/submit",ta,map("fromAccount",from,"toAccount",to,"amount",amount,"requestId",key)))==200;}catch(Exception e){throw new RuntimeException(e);}}
+    boolean transfer(String from,String to,int amount,String key){try{return status(request("POST","/api/transfer/submit",ta,map("fromAccount",from,"toAccount",to,"amount",amount,"requestId",key==null?UUID.randomUUID().toString():prefix+"_transfer_"+key)))==200;}catch(Exception e){throw new RuntimeException(e);}}
+    @Test void publicCreationRejectsMissingOrShortKeysWithoutOrdersOrFundsWrites() throws Exception {
+        TradingSymbol s=symbol();quote(s,"100");depositChannel("digital","USDT-TRC20","test");
+        Map<String,Map<String,Object>> inputs=new LinkedHashMap<>();
+        inputs.put("/api/trade/contract/order",map("symbol",s.getSymbol(),"type","MARKET","side","BUY","quantity","0.01"));
+        inputs.put("/api/trade/option/order",map("symbol",s.getSymbol(),"direction","UP","duration",60,"amount",10));
+        inputs.put("/api/transfer/submit",map("fromAccount","FUND","toAccount","CONTRACT","amount",1));
+        inputs.put("/api/deposit/submit",map("type","digital","network","USDT-TRC20","address","test","amount",1));
+        Map<String,Long> versions=new LinkedHashMap<>();for(AssetAccount account:assets.findByTenantIdAndUserId(1L,a.getId()))versions.put(account.getCoin(),account.getRowVersion());
+        for(Map.Entry<String,Map<String,Object>> route:inputs.entrySet())for(String key:Arrays.asList(null,"short")){
+            Map<String,Object> input=new LinkedHashMap<>(route.getValue());if(key!=null)input.put("requestId",key);
+            MvcResult denied=request("POST",route.getKey(),ta,input);assertEquals(400,status(denied),denied.getResponse().getContentAsString());
+            assertTrue(body(denied).path("message").asText().contains("请求编号"),denied.getResponse().getContentAsString());
+        }
+        assertTrue(contracts.findByTenantIdAndUserIdOrderByCreatedAtDesc(1L,a.getId()).isEmpty());assertTrue(options.findByTenantIdAndUserIdOrderByCreatedAtDesc(1L,a.getId()).isEmpty());
+        assertTrue(transfers.findByTenantIdAndUserIdOrderByCreatedAtDesc(1L,a.getId()).isEmpty());assertTrue(deposits.findByTenantIdAndUserIdOrderByCreatedAtDesc(1L,a.getId()).isEmpty());
+        for(AssetAccount account:assets.findByTenantIdAndUserId(1L,a.getId())){same(new BigDecimal("10000"),account.getAvailable());same(BigDecimal.ZERO,account.getFrozen());assertEquals(versions.get(account.getCoin()).longValue(),account.getRowVersion());}
+    }
     List<Boolean> race(Supplier<Boolean> one,Supplier<Boolean> two)throws Exception{
         ExecutorService pool=Executors.newFixedThreadPool(2);CountDownLatch start=new CountDownLatch(1);
         try{List<Future<Boolean>> work=new ArrayList<>();for(Supplier<Boolean> f:Arrays.asList(one,two))work.add(pool.submit(()->{start.await();try(com.gtcfesk.exchange.tenant.TenantContext.Scope ignored=com.gtcfesk.exchange.tenant.TenantContext.open(1L)){return f.get();}catch(RuntimeException e){return false;}}));start.countDown();List<Boolean> result=new ArrayList<>();for(Future<Boolean> f:work)result.add(f.get(20,TimeUnit.SECONDS));return result;}finally{pool.shutdownNow();}
@@ -301,10 +342,11 @@ class MinimalFixRegressionTest {
     }
     @Test void invalidAmountsAndWithdrawalTypesDoNotWriteFundsOrRecords()throws Exception{
         org.mockito.Mockito.when(quotes.requireConversionRate("USD","yahoo")).thenReturn(BigDecimal.ONE);
+        depositChannel("digital","USDT-TRC20","test");
         long count=deposits.countByTenantId(1L);BigDecimal before=balance(a,"FUND");
-        for(int amount:new int[]{0,-1})assertEquals(400,status(request("POST","/api/deposit/submit",ta,map("type","digital","network","USDT-TRC20","address","test","amount",amount,"proofImage","test"))));
+        for(int amount:new int[]{0,-1})assertEquals(400,status(submitDeposit(map("type","digital","network","USDT-TRC20","address","test","amount",amount,"proofImage","test"))));
         assertEquals(count,deposits.countByTenantId(1L));assertEquals(400,status(request("POST","/api/withdraw/submit",ta,map("type","unknown","network","USD","address","test","amount",1))));same(before,balance(a,"FUND"));
-        assertEquals(200,status(request("POST","/api/deposit/submit",ta,map("type","digital","network","USDT-TRC20","address","test","amount",1,"proofImage","test"))));assertEquals(count+1,deposits.countByTenantId(1L));
+        assertEquals(200,status(submitDeposit(map("type","digital","network","USDT-TRC20","address","test","amount",1,"proofImage","test"))));assertEquals(count+1,deposits.countByTenantId(1L));
     }
 
     KycRecord identity(UserAccount user, String status) {
@@ -325,12 +367,12 @@ class MinimalFixRegressionTest {
             JsonNode info = body(request("GET", "/api/kyc/status", tb, null));
             assertFalse(info.path("canTrade").asBoolean()); assertEquals("NOT_VERIFIED", info.path("kycStatus").asText());
             for (String type : Arrays.asList("MARKET", "LIMIT")) for (String side : Arrays.asList("BUY", "SELL")) {
-                MvcResult denied = request("POST", "/api/trade/contract/order", tb, map("symbol",s.getSymbol(),"type",type,"side",side,"quantity","0.01","price",100));
+                MvcResult denied = createOrder("contract", tb, map("symbol",s.getSymbol(),"type",type,"side",side,"quantity","0.01","price",100));
                 assertEquals(403, status(denied)); assertEquals("KYC_REQUIRED", body(denied).path("errorCode").asText());
                 assertEquals("NONE".equals(state) ? "NOT_VERIFIED" : state, body(denied).path("kycStatus").asText());
             }
             for (String direction : Arrays.asList("UP", "DOWN")) {
-                MvcResult denied = request("POST", "/api/trade/option/order", tb, map("symbol",s.getSymbol(),"direction",direction,"duration",60,"amount",10));
+                MvcResult denied = createOrder("option", tb, map("symbol",s.getSymbol(),"direction",direction,"duration",60,"amount",10));
                 assertEquals(403, status(denied)); assertEquals("KYC_REQUIRED", body(denied).path("errorCode").asText());
             }
             assertTrue(contracts.findByTenantIdAndUserIdOrderByCreatedAtDesc(1L, b.getId()).isEmpty());
@@ -340,12 +382,12 @@ class MinimalFixRegressionTest {
         KycRecord pendingIdentity = identity(b,"PENDING");
         assertEquals(200,status(request("POST","/api/admin/kyc/"+pendingIdentity.getId()+"/approve",superToken,map())));
         assertTrue(body(request("GET","/api/kyc/status",tb,null)).path("canTrade").asBoolean());
-        assertEquals(200,status(request("POST","/api/trade/contract/order",tb,map("symbol",s.getSymbol(),"type","MARKET","side","BUY","quantity","0.01"))));
+        assertEquals(200,status(createOrder("contract",tb,map("symbol",s.getSymbol(),"type","MARKET","side","BUY","quantity","0.01"))));
         durations.findByTenantIdAndDuration(1L, 60).orElseGet(() -> {
             OptionDuration d=new OptionDuration();d.setDuration(60);d.setLabel("60s");d.setEnabled(true);d.setSortOrder(1);
             d.setProfitRate(new BigDecimal("0.8"));d.setLossRate(BigDecimal.ONE);d.setMinAmount(BigDecimal.ONE);d.setMaxAmount(new BigDecimal("100"));return durations.saveAndFlush(d);
         });
-        for (String direction : Arrays.asList("UP","DOWN")) assertEquals(200,status(request("POST","/api/trade/option/order",tb,map("symbol",s.getSymbol(),"direction",direction,"duration",60,"amount",10))));
+        for (String direction : Arrays.asList("UP","DOWN")) assertEquals(200,status(createOrder("option",tb,map("symbol",s.getSymbol(),"direction",direction,"duration",60,"amount",10))));
         identity(b,"REJECTED");
         for (OptionOrder order : options.findByTenantIdAndUserIdOrderByCreatedAtDesc(1L, b.getId())) {order.setOpenTime(LocalDateTime.now().minusMinutes(2));options.saveAndFlush(order);}
         optionService.settleExpiredOrders(Collections.emptyMap());
@@ -373,11 +415,11 @@ class MinimalFixRegressionTest {
         TradingSymbol symbol=symbol();OptionDuration d=durations.findByTenantIdAndDuration(1L, 60).orElseGet(()->{OptionDuration x=new OptionDuration();x.setDuration(60);x.setLabel("60s");x.setSortOrder(1);x.setEnabled(true);x.setProfitRate(new BigDecimal("0.8"));x.setLossRate(BigDecimal.ONE);x.setMinAmount(BigDecimal.ONE);x.setMaxAmount(new BigDecimal("100"));return durations.saveAndFlush(x);});
         Map<String,Object> req=map("symbol",symbol.getSymbol(),"side","BUY","type","MARKET","quantity",1,"currentPrice",100);
         quote(symbol,"100");
-        for(Object[] bad:Arrays.asList(new Object[]{"side","INVALID"},new Object[]{"type","INVALID"},new Object[]{"quantity",-1},new Object[]{"quantity",0})) {Map<String,Object> input=new HashMap<>(req);input.put(bad[0].toString(),bad[1]);assertEquals(400,status(request("POST","/api/trade/contract/order",ta,input)));}
+        for(Object[] bad:Arrays.asList(new Object[]{"side","INVALID"},new Object[]{"type","INVALID"},new Object[]{"quantity",-1},new Object[]{"quantity",0})) {Map<String,Object> input=new HashMap<>(req);input.put(bad[0].toString(),bad[1]);assertEquals(400,status(createOrder("contract",ta,input)));}
         Map<String,Object> opt=map("symbol",symbol.getSymbol(),"direction","UP","duration",60,"amount",10,"currentPrice",100);
-        for(Object[] bad:Arrays.asList(new Object[]{"direction","INVALID"},new Object[]{"duration",-1},new Object[]{"duration",61},new Object[]{"amount",-1},new Object[]{"amount",0},new Object[]{"amount",101})) {Map<String,Object> input=new HashMap<>(opt);input.put(bad[0].toString(),bad[1]);assertEquals(400,status(request("POST","/api/trade/option/order",ta,input)));}
+        for(Object[] bad:Arrays.asList(new Object[]{"direction","INVALID"},new Object[]{"duration",-1},new Object[]{"duration",61},new Object[]{"amount",-1},new Object[]{"amount",0},new Object[]{"amount",101})) {Map<String,Object> input=new HashMap<>(opt);input.put(bad[0].toString(),bad[1]);assertEquals(400,status(createOrder("option",ta,input)));}
         assertEquals(0,contracts.findByTenantIdAndUserIdOrderByCreatedAtDesc(1L, a.getId()).size());assertEquals(0,options.findByTenantIdAndUserIdOrderByCreatedAtDesc(1L, a.getId()).size());same(new BigDecimal("10000"),balance(a,"CONTRACT"));same(new BigDecimal("10000"),balance(a,"OPTION"));
-        assertEquals(200,status(request("POST","/api/trade/contract/order",ta,req)));assertEquals(200,status(request("POST","/api/trade/option/order",ta,opt)));
+        assertEquals(200,status(createOrder("contract",ta,req)));assertEquals(200,status(createOrder("option",ta,opt)));
     }
     @Test void userInfoIsPrivateAndInputErrorsDoNotExposeInternals()throws Exception{
         assertEquals(403,status(request("GET","/api/user/"+b.getId()+"/info",ta,null)));assertEquals(200,status(request("GET","/api/user/"+a.getId()+"/info",ta,null)));
@@ -461,8 +503,14 @@ class MinimalFixRegressionTest {
     @Test void cancelCompetitionUnfreezesMarginExactlyOnce()throws Exception {
         TradingSymbol symbol=symbol();CreateContractOrderRequest req=new CreateContractOrderRequest();req.setSymbol(symbol.getSymbol());req.setSide("BUY");req.setType("LIMIT");req.setQuantity(BigDecimal.ONE);req.setPrice(new BigDecimal("100"));
         BigDecimal before=balance(a,"CONTRACT");ContractOrder order=contractService.createOrder(a.getId(),req);
+        AssetAccount reserved=assets.findByTenantIdAndUserIdAndCoin(1L,a.getId(),"CONTRACT").get();
         List<Boolean> outcomes=race(()->{contractService.cancelOrder(a.getId(),order.getId());return true;},()->{contractService.adminCancelOrder(order.getId());return true;});
         assertEquals(1,outcomes.stream().filter(Boolean.TRUE::equals).count());same(before,balance(a,"CONTRACT"));same(BigDecimal.ZERO,assets.findByTenantIdAndUserIdAndCoin(1L, a.getId(),"CONTRACT").get().getFrozen());assertEquals("CANCELLED",contracts.findByTenantIdAndId(1L, order.getId()).get().getStatus());
+        assertEquals(order.getRowVersion()+1,contracts.findByTenantIdAndId(1L,order.getId()).get().getRowVersion());
+        assertEquals(reserved.getRowVersion()+1,assets.findByTenantIdAndId(1L,reserved.getId()).get().getRowVersion());
+        DmlInspector.begin();try{assertThrows(BusinessException.class,()->contractService.cancelOrder(a.getId(),order.getId()));assertThrows(BusinessException.class,()->contractService.adminCancelOrder(order.getId()));}finally{assertEquals(0,DmlInspector.end(),"sequential duplicate cancellations must issue zero Hibernate DML");}
+        assertEquals(order.getRowVersion()+1,contracts.findByTenantIdAndId(1L,order.getId()).get().getRowVersion());
+        AssetAccount unchanged=assets.findByTenantIdAndId(1L,reserved.getId()).get();assertEquals(reserved.getRowVersion()+1,unchanged.getRowVersion());same(before,unchanged.getAvailable());same(BigDecimal.ZERO,unchanged.getFrozen());
     }
 
     @Test void forgedContractPricesCannotCreateProfitAndOldClientsStillWork() throws Exception {
@@ -470,7 +518,7 @@ class MinimalFixRegressionTest {
         TradingSymbol s=symbol();s.setLeverage(new BigDecimal("100"));symbols.saveAndFlush(s);
         for(String side:Arrays.asList("BUY","SELL")) {
             quote(s,"105");
-            MvcResult created=request("POST","/api/trade/contract/order",ta,map("symbol",s.getSymbol(),"side",side,"type","MARKET","quantity","0.01","currentPrice",1));
+            MvcResult created=createOrder("contract",ta,map("symbol",s.getSymbol(),"side",side,"type","MARKET","quantity","0.01","currentPrice",1));
             assertEquals(200,status(created));long id=body(created).path("orderId").asLong();
             same(new BigDecimal("105"),contracts.findByTenantIdAndId(1L, id).get().getOpenPrice());
             assertEquals(400,status(request("POST","/api/trade/contract/order/"+id+"/close",tb,map("closePrice",999999))));
@@ -479,7 +527,7 @@ class MinimalFixRegressionTest {
             BigDecimal after=balance(a,"CONTRACT");assertEquals(400,status(request("POST","/api/trade/contract/order/"+id+"/close",ta,null)));same(after,balance(a,"CONTRACT"));
         }
         for(Object payload:Arrays.asList(null,map(),map("closePrice","invalid"),map("closePrice",-1))) {
-            MvcResult created=request("POST","/api/trade/contract/order",ta,map("symbol",s.getSymbol(),"side","BUY","type","MARKET","quantity","0.01"));
+            MvcResult created=createOrder("contract",ta,map("symbol",s.getSymbol(),"side","BUY","type","MARKET","quantity","0.01"));
             assertEquals(200,status(created));long id=body(created).path("orderId").asLong();
             assertEquals(200,status(request("POST","/api/trade/contract/order/"+id+"/close",ta,payload)));same(BigDecimal.ZERO,contracts.findByTenantIdAndId(1L, id).get().getProfit());
         }
@@ -488,10 +536,10 @@ class MinimalFixRegressionTest {
     @Test void missingQuotesRejectContractExecutionWithoutChangingOrdersOrFunds() throws Exception {
         TradingSymbol s=symbol();Map<String,Object> input=map("symbol",s.getSymbol(),"side","BUY","type","MARKET","quantity","0.01","currentPrice",1);
         for(String price:Arrays.asList(null,"0","-1")) {
-            quote(s,price);assertEquals(400,status(request("POST","/api/trade/contract/order",ta,input)));
+            quote(s,price);assertEquals(400,status(createOrder("contract",ta,input)));
             assertTrue(contracts.findByTenantIdAndUserIdOrderByCreatedAtDesc(1L, a.getId()).isEmpty());same(new BigDecimal("10000"),balance(a,"CONTRACT"));same(BigDecimal.ZERO,assets.findByTenantIdAndUserIdAndCoin(1L, a.getId(),"CONTRACT").get().getFrozen());
         }
-        quote(s,"105");MvcResult created=request("POST","/api/trade/contract/order",ta,input);assertEquals(200,status(created));long id=body(created).path("orderId").asLong();
+        quote(s,"105");MvcResult created=createOrder("contract",ta,input);assertEquals(200,status(created));long id=body(created).path("orderId").asLong();
         AssetAccount before=assets.findByTenantIdAndUserIdAndCoin(1L, a.getId(),"CONTRACT").get();
         for(String price:Arrays.asList(null,"0","-1")) {
             quote(s,price);assertEquals(400,status(request("POST","/api/trade/contract/order/"+id+"/close",ta,map("closePrice",999999))));
@@ -503,11 +551,11 @@ class MinimalFixRegressionTest {
     @Test void adminAndStopTriggersCannotSubstituteTheirOwnExecutionPrices() throws Exception {
         TradingSymbol s=symbol();quote(s,"105");
         for(String side:Arrays.asList("BUY","SELL")) {
-            MvcResult created=request("POST","/api/trade/contract/order",ta,map("symbol",s.getSymbol(),"side",side,"type","MARKET","quantity","0.01","stopLoss","BUY".equals(side)?999999:1));
+            MvcResult created=createOrder("contract",ta,map("symbol",s.getSymbol(),"side",side,"type","MARKET","quantity","0.01","stopLoss","BUY".equals(side)?999999:1));
             assertEquals(200,status(created));long id=body(created).path("orderId").asLong();contractService.checkAndAutoCloseOrders(s.getSymbol(),new BigDecimal("999999"));
             ContractOrder closed=contracts.findByTenantIdAndId(1L, id).get();assertEquals("CLOSED",closed.getStatus());same(new BigDecimal("105"),closed.getClosePrice());same(BigDecimal.ZERO,closed.getProfit());
         }
-        MvcResult created=request("POST","/api/trade/contract/order",ta,map("symbol",s.getSymbol(),"side","BUY","type","MARKET","quantity","0.01"));
+        MvcResult created=createOrder("contract",ta,map("symbol",s.getSymbol(),"side","BUY","type","MARKET","quantity","0.01"));
         assertEquals(200,status(created));long id=body(created).path("orderId").asLong();
         BigDecimal before=balance(a,"CONTRACT");
         assertEquals(400,status(request("POST","/api/admin/orders/contract/"+id+"/close",superToken,map("closePrice",999999))));same(before,balance(a,"CONTRACT"));assertEquals("OPEN",contracts.findByTenantIdAndId(1L,id).get().getStatus());
@@ -518,8 +566,8 @@ class MinimalFixRegressionTest {
     @Test void optionOpeningIgnoresClientPricesAndRequiresFreshQuotes() throws Exception {
         TradingSymbol s=symbol();durations.findByTenantIdAndDuration(1L, 60).orElseGet(()->{OptionDuration d=new OptionDuration();d.setDuration(60);d.setLabel("60s");d.setSortOrder(1);d.setEnabled(true);d.setProfitRate(new BigDecimal("0.8"));d.setLossRate(BigDecimal.ONE);d.setMinAmount(BigDecimal.ONE);d.setMaxAmount(new BigDecimal("100"));return durations.saveAndFlush(d);});
         Map<String,Object> input=map("symbol",s.getSymbol(),"direction","UP","duration",60,"amount",10,"currentPrice",1);
-        quote(s,null);assertEquals(400,status(request("POST","/api/trade/option/order",ta,input)));same(new BigDecimal("10000"),balance(a,"OPTION"));assertTrue(options.findByTenantIdAndUserIdOrderByCreatedAtDesc(1L, a.getId()).isEmpty());
-        quote(s,"105");for(Object clientPrice:Arrays.asList(1,999999,-1,null)) {input.put("currentPrice",clientPrice);assertEquals(200,status(request("POST","/api/trade/option/order",ta,input)));}
+        quote(s,null);assertEquals(400,status(createOrder("option",ta,input)));same(new BigDecimal("10000"),balance(a,"OPTION"));assertTrue(options.findByTenantIdAndUserIdOrderByCreatedAtDesc(1L, a.getId()).isEmpty());
+        quote(s,"105");for(Object clientPrice:Arrays.asList(1,999999,-1,null)) {input.put("currentPrice",clientPrice);assertEquals(200,status(createOrder("option",ta,input)));}
         List<OptionOrder> opened=options.findByTenantIdAndUserIdOrderByCreatedAtDesc(1L, a.getId());assertEquals(4,opened.size());for(OptionOrder o:opened)same(new BigDecimal("105"),o.getOpenPrice());
         same(new BigDecimal("9960"),balance(a,"OPTION"));same(new BigDecimal("40"),assets.findByTenantIdAndUserIdAndCoin(1L, a.getId(),"OPTION").get().getFrozen());
     }
@@ -569,7 +617,7 @@ class MinimalFixRegressionTest {
                 BigDecimal before = balance(a, "CONTRACT");
                 Map<String, Object> input = map("symbol", s.getSymbol(), "type", "MARKET", "side", side,
                         "quantity", "0.01", "leverage", leverage, "currentPrice", 1);
-                MvcResult result = request("POST", "/api/trade/contract/order", ta, input);
+                MvcResult result = createOrder("contract", ta, input);
                 assertEquals(200, status(result));
                 ContractOrder order = contracts.findByTenantIdAndId(1L, body(result).path("orderId").asLong()).get();
                 BigDecimal selected = new BigDecimal(leverage == null ? "100" : leverage.toString());
@@ -591,13 +639,13 @@ class MinimalFixRegressionTest {
     @Test void invalidLeverageAndInsufficientMarginNeverMoveFunds() throws Exception {
         TradingSymbol s = symbol(); quote(s, "100");
         for (Object leverage : Arrays.asList(0, -1, "0.5", "2.5", 101, "1e100", "NaN")) {
-            assertEquals(400, status(request("POST", "/api/trade/contract/order", ta,
+            assertEquals(400, status(createOrder("contract", ta,
                     map("symbol", s.getSymbol(), "type", "MARKET", "side", "BUY", "quantity", "0.01", "leverage", leverage))));
         }
-        assertEquals(400, status(request("POST", "/api/trade/contract/order", ta,
+        assertEquals(400, status(createOrder("contract", ta,
                 map("symbol", s.getSymbol(), "type", "MARKET", "side", "BUY", "quantity", "100", "leverage", 1))));
         s.setMaxLeverage(new BigDecimal("20")); symbols.saveAndFlush(s);
-        assertEquals(400, status(request("POST", "/api/trade/contract/order", ta,
+        assertEquals(400, status(createOrder("contract", ta,
                 map("symbol", s.getSymbol(), "type", "MARKET", "side", "BUY", "quantity", "0.01", "leverage", 100))));
         assertTrue(contracts.findByTenantIdAndUserIdOrderByCreatedAtDesc(1L, a.getId()).isEmpty());
         same(new BigDecimal("10000"), balance(a, "CONTRACT"));
@@ -674,7 +722,16 @@ class MinimalFixRegressionTest {
 
     @Test void timedControlRequiresItsMenuAndValidatesInputs() throws Exception {
         String base = "/api/admin/ai-control/1";
-        Map<String, Object> valid = map("durationSeconds", 10, "targetPrice", 100, "intensity", 10, "randomOscillation", true);
+        String firstKey = "s2-menu-first-" + UUID.randomUUID(), secondKey = "s2-menu-default-" + UUID.randomUUID();
+        Map<String, Object> valid = map("durationSeconds", 10, "targetPrice", 100, "intensity", 10, "randomOscillation", true, "requestKey", firstKey);
+        // This fixture tests the real MVC/menu/bean-validation boundary, not command execution.
+        // The actual MySQL acceptance and browser fixture exercise the real queue and worker.
+        org.mockito.Mockito.doAnswer(call -> {
+            String key = OrderRequest.required(call.getArgument(5));
+            return map("symbolId", call.getArgument(0), "requestKey", key, "commandId", "fixture-" + key, "state", "ACCEPTED", "taskId", null);
+        }).when(controlCommands).accept(org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.anyInt(),
+                org.mockito.ArgumentMatchers.any(BigDecimal.class), org.mockito.ArgumentMatchers.anyInt(), org.mockito.ArgumentMatchers.anyBoolean(),
+                org.mockito.ArgumentMatchers.nullable(String.class), org.mockito.ArgumentMatchers.any(TargetControlOptions.class));
         assertEquals(401, status(request("POST", base + "/start", null, valid)));
         assertEquals(401, status(request("POST", base + "/start", ta, valid)));
         UserAccount agent = user("controlAgent", "agent", null); String token = agentLogin(agent);
@@ -685,15 +742,20 @@ class MinimalFixRegressionTest {
         org.mockito.Mockito.when(quotes.previewControl(1L, 10, new BigDecimal("100"), 10, true)).thenReturn(map("feasible", true));
         assertEquals(200, status(request("GET", base, token, null)));
         assertEquals(200, status(request("POST", base + "/preview", token, valid)));
-        assertEquals(200, status(request("POST", base + "/start", token, valid)));
-        org.mockito.Mockito.verify(quotes).startControl(org.mockito.ArgumentMatchers.eq(1L), org.mockito.ArgumentMatchers.eq(10), org.mockito.ArgumentMatchers.eq(new BigDecimal("100")), org.mockito.ArgumentMatchers.eq(10), org.mockito.ArgumentMatchers.eq(true), org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.argThat(o -> Boolean.FALSE.equals(o.getAutoRestore()) && "GRADUAL".equals(o.getRestoreMode()) && o.getRestoreDurationSeconds() == 10 && o.getRestoreIntensity() == 5 && o.getRestoreRandomOscillation() && o.getAutoReplaceHistory()));
-        assertEquals(200, status(request("POST", base + "/start", token, map("durationSeconds", 10, "targetPrice", 100, "intensity", 10))));
-        org.mockito.Mockito.verify(quotes, org.mockito.Mockito.times(2)).startControl(org.mockito.ArgumentMatchers.eq(1L), org.mockito.ArgumentMatchers.eq(10), org.mockito.ArgumentMatchers.eq(new BigDecimal("100")), org.mockito.ArgumentMatchers.eq(10), org.mockito.ArgumentMatchers.eq(true), org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.argThat(o -> Boolean.FALSE.equals(o.getAutoRestore()) && "GRADUAL".equals(o.getRestoreMode()) && o.getRestoreDurationSeconds() == 10 && o.getRestoreIntensity() == 5 && o.getRestoreRandomOscillation() && o.getAutoReplaceHistory()));
-        assertEquals(400, status(request("POST", base + "/start", token, map("durationSeconds", 10, "targetPrice", 100, "intensity", 1, "randomOscillation", null))));
-        assertEquals(400, status(request("POST", base + "/start", superToken, map("durationSeconds", 0, "targetPrice", 100, "intensity", 1))));
-        assertEquals(400, status(request("POST", base + "/start", superToken, map("durationSeconds", 10, "targetPrice", -1, "intensity", 1))));
+        MvcResult accepted = request("POST", base + "/start", token, valid);
+        assertEquals(202, status(accepted)); assertEquals("ACCEPTED", body(accepted).path("state").asText());
+        assertTrue(body(accepted).path("taskId").isNull()); assertEquals(firstKey, body(accepted).path("requestKey").asText());
+        org.mockito.Mockito.verify(controlCommands).accept(org.mockito.ArgumentMatchers.eq(1L), org.mockito.ArgumentMatchers.eq(10), org.mockito.ArgumentMatchers.eq(new BigDecimal("100")), org.mockito.ArgumentMatchers.eq(10), org.mockito.ArgumentMatchers.eq(true), org.mockito.ArgumentMatchers.eq(firstKey), org.mockito.ArgumentMatchers.argThat(o -> Boolean.FALSE.equals(o.getAutoRestore()) && "GRADUAL".equals(o.getRestoreMode()) && o.getRestoreDurationSeconds() == 10 && o.getRestoreIntensity() == 5 && o.getRestoreRandomOscillation() && o.getAutoReplaceHistory()));
+        MvcResult defaulted = request("POST", base + "/start", token, map("durationSeconds", 10, "targetPrice", 100, "intensity", 10, "requestKey", secondKey));
+        assertEquals(202, status(defaulted)); assertEquals("ACCEPTED", body(defaulted).path("state").asText()); assertTrue(body(defaulted).path("taskId").isNull());
+        org.mockito.Mockito.verify(controlCommands).accept(org.mockito.ArgumentMatchers.eq(1L), org.mockito.ArgumentMatchers.eq(10), org.mockito.ArgumentMatchers.eq(new BigDecimal("100")), org.mockito.ArgumentMatchers.eq(10), org.mockito.ArgumentMatchers.eq(true), org.mockito.ArgumentMatchers.eq(secondKey), org.mockito.ArgumentMatchers.argThat(o -> Boolean.FALSE.equals(o.getAutoRestore()) && "GRADUAL".equals(o.getRestoreMode()) && o.getRestoreDurationSeconds() == 10 && o.getRestoreIntensity() == 5 && o.getRestoreRandomOscillation() && o.getAutoReplaceHistory()));
+        assertEquals(400, status(request("POST", base + "/start", token, map("durationSeconds", 10, "targetPrice", 100, "intensity", 1))));
+        assertEquals(400, status(request("POST", base + "/start", token, map("durationSeconds", 10, "targetPrice", 100, "intensity", 1, "requestKey", "short"))));
+        assertEquals(400, status(request("POST", base + "/start", token, map("durationSeconds", 10, "targetPrice", 100, "intensity", 1, "randomOscillation", null, "requestKey", firstKey))));
+        assertEquals(400, status(request("POST", base + "/start", superToken, map("durationSeconds", 0, "targetPrice", 100, "intensity", 1, "requestKey", firstKey))));
+        assertEquals(400, status(request("POST", base + "/start", superToken, map("durationSeconds", 10, "targetPrice", -1, "intensity", 1, "requestKey", firstKey))));
         assertEquals(400, status(request("POST", base + "/restore", token, map("durationSeconds", 10, "intensity", 11))));
-        assertEquals(400, status(request("POST", base + "/start", token, map("durationSeconds", 1.5, "targetPrice", 100, "intensity", 1))));
+        assertEquals(400, status(request("POST", base + "/start", token, map("durationSeconds", 1.5, "targetPrice", 100, "intensity", 1, "requestKey", firstKey))));
         assertEquals(400, status(request("POST", base + "/restore", token, map("durationSeconds", 10, "intensity", 1.5))));
         assertEquals(400, status(request("POST", base + "/manual", token, map("enabled", true))));
         assertEquals(200, status(request("POST", base + "/restore", token, map("durationSeconds", 10, "intensity", 3))));
@@ -826,12 +888,13 @@ class MinimalFixRegressionTest {
 
     @Test void depositSummarySeparatesManualPurposesUserAndLegacyAndPaginates() throws Exception {
         org.mockito.Mockito.when(quotes.requireConversionRate("USD","yahoo")).thenReturn(BigDecimal.ONE);
+        depositChannel("bank","BANK","fixture");
         String url="/api/admin/deposit/orders",query="?userId="+a.getId();
         for(String purpose:Arrays.asList("BONUS","ADJUSTMENT","RECEIPT")) {
             Map<String,Object> input=map("userId",a.getId(),"amount","100","manualPurpose",purpose,"type",purpose.equals("RECEIPT")?"bank":"manual","proofImage","/fixture.png","remark","=SUM(1)","idempotencyKey",UUID.randomUUID().toString());
             assertEquals(200,status(request("POST",url+"/manual",superToken,input)));
         }
-        assertEquals(200,status(request("POST","/api/deposit/submit",ta,map("type","bank","network","BANK","address","fixture","amount","100"))));
+        assertEquals(200,status(submitDeposit(map("type","bank","network","BANK","address","fixture","amount","100"))));
         DepositRecord submitted=deposits.findByTenantIdAndUserIdOrderByCreatedAtDesc(1L, a.getId()).get(0);approveAsAdmin(submitted.getId());
         DepositRecord legacy=deposit(a,10);approveAsAdmin(legacy.getId());
         JsonNode totals=body(request("GET",url+"/summary"+query,superToken,null));

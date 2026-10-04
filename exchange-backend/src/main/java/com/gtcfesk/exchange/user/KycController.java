@@ -19,7 +19,7 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class KycController {
     @org.springframework.beans.factory.annotation.Autowired private com.gtcfesk.exchange.activity.TrialFunds trialFunds;
-    @org.springframework.beans.factory.annotation.Autowired(required=false) private KycIdentityService identityService;
+    @org.springframework.beans.factory.annotation.Autowired private KycIdentityService identityService;
     private final KycRecordRepository kycRecordRepository;
     private final UserAccountRepository userAccountRepository;
     private final FileUploadService fileUploadService;
@@ -81,7 +81,7 @@ public class KycController {
         kycRecord.setIdBackImage(backImageUrl);
         kycRecord.setStatus("PENDING");
         
-        kycRecordRepository.save(kycRecord);
+        identityService.submitCurrent(kycRecord);
         
         Map<String, Object> result = new HashMap<>();
         result.put("success", true);

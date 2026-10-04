@@ -11,6 +11,7 @@ class MarketPushTest {
     @Test void subscribersShareOneCalculationPerPush() throws Exception {
         MarketWebSocketHandler handler = new MarketWebSocketHandler();
         ForexQuoteMarketService market = mock(ForexQuoteMarketService.class);
+        when(market.readSnapshot(any())).thenAnswer(call -> ((java.util.function.Supplier<?>) call.getArgument(0)).get());
         ReflectionTestUtils.setField(handler, "marketService", market);
         com.gtcfesk.exchange.control.Tenant tenant = new com.gtcfesk.exchange.control.Tenant();
         tenant.setId(2L); tenant.setFrontendHost("tenant-a.test"); tenant.setDomainVerified(true); tenant.setStatus("ACTIVE");

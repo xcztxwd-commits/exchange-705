@@ -33,9 +33,9 @@ public class RedisMarketService {
         pendingPrices.forEach((symbol, quote) -> {
             if (!pendingPrices.remove(symbol, quote)) return;
             try {
-                redisTemplate.opsForValue().set(symbol, objectMapper.writeValueAsString(quote));
+                redisTemplate.execute(PRICE_SCRIPT,Collections.singletonList(symbol),objectMapper.writeValueAsString(quote));
             } catch (Exception failure) {
-                pendingPrices.putIfAbsent(symbol, quote);
+                pendingPrices.merge(symbol,quote,RedisMarketService::newer);
                 if (System.currentTimeMillis() - lastPriceWriteError > 30000) {
                     lastPriceWriteError = System.currentTimeMillis();
                     org.slf4j.LoggerFactory.getLogger(RedisMarketService.class).warn("Market snapshot persistence unavailable; retaining latest pending values");
@@ -43,6 +43,25 @@ public class RedisMarketService {
             }
         });
     }
+    // Both pending coalescing and Redis CAS reject a late callback from an older committed fact.
+    private static Map<String,Object> newer(Map<String,Object> a,Map<String,Object> b) {
+        String[] fields=a.containsKey("quoteVersion") || b.containsKey("quoteVersion")
+            ?new String[]{"writerGeneration","quoteVersion"}:new String[]{"timestamp","sourceSequence","ingressSequence"};
+        for(String field:fields) {
+            int comparison=Long.compare(QuoteState.time(a.get(field)),QuoteState.time(b.get(field)));
+            if(comparison!=0) return comparison>0?a:b;
+        }
+        return b;
+    }
+    private static final org.springframework.data.redis.core.script.DefaultRedisScript<Long> PRICE_SCRIPT =
+        new org.springframework.data.redis.core.script.DefaultRedisScript<>(
+            "local value=cjson.decode(ARGV[1]); local saved=redis.call('GET',KEYS[1]); " +
+            "if saved then local ok,old=pcall(cjson.decode,saved); if ok and type(old)=='table' then " +
+            "local fields={'timestamp','sourceSequence','ingressSequence'}; " +
+            "if old.quoteVersion or value.quoteVersion then fields={'writerGeneration','quoteVersion'} end; " +
+            "for _,field in ipairs(fields) do local a=tonumber(old[field]) or 0; local b=tonumber(value[field]) or 0; " +
+            "if a>b then return 0 elseif a<b then break end end end end; " +
+            "redis.call('SET',KEYS[1],ARGV[1]); return 1;",Long.class);
     @PreDestroy public void stopPriceWriter() { priceWriter.shutdownNow(); flushPrices(); }
     
     private static String tenantPrefix() { return "tenant:" + com.gtcfesk.exchange.tenant.TenantContext.requireTenantId() + ":"; }
@@ -133,7 +152,7 @@ public class RedisMarketService {
         com.gtcfesk.exchange.tenant.TenantContext.requireTenantId();
         if (!QuoteState.valid(quote)) return;
         // Only persistence snapshots coalesce; authoritative source events are handled separately.
-        pendingPrices.put(tenantPrefix() + PRICE_PREFIX + symbol, new HashMap<>(quote));
+        pendingPrices.merge(tenantPrefix() + PRICE_PREFIX + symbol,new HashMap<>(quote),RedisMarketService::newer);
     }
     /**
      * 从Redis获取价格数据

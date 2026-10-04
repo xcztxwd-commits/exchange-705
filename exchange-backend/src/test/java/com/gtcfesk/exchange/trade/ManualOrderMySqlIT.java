@@ -41,7 +41,7 @@ class ManualOrderMySqlIT {
         // Global DDL receipts are shared read-only metadata, not tenant-owned business rows.
         migrationMetadata=db.queryForList("select * from asset_history_migration order by migration_id");
         tenantMigrationMetadata=db.queryForList("select * from tenant_schema_version order by version");
-        assertEquals(2026100201L,db.queryForObject("select max(minimum_application_epoch) from tenant_schema_version",Long.class));
+        assertEquals(2026100402L,db.queryForObject("select max(minimum_application_epoch) from tenant_schema_version",Long.class));
         store=new AssetEquityStore(source,new ObjectMapper());
     }
     static void auth(String role){com.gtcfesk.exchange.tenant.TenantContext.open(2L);SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken("900001","unused",Collections.singletonList(new SimpleGrantedAuthority("ROLE_"+role))));}

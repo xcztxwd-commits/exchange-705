@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS market_control_task (
  duration_seconds INT NOT NULL, intensity INT NOT NULL, oscillation BOOLEAN NOT NULL,
  price_precision INT NOT NULL, start_source VARCHAR(32) NOT NULL, source_time BIGINT NOT NULL,
  started_at BIGINT NOT NULL, planned_end BIGINT NOT NULL, ended_at BIGINT NULL,
- sampled_until BIGINT NOT NULL, request_key VARCHAR(64) NULL,
+ stop_at BIGINT NULL, sampled_until BIGINT NOT NULL, request_key VARCHAR(64) NULL,
  UNIQUE KEY control_request (tenant_id,symbol_id, request_key), INDEX control_symbol (symbol_id, started_at)
 );
 CREATE TABLE IF NOT EXISTS market_control_plan (
@@ -85,3 +85,36 @@ CREATE TABLE IF NOT EXISTS market_legacy_minute_snapshot (
  symbol_id BIGINT NOT NULL, minute_at BIGINT NOT NULL, body TEXT NOT NULL,
  last_event BIGINT NOT NULL, PRIMARY KEY(tenant_id,symbol_id,minute_at)
 );
+
+CREATE TABLE IF NOT EXISTS market_engine_runtime (
+ tenant_id BIGINT NOT NULL,symbol_id BIGINT NOT NULL,
+ writer_generation BIGINT NOT NULL DEFAULT 0,owner_id VARCHAR(36),lease_until BIGINT NOT NULL DEFAULT 0,
+ control_revision BIGINT NOT NULL DEFAULT 0,snapshot_version BIGINT NOT NULL DEFAULT 0,
+ source_input_revision BIGINT NOT NULL DEFAULT 0,source_dirty_from BIGINT,source_dirty_to BIGINT,
+ quote_json MEDIUMTEXT,status_json MEDIUMTEXT,committed_at BIGINT NOT NULL DEFAULT 0,
+ PRIMARY KEY(tenant_id,symbol_id)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS market_engine_tenant(tenant_id BIGINT NOT NULL PRIMARY KEY) ENGINE=InnoDB;
+CREATE TABLE IF NOT EXISTS market_control_command(
+ tenant_id BIGINT NOT NULL,id VARCHAR(36) NOT NULL,symbol_id BIGINT NOT NULL,request_key VARCHAR(64) NOT NULL,
+ parameter_hash VARCHAR(64) NOT NULL,parameters_json TEXT NOT NULL,state VARCHAR(16) NOT NULL,
+ actor_id BIGINT NOT NULL,session_id VARCHAR(64),config_revision BIGINT NOT NULL,control_revision BIGINT NOT NULL,
+ writer_generation BIGINT,owner_id VARCHAR(36),seed BIGINT NOT NULL,accepted_at BIGINT NOT NULL,expires_at BIGINT NOT NULL,
+ prepared_json MEDIUMTEXT,task_id VARCHAR(36),error_code VARCHAR(64),message VARCHAR(255),
+ PRIMARY KEY(tenant_id,id),UNIQUE KEY command_request(tenant_id,symbol_id,request_key),KEY command_queue(tenant_id,state,accepted_at)
+) ENGINE=InnoDB;
+
+-- H2 contract fixture only. Formal MySQL migration supplies fences, immutability and tenant FKs.
+CREATE TABLE IF NOT EXISTS market_history_ordering (
+ tenant_id BIGINT NOT NULL,symbol_id BIGINT NOT NULL,ordering_version INT NOT NULL,
+ from_minute BIGINT NOT NULL,source_sequence BIGINT NOT NULL,scope_sha256 CHAR(64) NOT NULL,
+ evidence_sha256 CHAR(64) NOT NULL,responses_json MEDIUMTEXT NOT NULL,sealed_at BIGINT NOT NULL,writer_generation BIGINT NOT NULL,
+ PRIMARY KEY(tenant_id,symbol_id)
+) ENGINE=InnoDB;
+CREATE TABLE IF NOT EXISTS market_history_response (
+ tenant_id BIGINT NOT NULL,symbol_id BIGINT NOT NULL,request_sha256 CHAR(64) NOT NULL,
+ request_json TEXT NOT NULL,response_json MEDIUMTEXT NOT NULL,response_sha256 CHAR(64) NOT NULL,
+ artifact_sha256 CHAR(64) NOT NULL,artifact_pointer VARCHAR(255) NOT NULL,scope_sha256 CHAR(64) NOT NULL,
+ sealed_at BIGINT NOT NULL,writer_generation BIGINT NOT NULL,PRIMARY KEY(tenant_id,symbol_id,request_sha256)
+) ENGINE=InnoDB;

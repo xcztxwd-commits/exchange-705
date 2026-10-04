@@ -134,9 +134,17 @@ class PriceControlTest extends TenantMarketTestContext {
         com.gtcfesk.exchange.entity.AssetAccount account = new com.gtcfesk.exchange.entity.AssetAccount();
         account.setAvailable(BigDecimal.ZERO); account.setFrozen(BigDecimal.TEN);
         when(orders.findByTenantIdAndId(1L, 1L)).thenReturn(Optional.of(order));
+        when(orders.lockById(1L)).thenReturn(Optional.of(order));
+        when(accounts.lockByUserId(2L)).thenReturn(Collections.singletonList(account));
         when(orders.save(any())).thenAnswer(call -> call.getArgument(0));
         when(accounts.findByTenantIdAndUserIdAndCoin(1L, 2L, "OPTION")).thenReturn(Optional.of(account));
         com.gtcfesk.exchange.trade.OptionOrderService service = new com.gtcfesk.exchange.trade.OptionOrderService(mock(com.gtcfesk.exchange.user.KycIdentityService.class), orders, accounts, repository, durations, market);
+        com.gtcfesk.exchange.repository.UserAccountRepository users=mock(com.gtcfesk.exchange.repository.UserAccountRepository.class);
+        com.gtcfesk.exchange.entity.UserAccount owner=new com.gtcfesk.exchange.entity.UserAccount();owner.setId(2L);
+        when(users.lockById(2L)).thenReturn(Optional.of(owner));
+        ReflectionTestUtils.setField(service,"users",users);
+        com.gtcfesk.exchange.control.ControlAuditService audit=mock(com.gtcfesk.exchange.control.ControlAuditService.class);
+        ReflectionTestUtils.setField(service,"audit",audit);
         BigDecimal before = market.freshPrice("TEST");
         service.closeOrder(2L, 1L, new BigDecimal("999999"));
         BigDecimal after = market.freshPrice("TEST");
@@ -144,6 +152,8 @@ class PriceControlTest extends TenantMarketTestContext {
         assertEquals("CLOSED", order.getStatus());
         assertEquals(0, new BigDecimal("18").compareTo(account.getAvailable()));
         assertEquals(0, account.getFrozen().signum());
+        verify(users).lockById(2L);verify(accounts).lockByUserId(2L);verify(orders).lockById(1L);
+        verify(audit).record(isNull(),eq(1L),isNull(),eq("OPTION_SETTLE"),eq("1"),eq("SUCCESS"),anyString(),isNull());
     }
 
     @Test void schedulerCompletesTargetAndRestoreWithoutManualCompletionCalls() throws Exception {

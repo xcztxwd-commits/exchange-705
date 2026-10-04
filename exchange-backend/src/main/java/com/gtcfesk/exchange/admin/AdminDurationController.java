@@ -17,6 +17,7 @@ import java.util.Map;
 public class AdminDurationController {
 
     private final OptionDurationRepository optionDurationRepository;
+    @org.springframework.beans.factory.annotation.Autowired private com.gtcfesk.exchange.control.TenantPolicyService tenantPolicy;
 
     /**
      * 获取所有期限选项列表
@@ -35,7 +36,9 @@ public class AdminDurationController {
      */
     @PostMapping
     @com.gtcfesk.exchange.config.AdminPermission(menu = "durations", action = "create")
+    @org.springframework.transaction.annotation.Transactional
     public ResponseEntity<?> createDuration(@RequestBody OptionDuration duration) {
+        tenantPolicy.lockCurrentTenantForWrite();
         if (duration.getDuration() == null || duration.getDuration() <= 0) {
             throw new BusinessException("期限必须大于0");
         }
@@ -92,7 +95,9 @@ public class AdminDurationController {
      */
     @PutMapping("/{id}")
     @com.gtcfesk.exchange.config.AdminPermission(menu = "durations", action = "edit")
+    @org.springframework.transaction.annotation.Transactional
     public ResponseEntity<?> updateDuration(@PathVariable Long id, @RequestBody OptionDuration duration) {
+        tenantPolicy.lockCurrentTenantForWrite();
         OptionDuration existing = optionDurationRepository.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), id)
             .orElseThrow(() -> new BusinessException("期限选项不存在"));
 
@@ -148,7 +153,9 @@ public class AdminDurationController {
      */
     @DeleteMapping("/{id}")
     @com.gtcfesk.exchange.config.AdminPermission(menu = "durations", action = "delete")
+    @org.springframework.transaction.annotation.Transactional
     public ResponseEntity<?> deleteDuration(@PathVariable Long id) {
+        tenantPolicy.lockCurrentTenantForWrite();
         OptionDuration duration = optionDurationRepository.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), id)
             .orElseThrow(() -> new BusinessException("期限选项不存在"));
 

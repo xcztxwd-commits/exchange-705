@@ -1,7 +1,7 @@
 package com.gtcfesk.exchange.market;
 
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
+import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.jdbc.datasource.SingleConnectionDataSource;
@@ -12,15 +12,16 @@ import java.util.*;
 import static org.junit.jupiter.api.Assertions.*;
 import static com.gtcfesk.exchange.market.MarketSqlFixture.inTenant;
 
-@EnabledIfEnvironmentVariable(named="PERF_TEST_JDBC",matches="jdbc:mysql://127\\.0\\.0\\.1:[0-9]+/performance_test.*")
+@EnabledIfSystemProperty(named="performance.index.mysql.fixture",matches=".+")
 class ReceivedIndexRegressionTest extends TenantMarketTestContext {
     @Test void sameResultsAcrossIndexesAndEquivalentPrefixSkips() throws Exception {
-        DriverManagerDataSource ds=new DriverManagerDataSource(System.getenv("PERF_TEST_JDBC"),"root","performance-test-only");
+        DriverManagerDataSource ds=IdentifiedMarketMysqlFixture.open("performance.index.mysql.fixture");
         try(java.sql.Connection jdbcConnection=ds.getConnection()) {
             SingleConnectionDataSource connection=new SingleConnectionDataSource(jdbcConnection,true);
             JdbcTemplate db=new JdbcTemplate(connection);
             MarketSqlFixture.schema(db);
             ControlHistoryStore store=new ControlHistoryStore(db,new DataSourceTransactionManager(connection));store.migrate();
+            IdentifiedMarketMysqlFixture.symbol(db,61,"INDEX61");IdentifiedMarketMysqlFixture.symbol(db,62,"INDEX62");
             // The test database is newly created by the dedicated perf705 container, never the application database.
             for(String table:Arrays.asList("market_source_event","market_source_tick")) assertEquals(0L,db.queryForObject("SELECT COUNT(*) FROM "+table,Long.class));
             db.execute("CREATE TABLE perf_digit(n INT PRIMARY KEY)");

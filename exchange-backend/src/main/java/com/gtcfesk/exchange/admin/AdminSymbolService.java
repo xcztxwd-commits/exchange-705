@@ -30,6 +30,7 @@ public class AdminSymbolService {
     @Autowired private MarketCategoryService categories;
     @Autowired private ForexQuoteMarketService quotes;
     @Autowired private TransactionTemplate transactions;
+    @Autowired private FundingQuoteAuthority quoteAuthority;
     @javax.persistence.PersistenceContext private javax.persistence.EntityManager entityManager;
 
     public synchronized Map<String,Object> addFromCatalog(String source, String sourceCategory, String projectCategory, List<String> codes) {
@@ -236,13 +237,21 @@ public class AdminSymbolService {
             existing.setVolumePrecision(2); existing.setMinTradeAmount(new BigDecimal("0.01"));
         }
         TradingSymbol saved=symbolRepository.saveAndFlush(existing);
-        quotes.refreshSymbols();
+        org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
+            new org.springframework.transaction.support.TransactionSynchronization(){
+                @Override public void afterCommit(){quotes.requestSymbolRefresh();}
+            });
         return saved;
     }
     
+    @org.springframework.transaction.annotation.Transactional
     public void deleteSymbol(Long id) {
+        quoteAuthority.lockRuntimeIdentity(id);
         symbolRepository.deleteByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), id);
-        quotes.refreshSymbols();
+        org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
+            new org.springframework.transaction.support.TransactionSynchronization(){
+                @Override public void afterCommit(){quotes.requestSymbolRefresh();}
+            });
     }
     
     public void toggleHot(Long id) {
@@ -274,6 +283,7 @@ public class AdminSymbolService {
             symbols = symbolRepository.findAllByTenantId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId());
         }
         
+        symbols.sort(Comparator.comparing(TradingSymbol::getId));
         for (TradingSymbol symbol : symbols) {
             if(entityManager!=null) entityManager.refresh(symbol,javax.persistence.LockModeType.PESSIMISTIC_WRITE);
             if(symbol.getQuantityUnitType()!=null && (symbol.getMaxLeverage()==null || symbol.getMaxLeverage().compareTo(leverage)!=0)) symbol.setSpecVersion(Math.addExact(symbol.getSpecVersion(),1L));

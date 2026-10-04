@@ -1,5 +1,5 @@
 {
-  "schema_epoch": 2026100201,
+  "schema_epoch": 2026100404,
   "default_tenant_id": 1,
   "private": [
     "activity_campaign",
@@ -25,6 +25,9 @@
     "asset_history_revision",
     "asset_snapshot",
     "balance_adjustment",
+    "calendar_audit",
+    "calendar_event",
+    "calendar_reminder",
     "contract_order",
     "demo_account",
     "demo_ledger",
@@ -42,6 +45,7 @@
     "loan_setting",
     "manual_order_binding",
     "manual_order_record",
+    "market_control_command",
     "market_control_flow",
     "market_control_hold",
     "market_control_plan",
@@ -49,6 +53,10 @@
     "market_control_resume",
     "market_control_sample",
     "market_control_task",
+    "market_engine_runtime",
+    "market_engine_tenant",
+    "market_history_ordering",
+    "market_history_response",
     "market_legacy_minute_snapshot",
     "market_mixed_minute",
     "market_simulation_source_candle",
@@ -56,9 +64,14 @@
     "market_source_event",
     "market_source_quote",
     "market_source_tick",
+    "news_article",
+    "news_audit",
+    "news_source_setting",
     "operation_log",
     "option_duration",
     "option_order",
+    "s4_history_projection_minute",
+    "s4_history_projection_progress",
     "simulation_seed",
     "support_attachment",
     "support_conversation",
@@ -67,6 +80,10 @@
     "symbol_duration",
     "system_config",
     "t_ai_model",
+    "trader_audit",
+    "trader_equity",
+    "trader_history",
+    "trader_profile",
     "trading_symbol",
     "transfer_record",
     "trial_account",
@@ -82,8 +99,11 @@
   ],
   "shared": [
     "admin_menu",
+    "asset_history_migration",
+    "calendar_source",
+    "calendar_source_update",
     "menu_action",
-    "asset_history_migration"
+    "news_feed"
   ],
   "control": [
     "backend_login",
@@ -568,6 +588,42 @@
       "user_id",
       "user_account",
       "id"
+    ],
+    [
+      "market_control_command",
+      "symbol_id",
+      "trading_symbol",
+      "id"
+    ],
+    [
+      "market_engine_runtime",
+      "symbol_id",
+      "trading_symbol",
+      "id"
+    ],
+    [
+      "s4_history_projection_progress",
+      "symbol_id",
+      "trading_symbol",
+      "id"
+    ],
+    [
+      "s4_history_projection_minute",
+      "symbol_id",
+      "trading_symbol",
+      "id"
+    ],
+    [
+      "market_history_ordering",
+      "symbol_id",
+      "trading_symbol",
+      "id"
+    ],
+    [
+      "market_history_response",
+      "symbol_id",
+      "trading_symbol",
+      "id"
     ]
   ],
   "notes": {
@@ -644,7 +700,27 @@
     "activity_send_receipt": "V2026100102__stage1_current_business_schema.sql",
     "trial_grant": "V2026100102__stage1_current_business_schema.sql",
     "announcement_receipt": "V2026100102__stage1_current_business_schema.sql",
-    "manual_order_binding": "V2026100102__stage1_current_business_schema.sql"
+    "manual_order_binding": "V2026100102__stage1_current_business_schema.sql",
+    "market_control_command": "V2026100304__market_engine_runtime.sql",
+    "market_engine_runtime": "V2026100304__market_engine_runtime.sql",
+    "market_engine_tenant": "V2026100304__market_engine_runtime.sql",
+    "calendar_event": "V2026100301__economic_calendar.sql",
+    "calendar_audit": "V2026100301__economic_calendar.sql",
+    "calendar_reminder": "V2026100301__economic_calendar.sql",
+    "calendar_source": "V2026100301__economic_calendar.sql",
+    "calendar_source_update": "V2026100301__economic_calendar.sql",
+    "news_article": "V2026100302__external_news.sql",
+    "news_audit": "V2026100302__external_news.sql",
+    "news_source_setting": "V2026100302__external_news.sql",
+    "news_feed": "V2026100302__external_news.sql",
+    "trader_profile": "V2026100303__curated_traders.sql",
+    "trader_equity": "V2026100303__curated_traders.sql",
+    "trader_history": "V2026100303__curated_traders.sql",
+    "trader_audit": "V2026100303__curated_traders.sql",
+    "s4_history_projection_progress": "V2026100402__joint_s4_history_projection.sql",
+    "s4_history_projection_minute": "V2026100402__joint_s4_history_projection.sql",
+    "market_history_ordering": "V2026100404__history_ordering_and_response_receipts.sql",
+    "market_history_response": "V2026100404__history_ordering_and_response_receipts.sql"
   },
   "migration_files": [
     "V2026092900__legacy_feature_prerequisites.sql",
@@ -662,7 +738,16 @@
     "V2026093006__chat_archive_jobs.sql",
     "V2026100101__tenant_history_revision_and_legacy_markers.sql",
     "V2026100102__stage1_current_business_schema.sql",
-    "V2026100201__ordinary_funds_creation_receipts.sql"
+    "V2026100201__ordinary_funds_creation_receipts.sql",
+    "V2026100301__economic_calendar.sql",
+    "V2026100302__external_news.sql",
+    "V2026100303__curated_traders.sql",
+    "V2026100304__market_engine_runtime.sql",
+    "V2026100305__s2_runtime_tenant_constraints.sql",
+    "V2026100401__joint_s3_money_progress.sql",
+    "V2026100402__joint_s4_history_projection.sql",
+    "V2026100403__source_history_input_revision.sql",
+    "V2026100404__history_ordering_and_response_receipts.sql"
   ],
   "superseded_authoring_inputs": {
     "V2026093001__simple_manual_orders.sql": "V2026100102__stage1_current_business_schema.sql",

@@ -1,6 +1,7 @@
 package com.gtcfesk.exchange.market;
 
 import com.gtcfesk.exchange.repository.TradingSymbolRepository;
+import com.gtcfesk.exchange.tenant.TenantOneFixture;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import java.util.*;
@@ -8,6 +9,7 @@ import static org.mockito.Mockito.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 @EnabledIfEnvironmentVariable(named="CATALOG_LIVE_TEST",matches="true")
+@org.junit.jupiter.api.extension.ExtendWith(TenantOneFixture.class)
 class CatalogLiveTest {
     @Test void publicCatalogsResolveRealProviderMetadata() {
         MarketInstrumentCatalog catalog=new MarketInstrumentCatalog();catalog.http=new MarketHttp();catalog.exchange=new ExchangeQuoteSource();

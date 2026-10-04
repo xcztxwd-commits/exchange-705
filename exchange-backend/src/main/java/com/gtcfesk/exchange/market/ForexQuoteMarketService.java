@@ -24,6 +24,7 @@ public class ForexQuoteMarketService {
     private static final Logger log = LoggerFactory.getLogger(ForexQuoteMarketService.class);
     @Autowired private TenantJobRunner tenantJobs;
     private volatile boolean running;
+    private final ThreadLocal<PersistentPriceControl.Prepared> commandPlan=new ThreadLocal<>();
     private final ConcurrentMap<Long, TenantState> tenantStates = new ConcurrentHashMap<>();
     private static class TenantState {
         final String epoch = UUID.randomUUID().toString();
@@ -35,6 +36,7 @@ public class ForexQuoteMarketService {
         final java.util.concurrent.atomic.AtomicLong snapshotSequence = new java.util.concurrent.atomic.AtomicLong();
         final Map<String, Long> publishedSequence = new HashMap<>();
         boolean started;
+        int engineCursor;
         TenantState() {
             for (String category : Arrays.asList("Crypto", "CryptoPerpetual", "Metal", "Forex", "US", "CFD", "Oil", "Other")) groups.put(category, new Group(category));
         }
@@ -95,8 +97,14 @@ public class ForexQuoteMarketService {
     @Autowired private PersistentPriceControl controls;
     @Autowired private ControlHistoryStore controlHistory;
     @Autowired private ControlledKlineMerger klineMerger;
+    @Autowired private SourceHistoryProjector sourceHistory;
+    @Value("${app.market.s4-source-projection-enabled:false}") private boolean sourceProjectionEnabled;
     @Value("${market.quote.max-age-ms:60000}") private long maxAgeMs = 60000;
     @Value("${market.quote.poll-ms:3000}") private long pollMs = 3000;
+    private final Set<Long> engineActive=ConcurrentHashMap.newKeySet();
+    private final ThreadPoolExecutor engines=new ThreadPoolExecutor(2,2,0,TimeUnit.SECONDS,new ArrayBlockingQueue<>(64),r->new Thread(r,"market-engine"),new ThreadPoolExecutor.AbortPolicy());
+    private final java.util.concurrent.atomic.AtomicLong engineRejected=new java.util.concurrent.atomic.AtomicLong();
+    private final java.util.concurrent.atomic.AtomicLong engineDelayed=new java.util.concurrent.atomic.AtomicLong();
     private final ScheduledExecutorService metadata = Executors.newSingleThreadScheduledExecutor(r -> new Thread(r, "market-symbols"));
     @Value("${market.virtual-trading.enabled:false}") private boolean virtualTrading;
     @Value("${market.control.v3.enabled:true}") private boolean v3Enabled = true;
@@ -106,12 +114,16 @@ public class ForexQuoteMarketService {
         final String code, interval, key;
         final int limit;
         final Long endTime;
+        final boolean sourceFeed;
         KlineRequest(String code, String interval, int limit) {
             this(code, interval, limit, null);
         }
         KlineRequest(String code, String interval, int limit, Long endTime) {
+            this(code, interval, limit, endTime, false);
+        }
+        KlineRequest(String code, String interval, int limit, Long endTime, boolean sourceFeed) {
             this.code = code; this.interval = interval; this.limit = limit;
-            this.endTime = endTime;
+            this.endTime = endTime; this.sourceFeed = sourceFeed;
             this.key = code + ":" + interval + ":" + limit + (endTime == null ? "" : ":" + endTime);
         }
         @Override public boolean equals(Object other) { return other instanceof KlineRequest && key.equals(((KlineRequest) other).key); }
@@ -138,6 +150,9 @@ public class ForexQuoteMarketService {
         final String category;
         final ScheduledThreadPoolExecutor executor;
         volatile List<String> codes = Collections.emptyList();
+        volatile List<String> sourceCodes = Collections.emptyList();
+        int sourceCursor;
+        long nextSourceKline;
         final Map<String, Map<String, Object>> quotes = new ConcurrentHashMap<>();
         final LinkedHashMap<String, KlineRequest> pending = new LinkedHashMap<>();
         final LinkedHashMap<String, Map<String, Object>> klines = new LinkedHashMap<String, Map<String, Object>>(16, .75f, true) {
@@ -175,16 +190,31 @@ public class ForexQuoteMarketService {
     public static String marketCode(TradingSymbol symbol) {
         return symbol.getAlltickSymbol() == null || symbol.getAlltickSymbol().isEmpty() ? symbol.getSymbol() : symbol.getAlltickSymbol();
     }
+    @Value("${market.engine.auto-start:true}") private boolean autoStart=true;
     @PostConstruct public void start() {
+        if(!autoStart) return; // Explicit owned acceptance invokes writers itself; normal lifecycle remains enabled.
         running = true;
-        metadata.scheduleWithFixedDelay(() -> allTenants(this::refreshSymbols), 0, 30, TimeUnit.SECONDS);
-        metadata.scheduleWithFixedDelay(() -> allTenants(this::completeControls), 1, 1, TimeUnit.SECONDS);
+        metadata.scheduleWithFixedDelay(() -> allTenants(() -> scheduleEngine(true)), 0, 30, TimeUnit.SECONDS);
+        metadata.scheduleWithFixedDelay(() -> allTenants(() -> scheduleEngine(false)), 1, 1, TimeUnit.SECONDS);
+    }
+    /** Two bounded engine lanes; one tenant cannot hold the orchestration thread or occupy both lanes. */
+    private void scheduleEngine(boolean refresh) {
+        Long tenant=TenantContext.requireTenantId();
+        if(!engineActive.add(tenant)){engineDelayed.incrementAndGet();return;}
+        try {engines.execute(()->{try{tenantJob(tenant,refresh?this::refreshSymbols:this::completeControls);}finally{engineActive.remove(tenant);}});}
+        catch(RejectedExecutionException full){engineActive.remove(tenant);engineRejected.incrementAndGet();}
+    }
+    public Map<String,Object> engineMetrics() {
+        Map<String,Object> metrics=new LinkedHashMap<>();
+        metrics.put("engineWorkers",engines.getActiveCount());metrics.put("engineQueue",engines.getQueue().size());
+        metrics.put("engineDelayed",engineDelayed.get());metrics.put("engineRejected",engineRejected.get());metrics.put("symbolsPerTurn",16);return metrics;
     }
     public void refreshSymbols() {
         TenantContext.requireTenantId();
         try {
             Map<String, TradingSymbol> updated = new HashMap<>();
             Map<Group, Set<String>> codes = new HashMap<>();
+            Map<Group, Set<String>> sourceCodes = new HashMap<>();
             for (TradingSymbol loaded : symbols.findAllByTenantId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId())) {
                 TradingSymbol symbol = copySymbol(loaded);
                 if (controls != null && !RandomMarketPath.enabled(symbol) && PriceControlPath.running(symbol)) {
@@ -198,6 +228,9 @@ public class ForexQuoteMarketService {
                 updated.put(symbol.getSymbol(), symbol);
                 if (!"CryptoPerpetual".equals(sourceCategory(symbol))) updated.putIfAbsent(marketCode(symbol), symbol);
                 codes.computeIfAbsent(group(sourceCategory(symbol)), g -> new LinkedHashSet<>()).add(marketCode(symbol));
+                if (sourceProjectionEnabled && Boolean.TRUE.equals(symbol.getIsEnabled())
+                        && !RandomMarketPath.enabled(symbol) && !Boolean.TRUE.equals(symbol.getControlEnabled()))
+                    sourceCodes.computeIfAbsent(group(sourceCategory(symbol)), g -> new LinkedHashSet<>()).add(marketCode(symbol));
                 QuoteCurrencyConversion conversion=QuoteCurrencyConversion.route(symbol.getQuoteCurrency(),symbol.getMarketSource());
                 if(conversion!=null) {
                     codes.computeIfAbsent(group(conversion.category),g -> new LinkedHashSet<>()).add(conversion.code);
@@ -227,6 +260,7 @@ public class ForexQuoteMarketService {
                     }
                 }
                 group.codes = Collections.unmodifiableList(list);
+                group.sourceCodes = Collections.unmodifiableList(new ArrayList<>(sourceCodes.getOrDefault(group, Collections.emptySet())));
             }
 
             TenantState tenantState = state();
@@ -280,6 +314,7 @@ public class ForexQuoteMarketService {
             }
             KlineRequest request;
             if (System.currentTimeMillis() < group.nextKlines) return;
+            enqueueSourceKline(group, System.currentTimeMillis());
             synchronized (group) {
                 Iterator<KlineRequest> iterator = group.pending.values().iterator();
                 if (!iterator.hasNext()) return;
@@ -291,6 +326,8 @@ public class ForexQuoteMarketService {
                         ? source.getKline(request.code, request.interval, request.limit, group.category)
                         : source.getKline(request.code, request.interval, request.limit, group.category, request.endTime);
                 validateKline(result);
+                if (request.sourceFeed && ControlHistoryStore.rows(result).size() > 500)
+                    throw new MarketHttp.Failure("source_kline_response_too_large", 0);
                 result.put("fetchedAt", System.currentTimeMillis());
                 result.put("status", "available");
                 List<Long> targets = new ArrayList<>();
@@ -315,6 +352,27 @@ public class ForexQuoteMarketService {
             } finally { http.end(); group.activeKey = null; group.activeRequest = null; }
         } catch (Exception failure) { fail(group, failure, true); }
     }
+    /** Writer-only fair prefetch; display requests never create SOURCE work. */
+    private void enqueueSourceKline(Group group, long now) {
+        if (!sourceProjectionEnabled || controlHistory == null || now < group.nextSourceKline) return;
+        List<String> configured = group.sourceCodes;
+        if (configured.isEmpty()) return;
+        synchronized (group) {
+            if (group.pending.size() >= MAX_PENDING) return;
+            // ponytail: reuse the single provider lane; at most 16 checks and one 500-minute request per turn.
+            for (int checked = 0; checked < Math.min(16, configured.size()); checked++) {
+                String code = configured.get(Math.floorMod(group.sourceCursor++, configured.size()));
+                KlineRequest request = new KlineRequest(code, "1m", 500, null, true);
+                Map<String,Object> saved = group.klines.get(request.key);
+                if (!group.codes.contains(code) || request.key.equals(group.activeKey) || group.pending.containsKey(request.key)
+                        || saved != null && now - QuoteState.time(saved.get("fetchedAt")) < 15000) continue;
+                group.pending.put(request.key, request);
+                group.nextSourceKline = now + Math.max(1000, pollMs);
+                return;
+            }
+            group.nextSourceKline = now + 1000;
+        }
+    }
     private void receiveYahoo(String yahooSymbol, Map<String,Object> quote) {
         for (Group group : state().groups.values()) if ("Yahoo".equals(provider(group.category)))
             for (String code : group.codes) if (yahooSymbol.equals(MarketQuoteSource.mapSymbolToYahoo(code, group.category)))
@@ -336,6 +394,16 @@ public class ForexQuoteMarketService {
         saved.put("source", provider(category)); saved.put("fetchedAt", receivedAt); saved.put("sourceAvailable", true);
         saved.put("eventId", price.getOrDefault("eventId", UUID.randomUUID().toString()));
         saved.put("ingressSequence", sequence);
+        try {
+            // Conversion-only subscriptions have no source-history symbol; bind raw receipts to their actual consumers.
+            List<TradingSymbol> conversionTargets=conversionTargets(code,group.category);
+            if(!conversionTargets.isEmpty() && !controls.conversionQuotes(conversionTargets,code,group.category,saved,receivedAt,
+                    config -> controlSymbol(config.getId()))) return false;
+        } catch(RuntimeException failure) {
+            group.processingFailed.add(code);
+            synchronized(group.quoteLock) {markUnavailable(group,code);}
+            throw failure;
+        }
         if (!duplicate || group.processingFailed.contains(code)) {
             try {
                 List<TradingSymbol> targets = new ArrayList<>();
@@ -384,13 +452,25 @@ public class ForexQuoteMarketService {
             });
         } else action.run();
     }
+    private List<TradingSymbol> conversionTargets(String code,String category) {
+        List<TradingSymbol> targets=new ArrayList<>();
+        if(controls!=null) for(TradingSymbol config:new HashSet<>(state().registry.values()))
+            if(FundingConversions.matches(config,code,category)) targets.add(config);
+        return targets;
+    }
     private void unavailable(Group group, String code) {
+        Map<String,Object> failed;
         synchronized (group.quoteLock) {
             Map<String,Object> old = group.quotes.get(code);
             if (old != null && "ws".equals(old.get("transport")) && streamConnected(group.category)
                     && Boolean.TRUE.equals(QuoteState.view(old, maxAgeMs).get("available"))) return;
             markUnavailable(group, code);
+            failed=group.quotes.get(code);
         }
+        // A durable outage notification never runs under the in-memory publication monitor.
+        List<TradingSymbol> targets=conversionTargets(code,group.category);
+        if(failed!=null && !targets.isEmpty()) controls.conversionQuotes(targets,code,group.category,failed,
+            QuoteState.time(failed.get("fetchedAt")),config -> controlSymbol(config.getId()));
     }
     private void markUnavailable(Group group, String code) {
         Map<String,Object> old = group.quotes.get(code);
@@ -461,6 +541,12 @@ public class ForexQuoteMarketService {
     }
     public Map<String, Object> internalPrice(String code) {
         TradingSymbol config = state().registry.get(code);
+        if(controls!=null && config!=null) {
+            Map<String,Object> committed=controls.display(config,Collections.emptyMap(),System.currentTimeMillis());
+            committed.put("symbol",code);committed.put("marketRevision",config.getRowVersion());
+            if(RandomMarketPath.enabled(config) && !virtualTrading){committed.put("available",false);committed.put("tradeAvailable",false);}
+            return committed;
+        }
         if (RandomMarketPath.enabled(config)) {
             Map<String, Object> simulated = RandomMarketPath.quote(config, System.currentTimeMillis());
             if (durableFlow(config)) simulated = controls.display(config, simulationBaseQuote(config, System.currentTimeMillis()), System.currentTimeMillis());
@@ -489,7 +575,7 @@ public class ForexQuoteMarketService {
         if (controlled && QuoteState.valid(quote)) {
             quote.put("available", true); quote.put("tradeAvailable", true);
             quote.put("stale", false); quote.put("status", "available");
-            quote.put("executionExpiresAt", now + maxAgeMs); quote.put("expiresAt", now + maxAgeMs);
+            quote.put("executionExpiresAt", QuoteState.time(quote.get("timestamp")) + maxAgeMs); quote.put("expiresAt", quote.get("executionExpiresAt"));
         }
         if (!QuoteState.valid(quote)) { quote.put("available", false); quote.put("status", "unavailable"); }
         quote.put("symbol", code);
@@ -569,6 +655,9 @@ public class ForexQuoteMarketService {
         if ("USD".equals(quote) && orderPrice != null && orderPrice.signum() > 0) return orderPrice;
         return requireContractConversionRate(base,"yahoo");
     }
+    <T> T readSnapshot(java.util.function.Supplier<T> operation) {
+        return controlHistory == null ? operation.get() : controlHistory.readConsumerSnapshot(operation);
+    }
     public boolean knownSymbol(String symbol) { return state().registry.containsKey(symbol); }
     /** Shared, versioned display snapshot. Trading always revalidates via freshPrice(). */
     public Map<String,Object> snapshotPrice(String symbol) {
@@ -578,10 +667,12 @@ public class ForexQuoteMarketService {
         if (config == null) return internalPrice(symbol);
         long now = System.currentTimeMillis();
         long sequence = tenantState.snapshotSequence.incrementAndGet();
+        boolean committedBoundary = controlHistory != null && TransactionSynchronizationManager.isActualTransactionActive()
+            && TransactionSynchronizationManager.isCurrentTransactionReadOnly();
         Map<String,Object> previous;
         synchronized (tenantState) {
             previous = tenantState.published.get(symbol);
-            if (previous != null && now - tenantState.publishedAt.getOrDefault(symbol, 0L) < 100
+            if (!committedBoundary && previous != null && now - tenantState.publishedAt.getOrDefault(symbol, 0L) < 100
                     && now < QuoteState.time(previous.get("expiresAt"))) return previous;
         }
         Map<String,Object> next = new HashMap<>(internalPrice(symbol));
@@ -598,12 +689,16 @@ public class ForexQuoteMarketService {
         next.put("epoch", tenantState.epoch);
         synchronized (tenantState) {
             Map<String,Object> current = tenantState.published.get(symbol);
-            if (tenantState.registry != registry || sequence < tenantState.publishedSequence.getOrDefault(symbol, 0L))
+            if (!committedBoundary && (tenantState.registry != registry || sequence < tenantState.publishedSequence.getOrDefault(symbol, 0L)))
                 return current == null ? Collections.unmodifiableMap(next) : current;
-            next.put("quoteVersion", current == null ? 0L : current.get("quoteVersion"));
-            if (current == null || !next.equals(current)) next.put("quoteVersion", ++tenantState.quoteVersion);
+            if(controls==null) {
+                next.put("quoteVersion", current == null ? 0L : current.get("quoteVersion"));
+                if (current == null || !next.equals(current)) next.put("quoteVersion", ++tenantState.quoteVersion);
+            }
         }
         Map<String,Object> result = Collections.unmodifiableMap(next);
+        // A display RR result must not overwrite the shared newer publication cache.
+        if (committedBoundary) return result;
         afterCommit(() -> {
             synchronized (tenantState) {
                 if (tenantState.registry == registry && sequence >= tenantState.publishedSequence.getOrDefault(symbol, 0L)) {
@@ -633,11 +728,14 @@ public class ForexQuoteMarketService {
     }
     @SuppressWarnings("unchecked")
     public Map<String, Object> getKline(String code, String interval, Integer limit, String category, Long endTime) {
+        return cachedKline(code,interval,limit,category,endTime,true);
+    }
+    private Map<String,Object> cachedKline(String code,String interval,Integer limit,String category,Long endTime,boolean enqueue) {
         Group group = group(category);
         KlineRequest request = new KlineRequest(code, interval, Math.min(1000, Math.max(1, limit == null ? 100 : limit)), endTime);
         Map<String, Object> saved;
         String status;
-        boolean pending;
+        boolean pending, requestedAfterCommit = false;
         synchronized (group) {
             saved = group.klines.get(request.key);
             KlineRequest covered = request;
@@ -665,14 +763,27 @@ public class ForexQuoteMarketService {
             status = fresh ? "available" : saved == null ? "unavailable" : "stale";
             // Only configured products can create work; request traffic cannot grow the symbol registry.
             KlineRequest work = covered;
-            if (!fresh || partialCoverage) {
+            if (enqueue && (!fresh || partialCoverage)) {
                 if (group.activeRequest != null && group.activeRequest.covers(request)) work = group.activeRequest;
                 else for (KlineRequest queued : group.pending.values()) if (queued.covers(request)) { work = queued; break; }
-                if (group.codes.contains(code) && group.pending.size() < MAX_PENDING && !work.key.equals(group.activeKey))
-                    group.pending.putIfAbsent(work.key, work);
+                if (group.codes.contains(code) && group.pending.size() < MAX_PENDING && !work.key.equals(group.activeKey)) {
+                    if (TransactionSynchronizationManager.isActualTransactionActive()
+                            && TransactionSynchronizationManager.isCurrentTransactionReadOnly()) {
+                        KlineRequest scheduled = work;
+                        // The legacy fetch notification occurs only after the display snapshot commits; no SQL or provider I/O here.
+                        afterCommit(() -> { synchronized (group) {
+                            if (!group.codes.contains(scheduled.code) || group.pending.size() >= MAX_PENDING
+                                    || scheduled.key.equals(group.activeKey)) return;
+                            if (group.activeRequest != null && group.activeRequest.covers(scheduled)) return;
+                            for (KlineRequest queued : group.pending.values()) if (queued.covers(scheduled)) return;
+                            group.pending.putIfAbsent(scheduled.key, scheduled);
+                        } });
+                        requestedAfterCommit = true;
+                    } else group.pending.putIfAbsent(work.key, work);
+                }
             }
             pending = group.failures == 0 && group.klineFailures == 0
-                    && (group.pending.containsKey(work.key) || work.key.equals(group.activeKey));
+                    && (requestedAfterCommit || group.pending.containsKey(work.key) || work.key.equals(group.activeKey));
         }
         Map<String, Object> result = new HashMap<>();
         Map<String, Object> data = new HashMap<>();
@@ -699,9 +810,12 @@ public class ForexQuoteMarketService {
     @SuppressWarnings("unchecked")
     public Map<String, Object> internalKline(String symbol, String interval, Integer limit) {
         TradingSymbol config = state().registry.get(symbol);
+        Map<String,Object> projected=projectedSourceKline(config,symbol,interval,limit,null);
+        if(projected!=null) return projected;
         if (virtualTrading && RandomMarketPath.enabled(config))
             return durableSimulationKline(config, interval, limit, null);
-        Map<String, Object> result = getKline(config == null ? symbol : marketCode(config), interval, limit, config == null ? "Crypto" : sourceCategory(config));
+        Map<String, Object> result = cachedKline(config == null ? symbol : marketCode(config), interval, limit,
+            config == null ? "Crypto" : sourceCategory(config),null,true);
         return mergeControlKline(config, symbol, interval, limit, null, result);
     }
     /** Historical source candles are not rewritten using today's configured price offset. */
@@ -709,13 +823,54 @@ public class ForexQuoteMarketService {
     public Map<String, Object> historicalKline(String symbol, String interval, int limit, long endTime) {
         TradingSymbol config = state().registry.get(symbol);
         if (config == null) throw new IllegalArgumentException("Unknown symbol");
+        Map<String,Object> projected=projectedSourceKline(config,symbol,interval,limit,endTime);
+        if(projected!=null) return projected;
         if (virtualTrading && RandomMarketPath.enabled(config))
             return durableSimulationKline(config, interval, limit, endTime);
-        Map<String, Object> result = getKline(marketCode(config), interval, limit, sourceCategory(config), endTime);
+        Map<String, Object> result = cachedKline(marketCode(config), interval, limit, sourceCategory(config), endTime,true);
         Map<String, Object> data = (Map<String, Object>) result.get("data");
         data.put("symbol", symbol);
         data.put("source", provider(sourceCategory(config)));
         return mergeControlKline(config, symbol, interval, limit, endTime, result);
+    }
+    /** SOURCE 1m only. Other sessions/periods retain the exact pure compatibility reader. */
+    private Map<String,Object> projectedSourceKline(TradingSymbol config,String symbol,String interval,Integer limit,Long cursor) {
+        if(!sourceProjectionEnabled || sourceHistory==null || config==null || !"1m".equals(interval)
+                || !TransactionSynchronizationManager.isActualTransactionActive()
+                || !TransactionSynchronizationManager.isCurrentTransactionReadOnly()) return null;
+        int count=Math.min(1000,Math.max(1,limit==null?100:limit));
+        long end=MinuteHistoryProjection.minute(cursor==null?System.currentTimeMillis():cursor);
+        long from=Math.max(60000,end-(count-1L)*60000);
+        List<Map<String,Object>> rows=new ArrayList<>();
+        boolean pending=false;long receivedCutoffMinimum=Long.MAX_VALUE;
+        MinuteHistoryProjectionStore.Progress progress=null;
+        for(long first=from;first<=end;first+=500*60000L) {
+            long last=Math.min(end,first+499*60000L);
+            MinuteHistoryProjectionStore.ReadResult page=sourceHistory.readWindow(config.getId(),first,last);
+            if(!page.sourceOnly) return null;
+            pending|=page.pending; progress=page.progress;
+            if(page.sourceBlocked) break;
+            int retained=rows.size();boolean missing=false;
+            for(Map<String,Object> row:page.minutes) {
+                if(ControlHistoryStore.time(row)!=from+rows.size()*60000L) {pending=true;missing=true;break;}
+                rows.add(row);
+            }
+            if(rows.size()>retained) receivedCutoffMinimum=Math.min(receivedCutoffMinimum,page.receivedCutoffPrefixMinimum);
+            // A partial/blocked page ends the requested prefix; never append a clean suffix beyond its gap.
+            if(missing || page.pending || rows.size()==count) break;
+        }
+        Map<String,Object> data=new LinkedHashMap<>();data.put("code",marketCode(config));data.put("symbol",symbol);
+        // Only the contiguous requested clean prefix is visible; dirty/stale/gapped remainder stays pending.
+        data.put("kline_list",rows);
+        data.put("pending",pending);data.put("status",progress==null?"pending":pending?"partial":"available");
+        data.put("source",provider(sourceCategory(config)));data.put("projectionKind","SOURCE_1M");
+        data.put("historyWatermark",progress==null?0:progress.watermark);
+        data.put("historyGeneration",progress==null?0:progress.generation);
+        data.put("historyVersion",progress==null?0:progress.version);
+        data.put("sourceInputRevision",progress==null?0:progress.sourceInputRevision);
+        data.put("historyReceivedCutoffMinimum",receivedCutoffMinimum==Long.MAX_VALUE?0:receivedCutoffMinimum);
+        Map<String,Object> result=new LinkedHashMap<>();result.put("ret",progress==null?503:200);
+        result.put("msg",data.get("status"));result.put("status",data.get("status"));result.put("data",data);return result;
     }
     @SuppressWarnings("unchecked")
     private Map<String, Object> mergeControlKline(TradingSymbol config, String symbol, String interval, Integer limit, Long endTime, Map<String, Object> result) {
@@ -727,11 +882,20 @@ public class ForexQuoteMarketService {
         return result;
     }
     private Map<String,Object> durableSimulationKline(TradingSymbol config, String interval, Integer limit, Long endTime) {
-        Map<String,Object> result = simulationKline(config, interval, limit, endTime);
-        if (!durableFlow(config) || klineMerger == null) return result;
-        return klineMerger.merge(config.getId(), interval, limit == null ? 100 : limit, endTime, result, null, true,
+        if (controls == null || controlHistory == null || klineMerger == null) return simulationKline(config, interval, limit, endTime);
+        int count=Math.min(1000,Math.max(1,limit==null?100:limit));
+        long end=endTime==null?System.currentTimeMillis():endTime;
+        List<Map<String,Object>> captured = controlHistory.db.query("SELECT body FROM market_simulation_source_candle WHERE tenant_id="
+            + TenantContext.requireTenantId() + " AND symbol_id=? AND session_at=? AND period=? AND candle_at<=? ORDER BY candle_at DESC LIMIT ?",
+            (r,n) -> controlHistory.decode(r.getString(1)),config.getId(),config.getRandomMarketStartedAt(),interval,end,count);
+        Map<String,Object> data=new LinkedHashMap<>();data.put("symbol",config.getSymbol());data.put("kline_list",captured);data.put("status","available");
+        data.put("source","Simulation");data.put("simulated",true);data.put("simulationSession",config.getRandomMarketStartedAt());
+        Map<String,Object> result=new LinkedHashMap<>();result.put("ret",200);result.put("data",data);
+        // Simulation consumers read only the engine's committed session candles, never generate/save on GET.
+        return klineMerger.merge(config.getId(), interval, count, endTime, result, null, true,
             (from, to) -> controlHistory.db.query("SELECT body FROM market_simulation_source_candle WHERE tenant_id=" + TenantContext.requireTenantId() + " AND symbol_id=? AND session_at=? AND period='1m' AND candle_at>=? AND candle_at<=? ORDER BY candle_at",
-                (r,n) -> controlHistory.decode(r.getString(1)), config.getId(), config.getRandomMarketStartedAt(), from, to));
+                (r,n) -> controlHistory.decode(r.getString(1)), config.getId(), config.getRandomMarketStartedAt(),
+                Math.max(from,end-(count+2L)*RandomMarketPath.duration(interval)),to));
     }
     private String simulationHistoryKey(TradingSymbol config) {
         return "simulation-history:" + config.getId() + ":" + config.getRandomMarketStartedAt();
@@ -876,12 +1040,18 @@ public class ForexQuoteMarketService {
 
     public Map<String, Object> controlStatus(Long id) {
         TradingSymbol config = controlSymbol(id);
-        if (controls != null && !RandomMarketPath.enabled(config)) getKline(marketCode(config), "1m", 200, sourceCategory(config));
+        // S2: status queries must not schedule source/history work.
         return controlStatus(config);
     }
 
     private Map<String, Object> controlStatus(TradingSymbol config) {
         long now = System.currentTimeMillis();
+        if(controls!=null) {
+            Map<String,Object> committed=new LinkedHashMap<>();controls.status(config,committed,Collections.emptyMap(),now);
+            committed.put("id",config.getId());committed.put("v3Enabled",v3Enabled);committed.put("v4Enabled",v3Enabled&&v4Enabled);
+            committed.put("virtualTrading",virtualTrading);committed.put("randomMarketEnabled",RandomMarketPath.enabled(config));
+            return committed;
+        }
         Map<String, Object> quote = RandomMarketPath.enabled(config) ? simulationBaseQuote(config, now)
             : getPrice(marketCode(config), sourceCategory(config));
         Map<String, Object> result = new LinkedHashMap<>();
@@ -1082,7 +1252,7 @@ public class ForexQuoteMarketService {
     }
     public Map<String, Object> startControl(Long id, int duration, BigDecimal target, int intensity,
             boolean randomOscillation, String requestKey, RecoveryOptions options, TargetControlOptions targetOptions) {
-        if (TransactionSynchronizationManager.isActualTransactionActive())
+        if (TransactionSynchronizationManager.isActualTransactionActive() && commandPlan.get()==null)
             throw new IllegalStateException("Control preparation cannot join an outer transaction");
         if (targetOptions != null) { requireV4(); resolveFormula(id, targetOptions); }
         if (duration < 1 || duration > 86400 || intensity < 1 || intensity > 10 || target == null
@@ -1112,7 +1282,7 @@ public class ForexQuoteMarketService {
         Map<String,Object> raw = RandomMarketPath.enabled(config) ? simulationBaseQuote(config, now) : getPrice(marketCode(config), sourceCategory(config));
         Map<String,Object> view = controls.display(config, raw, now);
         BigDecimal displayed = view.get("price") instanceof Number ? ControlHistoryStore.number(view.get("price")) : null;
-        PersistentPriceControl.Prepared prepared = v3Enabled ? targetOptions == null ? controls.prepare(config, raw, displayed, duration, target, intensity, randomOscillation)
+        PersistentPriceControl.Prepared prepared = commandPlan.get()!=null?commandPlan.get():v3Enabled ? targetOptions == null ? controls.prepare(config, raw, displayed, duration, target, intensity, randomOscillation)
                 : controls.prepare(config, raw, displayed, duration, target, intensity, randomOscillation, targetOptions) : null;
         return controls.locked(id, () -> {
             TradingSymbol fresh = controlSymbol(id);
@@ -1135,6 +1305,23 @@ public class ForexQuoteMarketService {
         });
     }
 
+    TradingSymbol commandConfig(Long id){return copySymbol(controlSymbol(id));}
+    PersistentPriceControl.Prepared prepareCommand(Long id,int duration,BigDecimal target,int intensity,boolean oscillation,TargetControlOptions options,long seed) {
+        TradingSymbol config=commandConfig(id);requireV4();resolveFormula(id,options);
+        long now=System.currentTimeMillis();Map<String,Object> raw=RandomMarketPath.enabled(config)?simulationBaseQuote(config,now):getPrice(marketCode(config),sourceCategory(config));
+        Map<String,Object> committed=controls.display(config,Collections.emptyMap(),now);
+        BigDecimal displayed=committed.get("price") instanceof Number?ControlHistoryStore.number(committed.get("price")):null;
+        ControlPlanBudget.Lease allocation=controlHistory.budget.acquire(65536L+256L*(duration+1));
+        controls.commandSeed.set(seed);
+        try {PersistentPriceControl.Prepared prepared=controls.prepare(config,raw,displayed,duration,target,intensity,oscillation,options);prepared.allocation=allocation;return prepared;}
+        catch(RuntimeException failure){allocation.close();throw failure;}
+        finally{controls.commandSeed.remove();}
+    }
+    Map<String,Object> activateCommand(Long id,int duration,BigDecimal target,int intensity,boolean oscillation,String key,TargetControlOptions options,PersistentPriceControl.Prepared prepared) {
+        commandPlan.set(prepared);
+        try{return startControl(id,duration,target,intensity,oscillation,key,options,options);}
+        finally{commandPlan.remove();}
+    }
     public Map<String, Object> restoreControl(Long id, int duration, int intensity, boolean randomOscillation) {
         return restoreControl(id, duration, intensity, randomOscillation, null);
     }
@@ -1194,7 +1381,7 @@ public class ForexQuoteMarketService {
         TradingSymbol config = controlSymbol(id);
         if (controls != null && (!RandomMarketPath.enabled(config) || durableFlow(config))) {
             controls.stopAndHold(id, System.currentTimeMillis());
-            return controlStatus(config);
+            return publishControl(config);
         }
         if (!PriceControlPath.running(config)) return controlStatus(config);
         Map<String, Object> quote = requireControlQuote(config);
@@ -1232,23 +1419,50 @@ public class ForexQuoteMarketService {
                 tenantState.registry = Collections.unmodifiableMap(updated);
             }
         });
-        return controlStatus(saved);
+        return publishControl(saved);
+    }
+    /** Called only by explicit writer commands, never by GET/status/quote readers. */
+    private Map<String,Object> publishControl(TradingSymbol config) {
+        if(controls!=null) {
+            long now=controlTime(config);
+            Map<String,Object> raw=RandomMarketPath.enabled(config) ? simulationBaseQuote(config,now)
+                : getPrice(marketCode(config),sourceCategory(config));
+            controls.pump(config,raw,now,maxAgeMs);
+        }
+        return controlStatus(config);
     }
 
     void completeControls() {
-        long now = System.currentTimeMillis();
+        completeControls(System.currentTimeMillis());
+    }
+    void completeControls(long now) {
+        List<TradingSymbol> registered=new ArrayList<>(new HashSet<>(state().registry.values()));
+        registered.sort(Comparator.comparing(TradingSymbol::getId));
+        List<TradingSymbol> selected=new ArrayList<>();
+        if(!registered.isEmpty()){
+            TenantState tenant=state();int start=Math.floorMod(tenant.engineCursor,registered.size());
+            for(int i=0;i<Math.min(16,registered.size());i++)selected.add(registered.get((start+i)%registered.size()));
+            tenant.engineCursor=(start+selected.size())%registered.size();
+        }
         if (controls != null) {
             try {
-                Set<Long> active = new HashSet<>(controls.runningSymbols());
-                for (TradingSymbol config : state().registry.values())
-                    if (RandomMarketPath.enabled(config) && durableFlow(config)) active.add(config.getId());
-                for (Long id : active) {
+                for (TradingSymbol selectedSymbol : selected) {
+                    Long id=selectedSymbol.getId();
                     try {
-                        TradingSymbol config = controlSymbol(id);
+                        TradingSymbol config = copySymbol(controlSymbol(id));
                         Map<String,Object> base = RandomMarketPath.enabled(config) ? simulationBaseQuote(config, now) : getPrice(marketCode(config), sourceCategory(config));
                         if (RandomMarketPath.enabled(config)) {
                             base.put("eventId", "simulation-" + config.getRandomMarketStartedAt() + "-" + now / 1000);
-                            List<Map<String,Object>> bars = ControlHistoryStore.rows(RandomMarketPath.klines(config, "1m", 2, null, now));
+                            Long committed = controlHistory.db.queryForObject(
+                                "SELECT MAX(candle_at) FROM market_simulation_source_candle WHERE tenant_id=? AND symbol_id=? AND session_at=? AND period='1m'",
+                                Long.class, TenantContext.requireTenantId(), id, config.getRandomMarketStartedAt());
+                            // Revisit the committed last minute so a partial candle becomes complete after downtime.
+                            long first = Math.max(Math.floorDiv(config.getRandomMarketStartedAt(), 60000) * 60000,
+                                committed == null ? Long.MIN_VALUE : committed);
+                            long blockEnd = Math.min(now, first + 512L * 60000 - 1000);
+                            int minutes = (int) Math.min(512, Math.floorDiv(blockEnd, 60000) - Math.floorDiv(first, 60000) + 1);
+                            List<Map<String,Object>> bars = first > now ? Collections.emptyList()
+                                : ControlHistoryStore.rows(RandomMarketPath.klines(config, "1m", minutes, blockEnd, blockEnd));
                             List<String> bodies = new ArrayList<>();
                             for (Map<String,Object> bar : bars) bodies.add(controlHistory.encode(bar));
                             controls.locked(id, () -> {
@@ -1259,16 +1473,16 @@ public class ForexQuoteMarketService {
                                 for (int i = 0; i < bars.size(); i++) controlHistory.db.update(
                                     "INSERT INTO market_simulation_source_candle(tenant_id,symbol_id,session_at,period,candle_at,body) VALUES(" + TenantContext.requireTenantId() + ",?,?,'1m',?,?) ON DUPLICATE KEY UPDATE body=VALUES(body)",
                                     id, config.getRandomMarketStartedAt(), ControlHistoryStore.time(bars.get(i)), bodies.get(i));
-                                controls.display(fresh, base, now); return null;
+                                controls.pump(fresh, base, now, maxAgeMs); return null;
                             });
-                        } else controls.display(config, base, now);
+                        } else controls.pump(config, base, now, maxAgeMs);
                     }
                     catch (Exception failure) { log.error("Persistent control sampling failed for {}", id, failure); }
                 }
             } catch (Exception failure) { log.error("Cannot read persistent control tasks", failure); }
         }
         Set<Long> visited = new HashSet<>();
-        for (TradingSymbol snapshot : state().registry.values()) {
+        for (TradingSymbol snapshot : selected) {
             if (!PriceControlPath.running(snapshot) || now < PriceControlPath.endsAt(snapshot) || !visited.add(snapshot.getId())) continue;
             try {
                 java.util.function.Supplier<Void> completion = () -> {
@@ -1292,7 +1506,7 @@ public class ForexQuoteMarketService {
     }
     @PreDestroy public void stop() {
         running = false;
-        if (yahoo != null) yahoo.stop(); if (exchangeStream != null) exchangeStream.stop(); metadata.shutdownNow();
+        if (yahoo != null) yahoo.stop(); if (exchangeStream != null) exchangeStream.stop(); metadata.shutdownNow(); engines.shutdownNow();
         for (TenantState state : tenantStates.values()) for (Group group : state.groups.values()) group.executor.shutdownNow();
     }
 }

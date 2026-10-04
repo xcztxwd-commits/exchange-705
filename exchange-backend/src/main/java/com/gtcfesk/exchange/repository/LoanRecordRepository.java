@@ -17,6 +17,12 @@ public interface LoanRecordRepository extends com.gtcfesk.exchange.tenant.Tenant
     @org.springframework.data.jpa.repository.Query("SELECT x FROM LoanRecord x WHERE x.tenantId=:#{T(com.gtcfesk.exchange.tenant.TenantContext).requireTenantId()} AND x.id=:id")
     java.util.Optional<LoanRecord> lockById(@org.springframework.data.repository.query.Param("id") Long id);
 
+    @org.springframework.data.jpa.repository.Query("select x.id from LoanRecord x where x.tenantId=:tenant and x.userId=:user and x.requestKey=:key")
+    java.util.Optional<Long> findReplayId(@org.springframework.data.repository.query.Param("tenant") Long tenant,@org.springframework.data.repository.query.Param("user") Long user,@org.springframework.data.repository.query.Param("key") String key);
+
+    @org.springframework.data.jpa.repository.Query("select x.userId from LoanRecord x where x.tenantId=:#{T(com.gtcfesk.exchange.tenant.TenantContext).requireTenantId()} and x.id=:id")
+    java.util.Optional<Long> findOwnerIdById(@org.springframework.data.repository.query.Param("id") Long id);
+
     List<LoanRecord> findByTenantIdAndUserIdOrderByCreatedAtDesc(Long tenantId, Long userId);
     List<LoanRecord> findAllByTenantIdOrderByCreatedAtDesc(Long tenantId);
 }

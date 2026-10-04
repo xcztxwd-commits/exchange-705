@@ -1,0 +1,26 @@
+{
+  "sourceThread": "01a1013e-ccdc-7401-bd14-2e65818385ae",
+  "sourceTurn": "01a1013e-d4a9-7442-a529-193cd7ceaa0d",
+  "originalManifestSha256": "5d761abc76bea889d32cfd3c6fd50e1fa8c119eb79582263756c5cc33b402378",
+  "originalArchiveSha256": "cea9d28fb0be84c0bd6888f81b8124271b375864884d43dd5a89ebcced44c464",
+  "syntheticMysqlReaderReturns": true,
+  "productionPublicationReceipt": false,
+  "httpWsTransmissionReceipt": false,
+  "scope": "Separate historical synthetic MySQL return bodies, never canonical publication approval. Raw UTF-8 subtrees were imported unchanged after manifest/archive/thread verification.",
+  "bodies": [
+    {
+      "file": "old83.json",
+      "sha256": "b9e5a6c0e64fd7a679e4e2578d332c0eccdf46426ccaeff63de059bde38c7e4b",
+      "originalFile": "mysql-dev1/mysql-differences-2992624e-8635-43a7-b729-b4e96606b6a3.json",
+      "originalFileSha256": "a2149eee678f9c41ad1f8255c23f8a98e7b89de7df6108c6ee56d82db60af160",
+      "selector": "/0/expected"
+    },
+    {
+      "file": "old84.json",
+      "sha256": "68641c5893367ba787936fb9eafcc0e31f8419890ce47c40cda9000ea0002f48",
+      "originalFile": "mysql-direct-final/mysql-differences-0e58a6bf-8114-4eba-874d-6c5f5ba508af.json",
+      "originalFileSha256": "5053abb3905a50a63e99931daa6ed4d7504930923d94830876a0bdea43814b2b",
+      "selector": "/0/expected"
+    }
+  ]
+}

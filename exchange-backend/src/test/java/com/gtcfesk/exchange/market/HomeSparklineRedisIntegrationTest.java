@@ -97,11 +97,8 @@ class HomeSparklineRedisIntegrationTest {
     @SuppressWarnings("unchecked") List<Double> points(Map<String,Object> response){return (List<Double>)HomeSparklineCacheTest.row(response).get("points");}
     static void docker(String action)throws Exception {
         HomeSparklineFixture.requireStack();
-        String name=System.getenv("T05_REDIS_CONTAINER");
-        if(name==null || !name.startsWith("moddoc-t05-"))throw new IllegalStateException("T05 owned Redis only");
-        Process inspect=new ProcessBuilder("docker","inspect",name).start();
-        JsonNode details=new ObjectMapper().readTree(readAll(inspect.getInputStream()));assertEquals(0,inspect.waitFor());
-        assertEquals("T05",details.get(0).path("Config").path("Labels").path("moddoc.task").asText());
+        assertTrue(Set.of("stop","start","restart").contains(action));
+        String name=HomeSparklineFixture.ownedRedisContainer(action);
         Process p=new ProcessBuilder("docker",action,name).redirectErrorStream(true).start();String out=new String(readAll(p.getInputStream()),StandardCharsets.UTF_8);
         assertTrue(p.waitFor(45,TimeUnit.SECONDS));assertEquals(0,p.exitValue(),out);
     }

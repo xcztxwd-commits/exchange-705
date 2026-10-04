@@ -84,8 +84,11 @@ class IdentityLoanFlowTest {
         UserAccountRepository users = mock(UserAccountRepository.class);
         LoanService loan = new LoanService(loans, settings, users, kycs, mock(AssetAccountRepository.class), service);
         org.springframework.test.util.ReflectionTestUtils.setField(loan,"tenantPolicy",mock(com.gtcfesk.exchange.control.TenantPolicyService.class));
+        org.springframework.test.util.ReflectionTestUtils.setField(loan,"audit",mock(com.gtcfesk.exchange.control.ControlAuditService.class));
         LoanSetting setting = new LoanSetting(); setting.setEnabled(true); setting.setDays(10); setting.setFreeDays(0); setting.setDailyRate(new BigDecimal("1"));
         when(settings.findByTenantIdAndId(1L, 3L)).thenReturn(Optional.of(setting));
+        when(settings.lockById(3L)).thenReturn(Optional.of(setting));
+        when(users.lockById(1L)).thenReturn(Optional.of(new UserAccount()));
         when(users.findByTenantIdAndId(1L, 1L)).thenReturn(Optional.of(new UserAccount()));
         when(loans.save(any())).thenAnswer(call -> call.getArgument(0));
         LoanRecord record = loan.createLoan(1L, BigDecimal.TEN, 3L);
@@ -109,6 +112,8 @@ class IdentityLoanFlowTest {
         org.springframework.test.util.ReflectionTestUtils.setField(review,"tenantPolicy",mock(com.gtcfesk.exchange.control.TenantPolicyService.class));
         LoanRecord record = new LoanRecord(); record.setUserId(1L); record.setStatus("SIGNED"); record.setRealName("forged"); record.setIdNumber("forged");
         when(loans.lockById(8L)).thenReturn(Optional.of(record));
+        when(loans.findOwnerIdById(8L)).thenReturn(Optional.of(1L));
+        when(loans.findByTenantIdAndId(1L,8L)).thenReturn(Optional.of(record));
         assertThrows(BusinessException.class, () -> review.approveLoan(8L));
         verify(loans, never()).save(any()); verifyNoInteractions(assets);
     }
@@ -148,6 +153,8 @@ class IdentityLoanFlowTest {
         record.setRealName(identity.getRealName()); record.setIdNumber(identity.getIdNumber()); record.setAmount(BigDecimal.TEN); record.setDays(7);
         AssetAccount fund = new AssetAccount(); fund.setCoin("FUND"); fund.setAvailable(BigDecimal.ZERO);
         when(loans.lockById(8L)).thenReturn(Optional.of(record));
+        when(loans.findOwnerIdById(8L)).thenReturn(Optional.of(1L));
+        when(loans.findByTenantIdAndId(1L,8L)).thenReturn(Optional.of(record));
         when(assets.lockByUserId(1L)).thenReturn(Collections.singletonList(fund));
         review.approveLoan(8L);
         assertEquals("APPROVED", record.getStatus()); assertEquals(BigDecimal.TEN, fund.getAvailable());

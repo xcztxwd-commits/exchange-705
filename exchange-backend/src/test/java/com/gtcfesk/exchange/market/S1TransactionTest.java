@@ -237,6 +237,7 @@ class S1TransactionTest extends TenantMarketTestContext {
             when(repository.findAllByTenantId(2L)).thenReturn(Collections.singletonList(other));
             when(repository.findByTenantIdAndId(2L,98004L)).thenReturn(Optional.of(other));market.refreshSymbols();
             long now=System.currentTimeMillis();market.acceptQuote("S1","Metal",quote(now,100,"b-"+UUID.randomUUID()),"http",now);
+            market.completeControls();
         }
         ExecutorService workers=Executors.newFixedThreadPool(2);CountDownLatch locked=new CountDownLatch(1),release=new CountDownLatch(1);
         List<Double> times=new ArrayList<>();
@@ -247,12 +248,18 @@ class S1TransactionTest extends TenantMarketTestContext {
             }});
             assertTrue(locked.await(5,TimeUnit.SECONDS));
             CountDownLatch entering=new CountDownLatch(1);
-            Future<?> blocked=workers.submit(()->{try(TenantContext.Scope ignored=TenantContext.open(1L)){entering.countDown();market.controlStatus(98001L);}});
+            // S2 status is a pure read. The contending operation must be an explicit engine writer.
+            Future<?> blocked=workers.submit(()->{try(TenantContext.Scope ignored=TenantContext.open(1L)){entering.countDown();market.completeControls();}});
             assertTrue(entering.await(2,TimeUnit.SECONDS));Thread.sleep(100);assertFalse(blocked.isDone());
             if(mysql) assertTrue(store.db.queryForObject("SELECT COUNT(*) FROM information_schema.innodb_lock_waits",Integer.class)>0,"physical MySQL row-lock wait is present");
+            try(TenantContext.Scope ignored=TenantContext.open(1L)) {
+                long at=System.nanoTime();market.controlStatus(98001L);
+                assertTrue((System.nanoTime()-at)/1e6<1000,"same-tenant status remains a pure read while its writer is blocked");
+            }
             try(TenantContext.Scope ignored=TenantContext.open(2L)) {
                 long at=System.nanoTime();market.controlStatus(98004L);assertEquals(100.0,((Number)market.snapshotPrice("B").get("price")).doubleValue());
                 String key="b-"+UUID.randomUUID();Map<String,Object> receipt=market.startControl(98004L,60,new BigDecimal("100.054"),10,false,key);
+                market.completeControls();receipt=market.controlStatus(98004L);assertNotNull(receipt.get("taskId"));
                 assertEquals(receipt.get("taskId"),market.startControl(98004L,60,new BigDecimal("100.054"),10,false,key).get("taskId"));
                 times.add((System.nanoTime()-at)/1e6);
             }

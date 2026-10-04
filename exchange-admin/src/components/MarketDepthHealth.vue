@@ -37,7 +37,7 @@ onUnmounted(() => { active = false; if (timer) clearInterval(timer) })
   <section class="depth-health" aria-labelledby="depth-health-heading">
     <div class="depth-toolbar">
       <h3 id="depth-health-heading">外部参考深度 / 来源健康</h3>
-      <el-button :loading="busy" @click="load">刷新状态</el-button>
+      <el-button v-permission="'settings:view'" :loading="busy" @click="load">刷新状态</el-button>
       <el-button v-permission="'settings:save'" :disabled="!maySave" :loading="saving" @click="toggle">{{ health?.enabled ? '禁用当前租户深度' : '启用当前租户深度' }}</el-button>
     </div>
     <el-alert v-if="error" :title="error" type="error" :closable="false" show-icon role="alert" />
@@ -49,15 +49,15 @@ onUnmounted(() => { active = false; if (timer) clearInterval(timer) })
       <div><dt>REST 周期 / 过期阈值</dt><dd>{{ health.pollIntervalMs }} ms / {{ health.maxAgeMs }} ms</dd></div>
     </dl>
     <p>源时间未提供显示“—”，不会伪装为接收时间。5 档不补成 20 档；支持情况以官方目录验证为准。</p>
-    <el-table v-if="health" :data="health.instruments" empty-text="本租户没有启用品种" :max-height="440" style="width: 100%" tabindex="0" aria-label="本租户深度来源状态">
-      <el-table-column prop="symbol" label="品种 / 市场" min-width="160"><template #default="{ row }">{{ row.symbol }}<br>{{ row.externalSymbol || '—' }} · {{ row.marketType || '—' }}</template></el-table-column>
-      <el-table-column label="状态 / 支持" min-width="195"><template #default="{ row }">{{ labels[row.status] || row.status }}<br>{{ row.supportVerified ? '官方目录已确认' : row.status === 'UNSUPPORTED' ? '不支持' : '待访问验证' }}</template></el-table-column>
-      <el-table-column label="刷新 / 连接" min-width="175"><template #default="{ row }">{{ refresh(row) }}<br>{{ row.stream?.connected ? '已连接' : '未连接' }}</template></el-table-column>
-      <el-table-column label="实际档数 / 单位" min-width="150"><template #default="{ row }">买 {{ row.displayedLevels?.bids || 0 }} / 卖 {{ row.displayedLevels?.asks || 0 }}<br>{{ row.quantityUnit === 'CONTRACT' ? '张（合约）' : row.quantityCurrency || '—' }}</template></el-table-column>
-      <el-table-column label="最后成功 / 接收时间（SGT）" min-width="245"><template #default="{ row }">{{ date(row.lastSuccessAt) }}<br>{{ date(row.receivedAt) }}</template></el-table-column>
-      <el-table-column label="源时间 / 延迟" min-width="245"><template #default="{ row }">{{ date(row.sourceAsOf) }}<br>{{ row.latencyMs == null ? '来源未提供时间' : row.latencyMs + ' ms' }}</template></el-table-column>
-      <el-table-column label="最近错误 / 请求数" min-width="180"><template #default="{ row }">{{ row.reason || row.stream?.error || '—' }}<br>REST {{ row.restRequests || 0 }} / 缓存 {{ row.cacheHits || 0 }}</template></el-table-column>
-    </el-table>
+    <admin-table table-key="MarketDepthHealth.1" v-if="health" :data="health.instruments" empty-text="本租户没有启用品种" :max-height="440" style="width: 100%" tabindex="0" aria-label="本租户深度来源状态">
+      <el-table-column prop="symbol" column-key="symbol" label="品种 / 市场" min-width="160"><template #default="{ row }">{{ row.symbol }}<br>{{ row.externalSymbol || '—' }} · {{ row.marketType || '—' }}</template></el-table-column>
+      <el-table-column column-key="status" label="状态 / 支持" min-width="195"><template #default="{ row }">{{ labels[row.status] || row.status }}<br>{{ row.supportVerified ? '官方目录已确认' : row.status === 'UNSUPPORTED' ? '不支持' : '待访问验证' }}</template></el-table-column>
+      <el-table-column column-key="connection" label="刷新 / 连接" min-width="175"><template #default="{ row }">{{ refresh(row) }}<br>{{ row.stream?.connected ? '已连接' : '未连接' }}</template></el-table-column>
+      <el-table-column column-key="levels" label="实际档数 / 单位" min-width="150"><template #default="{ row }">买 {{ row.displayedLevels?.bids || 0 }} / 卖 {{ row.displayedLevels?.asks || 0 }}<br>{{ row.quantityUnit === 'CONTRACT' ? '张（合约）' : row.quantityCurrency || '—' }}</template></el-table-column>
+      <el-table-column column-key="received-time" label="最后成功 / 接收时间（SGT）" min-width="245"><template #default="{ row }">{{ date(row.lastSuccessAt) }}<br>{{ date(row.receivedAt) }}</template></el-table-column>
+      <el-table-column column-key="source-time" label="源时间 / 延迟" min-width="245"><template #default="{ row }">{{ date(row.sourceAsOf) }}<br>{{ row.latencyMs == null ? '来源未提供时间' : row.latencyMs + ' ms' }}</template></el-table-column>
+      <el-table-column column-key="errors" label="最近错误 / 请求数" min-width="180"><template #default="{ row }">{{ row.reason || row.stream?.error || '—' }}<br>REST {{ row.restRequests || 0 }} / 缓存 {{ row.cacheHits || 0 }}</template></el-table-column>
+    </admin-table>
   </section>
 </template>
 

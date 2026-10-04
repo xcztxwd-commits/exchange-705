@@ -102,7 +102,9 @@ public class ActivityService {
    if(!candidate.active()||!candidate.getPositions().contains(position)||!candidate.getTriggerConditions().contains(event)||!eligible(candidate,visitor))continue;
    ActivityCampaign campaign=locked(candidate.getId());
    if(!campaign.isAutoSendEnabled()||!campaign.active()||!campaign.getPositions().contains(position)||!campaign.getTriggerConditions().contains(event)||campaign.getClaimCount()>=campaign.getMaxClaims()||campaign.getGranted().add(campaign.getAmount()).compareTo(campaign.getBudget())>0)continue;
-   ActivityDelivery prior=deliveries.findByTenantIdAndCampaignIdAndUserId(tenant,campaign.getId(),user).orElse(null);
+   // The candidate read may have established an old RR snapshot while waiting for the
+   // campaign mutex. A locking receipt read must decide send/replay after that wait.
+   ActivityDelivery prior=deliveries.lockByCampaignAndUser(campaign.getId(),user).orElse(null);
    if(prior!=null){if(!campaign.isAllowRepeatSend())continue;prior.setSentAt(LocalDateTime.now());prior.setReceivedAt(null);prior.setOpenedAt(null);prior.setClosedAt(null);prior.setSentBy("AUTO:"+event);deliveries.save(prior);}
    else {ActivityDelivery next=new ActivityDelivery();next.setCampaignId(campaign.getId());next.setUserId(user);next.setSentBy("AUTO:"+event);deliveries.saveAndFlush(next);}
    sent++;
@@ -290,12 +292,13 @@ public class ActivityService {
  private ActivityDelivery owned(Long user,Long id){return deliveries.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), id).filter(d->d.getUserId().equals(user)).orElseThrow(()->new BusinessException("消息不存在"));}
  @Transactional public TrialAccount claim(Long user,Long id){return claim(user,id,null);}
  @Transactional public TrialAccount claim(Long user,Long id,String requestKey){
-  ActivityDelivery before=owned(user,id);funds.lock(user);
+  ActivityDelivery before=owned(user,id);funds.lockForGrant(user);
   if(requestKey!=null&&!requestKey.matches("[A-Za-z0-9_-]{16,64}"))throw new BusinessException("幂等键无效");
-  if(requestKey!=null){TrialGrant prior=grants.findByTenantIdAndUserIdAndRequestKey(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(),user,requestKey).orElse(null);
+  ActivityCampaign c=campaigns.lock(before.getCampaignId()).orElseThrow(()->new BusinessException("活动不存在"));
+  if(requestKey!=null){TrialGrant prior=funds.currentGrant(user,requestKey);
    if(prior!=null){if(!Objects.equals(prior.getCampaignId(),before.getCampaignId()))throw new BusinessException("幂等键已用于其他活动");return funds.snapshot(user);}
   }
-  tenantPolicy.requireNewBusiness("activity");ActivityCampaign c=locked(before.getCampaignId());
+  tenantPolicy.requireNewBusiness("activity");if(c.isDeleted())throw new BusinessException("活动不存在");
   ActivityDelivery d=owned(user,id);if(entityManager!=null)entityManager.refresh(d,javax.persistence.LockModeType.PESSIMISTIC_WRITE);
   if(d.getClaimedAt()!=null&&(!c.isAllowRepeatClaim()||requestKey==null))return funds.snapshot(user);
   if(!c.active())throw new BusinessException("活动未开始、已暂停或已结束");
@@ -309,11 +312,12 @@ public class ActivityService {
  }
  @Transactional public TrialAccount claimPublic(Long user,Long campaignId,String requestKey){
   if(requestKey==null||!requestKey.matches("[A-Za-z0-9_-]{16,64}"))throw new BusinessException("幂等键无效");
-  funds.lock(user);TrialGrant prior=grants.findByTenantIdAndUserIdAndRequestKey(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(),user,requestKey).orElse(null);
+  funds.lockForGrant(user);ActivityCampaign c=campaigns.lock(campaignId).orElseThrow(()->new BusinessException("活动不存在"));
+  TrialGrant prior=funds.currentGrant(user,requestKey);
   if(prior!=null){if(!Objects.equals(prior.getCampaignId(),campaignId))throw new BusinessException("幂等键已用于其他活动");return funds.snapshot(user);}
-  ActivityCampaign c=locked(campaignId);
+  if(c.isDeleted())throw new BusinessException("活动不存在");
   if(!c.active()||!c.getPositions().contains("ANONYMOUS_HOME"))throw new BusinessException("公开活动不存在或已结束");
-  ActivityDelivery d=deliveries.findByTenantIdAndCampaignIdAndUserId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(),campaignId,user).orElse(null);
+  ActivityDelivery d=deliveries.lockByCampaignAndUser(campaignId,user).orElse(null);
   if(d==null){d=new ActivityDelivery();d.setCampaignId(campaignId);d.setUserId(user);d.setSentBy("PUBLIC");d=deliveries.saveAndFlush(d);}
   return claim(user,d.getId(),requestKey);
  }

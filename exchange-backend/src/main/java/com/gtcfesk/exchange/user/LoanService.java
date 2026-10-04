@@ -38,6 +38,7 @@ public class LoanService {
     private final KycRecordRepository kycRecordRepository;
     private final AssetAccountRepository assetAccountRepository;
     private final LoanPersonalInfoService loanPersonalInfoService;
+    @javax.persistence.PersistenceContext private javax.persistence.EntityManager entityManager;
 
     public List<LoanSetting> getAvailableLoanSettings() {
         return loanSettingRepository.findByTenantIdAndEnabledTrueOrderByDaysAsc(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId());
@@ -59,32 +60,23 @@ public class LoanService {
         String requestHash=requestKey==null?null:OrderRequest.hash("loan",settingId,amount);
         tenantPolicy.requireNewBusiness("loan");
         com.gtcfesk.exchange.common.TradeValidation.positive(amount, "贷款金额");
-        LoanSetting setting = loanSettingRepository.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), settingId)
-                .orElseThrow(() -> new BusinessException("贷款设置不存在"));
-
-        validateSetting(setting);
-        if (!Boolean.TRUE.equals(setting.getEnabled())) {
-            throw new BusinessException("该贷款设置已禁用");
-        }
-
-        if (setting.getMinAmount() != null && amount.compareTo(setting.getMinAmount()) < 0) {
-            throw new BusinessException("贷款金额不能小于" + setting.getMinAmount());
-        }
-
-        if (setting.getMaxAmount() != null && amount.compareTo(setting.getMaxAmount()) > 0) {
-            throw new BusinessException("贷款金额不能大于" + setting.getMaxAmount());
-        }
-
+        LoanSetting preview=loanSettingRepository.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(),settingId)
+                .orElseThrow(()->new BusinessException("贷款设置不存在"));
+        validateAmount(preview,amount);
+        lockUser(userId);
+        lockAccounts(userId);
         if(requestKey!=null) {
-            userAccountRepository.lockById(userId).orElseThrow(()->new BusinessException("用户不存在"));
+            if(entityManager!=null){entityManager.flush();loanRecordRepository.findReplayId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(),userId,requestKey).flatMap(id->loanRecordRepository.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(),id)).ifPresent(row->entityManager.refresh(row,javax.persistence.LockModeType.PESSIMISTIC_READ));}
             LoanRecord previous=loanRecordRepository.findByTenantIdAndUserIdAndRequestKey(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(),userId,requestKey).orElse(null);
-            if(previous!=null) {OrderRequest.same(previous.getRequestHash(),requestHash);return previous;}
+            if(previous!=null) {if(entityManager!=null)entityManager.refresh(previous,javax.persistence.LockModeType.PESSIMISTIC_READ);OrderRequest.same(previous.getRequestHash(),requestHash);return previous;}
         }
-        // 验证用户存在
-        userAccountRepository.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), userId)
-                .orElseThrow(() -> new BusinessException("用户不存在"));
+        LoanSetting setting = loanSettingRepository.lockById(settingId)
+                .orElseThrow(() -> new BusinessException("贷款设置不存在"));
+        if(entityManager!=null)entityManager.refresh(setting,javax.persistence.LockModeType.PESSIMISTIC_READ);
 
-        com.gtcfesk.exchange.entity.LoanPersonalInfo approved = loanPersonalInfoService.requireApprovedPersonalInfo(userId);
+        validateAmount(setting,amount);
+
+        com.gtcfesk.exchange.entity.LoanPersonalInfo approved = loanPersonalInfoService.requireApprovedPersonalInfoForFunds(userId);
 
         // 计算利息（考虑免息天数）
         int chargeableDays = Math.max(0, setting.getDays() - setting.getFreeDays());
@@ -112,7 +104,8 @@ public class LoanService {
         record.setPhone(approved.getPhone());
         record.setAddress(approved.getAddress());
 
-        return loanRecordRepository.save(record);
+        loanRecordRepository.save(record);checkpoint("creation-order");
+        auditSuccess("LOAN_CREATE",String.valueOf(record.getId()),"userId="+userId+"; amount="+amount+"; status=PENDING",null);checkpoint("creation-audit");return record;
     }
 
     /** Optional amount bounds/overdue rate retain their existing nullable model semantics. */
@@ -160,8 +153,12 @@ public class LoanService {
 
     @Transactional
     public LoanRecord signContract(Long loanId, Long userId, String signatureImage) {
+        lockUser(userId);
+        lockAccounts(userId);
+        if(entityManager!=null){entityManager.flush();loanRecordRepository.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(),loanId).ifPresent(row->entityManager.refresh(row,javax.persistence.LockModeType.PESSIMISTIC_WRITE));}
         LoanRecord record = loanRecordRepository.lockById(loanId)
                 .orElseThrow(() -> new BusinessException("贷款记录不存在"));
+        if(entityManager!=null)entityManager.refresh(record,javax.persistence.LockModeType.PESSIMISTIC_WRITE);
 
         if (!record.getUserId().equals(userId)) {
             throw new org.springframework.security.access.AccessDeniedException("无权签署该贷款");
@@ -175,12 +172,13 @@ public class LoanService {
         record.setSignatureImage(signatureImage);
         record.setStatus("SIGNED");
         record.setRepaymentDate(LocalDateTime.now().plusDays(record.getDays()));
+        loanRecordRepository.save(record);checkpoint("signing-order");
+        auditSuccess("LOAN_SIGN",String.valueOf(loanId),"userId="+userId+"; status=PENDING/SIGNED",null);checkpoint("signing-audit");
         if (simulation != null && simulation.enabled()) {
-            loanRecordRepository.saveAndFlush(record);
+            loanRecordRepository.flush();
             simulationReview.approveLoan(record.getId());
         }
-
-        return loanRecordRepository.save(record);
+        return record;
     }
 
     public List<LoanRecord> getUserLoans(Long userId) {
@@ -213,15 +211,18 @@ public class LoanService {
      */
     @Transactional
     public LoanRecord earlyRepayment(Long loanId, Long userId) {
+        lockUser(userId);
+        List<AssetAccount> lockedAccounts=lockAccounts(userId);
+        if(entityManager!=null){entityManager.flush();loanRecordRepository.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(),loanId).ifPresent(row->entityManager.refresh(row,javax.persistence.LockModeType.PESSIMISTIC_WRITE));}
         LoanRecord record = loanRecordRepository.lockById(loanId)
                 .orElseThrow(() -> new BusinessException("贷款记录不存在"));
+        if(entityManager!=null)entityManager.refresh(record,javax.persistence.LockModeType.PESSIMISTIC_WRITE);
 
         // 验证用户权限
         if (!record.getUserId().equals(userId)) {
             throw new BusinessException("无权操作该贷款记录");
         }
 
-        userAccountRepository.lockById(userId).orElseThrow(() -> new BusinessException("用户不存在"));
         if ("COMPLETED".equals(record.getStatus()) && record.getActualRepaymentAt()!=null) return record;
         if (!"APPROVED".equals(record.getStatus()) || record.getApprovedAt()==null || record.getActualRepaymentAt()!=null) {
             throw new BusinessException("只有已放款且未还清的贷款才能提前还款");
@@ -244,7 +245,7 @@ public class LoanService {
         if(actualInterest.signum()<0)throw new BusinessException("贷款利息配置异常");
 
         // 获取用户的资金账户
-        AssetAccount fundAccount = assetAccountRepository.lockByUserId(userId).stream().filter(a -> "FUND".equals(a.getCoin())).findFirst()
+        AssetAccount fundAccount = lockedAccounts.stream().filter(a -> "FUND".equals(a.getCoin())).findFirst()
                 .orElseThrow(() -> new BusinessException("资金账户不存在"));
 
         // 检查余额是否足够
@@ -255,7 +256,7 @@ public class LoanService {
 
         // 扣除还款金额
         fundAccount.setAvailable(available.subtract(actualRepaymentAmount));
-        assetAccountRepository.save(fundAccount);
+        assetAccountRepository.save(fundAccount);checkpoint("repayment-account");
 
         // 更新贷款记录
         record.setStatus("COMPLETED");
@@ -263,9 +264,32 @@ public class LoanService {
         record.setTotalInterest(actualInterest); // 更新为实际利息
         record.setRepaymentAmount(actualRepaymentAmount); // 更新为实际还款金额
 
-        loanRecordRepository.save(record);
-        audit.recordCurrent("LOAN_REPAY",loanId.toString(),"userId="+userId+"; repayment="+actualRepaymentAmount+"; availableBefore="+available+"; availableAfter="+fundAccount.getAvailable()+"; status=APPROVED/COMPLETED",null);
-        return record;
+        loanRecordRepository.save(record);checkpoint("repayment-order");
+        auditSuccess("LOAN_REPAY",loanId.toString(),"userId="+userId+"; repayment="+actualRepaymentAmount+"; availableBefore="+available+"; availableAfter="+fundAccount.getAvailable()+"; status=APPROVED/COMPLETED",null);
+        checkpoint("repayment-audit");return record;
     }
+    private void auditSuccess(String action,String object,String detail,String reason) {
+        if(com.gtcfesk.exchange.control.ControlIdentity.current()!=null)audit.recordCurrent(action,object,detail,reason);
+        else audit.record(null,com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(),null,action,object,"SUCCESS",detail,reason);
+    }
+    private static void validateAmount(LoanSetting setting,BigDecimal amount) {
+        validateSetting(setting);
+        if(!Boolean.TRUE.equals(setting.getEnabled()))throw new BusinessException("该贷款设置已禁用");
+        if(setting.getMinAmount()!=null&&amount.compareTo(setting.getMinAmount())<0)throw new BusinessException("贷款金额不能小于"+setting.getMinAmount());
+        if(setting.getMaxAmount()!=null&&amount.compareTo(setting.getMaxAmount())>0)throw new BusinessException("贷款金额不能大于"+setting.getMaxAmount());
+    }
+    private void lockUser(Long userId) {
+        if(entityManager!=null){entityManager.flush();UserAccount loaded=userAccountRepository.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(),userId).orElseThrow(()->new BusinessException("用户不存在"));entityManager.refresh(loaded,javax.persistence.LockModeType.PESSIMISTIC_WRITE);}
+        UserAccount user=userAccountRepository.lockById(userId).orElseThrow(()->new BusinessException("用户不存在"));
+        if(entityManager!=null){entityManager.flush();entityManager.refresh(user,javax.persistence.LockModeType.PESSIMISTIC_WRITE);}
+    }
+    private List<AssetAccount> lockAccounts(Long userId) {
+        if(entityManager!=null){entityManager.flush();java.util.List<AssetAccount> loaded=new java.util.ArrayList<>(assetAccountRepository.findByTenantIdAndUserId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(),userId));loaded.sort(java.util.Comparator.comparing(AssetAccount::getCoin).thenComparing(AssetAccount::getId));for(AssetAccount row:loaded){entityManager.refresh(row,javax.persistence.LockModeType.PESSIMISTIC_WRITE);com.gtcfesk.exchange.tenant.TenantContext.require(row.getTenantId());if(!userId.equals(row.getUserId()))throw new com.gtcfesk.exchange.common.BusinessException("账户归属已变更，请重试");}}
+        List<AssetAccount> accounts=assetAccountRepository.lockByUserId(userId);
+        if(entityManager!=null){entityManager.flush();for(AssetAccount account:accounts)entityManager.refresh(account,javax.persistence.LockModeType.PESSIMISTIC_WRITE);}
+        return accounts;
+    }
+    /** Isolated rollback tests may fail after each actual financial write. */
+    protected void checkpoint(String stage) { }
 }
 

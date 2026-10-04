@@ -108,13 +108,14 @@ class AccountFundingSourceTest extends ActivityFeatureFixture {
  }
 }
 
-@SpringJUnitConfig(ActivityIntegrationTest.Config.class)
+@SpringJUnitConfig({ActivityIntegrationTest.Config.class,OrderPromotionRecoveryTest.Config.class})
 class ActivityConditionDeliveryTest extends ActivityFeatureFixture {
+ @Autowired OrderPromotionEvents orderEvents;
  @Test void businessEventIsRequiredAndReadsNeverSend(){
   ActivityCampaign c=campaign();c.setAutoSendEnabled(true);c.setTriggerConditions(Collections.singletonList("API_CONTRACT_ORDER"));c.setPositions(Collections.singletonList("AUTH_TRADE"));service.saveAutoSend(c.getId(),c);approved(user);
   service.inbox(user,0);service.autoSendDue();assertEquals(0L,deliveries.countByTenantIdAndCampaignId(1L,c.getId()));
   assertThrows(BusinessException.class,()->service.trigger(user,"FAKE_EVENT","AUTH_TRADE"));service.trigger(user,"LOGIN","AUTH_HOME");assertFalse(deliveries.findByTenantIdAndCampaignIdAndUserId(1L,c.getId(),user).isPresent());
-  contracts.createOrder(user,contract("MARKET","CONTRACT"));assertEquals(1L,deliveries.countByTenantIdAndCampaignId(1L,c.getId()));
+  contracts.createOrder(user,contract("MARKET","CONTRACT"));orderEvents.drain();assertEquals(1L,deliveries.countByTenantIdAndCampaignId(1L,c.getId()));
   service.inbox(user,0);assertEquals(1L,deliveries.countByTenantIdAndCampaignId(1L,c.getId()));
  }
  @Test void anonymousListShowsOnlyEligiblePublicCampaigns(){

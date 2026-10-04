@@ -28,6 +28,8 @@ public class TransferController {
     private final com.gtcfesk.exchange.repository.UserAccountRepository users;
     private final AssetAccountRepository assetAccountRepository;
     private final TransferRecordRepository transferRecordRepository;
+    @javax.persistence.PersistenceContext private javax.persistence.EntityManager em;
+    @org.springframework.beans.factory.annotation.Autowired private com.gtcfesk.exchange.control.ControlAuditService audit;
     
     /**
      * 划转
@@ -68,11 +70,16 @@ public class TransferController {
         com.gtcfesk.exchange.common.TradeValidation.positive(req.getAmount(), "划转金额");
         com.gtcfesk.exchange.common.OrderRequest.required(req.getRequestId());
         // Serialize account creation and idempotency for this user; lock all accounts in fixed order.
-        users.lockById(userId).orElseThrow(() -> new BusinessException("用户不存在"));
-        assetAccountRepository.lockByUserId(userId);
+        if(em!=null){em.flush();com.gtcfesk.exchange.entity.UserAccount loaded=users.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(),userId).orElseThrow(()->new BusinessException("用户不存在"));em.refresh(loaded,javax.persistence.LockModeType.PESSIMISTIC_WRITE);}
+        com.gtcfesk.exchange.entity.UserAccount customer=users.lockById(userId).orElseThrow(() -> new BusinessException("用户不存在"));
+        if(em!=null){em.flush();em.refresh(customer,javax.persistence.LockModeType.PESSIMISTIC_WRITE);}
+        if(em!=null){em.flush();java.util.List<AssetAccount> loaded=new java.util.ArrayList<>(assetAccountRepository.findByTenantIdAndUserId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(),userId));loaded.sort(java.util.Comparator.comparing(AssetAccount::getCoin).thenComparing(AssetAccount::getId));for(AssetAccount row:loaded){em.refresh(row,javax.persistence.LockModeType.PESSIMISTIC_WRITE);com.gtcfesk.exchange.tenant.TenantContext.require(row.getTenantId());if(!userId.equals(row.getUserId()))throw new com.gtcfesk.exchange.common.BusinessException("账户归属已变更，请重试");}}
+        java.util.List<AssetAccount> lockedAccounts=assetAccountRepository.lockByUserId(userId);
+        if(em!=null){em.flush();for(AssetAccount account:lockedAccounts)em.refresh(account,javax.persistence.LockModeType.PESSIMISTIC_WRITE);}
         if (req.getRequestId() != null) {
             TransferRecord previous = transferRecordRepository.findByTenantIdAndUserIdAndRequestId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), userId, req.getRequestId()).orElse(null);
             if (previous != null) {
+                if(em!=null)em.refresh(previous,javax.persistence.LockModeType.PESSIMISTIC_READ);
                 if (!fromAccount.equals(previous.getFromAccount()) || !toAccount.equals(previous.getToAccount())
                         || req.getAmount().compareTo(previous.getAmount()) != 0) throw new BusinessException("请求编号已用于不同划转");
                 Map<String, Object> result = new HashMap<>();
@@ -82,7 +89,7 @@ public class TransferController {
             }
         }
         // 获取转出账户
-        AssetAccount fromAsset = assetAccountRepository.findByTenantIdAndUserIdAndCoin(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), userId, fromAccount)
+        AssetAccount fromAsset = lockedAccounts.stream().filter(account->fromAccount.equals(account.getCoin())).findFirst()
                 .orElseGet(() -> {
                     AssetAccount a = new AssetAccount();
                     a.setUserId(userId);
@@ -99,7 +106,7 @@ public class TransferController {
         }
         
         // 获取转入账户
-        AssetAccount toAsset = assetAccountRepository.findByTenantIdAndUserIdAndCoin(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), userId, toAccount)
+        AssetAccount toAsset = lockedAccounts.stream().filter(account->toAccount.equals(account.getCoin())).findFirst()
                 .orElseGet(() -> {
                     AssetAccount a = new AssetAccount();
                     a.setUserId(userId);
@@ -114,8 +121,8 @@ public class TransferController {
         BigDecimal toAvailable = toAsset.getAvailable() != null ? toAsset.getAvailable() : BigDecimal.ZERO;
         toAsset.setAvailable(toAvailable.add(req.getAmount()));
         
-        assetAccountRepository.save(fromAsset);
-        assetAccountRepository.save(toAsset);
+        assetAccountRepository.save(fromAsset);checkpoint("transfer-from-account");
+        assetAccountRepository.save(toAsset);checkpoint("transfer-to-account");
         
         // 创建划转记录
         TransferRecord record = new TransferRecord();
@@ -124,7 +131,8 @@ public class TransferController {
         record.setFromAccount(fromAccount);
         record.setToAccount(toAccount);
         record.setAmount(req.getAmount());
-        transferRecordRepository.save(record);
+        transferRecordRepository.save(record);checkpoint("transfer-receipt");
+        auditSuccess("TRANSFER",String.valueOf(record.getId()),"userId="+userId+"; from="+fromAccount+"; to="+toAccount+"; amount="+req.getAmount()+"; fromBefore="+available+"; fromAfter="+fromAsset.getAvailable()+"; toBefore="+toAvailable+"; toAfter="+toAsset.getAvailable(),null);checkpoint("transfer-audit");
         
         Map<String, Object> result = new HashMap<>();
         result.put("success", true);
@@ -132,6 +140,13 @@ public class TransferController {
         return ResponseEntity.ok(result);
     }
     
+    private void auditSuccess(String action,String object,String detail,String reason) {
+        if(com.gtcfesk.exchange.control.ControlIdentity.current()!=null)audit.recordCurrent(action,object,detail,reason);
+        else audit.record(null,com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(),null,action,object,"SUCCESS",detail,reason);
+    }
+    /** Isolated rollback tests may fail after each actual financial write. */
+    protected void checkpoint(String stage) { }
+
     /**
      * 查询划转记录
      */

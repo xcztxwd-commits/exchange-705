@@ -82,6 +82,7 @@ class OptionSettlementMySqlIT {
     @Autowired JdbcTemplate database;
     @Autowired TenantJobRunner jobs;
     @Autowired com.gtcfesk.exchange.market.MarketOrderProcessor marketTasks;
+    @Autowired com.gtcfesk.exchange.market.PersistentPriceControl controls;
     TenantContext.Scope scope;
 
     @BeforeEach void tenant() {
@@ -187,11 +188,14 @@ class OptionSettlementMySqlIT {
         try (TenantContext.Scope ignored = TenantContext.open(1L)) { money(a, "108", "0"); }
         try (TenantContext.Scope ignored = TenantContext.open(2L)) { money(b, "108", "0"); }
     }
-    @Test void actualScheduledEntrySettlesWithDurableDisplaySymbolLocksWithoutOuterSelfBlocking(){
-        long user=user();account(user,"10");TradingSymbol symbol=new TradingSymbol();symbol.setSymbol("OWNED_LOCK_"+UUID.randomUUID().toString().substring(0,8));symbol.setName("Owned durable quote-lock input");symbol.setBaseCurrency("BTC");symbol.setQuoteCurrency("USD");symbol.setCategory("Crypto");symbol.setSourceCategory("Crypto");symbol.setMarketSource("binance");symbol.setIsEnabled(true);symbol=symbols.saveAndFlush(symbol);
+    @Test void actualScheduledEntrySettlesCommittedDisplayWithoutOuterSelfBlocking(){
+        long user=user();account(user,"10");TradingSymbol symbol=new TradingSymbol();symbol.setSymbol("OWNED_LOCK_"+UUID.randomUUID().toString().substring(0,8));symbol.setName("Owned committed quote input");symbol.setBaseCurrency("BTC");symbol.setQuoteCurrency("USD");symbol.setCategory("Crypto");symbol.setSourceCategory("Crypto");symbol.setMarketSource("binance");symbol.setIsEnabled(true);symbol=symbols.saveAndFlush(symbol);
+        // S2 display is a pure committed read; only the actual producer may publish the synthetic input.
+        long now=System.currentTimeMillis();Map<String,Object> input=new HashMap<>();input.put("price",new BigDecimal("110"));input.put("available",true);input.put("timestamp",now);input.put("sourceTimestamp",now);input.put("fetchedAt",now);input.put("expiresAt",now+60000);
+        controls.pump(symbol,input,now,60000);
+        Map<String,Object> committed=controls.display(symbol,input,System.currentTimeMillis());assertEquals(0,new BigDecimal("110").compareTo(new BigDecimal(committed.get("price").toString())));assertEquals(true,committed.get("available"));assertEquals(true,committed.get("tradeAvailable"));
         OptionOrder option=order(user);option.setSymbol(symbol.getSymbol());orders.saveAndFlush(option);scope.close();scope=null;
-        marketTasks.settleOptions();marketTasks.settleOptions();assertNull(TenantContext.currentTenantId());
-        try(TenantContext.Scope ignored=TenantContext.open(1L)){assertEquals("CLOSED",state(option.getId()));money(user,"108","0");}
+        for(int attempt=0;attempt<2;attempt++){marketTasks.settleOptions();assertNull(TenantContext.currentTenantId());try(TenantContext.Scope ignored=TenantContext.open(1L)){assertEquals("CLOSED",state(option.getId()));money(user,"108","0");}}
     }
 
 }

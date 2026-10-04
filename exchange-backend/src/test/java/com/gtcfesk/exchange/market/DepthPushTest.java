@@ -16,6 +16,7 @@ class DepthPushTest {
     @BeforeEach void setup()throws Exception{
         handler=new MarketWebSocketHandler();depth=mock(MarketDepthService.class);ReflectionTestUtils.setField(handler,"depth",depth);
         ForexQuoteMarketService prices=mock(ForexQuoteMarketService.class);ReflectionTestUtils.setField(handler,"marketService",prices);when(prices.knownSymbol("BTCUSDT")).thenReturn(true);Map<String,Object> quote=new HashMap<>();quote.put("price",100);quote.put("quoteVersion",1);when(prices.snapshotPrice("BTCUSDT")).thenReturn(quote);
+        when(prices.readSnapshot(any())).thenAnswer(call -> ((java.util.function.Supplier<?>) call.getArgument(0)).get());
         TenantRepository tenants=mock(TenantRepository.class);Tenant tenant=new Tenant();tenant.setId(1L);tenant.setFrontendHost("a.test");tenant.setDomainVerified(true);tenant.setStatus("ACTIVE");when(tenants.findById(1L)).thenReturn(Optional.of(tenant));ReflectionTestUtils.setField(handler,"tenants",tenants);
         session=mock(WebSocketSession.class);when(session.getId()).thenReturn("depth-test");when(session.isOpen()).thenReturn(true);Map<String,Object> attributes=new HashMap<>();attributes.put("tenantId",1L);attributes.put("frontendHost","a.test");when(session.getAttributes()).thenReturn(attributes);
         doAnswer(i->{received.add(ExchangeQuoteSource.JSON.readTree(((TextMessage)i.getArgument(0)).getPayload()));return null;}).when(session).sendMessage(any());

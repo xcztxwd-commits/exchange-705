@@ -94,19 +94,60 @@ def maintenance(db):
     if db.query('SELECT COUNT(*) FROM information_schema.PROCESSLIST WHERE ID<>CONNECTION_ID()')!=['0']:
         raise ValueError('Target has active sessions; preserve maintenance and drain writers')
 
-def preserved(db,columns):
+SOURCE0403_METADATA = {'table':'tenant_schema_version','version':2026100403,
+                       'minimum_application_epoch':2026100403,'business_activation_ready':False}
+
+HISTORY0404_METADATA = {'table':'tenant_schema_version','version':2026100404,
+                        'minimum_application_epoch':2026100404,'business_activation_ready':False}
+
+def metadata_append_contract(start,reviewed):
+    # Only these individually reviewed additive tails; never infer arbitrary future metadata.
+    tails = {
+        'V2026100403__source_history_input_revision.sql': SOURCE0403_METADATA,
+        'V2026100404__history_ordering_and_response_receipts.sql': HISTORY0404_METADATA,
+    }
+    if start>0 and len(reviewed[start:])==1:
+        name=reviewed[start]['name']
+        if name in tails and (name not in ('V2026100404__history_ordering_and_response_receipts.sql',)
+                or reviewed[start-1]['name']=='V2026100403__source_history_input_revision.sql'):
+            return dict(tails[name])
+    return None
+
+def metadata_version(contract):
+    if contract not in (SOURCE0403_METADATA,HISTORY0404_METADATA):
+        raise ValueError('Unreviewed metadata append contract')
+    return contract['version']
+
+def metadata_absent_before_plan(db,contract):
+    if contract is not None:
+        version=metadata_version(contract)
+        if db.query(f'SELECT COUNT(*) FROM tenant_schema_version WHERE version={version}')!=['0']:
+            raise ValueError(f'{version} metadata already exists; no additive plan/replay may infer a completed phase')
+
+def metadata_receipt_after_phase(db,contract):
+    if contract is not None:
+        version=metadata_version(contract)
+        if db.query(f'SELECT COUNT(*) FROM tenant_schema_version WHERE version={version} AND minimum_application_epoch={version} AND business_activation_ready=0 AND applied_at IS NOT NULL')!=['1']:
+            raise ValueError(f'Exact newly approved {version} inactive metadata receipt is missing or changed')
+
+def preserved(db,columns,metadata_append=None):
+    version=metadata_version(metadata_append) if metadata_append is not None else None
     queries=[];groups={t:[] for t in columns}
     for table,fields in columns.items():
         expr=[]
         for field in fields:
             value=core.ident(field)
-            if field=='current_token':value='NULL' # Explicitly reviewed old-session revocation, never business facts.
-            if table=='deposit_record':
+            if metadata_append is None and field=='current_token':value='NULL' # Only the original reviewed migration transforms.
+            if metadata_append is None and table=='deposit_record':
                 if field=='source':value="COALESCE(source,'LEGACY_UNKNOWN')"
                 if field=='order_no':value="COALESCE(order_no,CONCAT('LEGACY-DEP-',id))"
                 if field=='account_type':value="COALESCE(account_type,'FUND')"
             expr.append('HEX(CAST('+value+' AS BINARY))')
-        queries.append('SELECT '+core.literal(table)+',SHA2(JSON_ARRAY('+','.join(expr)+'),256) FROM '+core.ident(table)+';')
+        where=''
+        if metadata_append is not None:
+            if table=='tenant_schema_version':where=f' WHERE version<>{version}'
+        # Every original metadata row remains hashed with all old columns. Only the single planned receipt is excluded.
+        queries.append('SELECT '+core.literal(table)+',SHA2(JSON_ARRAY('+','.join(expr)+'),256) FROM '+core.ident(table)+where+';')
     for row in db.query('START TRANSACTION WITH CONSISTENT SNAPSHOT;\n'+'\n'.join(queries)+'\nCOMMIT;'):
         table,sha=row.split('\t');groups[table].append(sha)
     return {t:{'rows':len(rows),'sha256':hashlib.sha256('\n'.join(sorted(rows)).encode()).hexdigest()} for t,rows in groups.items()}
@@ -117,7 +158,16 @@ def plan(db,output,baseline=None):
     if 'tenant_schema_version' in db.tables():
         if baseline is None:raise ValueError('Already scoped/partly migrated target requires a verified completed ledger; never infer completed DDL from object names')
         previous=baseline.latest()
-        if previous['kind']!='COMPLETE' or previous['target']!=target(db) or previous['state']!=current:raise ValueError('Completed baseline ledger or current data differs')
+        local=getattr(baseline.policy,'local',False)
+        if local:
+            from local_test_migration import LocalPolicy,LocalLedger
+            if not isinstance(baseline.policy,LocalPolicy) or not isinstance(baseline,LocalLedger):raise ValueError('Actual local policy and evidence ledger required')
+            baseline.policy.guard_targets(db,baseline.policy.restore_db)
+            if previous['kind']!='LOCAL_BASELINE_OBSERVED' or previous['source_sha256']!=sources():
+                raise ValueError('Actual local imported baseline observation required; do not fabricate COMPLETE')
+            if core.file_hash(Path(previous['imported_backup']['path']))!=previous['imported_backup']['sha256']:
+                raise ValueError('Imported local baseline dump changed')
+        if previous['kind']!=('LOCAL_BASELINE_OBSERVED' if local else 'COMPLETE') or previous['target']!=target(db) or previous['state']!=current:raise ValueError('Completed baseline ledger or current data differs')
         old=previous['migrations'];new=migrations()
         if new[:len(old)]!=old:raise ValueError('Previously applied migration checksums changed')
         start=len(old)
@@ -125,11 +175,16 @@ def plan(db,output,baseline=None):
         checked=core.preflight(db)
         if not checked['passed']:raise ValueError('Current legacy inventory failed; no automatic orphan deletion or owner inference')
     columns=current['data']['columns']
+    metadata_append=metadata_append_contract(start,migrations())
+    if start>0 and metadata_append is None:raise ValueError('An existing scoped database requires an exact reviewed additive tail')
+    metadata_absent_before_plan(db,metadata_append)
     value={'format':1,'id':secrets.token_hex(16),'created_at':now().isoformat(),'target':target(db),'initial':current,
            'source_sha256':sources(),'migrations':migrations(),'start':start,'schema_epoch':core.EPOCH,
-           'preservation_columns':columns,'preserved_sha256':digest(preserved(db,columns)),
+           'preservation_columns':columns,'preserved_sha256':digest(preserved(db,columns,metadata_append)),
+           'allowed_metadata_append':metadata_append,
            'allowed_transforms':['old current_token revocation','only NULL legacy deposit source/order_no/account_type deterministic markers'],
            'restore_policy':'new isolated physical instance only; never overwrite source or new increments','business_activation_ready':False}
+    if metadata_append:value['allowed_transforms']=[f"only newly approved {metadata_append['version']} inactive schema-version receipt; all original column values unchanged"]
     if start>=len(value['migrations']):raise ValueError('No forward migration to apply')
     publish(output,value);return value
 
@@ -164,15 +219,27 @@ def restore_input(db,backup,path):
         out.write(text);out.flush();os.fsync(out.fileno())
     return {'path':str(path),'sha256':core.file_hash(Path(path)),'source_trigger_modes_sha256':digest(modes),'correction':'only recognized MySQL 5.7 trigger SQL_MODE headers; original dump unmodified'}
 
-def verify_backup(db,proposal,restore_db,output,ledger=None):
+def verify_backup(db,proposal,restore_db,output,ledger=None,local_policy=None):
     expected=proposal['initial'];tip=None;next_phase=proposal['start']
     if ledger is not None:
+        if local_policy is not None:
+            from local_test_migration import LocalLedger
+            if not isinstance(ledger,LocalLedger) or ledger.policy is not local_policy:raise ValueError('Local backup requires its actual owner-bound evidence ledger')
         last=ledger.latest()
-        if last['kind'] not in ('BEGIN','PHASE_COMPLETE','RESUME_VERIFIED') or last['plan_sha256']!=digest(proposal) or last['target']!=proposal['target']:raise ValueError('No certain approved phase boundary for newest backup')
-        expected=last['state'];tip=digest(last);next_phase=last['next']
+        imported=local_policy is not None and getattr(ledger.policy,'local',False) and len(ledger.rows())==1 and last['kind']=='LOCAL_BASELINE_OBSERVED'
+        if imported:
+            if ledger.policy is not local_policy or last['target']!=proposal['target'] or last['state']!=expected or last['migrations']!=proposal['migrations'][:proposal['start']] or last['source_sha256']!=proposal['source_sha256']:
+                raise ValueError('Local initial proof differs from the actual baseline observation')
+        else:
+            if last['kind'] not in ('BEGIN','PHASE_COMPLETE','RESUME_VERIFIED') or last['plan_sha256']!=digest(proposal) or last['target']!=proposal['target']:raise ValueError('No certain approved phase boundary for newest backup')
+            expected=last['state'];tip=digest(last);next_phase=last['next']
     if target(db)!=proposal['target'] or sources()!=proposal['source_sha256'] or state(db)!=expected:raise ValueError('Plan/source/target changed; replan before backup')
     maintenance(db);other=target(restore_db)
-    if not restore_db.test or other['server_uuid']==proposal['target']['server_uuid'] or other['datadir']==proposal['target']['datadir']:
+    if local_policy is not None:
+        from local_test_migration import LocalPolicy
+        if not isinstance(local_policy,LocalPolicy):raise ValueError('Explicit owner-authorized local policy required')
+        local_policy.guard_targets(db,restore_db)
+    elif not restore_db.test or other['server_uuid']==proposal['target']['server_uuid'] or other['datadir']==proposal['target']['datadir']:
         raise ValueError('Different labelled isolated MySQL process/datadir required')
     output=Path(output)
     if output.exists():raise ValueError('Restore receipt already exists')
@@ -233,6 +300,12 @@ def binding(proposal,proof):
 
 def apply(db,proposal,proof,restore_db,approval,ledger,resume=False,after_phase=None):
     if sources()!=proposal['source_sha256'] or migrations()!=proposal['migrations'] or target(db)!=proposal['target']:raise ValueError('Source/DDL/physical target differs from the immutable plan')
+    local=getattr(ledger.policy,'local',False)
+    if local:
+        from local_test_migration import LocalPolicy,LocalLedger
+        if not isinstance(ledger.policy,LocalPolicy) or not isinstance(ledger,LocalLedger):raise ValueError('Local policy/ledger cannot be guessed')
+        ledger.policy.guard_targets(db,restore_db)
+        if proposal.get('recovery'):raise ValueError('Local tests preserve uncertain DDL; no signed recovery substitution')
     scope='isolated-fixture' if db.test else 'business'
     if ledger.policy.fixture and not db.test:raise ValueError('Fixture approval cannot authorize a business target')
     if not db.test:
@@ -241,6 +314,11 @@ def apply(db,proposal,proof,restore_db,approval,ledger,resume=False,after_phase=
         if acceptance.get('result')!='PASS' or acceptance.get('source_sha256')!=proposal['source_sha256'] or acceptance.get('required_failures')!=0 or acceptance.get('blocked')!=[]:
             raise ValueError('Complete current-version acceptance is absent')
         if core.file_hash(Path(approval['payload']['acceptance_file']))!=approval['payload'].get('acceptance_sha256'):raise ValueError('Acceptance hash differs from approval')
+    metadata_append=metadata_append_contract(proposal['start'],proposal['migrations'])
+    if proposal.get('allowed_metadata_append')!=metadata_append:
+        raise ValueError('Approved plan lacks the exact additive0403 metadata preservation contract; replan/reapprove')
+    if metadata_append and 'tenant_schema_version' not in proposal['preservation_columns']:
+        raise ValueError('Original schema-version rows are not frozen in the approved plan')
     ledger.policy.verify(approval,binding(proposal,proof),scope)
     if proposal.get('recovery'):
         from forward_recovery import validate_apply
@@ -249,7 +327,7 @@ def apply(db,proposal,proof,restore_db,approval,ledger,resume=False,after_phase=
         raise ValueError('Full backup proof/hash is not bound to this plan')
     if core.file_hash(Path(proof['restore_input']['path']))!=proof['restore_input']['sha256']:raise ValueError('Bound restore input changed')
     other=target(restore_db)
-    if other!=proof['restore'] or other['server_uuid']==proposal['target']['server_uuid'] or other['datadir']==proposal['target']['datadir'] or state(restore_db)!=proof['restored']:
+    if other!=proof['restore'] or (not local and (other['server_uuid']==proposal['target']['server_uuid'] or other['datadir']==proposal['target']['datadir'])) or state(restore_db)!=proof['restored']:
         raise ValueError('Independent restore evidence no longer matches')
     maintenance(db);rows=ledger.rows()
     if resume:
@@ -260,7 +338,8 @@ def apply(db,proposal,proof,restore_db,approval,ledger,resume=False,after_phase=
         start=last['next']
         ledger.append({'kind':'RESUME_VERIFIED','plan_sha256':digest(proposal),'target':target(db),'state':last['state'],'next':start,'binding':binding(proposal,proof),'previous_tip':proof['ledger_tip']})
     else:
-        if rows or state(db)!=proposal['initial'] or proof['restored']!=proposal['initial'] or proof.get('ledger_tip') is not None:raise ValueError('Source changed or receipt exists; never replay apply')
+        observed=local and len(rows)==1 and rows[0]['kind']=='LOCAL_BASELINE_OBSERVED' and rows[0]['target']==proposal['target'] and rows[0]['state']==proposal['initial'] and rows[0]['migrations']==proposal['migrations'][:proposal['start']] and rows[0]['source_sha256']==proposal['source_sha256']
+        if (rows and not observed) or state(db)!=proposal['initial'] or proof['restored']!=proposal['initial'] or proof.get('ledger_tip') is not None:raise ValueError('Source changed or receipt exists; never replay apply')
         start=proposal['start'];ledger.append({'kind':'BEGIN','plan_sha256':digest(proposal),'target':target(db),'state':proposal['initial'],'next':start,'binding':binding(proposal,proof)})
     for index in range(start,len(core.MIGRATIONS)):
         maintenance(db)
@@ -269,7 +348,8 @@ def apply(db,proposal,proof,restore_db,approval,ledger,resume=False,after_phase=
         ledger.append({'kind':'INTENT','plan_sha256':digest(proposal),'target':target(db),'migration':proposal['migrations'][index],'index':index,'before':expected})
         try:
             core_path=core.MIGRATIONS[index];db.sql(core_path.read_text(encoding='utf-8'))
-            if digest(preserved(db,proposal['preservation_columns']))!=proposal['preserved_sha256']:raise ValueError('Original money/order/chat/actor facts changed; preserve maintenance and forward-repair only')
+            if digest(preserved(db,proposal['preservation_columns'],metadata_append))!=proposal['preserved_sha256']:raise ValueError('Original money/order/chat/actor/metadata facts changed; preserve maintenance and forward-repair only')
+            metadata_receipt_after_phase(db,metadata_append)
             ledger.append({'kind':'PHASE_COMPLETE','plan_sha256':digest(proposal),'target':target(db),'state':state(db),'next':index+1,'binding':binding(proposal,proof),'migration':proposal['migrations'][index]})
         except BaseException as error:
             ledger.append({'kind':'FAILED_UNCERTAIN','plan_sha256':digest(proposal),'target':target(db),'index':index,'failure_type':type(error).__name__})
@@ -296,7 +376,14 @@ def main():
     parser.add_argument('--restore-container');parser.add_argument('--restore-database');parser.add_argument('--approval',type=Path);parser.add_argument('--ledger',type=Path)
     parser.add_argument('--fixture-policy',type=Path,help='Only on an actually labelled isolated target; never a production bypass')
     parser.add_argument('--artifact',type=Path)
+    parser.add_argument('--local-owner-authorization',type=Path,help='Explicit local disposable-test owner authorization; never business approval')
     args=parser.parse_args();db=core.Database(args.container,args.database)
+    local_policy=None
+    if args.local_owner_authorization:
+        if args.fixture_policy or args.approval or not args.restore_container or not args.restore_database:
+            raise ValueError('Local owner mode is exclusive of signed approval and requires an exact restore target')
+        from local_test_migration import LocalPolicy,LocalLedger
+        local_policy=LocalPolicy(args.local_owner_authorization,db,core.Database(args.restore_container,args.restore_database))
     if args.action=='package-check':
         if args.artifact is None:raise ValueError('Actual artifact required; no caller-supplied epoch override')
         result=core.guard(db,package_epoch(args.artifact),not db.test);result['artifact_sha256']=core.file_hash(args.artifact);print(json.dumps(result));return
@@ -305,7 +392,7 @@ def main():
         baseline=None
         if args.ledger:
             if args.fixture_policy and not db.test:raise ValueError('Fixture policy cannot authorize business target')
-            baseline=Ledger(args.ledger,Policy(args.fixture_policy or POLICY,bool(args.fixture_policy)))
+            baseline=LocalLedger(args.ledger,local_policy) if local_policy else Ledger(args.ledger,Policy(args.fixture_policy or POLICY,bool(args.fixture_policy)))
         result=plan(db,args.output,baseline);print(json.dumps({'plan_sha256':digest(result),'target_sha256':digest(result['target']),'first_phase':result['start']}));return
     if not args.plan:raise ValueError('Immutable --plan required')
     proposal=read(args.plan)
@@ -316,12 +403,13 @@ def main():
         baseline=None
         if args.ledger:
             if args.fixture_policy and not db.test:raise ValueError('Fixture policy cannot authorize business target')
-            baseline=Ledger(args.ledger,Policy(args.fixture_policy or POLICY,bool(args.fixture_policy)))
-        result=verify_backup(db,proposal,restore,args.output,baseline);print(json.dumps({'result':result['result'],'backup_sha256':result['backup']['sha256'],'restore_proof_sha256':digest(result)}));return
-    if not args.proof or not args.approval or not args.ledger:raise ValueError('Bound proof, independent approval and ledger required')
+            baseline=LocalLedger(args.ledger,local_policy) if local_policy else Ledger(args.ledger,Policy(args.fixture_policy or POLICY,bool(args.fixture_policy)))
+        result=verify_backup(db,proposal,restore,args.output,baseline,local_policy=local_policy);print(json.dumps({'result':result['result'],'backup_sha256':result['backup']['sha256'],'restore_proof_sha256':digest(result)}));return
+    if not args.proof or (not args.approval and not local_policy) or not args.ledger:raise ValueError('Bound proof, authorization and ledger required')
     if args.fixture_policy and not db.test:raise ValueError('Fixture policy cannot authorize business target')
-    policy=Policy(args.fixture_policy or POLICY,bool(args.fixture_policy))
-    result=apply(db,proposal,read(args.proof),restore,read(args.approval),Ledger(args.ledger,policy),args.action=='resume')
+    policy=local_policy or Policy(args.fixture_policy or POLICY,bool(args.fixture_policy))
+    evidence=LocalLedger(args.ledger,policy) if local_policy else Ledger(args.ledger,policy)
+    result=apply(db,proposal,read(args.proof),restore,policy.value if local_policy else read(args.approval),evidence,args.action=='resume')
     print(json.dumps({'result':result['kind'],'activation_ready':False,'production_deployed':False}))
 
 if __name__=='__main__':

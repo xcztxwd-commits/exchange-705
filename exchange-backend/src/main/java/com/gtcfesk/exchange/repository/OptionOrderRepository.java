@@ -13,6 +13,20 @@ import java.util.List;
 
 @Repository
 public interface OptionOrderRepository extends com.gtcfesk.exchange.tenant.TenantRepository<OptionOrder, Long> {
+    interface ExpiryCandidate {
+        Long getId();
+        Long getUserId();
+        LocalDateTime getOpenTime();
+        Integer getDuration();
+    }
+    // Keyset projection: routing only. The atomic close refreshes all state after account locks.
+    @Query("SELECT o.id AS id, o.userId AS userId, o.openTime AS openTime, o.duration AS duration FROM OptionOrder o WHERE o.tenantId=:tenant AND o.status='TRADING' AND o.id>:after ORDER BY o.id")
+    List<ExpiryCandidate> expiryCandidates(@Param("tenant") Long tenant, @Param("after") long after, Pageable page);
+
+    @org.springframework.data.jpa.repository.Lock(javax.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT o FROM OptionOrder o WHERE o.tenantId=:#{T(com.gtcfesk.exchange.tenant.TenantContext).requireTenantId()} AND o.id=:id")
+    java.util.Optional<OptionOrder> lockById(@Param("id") Long id);
+
     // Current read after the caller locks the user, including under MySQL REPEATABLE_READ.
     @org.springframework.transaction.annotation.Transactional(readOnly=true)
     @org.springframework.data.jpa.repository.Lock(javax.persistence.LockModeType.PESSIMISTIC_READ)

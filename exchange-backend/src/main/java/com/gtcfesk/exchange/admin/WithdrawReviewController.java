@@ -30,7 +30,10 @@ import java.util.stream.Collectors;
 @RequestMapping("/api/admin/withdraw")
 @RequiredArgsConstructor
 public class WithdrawReviewController {
-    private void auditControl(String action,String object,String detail,String reason){if(com.gtcfesk.exchange.control.ControlIdentity.isAccess())controlAudit.recordCurrent(action,object,detail,reason); }
+    private void auditControl(String action,String object,String detail,String reason){
+        if(com.gtcfesk.exchange.control.ControlIdentity.current()!=null)controlAudit.recordCurrent(action,object,detail,reason);
+        else controlAudit.record(null,com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(),null,action,object,"SUCCESS",detail,reason);
+    }
     @org.springframework.beans.factory.annotation.Autowired private com.gtcfesk.exchange.control.ControlAuditService controlAudit;
     
     private final WithdrawRecordRepository withdrawRecordRepository;
@@ -224,7 +227,8 @@ public class WithdrawReviewController {
                     return ResponseEntity.status(403).body(resp);
                 }
             }
-            Optional<WithdrawRecord> recordOpt = Optional.ofNullable(com.gtcfesk.exchange.tenant.TenantEntities.find(em,WithdrawRecord.class,id,javax.persistence.LockModeType.PESSIMISTIC_WRITE));
+            LockedWithdraw locked=lockWithdrawal(id,agentId);
+            Optional<WithdrawRecord> recordOpt = Optional.ofNullable(locked.record);
             if (!recordOpt.isPresent()) {
                 Map<String, Object> resp = new HashMap<>();
                 resp.put("error", "提现记录不存在");
@@ -242,8 +246,8 @@ public class WithdrawReviewController {
             record.setStatus("APPROVED");
             record.setReviewRemark(req != null ? req.getRemark() : null);
             record.setReviewedAt(LocalDateTime.now());
-            withdrawRecordRepository.save(record);
-            auditControl("WITHDRAW_"+record.getStatus(),String.valueOf(record.getId()),"status="+record.getStatus(),record.getReviewRemark());
+            withdrawRecordRepository.save(record);checkpoint("approval-order");
+            auditControl("WITHDRAW_"+record.getStatus(),String.valueOf(record.getId()),"userId="+record.getUserId()+"; amount="+record.getAmount()+"; status=PENDING/APPROVED",record.getReviewRemark());checkpoint("approval-audit");
             
             // 实际到账金额已在提交时计算，这里只需将冻结金额扣除即可
             // 注意：实际到账应该在实际转出后设置为COMPLETED，这里只是审核通过
@@ -287,7 +291,8 @@ public class WithdrawReviewController {
                     return ResponseEntity.status(403).body(resp);
                 }
             }
-            Optional<WithdrawRecord> recordOpt = Optional.ofNullable(com.gtcfesk.exchange.tenant.TenantEntities.find(em,WithdrawRecord.class,id,javax.persistence.LockModeType.PESSIMISTIC_WRITE));
+            LockedWithdraw locked=lockWithdrawal(id,agentId);
+            Optional<WithdrawRecord> recordOpt = Optional.ofNullable(locked.record);
             if (!recordOpt.isPresent()) {
                 Map<String, Object> resp = new HashMap<>();
                 resp.put("error", "提现记录不存在");
@@ -302,21 +307,21 @@ public class WithdrawReviewController {
             }
             
             // 退回冻结的金额
-            AssetAccount fundAccount = assetAccountRepository.lockByUserId(record.getUserId()).stream().filter(a->"FUND".equals(a.getCoin())).findFirst().orElseThrow(()->new IllegalArgumentException("资金账户不存在"));
+            AssetAccount fundAccount = locked.accounts.stream().filter(a->"FUND".equals(a.getCoin())).findFirst().orElseThrow(()->new IllegalArgumentException("资金账户不存在"));
             if (fundAccount != null) {
                 BigDecimal totalAmount = record.getAmount().add(record.getFee());
                 if(fundAccount.getFrozen()==null||fundAccount.getFrozen().compareTo(totalAmount)<0)throw new IllegalArgumentException("冻结金额不足，未变更资金");
                 fundAccount.setFrozen(fundAccount.getFrozen().subtract(totalAmount));
                 fundAccount.setAvailable(fundAccount.getAvailable().add(totalAmount));
-                assetAccountRepository.save(fundAccount);
+                assetAccountRepository.save(fundAccount);checkpoint("rejection-account");
             }
             
             // 更新记录状态
             record.setStatus("REJECTED");
             record.setReviewRemark(req.getRemark());
             record.setReviewedAt(LocalDateTime.now());
-            withdrawRecordRepository.save(record);
-            auditControl("WITHDRAW_"+record.getStatus(),String.valueOf(record.getId()),"status="+record.getStatus(),record.getReviewRemark());
+            withdrawRecordRepository.save(record);checkpoint("rejection-order");
+            auditControl("WITHDRAW_"+record.getStatus(),String.valueOf(record.getId()),"userId="+record.getUserId()+"; amount="+record.getAmount()+"; availableAfter="+fundAccount.getAvailable()+"; frozenAfter="+fundAccount.getFrozen()+"; status=PENDING/REJECTED",record.getReviewRemark());checkpoint("rejection-audit");
             
             Map<String, Object> resp = new HashMap<>();
             resp.put("message", "已拒绝");
@@ -356,7 +361,8 @@ public class WithdrawReviewController {
                     return ResponseEntity.status(403).body(resp);
                 }
             }
-            Optional<WithdrawRecord> recordOpt = Optional.ofNullable(com.gtcfesk.exchange.tenant.TenantEntities.find(em,WithdrawRecord.class,id,javax.persistence.LockModeType.PESSIMISTIC_WRITE));
+            LockedWithdraw locked=lockWithdrawal(id,agentId);
+            Optional<WithdrawRecord> recordOpt = Optional.ofNullable(locked.record);
             if (!recordOpt.isPresent()) {
                 Map<String, Object> resp = new HashMap<>();
                 resp.put("error", "提现记录不存在");
@@ -371,18 +377,18 @@ public class WithdrawReviewController {
             }
             
             // 扣除冻结金额（实际转出）
-            AssetAccount fundAccount = assetAccountRepository.lockByUserId(record.getUserId()).stream().filter(a->"FUND".equals(a.getCoin())).findFirst().orElseThrow(()->new IllegalArgumentException("资金账户不存在"));
+            AssetAccount fundAccount = locked.accounts.stream().filter(a->"FUND".equals(a.getCoin())).findFirst().orElseThrow(()->new IllegalArgumentException("资金账户不存在"));
             if (fundAccount != null) {
                 BigDecimal totalAmount = record.getAmount().add(record.getFee());
                 if(fundAccount.getFrozen()==null||fundAccount.getFrozen().compareTo(totalAmount)<0)throw new IllegalArgumentException("冻结金额不足，未变更资金");
                 fundAccount.setFrozen(fundAccount.getFrozen().subtract(totalAmount));
-                assetAccountRepository.save(fundAccount);
+                assetAccountRepository.save(fundAccount);checkpoint("completion-account");
             }
             
             // 更新记录状态
             record.setStatus("COMPLETED");
-            withdrawRecordRepository.save(record);
-            auditControl("WITHDRAW_"+record.getStatus(),String.valueOf(record.getId()),"status="+record.getStatus(),record.getReviewRemark());
+            withdrawRecordRepository.save(record);checkpoint("completion-order");
+            auditControl("WITHDRAW_"+record.getStatus(),String.valueOf(record.getId()),"userId="+record.getUserId()+"; amount="+record.getAmount()+"; frozenAfter="+fundAccount.getFrozen()+"; status=APPROVED/COMPLETED",record.getReviewRemark());checkpoint("completion-audit");
             
             Map<String, Object> resp = new HashMap<>();
             resp.put("message", "标记为已完成");
@@ -398,6 +404,29 @@ public class WithdrawReviewController {
         }
     }
     
+    private static class LockedWithdraw {
+        final WithdrawRecord record;final List<AssetAccount> accounts;
+        LockedWithdraw(WithdrawRecord record,List<AssetAccount> accounts){this.record=record;this.accounts=accounts;}
+    }
+    private LockedWithdraw lockWithdrawal(Long id,Long agent) {
+        Long owner=withdrawRecordRepository.findOwnerIdById(id).orElse(null);
+        if(owner==null)return new LockedWithdraw(null,java.util.Collections.emptyList());
+        if(em!=null){em.flush();UserAccount loaded=userAccountRepository.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(),owner).orElseThrow(()->new IllegalArgumentException("用户不存在"));em.refresh(loaded,javax.persistence.LockModeType.PESSIMISTIC_WRITE);}
+        UserAccount user=userAccountRepository.lockById(owner).orElseThrow(()->new IllegalArgumentException("用户不存在"));
+        if(em!=null){em.flush();em.refresh(user,javax.persistence.LockModeType.PESSIMISTIC_WRITE);}
+        if(agent!=null&&!agent.equals(user.getParentUserId()))throw new org.springframework.security.access.AccessDeniedException("无权操作该提现记录");
+        if(em!=null){em.flush();java.util.List<AssetAccount> loaded=new java.util.ArrayList<>(assetAccountRepository.findByTenantIdAndUserId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(),owner));loaded.sort(java.util.Comparator.comparing(AssetAccount::getCoin).thenComparing(AssetAccount::getId));for(AssetAccount row:loaded){em.refresh(row,javax.persistence.LockModeType.PESSIMISTIC_WRITE);com.gtcfesk.exchange.tenant.TenantContext.require(row.getTenantId());if(!owner.equals(row.getUserId()))throw new com.gtcfesk.exchange.common.BusinessException("账户归属已变更，请重试");}}
+        List<AssetAccount> accounts=assetAccountRepository.lockByUserId(owner);
+        if(em!=null){em.flush();for(AssetAccount account:accounts)em.refresh(account,javax.persistence.LockModeType.PESSIMISTIC_WRITE);}
+        if(em!=null){em.flush();withdrawRecordRepository.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(),id).ifPresent(row->em.refresh(row,javax.persistence.LockModeType.PESSIMISTIC_WRITE));}
+        WithdrawRecord record=withdrawRecordRepository.lockById(id).orElse(null);
+        if(record!=null){if(em!=null)em.refresh(record,javax.persistence.LockModeType.PESSIMISTIC_WRITE);
+            if(!owner.equals(record.getUserId()))throw new IllegalArgumentException("提现归属已变更，请重试");}
+        return new LockedWithdraw(record,accounts);
+    }
+    /** Isolated rollback tests may fail after each actual financial write. */
+    protected void checkpoint(String stage) { }
+
     @Data
     public static class ApproveRequest {
         private String remark;

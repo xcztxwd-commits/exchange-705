@@ -44,43 +44,104 @@ public class TrialFunds {
  private Long tenant(){return com.gtcfesk.exchange.tenant.TenantContext.requireTenantId();}
 
  /** Lock order: user, asset rows, trial account/grants, then pending orders. */
- @Transactional public void lock(Long user){
-  users.lockById(user).orElseThrow(()->new BusinessException("用户不存在"));
-  assets.lockByUserId(user);
-  TrialAccount a=trials.lock(user).orElse(null);
-  if(a!=null && a.isTrialEligible())maintainLocked(a);
+ /** Current funding anchors only: no LEGACY grants, expiry maintenance or money DML. */
+ @Transactional public void lockForQuote(Long user){TrialAccount a=lockAccount(user,false);if(a!=null)grantRows(a,false);}
+ /** Quote units whose later expiry maintenance can cancel unmatched TRIAL contract orders.
+  * Keep the existing Option lockForQuote sequence unchanged; this method adds only prelocks, no expiry DML. */
+ @Transactional public void lockForQuoteAndPendingExpiry(Long user){
+  TrialAccount a=lockAccount(user,false);if(a==null)return;
+  List<TrialGrant> rows=grantRows(a,false);
+  if(rows.stream().noneMatch(g->g.isActive()&&g.getExpiresAt()!=null))return;
+  org.hibernate.query.NativeQuery<?> query=entityManager.createNativeQuery("select * from contract_order where tenant_id=?1 and user_id=?2 and status='PENDING' and funding_source='TRIAL' order by id for update").unwrap(org.hibernate.query.NativeQuery.class);
+  query.addEntity("locked",ContractOrder.class,org.hibernate.LockMode.NONE);query.setParameter(1,tenant());query.setParameter(2,user);
+  for(Object loaded:query.getResultList()){
+   ContractOrder order=(ContractOrder)loaded;entityManager.refresh(order,javax.persistence.LockModeType.PESSIMISTIC_WRITE);
+   com.gtcfesk.exchange.tenant.TenantContext.require(order.getTenantId());if(!user.equals(order.getUserId()))throw new BusinessException("挂单归属已变更，请重试");
+  }
  }
- private TrialAccount account(Long user){return trials.lock(user).orElseGet(()->{TrialAccount a=new TrialAccount();a.setUserId(user);return trials.saveAndFlush(a);});}
- private List<TrialGrant> grantRows(TrialAccount a){
-  List<TrialGrant> rows=grants.findByTenantIdAndUserIdOrderByIdAsc(tenant(),a.getUserId());
-  if(rows.isEmpty()&&(a.getAvailable().signum()!=0||a.getFrozen().signum()!=0||a.getGranted().signum()!=0)){
+ @Transactional public void lock(Long user){
+  TrialAccount a=lockAccount(user,false);if(a!=null){List<TrialGrant> rows=grantRows(a);if(a.isTrialEligible())maintainLocked(a,rows);}
+ }
+ private TrialAccount lockAccount(Long user,boolean create){
+  if(entityManager!=null){entityManager.flush();com.gtcfesk.exchange.entity.UserAccount loaded=users.findByTenantIdAndId(tenant(),user).orElseThrow(()->new BusinessException("用户不存在"));entityManager.refresh(loaded,javax.persistence.LockModeType.PESSIMISTIC_WRITE);}
+  com.gtcfesk.exchange.entity.UserAccount customer=users.lockById(user).orElseThrow(()->new BusinessException("用户不存在"));
+  // A repeat lock in a multi-order transaction must preserve earlier, still-uncommitted writes.
+  if(entityManager!=null){entityManager.flush();entityManager.refresh(customer,javax.persistence.LockModeType.PESSIMISTIC_WRITE);}
+  if(entityManager!=null){entityManager.flush();List<AssetAccount> loaded=new ArrayList<>(assets.findByTenantIdAndUserId(tenant(),user));loaded.sort(Comparator.comparing(AssetAccount::getCoin).thenComparing(AssetAccount::getId));for(AssetAccount row:loaded){entityManager.refresh(row,javax.persistence.LockModeType.PESSIMISTIC_WRITE);com.gtcfesk.exchange.tenant.TenantContext.require(row.getTenantId());if(!user.equals(row.getUserId()))throw new BusinessException("账户归属已变更，请重试");}}
+  List<AssetAccount> cash=assets.lockByUserId(user);
+  if(entityManager!=null){entityManager.flush();for(AssetAccount row:cash)entityManager.refresh(row,javax.persistence.LockModeType.PESSIMISTIC_WRITE);}
+  return create?account(user):refreshTrial(user);
+ }
+ /** Anchor only before the campaign lock; grant ranges and expiry maintenance follow that shared lock. */
+ @Transactional public void lockForGrant(Long user){lockAccount(user,true);}
+ private TrialAccount account(Long user){
+  if(entityManager!=null){
+   entityManager.flush();
+   // Existing repository upsert pattern: exclusive row anchor, never a missing-row FOR UPDATE gap.
+   entityManager.createNativeQuery("insert into trial_account(tenant_id,user_id,row_version,available,frozen,granted,consumed,profits,expired,uncovered_loss,trial_eligible) values(:tenant,:user,0,0,0,0,0,0,0,0,false) on duplicate key update user_id=case when tenant_id=:tenant then user_id else null end")
+    .setParameter("tenant",tenant()).setParameter("user",user).executeUpdate();checkpoint("trial-anchor");
+  }
+  refreshTrial(user);TrialAccount a=trials.lock(user).orElseGet(()->{TrialAccount next=new TrialAccount();next.setUserId(user);TrialAccount saved=trials.saveAndFlush(next);checkpoint("new-trial-account");return saved;});
+  if(entityManager!=null){entityManager.flush();entityManager.refresh(a,javax.persistence.LockModeType.PESSIMISTIC_WRITE);}return a;
+ }
+ private TrialAccount refreshTrial(Long user){
+  if(entityManager==null)return trials.lock(user).orElse(null);
+  entityManager.flush();TrialAccount row=trials.findByTenantIdAndId(tenant(),user).orElse(null);
+  // A miss is only a routing hint. Actual account writers upsert then perform the authoritative current read.
+  if(row!=null){entityManager.refresh(row,javax.persistence.LockModeType.PESSIMISTIC_WRITE);com.gtcfesk.exchange.tenant.TenantContext.require(row.getTenantId());if(!user.equals(row.getUserId()))throw new BusinessException("体验金账户归属已变更，请重试");}
+  return row;
+ }
+ private List<TrialGrant> grantRows(TrialAccount a){return grantRows(a,true);}
+ private List<TrialGrant> grantRows(TrialAccount a,boolean createLegacy){
+  // A current zero anchor has no grant history. Do not replace the account gap with a missing-child range gap.
+  if(!a.isTrialEligible()&&Arrays.asList(a.getAvailable(),a.getFrozen(),a.getGranted(),a.getConsumed(),a.getExpired(),a.getProfits(),a.getUncoveredLoss()).stream().allMatch(value->value.signum()==0))return new ArrayList<>();
+  List<TrialGrant> rows;
+  if(entityManager==null)rows=grants.lockByUserId(a.getUserId());
+  else {
+   entityManager.flush();
+   // Hydrate full current rows before refreshing an old managed version or an uninitialized RR proxy.
+   // NONE is ORM hydration only: SQL still takes the tenant/user grant rows in stable ID order.
+   org.hibernate.query.NativeQuery<?> query=entityManager.createNativeQuery("select * from trial_grant where tenant_id=?1 and user_id=?2 order by id for update").unwrap(org.hibernate.query.NativeQuery.class);
+   query.addEntity("locked",TrialGrant.class,org.hibernate.LockMode.NONE);query.setParameter(1,tenant());query.setParameter(2,a.getUserId());
+   rows=new ArrayList<>();
+   for(Object loaded:query.getResultList()){
+    TrialGrant row=TrialGrant.class.cast(loaded);entityManager.refresh(row,javax.persistence.LockModeType.PESSIMISTIC_WRITE);
+    com.gtcfesk.exchange.tenant.TenantContext.require(row.getTenantId());if(!a.getUserId().equals(row.getUserId()))throw new BusinessException("体验金批次归属已变更，请重试");rows.add(row);
+   }
+  }
+  if(createLegacy&&rows.isEmpty()&&(a.getAvailable().signum()!=0||a.getFrozen().signum()!=0||a.getGranted().signum()!=0)){
    // Historical balances have no per-claim clock. Preserve, never invent an expiry.
    TrialGrant old=new TrialGrant();old.setUserId(a.getUserId());old.setRequestKey("LEGACY");old.setClaimedAt(now());
    old.setAvailable(a.getAvailable());old.setFrozen(a.getFrozen());old.setConsumed(a.getConsumed());
-   rows.add(grants.saveAndFlush(old));
+   rows.add(grants.saveAndFlush(old));checkpoint("legacy-grant");
   }
   return rows;
  }
- private void maintainLocked(TrialAccount a){
-  LocalDateTime instant=now();List<TrialGrant> rows=grantRows(a);boolean changed=false;
+ private void maintainLocked(TrialAccount a){maintainLocked(a,grantRows(a));}
+ private void maintainLocked(TrialAccount a,List<TrialGrant> rows){
+  LocalDateTime instant=now();boolean changed=false;
   for(TrialGrant g:rows)if(g.isActive()&&g.getExpiresAt()!=null&&!instant.isBefore(g.getExpiresAt())){
    g.setActive(false);BigDecimal unused=g.getAvailable();g.setAvailable(ZERO);g.setExpired(g.getExpired().add(unused));
-   a.setAvailable(a.getAvailable().subtract(unused));a.setExpired(a.getExpired().add(unused));grants.save(g);changed=true;
+   a.setAvailable(a.getAvailable().subtract(unused));a.setExpired(a.getExpired().add(unused));grants.save(g);checkpoint("expiration-grant");changed=true;
   }
   if(changed){
    // D01: cancel only unmatched TRIAL pending orders. Never close an open position.
-   List<ContractOrder> pending=entityManager.createQuery("select o from ContractOrder o where o.tenantId=:tenant and o.userId=:user and o.status='PENDING' and o.fundingSource='TRIAL'",ContractOrder.class)
-    .setParameter("tenant",tenant()).setParameter("user",a.getUserId()).getResultList();
+   List<ContractOrder> loaded=entityManager.createQuery("select o from ContractOrder o where o.tenantId=:tenant and o.userId=:user and o.status='PENDING' and o.fundingSource='TRIAL' order by o.id",ContractOrder.class).setParameter("tenant",tenant()).setParameter("user",a.getUserId()).getResultList();
+   for(ContractOrder row:loaded)entityManager.refresh(row,javax.persistence.LockModeType.PESSIMISTIC_WRITE);
+   List<ContractOrder> pending=entityManager.createQuery("select o from ContractOrder o where o.tenantId=:tenant and o.userId=:user and o.status='PENDING' and o.fundingSource='TRIAL' order by o.id",ContractOrder.class)
+    .setParameter("tenant",tenant()).setParameter("user",a.getUserId()).setLockMode(javax.persistence.LockModeType.PESSIMISTIC_WRITE).getResultList();
    for(ContractOrder o:pending){
+    entityManager.refresh(o,javax.persistence.LockModeType.PESSIMISTIC_WRITE);
+    if(!tenant().equals(o.getTenantId())||!a.getUserId().equals(o.getUserId())||!"PENDING".equals(o.getStatus())||!"TRIAL".equals(o.getFundingSource()))continue;
     Map<Long,BigDecimal> portions=decode(o.getTrialAllocations());
     if(portions.keySet().stream().anyMatch(id->rows.stream().anyMatch(g->g.getId().equals(id)&&!g.isActive()))){
-     release(a,rows,portions);o.setStatus("CANCELLED");entityManager.persist(o);
+     release(a,rows,portions);o.setStatus("CANCELLED");entityManager.persist(o);checkpoint("expiration-order");
      record(a,ZERO,"TRIAL_EXPIRED_CANCEL:"+o.getId());
     }
    }
   }
   a.setTrialEligible(rows.stream().anyMatch(g->g.isActive()&&(g.getAvailable().signum()>0||g.getFrozen().signum()>0)));
-  trials.save(a);
+  trials.save(a);checkpoint("maintenance-account");
   // A later order refresh must see the cancellation, not overwrite an unflushed state.
   // Flush stays inside this transaction: grants, funds and order status still commit or roll back together.
   if(changed)entityManager.flush();
@@ -93,7 +154,9 @@ public class TrialFunds {
  }
  @Transactional public BigDecimal available(Long user){return snapshot(user).getAvailable();}
  @Transactional public Map<String,Object> status(Long user){
-  TrialAccount a=snapshot(user);List<TrialGrant> rows=trials.findByTenantIdAndId(tenant(),user).isPresent()?grantRows(a):Collections.emptyList();
+  TrialAccount a=trials.findByTenantIdAndId(tenant(),user).orElse(null);List<TrialGrant> rows=Collections.emptyList();
+  if(a!=null){lock(user);a=trials.lock(user).orElseThrow(()->new BusinessException("体验金账户已变更"));rows=grantRows(a);}
+  else {a=new TrialAccount();a.setUserId(user);}
   LocalDateTime expiry=rows.stream().filter(g->g.isActive()&&g.getExpiresAt()!=null).map(TrialGrant::getExpiresAt).min(LocalDateTime::compareTo).orElse(null);
   Map<String,Object> out=new LinkedHashMap<>();out.put("trialEligible",a.isTrialEligible());out.put("trialExpiresAt",expiry);
   out.put("serverNow",now());out.put("trialAvailable",a.getAvailable());out.put("trialFrozen",a.getFrozen());
@@ -101,17 +164,23 @@ public class TrialFunds {
   out.put("grants",rows);return out;
  }
  public void record(TrialAccount a,BigDecimal delta,String reason){
-  trials.save(a);TrialLedger line=new TrialLedger();line.setUserId(a.getUserId());line.setAvailable(a.getAvailable());
-  line.setFrozen(a.getFrozen());line.setDelta(delta);line.setReason(reason);ledger.save(line);
+  trials.save(a);checkpoint("trial-account");TrialLedger line=new TrialLedger();line.setUserId(a.getUserId());line.setAvailable(a.getAvailable());
+  line.setFrozen(a.getFrozen());line.setDelta(delta);line.setReason(reason);ledger.save(line);checkpoint("trial-ledger");
+ }
+ /** Current receipt after the canonical user lock; an absent request key never takes its own gap lock. */
+ @Transactional public TrialGrant currentGrant(Long user,String key){
+  TrialAccount a=lockAccount(user,true);List<TrialGrant> rows=grantRows(a);if(a.isTrialEligible())maintainLocked(a,rows);
+  return rows.stream().filter(row->Objects.equals(key,row.getRequestKey())).findFirst().orElse(null);
  }
  @Transactional public TrialAccount grant(Long user,BigDecimal amount,Long delivery){return grant(user,amount,null,delivery,"delivery-"+delivery,null);}
  @Transactional public TrialAccount grant(Long user,BigDecimal amount,Long campaign,Long delivery,String key,Integer days){
   if(amount==null||amount.signum()<=0||key==null||key.length()>80)throw new BusinessException("领取参数无效");
-  lock(user);TrialAccount a=account(user);grantRows(a);
-  TrialGrant prior=grants.findByTenantIdAndUserIdAndRequestKey(tenant(),user,key).orElse(null);
+  TrialAccount a=lockAccount(user,true);List<TrialGrant> rows=grantRows(a);if(a.isTrialEligible())maintainLocked(a,rows);
+  TrialGrant prior=rows.stream().filter(row->key.equals(row.getRequestKey())).findFirst().orElse(null);
+  // prior already belongs to the WRITE-locked current set; a weaker refresh can re-enter the old RR snapshot.
   if(prior!=null){if(!Objects.equals(prior.getCampaignId(),campaign))throw new BusinessException("幂等键已用于其他活动");return a;}
   LocalDateTime claimedAt=now();TrialGrant g=new TrialGrant();g.setUserId(user);g.setCampaignId(campaign);g.setDeliveryId(delivery);
-  g.setRequestKey(key);g.setClaimedAt(claimedAt);g.setExpiresAt(days==null?null:claimedAt.plusDays(days));g.setAvailable(amount);grants.saveAndFlush(g);
+  g.setRequestKey(key);g.setClaimedAt(claimedAt);g.setExpiresAt(days==null?null:claimedAt.plusDays(days));g.setAvailable(amount);grants.saveAndFlush(g);checkpoint("claim-grant");
   a.setAvailable(a.getAvailable().add(amount));a.setGranted(a.getGranted().add(amount));a.setTrialEligible(true);
   record(a,amount,"CLAIM:"+delivery+":"+g.getId());return a;
  }
@@ -129,7 +198,7 @@ public class TrialFunds {
   String chosen=source(source,expected);
   if(expected.equals(chosen)){
    if(cash.getAvailable().compareTo(cost)<0)throw new BusinessException("交易资产余额不足");
-   cash.setAvailable(cash.getAvailable().subtract(cost));cash.setFrozen(cash.getFrozen().add(cost));assets.save(cash);
+   cash.setAvailable(cash.getAvailable().subtract(cost));cash.setFrozen(cash.getFrozen().add(cost));assets.save(cash);checkpoint("reserve-cash");
    return new Reservation(ZERO,null);
   }
   TrialAccount a=account(user);maintainLocked(a);
@@ -138,7 +207,7 @@ public class TrialFunds {
   List<TrialGrant> rows=grantRows(a);rows.sort(Comparator.comparing(TrialGrant::getExpiresAt,Comparator.nullsLast(Comparator.naturalOrder())).thenComparing(TrialGrant::getId));
   for(TrialGrant g:rows){if(!g.isActive()||g.getAvailable().signum()<=0)continue;
    BigDecimal take=g.getAvailable().min(left);g.setAvailable(g.getAvailable().subtract(take));g.setFrozen(g.getFrozen().add(take));
-   grants.save(g);portions.put(g.getId(),take);left=left.subtract(take);if(left.signum()==0)break;
+   grants.save(g);checkpoint("reserve-grant");portions.put(g.getId(),take);left=left.subtract(take);if(left.signum()==0)break;
   }
   if(left.signum()!=0)throw new BusinessException("体验金可用余额不足");
   a.setAvailable(a.getAvailable().subtract(cost));a.setFrozen(a.getFrozen().add(cost));record(a,ZERO,reason);
@@ -161,7 +230,7 @@ public class TrialFunds {
    g.setFrozen(g.getFrozen().subtract(amount));a.setFrozen(a.getFrozen().subtract(amount));
    if(g.isActive()){g.setAvailable(g.getAvailable().add(amount));a.setAvailable(a.getAvailable().add(amount));}
    else {g.setExpired(g.getExpired().add(amount));a.setExpired(a.getExpired().add(amount));}
-   grants.save(g);released=released.add(amount);
+   grants.save(g);checkpoint("release-grant");released=released.add(amount);
   }
   if(released.signum()<0||a.getFrozen().signum()<0)throw new BusinessException("体验金冻结金额不足");
  }
@@ -175,7 +244,13 @@ public class TrialFunds {
   if(cashPrincipal.signum()>0){cash.setFrozen(cash.getFrozen().subtract(cashPrincipal));cash.setAvailable(cash.getAvailable().add(cashPrincipal));}
   BigDecimal used=ZERO;
   if(trial.signum()>0){
-   TrialAccount a=account(user);List<TrialGrant> rows=grantRows(a);Map<Long,BigDecimal> portions=decode(allocations);
+   TrialAccount a=account(user);List<TrialGrant> rows=grantRows(a);
+   // Settlement synchronously expires the grants it releases; a delayed maintenance job cannot revive principal.
+   LocalDateTime instant=now();for(TrialGrant g:rows)if(g.isActive()&&g.getExpiresAt()!=null&&!instant.isBefore(g.getExpiresAt())){
+    g.setActive(false);BigDecimal unused=g.getAvailable();g.setAvailable(ZERO);g.setExpired(g.getExpired().add(unused));
+    a.setAvailable(a.getAvailable().subtract(unused));a.setExpired(a.getExpired().add(unused));grants.save(g);checkpoint("settlement-expiration-grant");
+   }
+   Map<Long,BigDecimal> portions=decode(allocations);
    if(legacy&&portions.isEmpty()){
     BigDecimal left=trial;
     for(TrialGrant g:rows){BigDecimal take=g.getFrozen().min(left);if(take.signum()>0)portions.put(g.getId(),take);left=left.subtract(take);if(left.signum()==0)break;}
@@ -186,7 +261,7 @@ public class TrialFunds {
    release(a,rows,portions);
    if(net.signum()<0){BigDecimal left=net.negate();
     for(TrialGrant g:rows){if(!g.isActive()||g.getAvailable().signum()<=0)continue;
-     BigDecimal take=g.getAvailable().min(left);g.setAvailable(g.getAvailable().subtract(take));g.setConsumed(g.getConsumed().add(take));grants.save(g);
+     BigDecimal take=g.getAvailable().min(left);g.setAvailable(g.getAvailable().subtract(take));g.setConsumed(g.getConsumed().add(take));grants.save(g);checkpoint("consume-grant");
      a.setAvailable(a.getAvailable().subtract(take));a.setConsumed(a.getConsumed().add(take));used=used.add(take);left=left.subtract(take);if(left.signum()==0)break;
     }
     if(trialOnly&&left.signum()>0)a.setUncoveredLoss(a.getUncoveredLoss().add(left));
@@ -198,14 +273,16 @@ public class TrialFunds {
   // Existing contract/option profit rule: promotional wins credit real wallet.
   cash.setAvailable(cash.getAvailable().add(trialOnly?net.max(ZERO):net.add(legacy?used:ZERO)));
   // TRIAL losses never debit real. Historical mixed orders retain their original split.
-  assets.save(cash);
+  assets.save(cash);checkpoint("settlement-cash");
  }
  public void settle(Long user,AssetAccount cash,BigDecimal reserved,BigDecimal trial,BigDecimal net,String reason){settle(user,cash,reserved,trial,null,null,net,reason);}
+ protected void checkpoint(String stage) { }
  public BigDecimal tradingBalance(Long user,BigDecimal real){return available(user).add(identity.canUseTradingFunds(user)?real:ZERO);}
  public BigDecimal selectedBalance(Long user,BigDecimal real,String source){return "TRIAL".equals(source)?available(user):real;}
  public boolean reservationExpired(String allocations){
   Map<Long,BigDecimal> portions=decode(allocations);
-  for(Long id:portions.keySet()){TrialGrant g=grants.findByTenantIdAndId(tenant(),id).orElseThrow(()->new BusinessException("订单体验金批次不存在"));
+  for(Long id:new TreeSet<>(portions.keySet())){TrialGrant g=grants.findByTenantIdAndId(tenant(),id).orElseThrow(()->new BusinessException("订单体验金批次不存在"));
+   if(entityManager!=null)entityManager.refresh(g,javax.persistence.LockModeType.PESSIMISTIC_READ);
    if(!g.isActive()||g.getExpiresAt()!=null&&!now().isBefore(g.getExpiresAt()))return true;
   }return false;
  }
@@ -222,7 +299,7 @@ public class TrialFunds {
   }
   if(expected.equals(chosen)){
    if(delta.signum()>0&&cash.getAvailable().compareTo(delta)<0)throw new BusinessException("资产余额不足");
-   cash.setAvailable(cash.getAvailable().subtract(delta));cash.setFrozen(cash.getFrozen().add(delta));assets.save(cash);return new Reservation(ZERO,null);
+   cash.setAvailable(cash.getAvailable().subtract(delta));cash.setFrozen(cash.getFrozen().add(delta));assets.save(cash);checkpoint("resize-cash");return new Reservation(ZERO,null);
   }
   if(reservationExpired(allocations))throw new BusinessException(4601,"体验金挂单已到期");
   Map<Long,BigDecimal> portions=decode(allocations);

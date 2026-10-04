@@ -1,0 +1,21 @@
+{
+    "ret" : 200,
+    "data" : {
+      "merged" : true,
+      "code" : "TEST",
+      "source" : "fixture",
+      "kline_list" : [ {
+        "open_price" : 80.1234567890123456,
+        "close_price" : 84.1234567890123456,
+        "timestamp" : 1700000400000,
+        "high_price" : 110.1234567890123456,
+        "low_price" : 79.1234567890123456,
+        "volume" : 7,
+        "partial" : true,
+        "controlled" : true,
+        "minuteCount" : 1,
+        "historyReplaced" : true
+      } ],
+      "status" : "available"
+    }
+  }

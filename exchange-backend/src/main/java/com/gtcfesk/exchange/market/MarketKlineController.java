@@ -17,7 +17,7 @@ public class MarketKlineController {
                 || endTime > System.currentTimeMillis() + 86400000L)
             return ResponseEntity.badRequest().body(Collections.singletonMap("error", "Invalid history window"));
         try {
-            return ResponseEntity.ok(marketService.historicalKline(symbol, interval, limit, endTime));
+            return marketService.readSnapshot(() -> ResponseEntity.ok(marketService.historicalKline(symbol, interval, limit, endTime)));
         } catch (IllegalArgumentException exception) {
             return ResponseEntity.badRequest().body(Collections.singletonMap("error", "Unknown symbol"));
         }
@@ -27,7 +27,7 @@ public class MarketKlineController {
             @RequestParam(defaultValue = "1m") String interval,
             @RequestParam(defaultValue = "100") Integer limit,
             @RequestParam(required = false) String category) {
-        return ResponseEntity.ok(marketService.internalKline(symbol, interval, limit));
+        return marketService.readSnapshot(() -> ResponseEntity.ok(marketService.internalKline(symbol, interval, limit)));
     }
     @PostMapping("/batch")
     public ResponseEntity<?> getBatchKline(@RequestBody Map<String, Object> request) {
@@ -35,8 +35,10 @@ public class MarketKlineController {
         if (symbols == null) return ResponseEntity.badRequest().body(Collections.singletonMap("error", "symbols must contain 1-512 strings"));
         String interval = String.valueOf(request.getOrDefault("interval", "1m"));
         int limit = request.get("limit") instanceof Number ? ((Number) request.get("limit")).intValue() : 20;
-        List<Object> data = new ArrayList<>();
-        for (String symbol : symbols) data.add(marketService.internalKline(symbol, interval, limit).get("data"));
-        return ResponseEntity.ok(MarketPriceController.response(data));
+        return marketService.readSnapshot(() -> {
+            List<Object> data = new ArrayList<>();
+            for (String symbol : symbols) data.add(marketService.internalKline(symbol, interval, limit).get("data"));
+            return ResponseEntity.ok(MarketPriceController.response(data));
+        });
     }
 }
