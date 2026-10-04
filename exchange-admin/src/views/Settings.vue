@@ -4,6 +4,7 @@ import { ElMessage } from 'element-plus'
 import request from '@/utils/request'
 import { useTenantPolicies } from '@/composables/useTenantPolicies'
 import TenantPolicyNotice from '@/components/TenantPolicyNotice.vue'
+import MarketDepthHealth from '@/components/MarketDepthHealth.vue'
 const {snapshot,policyError,policyReady,reloadPolicies,editable,policyLabel}=useTenantPolicies('settings')
 import { playProtectedAudio } from '@/utils/audioUrl'
 
@@ -272,7 +273,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="settings-page">
+  <div class="settings-page" :class="{ 'depth-market-active': activeTab === 'market' }">
     <TenantPolicyNotice :snapshot="snapshot" :error="policyError"/><el-card shadow="never">
       <el-tabs v-model="activeTab">
         <el-tab-pane label="邮件配置" name="mail">
@@ -385,6 +386,7 @@ onMounted(() => {
         </el-tab-pane>
 
         <el-tab-pane label="行情配置" name="market">
+          <MarketDepthHealth v-if="activeTab === 'market'" :can-edit="editable('market.depth.enabled')" />
           <el-form label-width="150px">
             <el-form-item
               v-for="cfg in marketConfig"
@@ -583,5 +585,9 @@ onMounted(() => {
 <style scoped>
 .settings-page {
   padding: 0;
+}
+@media (max-width: 768px) {
+  /* Keep the depth panel reachable through the existing admin main-area scrollbar. */
+  .settings-page.depth-market-active { min-width: 360px; }
 }
 </style>

@@ -79,7 +79,7 @@ let timer: ReturnType<typeof setInterval>, disposed = false, selectionVersion = 
 const currentPrice = computed(() => market.getPrice(currentSymbol.value))
 const change = computed(() => market.getChange24h(currentSymbol.value)?.changePct)
 const quoteStatus = computed(() => market.getQuoteStatus(currentSymbol.value, now.value))
-const quoteReason = computed(() => !symbolInfo.value ? text('品種資料載入中', 'Loading instrument') : symbolInfo.value.isEnabled === false ? text('品種已停用', 'Instrument disabled') : quoteStatus.value === 'available' ? '' : quoteStatus.value === 'stale' ? text('報價已過期，等待更新', 'Quote expired; waiting for update') : text('行情暫不可用 / 停市', 'Quote unavailable / market closed'))
+const quoteReason = computed(() => !symbolInfo.value ? text('品種資料載入中', 'Loading instrument') : symbolInfo.value.isEnabled === false ? text('品種已停用', 'Instrument disabled') : quoteStatus.value === 'available' ? '' : quoteStatus.value === 'closed' ? locale.t('marketClosed') : quoteStatus.value === 'stale' ? text('報價已過期，等待更新', 'Quote expired; waiting for update') : text('行情暫不可用', 'Quote unavailable'))
 const quoteTime = computed(() => { const timestamp = market.quoteStatusMap[currentSymbol.value]?.timestamp; return timestamp ? formatQuoteTime(timestamp) : '—' })
 function price(value: any) { return value != null && Number.isFinite(Number(value)) && Number(value) > 0 ? Number(value).toFixed(precision.value) : '—' }
 function money(value: any) { return value != null && Number.isFinite(Number(value)) ? Number(value).toLocaleString(locale.locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—' }

@@ -26,6 +26,7 @@ class YahooQuoteStreamTest extends TenantMarketTestContext {
         ReflectionTestUtils.setField(market, "symbols", repository);
         ReflectionTestUtils.setField(market, "redis", mock(RedisMarketService.class));
         ReflectionTestUtils.setField(market, "controls", controls);
+        when(controls.sourceQuotes(anyList(), anyMap(), anyLong(), any())).thenReturn(1L);
         ReflectionTestUtils.setField(market, "yahoo", stream);
         market.refreshSymbols();
     }
@@ -47,10 +48,10 @@ class YahooQuoteStreamTest extends TenantMarketTestContext {
         long now = System.currentTimeMillis();
         assertTrue(market.acceptQuote("EURUSD", "Forex", quote(now, 1.1), "http", now));
         assertTrue(market.acceptQuote("EURUSD", "Forex", quote(now, 1.1), "ws", now + 1));
-        verify(controls, times(1)).sourceQuotes(anyList(), anyMap(), anyLong());
+        verify(controls, times(1)).sourceQuotes(anyList(), anyMap(), anyLong(), any());
         assertFalse(market.acceptQuote("EURUSD", "Forex", quote(now - 1, 2), "http", now + 2));
         assertTrue(market.acceptQuote("EURUSD", "Forex", quote(now, 1.2), "ws", now + 3));
-        verify(controls, times(2)).sourceQuotes(anyList(), anyMap(), anyLong());
+        verify(controls, times(2)).sourceQuotes(anyList(), anyMap(), anyLong(), any());
         assertEquals(1.2d, market.getPrice("EURUSD", "Forex").get("price"));
     }
     @Test void websocketWinsSameTimeWhileConnectedButHttpCanRecoverDisconnectedSource() {
@@ -68,7 +69,7 @@ class YahooQuoteStreamTest extends TenantMarketTestContext {
         long now = System.currentTimeMillis();
         market.acceptQuote("EURUSD", "Forex", quote(now - 61000, 1.1), "http", now);
         assertEquals("stale", market.getPrice("EURUSD", "Forex").get("status"));
-        doThrow(new IllegalStateException("db unavailable")).when(controls).sourceQuotes(anyList(), anyMap(), anyLong());
+        doThrow(new IllegalStateException("db unavailable")).when(controls).sourceQuotes(anyList(), anyMap(), anyLong(), any());
         assertThrows(IllegalStateException.class, () -> market.acceptQuote("EURUSD", "Forex", quote(now, 1.3), "http", now));
         assertEquals(1.1d, market.getPrice("EURUSD", "Forex").get("price"));
         assertFalse((boolean) market.getPrice("EURUSD", "Forex").get("available"));

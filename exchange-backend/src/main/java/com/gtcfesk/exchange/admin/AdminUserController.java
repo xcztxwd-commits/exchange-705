@@ -37,6 +37,8 @@ public class AdminUserController {
     @Autowired private javax.persistence.EntityManager entityManager;
     @Autowired
     private JwtUtil jwtUtil;
+    @Autowired private com.gtcfesk.exchange.control.TenantRepository tenants;
+    @Autowired private com.gtcfesk.exchange.control.TenantHostService tenantHosts;
 
     @PostMapping("/query")
     @com.gtcfesk.exchange.config.AdminPermission(menu = "users", action = "")
@@ -216,6 +218,36 @@ public class AdminUserController {
         return ResponseEntity.ok(user);
     }
     
+    @GetMapping("/{userId}/invite-preview")
+    @com.gtcfesk.exchange.config.AdminPermission(menu = "users", action = "")
+    public ResponseEntity<?> invitePreview(
+            @PathVariable Long userId,
+            @RequestHeader(value = "Authorization", required = false) String authHeader
+    ) {
+        // Reuse the existing tenant-scoped lookup and agent subordinate check.
+        ResponseEntity<?> detail = getUserDetail(userId, authHeader);
+        if (!detail.getStatusCode().is2xxSuccessful()) return detail;
+        UserAccount user = (UserAccount) detail.getBody();
+        Long tenantId = com.gtcfesk.exchange.tenant.TenantContext.requireTenantId();
+        com.gtcfesk.exchange.tenant.TenantContext.require(user.getTenantId());
+        if (user.getMyInviteCode() == null || user.getMyInviteCode().trim().isEmpty())
+            throw new com.gtcfesk.exchange.common.BusinessException("该用户尚未生成邀请码，请先在用户端开通邀请功能");
+        com.gtcfesk.exchange.control.Tenant tenant = tenants.findById(tenantId)
+                .orElseThrow(() -> new com.gtcfesk.exchange.common.BusinessException("租户不存在"));
+        if (!tenant.isDomainVerified() || tenant.getFrontendHost() == null || tenant.getFrontendHost().trim().isEmpty())
+            throw new com.gtcfesk.exchange.common.BusinessException("租户前台域名尚未验证，无法生成用户邀请二维码");
+        Map<String, Object> result = new HashMap<>();
+        result.put("userId", user.getId());
+        result.put("nickname", user.getNickname());
+        result.put("email", user.getEmail());
+        result.put("inviteCode", user.getMyInviteCode());
+        try {
+            result.put("inviteUrl", tenantHosts.frontendOrigin(tenant.getFrontendHost()) + "/?register=1&invite="
+                    + java.net.URLEncoder.encode(user.getMyInviteCode(), "UTF-8"));
+        } catch (java.io.UnsupportedEncodingException e) { throw new IllegalStateException(e); }
+        return ResponseEntity.ok().cacheControl(org.springframework.http.CacheControl.noStore()).body(result);
+    }
+
     /**
      * 从请求头中提取代理ID
      */

@@ -94,7 +94,7 @@ public class ImageController {
                     java.util.Set<String> modules=new java.util.HashSet<>();for(String module:java.util.Arrays.asList("kyc_review","loan_personal_info_review","loan_review","deposit_review","deposit_orders"))if(access.canReadMenu(module))modules.add(module);
                     if(isAudio||!published.allowsReview(filename,owner,modules))return ResponseEntity.notFound().build();
                 }else if(!ownStaff){
-                    boolean materialReader=!isAudio&&auth.getAuthorities().stream().anyMatch(a->java.util.Arrays.asList("ROLE_ADMIN","ROLE_SUPER_ADMIN").contains(a.getAuthority()))&&((access.canReadMenu("announcement")&&published.allowsMaterial(filename))||(access.canReadMenu("share_templates")&&published.allowsShare(filename,false)));
+                    boolean materialReader=!isAudio&&auth.getAuthorities().stream().anyMatch(a->java.util.Arrays.asList("ROLE_ADMIN","ROLE_SUPER_ADMIN").contains(a.getAuthority()))&&((access.canReadMenu("announcement")&&published.allowsMaterial(filename))||(access.canReadMenu("share_templates")&&published.allowsShare(filename,false))||(access.canReadMenu("traders")&&published.allowsTraderAvatar(filename,false)));
                     if(!materialReader)return ResponseEntity.notFound().build();
                 }
             }else return ResponseEntity.status(401).build();

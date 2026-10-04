@@ -456,10 +456,7 @@ const intervals = [
 // 获取当前价格
 // 判断是否休市
 // 休市判断已由后端处理（基于美股交易时间），前端不再基于K线数据判断
-const isMarketClosed = computed(() => {
-  // 后端已处理美股交易时间的休市判断，前端不再判断
-  return false
-})
+const isMarketClosed = computed(() => marketStore.getQuoteStatus(currentSymbol.value) === 'closed')
 
 const currentPrice = computed(() => {
   const price = marketStore.getPrice(currentSymbol.value)

@@ -58,7 +58,7 @@ export const useMarketStore = defineStore('market', () => {
     }
     const valid = normalizeQuote(quote)
     if (!valid) {
-      if (quote.status === 'unavailable' || quote.status === 'stale') quoteStatusMap.value[symbol] = {
+      if (quote.status === 'closed' || quote.status === 'unavailable' || quote.status === 'stale') quoteStatusMap.value[symbol] = {
         ...(previous || { timestamp: 0, fetchedAt: 0, expiresAt: 0 }), status: quote.status,
         epoch: quote.epoch, quoteVersion: quote.quoteVersion,
         sourceConnectionFailed: quote.sourceConnectionFailed, controlActive: quote.controlActive, controlState: quote.controlState, simulated: quote.simulated,
@@ -95,6 +95,7 @@ export const useMarketStore = defineStore('market', () => {
   const getQuoteStatus = (symbol: string, now = Date.now()): string => {
     const quote = quoteStatusMap.value[symbol]
     if (!quote) return 'unavailable'
+    if (quote.status === 'closed') return 'closed'
     if (quote.status === 'unavailable') return 'unavailable'
     return now >= quote.expiresAt ? 'stale' : quote.status
   }

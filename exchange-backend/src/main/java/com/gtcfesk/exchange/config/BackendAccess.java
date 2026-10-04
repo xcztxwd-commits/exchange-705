@@ -109,6 +109,7 @@ public class BackendAccess extends RequestBodyAdviceAdapter implements HandlerIn
             if (m.equals("getConfig")) {
                 String key = request.getParameter("key");
                 if ("agent.default.permissions".equals(key)) permissions.require("agents", "defaults");
+                else if (com.gtcfesk.exchange.market.MarketHoursConfig.KEY.equals(key)) permissions.require("market_hours", "");
                 else if ("share.templates".equals(key)) permissions.requireAny("share_templates", "settings", "orders");
                 else if ("share.materials".equals(key)) permissions.require("share_templates", "");
                 else permissions.require("settings", "");
@@ -180,6 +181,7 @@ public class BackendAccess extends RequestBodyAdviceAdapter implements HandlerIn
             Iterable<JsonNode> configs = node.isArray() ? node : Collections.singletonList(node);
             for (JsonNode cfg : configs) {
                 String key = cfg.path("key").asText();
+                if (com.gtcfesk.exchange.market.MarketHoursConfig.KEY.equals(key)) throw new AccessDeniedException("请通过休市设置接口修改，不能使用通用配置接口");
                 if ("agent.default.permissions".equals(key)) { if (!superAdmin()) deny(); }
                 else if ("support.settings".equals(key)) { if (agent != null) deny(); permissions.require("support_settings", "save"); }
                 else if ("share.templates".equals(key) || "share.materials".equals(key)) { if (agent != null) deny(); permissions.require("share_templates", "save"); }

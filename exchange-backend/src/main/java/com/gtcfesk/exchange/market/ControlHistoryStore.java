@@ -25,6 +25,30 @@ public class ControlHistoryStore {
     private final Map<String, TargetControlPlan> plans = Collections.synchronizedMap(new LinkedHashMap<String, TargetControlPlan>(16, .75f, true) {
         @Override protected boolean removeEldestEntry(Map.Entry<String, TargetControlPlan> oldest) { return size() > 8; }
     });
+    private final ThreadLocal<Map<String,TargetControlPlan>> preparedPlans = new ThreadLocal<>();
+    /** Pin immutable plans for one operation so LRU eviction cannot cause decoding under its symbol locks. */
+    <T> T withPlans(Collection<Long> symbols, Supplier<T> operation) {
+        if (preparedPlans.get() != null) return operation.get();
+        Map<String,TargetControlPlan> prepared = new HashMap<>();
+        for (Long symbol : symbols) {
+            List<Map<String,Object>> tasks = db.queryForList("SELECT id,algorithm_version FROM market_control_task WHERE tenant_id=" + tenant()
+                + " AND symbol_id=? ORDER BY started_at DESC,id DESC LIMIT 1", symbol);
+            if (!tasks.isEmpty() && ((Number)tasks.get(0).get("algorithm_version")).intValue() >= 3) {
+                String id = (String)tasks.get(0).get("id"); prepared.put(tenant() + ":" + id, plan(id));
+            }
+        }
+        preparedPlans.set(prepared);
+        try { return operation.get(); } finally { preparedPlans.remove(); }
+    }
+    void rememberPlan(String taskId, TargetControlPlan plan) {
+        String key = tenant() + ":" + taskId;
+        if (preparedPlans.get() != null) preparedPlans.get().put(key, plan);
+        if (org.springframework.transaction.support.TransactionSynchronizationManager.isSynchronizationActive()) {
+            org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(new org.springframework.transaction.support.TransactionSynchronization() {
+                @Override public void afterCommit() { plans.put(key, plan); }
+            });
+        } else plans.put(key, plan);
+    }
     public ControlHistoryStore(JdbcTemplate db, PlatformTransactionManager manager) {
         this.db = db; transactions = new TransactionTemplate(manager);
     }
@@ -39,16 +63,29 @@ public class ControlHistoryStore {
         });
     }
     <T> T transaction(Supplier<T> operation) { return transactions.execute(status -> operation.get()); }
-    void savePlan(String taskId, long seed, TargetControlPlan plan) {
+    static final class EncodedPlan {
+        final String parameters, prices, summary, checksum;
+        EncodedPlan(String parameters, String prices, String summary, String checksum) {
+            this.parameters = parameters; this.prices = prices; this.summary = summary; this.checksum = checksum;
+        }
+    }
+    EncodedPlan encodePlan(TargetControlPlan plan) {
         try {
-            db.update("INSERT INTO market_control_plan(tenant_id,task_id,seed,parameters_json,prices_json,summary_json,checksum) VALUES(" + tenant() + ",?,?,?,?,?,?)",
-                    taskId, seed, json.writeValueAsString(plan.snapshot()), json.writeValueAsString(plan.prices()),
-                    json.writeValueAsString(plan.summary()), plan.checksum());
+            return new EncodedPlan(json.writeValueAsString(plan.snapshot()), json.writeValueAsString(plan.prices()),
+                json.writeValueAsString(plan.summary()), plan.checksum());
         } catch (com.fasterxml.jackson.core.JsonProcessingException invalid) { throw new IllegalStateException("Cannot serialize control plan", invalid); }
     }
+    void savePlan(String taskId, long seed, EncodedPlan plan) {
+        db.update("INSERT INTO market_control_plan(tenant_id,task_id,seed,parameters_json,prices_json,summary_json,checksum) VALUES(" + tenant() + ",?,?,?,?,?,?)",
+            taskId, seed, plan.parameters, plan.prices, plan.summary, plan.checksum);
+    }
     TargetControlPlan plan(String taskId) {
-        TargetControlPlan cached = plans.get(tenant() + ":" + taskId);
+        String key = tenant() + ":" + taskId;
+        TargetControlPlan pinned = preparedPlans.get() == null ? null : preparedPlans.get().get(key);
+        if (pinned != null) return pinned;
+        TargetControlPlan cached = plans.get(key);
         if (cached != null) return cached;
+        if (preparedPlans.get() != null) throw new BalancedControlPlan.Failure("START_BASIS_CHANGED", "并发任务已变化，请重试以加载已提交计划");
         List<Map<String, Object>> rows = db.queryForList("SELECT parameters_json,prices_json,checksum FROM market_control_plan WHERE tenant_id=" + tenant() + " AND task_id=?", taskId);
         if (rows.size() != 1) throw new BalancedControlPlan.Failure("PLAN_CORRUPTED", "目标轨迹计划缺失");
         try {
@@ -73,7 +110,7 @@ public class ControlHistoryStore {
             } else throw new IllegalStateException("Unsupported control algorithm " + version);
             if (!plan.snapshot().equals(parameters)) throw new IllegalStateException("Parameter snapshot mismatch");
             if (!plan.checksum().equals(row.get("checksum"))) throw new IllegalStateException("Checksum mismatch");
-            plans.put(tenant() + ":" + taskId, plan); return plan;
+            plans.put(key, plan); return plan;
         } catch (Exception invalid) { throw new BalancedControlPlan.Failure("PLAN_CORRUPTED", "目标轨迹计划损坏：" + invalid.getMessage()); }
     }
     String encode(Map<String, Object> row) {
@@ -141,22 +178,35 @@ public class ControlHistoryStore {
         return (List<Map<String, Object>>) ((Map<?, ?>) result.get("data")).get("kline_list");
     }
     public void sourceCandles(long symbol, String period, List<Map<String, Object>> rows, long now) {
-        locked(symbol, () -> {
-            // Keep every confirmation timestamp and input order; all chunks share the symbol lock/transaction.
-            for (int offset = 0; offset < rows.size(); offset += 500) {
-                int count = Math.min(500, rows.size() - offset);
-                Object[] arguments = new Object[count * 5];
-                for (int i = 0; i < count; i++) {
-                    Map<String, Object> row = rows.get(offset + i);
-                    long at = time(row);
-                    Map<String, Object> copy = new LinkedHashMap<>(row); copy.put("timestamp", at);
-                    arguments[i * 5] = symbol; arguments[i * 5 + 1] = period;
-                    arguments[i * 5 + 2] = at; arguments[i * 5 + 3] = encode(copy); arguments[i * 5 + 4] = now;
+        sourceCandles(Collections.singletonList(symbol), period, rows, now);
+    }
+    /** Encode once before acquiring any alias lock; every alias/chunk still commits together. */
+    public void sourceCandles(List<Long> symbols, String period, List<Map<String, Object>> rows, long now) {
+        long owner = tenant();
+        List<Object[]> encoded = new ArrayList<>();
+        for (Map<String,Object> row : rows) {
+            long at = time(row);
+            Map<String,Object> copy = new LinkedHashMap<>(row); copy.put("timestamp", at);
+            encoded.add(new Object[]{at, encode(copy)});
+        }
+        List<Long> ordered = new ArrayList<>(new TreeSet<>(symbols));
+        transaction(() -> {
+            TenantContext.require(owner);
+            for (Long symbol : ordered) locked(symbol, () -> {
+                for (int offset = 0; offset < encoded.size(); offset += 500) {
+                    int count = Math.min(500, encoded.size() - offset);
+                    Object[] arguments = new Object[count * 5];
+                    for (int i = 0; i < count; i++) {
+                        Object[] row = encoded.get(offset + i);
+                        arguments[i * 5] = symbol; arguments[i * 5 + 1] = period;
+                        arguments[i * 5 + 2] = row[0]; arguments[i * 5 + 3] = row[1]; arguments[i * 5 + 4] = now;
+                    }
+                    db.update("INSERT INTO market_source_candle(tenant_id,symbol_id,period,candle_at,body,received_at) VALUES "
+                        + String.join(",", Collections.nCopies(count, "(" + tenant() + ",?,?,?,?,?)"))
+                        + " ON DUPLICATE KEY UPDATE body=VALUES(body),received_at=VALUES(received_at)", arguments);
                 }
-                db.update("INSERT INTO market_source_candle(tenant_id,symbol_id,period,candle_at,body,received_at) VALUES "
-                    + String.join(",", Collections.nCopies(count, "(" + tenant() + ",?,?,?,?,?)"))
-                    + " ON DUPLICATE KEY UPDATE body=VALUES(body),received_at=VALUES(received_at)", arguments);
-            }
+                return null;
+            });
             return null;
         });
     }
@@ -188,6 +238,14 @@ public class ControlHistoryStore {
         }
         List<Map<String,Object>> samples = db.queryForList("SELECT s.generated_at,s.price FROM market_control_sample s JOIN market_control_task t ON t.tenant_id=s.tenant_id AND t.id=s.task_id LEFT JOIN market_control_flow f ON f.tenant_id=t.tenant_id AND f.task_id=t.id LEFT JOIN market_control_publication p ON p.tenant_id=t.tenant_id AND p.task_id=t.id WHERE t.tenant_id=" + tenant() + " AND t.symbol_id=? AND s.generated_at>=? AND s.generated_at<? AND (f.task_id IS NULL OR f.state<>'SOURCE' OR (s.generated_at>=p.from_at AND s.generated_at<=p.to_at)) ORDER BY s.generated_at,t.id", symbol, first, end);
         for (Map<String,Object> sample : samples) events.computeIfAbsent(((Number)sample.get("generated_at")).longValue()/60000*60000, ignored -> new ArrayList<>()).add(sample);
+        // Retain the prices actually displayed under manual rules, not today's offset or raw ticks.
+        Set<Long> manualTimes = new HashSet<>();
+        for (Map<String,Object> minute : original) if (modern.contains(time(minute))) {
+            for (Map<String,Object> point : manualPoints(minute)) {
+                manualTimes.add(((Number)point.get("generated_at")).longValue());
+                events.computeIfAbsent(time(minute), ignored -> new ArrayList<>()).add(point);
+            }
+        }
         // Filter both UNION branches before materialization; the unbounded event history grows continuously.
         String windowEvents = "SELECT symbol_id,received_at,price,event_sequence FROM market_source_event WHERE tenant_id=" + tenant() + " AND symbol_id=? AND received_at>=? AND received_at<? UNION ALL "
             + "SELECT t.symbol_id,t.received_at,t.price,0 AS event_sequence FROM market_source_tick t WHERE t.tenant_id=" + tenant() + " AND t.symbol_id=? AND t.received_at>=? AND t.received_at<? "
@@ -195,7 +253,7 @@ public class ControlHistoryStore {
         List<Map<String,Object>> ticks = db.queryForList("SELECT e.received_at AS generated_at,e.price,e.event_sequence FROM (" + windowEvents + ") e WHERE NOT EXISTS (SELECT 1 FROM market_control_task t LEFT JOIN market_control_flow f ON f.tenant_id=t.tenant_id AND f.task_id=t.id LEFT JOIN market_control_publication p ON p.tenant_id=t.tenant_id AND p.task_id=t.id WHERE t.tenant_id=" + tenant() + " AND t.symbol_id=e.symbol_id AND e.received_at>=t.started_at AND e.received_at<=COALESCE(f.finished_at, CASE WHEN f.task_id IS NOT NULL THEN ? ELSE t.ended_at END) AND (f.task_id IS NULL OR f.state<>'SOURCE' OR (e.received_at>=p.from_at AND e.received_at<=p.to_at))) ORDER BY e.received_at,e.event_sequence", symbol, first, end, symbol, first, end, Long.MAX_VALUE);
         for (Map<String,Object> tick : ticks) {
             List<Map<String,Object>> minute = events.get(((Number)tick.get("generated_at")).longValue()/60000*60000);
-            if (minute != null) minute.add(0, tick);
+            if (minute != null && !manualTimes.contains(((Number)tick.get("generated_at")).longValue())) minute.add(0, tick);
         }
         List<Map<String,Object>> result = new ArrayList<>();
         for (Map<String,Object> minute : original) {
@@ -226,14 +284,24 @@ public class ControlHistoryStore {
             received = storeSnapshotTime(symbol, minute);
             saveMinute(symbol, minute, bar, Math.min(now - 1, received));
         }
-        List<Map<String, Object>> ticks = db.queryForList("SELECT received_at,price FROM (" + sourceEvents() + ") ticks WHERE symbol_id=? AND source_time>=? AND source_time<? AND received_at>? AND received_at<=? ORDER BY received_at,event_sequence",
-            symbol, minute, minute + 60000, received, now);
+        List<Map<String, Object>> ticks = db.queryForList("SELECT received_at,price FROM (" + sourceEvents("symbol_id=? AND source_time>=? AND source_time<? AND received_at>? AND received_at<=?", false) + ") ticks ORDER BY received_at,event_sequence",
+            symbol, minute, minute + 60000, received, now, symbol, minute, minute + 60000, received, now);
         for (Map<String, Object> tick : ticks) point(symbol, ((Number) tick.get("received_at")).longValue(), number(tick.get("price")), true);
     }
     private long storeSnapshotTime(long symbol, long minute) {
         return db.queryForObject("SELECT received_at FROM market_source_candle WHERE tenant_id=" + tenant() + " AND symbol_id=? AND period='1m' AND candle_at=?", Long.class, symbol, minute);
     }
     void point(long symbol, long time, BigDecimal price, boolean controlled) {
+        point(symbol, time, price, controlled, false);
+    }
+    void manualPoint(long symbol, long time, BigDecimal price) {
+        point(symbol, time, price, true, true);
+    }
+    @SuppressWarnings("unchecked")
+    private static List<Map<String,Object>> manualPoints(Map<String,Object> minute) {
+        return (List<Map<String,Object>>) minute.getOrDefault("manualPoints", Collections.emptyList());
+    }
+    private void point(long symbol, long time, BigDecimal price, boolean controlled, boolean manual) {
         long minute = time / 60000 * 60000;
         List<Map<String, Object>> existing = mixed(symbol, minute, minute);
         if (existing.isEmpty() && !controlled) return;
@@ -246,16 +314,26 @@ public class ControlHistoryStore {
             bar = existing.get(0);
         }
         addPrice(bar, minute, price);
+        if (manual) {
+            List<Map<String,Object>> points = new ArrayList<>(manualPoints(bar));
+            Map<String,Object> point = new LinkedHashMap<>(); point.put("generated_at", time); point.put("price", price);
+            points.add(point); bar.put("manualPoints", points);
+        }
         saveMinute(symbol, minute, bar, time);
     }
     private void saveMinute(long symbol, long minute, Map<String, Object> bar, long last) {
         db.update("INSERT INTO market_mixed_minute(tenant_id,symbol_id,minute_at,body,last_event) VALUES(" + tenant() + ",?,?,?,?) "
             + "ON DUPLICATE KEY UPDATE body=VALUES(body),last_event=VALUES(last_event)", symbol, minute, encode(bar), last);
     }
-    static String sourceEvents() {
-        return "SELECT symbol_id,source_time,received_at,price,event_sequence FROM market_source_event WHERE tenant_id=" + tenant() + " UNION ALL "
-            + "SELECT t.symbol_id,t.source_time,t.received_at,t.price,0 AS event_sequence FROM market_source_tick t "
-            + "WHERE t.tenant_id=" + tenant() + " AND NOT EXISTS (SELECT 1 FROM market_source_event e WHERE e.tenant_id=t.tenant_id AND e.symbol_id=t.symbol_id AND e.source_time=t.source_time AND e.received_at=t.received_at AND e.price=t.price)";
+    /** The same predicate/arguments apply to both branches, before UNION materialization. */
+    static String sourceEvents(String predicate, boolean latest) {
+        String tail = latest ? " ORDER BY source_time DESC,received_at DESC,event_sequence DESC LIMIT 1" : "";
+        // Bulk restores can leave tiny cardinalities until asynchronous stats refresh. Keep MySQL inside the bounded index.
+        // MySQL executes the conditional comment; H2 differential fixtures ignore it. No predicates or tie order change.
+        String events = "SELECT symbol_id,source_time,received_at,price,event_sequence FROM market_source_event /*! FORCE INDEX (source_event_time) */ WHERE tenant_id=" + tenant() + " AND " + predicate + tail;
+        String ticks = "SELECT t.symbol_id,t.source_time,t.received_at,t.price,0 AS event_sequence FROM market_source_tick t WHERE t.tenant_id=" + tenant() + " AND " + predicate
+            + " AND NOT EXISTS (SELECT 1 FROM market_source_event e WHERE e.tenant_id=t.tenant_id AND e.symbol_id=t.symbol_id AND e.source_time=t.source_time AND e.received_at=t.received_at AND e.price=t.price)" + tail;
+        return latest ? "(" + events + ") UNION ALL (" + ticks + ")" : events + " UNION ALL " + ticks;
     }
     boolean quote(long symbol, Map<String, Object> quote, long receivedAt) {
         long time = QuoteState.time(quote.get("timestamp"));

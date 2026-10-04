@@ -90,3 +90,12 @@ storage-state*.json
 # Generated stage/control bundles, not source.
 dist-stage*/
 dist-control*/
+
+# Additive economic calendar migration; no customer data.
+!exchange-backend/src/main/resources/db/migration/V2026100301__economic_calendar.sql
+
+# Additive external-news metadata migration; no secrets or article bodies.
+!exchange-backend/src/main/resources/db/migration/V2026100302__external_news.sql
+
+# Additive administrator-curated trader display migration; no private account data.
+!exchange-backend/src/main/resources/db/migration/V2026100303__curated_traders.sql

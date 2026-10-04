@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, shallowRef, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import QRCode from 'qrcode'
 import request from '@/utils/request'
 import { can } from '@/utils/access'
 import { useAuthStore } from '@/store/auth'
@@ -39,7 +40,8 @@ const order = computed(() => { try { return previewShareOrder(sample) } catch { 
 const rate = computed(() => order.value ? shareReturn(order.value) : null)
 const image = ref(''), rendering = ref(false), error = ref(''), stage = ref<HTMLElement>(), propertiesPanel = ref<HTMLElement>(), scale = ref(1)
 const users = ref<any[]>([]), userId = ref<number>(), searching = ref(false)
-let revision = 0, userRevision = 0, observer: ResizeObserver | undefined, disposed = false
+const qrImage = shallowRef<HTMLImageElement>(), inviteUrl = ref(''), inviteLoading = ref(false), inviteError = ref('')
+let revision = 0, userRevision = 0, inviteRevision = 0, observer: ResizeObserver | undefined, disposed = false
 const backgrounds = new Map<string, Promise<HTMLImageElement>>()
 async function background() {
   const file = design.value.artwork && shareBackgrounds[draft.base]
@@ -52,6 +54,7 @@ async function background() {
 }
 async function render() {
   const run = ++revision; rendering.value = true; error.value = ''
+  if (inviteLoading.value || inviteError.value) { image.value = ''; rendering.value = inviteLoading.value; return }
   try {
     const value = previewShareOrder(sample), layout = JSON.parse(JSON.stringify(design.value))
     await document.fonts.ready
@@ -60,23 +63,44 @@ async function render() {
     const canvas = document.createElement('canvas')
     drawSharePoster(canvas, value, { template: draft.base, design: layout, language: language.value, personal: true,
       mode: 'both', focus: draft.focus, quantity: false, capital: false, fee: false, leverage: true, orderId: false, openTime: true },
-    shareCopy(language.value), brand.value, timezone.value, undefined, undefined, artwork, images)
+    shareCopy(language.value), brand.value, timezone.value, qrImage.value, undefined, artwork, images)
     image.value = canvas.toDataURL('image/png')
   } catch (e: any) { if (run === revision) { error.value = e.message || '图片生成失败，请重试'; image.value = '' } }
   finally { if (run === revision) rendering.value = false }
 }
 async function searchUsers(keyword: string) {
   if (!can('users:view')) return
-  const run = ++userRevision; searching.value = true
+  const run = ++userRevision, query = keyword.trim(); users.value = []
+  if (!query) { searching.value = false; return }
+  searching.value = true
   try {
-    const result: any = await request.get('/admin/users', { params: { page: 1, size: 20, keyword } })
+    const filter = /^\d+$/.test(query) ? { userId: query } : { keyword: query }
+    const result: any = await request.get('/admin/users', { params: { page: 1, size: 20, ...filter } })
     if (!disposed && run === userRevision) users.value = result.list || []
   } catch (e: any) { if (run === userRevision) ElMessage.error(e.message || '用户查询失败') }
   finally { if (run === userRevision) searching.value = false }
 }
-function chooseUser(id?: number) {
+async function chooseUser(id?: number) {
+  const run = ++inviteRevision
+  revision++; image.value = ''; qrImage.value = undefined; inviteUrl.value = ''; inviteError.value = ''; inviteLoading.value = !!id
   const user = users.value.find(user => user.id === id)
   sample.userName = user?.nickname || ''; sample.userEmail = user?.email || ''
+  if (!id) { await render(); return }
+  try {
+    if (!can('users:view')) throw new Error('没有用户查询权限')
+    const info = await request.get(`/admin/users/${id}/invite-preview`) as unknown as { userId: number; nickname?: string; email?: string; inviteCode: string; inviteUrl: string }
+    if (disposed || run !== inviteRevision) return
+    if (info.userId !== id || !info.inviteCode || !info.inviteUrl) throw new Error('用户邀请信息无效，请重新选择用户')
+    const src = await QRCode.toDataURL(info.inviteUrl, { width: 320, margin: 2, errorCorrectionLevel: 'M' })
+    const qr = new Image(); qr.src = src; await qr.decode()
+    if (disposed || run !== inviteRevision) return
+    sample.userName = info.nickname || ''; sample.userEmail = info.email || ''
+    inviteUrl.value = info.inviteUrl; qrImage.value = qr
+  } catch (e: any) {
+    if (!disposed && run === inviteRevision) inviteError.value = e.message || '用户邀请二维码加载失败，请重试'
+  } finally {
+    if (!disposed && run === inviteRevision) { inviteLoading.value = false; await render() }
+  }
 }
 function changeFocus(value: ShareFocus) {
   if (!props.editable || draft.focus === value) return
@@ -214,9 +238,14 @@ watch(universal, value => { draft.languages = value ? ['*'] : draft.languages.fi
 watch(tab, value => { if (value === 'materials') void loadMaterials() })
 watch(materialQuery, () => { materialPage.value = 1 })
 watch(selectedKey, () => { nextTick(() => { if (propertiesPanel.value) propertiesPanel.value.scrollTop = 0 }) })
+watch(() => auth.token, () => {
+  userRevision++; inviteRevision++; users.value = []; userId.value = undefined; searching.value = false
+  qrImage.value = undefined; inviteUrl.value = ''; inviteError.value = ''; inviteLoading.value = false
+  sample.userName = ''; sample.userEmail = ''; revision++; image.value = ''; void render()
+})
 watch([design, sample, language, brand, timezone, () => draft.base, () => auth.token], render, { deep: true, immediate: true })
 onMounted(() => { observer = new ResizeObserver(measure); if (stage.value) observer.observe(stage.value); measure() })
-onBeforeUnmount(() => { disposed = true; revision++; userRevision++; observer?.disconnect(); assets.dispose(); drag = null })
+onBeforeUnmount(() => { disposed = true; revision++; userRevision++; inviteRevision++; observer?.disconnect(); assets.dispose(); drag = null })
 </script>
 
 <template>
@@ -329,7 +358,10 @@ onBeforeUnmount(() => { disposed = true; revision++; userRevision++; observer?.d
           <el-form-item label="平仓价"><el-input-number v-model="sample.closePrice" :min="0.00000001" :max="1e15" :controls="false" aria-label="预览平仓价" /></el-form-item>
           <el-form-item label="开仓时间"><input v-model="sample.openTime" type="datetime-local" aria-label="预览开仓时间" /></el-form-item>
           <el-form-item label="平仓时间"><input v-model="sample.closeTime" type="datetime-local" aria-label="预览平仓时间" /></el-form-item>
-          <el-form-item v-if="can('users:view')" label="选择用户（仅用于本次预览）"><el-select v-model="userId" filterable remote clearable :remote-method="searchUsers" :loading="searching" placeholder="搜索邮箱 / 名字" aria-label="预览用户" @change="chooseUser"><el-option v-for="user in users" :key="user.id" :value="user.id" :label="`${user.nickname || user.id} · ${user.email}`" /></el-select></el-form-item>
+          <el-form-item v-if="can('users:view')" label="选择用户（仅用于本次预览）"><el-select v-model="userId" filterable remote clearable :remote-method="searchUsers" :loading="searching" placeholder="搜索用户 ID / 邮箱" aria-label="预览用户" @change="chooseUser"><el-option v-for="user in users" :key="user.id" :value="user.id" :label="`ID ${user.id} · ${user.nickname || ''} · ${user.email || ''}`" /></el-select></el-form-item>
+          <p v-if="inviteLoading" class="panel-hint" role="status">正在加载用户邀请二维码…</p>
+          <template v-if="inviteError"><el-alert :title="inviteError" type="error" :closable="false" /><el-button v-permission="'users:view'" @click="chooseUser(userId)">重试二维码</el-button></template>
+          <el-form-item v-if="qrImage" label="用户邀请二维码"><img :src="qrImage.src" alt="所选用户邀请二维码" width="120" height="120" /><el-input :model-value="inviteUrl" readonly aria-label="预览邀请链接" /><small class="panel-hint">绑定用户 ID {{ userId }}；扫码进入该用户的邀请注册页面。清除用户同时移除二维码。</small></el-form-item>
           <el-form-item label="用户名字"><el-input v-model="sample.userName" aria-label="预览用户名字" maxlength="80" /></el-form-item>
           <el-form-item label="用户邮箱"><el-input v-model="sample.userEmail" aria-label="预览用户邮箱" maxlength="254" /></el-form-item>
           <el-form-item label="品牌"><el-input v-model="brand" aria-label="预览品牌" maxlength="80" /></el-form-item>

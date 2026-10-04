@@ -38,6 +38,28 @@
   ],
   "menus": [
     {
+      "code": "market_hours", "name": "休市设置", "path": "/market-hours", "group": "trading",
+      "actions": { "save": "编辑休市策略与绑定", "manual": "手动开市、休市与恢复自动" }
+    },
+    {
+      "code": "traders", "name": "交易员展示", "path": "/traders", "group": "trading",
+      "actions": { "edit": "新增、编辑人工资料", "publish": "发布与下架", "disable": "禁用与解除", "sort": "推荐排序（非业绩排行）", "equity": "维护与导入净资产曲线", "history": "维护与导入人工历史" }
+    },
+    {
+      "code": "news",
+      "name": "外部财经新闻",
+      "path": "/news",
+      "group": "trading",
+      "actions": { "source": "来源与许可管理", "sync": "按配额同步来源", "edit": "核验、分类与隐藏文章", "import": "导入已核验官方材料" }
+    },
+    {
+      "code": "calendar",
+      "name": "财经事件日历",
+      "path": "/calendar",
+      "group": "trading",
+      "actions": { "import": "核验导入", "edit": "纠正事件", "publish": "发布、下架与取消", "sync": "同步官方来源" }
+    },
+    {
       "code": "dashboard",
       "name": "运营看板",
       "path": "/dashboard",

@@ -21,6 +21,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public class MarketWebSocketHandler extends TextWebSocketHandler {
     @Autowired private ForexQuoteMarketService marketService;
     @Autowired private TenantRepository tenants;
+    @Autowired(required = false) private MarketDepthService depth;
     @Value("${market.push.interval-ms:1000}") private long intervalMs = 1000;
     @Value("${market.push.delta:false}") private boolean delta;
     private final ObjectMapper mapper = new ObjectMapper();
@@ -35,6 +36,11 @@ public class MarketWebSocketHandler extends TextWebSocketHandler {
         volatile boolean snapshot = true;
         volatile long busySince;
         volatile long lastListPush;
+        volatile String depthSymbol, depthMarketType;
+        volatile int depthLevels = 20;
+        volatile long depthRevision;
+        volatile boolean depthDisabledSent;
+        volatile long lastDepthPush;
     }
     private final Map<WebSocketSession, Client> clients = new ConcurrentHashMap<>();
     private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(r -> new Thread(r, "market-push"));
@@ -55,8 +61,9 @@ public class MarketWebSocketHandler extends TextWebSocketHandler {
         }
         clients.put(session, client);
     }
-    @Override public void afterConnectionClosed(WebSocketSession session, CloseStatus status) { clients.remove(session); }
-    @Override public void handleTransportError(WebSocketSession session, Throwable error) { clients.remove(session); }
+    @Override public void afterConnectionClosed(WebSocketSession session, CloseStatus status) { clients.remove(session); releaseDepth(session); }
+    @Override public void handleTransportError(WebSocketSession session, Throwable error) { clients.remove(session); releaseDepth(session); }
+    private void releaseDepth(WebSocketSession session) { if (depth != null) depth.release("ws:" + session.getId()); }
     @Override protected void handleTextMessage(WebSocketSession session, TextMessage message) throws Exception {
         Client client = clients.get(session);
         if (client == null || message.getPayloadLength() > 16384) return;
@@ -65,6 +72,31 @@ public class MarketWebSocketHandler extends TextWebSocketHandler {
         Map<String, Object> request = mapper.readValue(message.getPayload(), new TypeReference<Map<String, Object>>() {});
         Object action = request.get("action");
         if ("ping".equals(action)) { send(session, client, Collections.singletonMap("type", "pong")); return; }
+        if ("subscribeDepth".equals(action) || "unsubscribeDepth".equals(action)) {
+            if (depth == null) return;
+            synchronized (client) {
+            client.depthRevision++; client.depthDisabledSent = false;
+            client.lastDepthPush = 0;
+            client.depthSymbol = null; releaseDepth(session);
+            if ("subscribeDepth".equals(action)) {
+                try {
+                    Object symbol = request.get("symbol"), type = request.get("marketType"), levels = request.get("levels");
+                    if (!(symbol instanceof String) || type != null && !(type instanceof String)
+                            || levels != null && (!(levels instanceof Integer) || (Integer) levels < 1 || (Integer) levels > 20))
+                        throw new IllegalArgumentException("Invalid depth subscription");
+                    int count = levels == null ? 20 : (Integer) levels;
+                    Map<String,Object> initial = depth.read((String) symbol, count, (String) type, "ws:" + session.getId());
+                    if ("subscription_limit".equals(initial.get("reason"))) {
+                        Map<String,Object> reply = new HashMap<>(); reply.put("type", "depthError"); reply.put("reason", "subscription_limit"); send(session, client, reply); return;
+                    }
+                    client.depthLevels = count; client.depthMarketType = (String) type; client.depthSymbol = (String) symbol;
+                } catch (IllegalArgumentException invalid) {
+                    Map<String,Object> reply = new HashMap<>(); reply.put("type", "depthError"); reply.put("reason", "invalid_parameters"); send(session, client, reply);
+                }
+            }
+            }
+            return;
+        }
         Object symbols = request.get("symbols");
         if (!(symbols instanceof List)) return;
         for (Object value : (List<?>) symbols) {
@@ -94,7 +126,7 @@ public class MarketWebSocketHandler extends TextWebSocketHandler {
         } catch (RuntimeException failure) { return false; }
     }
     private void close(WebSocketSession session) {
-        clients.remove(session);
+        clients.remove(session); releaseDepth(session);
         try { session.close(CloseStatus.POLICY_VIOLATION); } catch (Exception ignored) { }
     }
     void push() {
@@ -103,9 +135,26 @@ public class MarketWebSocketHandler extends TextWebSocketHandler {
         Map<String,Boolean> bindings = new HashMap<>();
         for (Map.Entry<WebSocketSession, Client> entry : clients.entrySet()) {
             WebSocketSession session = entry.getKey(); Client client = entry.getValue();
-            if (!session.isOpen()) { clients.remove(session); continue; }
+            if (!session.isOpen()) { clients.remove(session); releaseDepth(session); continue; }
             if (!bindings.computeIfAbsent(client.tenantId + ":" + client.frontendHost, id -> validBinding(client))) { close(session); continue; }
-            if (client.symbols.isEmpty()) continue;
+            Map<String,Object> depthMessage = null;
+            synchronized (client) {
+            String depthSymbol = client.depthSymbol;
+            if (depth != null && depthSymbol != null) {
+                try (TenantContext.Scope scope = TenantContext.open(client.tenantId)) {
+                    long revision = client.depthRevision;
+                    Map<String,Object> data = depth.read(depthSymbol, client.depthLevels, client.depthMarketType, "ws:" + session.getId());
+                    boolean disabled = "DISABLED".equals(data.get("status"));
+                    if ((!disabled || !client.depthDisabledSent) && System.currentTimeMillis() - client.lastDepthPush >= 1000) {
+                        Map<String,Object> message = new HashMap<>(); message.put("type", "depth"); message.put("data", data);
+                        message.put("serverTime", System.currentTimeMillis()); message.put("depthRevision", revision);
+                        depthMessage = message;
+                    }
+                    if (!disabled) client.depthDisabledSent = false;
+                } catch (RuntimeException failure) { releaseDepth(session); }
+            }
+            }
+            if (client.symbols.isEmpty()) { if (depthMessage != null) send(session, client, depthMessage); continue; }
             try (TenantContext.Scope scope = TenantContext.open(client.tenantId)) {
             Map<String, Object> prices = new HashMap<>();
             boolean listFrame = client.snapshot || System.currentTimeMillis() - client.lastListPush >= 1000;
@@ -116,18 +165,24 @@ public class MarketWebSocketHandler extends TextWebSocketHandler {
                 catch (Exception failure) { continue; }
                 if (!delta || client.snapshot || !Objects.equals(client.versions.get(symbol), quote.get("quoteVersion"))) prices.put(symbol, quote);
             }
-            if (prices.isEmpty()) continue;
+            if (prices.isEmpty()) { if (depthMessage != null) send(session, client, depthMessage); continue; }
             Map<String, Object> message = new HashMap<>(); message.put("type", "price"); message.put("data", prices);
             message.put("snapshot", client.snapshot); message.put("serverTime", System.currentTimeMillis());
             message.put("listFrame", listFrame);
-            send(session, client, message);
+            // One bounded send job carries both independent protocols; neither starves the other.
+            List<Map<String,?>> frames = new ArrayList<>();
+            if (depthMessage != null) frames.add(depthMessage);
+            frames.add(message); send(session, client, frames);
             }
         }
     }
     private void send(WebSocketSession session, Client client, Map<String, ?> message) {
+        send(session, client, Collections.singletonList(message));
+    }
+    private void send(WebSocketSession session, Client client, List<Map<String,?>> messages) {
         if (!client.sending.compareAndSet(false, true)) {
             if (System.currentTimeMillis() - client.busySince > 10000) {
-                clients.remove(session); try { session.close(CloseStatus.SESSION_NOT_RELIABLE); } catch (Exception ignored) { }
+                clients.remove(session); releaseDepth(session); try { session.close(CloseStatus.SESSION_NOT_RELIABLE); } catch (Exception ignored) { }
             }
             return;
         }
@@ -135,7 +190,15 @@ public class MarketWebSocketHandler extends TextWebSocketHandler {
         try {
             senders.execute(() -> {
                 try { if (session.isOpen() && validBinding(client)) {
-                    session.sendMessage(new TextMessage(mapper.writeValueAsString(message)));
+                    for (Map<String,?> message : messages) {
+                    if ("depth".equals(message.get("type")) && (!Objects.equals(message.get("depthRevision"), client.depthRevision)
+                            || client.depthSymbol == null || !client.depthSymbol.equals(((Map<?,?>) message.get("data")).get("symbol")))) continue;
+                    Map<String,Object> frame = new HashMap<>(message); frame.remove("depthRevision");
+                    session.sendMessage(new TextMessage(mapper.writeValueAsString(frame)));
+                    if ("depth".equals(message.get("type"))) {
+                        client.lastDepthPush = System.currentTimeMillis();
+                        client.depthDisabledSent = "DISABLED".equals(((Map<?,?>) message.get("data")).get("status"));
+                    }
                     if ("price".equals(message.get("type"))) {
                         Map<?,?> prices = (Map<?,?>) message.get("data");
                         prices.forEach((symbol, quote) -> {
@@ -146,8 +209,9 @@ public class MarketWebSocketHandler extends TextWebSocketHandler {
                         client.snapshot = !client.versions.keySet().containsAll(client.symbols);
                         if (Boolean.TRUE.equals(message.get("listFrame"))) client.lastListPush = System.currentTimeMillis();
                     }
+                    }
                 } }
-                catch (Exception failure) { clients.remove(session); }
+                catch (Exception failure) { clients.remove(session); releaseDepth(session); }
                 finally { client.sending.set(false); }
             });
         } catch (RejectedExecutionException full) { client.sending.set(false); }

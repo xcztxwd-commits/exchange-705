@@ -34,8 +34,8 @@ final class ControlHoldService {
         if (pending.isEmpty()) return;
         Map<String,Object> reference = pending.get(0);
         List<Map<String,Object>> ticks = store.db.queryForList(
-            "SELECT price,source_time FROM (" + ControlHistoryStore.sourceEvents() + ") ticks WHERE symbol_id=? AND received_at<=? AND source_time<=? ORDER BY source_time DESC,received_at DESC,event_sequence DESC LIMIT 1",
-            task.symbolId, at, at);
+            "SELECT price,source_time FROM (" + ControlHistoryStore.sourceEvents("symbol_id=? AND received_at<=? AND source_time<=?", true) + ") ticks ORDER BY source_time DESC,received_at DESC,event_sequence DESC LIMIT 1",
+            task.symbolId, at, at, task.symbolId, at, at);
         BigDecimal price = ControlHistoryStore.number(reference.get("reference_price"));
         long time = ((Number) reference.get("reference_time")).longValue();
         if (!ticks.isEmpty() && ((Number) ticks.get(0).get("source_time")).longValue() >= time) {

@@ -291,11 +291,12 @@
                </label>
              </div>
 
+             <p v-if="marketStore.getQuoteStatus(currentSymbol) === 'closed'" role="status" class="text-xs text-amber-600 mt-2">{{ localeStore.t('marketClosed') }}</p>
              <p v-if="currentSymbolInfo && !Number.isFinite(estimatedMargin)" role="status" class="text-xs text-amber-600 mt-2">{{ localeStore.text('結算匯率暫不可用', 'Settlement rate unavailable') }}</p>
              <p v-if="auth.token && tradingAvailable <= 0" role="status" class="text-xs text-amber-600 mt-2">{{ localeStore.t('contractBalanceInsufficient') }}</p>
              <div class="flex space-x-3 pt-4">
-               <button v-if="canStartBusiness('contract')" :disabled="tradeSubmitting || kycChecking || (tradeVerified && (!currentSymbolInfo || !orderReady))" @click="submitContractOrder('BUY')" class="disabled:opacity-50 disabled:cursor-not-allowed flex-1 bg-[#8cc63f] text-white py-3.5 rounded-lg font-bold text-base hover:bg-[#7ab036] transition-colors shadow-sm shadow-green-200">{{ localeStore.t('buy') }}</button>
-               <button v-if="canStartBusiness('contract')" :disabled="tradeSubmitting || kycChecking || (tradeVerified && (!currentSymbolInfo || !orderReady))" @click="submitContractOrder('SELL')" class="disabled:opacity-50 disabled:cursor-not-allowed flex-1 bg-[#ff4d4f] text-white py-3.5 rounded-lg font-bold text-base hover:bg-[#e64042] transition-colors shadow-sm shadow-red-200">{{ localeStore.t('sell') }}</button>
+               <button v-if="canStartBusiness('contract')" :disabled="tradeSubmitting || kycChecking || (tradeVerified && (!currentSymbolInfo || !orderReady)) || marketStore.getQuoteStatus(currentSymbol) === 'closed'" @click="submitContractOrder('BUY')" class="disabled:opacity-50 disabled:cursor-not-allowed flex-1 bg-[#8cc63f] text-white py-3.5 rounded-lg font-bold text-base hover:bg-[#7ab036] transition-colors shadow-sm shadow-green-200">{{ localeStore.t('buy') }}</button>
+               <button v-if="canStartBusiness('contract')" :disabled="tradeSubmitting || kycChecking || (tradeVerified && (!currentSymbolInfo || !orderReady)) || marketStore.getQuoteStatus(currentSymbol) === 'closed'" @click="submitContractOrder('SELL')" class="disabled:opacity-50 disabled:cursor-not-allowed flex-1 bg-[#ff4d4f] text-white py-3.5 rounded-lg font-bold text-base hover:bg-[#e64042] transition-colors shadow-sm shadow-red-200">{{ localeStore.t('sell') }}</button>
              </div>
            </div>
         </div>
@@ -334,8 +335,8 @@
            </div>
 
            <div class="flex space-x-3">
-             <button v-if="canStartBusiness('option')" :disabled="tradeSubmitting || kycChecking || (tradeVerified && !currentSymbolInfo)" @click="submitOptionOrder('UP')" class="flex-1 bg-[#8cc63f] text-white py-3.5 rounded-lg font-bold text-base hover:bg-[#7ab036] transition-colors shadow-sm shadow-green-200">{{ localeStore.t('buyUp') }}</button>
-             <button v-if="canStartBusiness('option')" :disabled="tradeSubmitting || kycChecking || (tradeVerified && !currentSymbolInfo)" @click="submitOptionOrder('DOWN')" class="flex-1 bg-[#ff4d4f] text-white py-3.5 rounded-lg font-bold text-base hover:bg-[#e64042] transition-colors shadow-sm shadow-red-200">{{ localeStore.t('buyDown') }}</button>
+             <button v-if="canStartBusiness('option')" :disabled="tradeSubmitting || kycChecking || (tradeVerified && !currentSymbolInfo) || marketStore.getQuoteStatus(currentSymbol) === 'closed'" @click="submitOptionOrder('UP')" class="flex-1 bg-[#8cc63f] text-white py-3.5 rounded-lg font-bold text-base hover:bg-[#7ab036] transition-colors shadow-sm shadow-green-200">{{ localeStore.t('buyUp') }}</button>
+             <button v-if="canStartBusiness('option')" :disabled="tradeSubmitting || kycChecking || (tradeVerified && !currentSymbolInfo) || marketStore.getQuoteStatus(currentSymbol) === 'closed'" @click="submitOptionOrder('DOWN')" class="flex-1 bg-[#ff4d4f] text-white py-3.5 rounded-lg font-bold text-base hover:bg-[#e64042] transition-colors shadow-sm shadow-red-200">{{ localeStore.t('buyDown') }}</button>
            </div>
         </div>
       </aside>
@@ -2821,6 +2822,7 @@ const goToTradeVerification = () => {
 };
 
 const submitContractOrder = async (side: 'BUY' | 'SELL') => {
+  if (marketStore.getQuoteStatus(currentSymbol.value) === 'closed') { ElMessage.warning(localeStore.t('marketClosed')); return; }
   const funding = contractFunding.value;
   if (tradeSubmitting.value || kycChecking.value || !await ensureKyc()) return;
   if (funding !== contractFunding.value) return;
@@ -2890,6 +2892,7 @@ const submitContractOrder = async (side: 'BUY' | 'SELL') => {
 };
 
 const submitOptionOrder = async (direction: 'UP' | 'DOWN') => {
+  if (marketStore.getQuoteStatus(currentSymbol.value) === 'closed') { ElMessage.warning(localeStore.t('marketClosed')); return; }
   const funding = optionFunding.value;
   if (tradeSubmitting.value || kycChecking.value || !await ensureKyc()) return;
   if (funding !== optionFunding.value) return;

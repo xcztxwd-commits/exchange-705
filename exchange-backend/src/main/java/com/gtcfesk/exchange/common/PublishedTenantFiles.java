@@ -13,6 +13,7 @@ import java.util.*;
 public class PublishedTenantFiles {
  @PersistenceContext private EntityManager em;
  private final TenantRepository tenants;
+ private final com.gtcfesk.exchange.simulation.SimulationEnvironment simulation;
  @org.springframework.beans.factory.annotation.Autowired(required=false) private com.gtcfesk.exchange.control.TenantHostService hosts;
  private final SupportSettings support;
  private final com.gtcfesk.exchange.admin.SystemConfigService configs;
@@ -22,11 +23,20 @@ public class PublishedTenantFiles {
   String kind=audio?"audio":"images";List<String> urls=new ArrayList<>(Arrays.asList("/api/uploads/"+kind+"/"+filename,"/uploads/"+kind+"/"+filename));
   tenants.findById(tenant).ifPresent(t->{if(t.getFrontendHost()!=null){String origin=hosts==null?"https://"+t.getFrontendHost():hosts.frontendOrigin(t.getFrontendHost());urls.add(origin+urls.get(0));urls.add(origin+urls.get(1));}});
   if(audio){SupportSettings.Settings s=support.get();return "internal".equals(s.mode)&&urls.contains(s.userSound);}
+  if(allowsTraderAvatar(filename,true))return true;
   if(signedIn&&allowsShare(filename,true))return true;
   if(count("select count(p) from FinancialProduct p where p.tenantId=:tenant and p.enabled=true and p.imageUrl in :urls",tenant,urls)>0)return true;
   if(count("select count(s) from TradingSymbol s where s.tenantId=:tenant and s.isEnabled=true and (s.iconUrl in :urls or s.flagUrl in :urls)",tenant,urls)>0)return true;
   if(signedIn){for(String url:urls){String pattern="%\""+url.replace("!","!!").replace("%","!%").replace("_","!_")+"\"%";if(em.createQuery("select count(c) from ActivityCampaign c where c.tenantId=:tenant and c.deleted=false and c.template=false and c.status='ACTIVE' and c.layoutJson like :pattern escape '!'",Long.class).setParameter("tenant",tenant).setParameter("pattern",pattern).getSingleResult()>0)return true;}}
   return signedIn&&count("select count(d) from DepositSetting d where d.tenantId=:tenant and d.enabled=true and d.qrCode in :urls",tenant,urls)>0;
+ }
+ public boolean allowsTraderAvatar(String filename,boolean publishedOnly){
+  Long tenant=TenantContext.requireTenantId();
+  if(filename==null||!filename.matches(tenant+"/staff/(?:agent-)?-?[0-9]{1,19}/[a-zA-Z0-9_.-]+"))return false;
+  String env=simulation.enabled()?"DEMO":"REAL";
+  List<String> sources=simulation.enabled()?Arrays.asList("ADMIN_CURATED","DEMO"):Collections.singletonList("ADMIN_CURATED");
+  List<String> urls=Arrays.asList("/api/uploads/images/"+filename,"/demo-uploads/images/"+filename);
+  return em.createQuery("select count(p) from TraderProfile p where p.tenantId=:tenant and p.environment=:env and p.sourceType in :sources and p.avatarUrl in :urls"+(publishedOnly?" and p.status='PUBLISHED'":""),Long.class).setParameter("tenant",tenant).setParameter("env",env).setParameter("sources",sources).setParameter("urls",urls).getSingleResult()>0;
  }
  // Soft removal hides the library item, not its already-shared files used by draft copies.
  public boolean allowsMaterial(String filename){

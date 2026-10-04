@@ -21,6 +21,9 @@ public class PersistentPriceControl {
     private final ControlHoldService holds;
     private final ControlRecoveryFlow flows;
     public PersistentPriceControl(ControlHistoryStore store) { this.store = store; this.holds = new ControlHoldService(store); this.flows = new ControlRecoveryFlow(store, holds); }
+    <T> T locked(long symbol, java.util.function.Supplier<T> operation) {
+        return store.withPlans(Collections.singletonList(symbol), () -> store.locked(symbol, operation));
+    }
     @Getter public static class Task {
         String id, symbol, kind, status, startSource;
         long tenantId, symbolId, sourceTime, startedAt, plannedEnd, sampledUntil;
@@ -66,7 +69,7 @@ public class PersistentPriceControl {
     public Task startRealtimeRestore(TradingSymbol config, Map<String,Object> raw, BigDecimal displayed,
             int duration, int intensity, boolean oscillation, String requestKey) {
         TenantContext.require(config.getTenantId());
-        return store.locked(config.getId(), () -> {
+        return locked(config.getId(), () -> {
             Task previous = latest(config.getId());
             Map<String,Object> previousFlow = previous == null ? Collections.emptyMap() : flows.get(previous.id);
             Map<String,Object> view = display(config, raw, System.currentTimeMillis());
@@ -101,7 +104,7 @@ public class PersistentPriceControl {
         return store.db.queryForList("SELECT DISTINCT t.symbol_id FROM market_control_task t LEFT JOIN market_control_hold h ON h.tenant_id=t.tenant_id AND h.task_id=t.id WHERE t.tenant_id=" + tenant() + " AND (t.status='RUNNING' OR (h.activated_at IS NOT NULL AND h.released_at IS NULL) OR EXISTS (SELECT 1 FROM market_control_flow f WHERE f.tenant_id=" + tenant() + " AND f.task_id=t.id AND f.state IN ('WAITING_SOURCE','RECOVERING')))", Long.class);
     }
     public Task replaceHistory(long symbol, String taskId) {
-        return store.locked(symbol, () -> {
+        return locked(symbol, () -> {
             advance(latest(symbol), System.currentTimeMillis());
             List<Task> tasks = store.db.query(TASK_SELECT + "WHERE t.tenant_id=" + tenant() + " AND t.id=? AND t.symbol_id=?", TASK, taskId, symbol);
             if (tasks.isEmpty()) throw new BusinessException("控盘任务不存在");
@@ -122,7 +125,7 @@ public class PersistentPriceControl {
     public void importLegacy(TradingSymbol config) {
         TenantContext.require(config.getTenantId());
         if (!PriceControlPath.running(config)) return;
-        store.locked(config.getId(), () -> {
+        locked(config.getId(), () -> {
             String key = "legacy-" + config.getControlStartedAt();
             if (store.db.queryForObject("SELECT COUNT(*) FROM market_control_task WHERE tenant_id=" + tenant() + " AND symbol_id=? AND request_key=?", Integer.class, config.getId(), key) == 0) {
                 store.db.update("INSERT INTO market_control_task(tenant_id,id,symbol_id,symbol,algorithm_version,kind,status,start_price,target_price,duration_seconds,intensity,oscillation,price_precision,start_source,source_time,started_at,planned_end,sampled_until,request_key) VALUES(" + tenant() + ",?,?,?,1,'TARGET','RUNNING',?,?,?,?,?,?,'LEGACY_PARAMETERS',?,?,?,?,?)",
@@ -133,7 +136,7 @@ public class PersistentPriceControl {
             return null;
         });
     }
-    public void advance(long symbol, long now) { store.locked(symbol, () -> { advance(latest(symbol), now); return null; }); }
+    public void advance(long symbol, long now) { locked(symbol, () -> { advance(latest(symbol), now); return null; }); }
     private void advance(Task task, long now) {
         if (task == null || !task.running()) return;
         long until = Math.min(now, task.plannedEnd);
@@ -200,10 +203,14 @@ public class PersistentPriceControl {
     }
     public static final class Prepared {
         final TargetControlPlan plan;
+        final ControlHistoryStore.EncodedPlan encoded;
+        final long tenantId, symbolId;
+        final Long revision;
         final long seed;
         final String previousTaskId;
         final BigDecimal start;
-        Prepared(TargetControlPlan plan, long seed, String previousTaskId, BigDecimal start) {
+        Prepared(TargetControlPlan plan, long seed, String previousTaskId, BigDecimal start, TradingSymbol config, ControlHistoryStore.EncodedPlan encoded) {
+            this.encoded = encoded; this.tenantId = config.getTenantId(); this.symbolId = config.getId(); this.revision = config.getRowVersion();
             this.plan = plan; this.seed = seed; this.previousTaskId = previousTaskId; this.start = start;
         }
         public Map<String, Object> preview() {
@@ -233,7 +240,8 @@ public class PersistentPriceControl {
         BalancedControlPlan.Parameters p = new BalancedControlPlan.Parameters(start, target, duration, precision, intensity,
                 BalancedControlPlan.DEFAULT_RATIO);
         long seed = oscillation ? new SecureRandom().nextLong() : Objects.hash(p.snapshot());
-        return new Prepared(BalancedControlPlan.generate(p, seed), seed, previous == null ? null : previous.id, start);
+        TargetControlPlan plan = BalancedControlPlan.generate(p, seed);
+        return new Prepared(plan, seed, previous == null ? null : previous.id, start, config, store.encodePlan(plan));
     }
     public Prepared prepare(TradingSymbol config, Map<String, Object> raw, BigDecimal displayed,
             int duration, BigDecimal target, int intensity, boolean oscillation, TargetControlOptions options) {
@@ -245,12 +253,13 @@ public class PersistentPriceControl {
         StabilizedControlPlan.Parameters p = new StabilizedControlPlan.Parameters(start, target, duration, precision, intensity,
                 StabilizedControlPlan.DEFAULT_RATIO, settings);
         long seed = oscillation ? new SecureRandom().nextLong() : Objects.hash(p.snapshot());
-        return new Prepared(StabilizedControlPlan.generate(p, seed), seed, previous == null ? null : previous.id, start);
+        TargetControlPlan plan = StabilizedControlPlan.generate(p, seed);
+        return new Prepared(plan, seed, previous == null ? null : previous.id, start, config, store.encodePlan(plan));
     }
     public Task startPrepared(TradingSymbol config, Map<String, Object> raw, BigDecimal displayed, int duration,
             BigDecimal target, int intensity, boolean oscillation, String requestKey, RecoveryOptions options, Prepared prepared) {
         TenantContext.require(config.getTenantId());
-        return store.locked(config.getId(), () -> {
+        return locked(config.getId(), () -> {
             if (options != null && requestKey != null && store.db.queryForObject("SELECT COUNT(*) FROM market_control_task t LEFT JOIN market_control_flow f ON f.tenant_id=t.tenant_id AND f.task_id=t.id WHERE t.tenant_id=" + tenant() + " AND t.symbol_id=? AND t.request_key=? AND f.task_id IS NULL", Integer.class, config.getId(), requestKey) > 0)
                 throw new BusinessException("旧任务请求标识不可追加自动恢复配置");
             Task task = startLocked(config, raw, displayed, duration, target, intensity, oscillation, false, requestKey, prepared);
@@ -266,7 +275,7 @@ public class PersistentPriceControl {
     public Task start(TradingSymbol config, Map<String, Object> raw, BigDecimal displayed, int duration, BigDecimal target,
             int intensity, boolean oscillation, boolean restore, String requestKey, RecoveryOptions options) {
         TenantContext.require(config.getTenantId());
-        return store.locked(config.getId(), () -> {
+        return locked(config.getId(), () -> {
             if (requestKey != null && store.db.queryForObject("SELECT COUNT(*) FROM market_control_task t LEFT JOIN market_control_flow f ON f.tenant_id=t.tenant_id AND f.task_id=t.id WHERE t.tenant_id=" + tenant() + " AND t.symbol_id=? AND t.request_key=? AND f.task_id IS NULL", Integer.class, config.getId(), requestKey) > 0)
                 throw new BusinessException("旧任务请求标识不可追加自动恢复配置");
             Task task = start(config, raw, displayed, duration, target, intensity, oscillation, restore, requestKey);
@@ -280,7 +289,7 @@ public class PersistentPriceControl {
     public Task start(TradingSymbol config, Map<String, Object> raw, BigDecimal displayed, int duration, BigDecimal target,
             int intensity, boolean oscillation, boolean restore, String requestKey) {
         TenantContext.require(config.getTenantId());
-        return store.locked(config.getId(), () -> startLocked(config, raw, displayed, duration, target, intensity, oscillation, restore, requestKey, null));
+        return locked(config.getId(), () -> startLocked(config, raw, displayed, duration, target, intensity, oscillation, restore, requestKey, null));
     }
     private Task startLocked(TradingSymbol config, Map<String, Object> raw, BigDecimal displayed, int duration, BigDecimal target,
             int intensity, boolean oscillation, boolean restore, String requestKey, Prepared prepared) {
@@ -300,6 +309,9 @@ public class PersistentPriceControl {
                     return task;
                 }
             }
+            if (prepared != null && (prepared.tenantId != tenant() || prepared.symbolId != config.getId()
+                    || !Objects.equals(prepared.revision, config.getRowVersion())))
+                throw new BalancedControlPlan.Failure("START_BASIS_CHANGED", "预计算后租户、品种或配置版本已变化");
             if (prepared != null && (duration != ((Number) prepared.plan.snapshot().get("duration")).intValue()
                     || intensity != ((Number) prepared.plan.snapshot().get("intensity")).intValue()
                     || target.compareTo(new BigDecimal((String) prepared.plan.snapshot().get("target")).movePointLeft(prepared.plan.precision())) != 0))
@@ -343,16 +355,19 @@ public class PersistentPriceControl {
             store.db.update("INSERT INTO market_control_task(tenant_id,id,symbol_id,symbol,algorithm_version,kind,status,start_price,target_price,duration_seconds,intensity,oscillation,price_precision,start_source,source_time,started_at,planned_end,sampled_until,request_key) VALUES(" + tenant() + ",?,?,?,? ,?,'RUNNING',?,?,?,?,?,?,?,?,?,?,?,?)",
                 id, config.getId(), config.getSymbol(), algorithm, restore ? "RESTORE" : "TARGET", prepared == null ? basis.get("price") : prepared.start, target, duration, intensity, oscillation,
                 PriceControlPath.precision(config), basis.get("source"), QuoteState.time(basis.get("timestamp")), now, now + duration * 1000L, now - 1000, requestKey);
-            if (prepared != null) store.savePlan(id, prepared.seed, prepared.plan);
+            if (prepared != null) {
+                store.savePlan(id, prepared.seed, prepared.encoded);
+                store.rememberPlan(id, prepared.plan);
+            }
             Task task = latest(config.getId());
             if (prepared != null) task.plan = prepared.plan;
             if (!restore) holds.prepare(task, raw);
             advance(task, now); return task;
     }
-    public void stop(long symbol, long now) { store.locked(symbol, () -> { stopLocked(latest(symbol), now); return null; }); }
+    public void stop(long symbol, long now) { locked(symbol, () -> { stopLocked(latest(symbol), now); return null; }); }
     /** Stop movement without restoring the source price; only an explicit restore releases the offset. */
     public void stopAndHold(long symbol, long now) {
-        store.locked(symbol, () -> {
+        locked(symbol, () -> {
             Task task = latest(symbol); advance(task, now);
             Map<String,Object> flow = task == null ? Collections.emptyMap() : flows.get(task.id);
             if (!flow.isEmpty() && "RECOVERING".equals(flow.get("state"))) {
@@ -380,32 +395,64 @@ public class PersistentPriceControl {
             store.db.update("UPDATE market_control_task SET status='STOPPED',ended_at=? WHERE tenant_id=" + tenant() + " AND id=?", now, task.id);
         }
     }
+    private static boolean manual(TradingSymbol config, Task task) {
+        return Boolean.TRUE.equals(config.getControlEnabled()) && !PriceControlPath.running(config) && (task == null || !task.running());
+    }
+    void recordManualPrice(TradingSymbol config, Map<String,Object> raw, long now) {
+        TenantContext.require(config.getTenantId());
+        if (Boolean.TRUE.equals(raw.get("available")) && raw.get("price") instanceof Number) {
+            store.freeze(config.getId(), now);
+            store.manualPoint(config.getId(), now, ForexQuoteMarketService.controlledPrice(config, raw, now));
+        }
+    }
     public void sourceQuote(TradingSymbol config, Map<String, Object> raw, long receivedAt) {
         TenantContext.require(config.getTenantId());
-        store.locked(config.getId(), () -> {
+        locked(config.getId(), () -> {
+            Map<String,Object> committed = store.lastQuote(config.getId());
+            if (QuoteState.time(raw.get("timestamp")) < QuoteState.time(committed.get("timestamp"))) return null;
             if (!store.quote(config.getId(), raw, receivedAt)) return null;
             Task task = latest(config.getId()); advance(task, receivedAt);
-            if (task != null && !flows.get(task.id).isEmpty()) { flows.observe(task, raw, receivedAt); return null; }
+            Map<String,Object> flow = task == null ? Collections.emptyMap() : flows.get(task.id);
+            if (!flow.isEmpty() && !"SOURCE".equals(flow.get("state"))) { flows.observe(task, raw, receivedAt); return null; }
             if (task != null && !holds.active(task.id).isEmpty()) { holds.observe(task, raw, receivedAt); return null; }
             // Only actual later quotes may extend a mixed minute. Late provider bars never rewrite it.
             if (Boolean.TRUE.equals(raw.get("available")) && (task == null || !task.running())
-                    && (task == null || task.endedAt == null || QuoteState.time(raw.get("timestamp")) > task.endedAt))
-                store.point(config.getId(), receivedAt, ForexQuoteMarketService.controlledPrice(config, raw, receivedAt), Boolean.TRUE.equals(config.getControlEnabled()));
+                    && (manual(config, task) || task == null || task.endedAt == null || QuoteState.time(raw.get("timestamp")) > task.endedAt)) {
+                BigDecimal price = ForexQuoteMarketService.controlledPrice(config, raw, receivedAt);
+                if (manual(config, task)) store.manualPoint(config.getId(), receivedAt, price);
+                else store.point(config.getId(), receivedAt, price, false);
+            }
             if (task != null && !task.running() && Boolean.TRUE.equals(raw.get("available"))) display(config, raw, receivedAt);
             return null;
         });
     }
-    public void sourceQuotes(List<TradingSymbol> configs, Map<String,Object> raw, long receivedAt) {
+    public long sourceQuotes(List<TradingSymbol> configs, Map<String,Object> raw, long receivedAt) {
+        return sourceQuotes(configs, raw, receivedAt, java.util.function.Function.identity());
+    }
+    long sourceQuotes(List<TradingSymbol> configs, Map<String,Object> raw, long receivedAt,
+            java.util.function.Function<TradingSymbol,TradingSymbol> reload) {
         // Aliases sharing a source event commit together; a retry cannot partially duplicate history.
         configs.sort(Comparator.comparing(TradingSymbol::getId));
-        store.transaction(() -> {
-            for (TradingSymbol config : configs) sourceQuote(config, raw, receivedAt);
-            return null;
-        });
+        List<Long> ids = new ArrayList<>();
+        for (TradingSymbol config : configs) { TenantContext.require(config.getTenantId()); ids.add(config.getId()); }
+        return store.withPlans(ids, () -> store.transaction(() -> {
+            for (TradingSymbol config : configs) store.locked(config.getId(), () -> {
+                TradingSymbol fresh = reload.apply(config);
+                TenantContext.require(fresh.getTenantId());
+                if (!Objects.equals(fresh.getId(), config.getId())) throw new IllegalStateException("Source alias identity changed");
+                if (!RandomMarketPath.enabled(fresh)) sourceQuote(fresh, raw, receivedAt);
+                return null;
+            });
+            if (configs.isEmpty()) return 0L;
+            if (QuoteState.time(raw.get("timestamp")) < QuoteState.time(store.lastQuote(configs.get(0).getId()).get("timestamp"))) return 0L;
+            List<Long> sequence = store.db.queryForList("SELECT event_sequence FROM market_source_event WHERE tenant_id=" + tenant()
+                + " AND symbol_id=? AND event_id=?", Long.class, configs.get(0).getId(), raw.get("eventId"));
+            return sequence.isEmpty() ? 0L : sequence.get(0);
+        }));
     }
     public Map<String, Object> display(TradingSymbol config, Map<String, Object> raw, long now) {
         TenantContext.require(config.getTenantId());
-        return store.locked(config.getId(), () -> displayLocked(config, raw, now));
+        return locked(config.getId(), () -> displayLocked(config, raw, now));
     }
     private Map<String, Object> displayLocked(TradingSymbol config, Map<String, Object> raw, long now) {
         advance(config.getId(), now);
@@ -423,10 +470,22 @@ public class PersistentPriceControl {
         }
         boolean hasHistory = task != null || !store.db.queryForList("SELECT minute_at FROM market_mixed_minute WHERE tenant_id=" + tenant() + " AND symbol_id=? LIMIT 1", Long.class, config.getId()).isEmpty();
         if (hasHistory || Boolean.TRUE.equals(config.getControlEnabled())) result.put("controlHistory", true);
+        if (task != null) {
+            result.put("controlTaskId", task.id);
+            Map<String,Object> publicationVersion = store.db.queryForMap("SELECT COUNT(*) AS n,COALESCE(SUM(p.to_at),0) AS total FROM market_control_publication p JOIN market_control_task t ON t.tenant_id=p.tenant_id AND t.id=p.task_id WHERE t.tenant_id=" + tenant() + " AND t.symbol_id=?", config.getId());
+            result.put("controlHistoryRevision", task.id + ":" + publicationVersion.get("n") + ":" + publicationVersion.get("total"));
+        }
+        // A committed manual rule supersedes an ended task, including its retained SOURCE flow.
+        // controlRunning denotes an active display rule; admin running remains false for manual mode.
+        if (manual(config, task)) {
+            if (result.get("price") instanceof Number) result.put("price", ForexQuoteMarketService.controlledPrice(config, result, now));
+            result.put("controlState", "MANUAL"); result.put("controlRunning", true);
+            result.put("controlOffset", config.getControlPriceOffset());
+            result.put("controlHistoryRevision", (task == null ? "" : result.get("controlHistoryRevision") + ":") + "manual:" + config.getRowVersion());
+            result.put("displayAvailable", QuoteState.valid(result));
+            return result;
+        }
         if (task == null) return result;
-        result.put("controlHistory", true); result.put("controlTaskId", task.id);
-        Map<String,Object> publicationVersion = store.db.queryForMap("SELECT COUNT(*) AS n,COALESCE(SUM(p.to_at),0) AS total FROM market_control_publication p JOIN market_control_task t ON t.tenant_id=p.tenant_id AND t.id=p.task_id WHERE t.tenant_id=" + tenant() + " AND t.symbol_id=?", config.getId());
-        result.put("controlHistoryRevision", task.id + ":" + publicationVersion.get("n") + ":" + publicationVersion.get("total"));
         Map<String,Object> flow = flows.observe(task, raw, now);
         if (!flow.isEmpty() && !"TARGET".equals(flow.get("state"))) {
             String state = (String)flow.get("state");
@@ -434,6 +493,7 @@ public class PersistentPriceControl {
             result.put("controlState", state); result.put("controlRunning", !"SOURCE".equals(state));
             result.put("controlSourceResumed", "SOURCE".equals(state));
             result.put("controlHolding", "HOLDING".equals(state));
+            if ("SOURCE".equals(state) && RandomMarketPath.enabled(config)) result.put("price", RandomMarketPath.price(config, now));
             if (!"SOURCE".equals(state)) {
                 result.put("price", flow.get("last_price")); result.put("timestamp", flow.get("last_at"));
                 result.put("generatedAt", flow.get("last_at")); result.put("displayAvailable", true);
@@ -455,7 +515,7 @@ public class PersistentPriceControl {
         List<Map<String, Object>> resumed = running ? Collections.emptyList()
             : store.db.queryForList("SELECT resumed_at,source_time,price FROM market_control_resume WHERE tenant_id=" + tenant() + " AND task_id=?", task.id);
         if (!running && sourceAvailable && resumed.isEmpty()) {
-            store.locked(config.getId(), () -> {
+            locked(config.getId(), () -> {
                 // A task can finish between provider polls. Persist the return to its currently valid
                 // quote separately, without changing that quote's original timestamp or freshness.
                 if (Objects.equals(task.id, latest(config.getId()).id)
@@ -494,8 +554,7 @@ public class PersistentPriceControl {
         TenantContext.require(config.getTenantId());
         Map<String, Object> display = display(config, raw, now);
         Task task = latest(config.getId());
-        boolean manual = Boolean.TRUE.equals(config.getControlEnabled()) && !PriceControlPath.running(config) && (task == null || !task.running());
-        if (manual && raw.get("price") instanceof Number) display.put("price", ForexQuoteMarketService.controlledPrice(config, raw, now));
+        boolean manual = manual(config, task);
         Map<String, Object> basis = startBasis(config, raw, display.get("price") instanceof Number ? ControlHistoryStore.number(display.get("price")) : null, now);
         if (task != null && task.holding) {
             basis.put("price", display.get("price")); basis.put("source", "CONTROL_DISPLAY");
@@ -503,7 +562,7 @@ public class PersistentPriceControl {
         }
         result.put("sourceAvailable", Boolean.TRUE.equals(raw.get("available"))); result.put("canStart", !basis.isEmpty());
         result.put("startBasis", basis); result.put("controlState", display.get("controlState")); result.put("currentPrice", display.get("price"));
-        if (task == null || manual && flows.get(task.id).isEmpty()) return;
+        if (task == null || manual) return;
         result.put("taskId", task.id); result.put("running", task.running() && now < task.plannedEnd);
         result.put("enabled", task.running() || task.holding); result.put("holding", task.holding); result.put("restoring", "RESTORE".equals(task.kind));
         if (display.get("controlOffset") != null) result.put("offset", display.get("controlOffset"));

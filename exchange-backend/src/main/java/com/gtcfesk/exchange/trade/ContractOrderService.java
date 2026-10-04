@@ -79,6 +79,7 @@ public class ContractOrderService {
         QuantityRules.protocol(symbol, req.getSpecVersion(), req.getQuantityUnitType());
         QuantityRules.quantity(symbol, req.getQuantity());
         if (!Boolean.TRUE.equals(symbol.getIsEnabled())) throw new BusinessException("交易品种已停用");
+        quotes.requireMarketOpen(symbol); // Includes new limit orders; cancellation remains allowed.
         boolean forex = FxContractRules.isForex(symbol);
         FxContractRules.validate(symbol);
         // 成交价只取服务端行情（含后台偏移）；限价单可在缺少行情时等待撮合。
@@ -629,6 +630,7 @@ public class ContractOrderService {
 
     /** 获取允许成交的服务端行情，包含后台价格偏移。 */
     private BigDecimal requireFreshPrice(String symbol) {
+        quotes.requireMarketOpen(symbol);
         BigDecimal price = quotes.freshPrice(symbol);
         if (price == null || price.signum() <= 0) {
             throw new BusinessException("行情暂不可用或报价已过期，请稍后重试");

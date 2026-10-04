@@ -61,9 +61,11 @@ public class OptionOrderService {
         if (req == null || req.getSymbol() == null || !("UP".equals(req.getDirection()) || "DOWN".equals(req.getDirection()))
                 || req.getDuration() == null || req.getDuration() <= 0) throw new BusinessException("交易参数无效");
         com.gtcfesk.exchange.common.TradeValidation.positive(req.getAmount(), "金额");
-        if (!tradingSymbolRepository.findByTenantIdAndSymbol(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), req.getSymbol()).map(s -> Boolean.TRUE.equals(s.getIsEnabled())).orElse(false)) {
+        com.gtcfesk.exchange.entity.TradingSymbol instrument=tradingSymbolRepository.findByTenantIdAndSymbol(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), req.getSymbol()).orElse(null);
+        if (instrument==null||!Boolean.TRUE.equals(instrument.getIsEnabled())) {
             throw new BusinessException("交易品种不存在或已停用");
         }
+        quotes.requireMarketWindow(instrument,req.getDuration());
         OptionDuration duration = optionDurationRepository.findByTenantIdAndDuration(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), req.getDuration())
                 .filter(d -> Boolean.TRUE.equals(d.getEnabled())).orElseThrow(() -> new BusinessException("交易周期不存在或已停用"));
         if ((duration.getMinAmount() != null && req.getAmount().compareTo(duration.getMinAmount()) < 0)
@@ -154,6 +156,7 @@ public class OptionOrderService {
             try {
                 LocalDateTime expireTime = order.getOpenTime().plusSeconds(order.getDuration());
                 if (now.isBefore(expireTime)) continue;
+                if (quotes.isMarketClosed(order.getSymbol())) continue; // Preserve expiry/escrow; settle when executable quotes return.
                 settlement.execute(status -> {
                     closeOrder(order.getUserId(), order.getId(), null);
                     return null;

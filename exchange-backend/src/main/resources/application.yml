@@ -74,6 +74,13 @@ forex:
 
 # 行情（K线/最新价）外部接口配置
 market:
+  depth:
+    enabled: ${MARKET_DEPTH_ENABLED:true}
+    max-age-ms: 15000
+    poll-ms: 5000
+    idle-ms: 60000
+    futures-ws: wss://fstream.binance.com/public/ws
+    okx-ws: wss://ws.okx.com/ws/v5/public
   exchange:
     provider: ${EXCHANGE_MARKET_PROVIDER:binance}
     stream-enabled: ${EXCHANGE_STREAM_ENABLED:true}

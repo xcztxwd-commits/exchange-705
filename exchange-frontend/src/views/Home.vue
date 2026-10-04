@@ -117,9 +117,9 @@ function getRealTimePrice(symbol: any): number {
 
 // 判断是否显示休市
 // 休市判断已由后端处理（基于美股交易时间），前端不再基于K线数据判断
-function isMarketClosed(_symbol: any): boolean {
-  // 后端已处理美股交易时间的休市判断，前端不再判断
-  return false
+// Only the backend calendar determines closure; stale quotes are a different state.
+function isMarketClosed(symbol: any): boolean {
+  return marketStore.getQuoteStatus(symbol.symbol) === 'closed'
 }
 
 // 获取实时涨跌幅（使用市场数据存储的涨跌幅）

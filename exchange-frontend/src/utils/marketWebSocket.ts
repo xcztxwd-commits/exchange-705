@@ -57,7 +57,8 @@ export function normalizeQuote(quote: PriceUpdate[string], now = Date.now()) {
     ? Math.min(timestamp + 60_000, fetchedAt + 60_000, quote.expiresAt == null ? Infinity : milliseconds(quote.expiresAt))
     : milliseconds(quote.executionExpiresAt)
   if (!Number.isFinite(fetchedAt) || !Number.isFinite(expiresAt)) return null
-  const status = quote.status === 'unavailable' ? 'unavailable'
+  const status = quote.status === 'closed' ? 'closed'
+    : quote.status === 'unavailable' ? 'unavailable'
     : quote.status === 'stale' || quote.stale || now >= expiresAt ? 'stale'
     : quote.available === false || (quote.status != null && quote.status !== 'available') ? 'unavailable' : 'available'
   return { ...quote, timestamp, fetchedAt, expiresAt, status }
