@@ -154,6 +154,10 @@ def preserved(db,columns,metadata_append=None):
 
 def plan(db,output,baseline=None):
     if isolation_gate.check()[0]:raise ValueError('Current source review gate failed')
+    # Reject known-invalid legacy metadata before hashing every business row.
+    # Keep the later preflight: a successful early check does not freeze live writers.
+    if 'tenant_schema_version' not in db.tables() and not core.preflight(db)['passed']:
+        raise ValueError('Current legacy inventory failed; no automatic orphan deletion or owner inference')
     current=state(db);start=0
     if 'tenant_schema_version' in db.tables():
         if baseline is None:raise ValueError('Already scoped/partly migrated target requires a verified completed ledger; never infer completed DDL from object names')

@@ -7,6 +7,8 @@ from pathlib import Path
 import tempfile
 import unittest
 import zipfile
+from types import SimpleNamespace
+from unittest.mock import patch
 import controlled_migration as tool
 
 class ControlledMigrationTests(unittest.TestCase):
@@ -94,5 +96,40 @@ class SchemaMetadataTests(unittest.TestCase):
         value=tool.schema(self.Database(definition))
         self.assertEqual(tool.digest(definition),value['objects']['table:fixture_table'])
         self.assertNotEqual(tool.digest([]),value['objects']['table:fixture_table'])
+
+class PlanPreflightTests(unittest.TestCase):
+    def test_failed_legacy_preflight_never_hashes_data_or_publishes_plan(self):
+        db=SimpleNamespace(tables=lambda:['user_account'])
+        with patch.object(tool.isolation_gate,'check',return_value=([],{})), \
+                patch.object(tool.core,'preflight',return_value={'passed':False}) as preflight, \
+                patch.object(tool,'state') as state, patch.object(tool,'publish') as publish:
+            with self.assertRaisesRegex(ValueError,'Current legacy inventory failed'):
+                tool.plan(db,Path('unused-plan.json'))
+            preflight.assert_called_once_with(db);state.assert_not_called();publish.assert_not_called()
+
+    def test_successful_early_preflight_does_not_replace_post_snapshot_check(self):
+        db=SimpleNamespace(tables=lambda:['user_account'])
+        with patch.object(tool.isolation_gate,'check',return_value=([],{})), \
+                patch.object(tool.core,'preflight',side_effect=[{'passed':True},{'passed':False}]) as preflight, \
+                patch.object(tool,'state',return_value={}) as state, patch.object(tool,'publish') as publish:
+            with self.assertRaisesRegex(ValueError,'Current legacy inventory failed'):
+                tool.plan(db,Path('unused-plan.json'))
+            self.assertEqual(preflight.call_count,2);state.assert_called_once_with(db);publish.assert_not_called()
+
+    def test_scoped_target_still_requires_existing_completed_ledger(self):
+        db=SimpleNamespace(tables=lambda:['tenant_schema_version'])
+        with patch.object(tool.isolation_gate,'check',return_value=([],{})), \
+                patch.object(tool.core,'preflight') as preflight, patch.object(tool,'state',return_value={}):
+            with self.assertRaisesRegex(ValueError,'requires a verified completed ledger'):
+                tool.plan(db,Path('unused-plan.json'))
+            preflight.assert_not_called()
+
+    def test_source_gate_failure_is_checked_before_any_database_work(self):
+        db=SimpleNamespace(tables=lambda:self.fail('Source rejection must not query the DB'))
+        with patch.object(tool.isolation_gate,'check',return_value=(['failed'],{})), \
+                patch.object(tool.core,'preflight') as preflight, patch.object(tool,'state') as state:
+            with self.assertRaisesRegex(ValueError,'Current source review gate failed'):
+                tool.plan(db,Path('unused-plan.json'))
+            preflight.assert_not_called();state.assert_not_called()
 
 if __name__=='__main__':unittest.main()
