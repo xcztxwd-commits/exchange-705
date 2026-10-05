@@ -121,6 +121,32 @@ class SchemaMetadataTests(unittest.TestCase):
         self.assertNotEqual(tool.digest([]),value['objects']['table:fixture_table'])
 
 class PlanPreflightTests(unittest.TestCase):
+    def test_revision_seed_is_exact_and_only_after_its_reviewed_phase(self):
+        before={'rows':2,'sha256':'a'*64};after={'rows':3,'sha256':'b'*64}
+        original={'asset_history_revision':before,'wallet':{'rows':1,'sha256':'c'*64}}
+        proposal={'migrations':[{'name':'earlier.sql'},{'name':tool.HISTORY_REVISION_SEED}],
+                  'history_revision_seed':{'before':before,'after':after},'preserved_sha256':tool.digest(original)}
+        tool.verify_preserved(proposal,original,0)
+        seeded={**original,'asset_history_revision':after};tool.verify_preserved(proposal,seeded,1)
+        self.assertEqual(after,seeded['asset_history_revision'])
+        for facts,index in [(seeded,0),(original,1),({**seeded,'wallet':before},1),
+                            ({**seeded,'asset_history_revision':{'rows':3,'sha256':'d'*64}},1)]:
+            with self.assertRaises(ValueError):tool.verify_preserved(proposal,facts,index)
+
+    def test_revision_seed_requires_exact_original_columns_and_keeps_all_key_fields(self):
+        with self.assertRaises(ValueError):tool.history_revision_seed(None,{'asset_history_revision':['revision']})
+        self.assertIsNone(tool.history_revision_seed(None,{}))
+        captured=[]
+        def fingerprints(db,queries,columns):
+            captured.extend(queries);return {'asset_history_revision':{'rows':1,'sha256':'a'*64}}
+        fields=['user_id','basis_version','level','revision']
+        with patch.object(tool.core,'row_fingerprints',side_effect=fingerprints):
+            result=tool.history_revision_seed(None,{'asset_history_revision':fields})
+        self.assertEqual(tool.HISTORY_REVISION_SEED,result['migration'])
+        for field in fields:self.assertIn('HEX(CAST(`'+field+'` AS BINARY))',captured[-1])
+        self.assertIn('r.revision+IF(p.user_id IS NULL,0,1)',captured[-1])
+        self.assertIn('WHERE NOT EXISTS',captured[-1])
+
     def test_reviewed_legacy_column_reuse_never_executes_duplicate_ddl(self):
         db=SimpleNamespace(sql=lambda sql:self.fail('Already present reviewed columns must not run ALTER'))
         path=Path('V2026092903__activity_delivery_settings.sql')

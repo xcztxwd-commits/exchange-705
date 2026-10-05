@@ -166,6 +166,38 @@ def preserved(db,columns,metadata_append=None):
         queries.append('SELECT '+core.literal(table)+',SHA2(JSON_ARRAY('+','.join(expr)+'),256) AS row_sha256 FROM '+core.ident(table)+where+' ORDER BY row_sha256;')
     return core.row_fingerprints(db,queries,columns)
 
+HISTORY_REVISION_SEED = 'V2026100101__tenant_history_revision_and_legacy_markers.sql'
+
+def history_revision_seed(db,columns):
+    """Exact expected cache revision seed; never exclude this table from preservation."""
+    fields=columns.get('asset_history_revision')
+    if fields is None:return None
+    if set(fields)!={'user_id','basis_version','level','revision'}:
+        raise ValueError('Unreviewed original history revision columns')
+    parents=' UNION '.join('SELECT user_id,basis_version,'+str(level)+' AS level FROM '+core.ident(table)+' GROUP BY user_id,basis_version'
+                          for level,table in enumerate(('asset_history_1h','asset_history_4h','asset_history_1d'),1))
+    match='p.user_id=r.user_id AND p.basis_version=r.basis_version AND p.level=r.level'
+    rows=('SELECT r.user_id,r.basis_version,r.level,r.revision+IF(p.user_id IS NULL,0,1) AS revision '
+          'FROM asset_history_revision r LEFT JOIN ('+parents+') p ON '+match+
+          ' UNION ALL SELECT p.user_id,p.basis_version,p.level,1 FROM ('+parents+') p '
+          'WHERE NOT EXISTS(SELECT 1 FROM asset_history_revision r WHERE '+match+')')
+    expr='JSON_ARRAY('+','.join('HEX(CAST('+core.ident(f)+' AS BINARY))' for f in fields)+')'
+    sql="SELECT 'asset_history_revision',SHA2("+expr+',256) AS row_sha256 FROM ('+rows+') expected ORDER BY row_sha256;'
+    reference={'asset_history_revision':fields}
+    return {'migration':HISTORY_REVISION_SEED,
+            'before':preserved(db,reference)['asset_history_revision'],
+            'after':core.row_fingerprints(db,[sql],reference)['asset_history_revision']}
+
+def verify_preserved(proposal,actual,index):
+    contract=proposal.get('history_revision_seed')
+    actual=dict(actual)
+    if contract and index>=next(i for i,m in enumerate(proposal['migrations']) if m['name']==HISTORY_REVISION_SEED):
+        if actual.get('asset_history_revision')!=contract['after']:
+            raise ValueError('Exact reviewed derived history revision seed differs')
+        actual['asset_history_revision']=contract['before']
+    if digest(actual)!=proposal['preserved_sha256']:
+        raise ValueError('Original money/order/chat/actor/metadata facts changed; preserve maintenance and forward-repair only')
+
 def plan(db,output,baseline=None):
     if isolation_gate.check()[0]:raise ValueError('Current source review gate failed')
     # Reject known-invalid legacy metadata before hashing every business row.
@@ -203,6 +235,11 @@ def plan(db,output,baseline=None):
            'allowed_metadata_append':metadata_append,
            'allowed_transforms':['old current_token revocation','only NULL legacy deposit source/order_no/account_type deterministic markers'],
            'restore_policy':'new isolated physical instance only; never overwrite source or new increments','business_activation_ready':False}
+    value['history_revision_seed']=history_revision_seed(db,columns) if start==0 else None
+    if value['history_revision_seed']:
+        if value['history_revision_seed']['before']!=current['data']['tables']['asset_history_revision']:
+            raise ValueError('History revision facts changed during planning')
+        value['allowed_transforms'].append('only exact V2026100101 derived cache revision +1 per existing parent group and revision=1 for missing groups')
     if metadata_append:value['allowed_transforms']=[f"only newly approved {metadata_append['version']} inactive schema-version receipt; all original column values unchanged"]
     if start>=len(value['migrations']):raise ValueError('No forward migration to apply')
     publish(output,value);return value
@@ -374,6 +411,8 @@ def apply(db,proposal,proof,restore_db,approval,ledger,resume=False,after_phase=
     other=target(restore_db)
     if other!=proof['restore'] or (not local and (other['server_uuid']==proposal['target']['server_uuid'] or other['datadir']==proposal['target']['datadir'])) or state(restore_db)!=proof['restored']:
         raise ValueError('Independent restore evidence no longer matches')
+    if not resume and proposal.get('history_revision_seed')!=(history_revision_seed(restore_db,proposal['preservation_columns']) if proposal['start']==0 else None):
+        raise ValueError('History revision seed contract differs from independently restored original facts')
     legacy_reuse=proposal.get('legacy_column_reuse',[])
     if not isinstance(legacy_reuse,list) or len(legacy_reuse)!=len(set(legacy_reuse)) or not set(legacy_reuse).issubset(core.LEGACY_COLUMN_MIGRATIONS) or (proposal['start']>0 and legacy_reuse):
         raise ValueError('Unreviewed legacy-column reuse contract')
@@ -384,11 +423,13 @@ def apply(db,proposal,proof,restore_db,approval,ledger,resume=False,after_phase=
         tip_matches=proof.get('ledger_tip')==digest(last) or (last['kind']=='RESUME_VERIFIED' and last['binding']==binding(proposal,proof) and proof.get('ledger_tip')==last['previous_tip'])
         if last['plan_sha256']!=digest(proposal) or last['target']!=target(db) or state(db)!=last['state'] or proof['restored']!=last['state'] or proof.get('next')!=last['next'] or not tip_matches:raise ValueError('Receipt/plan/latest source differs; preserve all increments and use a new reviewed forward plan')
         start=last['next']
+        verify_preserved(proposal,preserved(restore_db,proposal['preservation_columns'],metadata_append),start-1)
         ledger.append({'kind':'RESUME_VERIFIED','plan_sha256':digest(proposal),'target':target(db),'state':last['state'],'next':start,'binding':binding(proposal,proof),'previous_tip':proof['ledger_tip']})
     else:
         observed=local and len(rows)==1 and rows[0]['kind']=='LOCAL_BASELINE_OBSERVED' and rows[0]['target']==proposal['target'] and rows[0]['state']==proposal['initial'] and rows[0]['migrations']==proposal['migrations'][:proposal['start']] and rows[0]['source_sha256']==proposal['source_sha256']
         if (rows and not observed) or state(db)!=proposal['initial'] or proof['restored']!=proposal['initial'] or proof.get('ledger_tip') is not None:raise ValueError('Source changed or receipt exists; never replay apply')
-    start=proposal['start'];ledger.append({'kind':'BEGIN','plan_sha256':digest(proposal),'target':target(db),'state':proposal['initial'],'next':start,'binding':binding(proposal,proof)})
+        start=proposal['start']
+        ledger.append({'kind':'BEGIN','plan_sha256':digest(proposal),'target':target(db),'state':proposal['initial'],'next':start,'binding':binding(proposal,proof)})
     for index in range(start,len(core.MIGRATIONS)):
         maintenance(db)
         expected=ledger.latest()['state']
@@ -397,7 +438,7 @@ def apply(db,proposal,proof,restore_db,approval,ledger,resume=False,after_phase=
         try:
             core_path=core.MIGRATIONS[index]
             execution=execute_phase(db,core_path,legacy_reuse)
-            if digest(preserved(db,proposal['preservation_columns'],metadata_append))!=proposal['preserved_sha256']:raise ValueError('Original money/order/chat/actor/metadata facts changed; preserve maintenance and forward-repair only')
+            verify_preserved(proposal,preserved(db,proposal['preservation_columns'],metadata_append),index)
             metadata_receipt_after_phase(db,metadata_append)
             ledger.append({'kind':'PHASE_COMPLETE','plan_sha256':digest(proposal),'target':target(db),'state':state(db),'next':index+1,'binding':binding(proposal,proof),'migration':proposal['migrations'][index],'execution':execution})
         except BaseException as error:
