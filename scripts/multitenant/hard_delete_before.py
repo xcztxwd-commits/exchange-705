@@ -33,7 +33,8 @@ ALTERNATIVES={
     'market_source_tick':('received_at','ms','first receipt'),
     'support_presence':('heartbeat_at','datetime','last heartbeat'),
 }
-EXTRA_RELATIONS=[('admin_role_menu','menu_id','admin_menu','id'),
+EXTRA_RELATIONS=[('admin_menu','parent_id','admin_menu','id'),
+                 ('admin_role_menu','menu_id','admin_menu','id'),
                  ('user_menu','menu_id','admin_menu','id'),
                  ('menu_action','menu_id','admin_menu','id'),
                  ('user_action','menu_id','admin_menu','id')]

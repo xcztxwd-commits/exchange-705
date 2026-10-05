@@ -34,6 +34,7 @@ class Checks(unittest.TestCase):
     def test_children_before_parents_and_cycles_refused(self):
         self.assertEqual(['child','parent'],cleanup.delete_order(['parent','child'],[('child','parent',[('parent_id','id')])]))
         with self.assertRaises(ValueError):cleanup.delete_order(['a','b'],[('a','b',[]),('b','a',[])])
+        self.assertIn(('admin_menu','parent_id','admin_menu','id'),cleanup.EXTRA_RELATIONS)
     def test_count_mismatch_forces_mysql_error_before_commit(self):
         sql=cleanup.deletion_sql({'protected':['user_account'],'selected':{'child':[{'key':['1']}]},'keys':{'child':['id']},'delete_order':['child']})
         self.assertLess(sql.index('ROW_COUNT()=1'),sql.index('COMMIT;'))
