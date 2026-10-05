@@ -99,3 +99,6 @@ dist-control*/
 
 # Additive administrator-curated trader display migration; no private account data.
 !exchange-backend/src/main/resources/db/migration/V2026100303__curated_traders.sql
+
+# Reviewed public schema-only snapshot; never allow business data dumps.
+!docs/database/schema.sql

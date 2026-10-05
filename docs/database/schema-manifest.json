@@ -1,0 +1,300 @@
+{
+  "snapshot_date": "2026-10-05",
+  "schema_epoch": 2026100404,
+  "source_code_commit": "50d65fdc59083f9c3d029fa78d42794f5eabf86c",
+  "source_kind": "migrated isolated MySQL 5.7 fixture; structure-only metadata capture",
+  "database_defaults": {
+    "collation": "utf8mb4_unicode_ci",
+    "character_set": "utf8mb4"
+  },
+  "counts": {
+    "tables": 112,
+    "columns": 1319,
+    "indexes": 448,
+    "foreign_keys": 188,
+    "triggers": 161,
+    "routines": 1,
+    "views": 0,
+    "events": 0
+  },
+  "categories": {
+    "private": 94,
+    "shared": 6,
+    "control": 12
+  },
+  "registered_table_count": 113,
+  "registered_without_ddl": [
+    "tenant_migration_history"
+  ],
+  "tables": [
+    "activity_campaign",
+    "activity_delivery",
+    "activity_material",
+    "activity_selection",
+    "activity_selection_member",
+    "activity_send_receipt",
+    "admin_menu",
+    "admin_role",
+    "admin_role_menu",
+    "admin_table_preference",
+    "admin_user",
+    "announcement",
+    "announcement_receipt",
+    "asset_account",
+    "asset_history_1d",
+    "asset_history_1h",
+    "asset_history_1m",
+    "asset_history_4h",
+    "asset_history_baseline",
+    "asset_history_job_state",
+    "asset_history_migration",
+    "asset_history_quote_batch",
+    "asset_history_revision",
+    "asset_snapshot",
+    "backend_login",
+    "balance_adjustment",
+    "calendar_audit",
+    "calendar_event",
+    "calendar_reminder",
+    "calendar_source",
+    "calendar_source_update",
+    "contract_order",
+    "control_access_session",
+    "control_admin",
+    "control_audit_log",
+    "control_chat_archive_job",
+    "control_table_preference",
+    "demo_account",
+    "demo_ledger",
+    "demo_order",
+    "deposit_credit_record",
+    "deposit_record",
+    "deposit_setting",
+    "financial_order",
+    "financial_product",
+    "financial_yield_record",
+    "inbox_letter",
+    "kyc_record",
+    "loan_personal_info",
+    "loan_record",
+    "loan_setting",
+    "manual_order_binding",
+    "manual_order_record",
+    "market_control_command",
+    "market_control_flow",
+    "market_control_hold",
+    "market_control_plan",
+    "market_control_publication",
+    "market_control_resume",
+    "market_control_sample",
+    "market_control_task",
+    "market_engine_runtime",
+    "market_engine_tenant",
+    "market_history_ordering",
+    "market_history_response",
+    "market_legacy_minute_snapshot",
+    "market_mixed_minute",
+    "market_simulation_source_candle",
+    "market_source_candle",
+    "market_source_event",
+    "market_source_quote",
+    "market_source_tick",
+    "menu_action",
+    "news_article",
+    "news_audit",
+    "news_feed",
+    "news_source_setting",
+    "operation_log",
+    "option_duration",
+    "option_order",
+    "s4_history_projection_minute",
+    "s4_history_projection_progress",
+    "simulation_seed",
+    "support_attachment",
+    "support_conversation",
+    "support_message",
+    "support_presence",
+    "symbol_duration",
+    "system_config",
+    "t_ai_model",
+    "tenant",
+    "tenant_domain_binding",
+    "tenant_domain_history",
+    "tenant_policy",
+    "tenant_schema_version",
+    "trader_audit",
+    "trader_equity",
+    "trader_history",
+    "trader_profile",
+    "trading_symbol",
+    "transfer_record",
+    "trial_account",
+    "trial_grant",
+    "trial_ledger",
+    "user_account",
+    "user_action",
+    "user_bank_card",
+    "user_digital_address",
+    "user_id_sequence",
+    "user_menu",
+    "verify_code",
+    "withdraw_record"
+  ],
+  "normalizations": {
+    "definer": "CURRENT_USER (source accounts omitted)",
+    "live_auto_increment_counters": "removed; user_account table-level floor 7000001 retained from reviewed tenant DDL; ORM uses user_id_sequence with INITIAL_PARAM=752911 independently",
+    "definer_replacements": 162,
+    "removed_table_counters": 35,
+    "stored_sql_mode": "recognized MySQL 5.7 dump headers verified against actual trigger/routine metadata"
+  },
+  "contains_business_rows": false,
+  "contains_migration_receipts": false,
+  "business_activation_granted": false,
+  "migrations": [
+    {
+      "name": "V2026092900__legacy_feature_prerequisites.sql",
+      "sha256": "eab055fb009441768ce3b277f5545e94cfabc1f4249cf17fec4851b8f9aa9859"
+    },
+    {
+      "name": "V2026092901__multitenant_control.sql",
+      "sha256": "9a436c3113e839e42844cc9238b89cee1ee057b159eaf686ff94be256f2d39ab"
+    },
+    {
+      "name": "V2026092902__multitenant_isolation.sql",
+      "sha256": "24ffda4124a169d2eb8d866d0af92f7f46476d9156e7edc9333651b72bd450bd"
+    },
+    {
+      "name": "V2026092903__activity_delivery_settings.sql",
+      "sha256": "ffcbc91e4009bd304a549578dcab12c282dd6bfed49706208b0d033ccb19b93e"
+    },
+    {
+      "name": "V2026092904__activity_template_design.sql",
+      "sha256": "7b5371cadc5eec87d5fe9a0253b58d6905a850ed966d6358ee265de58328ee4b"
+    },
+    {
+      "name": "V2026092905__activity_material_library.sql",
+      "sha256": "0f5bddb42d22693f115df11ff8f24c8c6db636600865342f1200967a78102028"
+    },
+    {
+      "name": "V2026092906__activity_repeat_send.sql",
+      "sha256": "137a66f1467e9b707bff416864687e0fb4891828020a64fe8b4593fc5064a520"
+    },
+    {
+      "name": "V2026093001__activity_material_constraints.sql",
+      "sha256": "1e51a27e60efaf798219a22d8b4ae0bc97b7f724be8dffd3ced37fb6eec03972"
+    },
+    {
+      "name": "V2026093002__control_table_preferences.sql",
+      "sha256": "0f02e71472252db16051d41055e1fcf9bf8df8b7b8109fa6716d477000ad9198"
+    },
+    {
+      "name": "V2026093003__support_time_filter.sql",
+      "sha256": "5f9a3a1a939ae75cb027196526db80f0d17b8f973e60ee2bb178a73b9337a1ec"
+    },
+    {
+      "name": "V2026093004__tenant_domain_candidates.sql",
+      "sha256": "4a82423d08d3b3c06a3b50b62384c053da97dfaf6a7189ac292ac9e10e534b31"
+    },
+    {
+      "name": "V2026093005__user_id_sequence.sql",
+      "sha256": "04f1ec1bde23f282784e14e58c384d6de2efc9721f6257c407be34c316a6398b"
+    },
+    {
+      "name": "V2026093006__chat_archive_jobs.sql",
+      "sha256": "0db29cf208be0d9d83bc6ff345d938b5027457fa4be07154c71e32c69b3024be"
+    },
+    {
+      "name": "V2026100101__tenant_history_revision_and_legacy_markers.sql",
+      "sha256": "d6450c4c796a7a78569e62db02983562cc551ed2d68ddc70cf4bbc6d72683955"
+    },
+    {
+      "name": "V2026100102__stage1_current_business_schema.sql",
+      "sha256": "e65ce177bf5318a90f375ab08f66148e1bd6d62965ae214fe275c7331edb112d"
+    },
+    {
+      "name": "V2026100201__ordinary_funds_creation_receipts.sql",
+      "sha256": "916f50a25a4f940186d5e800301f0443589af828902ec129dce742f54915fdda"
+    },
+    {
+      "name": "V2026100301__economic_calendar.sql",
+      "sha256": "260d21f34d22511ed7681a5ecaa2b870db8e9b826e0b889e3c4bf0586a037fb5"
+    },
+    {
+      "name": "V2026100302__external_news.sql",
+      "sha256": "c846e622bf89895ec7a0d79b0d0e4f9f97045e9fa5c62bd1512b94b331eeec94"
+    },
+    {
+      "name": "V2026100303__curated_traders.sql",
+      "sha256": "5d63020c546ce65a4e78450f277010f7449365ef50c5300c36a11a3c86825527"
+    },
+    {
+      "name": "V2026100304__market_engine_runtime.sql",
+      "sha256": "3b333cdf1458ebd0b28dc373ef1fdbc5cba841392870a1aaed74bf7419d1a844"
+    },
+    {
+      "name": "V2026100305__s2_runtime_tenant_constraints.sql",
+      "sha256": "9f6ff8ceb6519e8d3446554a03c56b6cc58d1cc33e91d532c4e6537998c804d9"
+    },
+    {
+      "name": "V2026100401__joint_s3_money_progress.sql",
+      "sha256": "123d14ba9a8767a5e2f81e624a0100a5282a34603f40ce366561b26b320e60bb"
+    },
+    {
+      "name": "V2026100402__joint_s4_history_projection.sql",
+      "sha256": "58ddcf5aac26f8f7d53fb9f69230c3308357bc5d92d1ef3fb2f0437bfb8cc277"
+    },
+    {
+      "name": "V2026100403__source_history_input_revision.sql",
+      "sha256": "232fd47233ba1b2a219bbbaad51483c3f565db4966377a362b3fe1949cea9671"
+    },
+    {
+      "name": "V2026100404__history_ordering_and_response_receipts.sql",
+      "sha256": "8689d5bc2192161ed60db148c7792984da92f5f34493a5c8d094555dd396d1ae"
+    }
+  ],
+  "sha256": {
+    "docs/database/schema.sql": "112118fbd7e5b474dd64b035907c7ccdca80944e956a48a1ab5742569401ea6a",
+    "docs/database/data-dictionary.md": "592a7a6cbfce1addf80b5a50a5703df10a350f777379887a1cc90a5d1a44aa90",
+    "scripts/multitenant/table_manifest.json": "3f3a2e704d60487545a9a4c8fe2ca455a8d939c7e18429e3dae90c1720aea12b",
+    "scripts/multitenant/legacy-schema.sql": "6cbf7e0bb75eed06cc46f0c39ee16af8c8557e0416b8c45d5b186bcee382fcf1",
+    "scripts/multitenant/legacy-feature-tables.sql": "fd58712b25fa33152b13db4a25f4cb0657ad86d3f0a4cc86170fd16e852c42bc",
+    "exchange-backend/src/main/resources/db/migration/V2026092900__legacy_feature_prerequisites.sql": "eab055fb009441768ce3b277f5545e94cfabc1f4249cf17fec4851b8f9aa9859",
+    "exchange-backend/src/main/resources/db/migration/V2026092901__multitenant_control.sql": "9a436c3113e839e42844cc9238b89cee1ee057b159eaf686ff94be256f2d39ab",
+    "exchange-backend/src/main/resources/db/migration/V2026092902__multitenant_isolation.sql": "24ffda4124a169d2eb8d866d0af92f7f46476d9156e7edc9333651b72bd450bd",
+    "exchange-backend/src/main/resources/db/migration/V2026092903__activity_delivery_settings.sql": "ffcbc91e4009bd304a549578dcab12c282dd6bfed49706208b0d033ccb19b93e",
+    "exchange-backend/src/main/resources/db/migration/V2026092904__activity_template_design.sql": "7b5371cadc5eec87d5fe9a0253b58d6905a850ed966d6358ee265de58328ee4b",
+    "exchange-backend/src/main/resources/db/migration/V2026092905__activity_material_library.sql": "0f5bddb42d22693f115df11ff8f24c8c6db636600865342f1200967a78102028",
+    "exchange-backend/src/main/resources/db/migration/V2026092906__activity_repeat_send.sql": "137a66f1467e9b707bff416864687e0fb4891828020a64fe8b4593fc5064a520",
+    "exchange-backend/src/main/resources/db/migration/V2026093001__activity_material_constraints.sql": "1e51a27e60efaf798219a22d8b4ae0bc97b7f724be8dffd3ced37fb6eec03972",
+    "exchange-backend/src/main/resources/db/migration/V2026093002__control_table_preferences.sql": "0f02e71472252db16051d41055e1fcf9bf8df8b7b8109fa6716d477000ad9198",
+    "exchange-backend/src/main/resources/db/migration/V2026093003__support_time_filter.sql": "5f9a3a1a939ae75cb027196526db80f0d17b8f973e60ee2bb178a73b9337a1ec",
+    "exchange-backend/src/main/resources/db/migration/V2026093004__tenant_domain_candidates.sql": "4a82423d08d3b3c06a3b50b62384c053da97dfaf6a7189ac292ac9e10e534b31",
+    "exchange-backend/src/main/resources/db/migration/V2026093005__user_id_sequence.sql": "04f1ec1bde23f282784e14e58c384d6de2efc9721f6257c407be34c316a6398b",
+    "exchange-backend/src/main/resources/db/migration/V2026093006__chat_archive_jobs.sql": "0db29cf208be0d9d83bc6ff345d938b5027457fa4be07154c71e32c69b3024be",
+    "exchange-backend/src/main/resources/db/migration/V2026100101__tenant_history_revision_and_legacy_markers.sql": "d6450c4c796a7a78569e62db02983562cc551ed2d68ddc70cf4bbc6d72683955",
+    "exchange-backend/src/main/resources/db/migration/V2026100102__stage1_current_business_schema.sql": "e65ce177bf5318a90f375ab08f66148e1bd6d62965ae214fe275c7331edb112d",
+    "exchange-backend/src/main/resources/db/migration/V2026100201__ordinary_funds_creation_receipts.sql": "916f50a25a4f940186d5e800301f0443589af828902ec129dce742f54915fdda",
+    "exchange-backend/src/main/resources/db/migration/V2026100301__economic_calendar.sql": "260d21f34d22511ed7681a5ecaa2b870db8e9b826e0b889e3c4bf0586a037fb5",
+    "exchange-backend/src/main/resources/db/migration/V2026100302__external_news.sql": "c846e622bf89895ec7a0d79b0d0e4f9f97045e9fa5c62bd1512b94b331eeec94",
+    "exchange-backend/src/main/resources/db/migration/V2026100303__curated_traders.sql": "5d63020c546ce65a4e78450f277010f7449365ef50c5300c36a11a3c86825527",
+    "exchange-backend/src/main/resources/db/migration/V2026100304__market_engine_runtime.sql": "3b333cdf1458ebd0b28dc373ef1fdbc5cba841392870a1aaed74bf7419d1a844",
+    "exchange-backend/src/main/resources/db/migration/V2026100305__s2_runtime_tenant_constraints.sql": "9f6ff8ceb6519e8d3446554a03c56b6cc58d1cc33e91d532c4e6537998c804d9",
+    "exchange-backend/src/main/resources/db/migration/V2026100401__joint_s3_money_progress.sql": "123d14ba9a8767a5e2f81e624a0100a5282a34603f40ce366561b26b320e60bb",
+    "exchange-backend/src/main/resources/db/migration/V2026100402__joint_s4_history_projection.sql": "58ddcf5aac26f8f7d53fb9f69230c3308357bc5d92d1ef3fb2f0437bfb8cc277",
+    "exchange-backend/src/main/resources/db/migration/V2026100403__source_history_input_revision.sql": "232fd47233ba1b2a219bbbaad51483c3f565db4966377a362b3fe1949cea9671",
+    "exchange-backend/src/main/resources/db/migration/V2026100404__history_ordering_and_response_receipts.sql": "8689d5bc2192161ed60db148c7792984da92f5f34493a5c8d094555dd396d1ae"
+  },
+  "verification": {
+    "offline_contract": "PASS",
+    "offline_self_test_checks": 4,
+    "fresh_mysql57_import": "PASS",
+    "mysql_version": "5.7.44",
+    "normalized_ddl_roundtrip": "PASS",
+    "normalized_ddl_sha256": "3ed3c40c445acee4dcf4f963ec63b0002343eff41dbb01225c66bb90be231b5d",
+    "empty_table_check": "PASS",
+    "total_business_table_rows": 0,
+    "foreign_key_checks_restored": true,
+    "unique_checks_restored": true,
+    "application_or_production_acceptance": false
+  }
+}
