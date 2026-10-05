@@ -43,7 +43,7 @@ class Source0403MetadataContractTests(unittest.TestCase):
         result=tool.preserved(db,columns,tool.SOURCE0403_METADATA)
         sql=db.sql[0];self.assertEqual(1,sql.count(' WHERE version<>2026100403'))
         self.assertIn('HEX(CAST(`applied_at` AS BINARY))',sql);self.assertIn('HEX(CAST(`business_activation_ready` AS BINARY))',sql)
-        self.assertIn('FROM `asset_account`;',sql);self.assertNotIn('FROM `asset_account` WHERE',sql)
+        self.assertIn('FROM `asset_account` ORDER BY row_sha256;',sql);self.assertNotIn('FROM `asset_account` WHERE',sql)
         self.assertEqual(1,result['tenant_schema_version']['rows']);self.assertEqual(1,result['asset_account']['rows'])
     def test_original_duplicate_metadata_rows_remain_multiset_sensitive(self):
         columns={'tenant_schema_version':['version','applied_at']};row='tenant_schema_version\t'+'a'*64

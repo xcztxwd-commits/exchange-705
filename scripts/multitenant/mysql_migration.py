@@ -17,6 +17,7 @@ import re
 import secrets
 import subprocess
 import sys
+import tempfile
 import time
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -70,6 +71,19 @@ class Database:
 
     def query(self, sql):
         return self.sql(sql).stdout.decode('utf-8').rstrip('\n').splitlines()
+
+    def query_stream(self, sql):
+        """Stream sorted verification rows without buffering millions of hashes."""
+        command=self.command();command[-1]+=' --quick'
+        with tempfile.TemporaryFile() as source, tempfile.TemporaryFile() as error:
+            source.write(sql.encode('utf-8'));source.seek(0)
+            process=subprocess.Popen(command,stdin=source,stdout=subprocess.PIPE,stderr=error)
+            try:
+                for row in process.stdout:yield row.decode('utf-8').rstrip('\n')
+                if process.wait():raise RuntimeError('Streaming MySQL verification failed; no partial PASS')
+            finally:
+                process.stdout.close()
+                if process.poll() is None:process.kill();process.wait()
 
     def restore_file(self, path):
         """Stream a bounded-memory restore into an already-created isolated database."""
@@ -157,13 +171,30 @@ def fingerprint(db, reference=None):
         # HEX(number) rounds numeric arguments in MySQL; cast first to preserve every
         # DECIMAL digit, datetime fraction and binary evidence byte.
         expr="JSON_ARRAY("+','.join('HEX(CAST('+ident(c)+' AS BINARY))' for c in fields)+')'
-        queries.append('SELECT '+literal(table)+',SHA2('+expr+',256) FROM '+ident(table)+';')
-    result=db.query('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ; START TRANSACTION WITH CONSISTENT SNAPSHOT;\n'+'\n'.join(queries)+'\nCOMMIT;')
+        queries.append('SELECT '+literal(table)+',SHA2('+expr+',256) AS row_sha256 FROM '+ident(table)+' ORDER BY row_sha256;')
+    return {'columns':columns,'tables':row_fingerprints(db,queries,columns)}
+
+def row_fingerprints(db, queries, columns):
+    sql='SET TRANSACTION ISOLATION LEVEL REPEATABLE READ; START TRANSACTION WITH CONSISTENT SNAPSHOT;\n'+'\n'.join(queries)+'\nCOMMIT;'
+    stream=getattr(db,'query_stream',None)
+    if stream is not None:
+        groups={t:{'rows':0,'digest':hashlib.sha256(),'last':None} for t in columns}
+        for row in stream(sql):
+            table,sha=row.split('\t')
+            if table not in groups or not re.fullmatch('[0-9a-f]{64}',sha):raise ValueError('Invalid verification row')
+            item=groups[table]
+            if item['last'] is not None:
+                if sha<item['last']:raise ValueError('Verification rows not sorted')
+                item['digest'].update(b'\n')
+            item['digest'].update(sha.encode('ascii'));item['rows']+=1;item['last']=sha
+        return {t:{'rows':g['rows'],'sha256':g['digest'].hexdigest()} for t,g in groups.items()}
+    # Small injected test adapters retain the exact original aggregation contract.
+    result=db.query(sql)
     groups={table:[] for table in columns}
     for row in result:
         table,digest=row.split('\t');groups[table].append(digest)
-    return {'columns':columns,'tables':{table:{'rows':len(hashes),'sha256':hashlib.sha256(('\n'.join(sorted(hashes))).encode()).hexdigest()}
-                                      for table,hashes in groups.items()}}
+    return {table:{'rows':len(hashes),'sha256':hashlib.sha256(('\n'.join(sorted(hashes))).encode()).hexdigest()}
+            for table,hashes in groups.items()}
 
 def reviewed_legacy_triggers(rows):
     """Return exact reviewed legacy callbacks and any changed/unknown trigger names."""

@@ -132,7 +132,7 @@ def metadata_receipt_after_phase(db,contract):
 
 def preserved(db,columns,metadata_append=None):
     version=metadata_version(metadata_append) if metadata_append is not None else None
-    queries=[];groups={t:[] for t in columns}
+    queries=[]
     for table,fields in columns.items():
         expr=[]
         for field in fields:
@@ -147,10 +147,8 @@ def preserved(db,columns,metadata_append=None):
         if metadata_append is not None:
             if table=='tenant_schema_version':where=f' WHERE version<>{version}'
         # Every original metadata row remains hashed with all old columns. Only the single planned receipt is excluded.
-        queries.append('SELECT '+core.literal(table)+',SHA2(JSON_ARRAY('+','.join(expr)+'),256) FROM '+core.ident(table)+where+';')
-    for row in db.query('START TRANSACTION WITH CONSISTENT SNAPSHOT;\n'+'\n'.join(queries)+'\nCOMMIT;'):
-        table,sha=row.split('\t');groups[table].append(sha)
-    return {t:{'rows':len(rows),'sha256':hashlib.sha256('\n'.join(sorted(rows)).encode()).hexdigest()} for t,rows in groups.items()}
+        queries.append('SELECT '+core.literal(table)+',SHA2(JSON_ARRAY('+','.join(expr)+'),256) AS row_sha256 FROM '+core.ident(table)+where+' ORDER BY row_sha256;')
+    return core.row_fingerprints(db,queries,columns)
 
 def plan(db,output,baseline=None):
     if isolation_gate.check()[0]:raise ValueError('Current source review gate failed')
