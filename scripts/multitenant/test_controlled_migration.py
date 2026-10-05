@@ -95,6 +95,40 @@ class ControlledMigrationTests(unittest.TestCase):
             source=self.root/f'bad-{index}.sql';source.write_text(text)
             with self.subTest(index=index),self.assertRaises(ValueError):
                 tool.stream_restore_trigger_sql_modes(source,self.root/f'bad-output-{index}.sql',modes)
+
+    def test_streamed_routine_modes_preserve_procedure_function_body_and_original(self):
+        mode='STRICT_TRANS_TABLES,NO_AUTO_CREATE_USER'
+        header="/*!50003 SET sql_mode = 'STRICT_TRANS_TABLES' */ ;\nDELIMITER ;;\nCREATE DEFINER=`root`@`localhost` "
+        sql=header+"PROCEDURE `same`() SELECT 'NO_AUTO_CREATE_USER';;\n"+header+"FUNCTION `same`() RETURNS INT RETURN 1;;\nINSERT INTO t VALUES('STRICT_TRANS_TABLES');\n"
+        source=self.root/'routines.sql';source.write_text(sql);output=self.root/'routine-input.sql'
+        modes={'PROCEDURE:same':mode,'FUNCTION:same':mode}
+        with patch.object(Path,'read_text',side_effect=AssertionError('Large input cannot be materialized')):
+            tool.stream_restore_trigger_sql_modes(source,output,{},modes)
+        self.assertEqual(sql,source.read_text())
+        self.assertEqual(sql.replace("SET sql_mode = 'STRICT_TRANS_TABLES'","SET sql_mode = '"+mode+"'"),output.read_text())
+
+    def test_streamed_routine_missing_duplicate_unknown_changed_and_unrecognized_rejected(self):
+        sql="/*!50003 SET sql_mode = 'STRICT_TRANS_TABLES' */ ;\nDELIMITER ;;\nCREATE DEFINER=`root`@`localhost` PROCEDURE `p`() SELECT 1;;\n"
+        mode={'PROCEDURE:p':'STRICT_TRANS_TABLES,NO_AUTO_CREATE_USER'}
+        cases=[(sql,{}),(sql+sql,mode),('',mode),(sql,{'PROCEDURE:p':'ANSI'}),
+               (sql.splitlines()[-1]+'\n',mode),(sql.replace('DELIMITER ;;','unexpected header'),mode),
+               (sql,{'PROCEDURE:p':"STRICT_TRANS_TABLES';SELECT 1"})]
+        for index,(text,modes) in enumerate(cases):
+            source=self.root/f'bad-routine-{index}.sql';source.write_text(text)
+            with self.subTest(index=index),self.assertRaises(ValueError):
+                tool.stream_restore_trigger_sql_modes(source,self.root/f'bad-routine-output-{index}.sql',{},modes)
+
+    def test_restore_input_binds_actual_trigger_and_routine_metadata(self):
+        sql="/*!50003 SET sql_mode = 'STRICT_TRANS_TABLES' */ ;\nDELIMITER ;;\nCREATE DEFINER=`root`@`localhost` PROCEDURE `p`() SELECT 1;;\n"
+        source=self.root/'original-routine.sql';source.write_text(sql)
+        mode='STRICT_TRANS_TABLES,NO_AUTO_CREATE_USER'
+        def query(value):
+            if 'information_schema.TRIGGERS' in value:return []
+            self.assertIn('information_schema.ROUTINES',value)
+            return [json.dumps({'name':'p','type':'PROCEDURE','mode':mode})]
+        receipt=tool.restore_input(SimpleNamespace(query=query),{'path':str(source)},self.root/'bound-routine.sql')
+        self.assertEqual(tool.digest({'PROCEDURE:p':mode}),receipt['source_routine_modes_sha256'])
+        self.assertEqual(sql,source.read_text())
     def test_ambiguous_jar_resource_fails_closed(self):
         path=self.root/'ambiguous.jar'
         with zipfile.ZipFile(path,'w') as jar:

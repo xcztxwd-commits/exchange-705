@@ -270,12 +270,16 @@ def restore_trigger_sql_modes(sql,modes):
 def restore_input(db,backup,path):
     rows=db.query("SELECT JSON_OBJECT('name',TRIGGER_NAME,'mode',SQL_MODE) FROM information_schema.TRIGGERS WHERE TRIGGER_SCHEMA=DATABASE()")
     modes={x['name']:x['mode'] for x in map(json.loads,rows)}
-    stream_restore_trigger_sql_modes(Path(backup['path']),path,modes)
-    return {'path':str(path),'sha256':core.file_hash(Path(path)),'source_trigger_modes_sha256':digest(modes),'correction':'only recognized MySQL 5.7 trigger SQL_MODE headers; original dump unmodified'}
+    rows=db.query("SELECT JSON_OBJECT('name',ROUTINE_NAME,'type',ROUTINE_TYPE,'mode',SQL_MODE) FROM information_schema.ROUTINES WHERE ROUTINE_SCHEMA=DATABASE()")
+    routines={x['type']+':'+x['name']:x['mode'] for x in map(json.loads,rows)}
+    stream_restore_trigger_sql_modes(Path(backup['path']),path,modes,routines)
+    return {'path':str(path),'sha256':core.file_hash(Path(path)),'source_trigger_modes_sha256':digest(modes),
+            'source_routine_modes_sha256':digest(routines),'correction':'only recognized MySQL 5.7 trigger/routine SQL_MODE headers; original dump unmodified'}
 
-def stream_restore_trigger_sql_modes(source,path,modes):
+def stream_restore_trigger_sql_modes(source,path,modes,routine_modes=None):
     """Keep large snapshot bodies out of memory; only recognized three-line headers change."""
-    found=[]
+    found=[];routine_found=[];routine_modes={} if routine_modes is None else routine_modes
+    routine_header=re.compile(r'^CREATE DEFINER=`[^`]+`@`[^`]+` (PROCEDURE|FUNCTION) (`?[A-Za-z0-9_]+`?)(?=\s|\()',re.M)
     with Path(source).open(encoding='utf-8') as inp,Path(path).open('x',encoding='utf-8',newline='') as out:
         for line in inp:
             block=line
@@ -287,10 +291,22 @@ def stream_restore_trigger_sql_modes(source,path,modes):
                     name=names[0].strip('`')
                     if name not in modes or name in found:raise ValueError('Unknown/duplicate trigger in restore input')
                     block=restore_trigger_sql_modes(block,{name:modes[name]});found.append(name)
-            elif re.search(r'/\*!50003 TRIGGER (`?[A-Za-z0-9_]+`?)(?=\s)',line):
-                raise ValueError('Unrecognized trigger restore layout')
+                routines=routine_header.findall(block)
+                if routines:
+                    if names or len(routines)!=1:raise ValueError('Ambiguous stored-object restore header')
+                    kind,name=routines[0];key=kind+':'+name.strip('`')
+                    if key not in routine_modes or key in routine_found:raise ValueError('Unknown/duplicate routine in restore input')
+                    actual=routine_modes[key]
+                    if not re.fullmatch(r'[A-Z0-9_,]*',actual):raise ValueError('Unrecognized source routine SQL mode')
+                    header=re.match(r"(^/\*!50003 SET sql_mode\s*=\s*')([^']*)(' \*/ ;\nDELIMITER [^\n]+\n)",block)
+                    stripped=','.join(x for x in actual.split(',') if x!='NO_AUTO_CREATE_USER')
+                    if header is None or header[2] not in (actual,stripped):raise ValueError('Unexpected routine restore layout or SQL mode difference')
+                    block=header[1]+actual+header[3]+block[header.end():];routine_found.append(key)
+            elif re.search(r'/\*!50003 TRIGGER (`?[A-Za-z0-9_]+`?)(?=\s)',line) or routine_header.search(line):
+                raise ValueError('Unrecognized stored-object restore layout')
             out.write(block)
         if set(found)!=set(modes):raise ValueError('Missing trigger restore header')
+        if set(routine_found)!=set(routine_modes):raise ValueError('Missing routine restore header')
         out.flush();os.fsync(out.fileno())
 
 def verify_backup(db,proposal,restore_db,output,ledger=None,local_policy=None):
