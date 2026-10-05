@@ -421,6 +421,9 @@ def apply(db,proposal,proof,restore_db,approval,ledger,resume=False,after_phase=
     if proposal.get('recovery'):
         from forward_recovery import validate_apply
         validate_apply(proposal,approval,ledger.policy)
+    if proposal.get('partial_recovery'):
+        from partial_forward_recovery import validate_apply
+        validate_apply(proposal,proof,approval,ledger.policy)
     if proof['result']!='PASS' or proof['plan_sha256']!=digest(proposal) or proof['source']!=proposal['target'] or core.file_hash(Path(proof['backup']['path']))!=proof['backup']['sha256']:
         raise ValueError('Full backup proof/hash is not bound to this plan')
     if core.file_hash(Path(proof['restore_input']['path']))!=proof['restore_input']['sha256']:raise ValueError('Bound restore input changed')
@@ -443,9 +446,10 @@ def apply(db,proposal,proof,restore_db,approval,ledger,resume=False,after_phase=
         ledger.append({'kind':'RESUME_VERIFIED','plan_sha256':digest(proposal),'target':target(db),'state':last['state'],'next':start,'binding':binding(proposal,proof),'previous_tip':proof['ledger_tip']})
     else:
         observed=local and len(rows)==1 and rows[0]['kind']=='LOCAL_BASELINE_OBSERVED' and rows[0]['target']==proposal['target'] and rows[0]['state']==proposal['initial'] and rows[0]['migrations']==proposal['migrations'][:proposal['start']] and rows[0]['source_sha256']==proposal['source_sha256']
-        if (rows and not observed) or state(db)!=proposal['initial'] or proof['restored']!=proposal['initial'] or proof.get('ledger_tip') is not None:raise ValueError('Source changed or receipt exists; never replay apply')
-        start=proposal['start']
-        ledger.append({'kind':'BEGIN','plan_sha256':digest(proposal),'target':target(db),'state':proposal['initial'],'next':start,'binding':binding(proposal,proof)})
+        initial=proposal['partial_recovery']['actual']['after'] if proposal.get('partial_recovery') else proposal['initial']
+        if (rows and not observed) or state(db)!=initial or proof['restored']!=initial or proof.get('ledger_tip') is not None:raise ValueError('Source changed or receipt exists; never replay apply')
+        start=3 if proposal.get('partial_recovery') else proposal['start']
+        ledger.append({'kind':'BEGIN','plan_sha256':digest(proposal),'target':target(db),'state':initial,'next':start,'binding':binding(proposal,proof)})
     for index in range(start,len(core.MIGRATIONS)):
         maintenance(db)
         expected=ledger.latest()['state']
