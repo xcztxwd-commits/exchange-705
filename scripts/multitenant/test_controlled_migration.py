@@ -75,6 +75,26 @@ class ControlledMigrationTests(unittest.TestCase):
         with zipfile.ZipFile(old,'w') as jar:jar.writestr('META-INF/MANIFEST.MF','fixture')
         with zipfile.ZipFile(new,'w') as jar:jar.writestr('BOOT-INF/classes/META-INF/mt705-schema-epoch','2026100101\n')
         self.assertEqual(0,tool.package_epoch(old));self.assertEqual(2026100101,tool.package_epoch(new))
+
+    def test_streamed_trigger_correction_matches_full_parser_without_read_text(self):
+        header="/*!50003 SET sql_mode = 'STRICT_TRANS_TABLES' */ ;\nDELIMITER ;;\n/*!50003 CREATE*/ /*!50017 DEFINER=`root`@`localhost`*/ /*!50003 TRIGGER `mt_fixture`"
+        sql='-- original facts\n'+header+" BEFORE UPDATE ON `t` FOR EACH ROW SET NEW.x=1;;\nINSERT INTO t VALUES('unchanged');\n"
+        modes={'mt_fixture':'STRICT_TRANS_TABLES,NO_AUTO_CREATE_USER'}
+        source=self.root/'source.sql';source.write_text(sql)
+        output=self.root/'streamed.sql'
+        with patch.object(Path,'read_text',side_effect=AssertionError('Large input cannot be materialized')):
+            tool.stream_restore_trigger_sql_modes(source,output,modes)
+        self.assertEqual(tool.restore_trigger_sql_modes(sql,modes),output.read_text())
+        self.assertEqual(sql,source.read_text())
+
+    def test_streamed_restore_rejects_missing_duplicate_unknown_and_unrecognized_headers(self):
+        sql="/*!50003 SET sql_mode = 'STRICT_TRANS_TABLES' */ ;\nDELIMITER ;;\n/*!50003 CREATE*/ /*!50017 DEFINER=`root`@`localhost`*/ /*!50003 TRIGGER `mt_fixture` BEFORE UPDATE ON t SET NEW.x=1;;\n"
+        cases=[(sql,{}),(sql+sql,{'mt_fixture':'STRICT_TRANS_TABLES'}),('',{'mt_fixture':'STRICT_TRANS_TABLES'}),
+               (sql.splitlines()[-1]+'\n',{'mt_fixture':'STRICT_TRANS_TABLES'})]
+        for index,(text,modes) in enumerate(cases):
+            source=self.root/f'bad-{index}.sql';source.write_text(text)
+            with self.subTest(index=index),self.assertRaises(ValueError):
+                tool.stream_restore_trigger_sql_modes(source,self.root/f'bad-output-{index}.sql',modes)
     def test_ambiguous_jar_resource_fails_closed(self):
         path=self.root/'ambiguous.jar'
         with zipfile.ZipFile(path,'w') as jar:
@@ -98,6 +118,19 @@ class SchemaMetadataTests(unittest.TestCase):
         self.assertNotEqual(tool.digest([]),value['objects']['table:fixture_table'])
 
 class PlanPreflightTests(unittest.TestCase):
+    def test_reviewed_legacy_column_reuse_never_executes_duplicate_ddl(self):
+        db=SimpleNamespace(sql=lambda sql:self.fail('Already present reviewed columns must not run ALTER'))
+        path=Path('V2026092903__activity_delivery_settings.sql')
+        with patch.object(tool.core,'already_present_legacy_columns',return_value=True):
+            self.assertEqual('REUSED_EXACT_REVIEWED_LEGACY_COLUMNS_NO_DDL',tool.execute_phase(db,path,[path.name]))
+            with self.assertRaises(ValueError):tool.execute_phase(db,path,[])
+        with patch.object(tool.core,'already_present_legacy_columns',return_value=False),self.assertRaises(ValueError):
+            tool.execute_phase(db,path,[path.name])
+
+    def test_unreviewed_phase_executes_exact_sql_without_reuse(self):
+        path=Path('reviewed-fixture.sql');db=SimpleNamespace(sql=lambda sql:self.assertEqual('SELECT 1;',sql))
+        with patch.object(tool.core,'already_present_legacy_columns',return_value=False),patch.object(Path,'read_text',return_value='SELECT 1;'):
+            self.assertEqual('EXECUTED_REVIEWED_DDL',tool.execute_phase(db,path,[]))
     def test_failed_legacy_preflight_never_hashes_data_or_publishes_plan(self):
         db=SimpleNamespace(tables=lambda:['user_account'])
         with patch.object(tool.isolation_gate,'check',return_value=([],{})), \

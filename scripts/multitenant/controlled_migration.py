@@ -184,6 +184,7 @@ def plan(db,output,baseline=None):
     metadata_absent_before_plan(db,metadata_append)
     value={'format':1,'id':secrets.token_hex(16),'created_at':now().isoformat(),'target':target(db),'initial':current,
            'source_sha256':sources(),'migrations':migrations(),'start':start,'schema_epoch':core.EPOCH,
+           'legacy_column_reuse':[p.name for p in core.MIGRATIONS if start==0 and core.already_present_legacy_columns(db,p)],
            'preservation_columns':columns,'preserved_sha256':digest(preserved(db,columns,metadata_append)),
            'allowed_metadata_append':metadata_append,
            'allowed_transforms':['old current_token revocation','only NULL legacy deposit source/order_no/account_type deterministic markers'],
@@ -218,10 +219,28 @@ def restore_trigger_sql_modes(sql,modes):
 def restore_input(db,backup,path):
     rows=db.query("SELECT JSON_OBJECT('name',TRIGGER_NAME,'mode',SQL_MODE) FROM information_schema.TRIGGERS WHERE TRIGGER_SCHEMA=DATABASE()")
     modes={x['name']:x['mode'] for x in map(json.loads,rows)}
-    text=restore_trigger_sql_modes(Path(backup['path']).read_text(encoding='utf-8'),modes)
-    with Path(path).open('x',encoding='utf-8',newline='') as out:
-        out.write(text);out.flush();os.fsync(out.fileno())
+    stream_restore_trigger_sql_modes(Path(backup['path']),path,modes)
     return {'path':str(path),'sha256':core.file_hash(Path(path)),'source_trigger_modes_sha256':digest(modes),'correction':'only recognized MySQL 5.7 trigger SQL_MODE headers; original dump unmodified'}
+
+def stream_restore_trigger_sql_modes(source,path,modes):
+    """Keep large snapshot bodies out of memory; only recognized three-line headers change."""
+    found=[]
+    with Path(source).open(encoding='utf-8') as inp,Path(path).open('x',encoding='utf-8',newline='') as out:
+        for line in inp:
+            block=line
+            if re.match(r'^/\*!50003 SET sql_mode\s*=\s*\x27',line):
+                block+=inp.readline()+inp.readline()
+                names=re.findall(r'/\*!50003 TRIGGER (`?[A-Za-z0-9_]+`?)(?=\s)',block)
+                if names:
+                    if len(names)!=1:raise ValueError('Duplicate trigger restore header')
+                    name=names[0].strip('`')
+                    if name not in modes or name in found:raise ValueError('Unknown/duplicate trigger in restore input')
+                    block=restore_trigger_sql_modes(block,{name:modes[name]});found.append(name)
+            elif re.search(r'/\*!50003 TRIGGER (`?[A-Za-z0-9_]+`?)(?=\s)',line):
+                raise ValueError('Unrecognized trigger restore layout')
+            out.write(block)
+        if set(found)!=set(modes):raise ValueError('Missing trigger restore header')
+        out.flush();os.fsync(out.fileno())
 
 def verify_backup(db,proposal,restore_db,output,ledger=None,local_policy=None):
     expected=proposal['initial'];tip=None;next_phase=proposal['start']
@@ -249,7 +268,7 @@ def verify_backup(db,proposal,restore_db,output,ledger=None,local_policy=None):
     if output.exists():raise ValueError('Restore receipt already exists')
     backup=db.dump(output.with_suffix('.sql'))
     restored_input=restore_input(db,backup,output.with_name(output.stem+'-restore-input.sql'))
-    restore_db.create_empty();restore_db.sql(Path(restored_input['path']).read_text(encoding='utf-8'))
+    restore_db.create_empty();restore_db.restore_file(restored_input['path'])
     restored=state(restore_db)
     if restored!=expected or state(db)!=expected:raise ValueError('Full restore or newest source changed; first DDL prohibited')
     value={'format':1,'result':'PASS','plan_sha256':digest(proposal),'source':target(db),'backup':backup,'restore_input':restored_input,'restore':other,'restored':restored,'ledger_tip':tip,'next':next_phase,'created_at':now().isoformat()}
@@ -305,6 +324,14 @@ def binding(proposal,proof):
 def apply(db,proposal,proof,restore_db,approval,ledger,resume=False,after_phase=None):
     if sources()!=proposal['source_sha256'] or migrations()!=proposal['migrations'] or target(db)!=proposal['target']:raise ValueError('Source/DDL/physical target differs from the immutable plan')
     local=getattr(ledger.policy,'local',False)
+    owner_live_test=getattr(ledger.policy,'owner_live_test',False)
+    if owner_live_test:
+        from owner_live_test_migration import OwnerLiveTestPolicy,OwnerLiveTestLedger
+        if not isinstance(ledger.policy,OwnerLiveTestPolicy) or not isinstance(ledger,OwnerLiveTestLedger):
+            raise ValueError('Owner live-test policy and ledger cannot be guessed')
+        ledger.policy.guard()
+        if local or proposal.get('recovery'):
+            raise ValueError('Owner live-test mode cannot infer local mode or uncertain DDL recovery')
     if local:
         from local_test_migration import LocalPolicy,LocalLedger
         if not isinstance(ledger.policy,LocalPolicy) or not isinstance(ledger,LocalLedger):raise ValueError('Local policy/ledger cannot be guessed')
@@ -312,7 +339,7 @@ def apply(db,proposal,proof,restore_db,approval,ledger,resume=False,after_phase=
         if proposal.get('recovery'):raise ValueError('Local tests preserve uncertain DDL; no signed recovery substitution')
     scope='isolated-fixture' if db.test else 'business'
     if ledger.policy.fixture and not db.test:raise ValueError('Fixture approval cannot authorize a business target')
-    if not db.test:
+    if not db.test and not owner_live_test:
         if isolation_gate.check(release=True)[0]:raise ValueError('Production acceptance/release blockers remain; no migration')
         acceptance=read(approval['payload']['acceptance_file'])
         if acceptance.get('result')!='PASS' or acceptance.get('source_sha256')!=proposal['source_sha256'] or acceptance.get('required_failures')!=0 or acceptance.get('blocked')!=[]:
@@ -333,6 +360,9 @@ def apply(db,proposal,proof,restore_db,approval,ledger,resume=False,after_phase=
     other=target(restore_db)
     if other!=proof['restore'] or (not local and (other['server_uuid']==proposal['target']['server_uuid'] or other['datadir']==proposal['target']['datadir'])) or state(restore_db)!=proof['restored']:
         raise ValueError('Independent restore evidence no longer matches')
+    legacy_reuse=proposal.get('legacy_column_reuse',[])
+    if not isinstance(legacy_reuse,list) or len(legacy_reuse)!=len(set(legacy_reuse)) or not set(legacy_reuse).issubset(core.LEGACY_COLUMN_MIGRATIONS) or (proposal['start']>0 and legacy_reuse):
+        raise ValueError('Unreviewed legacy-column reuse contract')
     maintenance(db);rows=ledger.rows()
     if resume:
         if not rows or rows[-1]['kind'] not in ('BEGIN','PHASE_COMPLETE','RESUME_VERIFIED'):raise ValueError('Uncertain/incomplete/failed/complete DDL cannot be resumed or blindly replayed')
@@ -344,17 +374,18 @@ def apply(db,proposal,proof,restore_db,approval,ledger,resume=False,after_phase=
     else:
         observed=local and len(rows)==1 and rows[0]['kind']=='LOCAL_BASELINE_OBSERVED' and rows[0]['target']==proposal['target'] and rows[0]['state']==proposal['initial'] and rows[0]['migrations']==proposal['migrations'][:proposal['start']] and rows[0]['source_sha256']==proposal['source_sha256']
         if (rows and not observed) or state(db)!=proposal['initial'] or proof['restored']!=proposal['initial'] or proof.get('ledger_tip') is not None:raise ValueError('Source changed or receipt exists; never replay apply')
-        start=proposal['start'];ledger.append({'kind':'BEGIN','plan_sha256':digest(proposal),'target':target(db),'state':proposal['initial'],'next':start,'binding':binding(proposal,proof)})
+    start=proposal['start'];ledger.append({'kind':'BEGIN','plan_sha256':digest(proposal),'target':target(db),'state':proposal['initial'],'next':start,'binding':binding(proposal,proof)})
     for index in range(start,len(core.MIGRATIONS)):
         maintenance(db)
         expected=ledger.latest()['state']
         if state(db)!=expected:raise ValueError('New writes detected; no restore/replay or further DDL')
         ledger.append({'kind':'INTENT','plan_sha256':digest(proposal),'target':target(db),'migration':proposal['migrations'][index],'index':index,'before':expected})
         try:
-            core_path=core.MIGRATIONS[index];db.sql(core_path.read_text(encoding='utf-8'))
+            core_path=core.MIGRATIONS[index]
+            execution=execute_phase(db,core_path,legacy_reuse)
             if digest(preserved(db,proposal['preservation_columns'],metadata_append))!=proposal['preserved_sha256']:raise ValueError('Original money/order/chat/actor/metadata facts changed; preserve maintenance and forward-repair only')
             metadata_receipt_after_phase(db,metadata_append)
-            ledger.append({'kind':'PHASE_COMPLETE','plan_sha256':digest(proposal),'target':target(db),'state':state(db),'next':index+1,'binding':binding(proposal,proof),'migration':proposal['migrations'][index]})
+            ledger.append({'kind':'PHASE_COMPLETE','plan_sha256':digest(proposal),'target':target(db),'state':state(db),'next':index+1,'binding':binding(proposal,proof),'migration':proposal['migrations'][index],'execution':execution})
         except BaseException as error:
             ledger.append({'kind':'FAILED_UNCERTAIN','plan_sha256':digest(proposal),'target':target(db),'index':index,'failure_type':type(error).__name__})
             raise
@@ -362,6 +393,14 @@ def apply(db,proposal,proof,restore_db,approval,ledger,resume=False,after_phase=
     core.guard(db,proposal['schema_epoch'])
     result={'kind':'COMPLETE','plan_sha256':digest(proposal),'target':target(db),'state':state(db),'migrations':proposal['migrations'],'activation_ready':False,'binding':binding(proposal,proof)}
     ledger.append(result);return result
+
+def execute_phase(db,path,legacy_reuse):
+    present=core.already_present_legacy_columns(db,path)
+    if present!=(path.name in legacy_reuse):
+        raise ValueError('Legacy column state differs from bound plan; no inferred DDL completion or replay')
+    if present:return 'REUSED_EXACT_REVIEWED_LEGACY_COLUMNS_NO_DDL'
+    db.sql(path.read_text(encoding='utf-8'))
+    return 'EXECUTED_REVIEWED_DDL'
 
 def package_epoch(path):
     with zipfile.ZipFile(path) as jar:
@@ -381,8 +420,14 @@ def main():
     parser.add_argument('--fixture-policy',type=Path,help='Only on an actually labelled isolated target; never a production bypass')
     parser.add_argument('--artifact',type=Path)
     parser.add_argument('--local-owner-authorization',type=Path,help='Explicit local disposable-test owner authorization; never business approval')
+    parser.add_argument('--owner-live-test-authorization',type=Path,help='Explicit current owner no-real-users instruction; not independent signed production approval; activation remains off')
     args=parser.parse_args();db=core.Database(args.container,args.database)
-    local_policy=None
+    local_policy=None;owner_policy=None
+    if args.owner_live_test_authorization:
+        if args.local_owner_authorization or args.fixture_policy or args.approval or not args.restore_container or not args.restore_database or args.action not in ('apply','resume'):
+            raise ValueError('Owner live-test apply/resume is exclusive of fixture/local/signed approval')
+        from owner_live_test_migration import OwnerLiveTestPolicy,OwnerLiveTestLedger
+        owner_policy=OwnerLiveTestPolicy(args.owner_live_test_authorization,db,core.Database(args.restore_container,args.restore_database))
     if args.local_owner_authorization:
         if args.fixture_policy or args.approval or not args.restore_container or not args.restore_database:
             raise ValueError('Local owner mode is exclusive of signed approval and requires an exact restore target')
@@ -409,11 +454,11 @@ def main():
             if args.fixture_policy and not db.test:raise ValueError('Fixture policy cannot authorize business target')
             baseline=LocalLedger(args.ledger,local_policy) if local_policy else Ledger(args.ledger,Policy(args.fixture_policy or POLICY,bool(args.fixture_policy)))
         result=verify_backup(db,proposal,restore,args.output,baseline,local_policy=local_policy);print(json.dumps({'result':result['result'],'backup_sha256':result['backup']['sha256'],'restore_proof_sha256':digest(result)}));return
-    if not args.proof or (not args.approval and not local_policy) or not args.ledger:raise ValueError('Bound proof, authorization and ledger required')
+    if not args.proof or (not args.approval and not local_policy and not owner_policy) or not args.ledger:raise ValueError('Bound proof, authorization and ledger required')
     if args.fixture_policy and not db.test:raise ValueError('Fixture policy cannot authorize business target')
-    policy=local_policy or Policy(args.fixture_policy or POLICY,bool(args.fixture_policy))
-    evidence=LocalLedger(args.ledger,policy) if local_policy else Ledger(args.ledger,policy)
-    result=apply(db,proposal,read(args.proof),restore,policy.value if local_policy else read(args.approval),evidence,args.action=='resume')
+    policy=local_policy or owner_policy or Policy(args.fixture_policy or POLICY,bool(args.fixture_policy))
+    evidence=LocalLedger(args.ledger,policy) if local_policy else OwnerLiveTestLedger(args.ledger,policy) if owner_policy else Ledger(args.ledger,policy)
+    result=apply(db,proposal,read(args.proof),restore,policy.value if local_policy or owner_policy else read(args.approval),evidence,args.action=='resume')
     print(json.dumps({'result':result['kind'],'activation_ready':False,'production_deployed':False}))
 
 if __name__=='__main__':

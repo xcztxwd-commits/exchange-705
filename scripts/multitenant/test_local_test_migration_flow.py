@@ -37,6 +37,7 @@ class LocalFlowReviewTests(unittest.TestCase):
             local.observe_local_baseline(self.db,self.other,self.state(),imported,ledger)
             with patch.object(FakeDb,'dump',side_effect=self.dump,create=True),\
                     patch.object(FakeDb,'create_empty',return_value=None,create=True),\
+                    patch.object(FakeDb,'restore_file',return_value=None,create=True),\
                     patch.object(c,'restore_input',side_effect=self.restore_input):
                 proof=c.verify_backup(self.db,self.proposal(),restored,self.root/'proof.json',ledger,local_policy=policy)
         self.assertEqual('PASS',proof['result']);self.assertIsNone(proof['ledger_tip'])

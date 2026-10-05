@@ -71,6 +71,14 @@ class Database:
     def query(self, sql):
         return self.sql(sql).stdout.decode('utf-8').rstrip('\n').splitlines()
 
+    def restore_file(self, path):
+        """Stream a bounded-memory restore into an already-created isolated database."""
+        if not self.test:raise ValueError('File restore is isolated-instance only; never overwrite a business database')
+        with Path(path).open('rb') as source:
+            result=subprocess.run(self.command(),stdin=source,capture_output=True)
+        if result.returncode:raise RuntimeError('Snapshot restore failed; retain protected input and evidence')
+        return result
+
     def create_empty(self):
         if not self.test: raise RuntimeError('Restore/rehearsal creates databases only in an isolated labelled test instance')
         # Deliberately no IF NOT EXISTS: refusing collisions protects old rehearsal evidence.
@@ -373,7 +381,7 @@ def rehearse():
         before=fingerprint(db,original_columns);atomic_json(folder/'before.json',before)
         report['backup']=db.dump(restricted/'before.sql')
         restore=Database(TEST_CONTAINER,db.database+'_restore');restore.create_empty()
-        restore.sql((restricted/'before.sql').read_text(encoding='utf-8'))
+        restore.restore_file(restricted/'before.sql')
         restored=fingerprint(restore,before['columns'])
         if restored!=before:raise AssertionError('Backup restore verification mismatch')
         report['restore_verified']=True;report['restore_target']=restore.database
@@ -424,7 +432,7 @@ def main():
         fresh=Database(TEST_CONTAINER,name);fresh.create_empty()
         backup=Path(proof['migrated_backup']['path'])
         if file_hash(backup)!=proof['migrated_backup']['sha256']:raise RuntimeError('Fixture backup checksum mismatch')
-        fresh.sql(backup.read_text(encoding='utf-8'))
+        fresh.restore_file(backup)
         username='mt705_'+secrets.token_hex(4);password=secrets.token_hex(24)
         fresh.sql("CREATE USER '"+username+"'@'%' IDENTIFIED BY '"+password+"'; GRANT ALL PRIVILEGES ON "+ident(name)+".* TO '"+username+"'@'%';")
         restrict_directory(args.output.parent)
@@ -445,7 +453,7 @@ def main():
     elif args.action=='guard':print(json.dumps(guard(db,args.application_epoch,args.require_ready)))
     elif args.action=='restore-new':
         if args.backup is None:raise RuntimeError('--backup is required')
-        db.create_empty();db.sql(args.backup.read_text(encoding='utf-8'))
+        db.create_empty();db.restore_file(args.backup)
         print('Backup restored into new isolated database '+db.database)
     elif args.action=='migrate':
         if not db.test:raise RuntimeError('Business apply requires controlled_migration.py with immutable plan, independent newest restore, trusted approvals and phase ledger; legacy flags cannot authorize it')
@@ -461,7 +469,7 @@ def main():
         out=ROOT/'rollback/multitenant-20260929/schema'/('migration-'+stamp)
         before=fingerprint(db);backup=db.dump(out/'before.sql')
         ensure_test();restore=Database(TEST_CONTAINER,'mt705_restore_'+stamp.lower());restore.create_empty()
-        restore.sql((out/'before.sql').read_text(encoding='utf-8'))
+        restore.restore_file(out/'before.sql')
         if fingerprint(restore,before['columns'])!=before:raise AssertionError('Current target backup restore failed')
         # Backup and restore are proven before the first target DDL.
         checksums=apply(db)

@@ -91,7 +91,7 @@ def apply_fixture(db,plan,out,*,fixture_container_id=None,restore_db=None):
     if (out/'before.sql').exists():raise ValueError('Interrupted attempt preserved; choose fresh evidence directory')
     backup=db.dump(out/'before.sql')
     restored=restore_db if restore_db is not None else Database(TEST_CONTAINER,'mt705_quarantine_restore_'+secrets.token_hex(5));restored.create_empty()
-    restored.sql((out/'before.sql').read_text(encoding='utf-8'))
+    restored.restore_file(out/'before.sql')
     if fingerprint(restored,all_columns)!=before:raise ValueError('Full backup restoration mismatch; no deletions')
     atomic_json(out/'archive.json',plan)
     (out/'restore-rows.sql').write_text(restore_sql(plan),encoding='utf-8')
