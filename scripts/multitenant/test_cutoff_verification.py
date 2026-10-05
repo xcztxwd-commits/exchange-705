@@ -2,7 +2,9 @@
 import datetime as dt
 import hashlib
 import unittest
+from types import SimpleNamespace
 import mysql_migration as core
+import controlled_migration as controlled
 import hard_delete_before as cleanup
 
 class Rows:
@@ -36,5 +38,16 @@ class Checks(unittest.TestCase):
         sql=cleanup.deletion_sql({'protected':['user_account'],'selected':{'child':[{'key':['1']}]},'keys':{'child':['id']},'delete_order':['child']})
         self.assertLess(sql.index('ROW_COUNT()=1'),sql.index('COMMIT;'))
         self.assertIn('NOT NULL',sql);self.assertNotIn('FOREIGN_KEY_CHECKS',sql)
+    def test_restore_preserves_source_defaults_and_rejects_business_target(self):
+        source=SimpleNamespace(query=lambda sql:['latin1\tlatin1_swedish_ci'])
+        calls=[]
+        restore=SimpleNamespace(test=True,database='mt705_restore',create_empty=lambda:calls.append('CREATE'),
+                                sql=lambda sql,database:calls.append(sql),query=source.query)
+        controlled.create_restore_database(source,restore)
+        self.assertEqual('CREATE',calls[0]);self.assertIn('CHARACTER SET latin1 COLLATE latin1_swedish_ci',calls[1])
+        restore.test=False
+        with self.assertRaises(ValueError):controlled.create_restore_database(source,restore)
+        self.assertEqual(2,len(calls))
+        with self.assertRaises(ValueError):controlled.database_defaults(SimpleNamespace(query=lambda sql:['latin1;DELETE\tlatin1_swedish_ci']))
 
 if __name__=='__main__':unittest.main()

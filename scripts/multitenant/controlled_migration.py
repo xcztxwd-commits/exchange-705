@@ -55,6 +55,7 @@ def schema(db):
         definition=db.query('SHOW CREATE TABLE '+core.ident(table))
         if not definition:raise ValueError('Missing SHOW CREATE TABLE metadata; restoration evidence is incomplete')
         objects['table:'+table]=digest(definition)
+    objects['database-defaults']=digest(database_defaults(db))
     definitions={
         'trigger':('TRIGGERS','TRIGGER_SCHEMA',['TRIGGER_NAME','EVENT_MANIPULATION','EVENT_OBJECT_TABLE','ACTION_ORDER','ACTION_TIMING','ACTION_STATEMENT','SQL_MODE','DEFINER','CHARACTER_SET_CLIENT','COLLATION_CONNECTION','DATABASE_COLLATION']),
         'routine':('ROUTINES','ROUTINE_SCHEMA',['ROUTINE_NAME','ROUTINE_TYPE','DTD_IDENTIFIER','ROUTINE_DEFINITION','SQL_MODE','SECURITY_TYPE','SQL_DATA_ACCESS','IS_DETERMINISTIC','DEFINER','CHARACTER_SET_CLIENT','COLLATION_CONNECTION','DATABASE_COLLATION']),
@@ -72,6 +73,21 @@ def schema(db):
             normalized.append(value)
         objects[kind+'-definitions']=digest(sorted(normalized,key=lambda x:canonical(x)))
     return {'objects':objects,'sha256':digest(objects)}
+
+def database_defaults(db):
+    rows=db.query('SELECT DEFAULT_CHARACTER_SET_NAME,DEFAULT_COLLATION_NAME FROM information_schema.SCHEMATA WHERE SCHEMA_NAME=DATABASE()')
+    if len(rows)!=1:raise ValueError('Exact source database defaults required')
+    values=rows[0].split('\t')
+    if len(values)!=2 or any(not re.fullmatch('[A-Za-z0-9_]+',v) for v in values):raise ValueError('Invalid source database defaults')
+    return {'character_set':values[0],'collation':values[1]}
+
+def create_restore_database(source,restore):
+    """Preserve the source defaults before restoring tables, routines and triggers."""
+    if not restore.test:raise ValueError('Database creation/default adjustment is isolated-restore only')
+    defaults=database_defaults(source)
+    restore.create_empty()
+    restore.sql('ALTER DATABASE '+core.ident(restore.database)+' CHARACTER SET '+defaults['character_set']+' COLLATE '+defaults['collation'],False)
+    if database_defaults(restore)!=defaults:raise ValueError('Restored database defaults differ')
 
 def all_fields(db): return core.fingerprint(db,{t:[f[0] for f in fs] for t,fs in db.columns().items()})
 def state(db): return {'schema':schema(db),'data':all_fields(db)}
@@ -266,7 +282,7 @@ def verify_backup(db,proposal,restore_db,output,ledger=None,local_policy=None):
     if output.exists():raise ValueError('Restore receipt already exists')
     backup=db.dump(output.with_suffix('.sql'))
     restored_input=restore_input(db,backup,output.with_name(output.stem+'-restore-input.sql'))
-    restore_db.create_empty();restore_db.restore_file(restored_input['path'])
+    create_restore_database(db,restore_db);restore_db.restore_file(restored_input['path'])
     restored=state(restore_db)
     if restored!=expected or state(db)!=expected:raise ValueError('Full restore or newest source changed; first DDL prohibited')
     value={'format':1,'result':'PASS','plan_sha256':digest(proposal),'source':target(db),'backup':backup,'restore_input':restored_input,'restore':other,'restored':restored,'ledger_tip':tip,'next':next_phase,'created_at':now().isoformat()}

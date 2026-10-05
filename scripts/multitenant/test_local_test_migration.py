@@ -28,6 +28,8 @@ class FakeDb:
         self.queue='0';self.archive_queue='0';self.live_leases='0';self.sql_seen=[];self.count_state=0;self.transactions='0';self.exists='1'
     def sql(self,sql,database=True,check=True):
         self.sql_seen.append((sql,database))
+        if sql.startswith('ALTER DATABASE ') and ' CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci' in sql:
+            return SimpleNamespace(stdout=b'',returncode=0)
         if sql.startswith('SELECT @@global.read_only; '):
             if database is not False:raise AssertionError('Drain checks must use unbound transport')
             values=[self.read_only,self.sessions,self.transactions]
@@ -39,6 +41,7 @@ class FakeDb:
         raise AssertionError('Unexpected offline SQL transport: '+sql)
     def query(self,sql):
         self.sql_seen.append(sql)
+        if 'information_schema.SCHEMATA' in sql:return ['utf8mb4\tutf8mb4_unicode_ci']
         if sql=='SELECT @@global.read_only':return [self.read_only]
         if 'information_schema.PROCESSLIST' in sql:return [self.sessions]
         if 'COUNT(*)' in sql and 'tenant_schema_version' in sql and 'version=2026100403' in sql:return [self.new_receipts]

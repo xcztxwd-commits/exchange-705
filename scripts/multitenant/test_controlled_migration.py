@@ -107,7 +107,10 @@ class SchemaMetadataTests(unittest.TestCase):
         database='fixture'
         def __init__(self,definition):self.definition=definition
         def tables(self):return ['fixture_table']
-        def query(self,sql):return self.definition if sql.startswith('SHOW CREATE TABLE ') else []
+        def query(self,sql):
+            if sql.startswith('SHOW CREATE TABLE '):return self.definition
+            if 'information_schema.SCHEMATA' in sql:return ['latin1\tlatin1_swedish_ci']
+            return []
     def test_missing_table_definition_cannot_be_fingerprinted_as_empty(self):
         with self.assertRaisesRegex(ValueError,'Missing SHOW CREATE TABLE'):
             tool.schema(self.Database([]))

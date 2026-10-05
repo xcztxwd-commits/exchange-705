@@ -184,7 +184,7 @@ def verify_backup(db,proposal,restore,output):
     initial=controlled.state(db)
     backup=db.dump(output.with_suffix('.sql'))
     corrected=controlled.restore_input(db,backup,output.with_name(output.stem+'-restore-input.sql'))
-    restore.create_empty();restore.restore_file(corrected['path'])
+    controlled.create_restore_database(db,restore);restore.restore_file(corrected['path'])
     restored=controlled.state(restore)
     if initial!=restored or controlled.state(db)!=initial:
         raise ValueError('Frozen source or full restored original fields differ; hard deletion prohibited')
