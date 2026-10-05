@@ -12,7 +12,7 @@ services:
       - mysql-data:/var/lib/mysql
       - ./1090.sql:/docker-entrypoint-initdb.d/1090.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "MYSQL_PWD=$$MYSQL_PASSWORD mysql -h 127.0.0.1 -u1090 -D1090 -e 'SELECT 1 FROM admin_user LIMIT 1' >/dev/null"]
+      test: ["CMD-SHELL", "MYSQL_PWD=$$MYSQL_ROOT_PASSWORD mysql -h 127.0.0.1 -uroot -D1090 -e 'SELECT 1' >/dev/null"]
       interval: 10s
       timeout: 5s
       retries: 30
@@ -63,7 +63,7 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/api/user/system/timezone >/dev/null"]
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/healthz >/dev/null"]
       interval: 15s
       timeout: 5s
       start_period: 60s

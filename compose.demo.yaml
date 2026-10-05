@@ -20,7 +20,7 @@ services:
     volumes:
       - demo-mysql-data:/var/lib/mysql
     healthcheck:
-      test: [CMD-SHELL, 'MYSQL_PWD=$$MYSQL_PASSWORD mysql -h127.0.0.1 -usimulation -Dexchange_demo -e "SELECT 1" >/dev/null']
+      test: [CMD-SHELL, 'MYSQL_PWD=$$MYSQL_ROOT_PASSWORD mysql -h127.0.0.1 -uroot -Dexchange_demo -e "SELECT 1" >/dev/null']
       interval: 10s
       timeout: 5s
       retries: 30
@@ -58,7 +58,7 @@ services:
       backend:
         condition: service_healthy
     healthcheck:
-      test: [CMD-SHELL, 'curl -fsS http://localhost:8080/api/user/system/timezone >/dev/null']
+      test: [CMD-SHELL, 'curl -fsS http://localhost:8080/healthz >/dev/null']
       interval: 15s
       timeout: 5s
       start_period: 60s
