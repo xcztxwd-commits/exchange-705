@@ -2,14 +2,41 @@
 
 The default signed production route is unchanged. This exceptional route requires
 the owner's exact no-real-users instruction, bound backup/target/source receipts,
-actual maintenance and an unsigned append-only evidence chain. Activation stays off.
+actual maintenance and an unsigned append-only evidence chain. Only the explicitly
+authorized current live-test release can activate its single new 0702 receipt.
 """
 import datetime as dt
+import hashlib
+import json
 from pathlib import Path
+import re
+import subprocess
+import tarfile
 import controlled_migration as c
 
 INSTRUCTION = '跳过批准环节，目前线上环节无真实用户，允许直接迁移'
 KIND = 'OWNER_AUTHORIZED_LIVE_TEST_MIGRATION_NOT_SIGNED_APPROVAL'
+DEPLOY_INSTRUCTION = '我授予你所有权限，我现在需要你将代码整理合并，解决冲突，合入主线，并且正常部署更新到线上，并且只处理有变化的数据库，不做全实例备份迁移'
+LIVE_TEST_INSTRUCTION = '线上无真实用户，无真实资金，都为测试数据，但你也要尽量保证数据的完整'
+ACTIVATION = 'OWNER_AUTHORIZED_LIVE_TEST_0702_ACTIVATION_NOT_SIGNED_APPROVAL'
+BASELINE_SHA256 = '3d4fae2f121413c73ad809a0a23654db99121a961a67f1242c3b0ec0ddf1506b'
+
+def current_instruction(value):
+    receipt = Path(value['instruction_receipt'])
+    if c.core.file_hash(receipt) != value['instruction_sha256']:
+        raise ValueError('Exact current owner instruction receipt required')
+    instruction = c.read(receipt)
+    if instruction.get('format') == 2:
+        if (instruction.get('human_instructions') != [DEPLOY_INSTRUCTION, LIVE_TEST_INSTRUCTION]
+                or instruction.get('owner_asserts_no_real_users') is not True
+                or instruction.get('owner_asserts_no_real_funds') is not True
+                or value.get('owner_asserts_no_real_funds') is not True
+                or value.get('authorized_databases') != [value['source']['database']]):
+            raise ValueError('Exact current live-test facts and single changed database required')
+        return 2
+    if instruction.get('human_instruction') != INSTRUCTION:
+        raise ValueError('Exact current owner instruction receipt required')
+    return 1
 
 class OwnerLiveTestPolicy:
     fixture = False
@@ -27,9 +54,7 @@ class OwnerLiveTestPolicy:
             raise ValueError('Owner instruction must not impersonate signed approval')
         if value.get('kind') != KIND or value.get('owner_asserts_no_real_users') is not True:
             raise ValueError('Explicit owner-authorized live-test scope required')
-        receipt = Path(value['instruction_receipt'])
-        if c.core.file_hash(receipt) != value['instruction_sha256'] or c.read(receipt).get('human_instruction') != INSTRUCTION:
-            raise ValueError('Exact current owner instruction receipt required')
+        current_instruction(value)
         expiry = dt.datetime.fromisoformat(value['expires_at'])
         if expiry.tzinfo is None or expiry <= c.now():
             raise ValueError('Owner live-test authorization expired')
@@ -78,3 +103,241 @@ class OwnerLiveTestLedger:
         previous = c.digest(c.read(self.directory/f'{len(rows)-1:06d}.json')) if rows else '0'*64
         value = {'sequence':len(rows), 'previous':previous, 'at':c.now().isoformat(), 'journal_kind':KIND, **body}
         c.publish(self.directory/f'{len(rows):06d}.json', {'body':value, 'sha256':c.digest(value)})
+
+def container_artifact_hash(container_id, path):
+    """Hash actual bytes even after the verified application is stopped for draining."""
+    if not re.fullmatch(r'[0-9a-f]{64}', container_id) or not re.fullmatch(r'/[A-Za-z0-9_./-]+', path) or '..' in path.split('/'):
+        raise ValueError('Exact application container and absolute artifact path required')
+    process = subprocess.Popen(['docker','cp',container_id+':'+path,'-'], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+    result = hashlib.sha256(); count = 0
+    try:
+        with tarfile.open(fileobj=process.stdout, mode='r|') as archive:
+            for entry in archive:
+                if not entry.isfile() or count or entry.name != Path(path).name:
+                    raise ValueError('Only the exact regular packaged artifact may be hashed')
+                count += 1
+                with archive.extractfile(entry) as source:
+                    for chunk in iter(lambda:source.read(1024*1024), b''):result.update(chunk)
+        if process.wait() or count != 1:raise ValueError('Actual application artifact could not be verified')
+    finally:
+        process.stdout.close()
+        if process.poll() is None:process.kill();process.wait()
+    return result.hexdigest()
+
+def inspect_application(container):
+    values = json.loads(c.core.run(['docker','inspect',container]).stdout)
+    if len(values) != 1:raise ValueError('Exactly one live-test application required')
+    return values[0]
+
+def baseline_definitions(db):
+    """Compare all reviewed DDL; live counters remain exact in the full-state proof."""
+    objects = dict(c.schema(db)['objects'])
+    for table in db.tables():
+        definition = '\n'.join(db.query('SHOW CREATE TABLE '+c.core.ident(table)))
+        # Only MySQL's final table-option counter is variable. Never normalize row
+        # values, defaults, triggers, functions, column names or their SQL modes.
+        definition = re.sub(r'^(\) ENGINE=[A-Za-z0-9_]+) AUTO_INCREMENT=[0-9]+(?= |$)',r'\1',definition,flags=re.M)
+        objects['table:'+table] = c.digest(definition)
+    return {'objects':objects,'sha256':c.digest(objects)}
+
+def observe_baseline(db, restore, reference, snapshot, output, ledger):
+    """Freeze and fully restore one live-test DB; observe, never invent COMPLETE."""
+    if not isinstance(ledger,OwnerLiveTestLedger) or not isinstance(ledger.policy,OwnerLiveTestPolicy):
+        raise ValueError('Actual owner live-test policy/ledger required for baseline observation')
+    policy = ledger.policy;policy.guard()
+    if current_instruction(policy.value) != 2 or ledger.rows():
+        raise ValueError('Current owner live-test instruction and new baseline evidence required')
+    reviewed = c.migrations()
+    if (c.core.EPOCH != 2026100702 or tuple(x['name'] for x in reviewed[-3:]) != ('V2026100603__tenant_entry_frontend_roles.sql',*c.CONTROL0702_TAIL)
+            or c.core.file_hash(Path(snapshot)) != BASELINE_SHA256):
+        raise ValueError('Exact immutable reviewed 0603 snapshot and two-phase tail required')
+    source_target, restore_target = c.target(db),c.target(restore)
+    reference_target = c.target(reference)
+    expected_reference = dict(restore_target);expected_reference['database'] = restore.database+'_0603_reference'
+    expected_reference['physical'] = dict(restore_target['physical'],database=expected_reference['database'])
+    if (not restore.test or not reference.test or reference_target != expected_reference
+            or restore_target['server_uuid'] == source_target['server_uuid'] or restore_target['datadir'] == source_target['datadir']):
+        raise ValueError('New independent single-DB restore and exact 0603 reference namespace required')
+    if db.query('SELECT MAX(version),MAX(minimum_application_epoch),MIN(business_activation_ready+0) FROM tenant_schema_version') != ['2026100603\t2026100603\t1']:
+        raise ValueError('Actual already-active reviewed 0603 source metadata required')
+    c.metadata_absent_before_plan(db,c.CONTROL0702_METADATA)
+    columns = db.query("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND ((TABLE_NAME='market_control_command' AND COLUMN_NAME IN ('retry_count','retry_at')) OR (TABLE_NAME='market_control_flow' AND COLUMN_NAME IN ('history_pending_until','history_retry_at','history_error')))")
+    if columns != ['0']:raise ValueError('Unknown or partially migrated control columns; no baseline inference')
+    output = Path(output)
+    if any(p.exists() for p in (output,output.with_suffix('.sql'),output.with_name(output.stem+'-restore-input.sql'))):
+        raise ValueError('Baseline backup/evidence exists; never overwrite')
+    c.maintenance(db);before = c.state(db)
+    backup = db.dump(output.with_suffix('.sql'))
+    restored_input = c.restore_input(db,backup,output.with_name(output.stem+'-restore-input.sql'))
+    c.create_restore_database(db,restore);restore.restore_file(restored_input['path'])
+    if c.state(restore) != before or c.state(db) != before:
+        raise ValueError('Full single-DB restore/current source differs; no baseline accepted')
+    c.create_restore_database(db,reference);reference.restore_file(snapshot)
+    reference_state = c.state(reference)
+    if any(value['rows'] for value in reference_state['data']['tables'].values()):
+        raise ValueError('Reviewed baseline reference must contain structure only, not live data')
+    definitions = baseline_definitions(db)
+    if definitions != baseline_definitions(restore) or definitions != baseline_definitions(reference):
+        raise ValueError('Actual original definitions differ from the reviewed immutable 0603 snapshot')
+    c.maintenance(db)
+    if c.state(db) != before or c.state(restore) != before:raise ValueError('Source or restored facts changed during baseline review')
+    value = {'kind':'OWNER_BASELINE_OBSERVED','target':source_target,'state':before,'source_sha256':c.sources(),
+             'migrations':reviewed[:-2],'backup':backup,'restore_input':restored_input,'restore':restore_target,
+             'reviewed_snapshot':{'path':str(snapshot),'sha256':BASELINE_SHA256},'reference':reference_target,
+             'reference_state':reference_state,'reviewed_definitions':definitions,
+             'instruction_sha256':policy.value['instruction_sha256'],'independent_signed_approval_claimed':False,
+             'past_migration_completion_invented':False,'counter_policy':'only final DDL AUTO_INCREMENT option ignored for structural reference; current/restored full counters remain exact'}
+    c.publish(output,value);ledger.append(value);return value
+
+def verify_baseline(db, ledger, previous):
+    if not isinstance(ledger,OwnerLiveTestLedger) or not isinstance(ledger.policy,OwnerLiveTestPolicy):
+        raise ValueError('Owner baseline flag cannot substitute for actual owner policy/ledger')
+    policy = ledger.policy;policy.guard()
+    if (current_instruction(policy.value) != 2 or len(ledger.rows()) != 1 or previous.get('kind') != 'OWNER_BASELINE_OBSERVED'
+            or previous.get('source_sha256') != c.sources() or previous.get('instruction_sha256') != policy.value['instruction_sha256']
+            or previous.get('target') != c.target(db) or previous.get('state') != c.state(db)
+            or previous.get('migrations') != c.migrations()[:-2]
+            or previous.get('reviewed_snapshot',{}).get('sha256') != BASELINE_SHA256
+            or c.core.file_hash(Path(previous['reviewed_snapshot']['path'])) != BASELINE_SHA256
+            or c.core.file_hash(Path(previous['backup']['path'])) != previous['backup']['sha256']
+            or c.core.file_hash(Path(previous['restore_input']['path'])) != previous['restore_input']['sha256']
+            or c.target(policy.restore) != previous.get('restore') or c.state(policy.restore) != previous['state']):
+        raise ValueError('Frozen real owner baseline/source/backup/restore proof changed')
+    reference = c.core.Database(policy.restore.container,previous['reference']['database'])
+    if (c.target(reference) != previous['reference'] or c.state(reference) != previous['reference_state']
+            or baseline_definitions(reference) != previous['reviewed_definitions']
+            or baseline_definitions(db) != previous['reviewed_definitions']):
+        raise ValueError('Actual reviewed baseline structure/reference changed')
+
+def proof_from_baseline(db, proposal, restore, output, ledger):
+    """Bind the already verified full single-DB restore to a later immutable plan."""
+    if not isinstance(ledger,OwnerLiveTestLedger):raise ValueError('Actual owner baseline ledger required for backup reuse')
+    previous = ledger.latest();verify_baseline(db,ledger,previous)
+    if (proposal.get('target') != previous['target'] or proposal.get('initial') != previous['state']
+            or proposal.get('source_sha256') != previous['source_sha256'] or proposal.get('migrations') != c.migrations()
+            or proposal.get('start') != len(previous['migrations']) or proposal.get('schema_epoch') != 2026100702
+            or proposal.get('allowed_metadata_append') != c.CONTROL0702_METADATA
+            or c.target(restore) != previous['restore'] or c.state(restore) != previous['state']):
+        raise ValueError('Frozen baseline restore/source/plan binding differs; no backup reuse')
+    c.maintenance(db)
+    if c.state(db) != previous['state']:raise ValueError('New writes after full restore; preserve increments and replan')
+    value = {'format':1,'result':'PASS','plan_sha256':c.digest(proposal),'source':previous['target'],
+             'backup':previous['backup'],'restore_input':previous['restore_input'],'restore':previous['restore'],
+             'restored':previous['state'],'ledger_tip':None,'next':proposal['start'],'created_at':c.now().isoformat(),
+             'reuse':'ACTUAL_OWNER_BASELINE_FULL_SINGLE_DB_RESTORE','owner_baseline_tip':c.digest(previous)}
+    c.publish(output,value);return value
+
+def record_startup(db, artifact, application, artifact_path, output):
+    """Observe real healthy startup under read_only; then stop/drain before activation."""
+    artifact = Path(artifact); output = Path(output)
+    c.core.restrict_directory(output.parent)
+    if db.test or c.core.EPOCH != 2026100702 or c.package_epoch(artifact) != 2026100702:
+        raise ValueError('Only the exact current live-test 0702 application is supported')
+    if c.isolation_gate.check()[0] or db.query('SELECT @@global.read_only') != ['1']:
+        raise ValueError('Reviewed source and actual read_only startup required')
+    actual = inspect_application(application); status = actual['State']
+    if not status['Running'] or status.get('Health',{}).get('Status') != 'healthy':
+        raise ValueError('Actual application startup must be healthy')
+    artifact_sha256 = c.core.file_hash(artifact)
+    if container_artifact_hash(actual['Id'], artifact_path) != artifact_sha256:
+        raise ValueError('Running application bytes differ from the tested artifact')
+    users = db.query('SELECT DISTINCT USER FROM information_schema.PROCESSLIST WHERE ID<>CONNECTION_ID() ORDER BY USER')
+    if not users or db.query('SELECT COUNT(*) FROM mysql.user WHERE Super_priv=\'Y\' AND User IN ('+','.join(c.core.literal(x) for x in users)+')') != ['0']:
+        raise ValueError('Startup must expose actual non-SUPER application connections under read_only')
+    observed = c.now().isoformat()
+    logs = c.core.run(['docker','logs','--since',status['StartedAt'],'--until',observed,actual['Id']])
+    raw = logs.stdout + logs.stderr
+    if not re.search(rb'\bStarted [A-Za-z0-9_.$]+ in [0-9.]+', raw):
+        raise ValueError('Current container startup completion is absent from actual logs')
+    # Bounded interval allows exact re-verification without accepting a self-declared PASS.
+    log_path = output.with_suffix('.startup.log')
+    with log_path.open('xb') as out:out.write(raw);out.flush();c.os.fsync(out.fileno())
+    value = {'kind':'ACTUAL_LIVE_TEST_STARTUP_UNDER_READ_ONLY','result':'PASS','source_sha256':c.sources(),
+             'target':c.target(db),'application':{'container_id':actual['Id'],'image_id':actual['Image'],
+             'started_at':status['StartedAt'],'artifact_path':artifact_path},'artifact_sha256':artifact_sha256,
+             'artifact_epoch':2026100702,'observed_at':observed,'read_only':True,'actual_non_super_users':users,
+             'logs':{'path':str(log_path),'sha256':c.core.file_hash(log_path)}}
+    c.publish(output,value);return value
+
+def verify_startup(db, artifact, startup):
+    if (startup.get('kind') != 'ACTUAL_LIVE_TEST_STARTUP_UNDER_READ_ONLY' or startup.get('result') != 'PASS'
+            or startup.get('source_sha256') != c.sources() or startup.get('target') != c.target(db)
+            or startup.get('read_only') is not True or not startup.get('actual_non_super_users')
+            or startup.get('artifact_epoch') != 2026100702 or c.package_epoch(artifact) != 2026100702
+            or c.core.file_hash(Path(artifact)) != startup.get('artifact_sha256')):
+        raise ValueError('Actual startup target/source/artifact facts changed')
+    expiry = dt.datetime.fromisoformat(startup['observed_at'])
+    if expiry.tzinfo is None or expiry > c.now() or c.now()-expiry > dt.timedelta(hours=2):
+        raise ValueError('Fresh actual startup evidence required')
+    application = startup['application']; actual = inspect_application(application['container_id'])
+    if (actual['Id'] != application['container_id'] or actual['Image'] != application['image_id']
+            or actual['State']['StartedAt'] != application['started_at']
+            or container_artifact_hash(actual['Id'], application['artifact_path']) != startup['artifact_sha256']):
+        raise ValueError('Application identity, startup or packaged bytes changed')
+    logs = c.core.run(['docker','logs','--since',application['started_at'],'--until',startup['observed_at'],actual['Id']])
+    raw = logs.stdout + logs.stderr
+    if (hashlib.sha256(raw).hexdigest() != startup['logs']['sha256']
+            or c.core.file_hash(Path(startup['logs']['path'])) != startup['logs']['sha256']
+            or not re.search(rb'\bStarted [A-Za-z0-9_.$]+ in [0-9.]+',raw)):
+        raise ValueError('Actual bounded startup logs changed')
+    users = startup['actual_non_super_users']
+    if db.query('SELECT COUNT(*) FROM mysql.user WHERE Super_priv=\'Y\' AND User IN ('+','.join(c.core.literal(x) for x in users)+')') != ['0']:
+        raise ValueError('Observed application account can bypass read_only')
+
+def activate(db, proposal, proof, restore, artifact, startup_path, ledger):
+    """Activate exactly one new live-test receipt; never approve normal production."""
+    if not isinstance(ledger,OwnerLiveTestLedger) or not isinstance(ledger.policy,OwnerLiveTestPolicy):
+        raise ValueError('Explicit owner live-test activation policy and ledger required')
+    policy = ledger.policy; policy.guard()
+    if current_instruction(policy.value) != 2:
+        raise ValueError('Current two-instruction live-test deployment authorization required')
+    policy.verify(policy.value,c.binding(proposal,proof),'business')
+    complete = ledger.latest(); activation = policy.value.get('activation',{})
+    startup_path = Path(startup_path); startup = c.read(startup_path)
+    expected = {'kind':ACTIVATION,'complete_tip':c.digest(complete),
+                'startup_sha256':c.core.file_hash(startup_path),'artifact_sha256':c.core.file_hash(Path(artifact)),
+                'schema_version':2026100702,'minimum_application_epoch':2026100603}
+    if activation != expected:raise ValueError('Owner activation authorization is not bound to COMPLETE/startup/artifact')
+    if (complete.get('kind') != 'COMPLETE' or complete.get('activation_ready') is not False
+            or complete.get('binding') != c.binding(proposal,proof) or complete.get('plan_sha256') != c.digest(proposal)
+            or complete.get('target') != c.target(db) or complete.get('migrations') != c.migrations()
+            or complete.get('state') != c.state(db) or c.metadata_append_contract(proposal['start'],proposal['migrations']) != c.CONTROL0702_METADATA
+            or proposal.get('allowed_metadata_append') != c.CONTROL0702_METADATA):
+        raise ValueError('Exact complete current 0702 migration and unchanged full source required')
+    if (proof.get('result') != 'PASS' or proof.get('plan_sha256') != c.digest(proposal)
+            or proof.get('source') != c.target(db) or c.target(restore) != proof.get('restore')
+            or c.state(restore) != proof.get('restored')
+            or c.core.file_hash(Path(proof['backup']['path'])) != proof['backup']['sha256']
+            or c.core.file_hash(Path(proof['restore_input']['path'])) != proof['restore_input']['sha256']):
+        raise ValueError('Original full isolated restore/backup proof changed')
+    if (not restore.test or c.target(restore)['server_uuid'] == c.target(db)['server_uuid']
+            or c.target(restore)['datadir'] == c.target(db)['datadir']):
+        raise ValueError('Actual independent isolated restore required for activation')
+    verify_startup(db,artifact,startup);c.maintenance(db)
+    c.metadata_receipt_after_phase(db,c.CONTROL0702_METADATA)
+    if db.query('SELECT COUNT(*) FROM tenant_schema_version WHERE version<>2026100702 AND business_activation_ready<>1') != ['0']:
+        raise ValueError('Activation cannot silently enable other existing schema receipts')
+    fields = complete['state']['data']['columns']
+    preserved = c.preserved(db,fields,c.CONTROL0702_METADATA)
+    receipt_sql = 'SELECT version,HEX(CAST(applied_at AS BINARY)),minimum_application_epoch FROM tenant_schema_version WHERE version=2026100702'
+    receipt = db.query(receipt_sql)
+    ledger.append({'kind':'OWNER_LIVE_TEST_ACTIVATION_INTENT','target':c.target(db),'state':complete['state'],
+                   'activation':expected,'binding':c.binding(proposal,proof),'preserved_sha256':c.digest(preserved),
+                   'instruction_sha256':policy.value['instruction_sha256'],'independent_signed_approval_claimed':False})
+    try:
+        c.maintenance(db)
+        result = db.sql('START TRANSACTION; UPDATE tenant_schema_version SET business_activation_ready=1 WHERE version=2026100702 AND minimum_application_epoch=2026100603 AND business_activation_ready=0 AND applied_at IS NOT NULL; SELECT ROW_COUNT(); COMMIT;')
+        if result.stdout.decode().strip() != '1':raise ValueError('Exact single 0702 activation did not commit')
+        if (c.schema(db) != complete['state']['schema'] or c.preserved(db,fields,c.CONTROL0702_METADATA) != preserved
+                or db.query(receipt_sql) != receipt):
+            raise ValueError('Activation changed original rows/definitions or new receipt facts')
+        ready = c.core.guard(db,c.package_epoch(artifact),True);c.maintenance(db)
+        value = {'kind':'OWNER_LIVE_TEST_ACTIVATION_COMPLETE','target':c.target(db),'state':c.state(db),
+                 'activation':expected,'binding':c.binding(proposal,proof),'activation_ready':ready['activation_ready'],
+                 'instruction_sha256':policy.value['instruction_sha256'],'independent_signed_approval_claimed':False,
+                 'normal_production_release_approved':False,'writers_reenabled':False}
+        ledger.append(value);return value
+    except BaseException as error:
+        ledger.append({'kind':'OWNER_LIVE_TEST_ACTIVATION_FAILED_UNCERTAIN','target':c.target(db),
+                       'activation':expected,'failure_type':type(error).__name__,'writers_reenabled':False})
+        raise

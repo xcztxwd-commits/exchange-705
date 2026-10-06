@@ -230,6 +230,10 @@ def plan(db,output,baseline=None):
         if baseline is None:raise ValueError('Already scoped/partly migrated target requires a verified completed ledger; never infer completed DDL from object names')
         previous=baseline.latest()
         local=getattr(baseline.policy,'local',False)
+        owner=getattr(baseline.policy,'owner_live_test',False)
+        if owner:
+            from owner_live_test_migration import verify_baseline
+            verify_baseline(db,baseline,previous)
         if local:
             from local_test_migration import LocalPolicy,LocalLedger
             if not isinstance(baseline.policy,LocalPolicy) or not isinstance(baseline,LocalLedger):raise ValueError('Actual local policy and evidence ledger required')
@@ -238,7 +242,8 @@ def plan(db,output,baseline=None):
                 raise ValueError('Actual local imported baseline observation required; do not fabricate COMPLETE')
             if core.file_hash(Path(previous['imported_backup']['path']))!=previous['imported_backup']['sha256']:
                 raise ValueError('Imported local baseline dump changed')
-        if previous['kind']!=('LOCAL_BASELINE_OBSERVED' if local else 'COMPLETE') or previous['target']!=target(db) or previous['state']!=current:raise ValueError('Completed baseline ledger or current data differs')
+        baseline_kind='LOCAL_BASELINE_OBSERVED' if local else 'OWNER_BASELINE_OBSERVED' if owner else 'COMPLETE'
+        if previous['kind']!=baseline_kind or previous['target']!=target(db) or previous['state']!=current:raise ValueError('Completed baseline ledger or current data differs')
         old=previous['migrations'];new=migrations()
         if new[:len(old)]!=old:raise ValueError('Previously applied migration checksums changed')
         start=len(old)
@@ -515,19 +520,21 @@ def package_epoch(path):
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('action',choices=['plan','verify-backup','apply','resume','package-check'])
+    parser.add_argument('action',choices=['plan','verify-backup','apply','resume','package-check','owner-observe-baseline','owner-record-startup','owner-activate'])
     parser.add_argument('--container',required=True);parser.add_argument('--database',required=True)
     parser.add_argument('--plan',type=Path);parser.add_argument('--proof',type=Path);parser.add_argument('--output',type=Path)
     parser.add_argument('--restore-container');parser.add_argument('--restore-database');parser.add_argument('--approval',type=Path);parser.add_argument('--ledger',type=Path)
     parser.add_argument('--fixture-policy',type=Path,help='Only on an actually labelled isolated target; never a production bypass')
     parser.add_argument('--artifact',type=Path)
+    parser.add_argument('--reviewed-baseline',type=Path);parser.add_argument('--application-container');parser.add_argument('--application-artifact-path',default='/app/app.jar')
+    parser.add_argument('--startup-receipt',type=Path)
     parser.add_argument('--local-owner-authorization',type=Path,help='Explicit local disposable-test owner authorization; never business approval')
-    parser.add_argument('--owner-live-test-authorization',type=Path,help='Explicit current owner no-real-users instruction; not independent signed production approval; activation remains off')
+    parser.add_argument('--owner-live-test-authorization',type=Path,help='Explicit exact live-test owner instruction; never independent signed production approval')
     args=parser.parse_args();db=core.Database(args.container,args.database)
     local_policy=None;owner_policy=None
     if args.owner_live_test_authorization:
-        if args.local_owner_authorization or args.fixture_policy or args.approval or not args.restore_container or not args.restore_database or args.action not in ('apply','resume'):
-            raise ValueError('Owner live-test apply/resume is exclusive of fixture/local/signed approval')
+        if args.local_owner_authorization or args.fixture_policy or args.approval or not args.restore_container or not args.restore_database or args.action not in ('plan','verify-backup','apply','resume','owner-observe-baseline','owner-activate'):
+            raise ValueError('Owner live-test execution is exclusive of fixture/local/signed approval')
         from owner_live_test_migration import OwnerLiveTestPolicy,OwnerLiveTestLedger
         owner_policy=OwnerLiveTestPolicy(args.owner_live_test_authorization,db,core.Database(args.restore_container,args.restore_database))
     if args.local_owner_authorization:
@@ -535,6 +542,19 @@ def main():
             raise ValueError('Local owner mode is exclusive of signed approval and requires an exact restore target')
         from local_test_migration import LocalPolicy,LocalLedger
         local_policy=LocalPolicy(args.local_owner_authorization,db,core.Database(args.restore_container,args.restore_database))
+    if args.action=='owner-record-startup':
+        if args.local_owner_authorization or args.fixture_policy or args.approval or not args.artifact or not args.application_container or not args.output:
+            raise ValueError('Actual artifact, application container and exclusive output required')
+        from owner_live_test_migration import record_startup
+        result=record_startup(db,args.artifact,args.application_container,args.application_artifact_path,args.output)
+        print(json.dumps({'result':result['result'],'startup_sha256':core.file_hash(args.output),'independent_signed_approval_claimed':False}));return
+    if args.action=='owner-observe-baseline':
+        if not owner_policy or not args.ledger or not args.reviewed_baseline or not args.output:
+            raise ValueError('Explicit current owner policy, new ledger, immutable 0603 snapshot and output required')
+        from owner_live_test_migration import observe_baseline
+        restore=owner_policy.restore;reference=core.Database(args.restore_container,args.restore_database+'_0603_reference')
+        result=observe_baseline(db,restore,reference,args.reviewed_baseline,args.output,OwnerLiveTestLedger(args.ledger,owner_policy))
+        print(json.dumps({'result':result['kind'],'backup_sha256':result['backup']['sha256'],'past_migration_completion_invented':False}));return
     if args.action=='package-check':
         if args.artifact is None:raise ValueError('Actual artifact required; no caller-supplied epoch override')
         result=core.guard(db,package_epoch(args.artifact),not db.test);result['artifact_sha256']=core.file_hash(args.artifact);print(json.dumps(result));return
@@ -543,7 +563,7 @@ def main():
         baseline=None
         if args.ledger:
             if args.fixture_policy and not db.test:raise ValueError('Fixture policy cannot authorize business target')
-            baseline=LocalLedger(args.ledger,local_policy) if local_policy else Ledger(args.ledger,Policy(args.fixture_policy or POLICY,bool(args.fixture_policy)))
+            baseline=LocalLedger(args.ledger,local_policy) if local_policy else OwnerLiveTestLedger(args.ledger,owner_policy) if owner_policy else Ledger(args.ledger,Policy(args.fixture_policy or POLICY,bool(args.fixture_policy)))
         result=plan(db,args.output,baseline);print(json.dumps({'plan_sha256':digest(result),'target_sha256':digest(result['target']),'first_phase':result['start']}));return
     if not args.plan:raise ValueError('Immutable --plan required')
     proposal=read(args.plan)
@@ -554,12 +574,23 @@ def main():
         baseline=None
         if args.ledger:
             if args.fixture_policy and not db.test:raise ValueError('Fixture policy cannot authorize business target')
-            baseline=LocalLedger(args.ledger,local_policy) if local_policy else Ledger(args.ledger,Policy(args.fixture_policy or POLICY,bool(args.fixture_policy)))
-        result=verify_backup(db,proposal,restore,args.output,baseline,local_policy=local_policy);print(json.dumps({'result':result['result'],'backup_sha256':result['backup']['sha256'],'restore_proof_sha256':digest(result)}));return
+            baseline=LocalLedger(args.ledger,local_policy) if local_policy else OwnerLiveTestLedger(args.ledger,owner_policy) if owner_policy else Ledger(args.ledger,Policy(args.fixture_policy or POLICY,bool(args.fixture_policy)))
+        if owner_policy and baseline and baseline.latest().get('kind')=='OWNER_BASELINE_OBSERVED':
+            from owner_live_test_migration import proof_from_baseline
+            result=proof_from_baseline(db,proposal,restore,args.output,baseline)
+        else:
+            result=verify_backup(db,proposal,restore,args.output,baseline,local_policy=local_policy)
+        print(json.dumps({'result':result['result'],'backup_sha256':result['backup']['sha256'],'restore_proof_sha256':digest(result)}));return
     if not args.proof or (not args.approval and not local_policy and not owner_policy) or not args.ledger:raise ValueError('Bound proof, authorization and ledger required')
     if args.fixture_policy and not db.test:raise ValueError('Fixture policy cannot authorize business target')
     policy=local_policy or owner_policy or Policy(args.fixture_policy or POLICY,bool(args.fixture_policy))
     evidence=LocalLedger(args.ledger,policy) if local_policy else OwnerLiveTestLedger(args.ledger,policy) if owner_policy else Ledger(args.ledger,policy)
+    if args.action=='owner-activate':
+        if not owner_policy or not args.artifact or not args.startup_receipt:
+            raise ValueError('Actual current owner authorization, complete artifact and actual startup receipt required')
+        from owner_live_test_migration import activate
+        result=activate(db,proposal,read(args.proof),restore,args.artifact,args.startup_receipt,evidence)
+        print(json.dumps({'result':result['kind'],'activation_ready':result['activation_ready'],'normal_production_release_approved':False,'writers_reenabled':False}));return
     result=apply(db,proposal,read(args.proof),restore,policy.value if local_policy or owner_policy else read(args.approval),evidence,args.action=='resume')
     print(json.dumps({'result':result['kind'],'activation_ready':False,'production_deployed':False}))
 
