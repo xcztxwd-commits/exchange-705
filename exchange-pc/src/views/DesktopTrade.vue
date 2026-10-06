@@ -692,7 +692,7 @@
               <p class="text-gray-500 dark:text-gray-400 dark:text-gray-500 text-sm">{{ localeStore.t('selectNetworkGetAddress') }}</p>
             </div>
             
-            <div class="bg-gray-100 dark:bg-[#2b3139]/80 p-1.5 rounded-xl flex space-x-2 mb-8">
+            <div v-if="showDepositTypeTabs" data-testid="deposit-type-tabs" class="bg-gray-100 dark:bg-[#2b3139]/80 p-1.5 rounded-xl flex space-x-2 mb-8">
               <button @click="depositTab = 'digital'" :class="['flex-1 py-2.5 rounded-lg font-bold text-sm transition-all', depositTab === 'digital' ? 'bg-white dark:bg-[#131722] text-gray-800 dark:text-gray-100 shadow-sm' : 'text-gray-500 dark:text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-200 dark:text-gray-200']">{{ localeStore.t('digitalCurrencyLabel') }}</button>
               <button @click="depositTab = 'bank'" :class="['flex-1 py-2.5 rounded-lg font-bold text-sm transition-all', depositTab === 'bank' ? 'bg-[#8cc63f] text-white shadow-sm' : 'text-gray-500 dark:text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-200 dark:text-gray-200']">{{ localeStore.t('bankCardLabel') }}</button>
             </div>
@@ -1554,6 +1554,7 @@
 </template>
 
 <script setup lang="ts">
+import { useDepositChannels } from '@/utils/depositChannels'
 import { canStartBusiness } from '@/utils/tenantFeatures'
 import ProtectedImage from '../../../exchange-frontend/src/components/ProtectedImage.vue'
 import { reportPageView } from '@/utils/pageActivity'
@@ -3200,7 +3201,9 @@ const selectSymbol = (symbol: any) => {
 // ======================
 // 充值 (Deposit) 逻辑
 // ======================
-const depositTab = ref('digital'); // 'digital' or 'bank'
+const { depositType: depositTab, showDepositTypeTabs } = useDepositChannels(
+  () => depositSettings.value.length > 0, () => Boolean(bankSetting.value)
+);
 const depositSettings = ref<any[]>([]);
 const selectedDepositSetting = ref<any>(null);
 const bankSetting = ref<any>(null);
@@ -3238,9 +3241,7 @@ const loadDepositSettings = async () => {
     const res: any = await request.get('/deposit/settings/list?type=digital');
     if (res && res.success !== false) {
       depositSettings.value = res.list || res.data || [];
-      if (depositSettings.value.length > 0) {
-        selectedDepositSetting.value = depositSettings.value[0];
-      }
+      selectedDepositSetting.value = depositSettings.value[0] || null;
     }
     
     const bankRes: any = await request.get('/deposit/settings/bank');

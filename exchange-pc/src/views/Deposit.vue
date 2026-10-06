@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useDepositChannels } from '@/utils/depositChannels'
 import { canStartBusiness } from '@/utils/tenantFeatures'
 import ProtectedImage from '../../../exchange-frontend/src/components/ProtectedImage.vue'
 import { accountMode } from "@/utils/accountMode"
@@ -24,7 +25,9 @@ const localeStore = useLocaleStore()
 localeStore.loadLocale()
 
 // 充值方式：数字货币 / 银行卡
-const depositType = ref<'digital' | 'bank'>('digital')
+const { depositType, showDepositTypeTabs } = useDepositChannels(
+  () => networks.value.length > 0, () => bankInfo.value.hasBank
+)
 
 // 网络/币种选择
 const showNetworkModal = ref(false)
@@ -367,7 +370,7 @@ onMounted(() => {
     </div>
 
     <!-- 充值方式选择 -->
-    <div class="deposit-type-tabs">
+    <div v-if="showDepositTypeTabs" data-testid="deposit-type-tabs" class="deposit-type-tabs">
       <div 
         class="deposit-tab" 
         :class="{ active: depositType === 'digital' }"
