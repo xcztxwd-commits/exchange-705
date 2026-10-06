@@ -75,7 +75,7 @@
         }
       ],
       "classification": "private_scoped",
-      "review_reason": "\u6536\u4ef6\u6295\u9012\u552f\u4e00\u952e\u542b tenant_id + campaignId + userId\uff1b\u4e24\u4e2a\u5173\u8054 ID \u662f\u6807\u91cf\uff0c\u8fc1\u79fb\u6e05\u5355\u5206\u522b\u7ea6\u675f\u6d3b\u52a8\u4e0e\u7528\u6237\uff1b\u65e0\u7ea7\u8054\u5199\u8def\u5f84\u3002 \u5df2\u5b8c\u6574\u5ba1\u67e5\u5f53\u524d\u6587\u4ef6\uff0c\u786e\u8ba4\u663e\u5f0f TenantEntityPersister + TenantOwnedEntity\u3001\u65e0\u79df\u6237\u5b57\u6bb5/\u8bbf\u95ee\u5668\u8986\u76d6\uff1b\u6b64\u7ed3\u8bba\u4ec5\u7528\u4e8e\u5f53\u524d\u6620\u5c04\u6e90\u7801\u767b\u8bb0\uff0c\u4e0d\u6279\u51c6\u53d1\u5e03\u3002 \u590d\u6838\u8bc1\u636e\uff1areports/multitenant/handoff-20260929/entity-review.json\u3002"
+      "review_reason": "收件投递唯一键含 tenant_id + campaignId + userId；两个关联 ID 是标量，迁移清单分别约束活动与用户；无级联写路径。 已完整审查当前文件，确认显式 TenantEntityPersister + TenantOwnedEntity、无租户字段/访问器覆盖；此结论仅用于当前映射源码登记，不批准发布。 复核证据：reports/multitenant/handoff-20260929/entity-review.json。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/activity/ActivityDeliveryRepository.java": {
       "sha256": "afd0e513e0da6eda7525a4e580e20d86caab35a7bee46ab217f0426b46954fec",
@@ -423,7 +423,7 @@
         }
       ],
       "classification": "private_scoped",
-      "review_reason": "\u7528\u6237 ID \u548c\u91d1\u989d/\u539f\u56e0/\u65f6\u95f4\u662f\u6807\u91cf\uff1b\u65e0 ORM \u5173\u8054\u548c\u672c\u5730\u56de\u8c03\uff0c\u7ed1\u5b9a\u79df\u6237\u7269\u7406\u5199\u8c13\u8bcd\uff1b\u8ffd\u52a0\u6027\u4ecd\u7531\u4e1a\u52a1\u5165\u53e3\u4fdd\u8bc1\u3002 \u5df2\u5b8c\u6574\u5ba1\u67e5\u5f53\u524d\u6587\u4ef6\uff0c\u786e\u8ba4\u663e\u5f0f TenantEntityPersister + TenantOwnedEntity\u3001\u65e0\u79df\u6237\u5b57\u6bb5/\u8bbf\u95ee\u5668\u8986\u76d6\uff1b\u6b64\u7ed3\u8bba\u4ec5\u7528\u4e8e\u5f53\u524d\u6620\u5c04\u6e90\u7801\u767b\u8bb0\uff0c\u4e0d\u6279\u51c6\u53d1\u5e03\u3002 \u590d\u6838\u8bc1\u636e\uff1areports/multitenant/handoff-20260929/entity-review.json\u3002"
+      "review_reason": "用户 ID 和金额/原因/时间是标量；无 ORM 关联和本地回调，绑定租户物理写谓词；追加性仍由业务入口保证。 已完整审查当前文件，确认显式 TenantEntityPersister + TenantOwnedEntity、无租户字段/访问器覆盖；此结论仅用于当前映射源码登记，不批准发布。 复核证据：reports/multitenant/handoff-20260929/entity-review.json。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/activity/TrialLedgerRepository.java": {
       "sha256": "33b93eeab1266756d11ad8d4335eb2183ce9214f352c6fe2602bb9ef21562787",
@@ -514,10 +514,10 @@
       "review_reason": "Stage1 current controller query review: existing AdminPermission enforcement remains; new email enrichment/search uses scoped AdminUserIdentity helpers, list/detail/specification calls keep verified tenant. Delegated write identity unaffected. Complete funds validation is phase2; no new unscoped EntityManager/JDBC fallback added."
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/admin/AdminAiControlController.java": {
-      "sha256": "7f7a4732c0f64df460fc55f2cd00476dc648428c62d268218a8eb8df7c075d4a",
-      "surfaces": [],
       "classification": "boundary",
-      "review_reason": "Controller retains AdminPermission per endpoint. Start now requires valid server-bound actor/requestKey via commands and returns 202, no direct activation. Query tenant-symbol-bound; STOP routes atomic cancel/invalidate and stop. Permission/JWT code unchanged. Current byte hash exactly matches the previously manually reviewed S2 source snapshot; final tests reported independently, not release approval."
+      "review_reason": "Controller retains AdminPermission per endpoint. Start now requires valid server-bound actor/requestKey via commands and returns 202, no direct activation. Query tenant-symbol-bound; STOP routes atomic cancel/invalidate and stop. Permission/JWT code unchanged. Current byte hash exactly matches the previously manually reviewed S2 source snapshot; final tests reported independently, not release approval. 2026-10-07 independent delta review against registered Git source: every control endpoint retains AdminPermission. START and RESTORE call one durable tenant-scoped command service and return 202 without synchronous plan generation/engine activation. Request keys are strict ASCII and MDC receives only validated keys. Query/cancel/manual/stop retain tenant-symbol binding; no actor/tenant request field, SQL, cache or scheduler was added in this controller. Queue cancellation and engine stop are deliberately separate, not the obsolete atomic-stop claim in the old reason. Exact current SHA also matches the prior directed review snapshot; this is source review, not runtime or release approval.",
+      "sha256": "eb975a0e7e537989a474e3ae0ee1e578910630e48274b9f9d076e837895f5c2f",
+      "surfaces": []
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/admin/AdminAnnouncementController.java": {
       "sha256": "a4e4212a6c83acbabab9eb409e8f0deae9cd8a54a62a23544b4e460f493ae23d",
@@ -592,7 +592,7 @@
         }
       ],
       "classification": "private_scoped",
-      "review_reason": "Explicit server tenant/identity boundary or delegated tenant service. Source fingerprint and all detected SQL/cache/async/file occurrences require review on change. 2026-10-06\uff1a\u9010\u884c\u590d\u6838\u4ec5\u5c06\u79df\u6237\u7ba1\u7406\u5458/\u4ee3\u7406\u5bc6\u7801\u4e0b\u9650\u4ece12\u4f4d\u6539\u4e3a6\u4f4d\u5e76\u66f4\u65b0\u9519\u8bef\u63d0\u793a\uff0c\u652f\u6301\u7eaf\u6570\u5b57\uff1b\u79df\u6237\u4f5c\u7528\u57df\u3001\u89d2\u8272\u6388\u4e88\u4e0e\u5168\u5c40\u767b\u5f55\u540d\u552f\u4e00\u6027\u3001\u539f\u5bc6\u7801\u9a8c\u8bc1\u3001\u5bc6\u7801\u54c8\u5e0c\u3001\u4f1a\u8bdd\u64a4\u9500\u3001\u9996\u6b21\u6539\u5bc6\u53ca\u63a7\u5236\u5ba1\u8ba1\u5747\u4fdd\u7559\u3002\u603b\u63a7\u72ec\u7acb\u5bc6\u7801\u4e0eMFA\u89c4\u5219\u4e0d\u53d8\u3002"
+      "review_reason": "Explicit server tenant/identity boundary or delegated tenant service. Source fingerprint and all detected SQL/cache/async/file occurrences require review on change. 2026-10-06：逐行复核仅将租户管理员/代理密码下限从12位改为6位并更新错误提示，支持纯数字；租户作用域、角色授予与全局登录名唯一性、原密码验证、密码哈希、会话撤销、首次改密及控制审计均保留。总控独立密码与MFA规则不变。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/admin/AdminDataInitializer.java": {
       "sha256": "a003015d07a8420af220e358886b9937b2ec7fbd69faf51d9b42524906601e75",
@@ -795,7 +795,7 @@
         }
       ],
       "classification": "private_scoped",
-      "review_reason": "Stage1 final tenant-owner staff controller review: list/detail/create/update/delete/role lookups retain server tenant and target permission upper bounds. Genuine same-namespace bug fixed on both creation and rename: global preflight precedes subject insert; normalized changed name is held in nextAccount until all reads/role validation finish, preventing dirty ORM autoflush before conflict validation. Own unchanged normalized name remains allowed; physical saveAndFlush races become bounded BusinessException and transaction rollback. BackendLogin registration verifies same-tenant owner; no new account selector or authority bypass. Six current regression cases cover these code paths; execution proof owned by root, not claimed here. 2026-10-06\uff1a\u9010\u884c\u590d\u6838\u4ec5\u5c06\u79df\u6237\u7ba1\u7406\u5458/\u4ee3\u7406\u5bc6\u7801\u4e0b\u9650\u4ece12\u4f4d\u6539\u4e3a6\u4f4d\u5e76\u66f4\u65b0\u9519\u8bef\u63d0\u793a\uff0c\u652f\u6301\u7eaf\u6570\u5b57\uff1b\u79df\u6237\u4f5c\u7528\u57df\u3001\u89d2\u8272\u6388\u4e88\u4e0e\u5168\u5c40\u767b\u5f55\u540d\u552f\u4e00\u6027\u3001\u539f\u5bc6\u7801\u9a8c\u8bc1\u3001\u5bc6\u7801\u54c8\u5e0c\u3001\u4f1a\u8bdd\u64a4\u9500\u3001\u9996\u6b21\u6539\u5bc6\u53ca\u63a7\u5236\u5ba1\u8ba1\u5747\u4fdd\u7559\u3002\u603b\u63a7\u72ec\u7acb\u5bc6\u7801\u4e0eMFA\u89c4\u5219\u4e0d\u53d8\u3002"
+      "review_reason": "Stage1 final tenant-owner staff controller review: list/detail/create/update/delete/role lookups retain server tenant and target permission upper bounds. Genuine same-namespace bug fixed on both creation and rename: global preflight precedes subject insert; normalized changed name is held in nextAccount until all reads/role validation finish, preventing dirty ORM autoflush before conflict validation. Own unchanged normalized name remains allowed; physical saveAndFlush races become bounded BusinessException and transaction rollback. BackendLogin registration verifies same-tenant owner; no new account selector or authority bypass. Six current regression cases cover these code paths; execution proof owned by root, not claimed here. 2026-10-06：逐行复核仅将租户管理员/代理密码下限从12位改为6位并更新错误提示，支持纯数字；租户作用域、角色授予与全局登录名唯一性、原密码验证、密码哈希、会话撤销、首次改密及控制审计均保留。总控独立密码与MFA规则不变。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/admin/AdminMenuController.java": {
       "sha256": "81500dca359d7882f347f523863836dab90cb00dd83693569975089e0ae4e481",
@@ -816,7 +816,9 @@
       "review_reason": "DTO, pure calculation or delegated controller/service; all production Java files are fingerprinted even without a detector match."
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/admin/AdminOrderController.java": {
-      "sha256": "1167c37730a7f2216444021075b8ce8d0896ceac183abd5648c6355ef44f2077",
+      "classification": "private_scoped",
+      "review_reason": "Stage1 current controller query review: existing AdminPermission enforcement remains; new email enrichment/search uses scoped AdminUserIdentity helpers, list/detail/specification calls keep verified tenant. Delegated write identity unaffected. Complete funds validation is phase2; no new unscoped EntityManager/JDBC fallback added. 2026-10-07 independent fresh delta review against registered Git source: new share-preview is read-only and AdminPermission orders read remains mandatory. Contract/option and owning user are both fetched by server TenantContext plus id, with ownership recheck; deleted/non-CLOSED/unbound orders are rejected. ROLE_AGENT must match the owner parentUserId from authenticated BackendAccess, not the request. Only the existing order DTO plus owner display name/email is returned, with no-store. Added leverage/netProfit are display calculation only, not ledger writes. Existing scoped list/specification subqueries, tenant-scoped owner/agent enrichment and controlled-exit delegates are retained. No new cache, background job or raw private SQL; complete funds/ORM acceptance remains separate.",
+      "sha256": "36c1ed4210a9d5160ac10a57f03008598a710b935581030395a75a9b31e2a058",
       "surfaces": [
         {
           "kind": "identity_boundary",
@@ -854,88 +856,106 @@
           "statement_sha256": "c20823807df2b1cd213cb5d4aa2a8fe509b357f783e3b9183ab20b14dbc30200"
         },
         {
+          "kind": "identity_boundary",
+          "line": 142,
+          "statement_sha256": "63dbaed2d8c439d711722bf63913183a29ba5fb805f8929f91098b579de9d75e"
+        },
+        {
+          "kind": "identity_boundary",
+          "line": 147,
+          "statement_sha256": "bb02bf4e55aa4ab7fd0996539321190cd334d79de1d9682e1d41ac7f96097806"
+        },
+        {
+          "kind": "identity_boundary",
+          "line": 152,
+          "statement_sha256": "bb02bf4e55aa4ab7fd0996539321190cd334d79de1d9682e1d41ac7f96097806"
+        },
+        {
+          "kind": "identity_boundary",
+          "line": 160,
+          "statement_sha256": "a53699decf3bce88b3576799fb7ed206bced9695e6fb06085259917ac0ffda44"
+        },
+        {
           "kind": "cache_lock",
-          "line": 140,
+          "line": 170,
           "statement_sha256": "2b668204b9db4ab0d09101e4c376100a49bc9b6c74708769866c19f1cb71662d"
         },
         {
           "kind": "cache_lock",
-          "line": 173,
+          "line": 209,
           "statement_sha256": "adb67433f384bf9131395ed63adea724145edb7815512700ba51fa44fc3e58b7"
         },
         {
           "kind": "identity_boundary",
-          "line": 205,
+          "line": 241,
           "statement_sha256": "d62c39a61bd3bada09ee07ed251075950a8c6f147466f77d63971d0ae5645bd3"
         },
         {
           "kind": "identity_boundary",
-          "line": 211,
+          "line": 247,
           "statement_sha256": "f0eb9736572b2a33b35e872577bcc000efb6a447865a9eccac90389a8a66016a"
         },
         {
           "kind": "identity_boundary",
-          "line": 230,
+          "line": 266,
           "statement_sha256": "d62c39a61bd3bada09ee07ed251075950a8c6f147466f77d63971d0ae5645bd3"
         },
         {
           "kind": "identity_boundary",
-          "line": 236,
+          "line": 272,
           "statement_sha256": "f0eb9736572b2a33b35e872577bcc000efb6a447865a9eccac90389a8a66016a"
         },
         {
           "kind": "identity_boundary",
-          "line": 331,
+          "line": 367,
           "statement_sha256": "6b98e88e42a8d76ab443d387210b6e07003ba42b93e8bf2d84b7c3f0d5785ad1"
         },
         {
           "kind": "identity_boundary",
-          "line": 374,
+          "line": 410,
           "statement_sha256": "6b98e88e42a8d76ab443d387210b6e07003ba42b93e8bf2d84b7c3f0d5785ad1"
         },
         {
           "kind": "identity_boundary",
-          "line": 407,
+          "line": 443,
           "statement_sha256": "dc632d07205a49eb682251bd38844c2fda44bc64f014623dd4d49235bf18ab2a"
         },
         {
           "kind": "native_sql",
-          "line": 411,
+          "line": 447,
           "statement_sha256": "5b7e0b7bab63bab3a7c514dd12f0e8236d91c74920346a692ffc5b8164748ef1"
         },
         {
           "kind": "identity_boundary",
-          "line": 422,
+          "line": 458,
           "statement_sha256": "dc632d07205a49eb682251bd38844c2fda44bc64f014623dd4d49235bf18ab2a"
         },
         {
           "kind": "native_sql",
-          "line": 424,
+          "line": 460,
           "statement_sha256": "5b7e0b7bab63bab3a7c514dd12f0e8236d91c74920346a692ffc5b8164748ef1"
         },
         {
           "kind": "identity_boundary",
-          "line": 435,
+          "line": 471,
           "statement_sha256": "ac3de6eff63e81aa8a463d34ed1ba12cdb19038b2db8c890a712a1a14afcd0e1"
         },
         {
           "kind": "native_sql",
-          "line": 439,
+          "line": 475,
           "statement_sha256": "5b7e0b7bab63bab3a7c514dd12f0e8236d91c74920346a692ffc5b8164748ef1"
         },
         {
           "kind": "identity_boundary",
-          "line": 450,
+          "line": 486,
           "statement_sha256": "ac3de6eff63e81aa8a463d34ed1ba12cdb19038b2db8c890a712a1a14afcd0e1"
         },
         {
           "kind": "native_sql",
-          "line": 452,
+          "line": 488,
           "statement_sha256": "5b7e0b7bab63bab3a7c514dd12f0e8236d91c74920346a692ffc5b8164748ef1"
         }
-      ],
-      "classification": "private_scoped",
-      "review_reason": "Stage1 current controller query review: existing AdminPermission enforcement remains; new email enrichment/search uses scoped AdminUserIdentity helpers, list/detail/specification calls keep verified tenant. Delegated write identity unaffected. Complete funds validation is phase2; no new unscoped EntityManager/JDBC fallback added."
+      ]
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/admin/AdminPermissionCatalog.java": {
       "sha256": "28ad4c218b9708dce6de4fe86710105321c196d7f3bac56d3d7560c45d9d40a3",
@@ -1154,7 +1174,9 @@
       "review_reason": "Joint review: tenant repository and ownership; deletion locks existing runtime before configuration, updates request refresh only after commit, batch IDs sorted. No funds are acquired from an engine lock; MySQL cross-entry contention remains an acceptance item."
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/admin/AdminTablePreferenceController.java": {
-      "sha256": "d22761c5d8d4768d20841a02b598b2f43c7da6d348d8c1a03218737dcf5f21cb",
+      "classification": "boundary",
+      "review_reason": "Shared column validation; tenant required, CONTROL_ACCESS identity target checked, stable actual actor used without session/token; normal admin and agent keys and scoped legacy migration retained. Preferences are presentation only, no business data/column permissions. 2026-10-07 independent delta review: diff only adds application/json;charset=UTF-8. Full current boundary still requires backend roles and current server tenant; CONTROL_ACCESS target tenant/actor is validated. Presentation key includes tenant/mode/actor/table, not session/token or caller actor; legacy fallback is tenant-scoped. Existing strict columns validation and TenantEntityPersister write boundary remain. No business data authorization is inferred from visible columns. Exact SHA matches prior directed review; no runtime/release approval.",
+      "sha256": "330a6a43d9f3afcc41778f0f44302836091d190f37b3148c4633822ed5083fc6",
       "surfaces": [
         {
           "kind": "identity_boundary",
@@ -1201,9 +1223,7 @@
           "line": 41,
           "statement_sha256": "5e498cd967870a505f9d4027235b18d4c147a7d5c2de2451b59239b98273b9c5"
         }
-      ],
-      "classification": "boundary",
-      "review_reason": "Shared column validation; tenant required, CONTROL_ACCESS identity target checked, stable actual actor used without session/token; normal admin and agent keys and scoped legacy migration retained. Preferences are presentation only, no business data/column permissions."
+      ]
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/admin/AdminTenantPolicyController.java": {
       "sha256": "974c4726bd5892fb55b72e3c7f22841087a4018622315294eedb12d5289c0457",
@@ -1232,7 +1252,7 @@
         }
       ],
       "classification": "private_scoped",
-      "review_reason": "\u8eab\u4efd\u4e3b\u952e\u548c rowVersion \u4fdd\u7559\uff0cpasswordHash/currentToken \u663e\u5f0f JsonIgnore\uff1b\u672c\u5730\u751f\u547d\u5468\u671f\u53ea\u6539\u65f6\u95f4\uff0c\u65e0 tenantId \u8bbf\u95ee\u5668\u8986\u76d6\u3002 \u5df2\u5b8c\u6574\u5ba1\u67e5\u5f53\u524d\u6587\u4ef6\uff0c\u786e\u8ba4\u663e\u5f0f TenantEntityPersister + TenantOwnedEntity\u3001\u65e0\u79df\u6237\u5b57\u6bb5/\u8bbf\u95ee\u5668\u8986\u76d6\uff1b\u6b64\u7ed3\u8bba\u4ec5\u7528\u4e8e\u5f53\u524d\u6620\u5c04\u6e90\u7801\u767b\u8bb0\uff0c\u4e0d\u6279\u51c6\u53d1\u5e03\u3002 \u590d\u6838\u8bc1\u636e\uff1areports/multitenant/handoff-20260929/entity-review.json\u3002"
+      "review_reason": "身份主键和 rowVersion 保留，passwordHash/currentToken 显式 JsonIgnore；本地生命周期只改时间，无 tenantId 访问器覆盖。 已完整审查当前文件，确认显式 TenantEntityPersister + TenantOwnedEntity、无租户字段/访问器覆盖；此结论仅用于当前映射源码登记，不批准发布。 复核证据：reports/multitenant/handoff-20260929/entity-review.json。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/admin/AdminUserController.java": {
       "sha256": "e19eb558c9dd41f74c5eae30f13f5b379243726c4b5d4032762a40c9c84d901f",
@@ -2583,7 +2603,7 @@
         }
       ],
       "classification": "private_scoped",
-      "review_reason": "\u7b2c\u4e00\u9636\u6bb5\u6ce8\u518c\u8eab\u4efd\u51b2\u7a81\u6839\u56e0\u5b9e\u5ba1\uff1aRegistrationFields.apply \u6b63\u89c4\u5316\u540e\u7684\u975e\u7a7a\u624b\u673a\u53f7\u7528 TenantContext.requireTenantId \u4e0e findByTenantIdAndPhone \u9884\u67e5\uff0c\u4e0d\u8bfb\u53d6\u5176\u4ed6\u79df\u6237\u3002\u539f\u90ae\u7bb1/\u9080\u8bf7\u7801/\u9a8c\u8bc1\u7801/\u8d44\u4ea7/\u91cd\u7f6e\u5bc6\u7801\u8def\u5f84\u4ecd\u663e\u5f0f\u79df\u6237\u9650\u5b9a\u3002\u9996\u6b21 saveAndFlush \u7ee7\u7eed\u7ecf\u8fc7 TenantRepositoryImpl.saveAndFlush\u2192save \u7684\u670d\u52a1\u7aef\u79df\u6237\u5f52\u5c5e\u68c0\u67e5\uff0c\u5e76\u5728\u521b\u5efa\u8d44\u4ea7\u3001\u4f1a\u8bdd\u548c JWT \u524d\u5b9e\u9645\u68c0\u67e5\u552f\u4e00\u7ea6\u675f\u3002\u4ec5 SQLException \u539f\u751f1062\u6216\u660e\u786e uk_tenant_normalized_email/uk_tenant_normalized_phone \u7684 Hibernate constraint \u5206\u7c7b\u4e3a\u53d7\u63a7 BusinessException\uff0c\u5176\u4ed6\u5916\u952e/\u975e\u7a7a/\u672a\u77e5\u6570\u636e\u5e93\u9519\u8bef\u539f\u6837\u629b\u51fa\uff1bIdentityHashMap visited+12\u5c42\u4e0a\u9650\u9632 cause \u5faa\u73af\uff0c\u65e0\u5f02\u5e38\u6d88\u606f\u89e3\u6790\u6216\u989d\u5916\u67e5\u8be2\uff0c\u4fdd\u7559\u539f @Transactional \u56de\u6eda\u8bed\u4e49\uff0c\u4e0d\u5728\u5931\u8d25\u540e\u7ee7\u7eed dirty/persist\u3002\u5185\u90e8 initCause \u4fdd\u7559\u771f\u5b9e MySQL \u5206\u7c7b\uff0cGlobalExceptionHandler/SafeErrors \u5bf9\u5916\u53ea\u8fd4\u56de\u56fa\u5b9a\u4e1a\u52a1\u6d88\u606f\uff0c\u4e0d\u5e8f\u5217\u5316 Throwable/cause\u3002AuthController \u53ea\u6709\u6210\u529f\u6ce8\u518c\u540e\u624d trigger \u6d3b\u52a8\u3002\u5f53\u524d focused25 exit0\uff1a26/0/0/0\uff0c\u5176\u4e2d\u672c\u8f6e\u72ec\u7acb MySQL Stage1TenantRepositoryMySqlIT15 \u5305\u542b\u987a\u5e8f\u540c\u79df\u6237\u624b\u673a\u53f7\u62d2\u7edd\u4e14\u539f\u7528\u6237/\u8d44\u4ea7\u6307\u7eb9\u4e0d\u53d8\u3001A/B \u540c\u6b63\u89c4\u90ae\u7bb1/\u624b\u673a\u53f7\u4e0d\u540c\u5bc6\u7801\u4e0e\u771f\u5b9e JWT \u72ec\u7acb\u6210\u529f\u3001\u4e24\u6761\u771f\u5b9e SQL1062 phone/email INSERT \u7ade\u4e89\u6070\u4e00\u6210\u529f\u4e14\u5931\u8d25\u7528\u6237/\u8d44\u4ea7\u65e0\u6b8b\u7559\uff1b\u65b0\u589e RegistrationIdentityCollisionTest6 \u5305\u542b HTTP400\u3001\u4e0d\u541eFK\u548c\u975e1062\u5f02\u5e38\u3001\u7a7a\u53ef\u9009\u624b\u673a\u53f7\u65e0\u67e5\u8be2\u3002\u8be5 focused IT \u7684 captcha/policy/config \u5916\u56f4\u56fa\u5b9a\u66ff\u8eab\u5df2\u660e\u786e\uff0c\u4e0d\u66ff\u4ee3\u771f\u5b9e Redis/\u5f00\u901a/browser \u9a8c\u6536\uff1b\u6d4f\u89c8\u5668\u5148\u524d\u91cd\u590d\u624b\u673a\u53f7500\u5931\u8d25\u5b8c\u6574\u4fdd\u7559\u3002\u4ec5\u6e90\u7801\u5ba1\u67e5\u767b\u8bb0\uff0c\u4e0d\u662f\u9636\u6bb5\u5b8c\u6210\u6216\u53d1\u5e03\u6279\u51c6\u3002 Integration review 2026-10-06: Only avatar metadata and unset nickname fallback change. Password hashing, tenant-specific identity, registration readiness and credential claims remain enforced."
+      "review_reason": "第一阶段注册身份冲突根因实审：RegistrationFields.apply 正规化后的非空手机号用 TenantContext.requireTenantId 与 findByTenantIdAndPhone 预查，不读取其他租户。原邮箱/邀请码/验证码/资产/重置密码路径仍显式租户限定。首次 saveAndFlush 继续经过 TenantRepositoryImpl.saveAndFlush→save 的服务端租户归属检查，并在创建资产、会话和 JWT 前实际检查唯一约束。仅 SQLException 原生1062或明确 uk_tenant_normalized_email/uk_tenant_normalized_phone 的 Hibernate constraint 分类为受控 BusinessException，其他外键/非空/未知数据库错误原样抛出；IdentityHashMap visited+12层上限防 cause 循环，无异常消息解析或额外查询，保留原 @Transactional 回滚语义，不在失败后继续 dirty/persist。内部 initCause 保留真实 MySQL 分类，GlobalExceptionHandler/SafeErrors 对外只返回固定业务消息，不序列化 Throwable/cause。AuthController 只有成功注册后才 trigger 活动。当前 focused25 exit0：26/0/0/0，其中本轮独立 MySQL Stage1TenantRepositoryMySqlIT15 包含顺序同租户手机号拒绝且原用户/资产指纹不变、A/B 同正规邮箱/手机号不同密码与真实 JWT 独立成功、两条真实 SQL1062 phone/email INSERT 竞争恰一成功且失败用户/资产无残留；新增 RegistrationIdentityCollisionTest6 包含 HTTP400、不吞FK和非1062异常、空可选手机号无查询。该 focused IT 的 captcha/policy/config 外围固定替身已明确，不替代真实 Redis/开通/browser 验收；浏览器先前重复手机号500失败完整保留。仅源码审查登记，不是阶段完成或发布批准。 Integration review 2026-10-06: Only avatar metadata and unset nickname fallback change. Password hashing, tenant-specific identity, registration readiness and credential claims remain enforced."
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/auth/dto/LoginRequest.java": {
       "sha256": "a0dad4d8ecd2715b73a9ae10e09b9f4e06c1c49030ae1d434ace837ac88459fd",
@@ -3082,10 +3102,10 @@
       "review_reason": "Retained unused legacy MAX+1 generator. Structural gate forbids any production reference; UserAccount uses database IDENTITY."
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/config/GlobalExceptionHandler.java": {
-      "sha256": "e890e79b71ce944b6d51daa0a0e0722fd49977dbfc949bf7f2cfb2b150462ec5",
-      "surfaces": [],
       "classification": "boundary",
-      "review_reason": "Stage1 real supervision POST failure root-cause review: dedicated Spring HttpRequestMethodNotSupportedException branch now returns405 with supported methods from actual MVC mapping, no-store and bounded fixed message rather than generic500. It performs no private query, business receipt mutation, identity/tenant switch, permission grant or exception-text disclosure; all other denial/conflict/KYC mappings remain unchanged. Current ControlReadOnlyMethodTest actual root backend-readonly-9 JUnit1/failure0/error0/skip0 exit0 verifies2 real ControlReadController POST routes405/Allow GET/no-store and zero business collaborators. Actual backend package build5 exit0; not production release approval."
+      "review_reason": "Stage1 real supervision POST failure root-cause review: dedicated Spring HttpRequestMethodNotSupportedException branch now returns405 with supported methods from actual MVC mapping, no-store and bounded fixed message rather than generic500. It performs no private query, business receipt mutation, identity/tenant switch, permission grant or exception-text disclosure; all other denial/conflict/KYC mappings remain unchanged. Current ControlReadOnlyMethodTest actual root backend-readonly-9 JUnit1/failure0/error0/skip0 exit0 verifies2 real ControlReadController POST routes405/Allow GET/no-store and zero business collaborators. Actual backend package build5 exit0; not production release approval. 2026-10-07 independent fresh delta review: new engine failures are classified through the pure MarketEngineFailure normalizer and return fixed 503/Retry-After rather than SQL or arbitrary exception text; pessimistic conflicts use that same classifier while optimistic 409 is retained. Broken pipe/reset/client abort does not attempt a second response on a closed socket. Existing validation400, denied403, KYC403/no-store and method405/Allow/no-store branches remain. This advice performs no private query, receipt mutation, tenant/identity switch, permission grant, cache or background job. Generic internal stack logging is legacy diagnostic behavior, not user-facing business authority; complete authenticated Spring startup remains separately unverified.",
+      "sha256": "8543cc4d20f5d901570e8f7d999f7b44d8ecb90d9fd46f943214a2ea2c0da414",
+      "surfaces": []
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/config/JwtFilter.java": {
       "sha256": "f51847986097cb14299d2e8d902e9fdca963afa15c81daf4a331e55c5578e016",
@@ -3215,10 +3235,16 @@
       "review_reason": "Redis connection/serializer configuration only; tenant data keys belong to registered consumers."
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/config/RequestLoggingFilter.java": {
-      "sha256": "aec14e620bf21d4144c549576440aefa55c859afc7b3820626a7890de09eaaa9",
-      "surfaces": [],
       "classification": "stateless",
-      "review_reason": "DTO, pure calculation or delegated controller/service; all production Java files are fingerprinted even without a detector match."
+      "review_reason": "DTO, pure calculation or delegated controller/service; all production Java files are fingerprinted even without a detector match. 2026-10-07 independent fresh delta review: HTTP diagnostic filter remains stateless with no SQL, business write, cache, scheduler or authentication change. UUID trace is generated by server; logs omit headers, query and body. Request/command/task MDC values come from validated server paths. It only observes TenantContext in finally, never opens/replaces tenant identity, and removes its four MDC fields on every exit. IOException disconnect category is diagnostic only and grants no retry/write authority; per-request tenant logging completeness and pathological cause-cycle handling are separate diagnostic hardening, not proven isolation changes.",
+      "sha256": "bf4df0b25173cf5592e65c4eafa3dcd0fe922c4aa7334c9c5e3eea8a13799809",
+      "surfaces": [
+        {
+          "kind": "identity_boundary",
+          "line": 29,
+          "statement_sha256": "4fc46a071505c3a4f41e543eb1d5ac7c2ceb8972b3d6cdcecb29ea9c7ba5e90c"
+        }
+      ]
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/config/RestTemplateConfig.java": {
       "sha256": "c69afa51445bf95d94971f297bc89ff209c4505dad7d27f5abcb855e7d0d6367",
@@ -3342,7 +3368,7 @@
         }
       ],
       "classification": "control_plane",
-      "review_reason": "Stage1 final control backend creation review: authenticated target TenantContext scope retained; ADMIN creation performs global normalized name preflight before password hash/subject persistence. AGENT registration still verifies scoped existing agent. saveAndFlush concurrent uniqueness is translated without SQL/account detail; outer @Transactional rolls back both subject/login. Real control actor audit remains independent, no hidden identity or tenant template/data copy. 2026-10-06\uff1a\u9010\u884c\u590d\u6838\u4ec5\u5c06\u79df\u6237\u7ba1\u7406\u5458/\u4ee3\u7406\u5bc6\u7801\u4e0b\u9650\u4ece12\u4f4d\u6539\u4e3a6\u4f4d\u5e76\u66f4\u65b0\u9519\u8bef\u63d0\u793a\uff0c\u652f\u6301\u7eaf\u6570\u5b57\uff1b\u79df\u6237\u4f5c\u7528\u57df\u3001\u89d2\u8272\u6388\u4e88\u4e0e\u5168\u5c40\u767b\u5f55\u540d\u552f\u4e00\u6027\u3001\u539f\u5bc6\u7801\u9a8c\u8bc1\u3001\u5bc6\u7801\u54c8\u5e0c\u3001\u4f1a\u8bdd\u64a4\u9500\u3001\u9996\u6b21\u6539\u5bc6\u53ca\u63a7\u5236\u5ba1\u8ba1\u5747\u4fdd\u7559\u3002\u603b\u63a7\u72ec\u7acb\u5bc6\u7801\u4e0eMFA\u89c4\u5219\u4e0d\u53d8\u3002"
+      "review_reason": "Stage1 final control backend creation review: authenticated target TenantContext scope retained; ADMIN creation performs global normalized name preflight before password hash/subject persistence. AGENT registration still verifies scoped existing agent. saveAndFlush concurrent uniqueness is translated without SQL/account detail; outer @Transactional rolls back both subject/login. Real control actor audit remains independent, no hidden identity or tenant template/data copy. 2026-10-06：逐行复核仅将租户管理员/代理密码下限从12位改为6位并更新错误提示，支持纯数字；租户作用域、角色授予与全局登录名唯一性、原密码验证、密码哈希、会话撤销、首次改密及控制审计均保留。总控独立密码与MFA规则不变。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/control/BackendLogin.java": {
       "sha256": "4ca3ef442592f151716d51909e2088aff6384daaf35d5f75d0276ff6945017e1",
@@ -4168,7 +4194,9 @@
       "review_reason": "Independent control-plane identities/policies/sessions; business tenant access uses explicit verified scope and audit. Review file-specific occurrence list."
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/control/TenantDomainVerification.java": {
-      "sha256": "a37ee52a456bc8e63255815b64ecf73ce776d0ca4af75e8e12c05fad942edda2",
+      "classification": "boundary",
+      "review_reason": "Independent ROLE_CONTROL plus server ControlIdentity, no tenant/access-session context. Root/role validation before reservation; all writes lock explicit tenant. Per-role retirement, DNS/TLS outside locks with binding+config recheck, exact tenant/nonce/role reply. Batch activation requires complete VERIFIED candidate set and versions in one transaction with audit; active target read from same tenant, no arbitrary target field. Entry switch never revokes frontend sessions. Release checks role/owner/version/non-use. Public nonce reply and entryTarget grant no business authority. Legacy release also validates the independent actor before reading ownership. 2026-10-07 independent fresh delta review: only operation-reason normalization/default was added; blank reason becomes fixed total-control domain-management text, nonblank text still passes existing 3..512 validation and audit. Full current file preserves independent ROLE_CONTROL + typed server actor with no tenant/access-session context, explicit tenant locking, fixed ENTRY/FRONTEND roles, tenant/role/binding/config-version rechecks, DNS/TLS outside locks and exact nonce-bound reply. Host reservations/candidate caches are control-plane records; no business cache or scheduler added. Activate/release still require owner/status/version/non-use and complete verified candidates; public route reply is fixed-purpose and grants no business identity. This change weakens no tenant/permission boundary but deliberately does not require an operator-specific nonblank reason; formal release remains blocked.",
+      "sha256": "1f0f6aa54238316bad40c86e934147d8cfcc4970f2f5f6be0a25352dfacc9c0d",
       "surfaces": [
         {
           "kind": "identity_boundary",
@@ -4197,18 +4225,15 @@
         },
         {
           "kind": "cache_lock",
-          "line": 31,
+          "line": 32,
           "statement_sha256": "7eba60316c92c91c72413e7edbb834e1c644c6ae1a7f2c352c1d438dfc1bcd46"
         },
         {
           "kind": "cache_lock",
-          "line": 32,
+          "line": 33,
           "statement_sha256": "ea2ec1dbad26a26c6c107448f1349c35c772457414629b657762f0867bbab3fe"
         }
-      ],
-      "classification": "boundary",
-      "review_reason": "Independent ROLE_CONTROL plus server ControlIdentity, no tenant/access-session context. Root/role validation before reservation; all writes lock explicit tenant. Per-role retirement, DNS/TLS outside locks with binding+config recheck, exact tenant/nonce/role reply. Batch activation requires complete VERIFIED candidate set and versions in one transaction with audit; active target read from same tenant, no arbitrary target field. Entry switch never revokes frontend sessions. Release checks role/owner/version/non-use. Public nonce reply and entryTarget grant no business authority. Legacy release also validates the independent actor before reading ownership.",
-      "prior_review_reason": "Read full state machine: independent ROLE_CONTROL only; prepare reserves globally unique hostname without modifying active route; nonce/version/owner/15-minute TTL guards; pinned TLS probe outside DB locks; verify result rechecked under locks; activate audits atomically, retires old host, increments policyVersion, never opens business state. Explicit retired release keeps history/audit. Public nonce reply is GET-only and never establishes business TenantContext."
+      ]
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/control/TenantFeatureController.java": {
       "sha256": "b943000d1676a571ed508fa3532ab8edd2505ab848fa5fa49939bbc990293ad3",
@@ -4392,56 +4417,56 @@
       "review_reason": "Native tenant acquisition uses COMMIT flush mode, avoids before-anchor AUTO flush; writer flushes after X before refresh. Funding reader invoked before money DML and keeps tenant S while current policies/configs and readiness are read. TenantManagement/Domain/Retention/template writers use same existing tenant anchor. Normal non-simulation new-business flow contains no external provider call. Independent static review only; actual tests and release approval remain separate."
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/control/TenantReadinessService.java": {
-      "sha256": "896c24f6328a85e7e93a0d0ca3af1c75af10cf97c9c29ad850d9caafaf530742",
+      "classification": "private_scoped",
+      "review_reason": "Stage1 backend/schema source review: fixed entity/current-tenant predicates evaluate effective configuration/policies and never return secrets. Genuine readiness bug fixed: requires enabled super_admin owner plus matching active BackendLogin rather than any staff. Client configReady is not accepted; configured feature prerequisites remain server-validated. 2026-10-07 independent fresh delta review: removal is only the SMTP prerequisite for registration. Cross-check confirms AuthService.register consumes graphical captcha and does not send registration email; reset-code sending still uses EmailService runtime validation of tenant-scoped credentials, authorized SMTP endpoint and TLS. Other feature readiness and enabled super_admin plus active tenant-matched BackendLogin remain mandatory. inspect opens the explicit server-selected tenant in an AutoCloseable scope; fixed JPQL always binds e.tenantId and configuration/policy reads bind current tenant. Secrets are used internally for readiness and never returned. Controller/management entry points retain server control identity checks. No new cache, job, unscoped SQL or caller configReady bypass.",
+      "sha256": "f83f1869ebc7a781afa3671770f852c8256b0f4bf42b9b686e42f134131de336",
       "surfaces": [
         {
           "kind": "identity_boundary",
-          "line": 8,
+          "line": 7,
           "statement_sha256": "e650e907ad1ccccb0d9da291176531a8f032a5d3dd7e18c778268f6d8d3e5339"
         },
         {
           "kind": "entity_manager_jpql",
-          "line": 13,
+          "line": 12,
           "statement_sha256": "65cae50a5372322fd9ee67763d62f49bd23186953b896f94653babe794821db7"
         },
         {
           "kind": "entity_manager_jpql",
-          "line": 25,
+          "line": 24,
           "statement_sha256": "eb440423a871023892b3853be8a2990d75ff71ab1898066cb97cb06d14bd761d"
         },
         {
           "kind": "identity_boundary",
-          "line": 40,
+          "line": 39,
           "statement_sha256": "a7bacb4dca2da9f489e9f0bb01a2f4622608c766060adce06900d1e4cc60a6be"
         },
         {
           "kind": "native_sql",
-          "line": 45,
+          "line": 44,
           "statement_sha256": "6116a92885bdf3001b56898a140d6de0512127ae4ada62b716f524283f67d09a"
         },
         {
           "kind": "native_sql",
-          "line": 68,
+          "line": 64,
           "statement_sha256": "d6b7ed96c2cfe90153b0dd6def0f438269baa6c62da5784becb2ed66ea988d04"
         },
         {
           "kind": "entity_manager_jpql",
-          "line": 68,
+          "line": 64,
           "statement_sha256": "d6b7ed96c2cfe90153b0dd6def0f438269baa6c62da5784becb2ed66ea988d04"
         },
         {
           "kind": "identity_boundary",
-          "line": 68,
+          "line": 64,
           "statement_sha256": "d6b7ed96c2cfe90153b0dd6def0f438269baa6c62da5784becb2ed66ea988d04"
         },
         {
           "kind": "identity_boundary",
-          "line": 69,
+          "line": 65,
           "statement_sha256": "d06d7d505c4377d8e6dd426ff34e6ea9970443673e04a4b7f2b3e0689a8aa4b5"
         }
-      ],
-      "classification": "private_scoped",
-      "review_reason": "Stage1 backend/schema source review: fixed entity/current-tenant predicates evaluate effective configuration/policies and never return secrets. Genuine readiness bug fixed: requires enabled super_admin owner plus matching active BackendLogin rather than any staff. Client configReady is not accepted; configured feature prerequisites remain server-validated."
+      ]
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/control/TenantRepository.java": {
       "sha256": "f2adb297f6a1abcdc31b8e833a9d20232142817146686517da1ce2067efb245c",
@@ -4543,7 +4568,7 @@
         }
       ],
       "classification": "control_plane",
-      "review_reason": "\u552f\u4e00\u751f\u4ea7\u8c03\u7528\u6765\u81ea TenantManagementService.create\uff0c\u521d\u59cb\u5316\u52a0\u5165\u540c\u4e00\u4e8b\u52a1\u3002\u663e\u5f0f TenantContext.Scope\u3001\u79df\u6237\u884c\u9501\u548c\u7248\u672c\u5339\u914d\u4e32\u884c\u5316\u91cd\u8bd5\uff1b\u79df\u6237\u79c1\u8868\u5b58\u5728\u6027\u67e5\u8be2\u5e26 tenant\u3002\u4ec5\u521b\u5efa\u4e0d\u5b58\u5728\u7684\u65e0\u83dc\u5355\u975e super \u89d2\u8272\u3001\u7ad9\u540d/UTC/\u5173\u95ed\u5ba2\u670d\u3001\u7981\u7528\u5e01\u79cd\u3001\u7981\u7528\u96f6\u6536\u76ca\u4ea7\u54c1\uff1b\u4e0d\u8986\u76d6\u65e2\u6709\u914d\u7f6e\uff0c\u4e0d\u8bfb\u53d6\u5176\u4ed6\u79df\u6237\u6a21\u677f\uff0c\u4e0d\u590d\u5236\u7528\u6237\u3001\u8d44\u91d1\u3001\u4e1a\u52a1\u8ba2\u5355\u3001\u652f\u4ed8\u5730\u5740\u6216\u5bc6\u94a5\u3002saveAndFlush \u4fdd\u6301\u5728\u521b\u5efa\u4e8b\u52a1\u5185\uff0c\u5931\u8d25\u4e0d\u4f1a\u7559\u4e0b\u534a\u6a21\u677f\u3002 \u590d\u6838\u8bc1\u636e\uff1areports/multitenant/handoff-20260929/nonentity-review.json\uff1b\u97f3\u9891\u4fee\u590d\u89c1 audio-summary.json\u3002"
+      "review_reason": "唯一生产调用来自 TenantManagementService.create，初始化加入同一事务。显式 TenantContext.Scope、租户行锁和版本匹配串行化重试；租户私表存在性查询带 tenant。仅创建不存在的无菜单非 super 角色、站名/UTC/关闭客服、禁用币种、禁用零收益产品；不覆盖既有配置，不读取其他租户模板，不复制用户、资金、业务订单、支付地址或密钥。saveAndFlush 保持在创建事务内，失败不会留下半模板。 复核证据：reports/multitenant/handoff-20260929/nonentity-review.json；音频修复见 audio-summary.json。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/demo/DemoAccount.java": {
       "sha256": "c167d8790b6c12db8a83525746e9165fa0a73e1efd5474575fd044a3ef11e9cd",
@@ -4555,7 +4580,7 @@
         }
       ],
       "classification": "private_scoped",
-      "review_reason": "\u516c\u5f00 userId/cash/version \u5b57\u6bb5\u4e0d\u5305\u542b tenantId\uff1b\u79df\u6237\u5b57\u6bb5\u4ecd\u662f\u7236\u7c7b\u79c1\u6709\u53d7\u63a7\u5b57\u6bb5\uff0c\u65e0 ORM \u5173\u8054\u6216\u81ea\u5b9a\u4e49\u5199 SQL\u3002 \u5df2\u5b8c\u6574\u5ba1\u67e5\u5f53\u524d\u6587\u4ef6\uff0c\u786e\u8ba4\u663e\u5f0f TenantEntityPersister + TenantOwnedEntity\u3001\u65e0\u79df\u6237\u5b57\u6bb5/\u8bbf\u95ee\u5668\u8986\u76d6\uff1b\u6b64\u7ed3\u8bba\u4ec5\u7528\u4e8e\u5f53\u524d\u6620\u5c04\u6e90\u7801\u767b\u8bb0\uff0c\u4e0d\u6279\u51c6\u53d1\u5e03\u3002 \u590d\u6838\u8bc1\u636e\uff1areports/multitenant/handoff-20260929/entity-review.json\u3002"
+      "review_reason": "公开 userId/cash/version 字段不包含 tenantId；租户字段仍是父类私有受控字段，无 ORM 关联或自定义写 SQL。 已完整审查当前文件，确认显式 TenantEntityPersister + TenantOwnedEntity、无租户字段/访问器覆盖；此结论仅用于当前映射源码登记，不批准发布。 复核证据：reports/multitenant/handoff-20260929/entity-review.json。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/demo/DemoAccountRepository.java": {
       "sha256": "ec9947755157165f43fc6f39dcf09f6d16951291b498e5bdd40028ef08f78956",
@@ -4579,7 +4604,7 @@
         }
       ],
       "classification": "private_scoped",
-      "review_reason": "userId/orderId \u4e3a\u6807\u91cf\u4e14\u5747\u6709\u8fc1\u79fb\u5173\u7cfb\u6e05\u5355\uff1b\u865a\u62df\u8d44\u91d1\u8bb0\u5f55\u7ed1\u5b9a persister\uff0c\u4e0d\u81ea\u52a8\u58f0\u660e\u4e3a\u4e0d\u53ef\u66f4\u65b0\u8d26\u672c\u3002 \u5df2\u5b8c\u6574\u5ba1\u67e5\u5f53\u524d\u6587\u4ef6\uff0c\u786e\u8ba4\u663e\u5f0f TenantEntityPersister + TenantOwnedEntity\u3001\u65e0\u79df\u6237\u5b57\u6bb5/\u8bbf\u95ee\u5668\u8986\u76d6\uff1b\u6b64\u7ed3\u8bba\u4ec5\u7528\u4e8e\u5f53\u524d\u6620\u5c04\u6e90\u7801\u767b\u8bb0\uff0c\u4e0d\u6279\u51c6\u53d1\u5e03\u3002 \u590d\u6838\u8bc1\u636e\uff1areports/multitenant/handoff-20260929/entity-review.json\u3002"
+      "review_reason": "userId/orderId 为标量且均有迁移关系清单；虚拟资金记录绑定 persister，不自动声明为不可更新账本。 已完整审查当前文件，确认显式 TenantEntityPersister + TenantOwnedEntity、无租户字段/访问器覆盖；此结论仅用于当前映射源码登记，不批准发布。 复核证据：reports/multitenant/handoff-20260929/entity-review.json。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/demo/DemoLedgerRepository.java": {
       "sha256": "d9728fa87c729dd6378b42c134829e8dd2652075ab8a80daf4caa7c243a0a640",
@@ -4609,7 +4634,7 @@
         }
       ],
       "classification": "private_scoped",
-      "review_reason": "\u5e42\u7b49\u552f\u4e00\u952e\u542b tenant_id + user_id + request_key\uff1b\u5b57\u6bb5\u867d\u4e3a public\uff0c\u672a\u91cd\u58f0\u660e tenantId\uff0c\u65e0\u5173\u8054\u7ea7\u8054\u6216\u79df\u6237\u56de\u8c03\u8986\u76d6\u3002 \u5df2\u5b8c\u6574\u5ba1\u67e5\u5f53\u524d\u6587\u4ef6\uff0c\u786e\u8ba4\u663e\u5f0f TenantEntityPersister + TenantOwnedEntity\u3001\u65e0\u79df\u6237\u5b57\u6bb5/\u8bbf\u95ee\u5668\u8986\u76d6\uff1b\u6b64\u7ed3\u8bba\u4ec5\u7528\u4e8e\u5f53\u524d\u6620\u5c04\u6e90\u7801\u767b\u8bb0\uff0c\u4e0d\u6279\u51c6\u53d1\u5e03\u3002 \u590d\u6838\u8bc1\u636e\uff1areports/multitenant/handoff-20260929/entity-review.json\u3002"
+      "review_reason": "幂等唯一键含 tenant_id + user_id + request_key；字段虽为 public，未重声明 tenantId，无关联级联或租户回调覆盖。 已完整审查当前文件，确认显式 TenantEntityPersister + TenantOwnedEntity、无租户字段/访问器覆盖；此结论仅用于当前映射源码登记，不批准发布。 复核证据：reports/multitenant/handoff-20260929/entity-review.json。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/demo/DemoOrderRepository.java": {
       "sha256": "5e04017d31d878551bfe7112d11de62ea6e6d039dc47457d414879f842f30186",
@@ -4718,7 +4743,7 @@
         }
       ],
       "classification": "private_scoped",
-      "review_reason": "\u89d2\u8272\u4ee3\u7801\u3001\u540d\u79f0\u3001\u72b6\u6001\u53ca\u65f6\u95f4\u5747\u4e3a\u6807\u91cf\uff1b\u672c\u5730 prePersist/preUpdate \u4e0e\u7236\u7c7b\u5f52\u5c5e\u56de\u8c03\u65b9\u6cd5\u540d\u4e0d\u540c\uff0c\u4e0d\u5c4f\u853d\u7236\u6821\u9a8c\u3002 \u5df2\u5b8c\u6574\u5ba1\u67e5\u5f53\u524d\u6587\u4ef6\uff0c\u786e\u8ba4\u663e\u5f0f TenantEntityPersister + TenantOwnedEntity\u3001\u65e0\u79df\u6237\u5b57\u6bb5/\u8bbf\u95ee\u5668\u8986\u76d6\uff1b\u6b64\u7ed3\u8bba\u4ec5\u7528\u4e8e\u5f53\u524d\u6620\u5c04\u6e90\u7801\u767b\u8bb0\uff0c\u4e0d\u6279\u51c6\u53d1\u5e03\u3002 \u590d\u6838\u8bc1\u636e\uff1areports/multitenant/handoff-20260929/entity-review.json\u3002"
+      "review_reason": "角色代码、名称、状态及时间均为标量；本地 prePersist/preUpdate 与父类归属回调方法名不同，不屏蔽父校验。 已完整审查当前文件，确认显式 TenantEntityPersister + TenantOwnedEntity、无租户字段/访问器覆盖；此结论仅用于当前映射源码登记，不批准发布。 复核证据：reports/multitenant/handoff-20260929/entity-review.json。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/entity/AdminRoleMenu.java": {
       "sha256": "d3f9c5e8503b59786a1339876529b6d568ae42bad58de77af1462e0098d12b37",
@@ -4730,7 +4755,7 @@
         }
       ],
       "classification": "private_scoped",
-      "review_reason": "roleId/menuId \u662f\u6807\u91cf\uff1broleId \u5728\u8fc1\u79fb\u6e05\u5355\u4e2d\u8fde\u540c tenant_id \u7ea6\u675f\u79c1\u6709\u89d2\u8272\uff0cmenuId \u6307\u5411\u5171\u4eab\u83dc\u5355\uff1b\u521b\u5efa\u56de\u8c03\u53ea\u8d4b\u65f6\u95f4\u3002 \u5df2\u5b8c\u6574\u5ba1\u67e5\u5f53\u524d\u6587\u4ef6\uff0c\u786e\u8ba4\u663e\u5f0f TenantEntityPersister + TenantOwnedEntity\u3001\u65e0\u79df\u6237\u5b57\u6bb5/\u8bbf\u95ee\u5668\u8986\u76d6\uff1b\u6b64\u7ed3\u8bba\u4ec5\u7528\u4e8e\u5f53\u524d\u6620\u5c04\u6e90\u7801\u767b\u8bb0\uff0c\u4e0d\u6279\u51c6\u53d1\u5e03\u3002 \u590d\u6838\u8bc1\u636e\uff1areports/multitenant/handoff-20260929/entity-review.json\u3002"
+      "review_reason": "roleId/menuId 是标量；roleId 在迁移清单中连同 tenant_id 约束私有角色，menuId 指向共享菜单；创建回调只赋时间。 已完整审查当前文件，确认显式 TenantEntityPersister + TenantOwnedEntity、无租户字段/访问器覆盖；此结论仅用于当前映射源码登记，不批准发布。 复核证据：reports/multitenant/handoff-20260929/entity-review.json。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/entity/AdminTablePreference.java": {
       "sha256": "b766350f83af44450303bf6def4df33a655dd96a17bec473f6fd7877d64cb7d1",
@@ -4742,7 +4767,7 @@
         }
       ],
       "classification": "private_scoped",
-      "review_reason": "\u5b57\u7b26\u4e32\u4e3b\u952e\u548c JSON \u5217\u6784\u6210\u5355\u8868\u5b9e\u4f53\uff1bLombok Data \u672a\u8986\u76d6\u7236\u7c7b\u53d7\u63a7 tenantId \u8bbf\u95ee\u5668\uff0c\u65e0\u5173\u8054\u3001\u56de\u8c03\u6216\u81ea\u5b9a\u4e49 SQL\u3002 \u5df2\u5b8c\u6574\u5ba1\u67e5\u5f53\u524d\u6587\u4ef6\uff0c\u786e\u8ba4\u663e\u5f0f TenantEntityPersister + TenantOwnedEntity\u3001\u65e0\u79df\u6237\u5b57\u6bb5/\u8bbf\u95ee\u5668\u8986\u76d6\uff1b\u6b64\u7ed3\u8bba\u4ec5\u7528\u4e8e\u5f53\u524d\u6620\u5c04\u6e90\u7801\u767b\u8bb0\uff0c\u4e0d\u6279\u51c6\u53d1\u5e03\u3002 \u590d\u6838\u8bc1\u636e\uff1areports/multitenant/handoff-20260929/entity-review.json\u3002"
+      "review_reason": "字符串主键和 JSON 列构成单表实体；Lombok Data 未覆盖父类受控 tenantId 访问器，无关联、回调或自定义 SQL。 已完整审查当前文件，确认显式 TenantEntityPersister + TenantOwnedEntity、无租户字段/访问器覆盖；此结论仅用于当前映射源码登记，不批准发布。 复核证据：reports/multitenant/handoff-20260929/entity-review.json。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/entity/Announcement.java": {
       "sha256": "cce20235c7e4bc7a8a0a37c14609f41eb2fab811dd310bf9e9cdbd832955bbd3",
@@ -4766,7 +4791,7 @@
         }
       ],
       "classification": "private_scoped",
-      "review_reason": "\u8d26\u6237\u552f\u4e00\u952e\u542b tenant_id + user_id + coin\uff0crowVersion \u4fdd\u7559\uff1b\u672c\u5730\u56de\u8c03\u4ec5\u8d4b\u65f6\u95f4\uff0c\u5386\u53f2\u7269\u7406 SQL \u63a2\u9488\u76f4\u63a5\u8986\u76d6\u6b64\u5b9e\u4f53\u7684 UPDATE/DELETE\u3002 \u5df2\u5b8c\u6574\u5ba1\u67e5\u5f53\u524d\u6587\u4ef6\uff0c\u786e\u8ba4\u663e\u5f0f TenantEntityPersister + TenantOwnedEntity\u3001\u65e0\u79df\u6237\u5b57\u6bb5/\u8bbf\u95ee\u5668\u8986\u76d6\uff1b\u6b64\u7ed3\u8bba\u4ec5\u7528\u4e8e\u5f53\u524d\u6620\u5c04\u6e90\u7801\u767b\u8bb0\uff0c\u4e0d\u6279\u51c6\u53d1\u5e03\u3002 \u590d\u6838\u8bc1\u636e\uff1areports/multitenant/handoff-20260929/entity-review.json\u3002"
+      "review_reason": "账户唯一键含 tenant_id + user_id + coin，rowVersion 保留；本地回调仅赋时间，历史物理 SQL 探针直接覆盖此实体的 UPDATE/DELETE。 已完整审查当前文件，确认显式 TenantEntityPersister + TenantOwnedEntity、无租户字段/访问器覆盖；此结论仅用于当前映射源码登记，不批准发布。 复核证据：reports/multitenant/handoff-20260929/entity-review.json。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/entity/AssetSnapshot.java": {
       "sha256": "e84d313f54ce67ae9ae110e35686635f37df611a8456150cd7765689dddeaea6",
@@ -4778,7 +4803,7 @@
         }
       ],
       "classification": "private_scoped",
-      "review_reason": "userId\u3001capturedAt \u548c total \u662f\u5355\u8868\u6807\u91cf\uff1b\u6ca1\u6709\u672c\u5730\u56de\u8c03\u3001\u5173\u8054\u6216\u81ea\u5b9a\u4e49 SQL\uff1b\u540c\u79df\u6237\u7528\u6237\u5173\u7cfb\u5217\u4e8e\u8fc1\u79fb\u6e05\u5355\u3002 \u5df2\u5b8c\u6574\u5ba1\u67e5\u5f53\u524d\u6587\u4ef6\uff0c\u786e\u8ba4\u663e\u5f0f TenantEntityPersister + TenantOwnedEntity\u3001\u65e0\u79df\u6237\u5b57\u6bb5/\u8bbf\u95ee\u5668\u8986\u76d6\uff1b\u6b64\u7ed3\u8bba\u4ec5\u7528\u4e8e\u5f53\u524d\u6620\u5c04\u6e90\u7801\u767b\u8bb0\uff0c\u4e0d\u6279\u51c6\u53d1\u5e03\u3002 \u590d\u6838\u8bc1\u636e\uff1areports/multitenant/handoff-20260929/entity-review.json\u3002"
+      "review_reason": "userId、capturedAt 和 total 是单表标量；没有本地回调、关联或自定义 SQL；同租户用户关系列于迁移清单。 已完整审查当前文件，确认显式 TenantEntityPersister + TenantOwnedEntity、无租户字段/访问器覆盖；此结论仅用于当前映射源码登记，不批准发布。 复核证据：reports/multitenant/handoff-20260929/entity-review.json。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/entity/BalanceAdjustment.java": {
       "sha256": "0f9733e4674302829eb0ee5d8d15d1a893eb70f6974b9b709fdfabf8c636371c",
@@ -4790,7 +4815,7 @@
         }
       ],
       "classification": "private_scoped",
-      "review_reason": "request_key \u552f\u4e00\u952e\u542b tenant_id\uff1buserId \u4e0e\u5ba1\u8ba1\u4e8b\u5b9e\u5b57\u6bb5\u4e3a updatable=false\uff0c\u7236\u7c7b\u79df\u6237\u4e0d\u53ef\u53d8\uff1b\u65e0\u5173\u8054\u7ea7\u8054\u3002 \u5df2\u5b8c\u6574\u5ba1\u67e5\u5f53\u524d\u6587\u4ef6\uff0c\u786e\u8ba4\u663e\u5f0f TenantEntityPersister + TenantOwnedEntity\u3001\u65e0\u79df\u6237\u5b57\u6bb5/\u8bbf\u95ee\u5668\u8986\u76d6\uff1b\u6b64\u7ed3\u8bba\u4ec5\u7528\u4e8e\u5f53\u524d\u6620\u5c04\u6e90\u7801\u767b\u8bb0\uff0c\u4e0d\u6279\u51c6\u53d1\u5e03\u3002 \u590d\u6838\u8bc1\u636e\uff1areports/multitenant/handoff-20260929/entity-review.json\u3002"
+      "review_reason": "request_key 唯一键含 tenant_id；userId 与审计事实字段为 updatable=false，父类租户不可变；无关联级联。 已完整审查当前文件，确认显式 TenantEntityPersister + TenantOwnedEntity、无租户字段/访问器覆盖；此结论仅用于当前映射源码登记，不批准发布。 复核证据：reports/multitenant/handoff-20260929/entity-review.json。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/entity/ContractOrder.java": {
       "sha256": "d02ffc147e6c2d966627354eb7bc29b0d95d66c3394540c789ab9a3aa9c53578",
@@ -4814,7 +4839,7 @@
         }
       ],
       "classification": "private_scoped",
-      "review_reason": "\u5165\u8d26\u552f\u4e00\u952e\u542b tenant_id + deposit_record_id\uff1b\u5165\u6b3e\u4e0e\u7528\u6237\u5f15\u7528\u4e3a\u6807\u91cf\u4e14\u5747\u5217\u8fc1\u79fb\u5173\u7cfb\uff1b\u64cd\u4f5c\u8005\u4e3a\u663e\u5f0f\u7c7b\u578b/ID\uff0c\u4e0d\u4ee5 ORM \u5173\u8054\u8de8\u79df\u6237\u52a0\u8f7d\u3002 \u5df2\u5b8c\u6574\u5ba1\u67e5\u5f53\u524d\u6587\u4ef6\uff0c\u786e\u8ba4\u663e\u5f0f TenantEntityPersister + TenantOwnedEntity\u3001\u65e0\u79df\u6237\u5b57\u6bb5/\u8bbf\u95ee\u5668\u8986\u76d6\uff1b\u6b64\u7ed3\u8bba\u4ec5\u7528\u4e8e\u5f53\u524d\u6620\u5c04\u6e90\u7801\u767b\u8bb0\uff0c\u4e0d\u6279\u51c6\u53d1\u5e03\u3002 \u590d\u6838\u8bc1\u636e\uff1areports/multitenant/handoff-20260929/entity-review.json\u3002"
+      "review_reason": "入账唯一键含 tenant_id + deposit_record_id；入款与用户引用为标量且均列迁移关系；操作者为显式类型/ID，不以 ORM 关联跨租户加载。 已完整审查当前文件，确认显式 TenantEntityPersister + TenantOwnedEntity、无租户字段/访问器覆盖；此结论仅用于当前映射源码登记，不批准发布。 复核证据：reports/multitenant/handoff-20260929/entity-review.json。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/entity/DepositRecord.java": {
       "sha256": "2d34acb74abf2f1954c2ea10ca5c23e3a2e7083d31dff381c8ef59f67bbc9429",
@@ -4826,7 +4851,7 @@
         }
       ],
       "classification": "private_scoped",
-      "review_reason": "\u8ba2\u5355\u53f7\u53ca\u64cd\u4f5c\u8005\u5e42\u7b49\u552f\u4e00\u952e\u5747\u542b tenant_id\uff1browVersion \u4fdd\u7559\uff1buserId \u4e3a\u6807\u91cf\uff0c\u65f6\u95f4\u56de\u8c03\u4e0d\u89e6\u53ca\u79df\u6237\uff0c\u5c55\u793a\u5b57\u6bb5 Transient\u3002 \u5df2\u5b8c\u6574\u5ba1\u67e5\u5f53\u524d\u6587\u4ef6\uff0c\u786e\u8ba4\u663e\u5f0f TenantEntityPersister + TenantOwnedEntity\u3001\u65e0\u79df\u6237\u5b57\u6bb5/\u8bbf\u95ee\u5668\u8986\u76d6\uff1b\u6b64\u7ed3\u8bba\u4ec5\u7528\u4e8e\u5f53\u524d\u6620\u5c04\u6e90\u7801\u767b\u8bb0\uff0c\u4e0d\u6279\u51c6\u53d1\u5e03\u3002 \u590d\u6838\u8bc1\u636e\uff1areports/multitenant/handoff-20260929/entity-review.json\u3002"
+      "review_reason": "订单号及操作者幂等唯一键均含 tenant_id；rowVersion 保留；userId 为标量，时间回调不触及租户，展示字段 Transient。 已完整审查当前文件，确认显式 TenantEntityPersister + TenantOwnedEntity、无租户字段/访问器覆盖；此结论仅用于当前映射源码登记，不批准发布。 复核证据：reports/multitenant/handoff-20260929/entity-review.json。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/entity/DepositSetting.java": {
       "sha256": "f1a7cb92e5c6c979454714fc2290a3fa5ddf0e09bdd6d3e333e9eac63e9107f0",
@@ -4838,7 +4863,7 @@
         }
       ],
       "classification": "private_scoped",
-      "review_reason": "\u652f\u4ed8\u6e20\u9053\u914d\u7f6e\u4e3a\u79c1\u6709\u5355\u8868\u6807\u91cf\uff1b\u672c\u5730\u56de\u8c03\u53ea\u8d4b\u65f6\u95f4\uff0c\u6ca1\u6709 ORM \u5173\u8054\u6216\u5f52\u5c5e\u8986\u76d6\uff1b\u4e8c\u7ef4\u7801\u53d1\u5e03\u6388\u6743\u4e0d\u7531\u6b64\u6620\u5c04\u51b3\u5b9a\u3002 \u5df2\u5b8c\u6574\u5ba1\u67e5\u5f53\u524d\u6587\u4ef6\uff0c\u786e\u8ba4\u663e\u5f0f TenantEntityPersister + TenantOwnedEntity\u3001\u65e0\u79df\u6237\u5b57\u6bb5/\u8bbf\u95ee\u5668\u8986\u76d6\uff1b\u6b64\u7ed3\u8bba\u4ec5\u7528\u4e8e\u5f53\u524d\u6620\u5c04\u6e90\u7801\u767b\u8bb0\uff0c\u4e0d\u6279\u51c6\u53d1\u5e03\u3002 \u590d\u6838\u8bc1\u636e\uff1areports/multitenant/handoff-20260929/entity-review.json\u3002"
+      "review_reason": "支付渠道配置为私有单表标量；本地回调只赋时间，没有 ORM 关联或归属覆盖；二维码发布授权不由此映射决定。 已完整审查当前文件，确认显式 TenantEntityPersister + TenantOwnedEntity、无租户字段/访问器覆盖；此结论仅用于当前映射源码登记，不批准发布。 复核证据：reports/multitenant/handoff-20260929/entity-review.json。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/entity/FinancialOrder.java": {
       "sha256": "bdb2f0b883abc94874030e7714630a189f75245d9639aafbe587e247b47f721f",
@@ -4862,7 +4887,7 @@
         }
       ],
       "classification": "private_scoped",
-      "review_reason": "\u4ea7\u54c1\u53c2\u6570/\u5a92\u4f53\u5f15\u7528/\u72b6\u6001\u5747\u4e3a\u5355\u8868\u6807\u91cf\uff1b\u7236\u7c7b\u5f52\u5c5e\u4e0e persister \u751f\u6548\uff0c\u672c\u5730\u56de\u8c03\u4ec5\u8d4b\u65f6\u95f4\uff1b\u56fe\u7247\u8bbf\u95ee\u53e6\u7531\u670d\u52a1\u6388\u6743\u3002 \u5df2\u5b8c\u6574\u5ba1\u67e5\u5f53\u524d\u6587\u4ef6\uff0c\u786e\u8ba4\u663e\u5f0f TenantEntityPersister + TenantOwnedEntity\u3001\u65e0\u79df\u6237\u5b57\u6bb5/\u8bbf\u95ee\u5668\u8986\u76d6\uff1b\u6b64\u7ed3\u8bba\u4ec5\u7528\u4e8e\u5f53\u524d\u6620\u5c04\u6e90\u7801\u767b\u8bb0\uff0c\u4e0d\u6279\u51c6\u53d1\u5e03\u3002 \u590d\u6838\u8bc1\u636e\uff1areports/multitenant/handoff-20260929/entity-review.json\u3002"
+      "review_reason": "产品参数/媒体引用/状态均为单表标量；父类归属与 persister 生效，本地回调仅赋时间；图片访问另由服务授权。 已完整审查当前文件，确认显式 TenantEntityPersister + TenantOwnedEntity、无租户字段/访问器覆盖；此结论仅用于当前映射源码登记，不批准发布。 复核证据：reports/multitenant/handoff-20260929/entity-review.json。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/entity/FinancialYieldRecord.java": {
       "sha256": "34eb8e9e41d365c85738f92925eb742c6e7af99e2025402a43944238686f8829",
@@ -4874,7 +4899,7 @@
         }
       ],
       "classification": "private_scoped",
-      "review_reason": "\u6536\u76ca\u552f\u4e00\u952e\u542b tenant_id + order_id + yield_date\uff1b\u7528\u6237/\u4ea7\u54c1/\u8ba2\u5355\u5747\u6709\u8fc1\u79fb\u5173\u7cfb\uff0crowVersion \u4fdd\u7559\uff1b\u56de\u8c03\u4e0d\u8986\u5199\u7236\u65b9\u6cd5\u3002 \u5df2\u5b8c\u6574\u5ba1\u67e5\u5f53\u524d\u6587\u4ef6\uff0c\u786e\u8ba4\u663e\u5f0f TenantEntityPersister + TenantOwnedEntity\u3001\u65e0\u79df\u6237\u5b57\u6bb5/\u8bbf\u95ee\u5668\u8986\u76d6\uff1b\u6b64\u7ed3\u8bba\u4ec5\u7528\u4e8e\u5f53\u524d\u6620\u5c04\u6e90\u7801\u767b\u8bb0\uff0c\u4e0d\u6279\u51c6\u53d1\u5e03\u3002 \u590d\u6838\u8bc1\u636e\uff1areports/multitenant/handoff-20260929/entity-review.json\u3002"
+      "review_reason": "收益唯一键含 tenant_id + order_id + yield_date；用户/产品/订单均有迁移关系，rowVersion 保留；回调不覆写父方法。 已完整审查当前文件，确认显式 TenantEntityPersister + TenantOwnedEntity、无租户字段/访问器覆盖；此结论仅用于当前映射源码登记，不批准发布。 复核证据：reports/multitenant/handoff-20260929/entity-review.json。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/entity/KycRecord.java": {
       "sha256": "81962d36c17e1e3bc94333ae480d4ecc2abd65813435e6c8a291ffe4f66ca2cf",
@@ -4886,7 +4911,7 @@
         }
       ],
       "classification": "private_scoped",
-      "review_reason": "\u7528\u6237 ID \u4e0e\u5ba1\u6838\u5b57\u6bb5\u4e3a\u6807\u91cf\uff1b\u53ea\u6620\u5c04\u56fe\u7247\u8def\u5f84\uff0c\u4e0d\u8bfb\u53d6\u6587\u4ef6\uff1b\u672c\u5730\u65f6\u95f4\u56de\u8c03\u4e0d\u7ed5\u8fc7\u7236\u5f52\u5c5e\u68c0\u67e5\uff0c\u6750\u6599\u8bbf\u95ee\u6388\u6743\u4ecd\u5c5e\u670d\u52a1\u5c42\u3002 \u5df2\u5b8c\u6574\u5ba1\u67e5\u5f53\u524d\u6587\u4ef6\uff0c\u786e\u8ba4\u663e\u5f0f TenantEntityPersister + TenantOwnedEntity\u3001\u65e0\u79df\u6237\u5b57\u6bb5/\u8bbf\u95ee\u5668\u8986\u76d6\uff1b\u6b64\u7ed3\u8bba\u4ec5\u7528\u4e8e\u5f53\u524d\u6620\u5c04\u6e90\u7801\u767b\u8bb0\uff0c\u4e0d\u6279\u51c6\u53d1\u5e03\u3002 \u590d\u6838\u8bc1\u636e\uff1areports/multitenant/handoff-20260929/entity-review.json\u3002"
+      "review_reason": "用户 ID 与审核字段为标量；只映射图片路径，不读取文件；本地时间回调不绕过父归属检查，材料访问授权仍属服务层。 已完整审查当前文件，确认显式 TenantEntityPersister + TenantOwnedEntity、无租户字段/访问器覆盖；此结论仅用于当前映射源码登记，不批准发布。 复核证据：reports/multitenant/handoff-20260929/entity-review.json。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/entity/LoanPersonalInfo.java": {
       "sha256": "18ea8a878b07a98b1a9e4ae7e281472ce33d5af72f93628ca4710e39e567bbd4",
@@ -4898,7 +4923,7 @@
         }
       ],
       "classification": "private_scoped",
-      "review_reason": "\u7528\u6237\u548c\u5ba1\u6838\u4eba ID\u3001\u8eab\u4efd\u6750\u6599\u8def\u5f84\u4e3a\u6807\u91cf\uff1b\u65e0\u81ea\u52a8\u5173\u8054\u52a0\u8f7d\uff0c\u65f6\u95f4\u56de\u8c03\u4e0d\u6539 tenantId\uff1b\u56fe\u7247\u63a5\u53e3\u6388\u6743\u672a\u7531\u5b9e\u4f53\u5ba1\u67e5\u66ff\u4ee3\u3002 \u5df2\u5b8c\u6574\u5ba1\u67e5\u5f53\u524d\u6587\u4ef6\uff0c\u786e\u8ba4\u663e\u5f0f TenantEntityPersister + TenantOwnedEntity\u3001\u65e0\u79df\u6237\u5b57\u6bb5/\u8bbf\u95ee\u5668\u8986\u76d6\uff1b\u6b64\u7ed3\u8bba\u4ec5\u7528\u4e8e\u5f53\u524d\u6620\u5c04\u6e90\u7801\u767b\u8bb0\uff0c\u4e0d\u6279\u51c6\u53d1\u5e03\u3002 \u590d\u6838\u8bc1\u636e\uff1areports/multitenant/handoff-20260929/entity-review.json\u3002"
+      "review_reason": "用户和审核人 ID、身份材料路径为标量；无自动关联加载，时间回调不改 tenantId；图片接口授权未由实体审查替代。 已完整审查当前文件，确认显式 TenantEntityPersister + TenantOwnedEntity、无租户字段/访问器覆盖；此结论仅用于当前映射源码登记，不批准发布。 复核证据：reports/multitenant/handoff-20260929/entity-review.json。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/entity/LoanRecord.java": {
       "sha256": "de926e0bb0148ccc3ad0aacf3c19062f076876e4baa422a1105ed4f42f2fb76f",
@@ -4911,7 +4936,7 @@
       ],
       "classification": "private_scoped",
       "review_reason": "Adds JsonIgnore immutable nullable request_key/request_hash columns (64 characters) and unique tenant_id/user_id/request_key constraint. Existing historical/manual missing keys remain nullable; TenantOwnedEntity and explicit TenantEntityPersister, version/funding/saved business facts are preserved. Versioned schema migration uses VARCHAR, not an indexed LONGTEXT/JPA LOB.",
-      "prior_review_reason": "\u501f\u6b3e\u7528\u6237 ID \u4e0e\u91d1\u989d/\u72b6\u6001/\u7b7e\u540d\u8def\u5f84\u4e3a\u6807\u91cf\uff0crowVersion \u4fdd\u7559\uff1b\u56de\u8c03\u53ea\u8d4b\u65f6\u95f4\uff0c\u65e0 tenantId \u91cd\u58f0\u660e\u6216\u81ea\u5b9a\u4e49 SQL\u3002 \u5df2\u5b8c\u6574\u5ba1\u67e5\u5f53\u524d\u6587\u4ef6\uff0c\u786e\u8ba4\u663e\u5f0f TenantEntityPersister + TenantOwnedEntity\u3001\u65e0\u79df\u6237\u5b57\u6bb5/\u8bbf\u95ee\u5668\u8986\u76d6\uff1b\u6b64\u7ed3\u8bba\u4ec5\u7528\u4e8e\u5f53\u524d\u6620\u5c04\u6e90\u7801\u767b\u8bb0\uff0c\u4e0d\u6279\u51c6\u53d1\u5e03\u3002 \u590d\u6838\u8bc1\u636e\uff1areports/multitenant/handoff-20260929/entity-review.json\u3002",
+      "prior_review_reason": "借款用户 ID 与金额/状态/签名路径为标量，rowVersion 保留；回调只赋时间，无 tenantId 重声明或自定义 SQL。 已完整审查当前文件，确认显式 TenantEntityPersister + TenantOwnedEntity、无租户字段/访问器覆盖；此结论仅用于当前映射源码登记，不批准发布。 复核证据：reports/multitenant/handoff-20260929/entity-review.json。",
       "phase2_review_tests": [
         "OrdinaryCreationMySqlIT",
         "LoanStage2MySqlIT"
@@ -4927,7 +4952,7 @@
         }
       ],
       "classification": "private_scoped",
-      "review_reason": "\u671f\u9650/\u8d39\u7387/\u989d\u5ea6/\u542f\u7528\u72b6\u6001\u5747\u4e3a\u5355\u8868\u5b57\u6bb5\uff1b\u672c\u5730\u56de\u8c03\u4ec5\u8d4b\u65f6\u95f4\uff0c\u660e\u786e\u79c1\u6709\u6620\u5c04\u548c persister\uff0c\u4e0d\u8bfb\u53d6\u5176\u4ed6\u5b9e\u4f53\u3002 \u5df2\u5b8c\u6574\u5ba1\u67e5\u5f53\u524d\u6587\u4ef6\uff0c\u786e\u8ba4\u663e\u5f0f TenantEntityPersister + TenantOwnedEntity\u3001\u65e0\u79df\u6237\u5b57\u6bb5/\u8bbf\u95ee\u5668\u8986\u76d6\uff1b\u6b64\u7ed3\u8bba\u4ec5\u7528\u4e8e\u5f53\u524d\u6620\u5c04\u6e90\u7801\u767b\u8bb0\uff0c\u4e0d\u6279\u51c6\u53d1\u5e03\u3002 \u590d\u6838\u8bc1\u636e\uff1areports/multitenant/handoff-20260929/entity-review.json\u3002"
+      "review_reason": "期限/费率/额度/启用状态均为单表字段；本地回调仅赋时间，明确私有映射和 persister，不读取其他实体。 已完整审查当前文件，确认显式 TenantEntityPersister + TenantOwnedEntity、无租户字段/访问器覆盖；此结论仅用于当前映射源码登记，不批准发布。 复核证据：reports/multitenant/handoff-20260929/entity-review.json。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/entity/MenuAction.java": {
       "sha256": "6a73f4ea2be27fe4f51bbe6016deb20b86e8dc48213bb459f1990997f4e2591c",
@@ -4951,7 +4976,7 @@
         }
       ],
       "classification": "private_scoped",
-      "review_reason": "\u5ba1\u8ba1\u76ee\u6807\u4e0e\u7ba1\u7406\u5458 ID \u662f\u663e\u5f0f\u6807\u91cf\uff0c\u4e0d\u5f15\u5165\u672a\u7ecf\u79df\u6237\u9650\u5236\u7684 ORM \u5173\u8054\uff1b\u521b\u5efa\u56de\u8c03\u53ea\u8d4b\u65f6\u95f4\uff1b\u591a\u6001\u64cd\u4f5c\u8005\u8bed\u4e49\u4fdd\u7559\u4e3a\u4e0a\u6e38\u8d23\u4efb\u3002 \u5df2\u5b8c\u6574\u5ba1\u67e5\u5f53\u524d\u6587\u4ef6\uff0c\u786e\u8ba4\u663e\u5f0f TenantEntityPersister + TenantOwnedEntity\u3001\u65e0\u79df\u6237\u5b57\u6bb5/\u8bbf\u95ee\u5668\u8986\u76d6\uff1b\u6b64\u7ed3\u8bba\u4ec5\u7528\u4e8e\u5f53\u524d\u6620\u5c04\u6e90\u7801\u767b\u8bb0\uff0c\u4e0d\u6279\u51c6\u53d1\u5e03\u3002 \u590d\u6838\u8bc1\u636e\uff1areports/multitenant/handoff-20260929/entity-review.json\u3002"
+      "review_reason": "审计目标与管理员 ID 是显式标量，不引入未经租户限制的 ORM 关联；创建回调只赋时间；多态操作者语义保留为上游责任。 已完整审查当前文件，确认显式 TenantEntityPersister + TenantOwnedEntity、无租户字段/访问器覆盖；此结论仅用于当前映射源码登记，不批准发布。 复核证据：reports/multitenant/handoff-20260929/entity-review.json。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/entity/OptionDuration.java": {
       "sha256": "3a7faee6771ffbe56a857b87d2ca462990a930062267188be4b9d5ee36e8a129",
@@ -4963,7 +4988,7 @@
         }
       ],
       "classification": "private_scoped",
-      "review_reason": "\u671f\u9650\u548c\u6536\u76ca/\u635f\u5931/\u989d\u5ea6\u53c2\u6570\u5747\u4e3a\u5355\u8868\u6807\u91cf\uff0c\u56de\u8c03\u53ea\u8d4b\u65f6\u95f4\uff1b\u7ed1\u5b9a\u5f52\u5c5e\u57fa\u7c7b\u548c\u7269\u7406\u5199 persister\u3002 \u5df2\u5b8c\u6574\u5ba1\u67e5\u5f53\u524d\u6587\u4ef6\uff0c\u786e\u8ba4\u663e\u5f0f TenantEntityPersister + TenantOwnedEntity\u3001\u65e0\u79df\u6237\u5b57\u6bb5/\u8bbf\u95ee\u5668\u8986\u76d6\uff1b\u6b64\u7ed3\u8bba\u4ec5\u7528\u4e8e\u5f53\u524d\u6620\u5c04\u6e90\u7801\u767b\u8bb0\uff0c\u4e0d\u6279\u51c6\u53d1\u5e03\u3002 \u590d\u6838\u8bc1\u636e\uff1areports/multitenant/handoff-20260929/entity-review.json\u3002"
+      "review_reason": "期限和收益/损失/额度参数均为单表标量，回调只赋时间；绑定归属基类和物理写 persister。 已完整审查当前文件，确认显式 TenantEntityPersister + TenantOwnedEntity、无租户字段/访问器覆盖；此结论仅用于当前映射源码登记，不批准发布。 复核证据：reports/multitenant/handoff-20260929/entity-review.json。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/entity/OptionOrder.java": {
       "sha256": "5c99a73868ebfcbfc3f799e9ea68089d9a35703e14bd25fd389bdeae745193e0",
@@ -4987,7 +5012,7 @@
         }
       ],
       "classification": "private_scoped",
-      "review_reason": "\u914d\u7f6e key/value \u662f\u5355\u8868\u6807\u91cf\uff0c\u672a\u81ea\u884c\u58f0\u660e tenantId \u6216\u81ea\u5b9a\u4e49 SQL\uff1b\u914d\u7f6e\u79d8\u5bc6\u8f93\u51fa\u3001\u79df\u6237\u552f\u4e00\u7d22\u5f15\u4ecd\u7531\u670d\u52a1/\u8fc1\u79fb\u8d1f\u8d23\u3002 \u5df2\u5b8c\u6574\u5ba1\u67e5\u5f53\u524d\u6587\u4ef6\uff0c\u786e\u8ba4\u663e\u5f0f TenantEntityPersister + TenantOwnedEntity\u3001\u65e0\u79df\u6237\u5b57\u6bb5/\u8bbf\u95ee\u5668\u8986\u76d6\uff1b\u6b64\u7ed3\u8bba\u4ec5\u7528\u4e8e\u5f53\u524d\u6620\u5c04\u6e90\u7801\u767b\u8bb0\uff0c\u4e0d\u6279\u51c6\u53d1\u5e03\u3002 \u590d\u6838\u8bc1\u636e\uff1areports/multitenant/handoff-20260929/entity-review.json\u3002"
+      "review_reason": "配置 key/value 是单表标量，未自行声明 tenantId 或自定义 SQL；配置秘密输出、租户唯一索引仍由服务/迁移负责。 已完整审查当前文件，确认显式 TenantEntityPersister + TenantOwnedEntity、无租户字段/访问器覆盖；此结论仅用于当前映射源码登记，不批准发布。 复核证据：reports/multitenant/handoff-20260929/entity-review.json。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/entity/TradingSymbol.java": {
       "sha256": "d70fd6f69c77197f399d032e5e8c16a655330996241c3606ea740d5df1876925",
@@ -4999,7 +5024,7 @@
         }
       ],
       "classification": "private_scoped",
-      "review_reason": "\u5b9e\u4f53\u4ecd\u5206\u7c7b\u4e3a\u79c1\u6709\uff0crowVersion \u4fdd\u7559\uff1b\u62a5\u4ef7/\u54c1\u79cd\u5b57\u6bb5\u548c\u53ea\u8bfb\u6d3e\u751f getter \u4e0d\u89e6\u78b0\u79df\u6237\uff1b\u672c\u5730\u56de\u8c03\u53ea\u66f4\u65b0\u65f6\u95f4\uff0c\u5e02\u573a\u884c\u4e3a\u4e0d\u5728\u672c\u6b21\u6279\u51c6\u8303\u56f4\u3002 \u5df2\u5b8c\u6574\u5ba1\u67e5\u5f53\u524d\u6587\u4ef6\uff0c\u786e\u8ba4\u663e\u5f0f TenantEntityPersister + TenantOwnedEntity\u3001\u65e0\u79df\u6237\u5b57\u6bb5/\u8bbf\u95ee\u5668\u8986\u76d6\uff1b\u6b64\u7ed3\u8bba\u4ec5\u7528\u4e8e\u5f53\u524d\u6620\u5c04\u6e90\u7801\u767b\u8bb0\uff0c\u4e0d\u6279\u51c6\u53d1\u5e03\u3002 \u590d\u6838\u8bc1\u636e\uff1areports/multitenant/handoff-20260929/entity-review.json\u3002"
+      "review_reason": "实体仍分类为私有，rowVersion 保留；报价/品种字段和只读派生 getter 不触碰租户；本地回调只更新时间，市场行为不在本次批准范围。 已完整审查当前文件，确认显式 TenantEntityPersister + TenantOwnedEntity、无租户字段/访问器覆盖；此结论仅用于当前映射源码登记，不批准发布。 复核证据：reports/multitenant/handoff-20260929/entity-review.json。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/entity/TransferRecord.java": {
       "sha256": "f6cf611eb2a593f3340e9b2edc3c1d79573790d41bf84d9113a96e75c3957ea8",
@@ -5011,7 +5036,7 @@
         }
       ],
       "classification": "private_scoped",
-      "review_reason": "\u5e42\u7b49\u552f\u4e00\u952e\u542b tenant_id + user_id + request_id\uff1b\u7528\u6237\u5f15\u7528\u4e3a\u6807\u91cf\u3001\u91d1\u989d\u4e3a BigDecimal\uff0c\u521b\u5efa\u56de\u8c03\u4ec5\u8d4b\u65f6\u95f4\u3002 \u5df2\u5b8c\u6574\u5ba1\u67e5\u5f53\u524d\u6587\u4ef6\uff0c\u786e\u8ba4\u663e\u5f0f TenantEntityPersister + TenantOwnedEntity\u3001\u65e0\u79df\u6237\u5b57\u6bb5/\u8bbf\u95ee\u5668\u8986\u76d6\uff1b\u6b64\u7ed3\u8bba\u4ec5\u7528\u4e8e\u5f53\u524d\u6620\u5c04\u6e90\u7801\u767b\u8bb0\uff0c\u4e0d\u6279\u51c6\u53d1\u5e03\u3002 \u590d\u6838\u8bc1\u636e\uff1areports/multitenant/handoff-20260929/entity-review.json\u3002"
+      "review_reason": "幂等唯一键含 tenant_id + user_id + request_id；用户引用为标量、金额为 BigDecimal，创建回调仅赋时间。 已完整审查当前文件，确认显式 TenantEntityPersister + TenantOwnedEntity、无租户字段/访问器覆盖；此结论仅用于当前映射源码登记，不批准发布。 复核证据：reports/multitenant/handoff-20260929/entity-review.json。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/entity/UserAccount.java": {
       "sha256": "9b1a3030f4ee0a27c6cdbbf85d205a17a8abba15120a17eaead9b2e3a58b71e9",
@@ -5035,7 +5060,7 @@
         }
       ],
       "classification": "private_scoped",
-      "review_reason": "userId/menuId \u4e0e actionCode \u4e3a\u6807\u91cf\uff1b\u540c\u79df\u6237\u7528\u6237\u5173\u7cfb\u4f4d\u4e8e\u6e05\u5355\uff0c\u5171\u4eab\u83dc\u5355\u4e0d\u5efa\u7acb\u8de8\u79df\u6237 ORM \u56fe\uff1b\u521b\u5efa\u56de\u8c03\u4ec5\u8d4b\u65f6\u95f4\u3002 \u5df2\u5b8c\u6574\u5ba1\u67e5\u5f53\u524d\u6587\u4ef6\uff0c\u786e\u8ba4\u663e\u5f0f TenantEntityPersister + TenantOwnedEntity\u3001\u65e0\u79df\u6237\u5b57\u6bb5/\u8bbf\u95ee\u5668\u8986\u76d6\uff1b\u6b64\u7ed3\u8bba\u4ec5\u7528\u4e8e\u5f53\u524d\u6620\u5c04\u6e90\u7801\u767b\u8bb0\uff0c\u4e0d\u6279\u51c6\u53d1\u5e03\u3002 \u590d\u6838\u8bc1\u636e\uff1areports/multitenant/handoff-20260929/entity-review.json\u3002"
+      "review_reason": "userId/menuId 与 actionCode 为标量；同租户用户关系位于清单，共享菜单不建立跨租户 ORM 图；创建回调仅赋时间。 已完整审查当前文件，确认显式 TenantEntityPersister + TenantOwnedEntity、无租户字段/访问器覆盖；此结论仅用于当前映射源码登记，不批准发布。 复核证据：reports/multitenant/handoff-20260929/entity-review.json。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/entity/UserBankCard.java": {
       "sha256": "133a2a03d250ef7d76b5c1e399154ee188e45d4907ee940f63b9b42d7872486d",
@@ -5047,7 +5072,7 @@
         }
       ],
       "classification": "private_scoped",
-      "review_reason": "\u7528\u6237 ID \u548c\u6536\u6b3e\u5b57\u6bb5\u4e3a\u6807\u91cf\uff1b\u65e0 ORM \u81ea\u52a8\u5173\u8054\u6216\u5f52\u5c5e\u8986\u76d6\uff0c\u65f6\u95f4\u56de\u8c03\u4e0e\u7236\u65b9\u6cd5\u5206\u79bb\uff1b\u5bf9\u5916\u8fd4\u56de\u5b57\u6bb5\u9700\u5355\u72ec\u6388\u6743\u3002 \u5df2\u5b8c\u6574\u5ba1\u67e5\u5f53\u524d\u6587\u4ef6\uff0c\u786e\u8ba4\u663e\u5f0f TenantEntityPersister + TenantOwnedEntity\u3001\u65e0\u79df\u6237\u5b57\u6bb5/\u8bbf\u95ee\u5668\u8986\u76d6\uff1b\u6b64\u7ed3\u8bba\u4ec5\u7528\u4e8e\u5f53\u524d\u6620\u5c04\u6e90\u7801\u767b\u8bb0\uff0c\u4e0d\u6279\u51c6\u53d1\u5e03\u3002 \u590d\u6838\u8bc1\u636e\uff1areports/multitenant/handoff-20260929/entity-review.json\u3002"
+      "review_reason": "用户 ID 和收款字段为标量；无 ORM 自动关联或归属覆盖，时间回调与父方法分离；对外返回字段需单独授权。 已完整审查当前文件，确认显式 TenantEntityPersister + TenantOwnedEntity、无租户字段/访问器覆盖；此结论仅用于当前映射源码登记，不批准发布。 复核证据：reports/multitenant/handoff-20260929/entity-review.json。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/entity/UserDigitalAddress.java": {
       "sha256": "53a89c7126cf5dd3e6fb173b33a00361dd29a9ecb360e566dffdc6f8e86ff391",
@@ -5059,7 +5084,7 @@
         }
       ],
       "classification": "private_scoped",
-      "review_reason": "\u7528\u6237 ID \u548c\u5730\u5740/\u5e01\u79cd/\u7f51\u7edc\u5747\u4e3a\u672c\u8868\u5b57\u6bb5\uff1b\u540c\u79df\u6237\u7528\u6237\u5173\u7cfb\u5217\u4e8e\u8fc1\u79fb\u6e05\u5355\uff0c\u65f6\u95f4\u56de\u8c03\u4e0d\u6539\u5f52\u5c5e\u3002 \u5df2\u5b8c\u6574\u5ba1\u67e5\u5f53\u524d\u6587\u4ef6\uff0c\u786e\u8ba4\u663e\u5f0f TenantEntityPersister + TenantOwnedEntity\u3001\u65e0\u79df\u6237\u5b57\u6bb5/\u8bbf\u95ee\u5668\u8986\u76d6\uff1b\u6b64\u7ed3\u8bba\u4ec5\u7528\u4e8e\u5f53\u524d\u6620\u5c04\u6e90\u7801\u767b\u8bb0\uff0c\u4e0d\u6279\u51c6\u53d1\u5e03\u3002 \u590d\u6838\u8bc1\u636e\uff1areports/multitenant/handoff-20260929/entity-review.json\u3002"
+      "review_reason": "用户 ID 和地址/币种/网络均为本表字段；同租户用户关系列于迁移清单，时间回调不改归属。 已完整审查当前文件，确认显式 TenantEntityPersister + TenantOwnedEntity、无租户字段/访问器覆盖；此结论仅用于当前映射源码登记，不批准发布。 复核证据：reports/multitenant/handoff-20260929/entity-review.json。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/entity/UserMenu.java": {
       "sha256": "325602a0d16a267ca0ea8c7b99bcb512f53335a925e969807edd3a79329b6761",
@@ -5071,7 +5096,7 @@
         }
       ],
       "classification": "private_scoped",
-      "review_reason": "\u6388\u6743\u552f\u4e00\u952e\u542b tenant_id + user_id + menu_id\uff1b\u7528\u6237\u5173\u8054\u4e3a\u6807\u91cf\u4e14\u6709\u8fc1\u79fb\u5173\u7cfb\uff0c\u5171\u4eab\u83dc\u5355\u4e0d\u53c2\u4e0e\u8de8\u79df\u6237 ORM \u52a0\u8f7d\u3002 \u5df2\u5b8c\u6574\u5ba1\u67e5\u5f53\u524d\u6587\u4ef6\uff0c\u786e\u8ba4\u663e\u5f0f TenantEntityPersister + TenantOwnedEntity\u3001\u65e0\u79df\u6237\u5b57\u6bb5/\u8bbf\u95ee\u5668\u8986\u76d6\uff1b\u6b64\u7ed3\u8bba\u4ec5\u7528\u4e8e\u5f53\u524d\u6620\u5c04\u6e90\u7801\u767b\u8bb0\uff0c\u4e0d\u6279\u51c6\u53d1\u5e03\u3002 \u590d\u6838\u8bc1\u636e\uff1areports/multitenant/handoff-20260929/entity-review.json\u3002"
+      "review_reason": "授权唯一键含 tenant_id + user_id + menu_id；用户关联为标量且有迁移关系，共享菜单不参与跨租户 ORM 加载。 已完整审查当前文件，确认显式 TenantEntityPersister + TenantOwnedEntity、无租户字段/访问器覆盖；此结论仅用于当前映射源码登记，不批准发布。 复核证据：reports/multitenant/handoff-20260929/entity-review.json。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/entity/VerifyCode.java": {
       "sha256": "8a24a7a31d2ece844b3ca3b55ba4ebcf01e3ac3f14caf18796d9d82627f83d85",
@@ -5083,7 +5108,7 @@
         }
       ],
       "classification": "private_scoped",
-      "review_reason": "\u9a8c\u8bc1\u7801/\u76ee\u6807\u90ae\u7bb1/\u573a\u666f/\u6709\u6548\u671f\u4ec5\u4e3a\u5355\u8868\u5b57\u6bb5\uff1b\u672a\u91cd\u58f0\u660e\u79df\u6237\u6216\u81ea\u5b9a\u4e49\u56de\u8c03\uff0c\u53d1\u9001/\u9a8c\u8bc1\u4e0e\u4e0d\u5bf9\u5916\u6cc4\u9732\u4ecd\u987b\u7531\u670d\u52a1\u5c42\u4fdd\u969c\u3002 \u5df2\u5b8c\u6574\u5ba1\u67e5\u5f53\u524d\u6587\u4ef6\uff0c\u786e\u8ba4\u663e\u5f0f TenantEntityPersister + TenantOwnedEntity\u3001\u65e0\u79df\u6237\u5b57\u6bb5/\u8bbf\u95ee\u5668\u8986\u76d6\uff1b\u6b64\u7ed3\u8bba\u4ec5\u7528\u4e8e\u5f53\u524d\u6620\u5c04\u6e90\u7801\u767b\u8bb0\uff0c\u4e0d\u6279\u51c6\u53d1\u5e03\u3002 \u590d\u6838\u8bc1\u636e\uff1areports/multitenant/handoff-20260929/entity-review.json\u3002"
+      "review_reason": "验证码/目标邮箱/场景/有效期仅为单表字段；未重声明租户或自定义回调，发送/验证与不对外泄露仍须由服务层保障。 已完整审查当前文件，确认显式 TenantEntityPersister + TenantOwnedEntity、无租户字段/访问器覆盖；此结论仅用于当前映射源码登记，不批准发布。 复核证据：reports/multitenant/handoff-20260929/entity-review.json。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/entity/WithdrawRecord.java": {
       "sha256": "2898684556208aaba143218786173c7d2b55b248b2ce2d7935cca50ecd1d37de",
@@ -5096,7 +5121,7 @@
       ],
       "classification": "private_scoped",
       "review_reason": "Adds JsonIgnore immutable nullable request_key/request_hash columns (64 characters) and unique tenant_id/user_id/request_key constraint. Existing historical/manual missing keys remain nullable; TenantOwnedEntity and explicit TenantEntityPersister, version/funding/saved business facts are preserved. Versioned schema migration uses VARCHAR, not an indexed LONGTEXT/JPA LOB.",
-      "prior_review_reason": "\u7528\u6237 ID\u3001\u91d1\u989d\u3001\u6e20\u9053\u548c\u5ba1\u6838\u72b6\u6001\u4e3a\u6807\u91cf\uff0crowVersion \u4fdd\u7559\uff1b\u672c\u5730\u56de\u8c03\u53ea\u8d4b\u65f6\u95f4\uff0c\u4e0d\u8986\u76d6\u7236\u7c7b\u79df\u6237\u68c0\u67e5\u3002 \u5df2\u5b8c\u6574\u5ba1\u67e5\u5f53\u524d\u6587\u4ef6\uff0c\u786e\u8ba4\u663e\u5f0f TenantEntityPersister + TenantOwnedEntity\u3001\u65e0\u79df\u6237\u5b57\u6bb5/\u8bbf\u95ee\u5668\u8986\u76d6\uff1b\u6b64\u7ed3\u8bba\u4ec5\u7528\u4e8e\u5f53\u524d\u6620\u5c04\u6e90\u7801\u767b\u8bb0\uff0c\u4e0d\u6279\u51c6\u53d1\u5e03\u3002 \u590d\u6838\u8bc1\u636e\uff1areports/multitenant/handoff-20260929/entity-review.json\u3002",
+      "prior_review_reason": "用户 ID、金额、渠道和审核状态为标量，rowVersion 保留；本地回调只赋时间，不覆盖父类租户检查。 已完整审查当前文件，确认显式 TenantEntityPersister + TenantOwnedEntity、无租户字段/访问器覆盖；此结论仅用于当前映射源码登记，不批准发布。 复核证据：reports/multitenant/handoff-20260929/entity-review.json。",
       "phase2_review_tests": [
         "OrdinaryCreationMySqlIT"
       ]
@@ -5124,7 +5149,9 @@
       "review_reason": "Stage1 pure calculation review: bounded arithmetic/plan/candle inputs and deterministic snapshots only. No DB/credentials, no global mutable user state or process identity assignment. Caller resolves tenant-owned symbol before invoking."
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/market/ControlHistoryStore.java": {
-      "sha256": "713f489d0ed4a0a48cf2ee6548be2b6f358190efb6f3b153a262fabd33643278",
+      "classification": "private_scoped",
+      "review_reason": "LOCAL 0404/Option delta review: explicit tenant and symbol predicates; existing runtime writer fence and read-only RR consumers; exact immutable archived response/package binding, future-only cutoff, old ambiguous fail-closed; Option same-physical funds authority with user/assets/grants before runtime, RC only new units and unchanged legacy REQUIRED. Not production release approval. Five-chat integration review 2026-10-06: History-only source facts are excluded by a parameterized body predicate before LIMIT in tenant/symbol-scoped lastClose; cannot displace a real control-start basis. Existing writer/read-only and archived response boundaries preserved. 2026-10-07 independent delta review with exact-SHA prior directed evidence: all added history/flow SQL binds the current validated tenant and symbol/task; latest source uses independently bounded event/tick candidates with the same cutoff/tie ordering, while full-history NOT EXISTS exact dedup remains. STOPPED/SOURCE tasks do not load old plans. Writer transactions share 5s timeout, runtime fence, bounded sample quota and checked 500-row batches; progress is persisted atomically and actual transaction completion is logged. Prepared plan keys retain tenant:task; startup validates required scoped schema only, never removes triggers or creates unscoped tables. Existing private/funds/read-only-RR/archive boundaries retained; no production release proof.",
+      "sha256": "05717075bc572c9c2ba65823e162d2f24aa8a63986127fe914482d6b4299214c",
       "surfaces": [
         {
           "kind": "identity_boundary",
@@ -5149,7 +5176,7 @@
         {
           "kind": "native_sql",
           "line": 37,
-          "statement_sha256": "0325dc7c2d697d702212a98e512c79b327f39daef142f39a1f21139ac9eb41ed"
+          "statement_sha256": "6df4c44b7d0500576948a8580c1828e72d343d79390fa71256e3fd21e7b3c315"
         },
         {
           "kind": "native_sql",
@@ -5158,235 +5185,240 @@
         },
         {
           "kind": "startup",
-          "line": 60,
+          "line": 61,
           "statement_sha256": "371bd757af20686286e039d6813a3c3e2945b88c3673e3cd7b0b6c199dbbda87"
         },
         {
           "kind": "native_sql",
-          "line": 62,
+          "line": 63,
           "statement_sha256": "17d0821c39d6d4565dfad105dbd1411db34ea8eb1d5fcf5fab33f5f45a51485e"
         },
         {
           "kind": "native_sql",
-          "line": 63,
-          "statement_sha256": "306e9221037e75165fd586c4fca3eb93b1541c797ecf0f9c07f0fe02bc87540f"
+          "line": 64,
+          "statement_sha256": "42dd2760b6c271e49b2832fe64fa201c9b6ca1ffa8f382cafb6a8b97301160c8"
         },
         {
           "kind": "native_sql",
           "line": 65,
+          "statement_sha256": "306e9221037e75165fd586c4fca3eb93b1541c797ecf0f9c07f0fe02bc87540f"
+        },
+        {
+          "kind": "native_sql",
+          "line": 67,
           "statement_sha256": "e63a5da954754d9609f0150a39f2b8527935ce69bae5f78fc811345a64c16ff5"
         },
         {
           "kind": "native_sql",
-          "line": 83,
+          "line": 91,
           "statement_sha256": "73e7d1a05f88718977383b075428dcf6467eeeb3953d199cf161a54ac43a9a89"
         },
         {
           "kind": "native_sql",
-          "line": 106,
+          "line": 114,
           "statement_sha256": "7c6bfd11411e836d586c8a1673a9afed768bdb237ec12bc224f395783738b8c6"
         },
         {
           "kind": "native_sql",
-          "line": 114,
+          "line": 122,
           "statement_sha256": "6cf10900b9ddeecf6085fbe1390c84a7d91bf3949003718d8716027d3a1dbc0b"
         },
         {
           "kind": "native_sql",
-          "line": 169,
+          "line": 179,
           "statement_sha256": "862a9a29490c49770073e32db2f072a56ce2def8dd9687ff2cc7dd20b69ea933"
         },
         {
           "kind": "native_sql",
-          "line": 176,
+          "line": 186,
           "statement_sha256": "5e1603de92c6d7674f8f845cb5547984453ac648019eb1398088588f52ff879a"
         },
         {
           "kind": "native_sql",
-          "line": 187,
+          "line": 197,
           "statement_sha256": "5bb3198e110c77dd0606761a0d4559f1f915a8531696bae89d75ae5589f80066"
         },
         {
           "kind": "identity_boundary",
-          "line": 222,
+          "line": 233,
           "statement_sha256": "c8166e385ddd58f30a4354080b4b87970e7e17589491a4e0c9d411864bee64cc"
         },
         {
           "kind": "native_sql",
-          "line": 232,
+          "line": 243,
           "statement_sha256": "69b407df94e47c54de7ae104fa955b45a82bd876a5375d9cfe840827e1c3e41f"
         },
         {
           "kind": "native_sql",
-          "line": 246,
+          "line": 257,
           "statement_sha256": "4566c5d5d6d7dbd37b1b1652d63c18e7015c0539393ad24cac58bd1e809de6cc"
         },
         {
           "kind": "native_sql",
-          "line": 248,
+          "line": 259,
           "statement_sha256": "fa65c84fe3dc1899f6c1b1528c1011ae66b4042c8017b84434d43e593ed29bb8"
         },
         {
           "kind": "identity_boundary",
-          "line": 266,
+          "line": 277,
           "statement_sha256": "c8166e385ddd58f30a4354080b4b87970e7e17589491a4e0c9d411864bee64cc"
         },
         {
           "kind": "native_sql",
-          "line": 267,
+          "line": 278,
           "statement_sha256": "7c1eb1daf456c0df5413afe9308b297dfe9fe3a5b1ffb56712a431b973e0f38e"
         },
         {
           "kind": "identity_boundary",
-          "line": 289,
+          "line": 300,
           "statement_sha256": "c8166e385ddd58f30a4354080b4b87970e7e17589491a4e0c9d411864bee64cc"
         },
         {
           "kind": "native_sql",
-          "line": 290,
+          "line": 301,
           "statement_sha256": "955eed0619ad09e71131b35b98e75801180d116440498fc266a752389f80f9ec"
         },
         {
           "kind": "identity_boundary",
-          "line": 319,
+          "line": 330,
           "statement_sha256": "c8166e385ddd58f30a4354080b4b87970e7e17589491a4e0c9d411864bee64cc"
         },
         {
           "kind": "native_sql",
-          "line": 323,
+          "line": 334,
           "statement_sha256": "ed33071e17c03b118a2d0a0857a30a733062f5bcde51715b28d9ab497a910633"
         },
         {
           "kind": "native_sql",
-          "line": 339,
+          "line": 350,
           "statement_sha256": "4808bce7a34d8c179b5dddd80dcd390f3181bc4892ae1c17c51ce0561b0168d5"
         },
         {
           "kind": "native_sql",
-          "line": 340,
+          "line": 351,
           "statement_sha256": "a726bbca1408215dbfd4c99ff29aa592857e7fad4df641a99e8a9f8a83f7ff88"
         },
         {
           "kind": "native_sql",
-          "line": 357,
+          "line": 368,
           "statement_sha256": "72266a31be50f1ffbea9fbde89c7130c5b3d5022b0bc91183a3cc0a6b83fb388"
         },
         {
           "kind": "native_sql",
-          "line": 388,
+          "line": 399,
           "statement_sha256": "95b747de619fea8e32cd7f03813b8b2efd23458f97070c47e9133e286dd3bc78"
         },
         {
           "kind": "native_sql",
-          "line": 392,
+          "line": 403,
           "statement_sha256": "83cc05d2d7f2b7b32a7f1b3122e4afb2ac680db058308951393ffe17a41b74ad"
         },
         {
           "kind": "native_sql",
-          "line": 407,
+          "line": 418,
           "statement_sha256": "37f99b6e2b0be96a3567f8b86131fbf7ca4c86c618bceab2ec01fa1ea7adaef6"
         },
         {
           "kind": "native_sql",
-          "line": 433,
+          "line": 444,
           "statement_sha256": "ff1c557a22ac4103389b5d4885ad88a09c2628c70228485437c9a3849b7a18aa"
         },
         {
           "kind": "native_sql",
-          "line": 466,
+          "line": 477,
           "statement_sha256": "b01909a49d6377366e86e934d343bfdc063f30e2dac2b93729d00a1eecea32aa"
         },
         {
           "kind": "native_sql",
-          "line": 471,
+          "line": 482,
           "statement_sha256": "a634c52f070bfa088e9d50aba908b49c82a546aa821b9469e340d5eac81cdf3b"
         },
         {
           "kind": "native_sql",
-          "line": 472,
+          "line": 483,
           "statement_sha256": "b167a59c033b93677d6ff8dc6368ad0327655da7e2555fc7c598dcac954e2ed9"
         },
         {
           "kind": "native_sql",
-          "line": 517,
+          "line": 528,
           "statement_sha256": "457c743b5cf0121b2ba6409e5343c118f6545d25bccebaa83ac1387900eaf1bb"
         },
         {
           "kind": "native_sql",
-          "line": 522,
+          "line": 533,
           "statement_sha256": "f6fa36e3f02305ae2b892ed673ad1626af5fd2328d8209368f72631550368136"
         },
         {
           "kind": "native_sql",
-          "line": 542,
+          "line": 553,
           "statement_sha256": "7035f9b244f80f839ffd146f4f97f10a9cc08ea567549968aa07d0be2a7fc434"
         },
         {
           "kind": "native_sql",
-          "line": 555,
+          "line": 566,
           "statement_sha256": "aa2d9ece6e075db56066af28f330a36b3f665ce5f2837773f4263f75930aba49"
         },
         {
           "kind": "native_sql",
-          "line": 556,
+          "line": 567,
           "statement_sha256": "6988670c713897f44c4d05acf51cc12cb60b6d109e85c58d69ed39aad9595250"
         },
         {
           "kind": "native_sql",
-          "line": 563,
+          "line": 574,
           "statement_sha256": "00e163402a29d1ba567e233b4540685cde0b597437298866f2abe039a685a705"
         },
         {
           "kind": "native_sql",
-          "line": 564,
+          "line": 578,
           "statement_sha256": "674c608adf01756fab09a1cabb009eb0b183286fe89a4664a02d607420162885"
         },
         {
           "kind": "native_sql",
-          "line": 565,
-          "statement_sha256": "ffcbbf1c64c264feaa3ff951fbea766bd0069556bdede764405b2d50c06fb1f0"
+          "line": 579,
+          "statement_sha256": "5b3846a3c512a40600dc729f22bee58283f83fa5d523091b08ad715caca36fa9"
         },
         {
           "kind": "native_sql",
-          "line": 571,
+          "line": 585,
           "statement_sha256": "a43449a297b3a55d793916c4b0db168e4a8a9d43ab948e859c26eaa4dbccc054"
         },
         {
           "kind": "native_sql",
-          "line": 572,
+          "line": 586,
           "statement_sha256": "eb071b63f283c51e27590116e7996df37655e89307ccb76be14e36c44ba7ce4a"
         },
         {
           "kind": "native_sql",
-          "line": 574,
+          "line": 588,
           "statement_sha256": "5304c1fe2fe971e1978f746a883b0ebee88fa6b09f412fe5c81dae360e608caf"
         },
         {
           "kind": "native_sql",
-          "line": 575,
+          "line": 589,
           "statement_sha256": "c7b98533414e7d51e22f943021a897962b8f04de09f23dcb57458403d24404e5"
         },
         {
           "kind": "native_sql",
-          "line": 577,
+          "line": 591,
           "statement_sha256": "a2488dd8fad462fe38f0f76e67bf12fc308c08e2586471f852a36c8b42b4d25b"
         },
         {
           "kind": "native_sql",
-          "line": 582,
+          "line": 596,
           "statement_sha256": "b35096d7693c01007f788dba97464d19a9ec3eca5b8f6524c7902c4651e83bdd"
         },
         {
           "kind": "native_sql",
-          "line": 589,
+          "line": 603,
           "statement_sha256": "b9ed92f18fd33e97117eeadb1b7c2cd9e94b77e938f560324b9827d264d8ed25"
         }
-      ],
-      "classification": "private_scoped",
-      "review_reason": "LOCAL 0404/Option delta review: explicit tenant and symbol predicates; existing runtime writer fence and read-only RR consumers; exact immutable archived response/package binding, future-only cutoff, old ambiguous fail-closed; Option same-physical funds authority with user/assets/grants before runtime, RC only new units and unchanged legacy REQUIRED. Not production release approval. Five-chat integration review 2026-10-06: History-only source facts are excluded by a parameterized body predicate before LIMIT in tenant/symbol-scoped lastClose; cannot displace a real control-start basis. Existing writer/read-only and archived response boundaries preserved."
+      ]
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/market/ControlHoldService.java": {
-      "sha256": "368c449cf7afeb5a60c491e107c1e80d288c9dcd32773ba1adc37633d9ae4cc3",
+      "classification": "private_scoped",
+      "review_reason": "S1 2026-10-03: Latest candidate limited independently in each tenant/symbol/received/source-time branch; same tie order and legal reference fallback retained. No new unscoped SQL or changed hold ownership. 2026-10-07 independent delta review with exact-SHA prior directed evidence: tenant/task and tenant/symbol source queries retain all cutoff and tie predicates; MAX_EXECUTION_TIME and budget checks bound the existing latest lookup rather than relax ownership. No sample is appended after shared allowance is exhausted or raw quote is unavailable. Hold activation/release remains under existing runtime writer fence. No cache, independent job or source mutation added.",
+      "sha256": "40cfb191cfb799ac2f2696c5d72718537373dd7d8c0b912b88e97864b6b7e080",
       "surfaces": [
         {
           "kind": "native_sql",
@@ -5405,31 +5437,30 @@
         },
         {
           "kind": "native_sql",
-          "line": 37,
-          "statement_sha256": "a405fcc019435d6aeef5788e8ea5e666bee33807e7850111bb940dbb825cdfeb"
+          "line": 38,
+          "statement_sha256": "97a11bfb20a669934184b4f0ac29b4fc95f1d1fc7ba83260e52423ca1f5917f8"
         },
         {
           "kind": "native_sql",
-          "line": 45,
+          "line": 47,
           "statement_sha256": "e2ef88da9c50ce67ebe22255d633e6910afe6e2bd194689cd4b9936c506c7420"
         },
         {
           "kind": "native_sql",
-          "line": 61,
+          "line": 63,
           "statement_sha256": "a86d706bce4c825bb4a7b2b15b47d9523f3a0bb960f648d73d94d56bbac1d886"
         },
         {
           "kind": "native_sql",
-          "line": 67,
+          "line": 69,
           "statement_sha256": "b99d7571aafdae55c167b43737ad235f6bcf6048755f0ea551d9af386795ce0a"
         }
-      ],
-      "classification": "private_scoped",
-      "review_reason": "S1 2026-10-03: Latest candidate limited independently in each tenant/symbol/received/source-time branch; same tie order and legal reference fallback retained. No new unscoped SQL or changed hold ownership.",
-      "s1_prior_review_reason": "Each private query/update/insert carries validated tenant() including task/quote scope. Real MySQL market probe17."
+      ]
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/market/ControlRecoveryFlow.java": {
-      "sha256": "dba0659d649e3eb336e729c34ab3d9dd26cb60edc3f29b8b74fbf2b1aae00a08",
+      "classification": "private_scoped",
+      "review_reason": "LOCAL 0404/Option delta review: explicit tenant and symbol predicates; existing runtime writer fence and read-only RR consumers; exact immutable archived response/package binding, future-only cutoff, old ambiguous fail-closed; Option same-physical funds authority with user/assets/grants before runtime, RC only new units and unchanged legacy REQUIRED. Not production release approval. 2026-10-07 independent delta review with exact-SHA prior directed evidence: emergency SOURCE sets pending publication only to committed sample/flow watermark, without old-plan advancement or hold activation. All flow/publication SQL includes current tenant and exact task, and background finalization selects at most one tenant/symbol task under existing writer lane and historyOrdering guard; protected history waits 60s rather than bypassing protection. Recovery pauses process downtime/stalls and unavailable sources instead of generating valid quotes. No new scheduler or cross-tenant cache; retained committed history and original recovery ownership remain.",
+      "sha256": "d664275232511d3213a13978fbf7cc5f114dbfd1eaaa125456ccd2dde5a464b7",
       "surfaces": [
         {
           "kind": "native_sql",
@@ -5458,37 +5489,60 @@
         },
         {
           "kind": "native_sql",
-          "line": 40,
+          "line": 43,
+          "statement_sha256": "e1f9182e5eb85f0ded4caf79fc4a98c1121ac51a39b189381070d84febe3d310"
+        },
+        {
+          "kind": "native_sql",
+          "line": 49,
+          "statement_sha256": "cbd08de8e9d776cbf92af1430474ca377c29d243baadfa56aa61a8716b5fb521"
+        },
+        {
+          "kind": "native_sql",
+          "line": 55,
+          "statement_sha256": "3bcf4f6c7f15104902b7b072d17c8585bca76adb27d4173332486871935d3791"
+        },
+        {
+          "kind": "native_sql",
+          "line": 56,
+          "statement_sha256": "665d9b377c45c6bd97907aebab9120d678c82747bb7ca4b3dfec8455d6fc281d"
+        },
+        {
+          "kind": "native_sql",
+          "line": 59,
+          "statement_sha256": "aaebaa719be458a8e5368e2864d3927a452e8693193ed2f94025b3b9dfc55a76"
+        },
+        {
+          "kind": "native_sql",
+          "line": 65,
           "statement_sha256": "dc47d1db2c0751d96885cd22dc61b92e2e8c38e336a2381753f3777099ab3608"
         },
         {
           "kind": "native_sql",
-          "line": 58,
+          "line": 84,
           "statement_sha256": "fa9e6cb5a5295221db020bc85c715d1bcaa177cad386731a9ac25207baac76db"
         },
         {
           "kind": "native_sql",
-          "line": 64,
+          "line": 90,
           "statement_sha256": "f8033e0baaf00955e5880529507ffb82219c9f7c09a5d417a9fe5ff0bb6b79fa"
         },
         {
           "kind": "native_sql",
-          "line": 79,
+          "line": 106,
           "statement_sha256": "9521fc996c73ad9aa86cf618c1d7fc3982a4bdc2201059f92a741fc91a91aba9"
         },
         {
           "kind": "native_sql",
-          "line": 97,
+          "line": 124,
           "statement_sha256": "1fc29aa48c492e3a74307f43c9c500f750f6097584a30e1649464be601e50940"
         },
         {
           "kind": "native_sql",
-          "line": 101,
+          "line": 128,
           "statement_sha256": "38c406b8017b0052205902ce549c1e7c57e798065eec0de6dffca9e0c1288fc4"
         }
-      ],
-      "classification": "private_scoped",
-      "review_reason": "LOCAL 0404/Option delta review: explicit tenant and symbol predicates; existing runtime writer fence and read-only RR consumers; exact immutable archived response/package binding, future-only cutoff, old ambiguous fail-closed; Option same-physical funds authority with user/assets/grants before runtime, RC only new units and unchanged legacy REQUIRED. Not production release approval."
+      ]
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/market/ControlledKlineMerger.java": {
       "sha256": "faa63de34903f2dc8862d106c14482e0ec203514774867f3cdd73b0c0933dd9e",
@@ -5598,7 +5652,9 @@
       "review_reason": "DTO, pure calculation or delegated controller/service; all production Java files are fingerprinted even without a detector match."
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/market/ForexQuoteMarketService.java": {
-      "sha256": "2ba7177007bd21a3701e55bb985e8954145a28cabb9abd93f4617b73c89ee669",
+      "classification": "private_scoped",
+      "review_reason": "Conversion companions derive from subscribed raw provider input, not controlled/display prices. Target registry tenant-scoped; conversionTargets match actual configured routes. Publication/outage SQL is outside quoteLock monitor; original source ingestion still executes. No funds/order locks acquired by producer. Independent static review only; actual tests and release approval remain separate. Integration review 2026-10-06: Read-only full preview adds price-tick and screened tier diagnostics. Existing tenant scope and independent full-plan validation remain mandatory before a command can start. Five-chat integration review 2026-10-06: Historical GET reads a committed snapshot and queues tenant/source/version/period/window repair only after commit. Existing source lane deduplicates and caps work, rate limits and retries; provider HTTP precedes own writer transaction. Only overlapping raw historical caches are invalidated after commit, never latest quotes/control display. Sealed responses unchanged; existing history protection, writer fence and source projection authority retained. 2026-10-07 independent delta review with exact-SHA prior directed evidence: emergency manual disable/RESTORE use direct short history/runtime locking, and SOURCE pump bypasses old history finalization. Outage remains unavailable, valid observed source alone may produce a return point. TenantState is keyed by required server tenant; new retryAt/failures maps are symbol-keyed only inside that tenant state, bounded delay/counter, and AUTHORITY_LOST suppresses old writer for that symbol without starving others. Existing tenant job contexts, raw-provider conversion, source-repair cache keys and after-commit updates remain; no producer funds/order locks or new global data cache. GET controlStatus is a committed read without sampling/lease renewal. Runtime/authenticated application acceptance remains separate.",
+      "sha256": "5a8389908d756374067ebc6e44c509ead5c676b91258d5f25b544c87ca0933f3",
       "surfaces": [
         {
           "kind": "identity_boundary",
@@ -5611,263 +5667,286 @@
           "statement_sha256": "98aeda6d927098a2f82ba2b03d389c3ce5d9c3a4a6d821ba8c75e38cba7e392d"
         },
         {
+          "kind": "cache_lock",
+          "line": 40,
+          "statement_sha256": "b95b698da5d4fc20f90ab36a5e741addbab473f483dcdb955b0796ebff1c2503"
+        },
+        {
+          "kind": "cache_lock",
+          "line": 41,
+          "statement_sha256": "85a44611371f27be30f3d59b46b048eec62ad0ced676125385c4ec1f73a0bcf9"
+        },
+        {
           "kind": "identity_boundary",
-          "line": 44,
+          "line": 46,
           "statement_sha256": "f1eeec18a36fa46d1bae22ae3758c6a53b4eb71ea09f451cfe40f123eaa55980"
         },
         {
           "kind": "identity_boundary",
-          "line": 55,
+          "line": 57,
           "statement_sha256": "f63fd125d65b4d3debf648779cc503bbef7c794e793938b6901c229f05be685c"
         },
         {
           "kind": "cache_lock",
-          "line": 82,
+          "line": 84,
           "statement_sha256": "0d3403e381ea1413f9a16e48ac330a17e222357586dba7fd98daa02e9a1f5a7e"
         },
         {
           "kind": "cache_lock",
-          "line": 105,
+          "line": 107,
           "statement_sha256": "22ac4a9789b166251501c0c22c1f53ee13bcdb937560ec458142e99a5b9c371e"
         },
         {
           "kind": "async_job",
-          "line": 106,
+          "line": 108,
           "statement_sha256": "1e754f54568d839c5fb6f190796c5d3c6f4840f88047b4cfab9a1802da172bef"
         },
         {
           "kind": "async_job",
-          "line": 109,
+          "line": 111,
           "statement_sha256": "cfa4eccadc27b1f0d681e13cf0d8e493a4416e390609ea9c452ab866ef547189"
         },
         {
           "kind": "cache_lock",
-          "line": 164,
+          "line": 166,
           "statement_sha256": "be2e8a2622b5f8eef1456d2c1bb77f546498714e239cd060c9b476dbfdfebde6"
         },
         {
           "kind": "cache_lock",
-          "line": 173,
+          "line": 175,
           "statement_sha256": "964f8bf59a00a60d8c37c343dd099e03c1f614fe898b56c11582fad4dfbdf23d"
         },
         {
           "kind": "cache_lock",
-          "line": 174,
+          "line": 176,
           "statement_sha256": "6f9cccc3f758b949fa4441c7c9346069a32a89bbb3fe2eb9d3178fd562708c97"
         },
         {
           "kind": "async_job",
-          "line": 186,
+          "line": 188,
           "statement_sha256": "0f878fe4289ca94b8a29b3f52869100ab981354aa9ee47af40a7426af08be6bd"
         },
         {
           "kind": "identity_boundary",
-          "line": 191,
+          "line": 193,
           "statement_sha256": "1adcafb2e798bdf666fd06883060a6b7cbf47aee5786d29bf3caeb011b3b12dc"
         },
         {
           "kind": "startup",
-          "line": 205,
+          "line": 207,
           "statement_sha256": "90de0f4efe330ace505bbaecb1fc1166ae4c33c7d7049eda668e2a29bab7f421"
         },
         {
           "kind": "identity_boundary",
-          "line": 213,
+          "line": 215,
           "statement_sha256": "67c1778c6eebeb8dd83554894b99fa5396f3cac06bce3f6f0c09e65b5c34c1a3"
         },
         {
           "kind": "identity_boundary",
-          "line": 224,
+          "line": 226,
           "statement_sha256": "7b830a9c505d0610b1f61c7ad9b061f9aea79a2629de9406c644978cad1ff246"
         },
         {
           "kind": "identity_boundary",
-          "line": 229,
+          "line": 231,
           "statement_sha256": "f596215243b94bcd2d3f21a96a18c65e94215164fb0fdfa34e506246e48bcdc9"
         },
         {
           "kind": "identity_boundary",
-          "line": 572,
+          "line": 574,
           "statement_sha256": "7b830a9c505d0610b1f61c7ad9b061f9aea79a2629de9406c644978cad1ff246"
         },
         {
           "kind": "cache_lock",
-          "line": 626,
+          "line": 628,
           "statement_sha256": "6934e8d04502eb34587fde740fb75d6b12384cb97e1b9c597809d35786dfa094"
         },
         {
           "kind": "identity_boundary",
-          "line": 635,
+          "line": 637,
           "statement_sha256": "7b830a9c505d0610b1f61c7ad9b061f9aea79a2629de9406c644978cad1ff246"
         },
         {
           "kind": "identity_boundary",
-          "line": 658,
+          "line": 660,
           "statement_sha256": "7b830a9c505d0610b1f61c7ad9b061f9aea79a2629de9406c644978cad1ff246"
         },
         {
           "kind": "identity_boundary",
-          "line": 688,
+          "line": 690,
           "statement_sha256": "7b830a9c505d0610b1f61c7ad9b061f9aea79a2629de9406c644978cad1ff246"
         },
         {
           "kind": "cache_lock",
-          "line": 768,
+          "line": 770,
           "statement_sha256": "eaefa414060c55c4f36739209db856b8303af45a74e4a1747cc7e91062845a27"
         },
         {
           "kind": "cache_lock",
-          "line": 875,
+          "line": 877,
           "statement_sha256": "e22b2dd3dd1390fb0e2f9e5611d65ed527a75854fe7ca796af662898f706b630"
         },
         {
           "kind": "cache_lock",
-          "line": 958,
+          "line": 960,
           "statement_sha256": "2e33049cb8c5b63972030ea00bfdcade8e39bb5205ea514e254f363ea974f91c"
         },
         {
           "kind": "cache_lock",
-          "line": 997,
+          "line": 999,
           "statement_sha256": "929f48aa9c768c4ea38107501de83cfaecceb4773bd415a1f3a4915967d2e956"
         },
         {
           "kind": "cache_lock",
-          "line": 1005,
+          "line": 1007,
           "statement_sha256": "3af9143cc9b9639e485211d430eea2d274e8456e0e33a39a2eb0a0eadb158310"
         },
         {
           "kind": "native_sql",
-          "line": 1009,
+          "line": 1011,
           "statement_sha256": "653ae552b3e9927d1fb3eb806b8b71fbe5f940bda6c2c30960d730b4d88ae10a"
         },
         {
           "kind": "identity_boundary",
-          "line": 1010,
+          "line": 1012,
           "statement_sha256": "ee905c3287e7f61c389fd376cecdd6d6c49a9b20c1d3d025a4627a61be076c75"
         },
         {
           "kind": "native_sql",
-          "line": 1017,
+          "line": 1019,
           "statement_sha256": "6fea600377ffb309cc2c9886e22ea4443775007851811ad23662edcd2671d766"
         },
         {
           "kind": "identity_boundary",
-          "line": 1017,
+          "line": 1019,
           "statement_sha256": "6fea600377ffb309cc2c9886e22ea4443775007851811ad23662edcd2671d766"
         },
         {
           "kind": "native_sql",
-          "line": 1030,
+          "line": 1032,
           "statement_sha256": "c5d1a91c1f0a4e4667c4cb0300adff8e98126ef1741b5b739b861fa30361dd55"
         },
         {
           "kind": "identity_boundary",
-          "line": 1030,
+          "line": 1032,
           "statement_sha256": "c5d1a91c1f0a4e4667c4cb0300adff8e98126ef1741b5b739b861fa30361dd55"
         },
         {
           "kind": "cache_lock",
-          "line": 1053,
+          "line": 1055,
           "statement_sha256": "91e77e95ed8b70c5dcbfca71ee0e80e80325df03863864465bbb82a36430b8eb"
         },
         {
           "kind": "identity_boundary",
-          "line": 1118,
+          "line": 1120,
           "statement_sha256": "eaf4aa08a8249b33d00bc15ee90ffc4e9ffb5f67cb4f5612ed0c126a6e500c9a"
         },
         {
           "kind": "cache_lock",
-          "line": 1121,
+          "line": 1123,
           "statement_sha256": "6a4d7b5a921d2668c23391d41303b8ce15707ea9158cf5d13d456c37479dadf6"
         },
         {
           "kind": "cache_lock",
-          "line": 1134,
+          "line": 1136,
           "statement_sha256": "c056371516c89604c3b2abe3251ab9464265899445e033ef7219a25f688c4dff"
         },
         {
           "kind": "identity_boundary",
-          "line": 1151,
+          "line": 1153,
           "statement_sha256": "26fd761ba9e5d086fb93c643003c5cd438eef3a3e006b0c2084ceb15adfdaa26"
         },
         {
           "kind": "cache_lock",
-          "line": 1168,
+          "line": 1170,
           "statement_sha256": "3bad0e19fa114163726b96146a4232ad243315a5b5f8e4f19532736309bdc621"
         },
         {
           "kind": "cache_lock",
-          "line": 1322,
+          "line": 1324,
           "statement_sha256": "33403a71e1e7b110d43c708cebde4ad0f311c50ae17561a45609f795ef0d1645"
         },
         {
           "kind": "native_sql",
-          "line": 1352,
+          "line": 1354,
           "statement_sha256": "4c7d00727f52b785fa4e883a5794d6e6789a7cb0aeaa16055a45f8b7eea8c578"
         },
         {
           "kind": "native_sql",
-          "line": 1353,
+          "line": 1355,
           "statement_sha256": "1b0ecde2ba677af4e2173cd9d542a4835fda23d8c56613375aa64a38a7562838"
         },
         {
           "kind": "identity_boundary",
-          "line": 1353,
+          "line": 1355,
           "statement_sha256": "1b0ecde2ba677af4e2173cd9d542a4835fda23d8c56613375aa64a38a7562838"
         },
         {
           "kind": "cache_lock",
-          "line": 1457,
+          "line": 1459,
           "statement_sha256": "73c8335cabf3a04cdb9ca92a9657a8e8e794a756e8564a74bdee3b81a774da73"
         },
         {
           "kind": "cache_lock",
-          "line": 1484,
+          "line": 1486,
           "statement_sha256": "d2548b977a8d01907f0ecad8f291645ec8145fb1008ba1e2c7045b66f90b1d1a"
         },
         {
           "kind": "cache_lock",
-          "line": 1506,
+          "line": 1513,
           "statement_sha256": "2f7a3ea447c355e4469634618b902fbe2f4bc173e2cb2eb1e4df03974e3aeb01"
         },
         {
           "kind": "cache_lock",
-          "line": 1534,
-          "statement_sha256": "badf5ff661aebfd6cea9f606cfd79df62195f0cf325c7fe8fd07efa4ff03c8b4"
+          "line": 1541,
+          "statement_sha256": "7031cf219eac62728f1404cf0d269e01e9ad63f85747b26999616a4a6b3b4702"
         },
         {
           "kind": "cache_lock",
-          "line": 1551,
-          "statement_sha256": "e3cdf0560f5d8af1913bfc69fe6527eeba8d9dc43fd417f53ebf4fdbcca077cf"
+          "line": 1542,
+          "statement_sha256": "b9148386a415d83b9995bef214c49f88b4cbcba5c8b5d27371fe3f4db0eafe7d"
+        },
+        {
+          "kind": "cache_lock",
+          "line": 1559,
+          "statement_sha256": "db1a3e016bb5206fd769b4f68f3a5ce8e7c8b30b529805f2a8665912122d1937"
+        },
+        {
+          "kind": "cache_lock",
+          "line": 1560,
+          "statement_sha256": "607022532fd189a85e9c9c8637fd792a340df5665a5ae6b17b92a0edfff14c2f"
         },
         {
           "kind": "native_sql",
-          "line": 1583,
+          "line": 1593,
           "statement_sha256": "0d076ea58643aed562490001b35e9829f193ec7e5d15ef6b334639081e773c88"
         },
         {
           "kind": "identity_boundary",
-          "line": 1584,
+          "line": 1594,
           "statement_sha256": "1a818f43f4a277e1a21741bd600d7b5ad22d2afd74e865042cf4c5f1045ab018"
         },
         {
           "kind": "native_sql",
-          "line": 1599,
+          "line": 1609,
           "statement_sha256": "181c271c54c48eff7174f65241ca27cd6c9a6ddceddfc715d6014f53deef1ec6"
         },
         {
           "kind": "native_sql",
-          "line": 1600,
+          "line": 1610,
           "statement_sha256": "71341ae5e688b149c17f452eb198039ffa1560792a4413bfff5a413b7d845f7e"
         },
         {
           "kind": "identity_boundary",
-          "line": 1600,
+          "line": 1610,
           "statement_sha256": "71341ae5e688b149c17f452eb198039ffa1560792a4413bfff5a413b7d845f7e"
+        },
+        {
+          "kind": "identity_boundary",
+          "line": 1623,
+          "statement_sha256": "1efb718f6ef2ed796c1973b8cf0964e630f3684876c591d8810a7a51c25caf6d"
         }
-      ],
-      "classification": "private_scoped",
-      "review_reason": "Conversion companions derive from subscribed raw provider input, not controlled/display prices. Target registry tenant-scoped; conversionTargets match actual configured routes. Publication/outage SQL is outside quoteLock monitor; original source ingestion still executes. No funds/order locks acquired by producer. Independent static review only; actual tests and release approval remain separate. Integration review 2026-10-06: Read-only full preview adds price-tick and screened tier diagnostics. Existing tenant scope and independent full-plan validation remain mandatory before a command can start. Five-chat integration review 2026-10-06: Historical GET reads a committed snapshot and queues tenant/source/version/period/window repair only after commit. Existing source lane deduplicates and caps work, rate limits and retries; provider HTTP precedes own writer transaction. Only overlapping raw historical caches are invalidated after commit, never latest quotes/control display. Sealed responses unchanged; existing history protection, writer fence and source projection authority retained."
+      ]
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/market/MarketCategoryService.java": {
       "sha256": "6787a0df4fdbfb05fa1cb21efe865ad2cdb857d685e1e3e9aec428f3b5931364",
@@ -6104,7 +6183,9 @@
       "review_reason": "ROOT complete push/send/binding review: freeze clients per already verified tenant, union each symbol once in one outer RO RR, captured complete price batch sent only after COMMIT/context close. Ambient transaction fail-closed; no tenant switching within shared caller TX. Original times1 sharing restored, original perclient sending CAS/4workers/128 queue, depth revision, slowclient and host revalidation preserved. No global cap added; union/pool/auth deployment capacity remain open."
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/market/PersistentPriceControl.java": {
-      "sha256": "88bff2a9ba627f97082506593bca085d9d78d79adcee73e2b57f79810ff00403",
+      "classification": "private_scoped",
+      "review_reason": "conversionQuotes validates both original/reloaded tenant identity, visits symbol IDs ascending under runtime writer transaction, never touches user/assets/order locks. pump retains only still-configured companions under current runtime lock. No old OHLC/history facts rewritten by new helper. Independent static review only; actual tests and release approval remain separate. First-task source-equivalent identity review: before any control task, null/zero offset with display price numerically equal to the source uses the existing tenant-scoped controlled OHLC point without introducing an auxiliary manualPoints fact. Explicit manual commands, nonzero offsets, post-task auxiliary points and all historical facts remain unchanged; no comparator, tenant predicate, SQL, cache, lease or callback boundary is relaxed. 2026-10-07 independent delta review with exact-SHA prior directed evidence: emergency SOURCE uses direct existing scoped writer transaction, ends at last committed sample, invalidates pending commands/revision/releases hold, and defers history publication; it never waits for an old plan/endpoint or activates a hold. RESTORE requires valid source plus trusted committed price and creates the current flow without forcing the old target to complete. Advance uses bounded64-point chunks/shared512 allowance, reserve deadline and committed watermarks; later turns complete endpoint. All task/flow/runtime SQL preserves server tenant and symbol/task checks; captured task tenant is verified. SOURCE uses only valid observed raw price and outage remains unavailable. Existing manual/cache/conversion and private/funds/history boundaries retained, no new scheduler/global authority.",
+      "sha256": "182ae97ed708faa1aeff07772cd525180d4420fef53f33a1b9a85efaba538208",
       "surfaces": [
         {
           "kind": "identity_boundary",
@@ -6128,222 +6209,240 @@
         },
         {
           "kind": "native_sql",
-          "line": 88,
-          "statement_sha256": "bf3462b26d08e4fa9b2859868ad2d1ce71cfe28c45a9df2568dfdde2551f7485"
+          "line": 98,
+          "statement_sha256": "4f98282e8ea4850796f6b58085bb717296abf0cd570077c3654dac336a19c047"
         },
         {
           "kind": "native_sql",
-          "line": 89,
-          "statement_sha256": "260665494457478dc6a093e297b0fb5ac68303c35ed04072ecb19bb3e3d3dbad"
+          "line": 105,
+          "statement_sha256": "6c2436828684bd1705e71deecfe61f80b3c6ea2658959cf4034e23caa0b2f2f4"
         },
         {
           "kind": "native_sql",
-          "line": 108,
+          "line": 113,
+          "statement_sha256": "990b4ba3152849c73fba4d374a577b22d4c38d5319b739d245354900756c4aac"
+        },
+        {
+          "kind": "native_sql",
+          "line": 123,
+          "statement_sha256": "d965b1634a6673ca64b79021ff4709ef53f17546443995bc38d6c02fd5d2f717"
+        },
+        {
+          "kind": "native_sql",
+          "line": 124,
+          "statement_sha256": "e3e0bb3fd24c27f8d1528364c15b540725df78c6e758486427b5e6582ea3576a"
+        },
+        {
+          "kind": "native_sql",
+          "line": 140,
           "statement_sha256": "17518761ee631f9d75dd4a83407299d00404906faa81551d8a93bf0df957ba69"
         },
         {
           "kind": "native_sql",
-          "line": 126,
+          "line": 158,
           "statement_sha256": "281a49162de76880b43934ad800a76e62c75e9b963175dec945130016120a3c0"
         },
         {
           "kind": "identity_boundary",
-          "line": 133,
+          "line": 165,
           "statement_sha256": "65347da3738b331fb190fd26c5851eb3d820f7dfefdcf726cd1f6b37cde50478"
         },
         {
           "kind": "native_sql",
-          "line": 137,
+          "line": 169,
           "statement_sha256": "fb547f3b658ecebf0303bc37ef068cbc7eec283e00545223fd24439774b192f7"
         },
         {
           "kind": "native_sql",
-          "line": 138,
+          "line": 170,
           "statement_sha256": "181d308256193ac4ea9dcee4057285c4f3e77cd0c1b6ad1414e47c5940351033"
         },
         {
           "kind": "native_sql",
-          "line": 163,
+          "line": 202,
           "statement_sha256": "195ea53ed537f2f9f8dc77ebe5acbdabd36d9e97a68957e144f971060dde99f2"
         },
         {
           "kind": "identity_boundary",
-          "line": 167,
+          "line": 206,
           "statement_sha256": "65347da3738b331fb190fd26c5851eb3d820f7dfefdcf726cd1f6b37cde50478"
         },
         {
           "kind": "native_sql",
-          "line": 174,
+          "line": 213,
           "statement_sha256": "102267ba75c8d40ef08f00d3cf0ece2e489badc278b27d4e4dae2ee76fe08cab"
         },
         {
           "kind": "identity_boundary",
-          "line": 237,
+          "line": 276,
           "statement_sha256": "65347da3738b331fb190fd26c5851eb3d820f7dfefdcf726cd1f6b37cde50478"
         },
         {
           "kind": "native_sql",
-          "line": 241,
+          "line": 280,
           "statement_sha256": "6ef03294b7a640bd5c9ef5e738c8078426b18cfc2aceaa236e2f9ab7afc6a3c2"
         },
         {
           "kind": "identity_boundary",
-          "line": 249,
+          "line": 288,
           "statement_sha256": "65347da3738b331fb190fd26c5851eb3d820f7dfefdcf726cd1f6b37cde50478"
         },
         {
           "kind": "identity_boundary",
-          "line": 261,
+          "line": 300,
           "statement_sha256": "65347da3738b331fb190fd26c5851eb3d820f7dfefdcf726cd1f6b37cde50478"
         },
         {
           "kind": "identity_boundary",
-          "line": 274,
+          "line": 313,
           "statement_sha256": "65347da3738b331fb190fd26c5851eb3d820f7dfefdcf726cd1f6b37cde50478"
         },
         {
           "kind": "native_sql",
-          "line": 276,
+          "line": 315,
           "statement_sha256": "0df961f0a9ab5cf08d72eb34241822c267afff960072aefb41fe3bbdd160dc96"
         },
         {
           "kind": "identity_boundary",
-          "line": 290,
+          "line": 329,
           "statement_sha256": "65347da3738b331fb190fd26c5851eb3d820f7dfefdcf726cd1f6b37cde50478"
         },
         {
           "kind": "native_sql",
-          "line": 292,
+          "line": 331,
           "statement_sha256": "7a1bdcd48f5c1b39218b3ff99cbfe8bdd0f162ab018fa784192b2a2f64c989c5"
         },
         {
           "kind": "identity_boundary",
-          "line": 304,
+          "line": 343,
           "statement_sha256": "65347da3738b331fb190fd26c5851eb3d820f7dfefdcf726cd1f6b37cde50478"
         },
         {
           "kind": "native_sql",
-          "line": 368,
+          "line": 407,
           "statement_sha256": "9ea8cee9bbfb4aa1a702a03d8a938b50ee6d1dba5e3a50a43d9c9d5ede0d22fc"
         },
         {
           "kind": "native_sql",
-          "line": 387,
+          "line": 426,
           "statement_sha256": "475a6646227a8e1659aa1952791bff9cb209c51e3e1cedae0278bed35b587d34"
         },
         {
           "kind": "native_sql",
-          "line": 396,
+          "line": 435,
           "statement_sha256": "1ce65254be47be783effd12bdae89451987b66e6a1efe1fedf763a514965816c"
         },
         {
           "kind": "native_sql",
-          "line": 404,
+          "line": 443,
           "statement_sha256": "5c96d99d06918194d2bde059b428652523a6f606cc1d05e2a57a10dfbf2188e3"
         },
         {
           "kind": "native_sql",
-          "line": 408,
+          "line": 447,
           "statement_sha256": "4441d3c321491c32b6f3330c4946863971484e946ab418fdd79b186504bb554a"
         },
         {
           "kind": "native_sql",
-          "line": 420,
+          "line": 459,
           "statement_sha256": "73b85a34f7e4004a3b3a057223356a3ad111b5fce4da6d219c3d10a2dc5c73a3"
         },
         {
           "kind": "identity_boundary",
-          "line": 427,
+          "line": 466,
           "statement_sha256": "65347da3738b331fb190fd26c5851eb3d820f7dfefdcf726cd1f6b37cde50478"
         },
         {
           "kind": "identity_boundary",
-          "line": 434,
+          "line": 473,
           "statement_sha256": "65347da3738b331fb190fd26c5851eb3d820f7dfefdcf726cd1f6b37cde50478"
         },
         {
           "kind": "identity_boundary",
-          "line": 468,
+          "line": 508,
           "statement_sha256": "9cda3b5046bfd27ce84daaca8a065237f25c978ab5172591ae327a023ccf0ca9"
         },
         {
           "kind": "identity_boundary",
-          "line": 472,
+          "line": 512,
           "statement_sha256": "73b0e42d1e9228a392eb73fad84f05494ecdf2faeac70fc9b8fa62e677da7b12"
         },
         {
           "kind": "native_sql",
-          "line": 479,
+          "line": 519,
           "statement_sha256": "f0e5cd6fa6942f50c9a0e66871183a20542b25afe3c29f396ff5799c11d2a258"
         },
         {
           "kind": "identity_boundary",
-          "line": 491,
+          "line": 531,
           "statement_sha256": "65347da3738b331fb190fd26c5851eb3d820f7dfefdcf726cd1f6b37cde50478"
         },
         {
           "kind": "identity_boundary",
-          "line": 494,
+          "line": 534,
           "statement_sha256": "73b0e42d1e9228a392eb73fad84f05494ecdf2faeac70fc9b8fa62e677da7b12"
         },
         {
           "kind": "identity_boundary",
-          "line": 504,
+          "line": 544,
           "statement_sha256": "65347da3738b331fb190fd26c5851eb3d820f7dfefdcf726cd1f6b37cde50478"
         },
         {
           "kind": "native_sql",
-          "line": 531,
+          "line": 576,
           "statement_sha256": "5ea8043eb5e1016d9b3c0631b51ffb68d8cbd1bfcfa01b8e668a449178c68ae2"
         },
         {
           "kind": "cache_lock",
-          "line": 537,
+          "line": 583,
           "statement_sha256": "064c458f52fef1f916cca41909fa92ff3e71dfd2bb3ba77a44d8a3526db9599b"
         },
         {
           "kind": "native_sql",
-          "line": 551,
+          "line": 597,
           "statement_sha256": "59e1be29861f00d39971e3c6f8788404d9e32b96612a8580ee9450afa9650262"
         },
         {
           "kind": "native_sql",
-          "line": 555,
+          "line": 601,
           "statement_sha256": "8cbe2209e9afcdccc284f5e202d82dbb92cd297dcab11e6cb6ad6dc5b8af8d79"
         },
         {
           "kind": "native_sql",
-          "line": 596,
+          "line": 646,
           "statement_sha256": "7200bf709c96b5e7b57bca42689bd72b4650a36ceb70347db66dbe5aba993382"
         },
         {
           "kind": "native_sql",
-          "line": 602,
+          "line": 652,
           "statement_sha256": "b8985791cf6215964bd3cd183199149b2ef901bc6816fb8c2e7191e197528fad"
         },
         {
           "kind": "native_sql",
-          "line": 604,
+          "line": 654,
           "statement_sha256": "6ec50773c7abc0344ded8a4ee2a11120f3ed18a92bbdb15ae2ebfdb4b2eb3846"
         },
         {
           "kind": "native_sql",
-          "line": 610,
+          "line": 660,
           "statement_sha256": "cfb77073540c288a7a0993ce535b29c191916b21108fb52b9b8d0d2a83c3461e"
         },
         {
           "kind": "identity_boundary",
-          "line": 634,
+          "line": 684,
           "statement_sha256": "a5c196c901343960f1a0f7ed4c62ae51ea4835d2002d7fb4b58b2d03224feaa8"
         },
         {
           "kind": "identity_boundary",
-          "line": 637,
+          "line": 687,
           "statement_sha256": "65347da3738b331fb190fd26c5851eb3d820f7dfefdcf726cd1f6b37cde50478"
+        },
+        {
+          "kind": "native_sql",
+          "line": 711,
+          "statement_sha256": "736fb0defe0f9fc1ffba68840389d0e3d92358f15e7d8bca3f92c5359a445925"
         }
-      ],
-      "classification": "private_scoped",
-      "review_reason": "conversionQuotes validates both original/reloaded tenant identity, visits symbol IDs ascending under runtime writer transaction, never touches user/assets/order locks. pump retains only still-configured companions under current runtime lock. No old OHLC/history facts rewritten by new helper. Independent static review only; actual tests and release approval remain separate. First-task source-equivalent identity review: before any control task, null/zero offset with display price numerically equal to the source uses the existing tenant-scoped controlled OHLC point without introducing an auxiliary manualPoints fact. Explicit manual commands, nonzero offsets, post-task auxiliary points and all historical facts remain unchanged; no comparator, tenant predicate, SQL, cache, lease or callback boundary is relaxed."
+      ]
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/market/PriceControlPath.java": {
       "sha256": "be35e554fc9390754d826f3f254382056945b714a9f4c9dfa6e6bab2805a54fd",
@@ -7894,10 +7993,10 @@
       "review_reason": "Ordinary REAL/admin and simulation reads still require positive TenantContext. Only new explicit readAll accepts independent ROLE_CONTROL without tenant context, joins registered positive tenants, exposes safe fixed columns plus provenance, retains owner-bound user joins, escaped filters and bounded deterministic server paging in a repeatable read-only snapshot."
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/simulation/AdminReadRoutes.java": {
-      "sha256": "ee6e6df36d149a70885dd517ac625e20b331e74743ffc5186fd4aa2df5ebdfbd",
-      "surfaces": [],
       "classification": "stateless",
-      "review_reason": "DTO, pure calculation or delegated controller/service; all production Java files are fingerprinted even without a detector match."
+      "review_reason": "DTO, pure calculation or delegated controller/service; all production Java files are fingerprinted even without a detector match. 2026-10-07 independent fresh delta review: new allowlist entry is only GET /api/admin/orders/(contract|option)/[1-9][0-9]*/share-preview and maps to existing orders permission. The pure method/path function adds no mutable state, tenant selection, query, cache, background job or write access. Existing simulation proxy identity/tenant boundary and the actual AdminOrderController scoped read/agent-owner checks remain required; allowlist is not a permission grant. No broad wildcard POST/mutation or general URL forwarding was added.",
+      "sha256": "698018264713325f54fe9fd69960caf5f02bf45c014906ece6cf5f133ec2f789",
+      "surfaces": []
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/simulation/SimulationAdminQueryBoundary.java": {
       "sha256": "8c22aad570f86514a73d771a141e2f7a6c62e60dc8dfa9ac1000c7c8eb258e75",
@@ -8167,7 +8266,7 @@
         }
       ],
       "classification": "private_scoped",
-      "review_reason": "\u4ee5\u672c\u5730 userId \u4e3a\u4e3b\u952e\uff0c\u6a21\u62df\u91d1\u989d\u53ca\u65f6\u95f4\u4e3a public \u6807\u91cf\uff1btenantId \u4ecd\u7ee7\u627f\u53d7\u63a7\u5b57\u6bb5\uff0c\u540c\u79df\u6237\u7528\u6237\u5173\u7cfb\u660e\u786e\uff0c\u4e0d\u652f\u6301\u8de8\u5e93\u8eab\u4efd\u63a8\u65ad\u3002 \u5df2\u5b8c\u6574\u5ba1\u67e5\u5f53\u524d\u6587\u4ef6\uff0c\u786e\u8ba4\u663e\u5f0f TenantEntityPersister + TenantOwnedEntity\u3001\u65e0\u79df\u6237\u5b57\u6bb5/\u8bbf\u95ee\u5668\u8986\u76d6\uff1b\u6b64\u7ed3\u8bba\u4ec5\u7528\u4e8e\u5f53\u524d\u6620\u5c04\u6e90\u7801\u767b\u8bb0\uff0c\u4e0d\u6279\u51c6\u53d1\u5e03\u3002 \u590d\u6838\u8bc1\u636e\uff1areports/multitenant/handoff-20260929/entity-review.json\u3002"
+      "review_reason": "以本地 userId 为主键，模拟金额及时间为 public 标量；tenantId 仍继承受控字段，同租户用户关系明确，不支持跨库身份推断。 已完整审查当前文件，确认显式 TenantEntityPersister + TenantOwnedEntity、无租户字段/访问器覆盖；此结论仅用于当前映射源码登记，不批准发布。 复核证据：reports/multitenant/handoff-20260929/entity-review.json。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/support/AdminSupportController.java": {
       "sha256": "23a5985a09bc6917c0a84a3488c046e10ed3bcb9d2cc1b33fb18bea65cdcb980",
@@ -8196,7 +8295,7 @@
         }
       ],
       "classification": "private_scoped",
-      "review_reason": "\u4e24\u4e2a\u5e42\u7b49\u552f\u4e00\u952e\u90fd\u542b tenant_id\uff0c\u533a\u5206 adminId \u4e0e controlActorId\uff1b\u6536\u4ef6\u4eba/\u53d1\u4ef6\u4e8b\u5b9e updatable=false\uff0c\u4ec5 readAt \u53ef\u53d8\uff1b\u65e0 ORM \u5173\u8054\u3002 \u5df2\u5b8c\u6574\u5ba1\u67e5\u5f53\u524d\u6587\u4ef6\uff0c\u786e\u8ba4\u663e\u5f0f TenantEntityPersister + TenantOwnedEntity\u3001\u65e0\u79df\u6237\u5b57\u6bb5/\u8bbf\u95ee\u5668\u8986\u76d6\uff1b\u6b64\u7ed3\u8bba\u4ec5\u7528\u4e8e\u5f53\u524d\u6620\u5c04\u6e90\u7801\u767b\u8bb0\uff0c\u4e0d\u6279\u51c6\u53d1\u5e03\u3002 \u590d\u6838\u8bc1\u636e\uff1areports/multitenant/handoff-20260929/entity-review.json\u3002"
+      "review_reason": "两个幂等唯一键都含 tenant_id，区分 adminId 与 controlActorId；收件人/发件事实 updatable=false，仅 readAt 可变；无 ORM 关联。 已完整审查当前文件，确认显式 TenantEntityPersister + TenantOwnedEntity、无租户字段/访问器覆盖；此结论仅用于当前映射源码登记，不批准发布。 复核证据：reports/multitenant/handoff-20260929/entity-review.json。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/support/SupportAttachment.java": {
       "sha256": "ffbb52f2da411a8b0a67b2247a67ad4030216f56b14ca0b029ccc0215057e2fc",
@@ -8208,7 +8307,7 @@
         }
       ],
       "classification": "private_scoped",
-      "review_reason": "\u4ee5 messageId \u4e3a\u4e3b\u952e\uff0c\u9644\u4ef6\u5185\u5bb9\u4e3a\u4e0d\u53ef\u66f4\u65b0 LONGBLOB \u4e14 JsonIgnore\uff1b\u540c\u79df\u6237\u6d88\u606f\u5173\u7cfb\u5217\u4e8e\u8fc1\u79fb\u6e05\u5355\uff0c\u65e0\u516c\u5f00\u6587\u4ef6\u6620\u5c04\u3002 \u5df2\u5b8c\u6574\u5ba1\u67e5\u5f53\u524d\u6587\u4ef6\uff0c\u786e\u8ba4\u663e\u5f0f TenantEntityPersister + TenantOwnedEntity\u3001\u65e0\u79df\u6237\u5b57\u6bb5/\u8bbf\u95ee\u5668\u8986\u76d6\uff1b\u6b64\u7ed3\u8bba\u4ec5\u7528\u4e8e\u5f53\u524d\u6620\u5c04\u6e90\u7801\u767b\u8bb0\uff0c\u4e0d\u6279\u51c6\u53d1\u5e03\u3002 \u590d\u6838\u8bc1\u636e\uff1areports/multitenant/handoff-20260929/entity-review.json\u3002"
+      "review_reason": "以 messageId 为主键，附件内容为不可更新 LONGBLOB 且 JsonIgnore；同租户消息关系列于迁移清单，无公开文件映射。 已完整审查当前文件，确认显式 TenantEntityPersister + TenantOwnedEntity、无租户字段/访问器覆盖；此结论仅用于当前映射源码登记，不批准发布。 复核证据：reports/multitenant/handoff-20260929/entity-review.json。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/support/SupportConversation.java": {
       "sha256": "2a04d45ee4295771f6af821cf2f98ee3d9c4eed97aa0892477e581f3dc588b96",
@@ -8220,7 +8319,7 @@
         }
       ],
       "classification": "private_scoped",
-      "review_reason": "userId/activeUserId/adminId \u4e3a\u6709\u590d\u5408\u5173\u7cfb\u65b9\u6848\u7684\u6807\u91cf\uff0ccontrolActorId \u4fdd\u6301\u72ec\u7acb\u63a7\u5236\u9762\u8eab\u4efd\uff1b\u65e0\u5173\u8054\u7ea7\u8054\u6216\u672c\u5730\u56de\u8c03\u8986\u76d6\u3002 \u5df2\u5b8c\u6574\u5ba1\u67e5\u5f53\u524d\u6587\u4ef6\uff0c\u786e\u8ba4\u663e\u5f0f TenantEntityPersister + TenantOwnedEntity\u3001\u65e0\u79df\u6237\u5b57\u6bb5/\u8bbf\u95ee\u5668\u8986\u76d6\uff1b\u6b64\u7ed3\u8bba\u4ec5\u7528\u4e8e\u5f53\u524d\u6620\u5c04\u6e90\u7801\u767b\u8bb0\uff0c\u4e0d\u6279\u51c6\u53d1\u5e03\u3002 \u590d\u6838\u8bc1\u636e\uff1areports/multitenant/handoff-20260929/entity-review.json\u3002"
+      "review_reason": "userId/activeUserId/adminId 为有复合关系方案的标量，controlActorId 保持独立控制面身份；无关联级联或本地回调覆盖。 已完整审查当前文件，确认显式 TenantEntityPersister + TenantOwnedEntity、无租户字段/访问器覆盖；此结论仅用于当前映射源码登记，不批准发布。 复核证据：reports/multitenant/handoff-20260929/entity-review.json。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/support/SupportMessage.java": {
       "sha256": "b13910b80725b47076ec13d08cc8e6146d48b9ed9a60e0cd37481894bf8394e1",
@@ -8232,7 +8331,7 @@
         }
       ],
       "classification": "private_scoped",
-      "review_reason": "\u53bb\u91cd\u952e\u542b tenant_id\uff0cconversationId \u4e0e\u6b63\u6587/\u54c8\u5e0c\u4e8b\u5b9e\u5747 updatable=false\uff1b\u65e0 ORM \u7ea7\u8054\uff0csenderId \u591a\u6001\u8eab\u4efd\u7531\u670d\u52a1\u53e6\u884c\u9a8c\u8bc1\u3002 \u5df2\u5b8c\u6574\u5ba1\u67e5\u5f53\u524d\u6587\u4ef6\uff0c\u786e\u8ba4\u663e\u5f0f TenantEntityPersister + TenantOwnedEntity\u3001\u65e0\u79df\u6237\u5b57\u6bb5/\u8bbf\u95ee\u5668\u8986\u76d6\uff1b\u6b64\u7ed3\u8bba\u4ec5\u7528\u4e8e\u5f53\u524d\u6620\u5c04\u6e90\u7801\u767b\u8bb0\uff0c\u4e0d\u6279\u51c6\u53d1\u5e03\u3002 \u590d\u6838\u8bc1\u636e\uff1areports/multitenant/handoff-20260929/entity-review.json\u3002"
+      "review_reason": "去重键含 tenant_id，conversationId 与正文/哈希事实均 updatable=false；无 ORM 级联，senderId 多态身份由服务另行验证。 已完整审查当前文件，确认显式 TenantEntityPersister + TenantOwnedEntity、无租户字段/访问器覆盖；此结论仅用于当前映射源码登记，不批准发布。 复核证据：reports/multitenant/handoff-20260929/entity-review.json。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/support/SupportPermissionCatalog.java": {
       "sha256": "873ba265231ca1d620f5fe684faa20a9057baa05169fbf995bdb0332bd9667f7",
@@ -8261,7 +8360,7 @@
         }
       ],
       "classification": "private_scoped",
-      "review_reason": "\u4ee5 adminId \u4e3a\u4e3b\u952e\uff0c\u4ec5\u63a5\u53d7\u72b6\u6001\u4e0e\u5fc3\u8df3\u4e3a\u6807\u91cf\uff1b\u7ba1\u7406\u5458\u5173\u7cfb\u5728\u8fc1\u79fb\u6e05\u5355\u4e2d\u540c\u79df\u6237\u7ea6\u675f\uff0c\u79df\u6237\u5b57\u6bb5\u672a\u91cd\u58f0\u660e\u3002 \u5df2\u5b8c\u6574\u5ba1\u67e5\u5f53\u524d\u6587\u4ef6\uff0c\u786e\u8ba4\u663e\u5f0f TenantEntityPersister + TenantOwnedEntity\u3001\u65e0\u79df\u6237\u5b57\u6bb5/\u8bbf\u95ee\u5668\u8986\u76d6\uff1b\u6b64\u7ed3\u8bba\u4ec5\u7528\u4e8e\u5f53\u524d\u6620\u5c04\u6e90\u7801\u767b\u8bb0\uff0c\u4e0d\u6279\u51c6\u53d1\u5e03\u3002 \u590d\u6838\u8bc1\u636e\uff1areports/multitenant/handoff-20260929/entity-review.json\u3002"
+      "review_reason": "以 adminId 为主键，仅接受状态与心跳为标量；管理员关系在迁移清单中同租户约束，租户字段未重声明。 已完整审查当前文件，确认显式 TenantEntityPersister + TenantOwnedEntity、无租户字段/访问器覆盖；此结论仅用于当前映射源码登记，不批准发布。 复核证据：reports/multitenant/handoff-20260929/entity-review.json。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/support/SupportService.java": {
       "sha256": "6a4d52a3d595c82cf53340ee3a3af9bd82343598d5d6d31360d3f2675221cea8",
@@ -11636,7 +11735,9 @@
       "review_reason": "Global CONTROL-only actor/table key; no tenant owned business data; V2026093002 FK to real control_admin, composite unique, no token/password storage."
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/control/ControlTablePreferenceController.java": {
-      "sha256": "6690318287f59145b176ca1561ee49f565a94c5c72873b3e4cb386c7e84be869",
+      "classification": "boundary",
+      "review_reason": "Explicit authenticated ROLE_CONTROL, typed valid actor, no tenant/access session/context. Actor/table derived server-side, same strict payload validation; saveAndFlush plus real audit in one transaction. No caller actor field or fallback identity. 2026-10-07 independent delta review: only UTF-8 JSON produces changed. Full boundary retains authenticated independent ROLE_CONTROL, valid positive actor, no tenant/access session/context, and server actor/table-derived key. Shared strict presentation validation plus saveAndFlush and audit remain one transaction; ordinary admin credentials and caller actor cannot select control keys. Exact SHA matches prior directed review; source review only.",
+      "sha256": "4563e606ac049a0dedcad71b65e1566ecddaae678db978bdf9ebd4a25bc968c1",
       "surfaces": [
         {
           "kind": "identity_boundary",
@@ -11658,9 +11759,7 @@
           "line": 21,
           "statement_sha256": "a81dec4523a210646bc1646821e2139edf115be746ff140a0f4f8647ce471654"
         }
-      ],
-      "classification": "boundary",
-      "review_reason": "Explicit authenticated ROLE_CONTROL, typed valid actor, no tenant/access session/context. Actor/table derived server-side, same strict payload validation; saveAndFlush plus real audit in one transaction. No caller actor field or fallback identity."
+      ]
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/control/ControlTablePreferenceRepository.java": {
       "sha256": "26222cd4296c2101ea4a0096c7e3a16cb17ec193b990b941d30d14940d83da78",
@@ -12730,7 +12829,7 @@
       "sha256": "a2c1621f82a3ed43c608104a0495fa0d3c46f513cf778250a473aa1ad030a6aa",
       "surfaces": [],
       "classification": "boundary",
-      "review_reason": "\u6bcfGET calendar:view\uff1bedit/publish/sync/import\u5206\u522baction\uff1b\u624b\u52a8import actor+verified/reason+2MB chars/UTF8/\u767d\u540d\u5355\uff1b\u56fa\u5b9async\u4e0d\u63a5\u53d7URL\u3002 Evidence/audit: frontend/insights-source-review.json. Scope/limit: \u89c1\u5df2\u62a5Root\u7684AGENT_UUID\uff1a\u901a\u7528BackendAccess\u5bf9\u83b7\u6388\u83dc\u5355agent\u7684UUID vars.id\u6570\u5b57\u89e3\u6790\u53ef500\uff0c\u9700\u6574\u4f53agent\u610f\u56fe\u53ca\u6d4b\u8bd5\u3002"
+      "review_reason": "每GET calendar:view；edit/publish/sync/import分别action；手动import actor+verified/reason+2MB chars/UTF8/白名单；固定sync不接受URL。 Evidence/audit: frontend/insights-source-review.json. Scope/limit: 见已报Root的AGENT_UUID：通用BackendAccess对获授菜单agent的UUID vars.id数字解析可500，需整体agent意图及测试。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/admin/AdminMarketDepthController.java": {
       "sha256": "dd3ac3f8ca53cf18501e181cd9dfa94b1f95d2ea91c61ca0dc41459533347ad1",
@@ -12753,13 +12852,13 @@
       "sha256": "d56d70fcbf0b78a9069f1ca8a9188c18ed585a5a490f160d45153702e0715cf7",
       "surfaces": [],
       "classification": "boundary",
-      "review_reason": "\u6bcfGET news:view\uff1bsource/sync/edit/import\u5206\u522baction\uff1b\u540c\u6b65\u524d\u9a8c\u8bc1tenant\u542f\u7528source\uff1bimport actor+parser UTF8\u5927\u5c0f/\u8bb8\u53ef\u6750\u6599\uff0c\u9ed8\u8ba4\u65b0\u6587\u7ae0hidden\u3002 Evidence/audit: frontend/insights-source-review.json. Scope/limit: AGENT_UUID\u540c\u4e0a\uff1bcontroller chars\u9650\u5236\u540eparser\u989d\u5916UTF8\u5927\u5c0f\u68c0\u67e5\uff0c\u672a\u53d1\u73b0size\u7ed5\u8fc7\u3002"
+      "review_reason": "每GET news:view；source/sync/edit/import分别action；同步前验证tenant启用source；import actor+parser UTF8大小/许可材料，默认新文章hidden。 Evidence/audit: frontend/insights-source-review.json. Scope/limit: AGENT_UUID同上；controller chars限制后parser额外UTF8大小检查，未发现size绕过。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/admin/AdminTraderController.java": {
       "sha256": "3ecb4445424fa36475b2a71158286bad81db72fecbb96136c6b0f663e8192434",
       "surfaces": [],
       "classification": "boundary",
-      "review_reason": "\u6240\u6709read\u542baudit/preview/template\u4e3atraders:view\uff1bedit/publish/disable/sort/equity/history\u9010\u4e00action\uff1bno-store\uff1bImportFailure400\u4e0d\u90e8\u5206\u5199\u3002 Evidence/audit: frontend/insights-source-review.json. Scope/limit: AGENT_UUID\u540c\u4e0a\uff1b\u5199actor\u9650\u5b9aadmin/super\uff0c\u4e0d\u80fd\u636e\u83dc\u5355grant\u58f0\u79f0agent\u53ef\u5199\u3002"
+      "review_reason": "所有read含audit/preview/template为traders:view；edit/publish/disable/sort/equity/history逐一action；no-store；ImportFailure400不部分写。 Evidence/audit: frontend/insights-source-review.json. Scope/limit: AGENT_UUID同上；写actor限定admin/super，不能据菜单grant声称agent可写。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/insights/CalendarAudit.java": {
       "sha256": "d64962a5adf748497a9ff20569b027e34988c7f1161d3cc457682fef0eab8135",
@@ -12771,7 +12870,7 @@
         }
       ],
       "classification": "private_scoped",
-      "review_reason": "TenantOwnedEntity + TenantEntityPersister\uff1btenant/environment/event\u7d22\u5f15\uff0c\u524d\u540eJSON\u53caactor\u4ec5\u79c1\u6709\u5ba1\u8ba1\u3002 Evidence/audit: frontend/insights-source-review.json. Scope/limit: \u672a\u53d1\u73b0\u786e\u8ba4\u7684\u8de8\u79df\u6237\u8bfb\u5199\u7f3a\u53e3\uff1b\u6d4b\u8bd5\u6267\u884c\u7ed3\u679c\u7531\u6839\u4ee3\u7406\u6700\u7ec8\u62a5\u544a\u786e\u8ba4\u3002"
+      "review_reason": "TenantOwnedEntity + TenantEntityPersister；tenant/environment/event索引，前后JSON及actor仅私有审计。 Evidence/audit: frontend/insights-source-review.json. Scope/limit: 未发现确认的跨租户读写缺口；测试执行结果由根代理最终报告确认。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/insights/CalendarController.java": {
       "sha256": "1cfb1a43a18955ce05c794432805fc9a600575a94cc9e66a84f013d5d63cefee",
@@ -12793,13 +12892,13 @@
         }
       ],
       "classification": "boundary",
-      "review_reason": "GET permitAll\u4f46\u670d\u52a1tenant+environment+published\uff1btenant\u672c\u5730600/min\u9884\u7b97\uff1bICS\u53ea\u54cd\u5e94\u5b57\u7b26\u4e32\uff0c\u4e0d\u843d\u6587\u4ef6\uff0c\u56fa\u5b9a\u4e0b\u8f7d\u540d\u3002 Evidence/audit: frontend/insights-source-review.json. Scope/limit: \u9884\u7b97\u4ec5\u5355\u8fdb\u7a0bLRU256\uff0c\u975e\u5206\u5e03\u5f0f\u9650\u6d41\uff1b\u751f\u4ea7CDN\u4e0d\u5f97\u5ffd\u7565host tenant\u7f13\u5b58\u3002Spring\u5b89\u5168\u94fe\u9ed8\u8ba4cache headers\u53e6\u53d7\u90e8\u7f72\u5f71\u54cd\u3002"
+      "review_reason": "GET permitAll但服务tenant+environment+published；tenant本地600/min预算；ICS只响应字符串，不落文件，固定下载名。 Evidence/audit: frontend/insights-source-review.json. Scope/limit: 预算仅单进程LRU256，非分布式限流；生产CDN不得忽略host tenant缓存。Spring安全链默认cache headers另受部署影响。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/insights/CalendarData.java": {
       "sha256": "075bca8c123e927e3c137d0f43e339b99134a1115f3a0a0c3c1ab555239eb78a",
       "surfaces": [],
       "classification": "boundary",
-      "review_reason": "\u673a\u6784/\u6307\u6807/\u7edf\u8ba1\u671f/\u7a33\u5b9aUUID\u3001\u65f6\u533a/\u91d1\u989d/\u9636\u6bb5\u6821\u9a8c\uff1bURL\u9650\u5b9a\u673a\u6784HTTPS\u65e0credentials/port/fragment/CRLF\uff1b\u65e0DB/HTTP/file\u3002 Evidence/audit: frontend/insights-source-review.json. Scope/limit: \u672a\u53d1\u73b0\u786e\u8ba4\u7684\u8de8\u79df\u6237\u8bfb\u5199\u7f3a\u53e3\uff1b\u6d4b\u8bd5\u6267\u884c\u7ed3\u679c\u7531\u6839\u4ee3\u7406\u6700\u7ec8\u62a5\u544a\u786e\u8ba4\u3002"
+      "review_reason": "机构/指标/统计期/稳定UUID、时区/金额/阶段校验；URL限定机构HTTPS无credentials/port/fragment/CRLF；无DB/HTTP/file。 Evidence/audit: frontend/insights-source-review.json. Scope/limit: 未发现确认的跨租户读写缺口；测试执行结果由根代理最终报告确认。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/insights/CalendarEvent.java": {
       "sha256": "d14fab54bd5dcea3963587204896cd6111fe69371de3567ee9209041f1481faa",
@@ -12811,7 +12910,7 @@
         }
       ],
       "classification": "private_scoped",
-      "review_reason": "tenant/environment/eventId\u552f\u4e00\uff0c\u73af\u5883/\u7a33\u5b9a\u8eab\u4efd\u4e0d\u53ef\u66f4\u65b0\uff1bpublished\u3001manualLock\u3001JSON\u3001\u7248\u672c\u5c5e\u4e8e\u79df\u6237\u3002 Evidence/audit: frontend/insights-source-review.json. Scope/limit: \u672a\u53d1\u73b0\u786e\u8ba4\u7684\u8de8\u79df\u6237\u8bfb\u5199\u7f3a\u53e3\uff1b\u6d4b\u8bd5\u6267\u884c\u7ed3\u679c\u7531\u6839\u4ee3\u7406\u6700\u7ec8\u62a5\u544a\u786e\u8ba4\u3002"
+      "review_reason": "tenant/environment/eventId唯一，环境/稳定身份不可更新；published、manualLock、JSON、版本属于租户。 Evidence/audit: frontend/insights-source-review.json. Scope/limit: 未发现确认的跨租户读写缺口；测试执行结果由根代理最终报告确认。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/insights/CalendarJobs.java": {
       "sha256": "57d35f7bb0859e622cbb8e57f9d968e827fab5b56fec6018c64fe4008f46ede9",
@@ -12823,13 +12922,13 @@
         }
       ],
       "classification": "private_scoped",
-      "review_reason": "\u5148\u5168\u5c40\u516c\u5171\u6293\u53d6\uff0c\u518dTenantJobRunner.each\u6253\u5f00scope+\u9010\u79df\u6237REQUIRES_NEW\uff0c\u5bfc\u5165/\u63d0\u9192\u4e3a\u540c\u6b65lambda\uff1b\u65e0\u8de8\u7ebf\u7a0bcontext capture\u3002 Evidence/audit: frontend/insights-source-review.json. Scope/limit: \u73b0\u5b58integration\u4e3b\u8981\u76f4\u63a5\u8c03service/jobs.call\uff0c\u7f3a\u5c11\u5bf9tick\u904d\u5386\u591atenant\u7684\u4e13\u95e8\u65ad\u8a00\uff1broot\u5982\u8981\u6c42\u8c03\u5ea6\u5c42\u9a8c\u6536\uff0c\u53ef\u7ed9\u4e24\u4e2atenant tick\u6d4b\u8bd5\u3002"
+      "review_reason": "先全局公共抓取，再TenantJobRunner.each打开scope+逐租户REQUIRES_NEW，导入/提醒为同步lambda；无跨线程context capture。 Evidence/audit: frontend/insights-source-review.json. Scope/limit: 现存integration主要直接调service/jobs.call，缺少对tick遍历多tenant的专门断言；root如要求调度层验收，可给两个tenant tick测试。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/insights/CalendarParser.java": {
       "sha256": "a68d72e361e003630905f7058a4216c0ff07d2fd892eb98e4d0492843d67c455",
       "surfaces": [],
       "classification": "stateless",
-      "review_reason": "\u5b57\u7b26\u4e32\u548cStringReader\u89e3\u6790\u5b98\u65b9ICS/RSS/JSON\uff1b\u7981DTD/\u5b9e\u4f53/XInclude\u548c\u5916\u90e8schema\uff1b2MB/\u6761\u76ee\u4e0a\u9650\uff0c\u65e0File\u8f93\u5165\u6216\u4efb\u610fHTTP\u3002 Evidence/audit: frontend/insights-source-review.json. Scope/limit: CalendarParser.bls\u672c\u8eab\u672a\u5355\u72ecraw-size\u68c0\u67e5\uff0c\u751f\u4ea7\u5165\u53e3\u5df2\u7531fetch/controller 2MB\u5b88\u536b\uff1b\u5b83\u53ea\u88ab\u56fa\u5b9aCalendarSync\u8c03\u7528\u3002"
+      "review_reason": "字符串和StringReader解析官方ICS/RSS/JSON；禁DTD/实体/XInclude和外部schema；2MB/条目上限，无File输入或任意HTTP。 Evidence/audit: frontend/insights-source-review.json. Scope/limit: CalendarParser.bls本身未单独raw-size检查，生产入口已由fetch/controller 2MB守卫；它只被固定CalendarSync调用。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/insights/CalendarReminder.java": {
       "sha256": "dbfc6a6206343053e3dc1f01a4ae84d9765af74733c419e772fa0ac67ccb8b9e",
@@ -12841,7 +12940,7 @@
         }
       ],
       "classification": "private_scoped",
-      "review_reason": "tenant/environment/user/event/lead\u552f\u4e00\uff0c\u7528\u6237\u63d0\u9192\u4e0edelivery receipt\u4e0d\u53ef\u5171\u4eab\u3002 Evidence/audit: frontend/insights-source-review.json. Scope/limit: \u672a\u53d1\u73b0\u786e\u8ba4\u7684\u8de8\u79df\u6237\u8bfb\u5199\u7f3a\u53e3\uff1b\u6d4b\u8bd5\u6267\u884c\u7ed3\u679c\u7531\u6839\u4ee3\u7406\u6700\u7ec8\u62a5\u544a\u786e\u8ba4\u3002"
+      "review_reason": "tenant/environment/user/event/lead唯一，用户提醒与delivery receipt不可共享。 Evidence/audit: frontend/insights-source-review.json. Scope/limit: 未发现确认的跨租户读写缺口；测试执行结果由根代理最终报告确认。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/insights/CalendarService.java": {
       "sha256": "cd7d4860ebcf648cde56893bc3f53405806ef7fc1b57c2cc80fda950da7d4cbb",
@@ -12903,7 +13002,7 @@
         }
       ],
       "classification": "private_scoped",
-      "review_reason": "\u6240\u6709JPQL\u663e\u5f0ftenant+environment\uff1bevent published\u5b88\u536b\uff0cuser()\u9a8c\u8bc1ROLE_USER\u5e76TenantEntities\uff1b\u7f16\u8f91\u52a0\u9501/version/actor\uff1b\u63d0\u9192user\u8fc7\u6ee4\uff0c\u6295\u9012\u9501\u5f53\u524dtenant\u7528\u6237\uff1b\u65e0native SQL/file\u3002 Evidence/audit: frontend/insights-source-review.json. Scope/limit: \u7ec6\u7c92\u5ea6menu/action\u7531BackendAccess\u63a7\u5236\u5668\u524d\u7f6e\u68c0\u67e5\uff1b\u5185\u90e8admin\u5e03\u5c14\u4e0d\u662f\u72ec\u7acb\u6388\u6743API\u3002\u5916\u90e8\u8c03\u7528\u8005\u5b8c\u6574\u626b\u63cf\u53ea\u6709\u672c\u7ec4controller/sync/jobs\u3002"
+      "review_reason": "所有JPQL显式tenant+environment；event published守卫，user()验证ROLE_USER并TenantEntities；编辑加锁/version/actor；提醒user过滤，投递锁当前tenant用户；无native SQL/file。 Evidence/audit: frontend/insights-source-review.json. Scope/limit: 细粒度menu/action由BackendAccess控制器前置检查；内部admin布尔不是独立授权API。外部调用者完整扫描只有本组controller/sync/jobs。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/insights/CalendarSource.java": {
       "sha256": "25febb9ded760293d8c61fecc78b304fd667d7990533fc3d1ad4627f4b2805cc",
@@ -12915,7 +13014,7 @@
         }
       ],
       "classification": "shared_public",
-      "review_reason": "\u4ec5\u5b98\u65b9\u56fa\u5b9a\u6e90\u54cd\u5e94\u3001\u5065\u5eb7\u3001lease/budget\uff1b\u4e3b\u952eenvironment:source\uff0c\u4e0d\u542b\u4eba\u5de5\u5185\u5bb9\u6216\u7528\u6237\u6570\u636e\u3002 Evidence/audit: frontend/insights-source-review.json. Scope/limit: \u5171\u4eab\u9884\u7b97\u548c\u5065\u5eb7\u8de8\u79df\u6237\u8026\u5408\u662f\u660e\u786e\u516c\u5171\u6e90\u8fb9\u754c\uff0c\u4e0d\u53ef\u628a\u7ba1\u7406\u5458\u6838\u9a8c\u6750\u6599\u5b58\u5165\u8be5\u5b9e\u4f53\u3002"
+      "review_reason": "仅官方固定源响应、健康、lease/budget；主键environment:source，不含人工内容或用户数据。 Evidence/audit: frontend/insights-source-review.json. Scope/limit: 共享预算和健康跨租户耦合是明确公共源边界，不可把管理员核验材料存入该实体。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/insights/CalendarSourceUpdate.java": {
       "sha256": "7b91b6f6accc7291e16a2bfb62bcb95c5c99ecaf7493c2ad41cd27fe24e52ace",
@@ -12927,7 +13026,7 @@
         }
       ],
       "classification": "shared_public",
-      "review_reason": "\u53ea\u5b58\u73af\u5883/\u5b98\u65b9source\u7684\u6293\u53d6\u72b6\u6001\u3001HTTP\u3001hash/error\uff0c\u4e0d\u542btenant\u79c1\u6709\u4e8b\u4ef6\uff1bhistory\u660e\u786e\u6309environment/source\u3002 Evidence/audit: frontend/insights-source-review.json. Scope/limit: \u5404\u79df\u6237calendar:view\u53ef\u89c1\u5171\u4eab\u516c\u5171\u6e90\u5386\u53f2\uff1b\u4e0d\u4ee3\u8868\u79c1\u6709\u5ba1\u8ba1\u3002"
+      "review_reason": "只存环境/官方source的抓取状态、HTTP、hash/error，不含tenant私有事件；history明确按environment/source。 Evidence/audit: frontend/insights-source-review.json. Scope/limit: 各租户calendar:view可见共享公共源历史；不代表私有审计。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/insights/CalendarSync.java": {
       "sha256": "f3415d0e084ecda33ef12c0d807f168f519aab75300b26cf64ae9156e400f6a6",
@@ -12974,13 +13073,13 @@
         }
       ],
       "classification": "shared_public",
-      "review_reason": "\u767d\u540d\u5355\u516d\u56fa\u5b9a\u673a\u6784URL\uff0c\u4e0d\u968ftenant/input\u6539\u76ee\u6807\uff1b\u65e0redirect\uff0c4s/8s/12s\u548c2MB\uff1b\u5171\u4eabREQUIRES_NEW lease/cache\uff0c\u4ec5\u6709\u5f53\u524dTenantContext\u624d\u5199private import\uff1bhistory\u73af\u5883/\u56fa\u5b9asource\u3002 Evidence/audit: frontend/insights-source-review.json. Scope/limit: \u79df\u6237\u7ba1\u7406\u5458sync\u4f7f\u7528\u5171\u4eab\u9884\u7b97\uff0c\u53ef\u5f71\u54cd\u5176\u4ed6\u79df\u6237\u6e90\u5065\u5eb7\uff1b\u4e0d\u542b\u5bc6\u94a5\u3002live\u771f\u5b9e\u7f51\u7edc\u4e3a\u6761\u4ef6\u6d4b\u8bd5\uff0c\u672c\u62a5\u544a\u4e0d\u5192\u79f0\u5df2\u8fd0\u884c\u3002"
+      "review_reason": "白名单六固定机构URL，不随tenant/input改目标；无redirect，4s/8s/12s和2MB；共享REQUIRES_NEW lease/cache，仅有当前TenantContext才写private import；history环境/固定source。 Evidence/audit: frontend/insights-source-review.json. Scope/limit: 租户管理员sync使用共享预算，可影响其他租户源健康；不含密钥。live真实网络为条件测试，本报告不冒称已运行。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/insights/UserCalendarController.java": {
       "sha256": "e94bff1984aec5eaabfc8d26e586e2cc9ee266edbdfc239facf10d153f1c9be3",
       "surfaces": [],
       "classification": "boundary",
-      "review_reason": "/api/user route\u7531ROLE_USER\u4fdd\u62a4\uff1b\u63d0\u9192user\u6765\u81ea\u8ba4\u8bc1\u540d\u800c\u975e\u8f93\u5165\uff0cservice\u9a8c\u8bc1tenant\u62e5\u6709\u7528\u6237\u548cevent\u3002 Evidence/audit: frontend/insights-source-review.json. Scope/limit: \u672a\u53d1\u73b0\u786e\u8ba4\u7684\u8de8\u79df\u6237\u8bfb\u5199\u7f3a\u53e3\uff1b\u6d4b\u8bd5\u6267\u884c\u7ed3\u679c\u7531\u6839\u4ee3\u7406\u6700\u7ec8\u62a5\u544a\u786e\u8ba4\u3002"
+      "review_reason": "/api/user route由ROLE_USER保护；提醒user来自认证名而非输入，service验证tenant拥有用户和event。 Evidence/audit: frontend/insights-source-review.json. Scope/limit: 未发现确认的跨租户读写缺口；测试执行结果由根代理最终报告确认。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/insights/news/NewsArticle.java": {
       "sha256": "90687974fd325efdd479b490fd5178c1a5b63f56f699e027da98a3eb77bc4e15",
@@ -12992,7 +13091,7 @@
         }
       ],
       "classification": "private_scoped",
-      "review_reason": "tenant/environment/article\u552f\u4e00\uff1bhidden/sort/category/metadata\u5c5e\u4e8etenant\uff0cTenantEntityPersister\u5b88\u536b\u3002 Evidence/audit: frontend/insights-source-review.json. Scope/limit: \u672a\u53d1\u73b0\u786e\u8ba4\u7684\u8de8\u79df\u6237\u8bfb\u5199\u7f3a\u53e3\uff1b\u6d4b\u8bd5\u6267\u884c\u7ed3\u679c\u7531\u6839\u4ee3\u7406\u6700\u7ec8\u62a5\u544a\u786e\u8ba4\u3002"
+      "review_reason": "tenant/environment/article唯一；hidden/sort/category/metadata属于tenant，TenantEntityPersister守卫。 Evidence/audit: frontend/insights-source-review.json. Scope/limit: 未发现确认的跨租户读写缺口；测试执行结果由根代理最终报告确认。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/insights/news/NewsAudit.java": {
       "sha256": "0bdf7d1f973da1a42b26cb38246867620346495de8ea7e0103854118ab295a4e",
@@ -13004,13 +13103,13 @@
         }
       ],
       "classification": "private_scoped",
-      "review_reason": "tenant/environment\u5ba1\u8ba1\u7d22\u5f15\uff0cactor/\u6750\u6599/\u524d\u540eJSON\u53ea\u5728\u79c1\u6709\u8868\u3002 Evidence/audit: frontend/insights-source-review.json. Scope/limit: \u672a\u53d1\u73b0\u786e\u8ba4\u7684\u8de8\u79df\u6237\u8bfb\u5199\u7f3a\u53e3\uff1b\u6d4b\u8bd5\u6267\u884c\u7ed3\u679c\u7531\u6839\u4ee3\u7406\u6700\u7ec8\u62a5\u544a\u786e\u8ba4\u3002"
+      "review_reason": "tenant/environment审计索引，actor/材料/前后JSON只在私有表。 Evidence/audit: frontend/insights-source-review.json. Scope/limit: 未发现确认的跨租户读写缺口；测试执行结果由根代理最终报告确认。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/insights/news/NewsCatalog.java": {
       "sha256": "c3e2fe4c07d31c68883b3d41ec9b1a4c765b096593643b87643cb03dae985d77",
       "surfaces": [],
       "classification": "shared_public",
-      "review_reason": "\u4e94\u56fa\u5b9afetch/license URL\u3001\u5b98\u65b9\u6e90\u96c6\u5408\u3001\u95f4\u9694/\u9884\u7b97\u5e38\u91cf\uff1b\u672a\u77e5source\u62d2\u7edd\uff0c\u4e0d\u80fd\u7528\u524d\u7aefURL\u66ff\u6362\u6293\u53d6\u3002 Evidence/audit: frontend/insights-source-review.json. Scope/limit: \u672a\u53d1\u73b0\u786e\u8ba4\u7684\u8de8\u79df\u6237\u8bfb\u5199\u7f3a\u53e3\uff1b\u6d4b\u8bd5\u6267\u884c\u7ed3\u679c\u7531\u6839\u4ee3\u7406\u6700\u7ec8\u62a5\u544a\u786e\u8ba4\u3002"
+      "review_reason": "五固定fetch/license URL、官方源集合、间隔/预算常量；未知source拒绝，不能用前端URL替换抓取。 Evidence/audit: frontend/insights-source-review.json. Scope/limit: 未发现确认的跨租户读写缺口；测试执行结果由根代理最终报告确认。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/insights/news/NewsController.java": {
       "sha256": "4e23acd3f3d62310c1e2f3d1585fe6cf04cde5bbd6b50d475849e01a352f7aaf",
@@ -13032,7 +13131,7 @@
         }
       ],
       "classification": "boundary",
-      "review_reason": "GET\u516c\u5f00\u4f46NewsService tenant/environment/hidden/enabled\u8c13\u8bcd\uff1b600/min tenant\u672c\u5730\u9884\u7b97\uff0c\u4e0d\u89e6\u53d1upstream fetch\u3002 Evidence/audit: frontend/insights-source-review.json. Scope/limit: \u5355\u8fdb\u7a0bLRU256\u4e0d\u662f\u96c6\u7fa4\u9632\u6ee5\u7528\u4fdd\u8bc1\u3002"
+      "review_reason": "GET公开但NewsService tenant/environment/hidden/enabled谓词；600/min tenant本地预算，不触发upstream fetch。 Evidence/audit: frontend/insights-source-review.json. Scope/limit: 单进程LRU256不是集群防滥用保证。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/insights/news/NewsFeed.java": {
       "sha256": "8f1ad3523b6b2c67a74a3eb8248c348a8d7f178448d228dacf3abced0219c915",
@@ -13044,13 +13143,13 @@
         }
       ],
       "classification": "shared_public",
-      "review_reason": "environment:source\u4e3b\u952e\uff0c\u4ec5\u5df2\u89e3\u6790\u516c\u5171metadata/\u5065\u5eb7/lease/budget\uff1bAPI key\u4ec5server config\uff0c\u4e0d\u6301\u4e45\u8be5\u5b9e\u4f53\u3002 Evidence/audit: frontend/insights-source-review.json. Scope/limit: NewsData\u5168\u5c40\u8d26\u6237\u6388\u6743\u548cfeed\u9884\u7b97\u5c5e\u4e8e\u8fd0\u7ef4\u914d\u7f6e\uff1b\u79df\u6237licenseEvidence\u4ecdprivate\u3002"
+      "review_reason": "environment:source主键，仅已解析公共metadata/健康/lease/budget；API key仅server config，不持久该实体。 Evidence/audit: frontend/insights-source-review.json. Scope/limit: NewsData全局账户授权和feed预算属于运维配置；租户licenseEvidence仍private。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/insights/news/NewsItem.java": {
       "sha256": "4968ad4c28918d43cd09868898cf9c3543414e6ea10fdee0cc34d52262e59d03",
       "surfaces": [],
       "classification": "stateless",
-      "review_reason": "\u53eaheadline/publisher/originalURL/\u6458\u8981/\u65f6\u95f4\uff1b\u4e0d\u643a\u5e26\u79df\u6237\u7528\u6237\u3001secret\u3001\u6b63\u6587/\u56fe\u7247\u3002 Evidence/audit: frontend/insights-source-review.json. Scope/limit: \u672a\u53d1\u73b0\u786e\u8ba4\u7684\u8de8\u79df\u6237\u8bfb\u5199\u7f3a\u53e3\uff1b\u6d4b\u8bd5\u6267\u884c\u7ed3\u679c\u7531\u6839\u4ee3\u7406\u6700\u7ec8\u62a5\u544a\u786e\u8ba4\u3002"
+      "review_reason": "只headline/publisher/originalURL/摘要/时间；不携带租户用户、secret、正文/图片。 Evidence/audit: frontend/insights-source-review.json. Scope/limit: 未发现确认的跨租户读写缺口；测试执行结果由根代理最终报告确认。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/insights/news/NewsJobs.java": {
       "sha256": "9d74fcd0a41dad8e220396724fdbff985ac9e7cf5a5b81314dda1a513ac2ed2b",
@@ -13062,13 +13161,13 @@
         }
       ],
       "classification": "private_scoped",
-      "review_reason": "\u4e24\u6b21TenantJobRunner.each\u5206\u522b\u6536enabled\u548c\u6309tenant\u5bfc\u5165\uff0c\u4e2d\u95f4\u516c\u5171\u6e90fetch\uff1bactive\u662f\u672c\u6b21tick\u672c\u5730\u96c6\u5408\uff0c\u540c\u6b65lambda\u65e0\u7ebf\u7a0b\u8eab\u4efd\u501f\u7528\u3002 Evidence/audit: frontend/insights-source-review.json. Scope/limit: \u73b0\u6709integration\u6ca1\u6709\u5355\u72ectick\u591atenant\u8c03\u5ea6\u6d4b\u8bd5\uff1b\u53ef\u8865\u5b9e\u9645two-tenant disable/enable+tick\u8bc1\u660e\u5bfc\u5165\u4e0d\u4e32\u79df\u6237\u3002"
+      "review_reason": "两次TenantJobRunner.each分别收enabled和按tenant导入，中间公共源fetch；active是本次tick本地集合，同步lambda无线程身份借用。 Evidence/audit: frontend/insights-source-review.json. Scope/limit: 现有integration没有单独tick多tenant调度测试；可补实际two-tenant disable/enable+tick证明导入不串租户。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/insights/news/NewsParser.java": {
       "sha256": "49dfe25dac7ed1aa7cb6019228bb9ceea29682a01c87d3ed39939040ef34177a",
       "surfaces": [],
       "classification": "stateless",
-      "review_reason": "XML\u7981DOCTYPE/\u5916\u90e8\u5b9e\u4f53/schema\uff1b2MB UTF8/500entries\uff1bHTML\u7eaf\u6587\u672c+\u957f\u5ea6\uff1b\u5b98\u65b9\u6807\u9898\u8def\u5f84\u8303\u56f4\uff1b\u7d22\u5f15\u4ec5metadata\uff0c\u4e0d\u6293originalURL\u3002 Evidence/audit: frontend/insights-source-review.json. Scope/limit: url()\u53ea\u8bed\u6cd5\u62d2\u7eddIP/local\u540d\u79f0\uff0c\u4e0dDNS\u89e3\u6790\u9a8c\u8bc1\u516c\u7f51\u3002\u5f53\u524d\u4ec5\u5c55\u793a\u5916\u94fe\uff0c\u975eSSRF\uff1b\u82e5\u5c06\u6765\u6293\u6b63\u6587\u5fc5\u987b\u53e6\u5efa\u89e3\u6790/redirect\u9632\u62a4\uff0c\u4e0d\u80fd\u590d\u7528\u6b64\u65b9\u6cd5\u505aSSRF\u8bc1\u660e\u3002"
+      "review_reason": "XML禁DOCTYPE/外部实体/schema；2MB UTF8/500entries；HTML纯文本+长度；官方标题路径范围；索引仅metadata，不抓originalURL。 Evidence/audit: frontend/insights-source-review.json. Scope/limit: url()只语法拒绝IP/local名称，不DNS解析验证公网。当前仅展示外链，非SSRF；若将来抓正文必须另建解析/redirect防护，不能复用此方法做SSRF证明。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/insights/news/NewsService.java": {
       "sha256": "4debd956de716ff2a50c7023f59cbac026038d477a224fbc7ed1a8ffd0d0f6e6",
@@ -13105,7 +13204,7 @@
         }
       ],
       "classification": "private_scoped",
-      "review_reason": "\u6240\u6709JPQLtenant+environment\uff1bpublic\u4ec5enabled source\u4e14hidden=false\uff1b\u6765\u6e90\u8bbe\u7f6etenant\u79c1\u6709\uff1bimport\u5171\u4eabfeed\u9501\u4e32\u884c\u4f46\u53ea\u5199\u5f53\u524dtenant\u6587\u7ae0\uff1baudit actor\uff0c\u7248\u672c\u51b2\u7a81guard\u3002 Evidence/audit: frontend/insights-source-review.json. Scope/limit: importBatch\u63a5\u53d7\u5df2\u89e3\u6790Batch\uff0c\u65e0\u4e8c\u6b21\u5b8c\u6574item\u6821\u9a8c\uff1b\u5b9e\u9645caller\u4ec5\u5185\u90e8sync/parser controller\uff0c\u4e0d\u80fd\u66b4\u9732\u76f4\u63a5JSON Batch API\u3002"
+      "review_reason": "所有JPQLtenant+environment；public仅enabled source且hidden=false；来源设置tenant私有；import共享feed锁串行但只写当前tenant文章；audit actor，版本冲突guard。 Evidence/audit: frontend/insights-source-review.json. Scope/limit: importBatch接受已解析Batch，无二次完整item校验；实际caller仅内部sync/parser controller，不能暴露直接JSON Batch API。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/insights/news/NewsSourceSetting.java": {
       "sha256": "68db613a1c608ed8d3490cfceee25c086c403751cf920efe2c2a155e6b38e648",
@@ -13117,7 +13216,7 @@
         }
       ],
       "classification": "private_scoped",
-      "review_reason": "tenant/environment/source\u552f\u4e00\uff1b\u79df\u6237enabled/licenseReview\u6750\u6599\u4e0d\u8fdb\u5165\u5171\u4eabfeed\u3002 Evidence/audit: frontend/insights-source-review.json. Scope/limit: \u672a\u53d1\u73b0\u786e\u8ba4\u7684\u8de8\u79df\u6237\u8bfb\u5199\u7f3a\u53e3\uff1b\u6d4b\u8bd5\u6267\u884c\u7ed3\u679c\u7531\u6839\u4ee3\u7406\u6700\u7ec8\u62a5\u544a\u786e\u8ba4\u3002"
+      "review_reason": "tenant/environment/source唯一；租户enabled/licenseReview材料不进入共享feed。 Evidence/audit: frontend/insights-source-review.json. Scope/limit: 未发现确认的跨租户读写缺口；测试执行结果由根代理最终报告确认。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/insights/news/NewsSync.java": {
       "sha256": "170a2cbea3d348c60b3788d7f35db0789299802f8e90873cf2cbca7e3f477c1d",
@@ -13134,7 +13233,7 @@
         }
       ],
       "classification": "shared_public",
-      "review_reason": "\u56fa\u5b9acatalog\u7f51\u7edc\u76ee\u6807\u3001redirect\u7981\u7528\u30014/8/12s+2MB\uff1bsecret query\u4e0d\u56de\u663e\u3001\u4e0d\u5b58cache\uff1b\u5f02\u5e38\u53ea\u7c7b\u578b\uff1b\u73af\u5883\u9694\u79bb\u7684public feed lease/budget\uff0c\u65e0tenant\u6587\u7ae0\u5199\u3002 Evidence/audit: frontend/insights-source-review.json. Scope/limit: source fetch\u56de\u653espy\u4e0d\u7b49\u4e8elive\u5916\u90e8\u7f51\u7edc\u5df2\u9a8c\uff1b\u5168\u5c40NEWSDATA key/\u8bb8\u53ef\u4e0d\u80fd\u53d6\u4ee3tenant\u4eba\u5de5\u6388\u6743\u3002"
+      "review_reason": "固定catalog网络目标、redirect禁用、4/8/12s+2MB；secret query不回显、不存cache；异常只类型；环境隔离的public feed lease/budget，无tenant文章写。 Evidence/audit: frontend/insights-source-review.json. Scope/limit: source fetch回放spy不等于live外部网络已验；全局NEWSDATA key/许可不能取代tenant人工授权。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/insights/traders/TraderAudit.java": {
       "sha256": "c4dfc2746556a6ae1f92f0ffcda6cc70d3928f9cbde49655f735b2c3d4f6e031",
@@ -13146,7 +13245,7 @@
         }
       ],
       "classification": "private_scoped",
-      "review_reason": "tenant/environment\u5ba1\u8ba1scope\uff0cactor/reason/object/\u524d\u540eJSON\u53eaadmin:view\u53ef\u8bfb\u3002 Evidence/audit: frontend/insights-source-review.json. Scope/limit: \u672a\u53d1\u73b0\u786e\u8ba4\u7684\u8de8\u79df\u6237\u8bfb\u5199\u7f3a\u53e3\uff1b\u6d4b\u8bd5\u6267\u884c\u7ed3\u679c\u7531\u6839\u4ee3\u7406\u6700\u7ec8\u62a5\u544a\u786e\u8ba4\u3002"
+      "review_reason": "tenant/environment审计scope，actor/reason/object/前后JSON只admin:view可读。 Evidence/audit: frontend/insights-source-review.json. Scope/limit: 未发现确认的跨租户读写缺口；测试执行结果由根代理最终报告确认。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/insights/traders/TraderController.java": {
       "sha256": "f6bda1f9cef0c266270d808387a36402d0763a196c4efc71d4cab8a630e25a2a",
@@ -13168,13 +13267,13 @@
         }
       ],
       "classification": "boundary",
-      "review_reason": "public GET\u6295\u5f71\uff0c\u4ec5published\uff1bno-store\u660e\u786e\uff0ctenant600/min\uff1bhistory/equity\u5f53\u524dtenant profile\u518d\u9650\u5b9achildren\uff0c\u7121\u5916\u7f51/file\u3002 Evidence/audit: frontend/insights-source-review.json. Scope/limit: agent uuid\u8be6\u60c5\u76f8\u5173\u901a\u7528BackendAccess\u98ce\u9669\u89c1\u4e0b\u8282\uff0cpublic endpoint\u4e0d\u7ecf\u8fc7admin interceptor\u3002"
+      "review_reason": "public GET投影，仅published；no-store明确，tenant600/min；history/equity当前tenant profile再限定children，無外网/file。 Evidence/audit: frontend/insights-source-review.json. Scope/limit: agent uuid详情相关通用BackendAccess风险见下节，public endpoint不经过admin interceptor。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/insights/traders/TraderData.java": {
       "sha256": "d501e32b28104dea7ffa413b50f79b01f0f616f84dbf87362196ea690f71c3ac",
       "surfaces": [],
       "classification": "stateless",
-      "review_reason": "\u4eba\u5de5metadata DTO\uff0c\u4e0d\u542baccount/user/order\u8eab\u4efd\uff1b\u8f93\u5165type\u7531service\u767d\u540d\u5355/strict import\u9650\u5236\u3002 Evidence/audit: frontend/insights-source-review.json. Scope/limit: \u672a\u53d1\u73b0\u786e\u8ba4\u7684\u8de8\u79df\u6237\u8bfb\u5199\u7f3a\u53e3\uff1b\u6d4b\u8bd5\u6267\u884c\u7ed3\u679c\u7531\u6839\u4ee3\u7406\u6700\u7ec8\u62a5\u544a\u786e\u8ba4\u3002"
+      "review_reason": "人工metadata DTO，不含account/user/order身份；输入type由service白名单/strict import限制。 Evidence/audit: frontend/insights-source-review.json. Scope/limit: 未发现确认的跨租户读写缺口；测试执行结果由根代理最终报告确认。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/insights/traders/TraderEquity.java": {
       "sha256": "24215570d543121829d0c6927d8b938b0b9635729c893af72dfc3835a2b97731",
@@ -13186,7 +13285,7 @@
         }
       ],
       "classification": "private_scoped",
-      "review_reason": "tenant/environment/trader/time\u3001tenant/environment/point UUID\u53ccunique\uff1b\u5173\u8054scope\u7981\u6b62\u8de8\u79df\u6237\u66f2\u7ebf\u3002 Evidence/audit: frontend/insights-source-review.json. Scope/limit: \u672a\u53d1\u73b0\u786e\u8ba4\u7684\u8de8\u79df\u6237\u8bfb\u5199\u7f3a\u53e3\uff1b\u6d4b\u8bd5\u6267\u884c\u7ed3\u679c\u7531\u6839\u4ee3\u7406\u6700\u7ec8\u62a5\u544a\u786e\u8ba4\u3002"
+      "review_reason": "tenant/environment/trader/time、tenant/environment/point UUID双unique；关联scope禁止跨租户曲线。 Evidence/audit: frontend/insights-source-review.json. Scope/limit: 未发现确认的跨租户读写缺口；测试执行结果由根代理最终报告确认。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/insights/traders/TraderHistory.java": {
       "sha256": "fb008cbb110a9fa851e1fd3c1c9a442392d4b91c3a622b9652fb137746d57969",
@@ -13198,7 +13297,7 @@
         }
       ],
       "classification": "private_scoped",
-      "review_reason": "tenant/environment/trader/recordId\u53carecordKey unique\uff1b\u5185\u90e8\u8bc1\u636e/\u4eba\u5de5\u7f16\u53f7\u4e0d\u662fpublic\u8ba2\u5355\u3002 Evidence/audit: frontend/insights-source-review.json. Scope/limit: \u672a\u53d1\u73b0\u786e\u8ba4\u7684\u8de8\u79df\u6237\u8bfb\u5199\u7f3a\u53e3\uff1b\u6d4b\u8bd5\u6267\u884c\u7ed3\u679c\u7531\u6839\u4ee3\u7406\u6700\u7ec8\u62a5\u544a\u786e\u8ba4\u3002"
+      "review_reason": "tenant/environment/trader/recordId及recordKey unique；内部证据/人工编号不是public订单。 Evidence/audit: frontend/insights-source-review.json. Scope/limit: 未发现确认的跨租户读写缺口；测试执行结果由根代理最终报告确认。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/insights/traders/TraderProfile.java": {
       "sha256": "193ab2362c2b39ec4cd9d38e72d4761fc10b8d2aa9c6080844df8d850274bb3b",
@@ -13210,7 +13309,7 @@
         }
       ],
       "classification": "private_scoped",
-      "review_reason": "tenant/environment/trader UUID\u552f\u4e00\uff1bprivate dataJson\u542b\u6388\u6743\u6750\u6599\uff1bpublic\u53ea\u662f\u6709\u6761\u4ef6\u6295\u5f71\uff0c\u4e0d\u80fd\u5c06\u5b9e\u4f53\u6807shared\u3002 Evidence/audit: frontend/insights-source-review.json. Scope/limit: \u672a\u53d1\u73b0\u786e\u8ba4\u7684\u8de8\u79df\u6237\u8bfb\u5199\u7f3a\u53e3\uff1b\u6d4b\u8bd5\u6267\u884c\u7ed3\u679c\u7531\u6839\u4ee3\u7406\u6700\u7ec8\u62a5\u544a\u786e\u8ba4\u3002"
+      "review_reason": "tenant/environment/trader UUID唯一；private dataJson含授权材料；public只是有条件投影，不能将实体标shared。 Evidence/audit: frontend/insights-source-review.json. Scope/limit: 未发现确认的跨租户读写缺口；测试执行结果由根代理最终报告确认。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/insights/traders/TraderService.java": {
       "sha256": "0fb22289039b289b1cc9ad859cf4b49c4dc586a13ca4e2137b52f9fb2db46dde",
@@ -13292,7 +13391,7 @@
         }
       ],
       "classification": "private_scoped",
-      "review_reason": "\u6240\u6709query SCOPE tenant+environment\uff1bpublic PUBLISHED+\u53d7\u73af\u5883\u5141\u8bb8source\uff1bauthorizationNote/\u5386\u53f2evidence/recordKey\u4e0d\u516c\u5f00\uff1bchildren\u5148\u9a8c\u8bc1scoped profile\uff1bstaff\u5934\u50cf\u5f53\u524dtenant\u8def\u5f84\uff0c\u65e0\u5916\u94fe\uff1b\u9501profile/version\uff0c\u5bfc\u5165\u4e25\u683cfields/500\u5e76\u539f\u5b50\u5931\u8d25\u3002 Evidence/audit: frontend/insights-source-review.json. Scope/limit: \u73b0\u6709PublishedTenantFiles\u67e5\u8be2\u8bc1\u660e\u5934\u50cf\u53d1\u5e03\u6761\u4ef6tenant/env/source/status\uff0c\u4e0d\u7531\u672c\u7ec4\u8fdb\u884cfileIO\u3002\u79c1\u6709avatar\u5b58\u5728\u6027\u7531\u4e0a\u4f20/\u8bfb\u8def\u5f84\u9a8c\u8bc1\uff0c\u4e0d\u53ea\u662f\u5b57\u7b26\u4e32pattern\u3002"
+      "review_reason": "所有query SCOPE tenant+environment；public PUBLISHED+受环境允许source；authorizationNote/历史evidence/recordKey不公开；children先验证scoped profile；staff头像当前tenant路径，无外链；锁profile/version，导入严格fields/500并原子失败。 Evidence/audit: frontend/insights-source-review.json. Scope/limit: 现有PublishedTenantFiles查询证明头像发布条件tenant/env/source/status，不由本组进行fileIO。私有avatar存在性由上传/读路径验证，不只是字符串pattern。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/market/ControlPlanBudget.java": {
       "sha256": "c2ba814f64ad0852715b9d5a847d9ca9245fcef12eb87479933f107a4298ce55",
@@ -13362,7 +13461,9 @@
       "review_reason": "Two bounded public snapshot lanes; official WSS allowlists. Captured connection generation and desired instrument checks reject old callbacks, bounded messages and no incremental private state. Thread workers never access tenant-private data; source/type instrument keys shared deliberately."
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/market/MarketControlCommands.java": {
-      "sha256": "39f581024dea7fc72c17a24691d9f1fa64740bf28d4e2aa5ff0c33ddcdd64fb8",
+      "classification": "private_scoped",
+      "review_reason": "Durable tenant-symbol-key hash dedup, locked tenant queue32 and two workers/64 scheduled queue; trusted server Authentication principal or ControlIdentity only, positive actor and tenant. Plan outside publish tx, captured revision/generation/config/expiry revalidated. Atomic STOP and RUNNING+task+audit; late old generation refused; transient and postcommit unknown acknowledgements recover same receipt. Current byte hash exactly matches the previously manually reviewed S2 source snapshot; final tests reported independently, not release approval. Integration review 2026-10-06: Only allowlisted validation messages become visible. Writer-generation fencing, command scope, state transitions and opaque unexpected failures remain unchanged. 2026-10-07 independent delta review with exact-SHA prior directed evidence: durable accept/cancel use tenant queue lock and tenant/symbol/request key rows; START parameter hash compatibility and RESTORE action are retained. Unknown-key cancel inserts a durable CANCELLED tombstone; late accept returns it and old workers recheck terminal command row, owner/generation/config/revision/expiry before activation. Runtime-before-command lock order is retained. Prepared generation is published only after acknowledged transaction; unknown commit is reconciled by current reads rather than blindly taking a new generation. Retry count/backoff is finite and persists on same scoped receipt. Two workers/64 queue execute captured tenant through TenantJobRunner.oneContext; active set is tenant-keyed, fenced UUID set suppresses only already-selected tenant command, no authority is read from that set. Authentication/ControlIdentity is server-trusted with positive actor and tenant. After-commit logs/audit do not replace receipt authorization; formal release not approved.",
+      "sha256": "0a8d5ae0a483dc5cd1599db55a28237d3bb39121dfcc39d7e9974d8f42b4a8fb",
       "surfaces": [
         {
           "kind": "identity_boundary",
@@ -13380,133 +13481,181 @@
           "statement_sha256": "99872a6535e786b7b1e0a63516b6856bdb8630cbb794ff94e73d255c2c066d2c"
         },
         {
-          "kind": "async_job",
+          "kind": "cache_lock",
           "line": 25,
-          "statement_sha256": "53a3424faac0005be1a3086f66b66328fe8108e398103a03204b848c00b3cd25"
+          "statement_sha256": "76928ed51b8180746899bab0470ed246cbdbe84c8dca411e156f3e09c5d23eaf"
         },
         {
           "kind": "async_job",
           "line": 26,
+          "statement_sha256": "53a3424faac0005be1a3086f66b66328fe8108e398103a03204b848c00b3cd25"
+        },
+        {
+          "kind": "async_job",
+          "line": 27,
           "statement_sha256": "830e4d7de4ad35cf641534e62e0af7424b2e68b4a4e5a1ef6261d64188ced3bb"
         },
         {
           "kind": "startup",
-          "line": 29,
+          "line": 30,
           "statement_sha256": "71e328e8ec32898ec8d08bb550896d0d006b371032f4ec79e2aee34a3718c7a1"
-        },
-        {
-          "kind": "identity_boundary",
-          "line": 41,
-          "statement_sha256": "a76c526f77ea7ba911d142899572943cb5559d1616df4c68ffde04ad20061407"
-        },
-        {
-          "kind": "native_sql",
-          "line": 50,
-          "statement_sha256": "5396ba1b0e08d483cc6d61e87046e70df78aa9b4333e34534ce5aa37adbf0305"
-        },
-        {
-          "kind": "native_sql",
-          "line": 51,
-          "statement_sha256": "59531863a0c94c1303b2f2356de0498bbafe63a447fbd1a6b805b7215df4bcda"
         },
         {
           "kind": "native_sql",
           "line": 54,
+          "statement_sha256": "5396ba1b0e08d483cc6d61e87046e70df78aa9b4333e34534ce5aa37adbf0305"
+        },
+        {
+          "kind": "native_sql",
+          "line": 55,
+          "statement_sha256": "59531863a0c94c1303b2f2356de0498bbafe63a447fbd1a6b805b7215df4bcda"
+        },
+        {
+          "kind": "cache_lock",
+          "line": 57,
+          "statement_sha256": "cc5835e0f16bb0a01d2d026b6937c4fe2e7654f3900893000591edabbeea685d"
+        },
+        {
+          "kind": "identity_boundary",
+          "line": 58,
+          "statement_sha256": "63985758474cc2bd469d618a5af0cdb51d130d61839bfac8021f07a2b9d940bf"
+        },
+        {
+          "kind": "native_sql",
+          "line": 69,
           "statement_sha256": "30e91a2751622a745c5d13652129657177f402f5b9c91f56aa463695a46146c0"
         },
         {
           "kind": "native_sql",
-          "line": 58,
-          "statement_sha256": "02e620c5ec8d0d41570cede74c24898d6d3178e386a68259974928d534943fff"
+          "line": 73,
+          "statement_sha256": "a32972ee35d860389c544426864c1643ba098f156a8dfd58e64225ad3cdd8a63"
         },
         {
           "kind": "native_sql",
-          "line": 63,
+          "line": 77,
           "statement_sha256": "2533fc5a2e74149377a37a5b9ee13ba01f9a49b369da89b73b6f7208b652804b"
         },
         {
           "kind": "identity_boundary",
-          "line": 69,
+          "line": 86,
           "statement_sha256": "ee4bc2ae7b026aaf4b7fecdb8fa3b82425ed9ee3c27c945c6f202d47282765e7"
         },
         {
           "kind": "identity_boundary",
-          "line": 70,
+          "line": 87,
           "statement_sha256": "c97a05846449515afdddd8b52e7fdf09b817d322171bf94ea288fdaa03a43133"
         },
         {
           "kind": "identity_boundary",
-          "line": 72,
+          "line": 89,
           "statement_sha256": "590fa5aaa7ee3e360aae82813aa7b724ad8558b926ac806421f2cc07bf260835"
         },
         {
           "kind": "identity_boundary",
-          "line": 78,
+          "line": 95,
           "statement_sha256": "c9fe47fccb4da6c306f6df4387ade4b73d566ef8abc5b19f10617f0c4947ac9e"
         },
         {
           "kind": "native_sql",
-          "line": 83,
+          "line": 100,
           "statement_sha256": "91e56722ed2c517ffd3b606b51682ff1ff65f16f30b52c70ddce125c80bffe23"
         },
         {
+          "kind": "native_sql",
+          "line": 101,
+          "statement_sha256": "3ec42b0423a4f3b27763bdc6735ff55957215a6e4700c72e42f2df66dc137564"
+        },
+        {
           "kind": "cache_lock",
-          "line": 85,
-          "statement_sha256": "b2611393814bad8fbb0984d327eaf30c81d5402754dfb4e939931df0e85ce44b"
+          "line": 101,
+          "statement_sha256": "3ec42b0423a4f3b27763bdc6735ff55957215a6e4700c72e42f2df66dc137564"
         },
         {
           "kind": "native_sql",
-          "line": 96,
-          "statement_sha256": "a4cd65a1aa544afb0020a66f3b07bb797ca2817a87b9cb45f59d8bc9434eedcf"
+          "line": 102,
+          "statement_sha256": "d78c8bbcd19dcb0beaef5f933521ff960a57538ef622015580c47d20b854437e"
         },
         {
-          "kind": "native_sql",
-          "line": 99,
-          "statement_sha256": "18374451b9d0317c4da569b24e5e9d2ab4c45c6d058b1612f520353756cdb931"
+          "kind": "cache_lock",
+          "line": 105,
+          "statement_sha256": "ff6a0ef1f5dbd5fc3939fd5308378f0d0aa6b37363a88cc3a68b48707de0761d"
         },
         {
-          "kind": "native_sql",
-          "line": 110,
-          "statement_sha256": "6ced05fd797bc90ef4622b7b165abbdfe3800c9e5a0197e90a9343b0392a02ba"
+          "kind": "identity_boundary",
+          "line": 107,
+          "statement_sha256": "b1b24b6d2a1cd184a53b3356c1e4139fd1d68efde9230247b25f75b2550746a4"
         },
         {
           "kind": "native_sql",
           "line": 112,
+          "statement_sha256": "53cb60c5e12d7c5940b179559a7a8f1c6a5a7c1944cc30c4df2a4e722aedeed2"
+        },
+        {
+          "kind": "native_sql",
+          "line": 114,
+          "statement_sha256": "6c44bedc2aa5cb0bf2993d446292e35403f805ab8d969fad4a5d8fe6948d1cb7"
+        },
+        {
+          "kind": "native_sql",
+          "line": 135,
+          "statement_sha256": "71e294e822eec640f47b2b7332b760f192f3486123687c407ee5df37896ec947"
+        },
+        {
+          "kind": "native_sql",
+          "line": 147,
+          "statement_sha256": "6ced05fd797bc90ef4622b7b165abbdfe3800c9e5a0197e90a9343b0392a02ba"
+        },
+        {
+          "kind": "native_sql",
+          "line": 150,
           "statement_sha256": "1d6f18d5c395960d177a0bb95c276c5cac27a66e51c550f37d75a3cf2f3f7b5d"
         },
         {
           "kind": "native_sql",
-          "line": 121,
+          "line": 169,
           "statement_sha256": "15155ea06f3b64f0d880acf83da009018645b72d5b7ea01b74b4dc16f76359fa"
         },
         {
           "kind": "native_sql",
-          "line": 126,
-          "statement_sha256": "b0691e535f193ef75508e57ab0d221d0787c5317489f1a6e4796ff72c8eee6a0"
-        },
-        {
-          "kind": "native_sql",
-          "line": 136,
+          "line": 188,
           "statement_sha256": "12dd1296e5431334dba33e19f59de7ab7912228690debb2e13f5f16b5d0dabf9"
         },
         {
           "kind": "native_sql",
-          "line": 141,
+          "line": 193,
           "statement_sha256": "7e4ddc20706a0e78ba9088d1e18ff65fbd78b8a544997d0e589c3547fc7e1e0c"
         },
         {
           "kind": "native_sql",
-          "line": 149,
+          "line": 200,
+          "statement_sha256": "049c8e970b4cd0f3c9359f3b82f79705e3ea4f52e690382628f903a8faa7df0a"
+        },
+        {
+          "kind": "native_sql",
+          "line": 211,
+          "statement_sha256": "959b95753ccf7ef698130ec922aae1c62e619ede193283e23332c3d4f17c54aa"
+        },
+        {
+          "kind": "native_sql",
+          "line": 220,
+          "statement_sha256": "897d9136cde7daf2013dba0dfd321a7156dcabbdd94aa48e677fe0616f286968"
+        },
+        {
+          "kind": "native_sql",
+          "line": 225,
+          "statement_sha256": "04bec535ea9e6719196ec81fa9e62e4ffa83950101b2bb9111c3d86b42d8f0ac"
+        },
+        {
+          "kind": "native_sql",
+          "line": 228,
           "statement_sha256": "1453c0ff36b43e9535ff92534a9face995a81009620097086f05770c82787a41"
         },
         {
           "kind": "native_sql",
-          "line": 158,
+          "line": 237,
           "statement_sha256": "2b6525961726b0b8f278e9be5047f990371317dcd74ba9a401217605064c4112"
         }
-      ],
-      "classification": "private_scoped",
-      "review_reason": "Durable tenant-symbol-key hash dedup, locked tenant queue32 and two workers/64 scheduled queue; trusted server Authentication principal or ControlIdentity only, positive actor and tenant. Plan outside publish tx, captured revision/generation/config/expiry revalidated. Atomic STOP and RUNNING+task+audit; late old generation refused; transient and postcommit unknown acknowledgements recover same receipt. Current byte hash exactly matches the previously manually reviewed S2 source snapshot; final tests reported independently, not release approval. Integration review 2026-10-06: Only allowlisted validation messages become visible. Writer-generation fencing, command scope, state transitions and opaque unexpected failures remain unchanged."
+      ]
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/market/MarketDepthController.java": {
       "sha256": "3b593af31de1b8b0892cb760df0e40e8eb05b8762882f01dbb4fbb6ddc5dca9e",
@@ -13588,7 +13737,9 @@
       "review_reason": "Instrument visibility/enabled queries and per-tenant config require current tenant. Leases capture tenant and REST owner prefix; background config reads open captured TenantContext, shared public provider book cache bounded32/worker queue32/leases512/REST16. Late REST callbacks require same Entry identity; disable after transaction commit. Shared source metrics are public process aggregates, not private account/order data."
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/market/MarketRuntime.java": {
-      "sha256": "e920c8b835aee61b03800c450bdd4b03f2eb69d4ae74bd6aa1ef38683fc2bf4c",
+      "classification": "private_scoped",
+      "review_reason": "ROOT actual SELECT/body authority review: quote/status and current generation/control revision/snapshot version are read from one tenant+symbol selected row in the display RR. Tuple mismatch renders quote unavailable without changing expiry or persistence. Existing captured writer identity, lease/STOP lock/funding final authorization, source revision receipts and cleanup untouched; affected real funding tests still required. 2026-10-07 independent delta review with exact-SHA prior directed evidence: native runtime queries/updates always bind server tenant and symbol; captured/uncertain generations are tenant:symbol keys. 4.5s monotonic budget, 5s transaction timeout and 2s lock wait do not extend original15s lease or allow old owner/generation re-acquisition. ThreadLocal context/quota/deadline is cleaned on completion; native connection restores session lock timeout and clears fence variables, cleanup failure evicts unsafe connection rather than returning it to pool. Read-only fenceReason never claims ownership. TARGET/sample/completion-stall and recovery progress are distinguished; inconsistent tuple/stale source is unavailable without synthetic quotes or read-side lease write. No new independent jobs or cross-tenant cache; existing funds final fences retained.",
+      "sha256": "53e49cf2a467ba1ffd4fc1f57b8e75b3eb7385db468fb47ce2d72dfc6aabb30b",
       "surfaces": [
         {
           "kind": "cache_lock",
@@ -13601,78 +13752,96 @@
           "statement_sha256": "565b26ec8b1943f6c064d346aca497043f510b24cf04b264b7cd428c70e3f251"
         },
         {
+          "kind": "cache_lock",
+          "line": 15,
+          "statement_sha256": "4a172a3ee1a7eb41a0878b9e983e836d920e266e93f5f7c2b18ad23609787e47"
+        },
+        {
           "kind": "native_sql",
-          "line": 23,
+          "line": 38,
+          "statement_sha256": "f7fa8620dd68f0662e2c73df45f8807f3663828c2db74c0660f276ee00306c36"
+        },
+        {
+          "kind": "native_sql",
+          "line": 50,
           "statement_sha256": "daf3d1bd6fb127057be609f7473a42af920ed562bd6683fbe4d925e3552dc008"
         },
         {
           "kind": "native_sql",
-          "line": 28,
+          "line": 61,
+          "statement_sha256": "7e124f7fad80690f55c8f551e990a99da11d42214c612ca5343f4a06bc9a9ad6"
+        },
+        {
+          "kind": "native_sql",
+          "line": 72,
+          "statement_sha256": "1e2bcb4c7f4edef41126c90ea990f3a2f54ec6c616fe30a461a4fd87ad010adc"
+        },
+        {
+          "kind": "native_sql",
+          "line": 78,
           "statement_sha256": "1602283e0c75be23ac6ce8783f0689e274c40f754bf3b86bf2e9b47da45583fe"
         },
         {
           "kind": "native_sql",
-          "line": 29,
+          "line": 79,
           "statement_sha256": "50692436167b6bffa6e2eb430f71a0c6ad26de08fbc9778244ea634a59d78168"
         },
         {
           "kind": "native_sql",
-          "line": 30,
-          "statement_sha256": "a0ec8651827d6d4f6450b4a05411d5d94a460f4f861a07ca5dfa99a8b2fb33a6"
+          "line": 80,
+          "statement_sha256": "e8b5ab492965c187e5374570179272cbbf50a25a1517faa321a5db6ade22c7b2"
         },
         {
           "kind": "native_sql",
-          "line": 39,
+          "line": 96,
           "statement_sha256": "2225d339e5c1d7df6e9c5f66c9188e01ebf421125ea7ae0b5993a2bdb66d579c"
         },
         {
           "kind": "native_sql",
-          "line": 57,
+          "line": 114,
           "statement_sha256": "07966df31b383f06844ac99f8c2b2c8375c93c1e1b4f3f56dca9038d5ebe3d15"
         },
         {
           "kind": "native_sql",
-          "line": 67,
+          "line": 132,
           "statement_sha256": "97cfd9515d6c64616e10aac1732a4261db85defffc789b7e9bbee1e4a77a528a"
         },
         {
           "kind": "native_sql",
-          "line": 77,
+          "line": 142,
           "statement_sha256": "e7fd1bdd9a443fe02c68b88463f5eea8b5141c9594b18409560574cabc11b378"
         },
         {
           "kind": "native_sql",
-          "line": 82,
+          "line": 147,
           "statement_sha256": "8ebe1729394e7df65fe5c76c819a79f32513a7858ebde54976e91bfc4313f22a"
         },
         {
           "kind": "native_sql",
-          "line": 85,
+          "line": 150,
           "statement_sha256": "0eabfbdd1de99e1b476af1a5c9e9375b5f0229b892f278e550db9017f4caa2c2"
         },
         {
           "kind": "native_sql",
-          "line": 101,
+          "line": 214,
           "statement_sha256": "0f9a416634cb12418bb41888eec4345326f0bcd832f9b401ce7478a718d1164b"
         },
         {
           "kind": "native_sql",
-          "line": 109,
+          "line": 222,
           "statement_sha256": "90b36f04e26ecab67eb346535648b47ad3f2d5c08be72646dc05a35d3265e2fb"
         },
         {
           "kind": "native_sql",
-          "line": 117,
+          "line": 231,
           "statement_sha256": "e8488fd41154b8e7caccc6dfb325f3929f0e2b469f344c989eb3f74d0922743a"
         },
         {
           "kind": "native_sql",
-          "line": 127,
+          "line": 241,
           "statement_sha256": "98c7b5d6b73a011c75f8dcc9a9da9434d249f40ad56acfc02bd633667834d5aa"
         }
-      ],
-      "classification": "private_scoped",
-      "review_reason": "ROOT actual SELECT/body authority review: quote/status and current generation/control revision/snapshot version are read from one tenant+symbol selected row in the display RR. Tuple mismatch renders quote unavailable without changing expiry or persistence. Existing captured writer identity, lease/STOP lock/funding final authorization, source revision receipts and cleanup untouched; affected real funding tests still required."
+      ]
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/activity/OrderPromotionEvents.java": {
       "sha256": "20f7ab32b01e4cb168b22ebafc1e2fd7ba6ed5315e09049f41b4dee465040385",
@@ -14551,6 +14720,12 @@
           "statement_sha256": "2bec7154de19e7097f9632b27878aeafcb36479a35122c7e63aa40922ea7bf7b"
         }
       ]
+    },
+    "exchange-backend/src/main/java/com/gtcfesk/exchange/market/MarketEngineFailure.java": {
+      "classification": "stateless",
+      "review_reason": "2026-10-07 independent new-source review: pure cycle-deduplicated error-category traversal with local identity seen-set and deque, including SQLException cause/nextException. ENGINE_FENCED uses an explicit message marker, not every45000; busy/budget/transient classifications use explicit vendor codes/SQLState. Returns fixed category strings only. No database access, cache, static mutable business state, identity/tenant operation, files, callback or scheduler. Exact SHA matches prior directed review; stateless classification is explicit, not auto-approved production release.",
+      "sha256": "3c241108902086195248e16bef2e3b17bc30aeb609ccf68e38359b5ce503ad28",
+      "surfaces": []
     }
   },
   "release_approved": false,
