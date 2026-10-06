@@ -45,11 +45,6 @@
     "key": "SymbolCatalogDialog.1"
   },
   {
-    "file": "src/components/TenantPolicyNotice.vue",
-    "binding": "table-key",
-    "key": "tenant-policy-notice"
-  },
-  {
     "file": "src/control/AuditSecurity.vue",
     "binding": ":table-key",
     "key": "security ? 'control.access-sessions' : 'control.audit'"

@@ -1,12 +1,14 @@
 """Offline parser/gate checks only. Fake metadata is never actual MySQL evidence."""
 import hashlib
+import json
 import unittest
 import s2_schema_checks as schema
 
 
 class FakeMetadata:
     def __init__(self):
-        self.epoch = '2026100402\t2026100402\t0'
+        epoch = json.loads((schema.ROOT / 'scripts/multitenant/table_manifest.json').read_text(encoding='utf-8'))['schema_epoch']
+        self.epoch = f'{epoch}\t{epoch}\t0'
         self.missing_foreign_key = False
         self.changed_trigger = False
     def columns(self):

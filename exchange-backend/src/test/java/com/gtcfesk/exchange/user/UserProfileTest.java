@@ -113,7 +113,7 @@ class UserProfileTest {
     }
     @Test void avatarMigrationAddsNullableMetadataAndPreservesExistingProfiles() throws Exception {
         String sql;
-        try (java.io.InputStream input = getClass().getResourceAsStream("/db/migration/V2026100601__user_avatar.sql")) {
+        try (java.io.InputStream input = getClass().getResourceAsStream("/db/migration/V2026100602__user_avatar.sql")) {
             assertNotNull(input);
             java.io.ByteArrayOutputStream bytes = new java.io.ByteArrayOutputStream();
             byte[] buffer = new byte[1024]; int size;
@@ -124,7 +124,13 @@ class UserProfileTest {
              java.sql.Statement statement = db.createStatement()) {
             statement.execute("create table user_account(id bigint primary key,email varchar(128),nickname varchar(50))");
             statement.execute("insert into user_account values(77,'user@example.com','Existing name')");
-            statement.execute(sql);
+            statement.execute("create table tenant_schema_version(version bigint primary key,applied_at timestamp,minimum_application_epoch bigint,business_activation_ready boolean)");
+            // H2 has no MySQL UTC_TIMESTAMP; only substitute the fixture clock, not any migration data operation.
+            statement.execute(sql.replace("UTC_TIMESTAMP(6)", "CURRENT_TIMESTAMP(6)"));
+            try (java.sql.ResultSet receipt = statement.executeQuery("select version,minimum_application_epoch,business_activation_ready from tenant_schema_version")) {
+                assertTrue(receipt.next()); assertEquals(2026100602L, receipt.getLong(1));
+                assertEquals(2026100602L, receipt.getLong(2)); assertFalse(receipt.getBoolean(3)); assertFalse(receipt.next());
+            }
             try (java.sql.ResultSet rows = statement.executeQuery("select id,email,nickname,avatar_url from user_account")) {
                 assertTrue(rows.next()); assertEquals(77, rows.getLong("id")); assertEquals("user@example.com", rows.getString("email"));
                 assertEquals("Existing name", rows.getString("nickname")); assertNull(rows.getString("avatar_url")); assertFalse(rows.next());
