@@ -1,0 +1,8 @@
+const assert = require('node:assert/strict')
+const fs = require('node:fs')
+const path = require('node:path')
+const source = fs.readFileSync(path.join(__dirname, '../docker/nginx.conf'), 'utf8')
+assert.match(source, /location \^~ \/assets\/\s*\{[^}]*try_files \$uri =404;/)
+assert.match(source, /map \$status \$static_asset_cache_control \{[^}]*default "no-store";/)
+assert.match(source, /add_header Cache-Control \$static_asset_cache_control always;/)
+console.log('PASS missing static assets never fall back to SPA HTML and errors are not cached')
