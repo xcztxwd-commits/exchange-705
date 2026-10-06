@@ -142,10 +142,20 @@ class ActivityIntegrationTest {
   tenantScope.close();tenantScope=TenantContext.open(2L);assertEquals(0L,((org.springframework.data.domain.Page<?>)admin.recipients(campaign.getId(),0,"ALL",null,owner.getEmail())).getTotalElements());
  }
  @Test void onlineIdentityEmailPaginationAndAgentScope(){
-  for(Long id:Arrays.asList(user,other)){UserAccount owner=users.findByTenantIdAndId(1L,id).get();owner.setCurrentToken("test-only");owner.setLastActivityAt(LocalDateTime.now());owner.setStatus("normal");owner.setParentUserId(user);owner.setEmail("online"+id+"@activity.test");owner.setRemark("在线客户备注");users.saveAndFlush(owner);}
+  for(Long id:Arrays.asList(user,other)){UserAccount owner=users.findByTenantIdAndId(1L,id).get();owner.setCurrentToken("test-only");owner.setLastActivityAt(LocalDateTime.now());owner.setStatus("normal");owner.setParentUserId(user);owner.setEmail("online"+id+"@activity.test");owner.setRemark("在线客户备注");owner.setLastLoginIp(id.equals(user)?"203.0.113.17":"2001:db8::19");owner.setLastLoginRegion("测试地区");users.saveAndFlush(owner);}
   com.gtcfesk.exchange.user.UserActivityService activity=new com.gtcfesk.exchange.user.UserActivityService(users);
   Map<?,?> result=(Map<?,?>)activity.list(user,1,1," ONLINE ").get("data");assertEquals(2L,result.get("total"));assertEquals(1,((List<?>)result.get("items")).size());
   Map<?,?> row=(Map<?,?>)((List<?>)result.get("items")).get(0);assertEquals("在线客户备注",row.get("userRemark"));assertTrue(row.get("userEmail").toString().startsWith("online"));assertFalse(row.containsKey("currentToken"));
+  assertEquals("2001:db8::19",row.get("lastLoginIp"));assertEquals("测试地区",row.get("lastLoginRegion"));assertFalse(row.containsKey("passwordHash"));
+  Map<?,?> first=(Map<?,?>)activity.list(user,0,1,"online").get("data");
+  assertEquals("203.0.113.17",((Map<?,?>)((List<?>)first.get("items")).get(0)).get("lastLoginIp"));
+  UserAccount stored=users.findByTenantIdAndId(1L,other).orElseThrow(AssertionError::new);long version=stored.getRowVersion();
+  activity.list(null,0,20,stored.getEmail());assertEquals(version,users.findByTenantIdAndId(1L,other).orElseThrow(AssertionError::new).getRowVersion(),"online reads do not rewrite login metadata");
+  stored.setLastLoginIp(null);stored.setLastLoginRegion(null);users.saveAndFlush(stored);
+  Map<?,?> missing=(Map<?,?>)activity.list(user,0,20,stored.getEmail()).get("data");
+  Map<?,?> missingRow=(Map<?,?>)((List<?>)missing.get("items")).get(0);
+  assertTrue(missingRow.containsKey("lastLoginIp"));assertNull(missingRow.get("lastLoginIp"));
+  assertTrue(missingRow.containsKey("lastLoginRegion"));assertNull(missingRow.get("lastLoginRegion"));
   assertEquals(0L,((Map<?,?>)activity.list(other,0,20,"online").get("data")).get("total"));
   tenantScope.close();tenantScope=TenantContext.open(2L);assertEquals(0L,((Map<?,?>)activity.list(null,0,20,"online").get("data")).get("total"));
  }

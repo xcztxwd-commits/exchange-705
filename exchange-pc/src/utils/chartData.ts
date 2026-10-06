@@ -49,6 +49,41 @@ export function normalizeCandles(rows: unknown[], before = Infinity, interval = 
     : sorted
 }
 
+// Only an unbroken newest segment may advance a continuously traded crypto cursor.
+// Older disconnected cache rows stay hidden until the source completes that window.
+export function contiguousCryptoCandles(candles: KLineData[], before: number, interval: string, category: string): KLineData[] {
+  if (!/^Crypto(?:Perpetual)?$/i.test(category) || !candles.length) return candles
+  const period = chartPeriod(interval)
+  const durations = { second: 1000, minute: 60_000, hour: 3_600_000, day: 86_400_000, week: 604_800_000, month: 0, year: 0 }
+  const previous = (timestamp: number): number => {
+    if (period.type !== 'month') return timestamp - durations[period.type] * period.span
+    const date = new Date(timestamp)
+    date.setUTCMonth(date.getUTCMonth() - period.span)
+    return date.getTime()
+  }
+  if (Number.isFinite(before) && candles[candles.length - 1]!.timestamp !== previous(before)) return []
+  let first = candles.length - 1
+  while (first > 0 && candles[first - 1]!.timestamp === previous(candles[first]!.timestamp)) first--
+  return candles.slice(first)
+}
+
+export type HistoryRepairPolicy = { terminal: boolean; pending: boolean; reason: string; nextCursor: number }
+
+// Only explicit backend repair receipts may release a sparse window. Legacy responses retain the continuity guard.
+export function historyRepairPolicy(data: unknown): HistoryRepairPolicy | null {
+  if (!data || typeof data !== 'object') return null
+  const repair = (data as { historyRepair?: unknown }).historyRepair
+  if (!repair || typeof repair !== 'object') return null
+  const value = repair as { pending?: unknown; gaps?: unknown; nextCursor?: unknown }
+  if (typeof value.pending !== 'boolean' || !Array.isArray(value.gaps)) return null
+  const reasons = value.gaps.map(gap => gap && typeof gap === 'object' ? (gap as { reason?: unknown }).reason : null)
+  if (reasons.some(reason => typeof reason !== 'string')) return null
+  const nextCursor = Number(value.nextCursor)
+  return { terminal: !value.pending && reasons.length > 0, pending: value.pending,
+    reason: String(reasons.find(reason => /protected|frozen|sealed|control_samples|simulation|projection/.test(String(reason))) || reasons[0] || ''),
+    nextCursor: Number.isFinite(nextCursor) && nextCursor >= 946684800000 ? nextCursor : 0 }
+}
+
 // Quotes only update an existing candle; new OHLCV must come from the candle endpoint.
 export function candleFromQuote(last: KLineData | undefined, price: number, time: number, interval: string): KLineData | null {
   if (!last || !Number.isFinite(price) || price <= 0 || !Number.isFinite(time) || time < last.timestamp) return null

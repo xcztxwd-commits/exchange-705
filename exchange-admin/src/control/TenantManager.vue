@@ -113,5 +113,5 @@ onMounted(async()=>{await load();if(!disposed)stopCounts=startReadPolling(readCo
     <template #footer><el-button :disabled="busy||policiesLoading" @click="policyList(selected)">刷新策略</el-button><el-button :loading="busy" :disabled="policiesLoading||!!policiesError||!currentDefinition?.tenantEditable" type="primary" @click="savePolicy">保存策略</el-button></template>
   </el-dialog>
   <el-dialog :model-value="!!accounts" @update:model-value="(v:boolean)=>{if(!v)accounts=null}" title="系统后台账号" width="min(800px,95vw)" destroy-on-close><BackendAccounts :control="true" v-if="accounts" :key="accounts.id" :load="accountsLoad" :create="accountsCreate" /></el-dialog>
-  <el-dialog :model-value="!!online" @update:model-value="(v: boolean)=>{if(!v)online=null}" :title="`在线用户 / ${online?.name || ''}`" width="min(1100px,95vw)" destroy-on-close><OnlineUsers :control="true" v-if="online" :key="online.id" :load="onlineLoad" /></el-dialog>
+  <el-dialog :model-value="!!online" @update:model-value="(v: boolean)=>{if(!v)online=null}" :title="`在线用户 / ${online?.name || ''}`" width="min(1300px,95vw)" destroy-on-close><OnlineUsers :control="true" v-if="online" :key="online.id" :load="onlineLoad" /></el-dialog>
 </template>

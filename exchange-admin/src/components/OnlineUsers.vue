@@ -31,7 +31,7 @@ onMounted(() => { stop = startReadPolling(read) })
 onUnmounted(() => { active = false; generation++; stop?.() })
 </script>
 <template>
-  <p>最近 5 分钟有效活动的真实用户。最近页面为客户端上报，不代表实时正在浏览；模拟账户不重复计数。未标时区的时间保留服务器时间；已标时区的时间转换为本机时间。</p>
+  <p>最近 5 分钟有效活动的真实用户。最近页面为客户端上报，不代表实时正在浏览；模拟账户不重复计数。未标时区的时间保留服务器时间；已标时区的时间转换为本机时间。IP/地区为最近登录记录。</p>
   <el-alert v-if="error" :title="error + '；以下数据可能已过期。'" type="error" :closable="false" />
   <p v-if="asOf">统计时点：{{ time(asOf) }} · 默认 5 秒刷新</p>
   <el-form inline @submit.prevent="search"><el-form-item label="用户邮箱"><el-input v-model="email" clearable maxlength="254" placeholder="用户邮箱" @clear="search" /></el-form-item><el-button v-permission="control ? 'session:self' : 'users:view'" native-type="submit">搜索</el-button></el-form>
@@ -39,6 +39,12 @@ onUnmounted(() => { active = false; generation++; stop?.() })
     <el-table-column prop="id" label="用户 ID" width="100" />
     <el-table-column prop="userEmail" label="用户邮箱" min-width="200" show-overflow-tooltip />
     <el-table-column prop="userRemark" label="用户备注" min-width="150" show-overflow-tooltip><template #default="scope">{{ scope.row.userRemark || '-' }}</template></el-table-column>
+    <el-table-column prop="lastLoginIp" label="IP（地址）" min-width="200" show-overflow-tooltip>
+      <template #default="scope">
+        <div>{{ scope.row.lastLoginIp || '-' }}</div>
+        <div style="color: var(--el-text-color-secondary); font-size: 12px;">{{ scope.row.lastLoginRegion || '-' }}</div>
+      </template>
+    </el-table-column>
     <el-table-column label="最近页面" width="110"><template #default="scope">{{ pages[scope.row.lastPageCode] || '未知' }}</template></el-table-column>
     <el-table-column label="页面时间" min-width="175"><template #default="scope">{{ time(scope.row.lastPageSeenAt) }}</template></el-table-column>
     <el-table-column label="活动时间" min-width="175"><template #default="scope">{{ time(scope.row.lastActiveAt) }}</template></el-table-column>

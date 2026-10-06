@@ -50,6 +50,7 @@ public class UserActivityService {
         List<Map<String,Object>> items = new ArrayList<>();
         for (UserAccount user : rows) {
             Map<String,Object> row = new LinkedHashMap<>(); row.put("id", user.getId()); row.put("account", user.getEmail()); com.gtcfesk.exchange.admin.AdminUserIdentity.put(row, user);
+            row.put("lastLoginIp", user.getLastLoginIp()); row.put("lastLoginRegion", user.getLastLoginRegion());
             row.put("lastPageCode", user.getLastPageCode() == null ? "unknown" : user.getLastPageCode());
             row.put("lastPageSeenAt", user.getLastPageSeenAt()); row.put("lastActiveAt", user.getLastActivityAt()); row.put("deviceType", user.getLastDeviceType());
             items.add(row);

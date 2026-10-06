@@ -130,11 +130,13 @@ public class ExchangeQuoteSource {
             Map<String,Object> row = new HashMap<>(); row.put("timestamp", item.path(0).asLong()/1000);
             String[] keys = {"open_price","high_price","low_price","close_price","volume"};
             for (int i=0;i<keys.length;i++) row.put(keys[i], item.path(i+1).asDouble(Double.NaN));
-            row.put("turnover", item.path(7).asDouble()); rows.add(row);
+            row.put("turnover", item.path(7).asDouble());
+            if (okx && !"1".equals(item.path(8).asText()) || !okx && item.path(6).asLong() >= System.currentTimeMillis()) row.put("partial", true);
+            rows.add(row);
         }
         rows.sort(Comparator.comparingLong(row -> QuoteState.time(row.get("timestamp"))));
         Map<String,Object> result = new HashMap<>(), data = new HashMap<>();
         data.put("code", code); data.put("kline_list", rows); result.put("ret",200); result.put("msg","ok"); result.put("data",data);
-        ForexQuoteMarketService.validateKline(result); return result;
+        if (!rows.isEmpty()) ForexQuoteMarketService.validateKline(result); return result;
     }
 }
