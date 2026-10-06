@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import request from '@/utils/request'
 import { useTenantPolicies } from '@/composables/useTenantPolicies'
@@ -25,6 +25,12 @@ function setRegistrationEnabled(field: RegistrationFieldPolicy, enabled: boolean
 
 const loading = ref(false)
 const activeTab = ref('mail')
+const serviceConfigVisible = computed(() => snapshot.value?.features.external_support === true
+  && snapshot.value.supportChannel !== 'internal'
+  && !snapshot.value.configs.some(config => config.key === 'customer.service.link' && config.denied))
+watch([serviceConfigVisible, activeTab], ([visible, tab]) => {
+  if (!visible && tab === 'service') activeTab.value = 'mail'
+}, { flush: 'sync' })
 const uploadingSound = ref<string | null>(null)
 
 const mailConfig = ref<ConfigItem[]>([
@@ -246,7 +252,7 @@ const saveConfigs = async () => {
       ...smsConfig.value,
       ...riskConfig.value,
       ...marketConfig.value,
-      ...serviceConfig.value,
+      ...(serviceConfigVisible.value ? serviceConfig.value : []),
       ...soundConfig.value,
       ...domainConfig.value,
       ...systemConfig.value
@@ -419,7 +425,7 @@ onMounted(() => {
           </el-form>
         </el-tab-pane>
 
-        <el-tab-pane label="客服配置" name="service">
+        <el-tab-pane v-if="serviceConfigVisible" label="客服配置" name="service">
           <el-alert type="info" :closable="false" title="站内客服、站内信开关、欢迎语与客服提示音请前往独立的「客服与消息设置」；此处保留外部客服地址。" style="margin-bottom: 20px" />
           <el-form label-width="150px">
             <el-form-item

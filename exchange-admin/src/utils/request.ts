@@ -4,7 +4,7 @@ import { assertAdminRequestTarget } from './adminSession'
 
 const instance = axios.create({ baseURL: import.meta.env.VITE_API_BASE_URL || '/api', timeout: 10000 })
 export const rawRequest = axios.create({ timeout: 10000 })
-const publicAuth = new Set(['/api/admin/auth/login', '/api/admin/auth/control-exchange'])
+const publicAuth = new Set(['/api/admin/auth/login', '/api/admin/auth/control-exchange', '/api/admin/auth/control-exchange-config'])
 
 for (const client of [instance, rawRequest]) {
   client.interceptors.request.use((config) => {

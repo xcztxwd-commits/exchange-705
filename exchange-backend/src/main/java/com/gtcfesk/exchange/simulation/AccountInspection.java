@@ -3,7 +3,7 @@ package com.gtcfesk.exchange.simulation;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.*;
 import java.util.*;
 
 /** Fixed read projections: never expose credentials, identity documents or arbitrary SQL. */
@@ -34,11 +34,20 @@ public class AccountInspection {
     }
     @Transactional(readOnly=true)
     public Map<String,Object> read(String kind, Long userId, String userEmail, String status, int page, int size) {
+        return query(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(),kind,userId,userEmail,status,page,size);
+    }
+    /** Explicit total-control projection; ordinary admin and simulation reads stay strictly tenant-bound. */
+    @Transactional(readOnly=true, isolation=Isolation.REPEATABLE_READ, propagation=Propagation.REQUIRES_NEW)
+    public Map<String,Object> readAll(String kind, Long userId, String userEmail, String status, int page, int size) {
+        com.gtcfesk.exchange.control.ControlIdentity.requireIndependent();
+        return query(null,kind,userId,userEmail,status,page,size);
+    }
+    private Map<String,Object> query(Long tenant,String kind,Long userId,String userEmail,String status,int page,int size) {
         String[] spec=type(kind);
         if(page<1 || page>100000 || size<1 || size>100 || (userId!=null && userId<=0)) throw new IllegalArgumentException("筛选参数无效");
         boolean users = "users".equals(kind);
-        String from = spec[0]+" x"+(users ? "" : " LEFT JOIN user_account u ON u.tenant_id=x.tenant_id AND u.id=x."+spec[3]);
-        String where=" WHERE x.tenant_id=?"; List<Object> args=new ArrayList<>(); args.add(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId());
+        String from = spec[0]+" x"+(tenant==null?" JOIN tenant t ON t.id=x.tenant_id":"")+(users ? "" : " LEFT JOIN user_account u ON u.tenant_id=x.tenant_id AND u.id=x."+spec[3]);
+        String where=tenant==null?" WHERE x.tenant_id>0":" WHERE x.tenant_id=?"; List<Object> args=new ArrayList<>(); if(tenant!=null)args.add(tenant);
         String emailPattern=com.gtcfesk.exchange.admin.AdminUserIdentity.emailPattern(userEmail);
         if(emailPattern!=null){where+=" AND LOWER("+(users?"x":"u")+".email) LIKE ? ESCAPE '!'";args.add(emailPattern);}
         if(userId!=null){where+=" AND x."+spec[3]+"=?";args.add(userId);}
@@ -48,9 +57,9 @@ public class AccountInspection {
         }
         Long total=jdbc.queryForObject("SELECT COUNT(*) FROM "+from+where,Long.class,args.toArray());
         args.add(size);args.add((page-1)*size);
-        String select="x."+spec[2].replace(",",",x.");
+        String select=(tenant==null?"x.tenant_id,t.name AS tenant_name,":"")+"x."+spec[2].replace(",",",x.");
         if(!users)select+=",u.email AS user_email,u.remark AS user_remark";
-        List<Map<String,Object>> rows=jdbc.queryForList("SELECT "+select+" FROM "+from+where+" ORDER BY x.id DESC LIMIT ? OFFSET ?",args.toArray());
-        Map<String,Object> out=new LinkedHashMap<>();out.put("rows",rows);out.put("total",total);out.put("columns",(spec[2]+(users?"":",user_email,user_remark")).split(","));out.put("page",page);out.put("size",size);return out;
+        List<Map<String,Object>> rows=jdbc.queryForList("SELECT "+select+" FROM "+from+where+" ORDER BY x.id DESC,x.tenant_id DESC LIMIT ? OFFSET ?",args.toArray());
+        Map<String,Object> out=new LinkedHashMap<>();out.put("rows",rows);out.put("total",total);out.put("columns",((tenant==null?"tenant_id,tenant_name,":"")+spec[2]+(users?"":",user_email,user_remark")).split(","));out.put("page",page);out.put("size",size);return out;
     }
 }

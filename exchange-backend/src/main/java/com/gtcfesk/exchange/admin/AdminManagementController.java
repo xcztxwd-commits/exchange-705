@@ -193,7 +193,7 @@ public class AdminManagementController {
         
         validateRole(req.getRole());
         
-        if (req.getPassword() == null || req.getPassword().length() < 12) throw new BusinessException("新管理员密码至少 12 位");
+        if (req.getPassword() == null || req.getPassword().length() < 6) throw new BusinessException("新管理员密码至少 6 位，允许纯数字");
         // 创建管理员
         AdminUser admin = new AdminUser();
         admin.setAccount(com.gtcfesk.exchange.control.BackendLoginRegistry.normalize(req.getAccount()));
@@ -271,7 +271,7 @@ public class AdminManagementController {
         
         // 更新密码（如果提供了新密码）
         if (req.getPassword() != null && !req.getPassword().trim().isEmpty()) {
-            if (req.getPassword().length() < 12) throw new BusinessException("新管理员密码至少 12 位");
+            if (req.getPassword().length() < 6) throw new BusinessException("新管理员密码至少 6 位，允许纯数字");
             admin.setMustChangePassword(true);
             admin.setPasswordHash(passwordEncoder.encode(req.getPassword()));
             admin.setCurrentToken(null);

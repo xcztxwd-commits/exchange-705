@@ -1,11 +1,23 @@
 <script setup lang="ts">
 import { ref,onMounted,onUnmounted,watch } from 'vue'
 import { api,dataRows } from './api'
-const tenants=ref<any[]>([]),tenant=ref<number>(),kind=ref('users'),page=ref(1),rows=ref<any[]>([]),columns=ref<string[]>([]),total=ref(0),userId=ref(''),userEmail=ref(''),error=ref(''),loading=ref(false)
-const labels:Record<string,string>={user_id:'用户 ID',email:'用户邮箱',remark:'用户备注',user_email:'用户邮箱',user_remark:'用户备注'}
+const tenants=ref<any[]>([]),tenant=ref<number|'all'>('all'),kind=ref('users'),page=ref(1),rows=ref<any[]>([]),columns=ref<string[]>([]),total=ref(0),userId=ref(''),userEmail=ref(''),error=ref(''),loading=ref(false)
+const labels:Record<string,string>={tenant_id:'租户 ID',tenant_name:'租户',user_id:'用户 ID',email:'用户邮箱',remark:'用户备注',user_email:'用户邮箱',user_remark:'用户备注'}
 const kinds:Record<string,string>={users:'用户',wallets:'钱包余额',contracts:'合约订单',options:'期权订单',deposits:'充值',withdrawals:'提现',transfers:'资金划转',loans:'借贷',financial:'理财',equity:'资产快照'}
-let sequence=0
-async function load(reset=false){const generation=++sequence;rows.value=[];columns.value=[];total.value=0;error.value='';if(reset)page.value=1;if(!tenant.value)return;loading.value=true;try{if(userId.value&&!/^[1-9]\d*$/.test(userId.value))throw new Error('用户 ID 无效');const query=new URLSearchParams({page:String(page.value),size:'20',...(userId.value?{userId:userId.value}:{}),...(userEmail.value.trim()?{userEmail:userEmail.value.trim()}:{})});const response=await api(`/control/tenants/${tenant.value}/business/${kind.value}?${query}`);if(generation!==sequence)return;const data=response.data||response;rows.value=data.rows;columns.value=data.columns;total.value=data.total}catch(e:any){if(generation===sequence)error.value=e.message}finally{if(generation===sequence)loading.value=false}}
-watch([tenant,kind],()=>load(true));onUnmounted(()=>{sequence++});onMounted(async()=>{try{tenants.value=dataRows(await api('/control/tenants'))}catch(e:any){error.value=e.message}})
+let sequence=0,disposed=false,request:AbortController|undefined
+async function load(reset=false){
+ if(disposed)return
+ const generation=++sequence;request?.abort();request=new AbortController();const signal=request.signal
+ rows.value=[];columns.value=[];total.value=0;error.value='';if(reset)page.value=1;loading.value=true
+ try{if(userId.value&&!/^[1-9]\d*$/.test(userId.value))throw new Error('用户 ID 无效');if(tenant.value!=='all'&&(!Number.isSafeInteger(tenant.value)||tenant.value<=0))throw new Error('租户无效')
+  const query=new URLSearchParams({page:String(page.value),size:'20',...(userId.value?{userId:userId.value}:{}),...(userEmail.value.trim()?{userEmail:userEmail.value.trim()}:{})})
+  const path=tenant.value==='all'?'/control':`/control/tenants/${tenant.value}`
+  const response=await api(`${path}/business/${kind.value}?${query}`,'GET',undefined,signal)
+  if(generation!==sequence)return;const data=response.data||response;rows.value=data.rows;columns.value=data.columns;total.value=data.total
+ }catch(e:any){if(generation===sequence&&!signal.aborted)error.value=e.message}finally{if(generation===sequence)loading.value=false}
+}
+watch([tenant,kind],()=>load(true),{flush:'sync'})
+onUnmounted(()=>{disposed=true;sequence++;request?.abort()})
+onMounted(async()=>{const started=sequence;try{const choices=dataRows(await api('/control/tenants'));if(disposed)return;tenants.value=choices;if(started===sequence)await load(true)}catch(e:any){if(!disposed&&started===sequence)error.value=e.message}})
 </script>
-<template><div class="toolbar"><div><h2>业务监管 · 只读</h2><p>不会通过查看操作修改用户、订单、余额或已读状态；敏感读取记录总控审计。</p></div></div><el-form inline @submit.prevent="load(true)"><el-form-item label="租户"><el-select v-model="tenant" placeholder="明确选择租户"><el-option v-for="t in tenants" :key="t.id" :value="t.id" :label="t.name"/></el-select></el-form-item><el-form-item label="分类"><el-select v-model="kind"><el-option v-for="(label,key) in kinds" :key="key" :value="key" :label="label"/></el-select></el-form-item><el-form-item label="用户 ID"><el-input v-model="userId"/></el-form-item><el-form-item label="用户邮箱"><el-input v-model="userEmail" clearable maxlength="254" placeholder="用户邮箱"/></el-form-item><el-button native-type="submit" :loading="loading" :disabled="!tenant">查询</el-button></el-form><el-alert v-if="error" :title="error" type="error" :closable="false"/><admin-table :table-key="`control.business.${kind}`" :data="rows" border><el-table-column v-for="column in columns" :key="column" :prop="column" :label="labels[column]||column" min-width="150" show-overflow-tooltip/></admin-table><el-pagination v-model:current-page="page" :total="total" :page-size="20" layout="total,prev,pager,next" @current-change="load(false)"/></template>
+<template><div class="toolbar"><div><h2>业务监管 · 只读</h2><p>不会通过查看操作修改用户、订单、余额或已读状态；敏感读取记录总控审计。</p></div></div><el-form inline @submit.prevent="load(true)"><el-form-item label="租户"><el-select v-model="tenant" style="width:220px"><el-option value="all" label="全部"/><el-option v-for="t in tenants" :key="t.id" :value="t.id" :label="t.name"/></el-select></el-form-item><el-form-item label="分类"><el-select v-model="kind"><el-option v-for="(label,key) in kinds" :key="key" :value="key" :label="label"/></el-select></el-form-item><el-form-item label="用户 ID"><el-input v-model="userId"/></el-form-item><el-form-item label="用户邮箱"><el-input v-model="userEmail" clearable maxlength="254" placeholder="用户邮箱"/></el-form-item><el-button native-type="submit" :loading="loading">查询</el-button></el-form><el-alert v-if="error" :title="error" type="error" :closable="false"/><admin-table :table-key="`control.business.${kind}`" :data="rows" border><el-table-column v-for="column in columns" :key="column" :prop="column" :label="labels[column]||column" min-width="150" show-overflow-tooltip/></admin-table><el-pagination v-model:current-page="page" :total="total" :page-size="20" layout="total,prev,pager,next" @current-change="load(false)"/></template>

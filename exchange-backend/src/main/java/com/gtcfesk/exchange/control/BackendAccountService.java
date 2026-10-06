@@ -24,7 +24,7 @@ public class BackendAccountService {
    BackendLogin result;
    if("AGENT".equals(input.type)){if(input.subjectId==null)throw new IllegalArgumentException("请选择本租户已有代理");result=registry.register("AGENT",input.subjectId,input.account);}
    else if("ADMIN".equals(input.type)){
-    if(input.password==null||input.password.length()<12||input.password.length()>128||input.email==null||!input.email.matches("[^@\\s]+@[^@\\s]+\\.[^@\\s]+"))throw new IllegalArgumentException("邮箱或密码无效（密码至少 12 位）");
+    if(input.password==null||input.password.length()<6||input.password.length()>128||input.email==null||!input.email.matches("[^@\\s]+@[^@\\s]+\\.[^@\\s]+"))throw new IllegalArgumentException("邮箱或密码无效（密码须为 6 至 128 位，允许纯数字）");
     if(input.role!=null&&!Arrays.asList("admin","super_admin").contains(input.role))throw new IllegalArgumentException("通过现有角色页面分配员工角色");
     registry.requireAvailable(input.account);
     AdminUser a=new AdminUser();a.setAccount(BackendLoginRegistry.normalize(input.account));a.setEmail(input.email.trim().toLowerCase(Locale.ROOT));a.setPasswordHash(passwords.encode(input.password));a.setRole(input.role==null?"admin":input.role);a.setEnabled(true);a.setMustChangePassword(true);try{admins.saveAndFlush(a);}catch(org.springframework.dao.DataIntegrityViolationException conflict){throw new IllegalArgumentException("账号或邮箱不可用");}result=registry.register("ADMIN",a.getId(),a.getAccount());

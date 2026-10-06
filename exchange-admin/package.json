@@ -9,7 +9,10 @@
     "preview": "vite preview",
     "dev:control": "vite --config vite.control.config.ts",
     "build:control": "vue-tsc -b && vite build --config vite.control.config.ts",
-    "test:tenant": "node --experimental-strip-types tests/tenantSession.test.mjs"
+    "test:entry": "node --experimental-strip-types tests/controlTenantEntry.test.mjs",
+    "test:tenant": "node --experimental-strip-types tests/tenantSession.test.mjs",
+    "test:control": "node --experimental-strip-types tests/controlAccounts.test.mjs",
+    "test:policies": "node --experimental-strip-types tests/controlPolicies.test.mjs"
   },
   "dependencies": {
     "@element-plus/icons-vue": "^2.3.2",

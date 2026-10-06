@@ -19,8 +19,8 @@ class ControlReadOnlyMethodTest {
         JdbcTemplate jdbc=mock(JdbcTemplate.class);ControlReadQueryService queries=mock(ControlReadQueryService.class);
         MockMvc mvc=MockMvcBuilders.standaloneSetup(new ControlReadController(activity,inspection,tenants,audit,jdbc,queries))
             .setControllerAdvice(new GlobalExceptionHandler()).build();
-        for(String route:new String[]{"/business/users","/support/conversations"}) {
-            mvc.perform(post("/api/control/tenants/17"+route).contentType("application/json").content("{}"))
+        for(String route:new String[]{"/api/control/tenants/17/business/users","/api/control/tenants/17/support/conversations","/api/control/support/conversations","/api/control/business/users","/api/control/supervision/kyc","/api/control/supervision/admins","/api/control/supervision/agents","/api/control/supervision/statistics"}) {
+            mvc.perform(post(route).contentType("application/json").content("{}"))
                 .andExpect(status().isMethodNotAllowed()).andExpect(header().string("Allow","GET"))
                 .andExpect(header().string("Cache-Control","no-store")).andExpect(jsonPath("$.success").value(false));
         }

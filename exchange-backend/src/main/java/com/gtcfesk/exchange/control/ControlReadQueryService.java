@@ -28,10 +28,19 @@ public class ControlReadQueryService {
     /** Offset-bearing ISO timestamps, UTC half-open range; no receipt or presence writes. */
     public List<Map<String,Object>> conversations(Long user,Long admin,String createdFrom,String createdTo,int page){return conversations(user,admin,null,createdFrom,createdTo,page);}
     public List<Map<String,Object>> conversations(Long user,Long admin,String userEmail,String createdFrom,String createdTo,int page){
-        Long owner=tenant();if(page<0||page>100000||(user!=null&&user<=0)||(admin!=null&&admin<=0))throw new IllegalArgumentException("筛选参数无效");
+        return queryConversations(tenant(),user,admin,userEmail,createdFrom,createdTo,page);
+    }
+    /** Explicit platform-only aggregate read; never supplies a tenant context to business or retention writes. */
+    public List<Map<String,Object>> allConversations(Long user,Long admin,String userEmail,String createdFrom,String createdTo,int page){
+        ControlIdentity.requireIndependent();
+        return queryConversations(null,user,admin,userEmail,createdFrom,createdTo,page);
+    }
+    private List<Map<String,Object>> queryConversations(Long owner,Long user,Long admin,String userEmail,String createdFrom,String createdTo,int page){
+        if(page<0||page>100000||(user!=null&&user<=0)||(admin!=null&&admin<=0))throw new IllegalArgumentException("筛选参数无效");
         boolean hasFrom=createdFrom!=null&&!createdFrom.isEmpty(),hasTo=createdTo!=null&&!createdTo.isEmpty();
         if(hasFrom!=hasTo)throw new IllegalArgumentException("请同时填写开始与结束时间，含时区偏移");
-        String where=" WHERE x.tenant_id=?";List<Object> args=new ArrayList<>();args.add(owner);
+        String where=owner==null?" WHERE t.id IS NOT NULL AND x.tenant_id>0":" WHERE x.tenant_id=?";
+        List<Object> args=new ArrayList<>();if(owner!=null)args.add(owner);
         String pattern=com.gtcfesk.exchange.admin.AdminUserIdentity.emailPattern(userEmail);
         if(pattern!=null){where+=" AND LOWER(u.email) LIKE ? ESCAPE '!'";args.add(pattern);}
         if(user!=null){where+=" AND x.user_id=?";args.add(user);}if(admin!=null){where+=" AND x.admin_id=?";args.add(admin);}
@@ -44,22 +53,27 @@ public class ControlReadQueryService {
                 args.add(java.time.LocalDateTime.ofInstant(from,java.time.ZoneOffset.UTC));args.add(java.time.LocalDateTime.ofInstant(to,java.time.ZoneOffset.UTC));
             }catch(java.time.DateTimeException e){throw new IllegalArgumentException("时间须为含时区偏移的ISO时间");}
         }
-        args.add(page*30);return jdbc.queryForList("SELECT x.id,x.user_id,u.email AS user_email,u.remark AS user_remark,x.admin_id,x.status,x.created_at,x.closed_at,x.legal_hold FROM support_conversation x LEFT JOIN user_account u ON u.tenant_id=x.tenant_id AND u.id=x.user_id"+where+" ORDER BY x.created_at DESC,x.id DESC LIMIT 30 OFFSET ?",args.toArray());
+        args.add(page*30);return jdbc.queryForList("SELECT x.tenant_id,t.name AS tenant_name,x.id,x.user_id,u.email AS user_email,u.remark AS user_remark,x.admin_id,x.status,x.created_at,x.closed_at,x.legal_hold FROM support_conversation x LEFT JOIN tenant t ON t.id=x.tenant_id LEFT JOIN user_account u ON u.tenant_id=x.tenant_id AND u.id=x.user_id"+where+" ORDER BY x.created_at DESC,x.id DESC LIMIT 30 OFFSET ?",args.toArray());
     }
     public Map<String,Object> records(String kind,Long subject,String status,int page,int size) { return records(kind,subject,null,status,page,size); }
     public Map<String,Object> records(String kind,Long subject,String userEmail,String status,int page,int size) {
-        Long tenant=tenant();
+        return queryRecords(tenant(),kind,subject,userEmail,status,page,size);
+    }
+    public Map<String,Object> allRecords(String kind,Long subject,String userEmail,String status,int page,int size) {
+        ControlIdentity.requireIndependent();return queryRecords(null,kind,subject,userEmail,status,page,size);
+    }
+    private Map<String,Object> queryRecords(Long tenant,String kind,Long subject,String userEmail,String status,int page,int size) {
         if(page<1||page>100000||size<1||size>100||(subject!=null&&subject<=0))throw new IllegalArgumentException("筛选参数无效");
-        String table,columns,owner,where=" WHERE x.tenant_id=?";
+        String table,columns,owner,where=tenant==null?" WHERE x.tenant_id>0":" WHERE x.tenant_id=?";
         switch(kind) {
             case "kyc":table="kyc_record";columns="id,user_id,real_name,id_number,status,review_remark,reviewed_by,reviewed_at,created_at,updated_at";owner="user_id";break;
             case "admins":table="admin_user";columns="id,account,email,role,enabled,must_change_password,created_at,updated_at";owner="id";break;
             case "agents":table="user_account";columns="id,email,remark,nickname,parent_user_id,status,created_at,last_login_at";owner="id";where+=" AND x.user_type='agent'";break;
             default:throw new IllegalArgumentException("未知监管分类");
         }
-        String from=table+" x"+("kyc".equals(kind)?" LEFT JOIN user_account u ON u.tenant_id=x.tenant_id AND u.id=x.user_id":"");
+        String from=table+" x"+(tenant==null?" JOIN tenant t ON t.id=x.tenant_id":"")+("kyc".equals(kind)?" LEFT JOIN user_account u ON u.tenant_id=x.tenant_id AND u.id=x.user_id":"");
         String pattern=com.gtcfesk.exchange.admin.AdminUserIdentity.emailPattern(userEmail);
-        List<Object> args=new ArrayList<>();args.add(tenant);
+        List<Object> args=new ArrayList<>();if(tenant!=null)args.add(tenant);
         if(pattern!=null){where+=" AND LOWER("+("kyc".equals(kind)?"u":"x")+".email) LIKE ? ESCAPE '!'";args.add(pattern);}
         if(subject!=null){where+=" AND x."+owner+"=?";args.add(subject);}
         if(status!=null&&!status.isEmpty()) {
@@ -67,7 +81,8 @@ public class ControlReadQueryService {
             where+=" AND x.status=?";args.add(status);
         }
         Long total=jdbc.queryForObject("SELECT COUNT(*) FROM "+from+where,Long.class,args.toArray());
-        String select="x."+columns.replace(",",",x.");
+        String select=(tenant==null?"x.tenant_id,t.name AS tenant_name,":"")+"x."+columns.replace(",",",x.");
+        if(tenant==null)columns="tenant_id,tenant_name,"+columns;
         if("kyc".equals(kind)){select+=",u.email AS user_email,u.remark AS user_remark";columns+=",user_email,user_remark";}
         if("agents".equals(kind)){
             from+=" LEFT JOIN user_account parent ON parent.tenant_id=x.tenant_id AND parent.id=x.parent_user_id";
@@ -75,25 +90,32 @@ public class ControlReadQueryService {
         }
         if("agents".equals(kind))select+=",(SELECT COUNT(*) FROM user_account child WHERE child.tenant_id=x.tenant_id AND child.parent_user_id=x.id) AS subordinate_count";
         args.add(size);args.add((page-1)*size);
-        List<Map<String,Object>> rows=jdbc.queryForList("SELECT "+select+" FROM "+from+where+" ORDER BY x.id DESC LIMIT ? OFFSET ?",args.toArray());
+        List<Map<String,Object>> rows=jdbc.queryForList("SELECT "+select+" FROM "+from+where+" ORDER BY x.id DESC,x.tenant_id DESC LIMIT ? OFFSET ?",args.toArray());
         if("kyc".equals(kind))for(Map<String,Object> row:rows){String id=Objects.toString(row.get("id_number"),"");row.put("id_number",id.isEmpty()?"":"***"+id.substring(Math.max(0,id.length()-4)));}
         Map<String,Object> result=new LinkedHashMap<>();result.put("rows",rows);result.put("total",total);result.put("page",page);result.put("size",size);
         result.put("columns",(columns+("agents".equals(kind)?",subordinate_count":"")).split(","));return result;
     }
-    public Map<String,Object> statistics() {
-        Long t=tenant();Map<String,Object> out=new LinkedHashMap<>(),counts=new LinkedHashMap<>();
-        counts.put("users",count("user_account",t,""));counts.put("agents",count("user_account",t," AND user_type='agent'"));
-        counts.put("admins",count("admin_user",t,""));counts.put("pendingKyc",count("kyc_record",t," AND status='PENDING'"));
-        counts.put("openSupport",count("support_conversation",t," AND status<>'CLOSED'"));
+    public Map<String,Object> statistics() {return queryStatistics(tenant());}
+    public Map<String,Object> allStatistics() {ControlIdentity.requireIndependent();return queryStatistics(null);}
+    private Map<String,Object> queryStatistics(Long t) {
+        Map<String,Object> out=new LinkedHashMap<>(),counts=new LinkedHashMap<>();
+        counts.put("users",count("user_account",t,""));counts.put("agents",count("user_account",t," AND x.user_type='agent'"));
+        counts.put("admins",count("admin_user",t,""));counts.put("pendingKyc",count("kyc_record",t," AND x.status='PENDING'"));
+        counts.put("openSupport",count("support_conversation",t," AND x.status<>'CLOSED'"));
         out.put("tenantId",t);out.put("asOf",Instant.now().toString());out.put("counts",counts);
-        out.put("assets",jdbc.queryForList("SELECT coin,COUNT(*) AS accounts,COALESCE(SUM(available),0) AS available,COALESCE(SUM(frozen),0) AS frozen FROM asset_account WHERE tenant_id=? GROUP BY coin ORDER BY coin",t));
-        out.put("contracts",jdbc.queryForList("SELECT status,COUNT(*) AS orders FROM contract_order WHERE tenant_id=? GROUP BY status ORDER BY status",t));
-        out.put("options",jdbc.queryForList("SELECT status,COUNT(*) AS orders FROM option_order WHERE tenant_id=? GROUP BY status ORDER BY status",t));
-        out.put("deposits",jdbc.queryForList("SELECT currency,status,COUNT(*) AS records,COALESCE(SUM(amount),0) AS amount_usd FROM deposit_record WHERE tenant_id=? GROUP BY currency,status ORDER BY currency,status",t));
-        out.put("withdrawals",jdbc.queryForList("SELECT currency,status,COUNT(*) AS records,COALESCE(SUM(amount),0) AS amount_usd FROM withdraw_record WHERE tenant_id=? GROUP BY currency,status ORDER BY currency,status",t));
+        out.put("assets",statisticRows(t,"asset_account","x.coin,COUNT(*) AS accounts,COALESCE(SUM(x.available),0) AS available,COALESCE(SUM(x.frozen),0) AS frozen","x.coin"));
+        out.put("contracts",statisticRows(t,"contract_order","x.status,COUNT(*) AS orders","x.status"));
+        out.put("options",statisticRows(t,"option_order","x.status,COUNT(*) AS orders","x.status"));
+        out.put("deposits",statisticRows(t,"deposit_record","x.currency,x.status,COUNT(*) AS records,COALESCE(SUM(x.amount),0) AS amount_usd","x.currency,x.status"));
+        out.put("withdrawals",statisticRows(t,"withdraw_record","x.currency,x.status,COUNT(*) AS records,COALESCE(SUM(x.amount),0) AS amount_usd","x.currency,x.status"));
         return out;
     }
-    private long count(String table,Long tenant,String fixedCondition){return jdbc.queryForObject("SELECT COUNT(*) FROM "+table+" WHERE tenant_id=?"+fixedCondition,Long.class,tenant);}
+    /** Fixed internal SQL only; all-tenant monetary snapshots retain tenant, account type and currency dimensions. */
+    private String statisticsFrom(String table,Long tenant){return table+" x"+(tenant==null?" JOIN tenant t ON t.id=x.tenant_id WHERE x.tenant_id>0":" WHERE x.tenant_id=?");}
+    private long count(String table,Long tenant,String fixedCondition){return jdbc.queryForObject("SELECT COUNT(*) FROM "+statisticsFrom(table,tenant)+fixedCondition,Long.class,tenant==null?new Object[0]:new Object[]{tenant});}
+    private List<Map<String,Object>> statisticRows(Long tenant,String table,String select,String group){
+        return jdbc.queryForList("SELECT "+(tenant==null?"x.tenant_id,t.name AS tenant_name,":"")+select+" FROM "+statisticsFrom(table,tenant)+" GROUP BY "+(tenant==null?"x.tenant_id,t.name,":"")+group+" ORDER BY "+(tenant==null?"x.tenant_id,":"")+group,tenant==null?new Object[0]:new Object[]{tenant});
+    }
     private SupportConversation conversation(long id) {
         tenant();if(id<=0)throw new IllegalArgumentException("会话编号无效");
         SupportConversation c=TenantEntities.find(em,SupportConversation.class,id);
