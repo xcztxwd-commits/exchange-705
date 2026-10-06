@@ -103,7 +103,7 @@ function changePage(delta: number) {
         <h1>{{ t('在线客服', 'Customer support') }}</h1>
         <p>{{ t('专属协助 · 安心沟通', 'Personal assistance. A conversation you can trust.') }}</p>
       </div>
-      <span class="header-mark">SUPPORT</span>
+      <span class="header-mark">{{ localeStore.text('客服', 'Support') }}</span>
     </header>
     <p v-if="error" class="page-error" role="alert">{{ error }}</p>
     <div v-if="!config" class="welcome">{{ t('加载中…', 'Loading…') }}</div>

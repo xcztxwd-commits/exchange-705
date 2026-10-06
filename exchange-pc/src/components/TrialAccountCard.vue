@@ -8,7 +8,7 @@ function inbox(){window.dispatchEvent(new Event('activity-inbox'))}
 </script>
 <template>
  <section v-if="wallet.state.eligible" class="trial-account-card" :aria-label="t(6)" data-testid="trial-card">
-  <header><span class="trial-symbol" aria-hidden="true">✦</span><div><h3>{{ t(6) }}</h3><small>TRIAL CREDIT · U</small></div><button @click="inbox">{{ t(20) }} <span aria-hidden="true">›</span></button></header>
+  <header><span class="trial-symbol" aria-hidden="true">✦</span><div><h3>{{ t(6) }}</h3><small>{{ locale.text('体验金', 'Trial credit') }} · U</small></div><button @click="inbox">{{ t(20) }} <span aria-hidden="true">›</span></button></header>
   <div class="trial-balances"><div><small>{{ t(7) }}</small><strong>{{ props.visible ? money(wallet.state.available) : '****' }} <em>U</em></strong></div><div><small>{{ t(8) }}</small><b>{{ props.visible ? money(wallet.state.frozen) : '****' }} U</b></div></div>
   <p v-if="wallet.state.expiresAt != null" class="trial-countdown" data-testid="trial-countdown">{{ locale.text('剩余有效时间', 'Time remaining') }} <time>{{ wallet.remaining }}</time></p>
   <p>{{ t(12) }}</p>

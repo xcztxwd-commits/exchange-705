@@ -227,7 +227,7 @@ onUnmounted(() => {
   </TradeSheet>
   <main class="trade-page" :class="[activeTab, { 'keyboard-open': keyboardOpen }]">
     <header class="product-header"><div class="segments"><button :class="{ active: activeTab === 'contract' }" @click="activeTab = 'contract'">{{ locale.t('contract') }}</button><button :class="{ active: activeTab === 'term' }" @click="activeTab = 'term'">{{ locale.t('term') }}</button></div><button class="help" :aria-label="text('交易規則', 'Trading rules')" @click="showRules = true">?</button></header>
-    <section class="funding-selector" aria-label="Funding source" data-testid="funding-selector">
+    <section class="funding-selector" :aria-label="text('资金来源', 'Funding source')" data-testid="funding-selector">
       <span>{{ text('资金来源', 'Funding source') }}</span>
       <button v-if="wallet.state.eligible && wallet.state.available > 0" type="button" data-source="TRIAL" :aria-pressed="fundingSource === 'TRIAL'" @click="chooseFunding('TRIAL')">{{ text('体验金', 'Trial credit') }}</button>
       <button type="button" :data-source="activeTab === 'contract' ? 'CONTRACT' : 'OPTION'" :aria-pressed="fundingSource !== 'TRIAL'" @click="chooseFunding(activeTab === 'contract' ? 'CONTRACT' : 'OPTION')">{{ activeTab === 'contract' ? locale.t('contractAccountTitle') : locale.t('optionAccountTitle') }}</button>

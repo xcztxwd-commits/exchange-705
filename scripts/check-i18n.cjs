@@ -41,15 +41,30 @@ function sourceFiles(dir) {
   return fs.readdirSync(dir, { withFileTypes: true }).flatMap(entry => entry.isDirectory() ? sourceFiles(path.join(dir, entry.name)) : /\.(vue|ts)$/.test(entry.name) ? [path.join(dir, entry.name)] : [])
 }
 const projects = ['exchange-frontend', 'exchange-pc']
+// Include wrapper calls and dynamic label tables, not only single-quoted text calls.
+function uiLabels(source) {
+  const labels = []
+  for (const match of source.matchAll(/\b(?:text|copy|directionLabel|t|supportText)\(\s*(['"`])((?:\\.|(?!\1)[^\\])*)\1\s*,\s*(['"`])((?:\\.|(?!\3)[^\\])*)\3(?:\s*,\s*(['"`])((?:\\.|(?!\5)[^\\])*)\5)?/g)) {
+    // Three-string helpers already provide an explicit Japanese branch.
+    if (match[6] && /[\u3040-\u30ff\u3400-\u9fff]/.test(match[6])) continue
+    if (!match[4].includes('${')) labels.push(match[4])
+  }
+  for (const match of source.matchAll(/\ben:\s*(['"])(.*?)\1|\[\s*'(?:[^']*)'\s*,\s*'[^']*[\u3400-\u9fff][^']*'\s*,\s*'([^']*)'|\[\s*'[^']*[\u3400-\u9fff][^']*'\s*,\s*'([^']*)'/g)) {
+    const label = match[2] || match[3] || match[4]
+    if (/[A-Za-z]/.test(label)) labels.push(label)
+  }
+  return [...new Set(labels)]
+}
+assert.deepEqual(uiLabels(`text('中文', 'One'); copy("中文", "Two"); text('中文', \`Three\`); text('中文', 'Inline', '日本語'); t('中文', 'Support'); [{zh:'中文',en:'Four'}]; [['key','中文','Five']]; [['中文','Six']];`), ['One', 'Two', 'Three', 'Support', 'Four', 'Five', 'Six'])
 // Report all missing literals across both clients in one run, not only the first hit.
 const missingUiTranslations = []
 for (const project of projects) {
   const { uiMessages, uiAliases } = load(path.join(root, project, 'src/store/uiMessages.ts'))
   for (const file of sourceFiles(path.join(root, project, 'src'))) {
-    if (file.endsWith('uiMessages.ts')) continue
+    if (/(?:uiMessages|locale)\.ts$/.test(file)) continue
     const source = fs.readFileSync(file, 'utf8')
-    for (const match of source.matchAll(/\btext\(\s*'([^']*)'\s*,\s*'([^']*)'/g)) {
-      if (!Object.hasOwn(uiMessages.ja, match[2]) && !Object.hasOwn(uiAliases, match[2])) missingUiTranslations.push(file + ': ' + match[2])
+    for (const label of uiLabels(source)) {
+      if (!Object.hasOwn(uiMessages.ja, label) && !Object.hasOwn(uiAliases, label)) missingUiTranslations.push(file + ': ' + label)
     }
   }
 }
