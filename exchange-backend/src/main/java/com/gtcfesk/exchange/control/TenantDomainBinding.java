@@ -8,6 +8,7 @@ import java.time.Instant;
 public class TenantDomainBinding {
  @Id @Column(length=253) private String hostname;
  @Column(nullable=false) private Long tenantId;
+ @Column(name="domain_role",nullable=false,length=16) private String role="FRONTEND";
  @Column(nullable=false,length=16) private String status;
  @JsonIgnore @Column(length=32) private String challenge;
  private Instant expiresAt,verifiedAt;

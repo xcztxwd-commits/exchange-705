@@ -11,6 +11,10 @@ public class Tenant {
  @Column(nullable=false,unique=true,length=64) private String code;
  @Column(nullable=false,length=128) private String name;
  @Column(name="frontend_host",unique=true,length=253) private String frontendHost;
+ @Column(name="entry_host",unique=true,length=253) private String entryHost;
+ @Column(nullable=false) private boolean entryEnabled;
+ @Column(nullable=false) private boolean entryVerified;
+ @Column(nullable=false) private long domainVersion;
  @Column(nullable=false,length=32) private String status="DRAFT";
  @Column(nullable=false,length=32) private String templateVersion="safe-v1";
  @Column(nullable=false) private long policyVersion;

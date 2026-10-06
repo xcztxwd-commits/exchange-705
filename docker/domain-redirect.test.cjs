@@ -45,7 +45,9 @@ assert.doesNotMatch(aliasScript, /forexTransitionFinished/);
 const caddy = fs.readFileSync(path.join(__dirname, 'Caddyfile'), 'utf8');
 assert.equal((caddy.match(/domain-transition\.html\?next=\{uri\}/g) || []).length, 0);
 assert.equal((caddy.match(/@document header Accept \*text\/html\*/g) || []).length, 0);
-assert.equal((caddy.match(/redir https:\/\/trade\.forex-exchange\.cc\{uri\} 302/g) || []).length, 2);
+assert.doesNotMatch(caddy, /redir https:\/\/trade\.forex-exchange\.cc/, 'entry targets must come from tenant DB, not global suffix or hardcoded alias');
+assert.match(caddy, /http:\/\/\*\.forex-exchange\.net/);
+assert.match(caddy, /reverse_proxy pc:80/);
 
 async function checkAlias(search, expected) {
   let destination;

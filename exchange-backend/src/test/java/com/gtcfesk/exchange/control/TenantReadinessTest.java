@@ -53,4 +53,8 @@ class TenantReadinessTest {
   tx(()->em.createQuery("UPDATE BackendLogin SET enabled=false WHERE tenantId=:tenant").setParameter("tenant",tenant).executeUpdate());assertTrue(keys(readiness.report(tenant)).contains("backend.admin"));
   tx(()->{em.createQuery("UPDATE BackendLogin SET enabled=true WHERE tenantId=:tenant").setParameter("tenant",tenant).executeUpdate();em.createQuery("UPDATE AdminUser SET enabled=false WHERE tenantId=:tenant").setParameter("tenant",tenant).executeUpdate();});assertTrue(keys(readiness.report(tenant)).contains("backend.admin"));
  }
+ @Test void unconfiguredOrClosedEntryDoesNotAffectFrontendReadiness(){
+  Tenant t=tenants.findById(tenant).orElseThrow();assertNull(t.getEntryHost());assertFalse(t.isEntryEnabled());assertTrue(readiness.report(tenant).ready);
+  t.setEntryHost("optional.forex-exchange.net");t.setEntryEnabled(false);t.setEntryVerified(false);tenants.saveAndFlush(t);assertTrue(readiness.report(tenant).ready);readiness.requireReady(tenant);
+ }
 }

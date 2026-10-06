@@ -116,21 +116,28 @@ SOURCE0403_METADATA = {'table':'tenant_schema_version','version':2026100403,
 HISTORY0404_METADATA = {'table':'tenant_schema_version','version':2026100404,
                         'minimum_application_epoch':2026100404,'business_activation_ready':False}
 
+ENTRY0603_METADATA = {'table':'tenant_schema_version','version':2026100603,
+                      'minimum_application_epoch':2026100603,'business_activation_ready':False}
+
 def metadata_append_contract(start,reviewed):
     # Only these individually reviewed additive tails; never infer arbitrary future metadata.
     tails = {
         'V2026100403__source_history_input_revision.sql': SOURCE0403_METADATA,
         'V2026100404__history_ordering_and_response_receipts.sql': HISTORY0404_METADATA,
+        'V2026100603__tenant_entry_frontend_roles.sql': ENTRY0603_METADATA,
     }
     if start>0 and len(reviewed[start:])==1:
         name=reviewed[start]['name']
-        if name in tails and (name not in ('V2026100404__history_ordering_and_response_receipts.sql',)
-                or reviewed[start-1]['name']=='V2026100403__source_history_input_revision.sql'):
+        predecessor = {
+            'V2026100404__history_ordering_and_response_receipts.sql': 'V2026100403__source_history_input_revision.sql',
+            'V2026100603__tenant_entry_frontend_roles.sql': 'V2026100602__user_avatar.sql',
+        }
+        if name in tails and (name not in predecessor or reviewed[start-1]['name']==predecessor[name]):
             return dict(tails[name])
     return None
 
 def metadata_version(contract):
-    if contract not in (SOURCE0403_METADATA,HISTORY0404_METADATA):
+    if contract not in (SOURCE0403_METADATA,HISTORY0404_METADATA,ENTRY0603_METADATA):
         raise ValueError('Unreviewed metadata append contract')
     return contract['version']
 

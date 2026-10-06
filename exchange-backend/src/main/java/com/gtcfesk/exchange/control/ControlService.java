@@ -9,6 +9,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.*;import java.util.*;import java.nio.charset.StandardCharsets;import java.security.*;
 @Service
 public class ControlService {
+ private static final long LOGIN_LIFETIME_SECONDS=Duration.ofDays(7).getSeconds();
  private final ControlAdminRepository admins;private final ControlAccessSessionRepository sessions;private final TenantRepository tenants;
  private final ControlAuditService audit;private final JwtUtil jwt;private final PasswordEncoder passwords;private final ControlMfa mfa;private final TenantHostService hosts;
  private final boolean requireMfa;
@@ -17,7 +18,7 @@ public class ControlService {
   ControlAdmin a=admins.findByAccount(BackendLoginRegistry.normalize(account)).orElseThrow(()->new AccessDeniedException("账号或验证信息错误"));
   if(!a.isEnabled()||password==null||!passwords.matches(password,a.getPasswordHash())||(requireMfa&&!a.isMfaEnabled())||(a.isMfaEnabled()&&!mfa.verify(a.getMfaSecret(),code)))throw new AccessDeniedException("账号或验证信息错误");
   Map<String,Object> claims=new LinkedHashMap<>();claims.put("userType","control");claims.put("actorVersion",a.getSessionVersion());
-  Map<String,Object> result=new LinkedHashMap<>();result.put("token",jwt.generateToken("control-"+a.getId(),claims,3600));result.put("expiresAt",System.currentTimeMillis()+3600000);result.put("user",a);
+  Map<String,Object> result=new LinkedHashMap<>();result.put("token",jwt.generateToken("control-"+a.getId(),claims,LOGIN_LIFETIME_SECONDS));result.put("expiresAt",System.currentTimeMillis()+LOGIN_LIFETIME_SECONDS*1000);result.put("user",a);
   audit.record(a.getId(),null,null,"CONTROL_LOGIN",String.valueOf(a.getId()),"SUCCESS","",null);return result;
  }
  public ControlAdmin validateControl(Claims claims){

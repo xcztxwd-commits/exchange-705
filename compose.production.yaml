@@ -27,6 +27,9 @@ services:
       - "443:443"
     volumes:
       - ./docker/Caddyfile:/etc/caddy/Caddyfile:ro
+      # Local configuration only. Deployment requires existing release approval and verified wildcard TLS.
+      - ${TENANT_DOMAIN_CERT_FILE:?Provide reviewed wildcard certificate path}:/etc/caddy/tenant-domains.crt:ro
+      - ${TENANT_DOMAIN_KEY_FILE:?Provide protected wildcard key path}:/etc/caddy/tenant-domains.key:ro
       - caddy-data:/data
       - caddy-config:/config
     depends_on:

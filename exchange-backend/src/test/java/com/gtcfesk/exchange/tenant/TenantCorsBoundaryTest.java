@@ -22,4 +22,8 @@ class TenantCorsBoundaryTest {
   Tenant tenant=new Tenant();tenant.setId(2L);tenant.setFrontendHost("a.example.test");tenant.setDomainVerified(true);tenant.setStatus("ACTIVE");when(tenants.findByFrontendHost("a.example.test")).thenReturn(Optional.of(tenant));
   assertTrue(request("a.example.test","https://a.example.test",null));assertFalse(request("a.example.test","https://b.example.test",null));tenant.setDomainVerified(false);assertFalse(request("a.example.test","https://a.example.test",null));
  }
+ @Test void enabledEntryIsNeverAnAuthenticationOrigin()throws Exception{
+  Tenant t=new Tenant();t.setId(2L);t.setFrontendHost("a.example.test");t.setEntryHost("entry.forex-exchange.net");t.setEntryEnabled(true);t.setDomainVerified(true);t.setStatus("ACTIVE");when(tenants.findByFrontendHost("a.example.test")).thenReturn(Optional.of(t));
+  assertFalse(request("a.example.test","https://entry.forex-exchange.net",null));assertFalse(request("entry.forex-exchange.net","https://entry.forex-exchange.net",null));assertTrue(request("a.example.test","https://a.example.test",null));
+ }
 }

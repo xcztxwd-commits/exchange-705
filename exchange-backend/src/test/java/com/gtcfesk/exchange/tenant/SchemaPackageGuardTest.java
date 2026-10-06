@@ -7,7 +7,7 @@ import static org.mockito.Mockito.*;
 
 class SchemaPackageGuardTest {
     @Test void packagedEpochIsFixedResourceNotEnvironmentOverride() throws Exception {
-        assertEquals(2026100602L, SchemaPackageGuard.packagedEpoch());
+        assertEquals(2026100603L, SchemaPackageGuard.packagedEpoch());
     }
     @Test void olderPackageAndMissingVersionFailBeforeDatasourcePublication() throws Exception {
         Connection c = mock(Connection.class); DatabaseMetaData m = mock(DatabaseMetaData.class);

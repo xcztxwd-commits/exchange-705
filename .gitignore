@@ -108,3 +108,7 @@ dist-control*/
 
 # Reviewed additive CONTROL policy catalog; no tenant data or credentials.
 !exchange-backend/src/main/resources/db/migration/V2026100601__control_policy_definitions.sql
+
+# Reviewed additive tenant entry/frontend roles and read-only preflight.
+!exchange-backend/src/main/resources/db/migration/V2026100603__tenant_entry_frontend_roles.sql
+!scripts/tenant-domains/preflight.sql

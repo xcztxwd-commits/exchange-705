@@ -1,13 +1,6 @@
 (no_index) {
 	header X-Robots-Tag "noindex, nofollow, noarchive, nosnippet"
-	handle /robots.txt {
-		header Content-Type "text/plain; charset=utf-8"
-		respond <<ROBOTS
-			User-agent: *
-			Disallow: /
 
-			ROBOTS 200
-	}
 }
 
 (block_crawlers) {
@@ -15,7 +8,9 @@
 	# ponytail: user agents are self-reported; unidentified crawlers cannot be reliably distinguished from visitors.
 	@crawler header_regexp User-Agent "(?i)(Googlebot|Google-InspectionTool|bingbot|BingPreview|DuckDuckBot|Baiduspider|YandexBot|YandexImages|YandexVideo|Sogou[ _-](web|inst|pic|news|video)[ _-]spider|Sosospider|360Spider|Bytespider|PetalBot|Applebot|Yahoo![ ]Slurp|ia_archiver|AhrefsBot|SemrushBot|MJ12bot|DotBot|CCBot|Amazonbot|GPTBot|OAI-SearchBot|ClaudeBot|anthropic-ai|PerplexityBot|facebookexternalhit|Facebot|Twitterbot|LinkedInBot|Slackbot-LinkExpanding|Discordbot|TelegramBot|WhatsApp|SkypeUriPreview|Pinterestbot|Viber|vkShare|redditbot|Embedly|Quora[ ]Link[ ]Preview|Iframely|Mastodon)"
 	handle @crawler {
-		respond "Crawling and link previews are disabled." 403
+		header Cache-Control "no-store"
+        header Content-Type "application/json; charset=utf-8"
+        respond `{"success":false,"code":"TENANT_BOUNDARY_REJECTED","message":"入口或租户上下文无效"}` 403
 	}
 }
 
@@ -23,40 +18,54 @@ trade.forex-exchange.cc {
 	import no_index
 	handle {
 		header /entry.html Cache-Control "no-store"
-		reverse_proxy pc:80
+		reverse_proxy pc:80 {
+   header_up Host {http.request.hostport}
+   header_up X-Edge-TLS-Server-Name {http.request.tls.server_name}
+  }
 	}
 }
 
 admin-panel.forex-exchange.cc {
 	import no_index
 	handle {
-		reverse_proxy admin:80
+		reverse_proxy admin:80 {
+   header_up Host {http.request.hostport}
+   header_up X-Edge-TLS-Server-Name {http.request.tls.server_name}
+  }
 	}
 }
 
-fx.forex-exchange.cc {
-	import no_index
-	handle {
-		header Cache-Control "no-store"
-		redir https://trade.forex-exchange.cc{uri} 302
-	}
+# Wildcard TLS material is provisioned by operations, never by tenant domain edits.
+# It must cover BOTH platform roots. Stock Caddy cannot issue wildcard certs without a DNS issuer.
+https://*.forex-exchange.cc {
+ tls /etc/caddy/tenant-domains.crt /etc/caddy/tenant-domains.key
+ header X-Robots-Tag "noindex, nofollow, noarchive, nosnippet"
+ reverse_proxy pc:80 {
+   header_up Host {http.request.hostport}
+   header_up X-Edge-TLS-Server-Name {http.request.tls.server_name}
+  }
 }
 
-# Both protocols apply the crawler rule before any redirect.
-http://forex-exchange.net, https://forex-exchange.net, http://www.forex-exchange.net, https://www.forex-exchange.net {
-	import no_index
-	import block_crawlers
-	handle {
-		header Cache-Control "no-store"
-		redir https://trade.forex-exchange.cc/entry.html 302
-	}
+# Explicit HTTP entry listener prevents automatic permanent HTTP redirects.
+(tenant_entry) {
+ header Cache-Control "no-store"
+ header X-Robots-Tag "noindex, nofollow, noarchive, nosnippet"
+ import block_crawlers
+ reverse_proxy pc:80 {
+  header_up Host {http.request.hostport}
+  header_up X-Edge-TLS-Server-Name {http.request.tls.server_name}
+ }
 }
-
-trade.forex-exchange.net {
-	import no_index
-	import block_crawlers
-	handle {
-		header Cache-Control "no-store"
-		redir https://trade.forex-exchange.cc{uri} 302
-	}
+http://*.forex-exchange.net {
+ import tenant_entry
+}
+https://*.forex-exchange.net {
+ tls /etc/caddy/tenant-domains.crt /etc/caddy/tenant-domains.key
+ import tenant_entry
+}
+http://forex-exchange.net {
+ import tenant_entry
+}
+https://forex-exchange.net {
+ import tenant_entry
 }
