@@ -135,7 +135,10 @@ public class MarketControlCommands {
                 // An expired/changed old receipt can fail before claim; only a successful claim pins this turn's generation.
                 if(claimedThisTurn && !Objects.equals(command.get("writer_generation"),store.db.queryForObject("SELECT writer_generation FROM market_engine_runtime WHERE tenant_id=? AND symbol_id=?",Long.class,ControlHistoryStore.tenant(),symbol)))return null;
                 String code=failure instanceof BalancedControlPlan.Failure?((BalancedControlPlan.Failure)failure).code:"COMMAND_FAILED";
-                store.db.update("UPDATE market_control_command SET state='FAILED',prepared_json=NULL,error_code=?,message=? WHERE tenant_id=? AND id=? AND state IN ('ACCEPTED','PREPARING','READY')",code,"启动未完成："+failure.getClass().getSimpleName(),ControlHistoryStore.tenant(),id);return null;
+                // Only bounded validation messages are user-facing; unexpected errors remain opaque.
+                String message=Arrays.asList("AMPLITUDE_PRECISION_UNREPRESENTABLE","TARGET_AMPLITUDE_INFEASIBLE","CORRIDOR_PRECISION_UNREPRESENTABLE","CORRIDOR_STEP_INFEASIBLE","PLAN_SEARCH_EXHAUSTED","PLAN_COMPUTE_BUSY","INVALID_PARAMETERS","INVALID_FORMULA","ALGORITHM_DISABLED","START_BASIS_CHANGED").contains(code)
+                    ?failure.getMessage():"启动未完成："+failure.getClass().getSimpleName();
+                store.db.update("UPDATE market_control_command SET state='FAILED',prepared_json=NULL,error_code=?,message=? WHERE tenant_id=? AND id=? AND state IN ('ACCEPTED','PREPARING','READY')",code,message,ControlHistoryStore.tenant(),id);return null;
             });}catch(RuntimeException fenced){org.slf4j.LoggerFactory.getLogger(getClass()).warn("Command result remains recoverable: {}",id);return false;}
         }
         return preparationStarted;

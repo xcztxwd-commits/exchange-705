@@ -1,6 +1,5 @@
 <template>
   <el-config-provider :locale="elementLocales[localeStore.locale]">
-    <TenantStatus />
   <AccountModeSwitch v-if="auth.token" real-path="/" />
     <router-view :key="auth.user?.id" />
     <SupportNotifications :key="auth.user?.id" :inbox-target="route.path === '/' ? '#header-inbox' : undefined" />
@@ -20,7 +19,6 @@ import { createPageReporter, pageCodeForPath, safePageCode } from '@/utils/pageA
 import ActivityCenter from '@/components/ActivityCenter.vue'
 import SupportNotifications from '@/components/SupportNotifications.vue'
 import AccountModeSwitch from '@/components/AccountModeSwitch.vue'
-import TenantStatus from '@/components/TenantStatus.vue'
 import { refreshTenantFeatures } from '@/utils/tenantFeatures'
 import { ElConfigProvider } from 'element-plus'
 import { elementLocales } from '@/utils/elementLocale'

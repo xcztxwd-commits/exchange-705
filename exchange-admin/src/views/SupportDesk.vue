@@ -1,13 +1,17 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { useRoute, useRouter } from 'vue-router'
 import { access, can } from '@/utils/access'
 import { useAuthStore } from '@/store/auth'
 import request from '@/utils/request'
 import { supportDate, type Conversation } from '@/utils/support'
 import SupportThread from '@/components/SupportThread.vue'
+const route = useRoute(), router = useRouter()
+const scopeFromRoute = () => route.query.scope === 'queue' && can('support:claim') ? 'queue'
+  : route.query.scope === 'all' && access.superAdmin && can('support:audit') ? 'all' : 'mine'
 const auth = useAuthStore(),
-  scope = ref('mine'),
+  scope = ref(scopeFromRoute()),
   userEmail = ref(''),
   rows = ref<Conversation[]>([]),
   selected = ref<Conversation>(),
@@ -26,12 +30,13 @@ let timer: ReturnType<typeof setTimeout> | undefined,
 async function load() {
   if (pending || disposed) return
   pending = true
+  const requestedScope = scope.value
   try {
     const data: any = await request.get('/admin/support/sessions', {
-      params: { scope: scope.value, page: page.value, userEmail: userEmail.value.trim() || undefined },
+      params: { scope: requestedScope, page: page.value, userEmail: userEmail.value.trim() || undefined },
     })
     const state: any = await request.get('/user/support/config')
-    if (disposed) return
+    if (disposed || requestedScope !== scope.value) return
     rows.value = data
     config.value = state
     if (accepting.value && can('support:claim'))
@@ -47,7 +52,7 @@ async function load() {
     pending = false
     if (!disposed) {
       clearTimeout(timer)
-      timer = setTimeout(load, 5000)
+      timer = setTimeout(load, requestedScope === scope.value ? 5000 : 0)
     }
   }
 }
@@ -116,9 +121,11 @@ async function exportChat() {
     ElMessage.error(e.message)
   }
 }
+watch(() => route.query.scope, () => { if (route.path === '/support') scope.value = scopeFromRoute() })
 watch(scope, () => {
   page.value = 0
   selected.value = undefined
+  if (route.path === '/support' && route.query.scope !== scope.value) void router.replace({ query: { ...route.query, scope: scope.value } })
   void load()
 })
 onMounted(load)

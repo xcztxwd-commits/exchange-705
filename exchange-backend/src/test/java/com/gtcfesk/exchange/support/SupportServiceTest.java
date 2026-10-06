@@ -67,6 +67,7 @@ class SupportServiceTest {
     @Autowired SupportService service;
     @Autowired SupportSettings settings;
     @Autowired SupportPermissionCatalog catalog;
+    @Autowired com.gtcfesk.exchange.control.TenantPolicyService policy;
     @Autowired AdminPermissionService permissions;
     @Autowired UserAccountRepository users;
     @Autowired AdminUserRepository admins;
@@ -113,6 +114,68 @@ class SupportServiceTest {
         service.close(id,false); assertEquals("user-"+user, messages(id,false).get(messages(id,false).size()-1).getSenderName()); assertThrows(ResponseStatusException.class,()->service.send(id,false,key(),"closed",null));
         assertNotEquals(id,service.start("192.0.2.5").getId()); assertEquals(2,service.sessions(false,"mine",0).size());
     }
+    @Test void pendingCustomerMessagesSurviveOfflineAndUnassignedReception() {
+        // Use real database state; sessions from other tests may still be waiting.
+        new TransactionTemplate(manager).execute(s -> { em.createQuery("update SupportPresence p set p.accepting=false where p.tenantId=:tenant").setParameter("tenant",1L).executeUpdate(); return null; });
+        asAdmin(admin); assertTrue(service.onlineAgents().isEmpty());
+        long before=(Long)service.notifications(true).get("queueUnread");
+        long id=start();
+        asAdmin(admin); assertEquals(before,service.notifications(true).get("queueUnread"),"welcome-only sessions are not incoming customer messages");
+        asUser(user); SupportMessage text=service.send(id,false,key(),"离线留言",null), image=service.send(id,false,key(),"",png());
+        assertEquals(0L,service.notifications(false).get("queueUnread"),"users cannot see the staff queue");
+        asAdmin(admin); assertEquals(before+2,service.notifications(true).get("queueUnread")); assertEquals(0L,service.notifications(true).get("chatUnread"));
+        asAdmin(otherAdmin); assertEquals(before+2,service.notifications(true).get("queueUnread"));
+        service.presence(true); assertFalse(service.onlineAgents().isEmpty());
+        assertEquals(before+2,service.notifications(true).get("queueUnread"),"online staff without a receptionist must still see the pending messages");
+        asAdmin(admin); service.presence(true); service.claim(id); service.presence(false);
+        assertEquals(before,service.notifications(true).get("queueUnread")); assertEquals(2L,service.notifications(true).get("chatUnread"),"claim does not acknowledge reading, nor does going offline");
+        service.read(id,true,text.getId()); assertEquals(1L,service.notifications(true).get("chatUnread"));
+        service.read(id,true,image.getId()); assertEquals(0L,service.notifications(true).get("chatUnread"));
+        asAdmin(otherAdmin); assertEquals(0L,service.notifications(true).get("chatUnread"),"other receptionists do not see an assigned agent's unread messages");
+        asUser(otherUser); long abandoned=service.start("192.0.2.6").getId(); service.send(abandoned,false,key(),"无人接待",null);
+        asAdmin(admin); assertEquals(before+1,service.notifications(true).get("queueUnread"));
+        asUser(otherUser); service.close(abandoned,false);
+        asAdmin(admin); assertEquals(before,service.notifications(true).get("queueUnread"),"ended queue sessions are no longer pending");
+    }
+    @Test void pendingQueueRespectsReceptionPermissionAndEffectiveChannel() {
+        long id=start(); service.send(id,false,key(),"待处理",null);
+        asAdmin(admin); assertTrue((Long)service.notifications(true).get("queueUnread")>0);
+        Long roleId=roles.findByTenantIdAndRoleCode(1L,role).get().getId();
+        Long claimMenu=menus.findAll().stream().filter(m -> "support:claim".equals(m.getMenuCode())).findFirst().get().getId();
+        new TransactionTemplate(manager).execute(s -> { em.createQuery("delete from AdminRoleMenu g where g.tenantId=:tenant and g.roleId=:role and g.menuId=:menu").setParameter("tenant",1L).setParameter("role",roleId).setParameter("menu",claimMenu).executeUpdate(); return null; });
+        assertEquals(0L,service.notifications(true).get("queueUnread"),"no queue metadata without reception permission");
+        asAdmin(superAdmin); assertTrue((Long)service.notifications(true).get("queueUnread")>0);
+        for(String mode:Arrays.asList("off","external")) {
+            SupportSettings.Settings s=settings.get(); s.mode=mode; settings.save(s);
+            Map<String,Object> notification=service.notifications(true);
+            assertEquals(mode,notification.get("mode")); assertEquals(0L,notification.get("queueUnread")); assertEquals(0L,notification.get("chatUnread"));
+        }
+        SupportSettings.Settings s=settings.get(); s.mode="internal"; settings.save(s);
+        org.mockito.Mockito.when(policy.featureEnabled("support")).thenReturn(false);
+        try {
+            assertEquals("off",service.notifications(true).get("mode"));
+            assertEquals(0L,service.notifications(true).get("queueUnread"),"effective feature authorization overrides the local internal setting");
+        } finally { org.mockito.Mockito.when(policy.featureEnabled("support")).thenReturn(true); }
+        auth(admin,"AGENT"); assertThrows(AccessDeniedException.class,() -> service.notifications(true));
+        asUser(user); service.close(id,false);
+    }
+    @Test void pendingQueueNeverMixesTenantMessages() {
+        long id=start(); service.send(id,false,key(),"租户一留言",null);
+        asAdmin(superAdmin); long own=(Long)service.notifications(true).get("queueUnread"); assertTrue(own>0);
+        assertThrows(AccessDeniedException.class,() -> com.gtcfesk.exchange.tenant.TenantContext.open(2L));
+        // Simulate another verified request, not an in-request tenant override.
+        com.gtcfesk.exchange.tenant.TenantContext.clear();
+        try(com.gtcfesk.exchange.tenant.TenantContext.Scope ignored=com.gtcfesk.exchange.tenant.TenantContext.open(2L)) {
+            SupportSettings.Settings s=new SupportSettings.Settings(); s.mode="internal"; settings.save(s);
+            assertEquals(0L,service.notifications(true).get("queueUnread"));
+            Long foreignUser=user(); asUser(foreignUser); long foreign=service.start("192.0.2.7").getId(); service.send(foreign,false,key(),"租户二留言",null);
+            asAdmin(superAdmin); assertEquals(1L,service.notifications(true).get("queueUnread"));
+        }
+        finally { com.gtcfesk.exchange.tenant.TenantContext.clear(); com.gtcfesk.exchange.tenant.TenantContext.open(1L); }
+        asAdmin(superAdmin); assertEquals(own,service.notifications(true).get("queueUnread"));
+        asUser(user); service.close(id,false);
+    }
+
     @Test void userAndAgentIsolationIncludingImages() {
         long id=start(); MockMultipartFile image=png(); SupportMessage m=service.send(id,false,key(),"",image);
         asUser(otherUser); assertThrows(AccessDeniedException.class,()->service.detail(id,false,0));

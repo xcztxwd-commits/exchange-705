@@ -23,6 +23,7 @@ const ts = require('typescript'), vue = require('vue'), axios = require('axios')
 const source = readFileSync(new URL('../src/components/SimpleManualContractOrder.vue', import.meta.url), 'utf8').split('<script setup lang="ts">')[1].split('</script>')[0].replace(/^import .*$/gm, '')
 const js = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS } }).outputText
 const { simpleConditions, simpleFields, simplePayload } = await import('../src/utils/simpleManualOrder.ts')
+const { manualOrderEstimate } = await import('../src/utils/manualOrderEstimate.ts')
 const gets = [], posts = []
 const request = {
   get: async url => { gets.push(url); return { users: [], symbols: [{ symbol: 'FIXTURE', max_leverage: '100' }], timezone: 'UTC' } },
@@ -34,8 +35,8 @@ const request = {
   },
 }
 const scope = vue.effectScope()
-const names = ['computed','nextTick','reactive','ref','watch','ElMessage','request','simpleConditions','simpleFields','simplePayload','defineEmits','defineExpose']
-const component = scope.run(() => new Function(...names, js + ';return {open,form,selectChart,clearChart,edit,generate,result,canCreate,openBinding,binding,previewBinding,confirmBinding};')(...[vue.computed,vue.nextTick,vue.reactive,vue.ref,vue.watch,{success(){}},request,simpleConditions,simpleFields,simplePayload,()=>()=>{},()=>{}]))
+const names = ['computed','nextTick','reactive','ref','watch','ElMessage','request','simpleConditions','simpleFields','simplePayload','manualOrderEstimate','defineEmits','defineExpose']
+const component = scope.run(() => new Function(...names, js + ';return {open,form,selectChart,clearChart,edit,generate,result,canCreate,openBinding,binding,previewBinding,confirmBinding};')(...[vue.computed,vue.nextTick,vue.reactive,vue.ref,vue.watch,{success(){}},request,simpleConditions,simpleFields,simplePayload,manualOrderEstimate,()=>()=>{},()=>{}]))
 try {
   await component.open(); component.form.symbol = 'FIXTURE'; await vue.nextTick()
   component.selectChart(orderChartRange(rows, 2, 0)); await vue.nextTick(); assert.equal(posts.length, 0)
@@ -52,6 +53,31 @@ try {
   for (const url of [...gets, ...posts.map(r => r.url)]) assert.ok(client.getUri({url}).startsWith('/api/admin/orders/contract/manual'), url)
   console.log('real simple form chart-time pinning, preview invalidation, binding and API-prefix checks passed')
 } finally { scope.stop() }
+
+// The shared chart prompts for a symbol first, then waits for parent symbol reset before loading.
+const chartSource = readFileSync(new URL('../src/components/ManualOrderChart.vue', import.meta.url), 'utf8').split('<script setup lang="ts">')[1].split('</script>')[0].replace(/^import .*$/gm, '')
+const chartJs = ts.transpileModule(chartSource, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS } }).outputText
+const chartProps = vue.reactive({ symbol: '', symbols: [{ symbol: 'FIXTURE', name: 'fixture' }], timezone: 'UTC', active: false, disabled: false })
+const chartGets = [], chartEvents = [], chartScope = vue.effectScope()
+let closeDuringChoice = false
+const chartNames = ['computed','nextTick','onBeforeUnmount','ref','watch','echarts','request','orderChartCandles','orderChartRange','orderChartPriceExtent','defineProps','defineEmits']
+const chart = chartScope.run(() => new Function(...chartNames, chartJs + ';return {toggle,selectSymbol,symbolPicker,symbolChoice,expanded,stop,dispose};')(...[vue.computed,vue.nextTick,()=>{},vue.ref,vue.watch,{}, { get: async (url, options) => { chartGets.push({url,params:options.params}); return {candles:[],hasMore:false,from:0} } },orderChartCandles,orderChartRange,orderChartPriceExtent,()=>chartProps,()=> (event, value) => { chartEvents.push({event,value}); chartProps.symbol=value; if (closeDuringChoice) chartProps.active=false }]))
+try {
+  chart.toggle(); assert.equal(chart.symbolPicker.value, false); assert.equal(chartGets.length, 0)
+  chartProps.active=true; await vue.nextTick(); chartProps.disabled=true; chart.toggle(); assert.equal(chart.symbolPicker.value, false)
+  chartProps.disabled=false; chart.toggle(); assert.equal(chart.symbolPicker.value, true); assert.equal(chart.expanded.value, false); assert.equal(chartGets.length, 0)
+  chartProps.timezone='Asia/Tokyo'; await vue.nextTick(); assert.equal(chart.symbolPicker.value,true,'Late-loaded context must not dismiss a blank-symbol picker'); assert.equal(chartGets.length,0)
+  chart.symbolChoice.value='UNKNOWN'; await chart.selectSymbol(); assert.equal(chartEvents.length, 0); assert.equal(chartGets.length, 0)
+  chart.symbolChoice.value='FIXTURE'; await chart.selectSymbol()
+  assert.deepEqual(chartEvents, [{event:'change-symbol',value:'FIXTURE'}]); assert.equal(chartProps.symbol,'FIXTURE')
+  assert.equal(chart.symbolPicker.value,false); assert.equal(chart.expanded.value,true)
+  assert.equal(chartGets.length,1); assert.equal(chartGets[0].params.symbol,'FIXTURE'); assert.equal(chartGets[0].params.limit,200)
+  chart.toggle(); assert.equal(chart.expanded.value,false); chart.toggle(); assert.equal(chart.symbolPicker.value,false); assert.equal(chart.expanded.value,true)
+  assert.equal(chartGets.length,2, 'An existing symbol opens the chart directly, without an extra symbol prompt')
+  chartProps.symbol=''; await vue.nextTick(); chart.toggle(); chart.symbolChoice.value='FIXTURE'; closeDuringChoice=true; await chart.selectSymbol()
+  assert.equal(chartGets.length,2, 'Closing the parent during selection must not open or fetch a stale chart'); assert.equal(chart.symbolPicker.value,false); assert.equal(chart.expanded.value,false)
+  console.log('shared chart symbol-first picker, disabled/closed/invalid guards, parent reset ordering, bounded chart reads and direct existing-symbol opening checks passed')
+} finally { chart.stop(); chart.dispose(); chartScope.stop() }
 
 // Compact layout keeps all original inputs; business controls share the existing order capability.
 const { parse: parseSfc } = require('@vue/compiler-sfc'), { parse: parseTemplate } = require('@vue/compiler-dom')

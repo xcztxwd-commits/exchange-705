@@ -41,13 +41,13 @@ public final class StabilizedControlPlan implements TargetControlPlan {
             minStep = typical.multiply(settings.lowerFactor).setScale(0, RoundingMode.CEILING).toBigIntegerExact();
             maxStep = typical.multiply(settings.upperFactor).setScale(0, RoundingMode.FLOOR).toBigIntegerExact();
             if (maxStep.signum() < 1 || minStep.compareTo(maxStep) > 0)
-                throw new Failure("AMPLITUDE_PRECISION_UNREPRESENTABLE", "该价格精度无法表示此强度的单秒幅度");
+                throw new Failure("AMPLITUDE_PRECISION_UNREPRESENTABLE", "当前强度没有合法单秒幅度；请增加波动强度或恢复自适应默认公式后重新预览");
         }
         public BigDecimal amount(BigInteger ticks) { return new BigDecimal(ticks).movePointLeft(precision); }
         public BigInteger delta() { return target.subtract(start); }
         public Map<String, Object> snapshot() {
             Map<String, Object> m = new LinkedHashMap<>();
-            m.put("algorithmVersion", VERSION); m.put("mappingVersion", 3); m.put("schemaVersion", 1);
+            m.put("algorithmVersion", VERSION); m.put("mappingVersion", settings.adaptive ? 4 : 3); m.put("schemaVersion", 1);
             m.put("start", start.toString()); m.put("target", target.toString()); m.put("duration", duration);
             m.put("precision", precision); m.put("intensity", intensity); m.put("ratio", ratio.toPlainString());
             m.put("minStep", minStep.toString()); m.put("maxStep", maxStep.toString()); m.put("balancePercent", settings.balancePercent); m.put("feedbackPercent", settings.feedbackPercent); m.putAll(settings.snapshot());
@@ -75,7 +75,7 @@ public final class StabilizedControlPlan implements TargetControlPlan {
         BigInteger firstTick = max(BigInteger.ONE, ceil(delta.add(n.multiply(p.minStep)), sum));
         BigInteger lastTick = min(n.subtract(BigInteger.ONE), floor(delta.add(n.multiply(p.maxStep)), sum));
         if (firstTick.compareTo(lastTick) > 0)
-            throw new Failure("TARGET_AMPLITUDE_INFEASIBLE", "目标、时长与固定幅度不兼容，无法同时保持双向和均衡");
+            throw new Failure("TARGET_AMPLITUDE_INFEASIBLE", "目标价差、时长与当前幅度不兼容，无法保持涨跌和均衡；请增加执行时间或调整波动强度后重新预览");
         int first = firstTick.intValueExact(), last = lastTick.intValueExact();
         Counts best = null; BigInteger bestScore = null;
         for (int up = first; up <= last; up++) {
@@ -94,7 +94,7 @@ public final class StabilizedControlPlan implements TargetControlPlan {
                     .add(variation.shiftLeft(1).subtract(n.multiply(sum)).abs());
             if (bestScore == null || score.compareTo(bestScore) < 0) { bestScore = score; best = new Counts(up, down, variation); }
         }
-        if (best == null) throw new Failure("TARGET_AMPLITUDE_INFEASIBLE", "目标、时长与固定幅度不兼容，无法同时保持双向和均衡");
+        if (best == null) throw new Failure("TARGET_AMPLITUDE_INFEASIBLE", "目标价差、时长与当前幅度不兼容，无法保持涨跌和均衡；请增加执行时间或调整波动强度后重新预览");
         return best;
     }
     public static Map<String, Object> feasibility(Parameters p) {
@@ -104,6 +104,23 @@ public final class StabilizedControlPlan implements TargetControlPlan {
         try { checkCorridor(p); Counts c = counts(p); result.put("feasible", true); result.put("upSteps", c.up); result.put("downSteps", c.down); }
         catch (Failure failure) { result.put("feasible", false); result.put("errorCode", failure.code); result.put("message", failure.getMessage()); }
         return result;
+    }
+
+    /** Fast, read-only screening; the selected tier must still pass full plan generation. */
+    public static List<Map<String, Object>> previewTiers(BigDecimal start, BigDecimal target, int duration, int precision, TargetControlOptions options) {
+        List<Map<String, Object>> tiers = new ArrayList<>();
+        for (int intensity = 1; intensity <= 10; intensity++) {
+            Map<String, Object> tier = new LinkedHashMap<>(); tier.put("intensity", intensity);
+            try {
+                TargetControlSettings settings = new TargetControlSettings(start, target, duration, precision, intensity, options);
+                tier.putAll(settings.snapshot());
+                tier.putAll(feasibility(new Parameters(start, target, duration, precision, intensity, DEFAULT_RATIO, settings)));
+            } catch (Failure failure) {
+                tier.put("feasible", false); tier.put("errorCode", failure.code); tier.put("message", failure.getMessage());
+            }
+            tiers.add(tier);
+        }
+        return tiers;
     }
 
     private static BigInteger randomBelow(BigInteger bound, SplittableRandom random) {
@@ -207,7 +224,7 @@ public final class StabilizedControlPlan implements TargetControlPlan {
         BigInteger a = p.minStep.multiply(n), b = p.maxStep.multiply(n);
         if (!(a.compareTo(high) <= 0 && b.compareTo(low) >= 0)
                 && !(b.negate().compareTo(high) <= 0 && a.negate().compareTo(low) >= 0))
-            throw new Failure("CORRIDOR_STEP_INFEASIBLE", "偏差带太窄，第一步就无法同时满足幅度与参考线约束；不会自动扩大偏差带");
+            throw new Failure("CORRIDOR_STEP_INFEASIBLE", "偏差带过窄，无法容纳当前波动；请增加执行时间、降低波动强度或手动放宽偏差带后重新预览，不会自动扩大手动范围");
     }
     // ponytail: two concurrent bounded searches per process; a shared work queue is unnecessary at current scale.
     private static final java.util.concurrent.Semaphore SEARCH_SLOTS = new java.util.concurrent.Semaphore(2);
@@ -228,7 +245,7 @@ public final class StabilizedControlPlan implements TargetControlPlan {
             try { return new StabilizedControlPlan(p, candidate); }
             catch (Failure rejected) { /* Independently checked; try another pool/order. */ }
         }
-        throw new Failure("PLAN_SEARCH_EXHAUSTED", "计算预算内未找到满足窗口均衡和正价格的轨迹");
+        throw new Failure("PLAN_SEARCH_EXHAUSTED", "计算预算内未找到满足均衡和正价格的轨迹；请增加执行时间或调整波动强度、偏差带后重新预览");
     }
     private StabilizedControlPlan(Parameters p, String[] prices) { this.parameters = p; this.prices = prices.clone(); this.summary = Collections.unmodifiableMap(validate(p, this.prices)); }
     public static StabilizedControlPlan restore(Parameters p, List<String> prices) { return new StabilizedControlPlan(p, prices.toArray(new String[0])); }

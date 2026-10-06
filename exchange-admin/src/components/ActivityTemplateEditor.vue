@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
-import grapesjs, { type Editor, type Component } from 'grapesjs'
+import grapesjs, { type Editor, type Component, type ComponentResizeInitEventData, type ResizerOptions } from 'grapesjs'
 import zh from 'grapesjs/locale/zh.js'
 import 'grapesjs/dist/css/grapes.min.css'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -154,13 +154,61 @@ function save(asTemplate=props.template){
  emit('save',{layoutJson:JSON.stringify(design),translations:JSON.parse(JSON.stringify(copies.value)),name:campaignName.value.trim(),defaultLocale:defaultLocale.value,asTemplate})
 }
 async function cancel(){if(props.saving)return;if(changed.value||campaignName.value!==props.name||defaultLocale.value!==props.fallback){try{await ElMessageBox.confirm('未应用的设计将丢弃，确定退出？','退出编辑器',{confirmButtonText:'退出',cancelButtonText:'继续编辑'})}catch{return}}emit('cancel')}
+// Resize uses layout coordinates, not the iframe/rotated bounding rectangle used by the overlay.
+function resizeTransform(el:HTMLElement){
+ const css=el.ownerDocument.defaultView!.getComputedStyle(el)
+ const scale=css.scale==='none'?[1,1]:css.scale.split(' ').map(Number)
+ const matrix=new DOMMatrix(css.transform==='none'?undefined:css.transform)
+ return new DOMMatrix().scale(scale[0]??1,scale[1]??scale[0]??1).multiply(matrix)
+}
+function configureResize(data:ComponentResizeInitEventData){
+ const el=data.component.getEl()
+ if(!data.resizable||!editor||!el)return
+ const canvas=editor.Canvas
+ const options=typeof data.resizable==='object'?data.resizable:{}
+ let inverse=new DOMMatrix(),own=new DOMMatrix(),width=0,height=0,left=0,top=0
+ const mousePosFetcher=(event:Event)=>{
+  const point=canvas.getMouseRelativePos(event)
+  const local=inverse.transformPoint(new DOMPoint(point.x,point.y))
+  return {x:local.x,y:local.y}
+ }
+ const resizeOptions:ResizerOptions&{skipPositionUpdate:boolean}={...options,
+  skipPositionUpdate:el.ownerDocument.defaultView!.getComputedStyle(el).position!=='absolute',
+  docs:[document,el.ownerDocument],mousePosFetcher,
+  onStart(event,context){
+   options.onStart?.(event,context)
+   const css=el.ownerDocument.defaultView!.getComputedStyle(el)
+   width=parseFloat(css.width)||el.offsetWidth;height=parseFloat(css.height)||el.offsetHeight
+   left=parseFloat(css.left)||0;top=parseFloat(css.top)||0
+   own=resizeTransform(el)
+   let matrix=new DOMMatrix()
+   for(let node:HTMLElement|null=el;node;node=node.parentElement)matrix=resizeTransform(node).multiply(matrix)
+   inverse=new DOMMatrix([matrix.a,matrix.b,matrix.c,matrix.d,0,0]).inverse()
+   // GrapesJS measures transformed bounds; resizing must start from the actual CSS box.
+   Object.assign(context.resizer.startDim!,{w:width,h:height})
+   context.resizer.startPos=mousePosFetcher(event)
+  },
+  updateTarget(target,rect,context){
+   options.updateTarget?.(target,rect,context)
+   const handle=context.selectedHandler||''
+   if(!['tc','bc'].includes(handle))rect.w=Math.min(rect.w,canvas.getBody()?.offsetWidth||rect.w)
+   const dx=width-rect.w,dy=height-rect.h
+   const x=handle.includes('l')?dx:0,y=handle.includes('t')?dy:0
+   // Compensate the default center transform origin so the opposite corner stays fixed.
+   rect.l=Number((left+dx/2+own.a*(x-dx/2)+own.c*(y-dy/2)).toFixed(3))
+   rect.t=Number((top+dy/2+own.b*(x-dx/2)+own.d*(y-dy/2)).toFixed(3))
+  }
+ }
+ data.resizable=resizeOptions
+}
 onMounted(async()=>{
  // Device selection only previews width: the design schema stores shared, not breakpoint-specific styles.
  editor=grapesjs.init({container:canvas.value!,height:'100%',devicePreviewMode:true,dragMode:'absolute',storageManager:false,noticeOnUnload:false,i18n:{locale:'zh',messages:{zh}},
-  panels:{defaults:[]},canvasCss:designMotionCss,
+  panels:{defaults:[]},canvasCss:designMotionCss+'\n.gjs-resizing [data-design-motion]{animation-play-state:paused!important}',
   deviceManager:{devices:[{id:'mobile',name:'手机',width:'375px'},{id:'desktop',name:'桌面',width:'680px'}]},
   layerManager:{appendTo:layerPanel.value!},styleManager:{sectors:[]},blockManager:{blocks:[]}
  })
+ editor.on('component:resize:init',configureResize)
  editor.on('component:selected component:deselected',syncSelection)
  editor.on('component:styleUpdate',syncSelection)
  editor.on('block:drag:stop',(c:Component|undefined)=>{if(!c)return;c.addStyle({position:'absolute'});editor?.select(c)})

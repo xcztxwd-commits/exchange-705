@@ -47,6 +47,13 @@ public class PublishedTenantFiles {
   return em.createQuery("select count(m) from ActivityMaterial m where m.tenantId=:tenant and m.nodesJson like :pattern escape '!'",Long.class).setParameter("tenant",tenant).setParameter("pattern",pattern).getSingleResult()>0;
  }
  public boolean allowsShare(String filename,boolean publishedOnly){return configs.hasShareImage("/api/uploads/images/"+filename,publishedOnly);}
+ /** Read-only customer identity access never grants access to the user's other private uploads. */
+ public boolean allowsUserAvatar(String filename,Long user){
+  Long tenant=TenantContext.requireTenantId();
+  if(filename==null||!filename.matches(tenant+"/user/"+user+"/[a-zA-Z0-9_.-]+"))return false;
+  List<String> urls=Arrays.asList("/api/uploads/images/"+filename,"/demo-uploads/images/"+filename);
+  return em.createQuery("select count(u) from UserAccount u where u.tenantId=:tenant and u.id=:user and u.avatarUrl in :urls",Long.class).setParameter("tenant",tenant).setParameter("user",user).setParameter("urls",urls).getSingleResult()>0;
+ }
  public boolean allowsReview(String filename,Long user,java.util.Set<String> modules){
   Long tenant=TenantContext.requireTenantId();if(filename==null||!filename.matches(tenant+"/user/"+user+"/[a-zA-Z0-9_.-]+"))return false;
   List<String> urls=Arrays.asList("/api/uploads/images/"+filename,"/uploads/images/"+filename);

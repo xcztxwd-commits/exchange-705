@@ -5,6 +5,7 @@ import { Search, Refresh, Lock, Edit, Wallet, User, Delete, Document, ArrowDown 
 import { useAccountTable } from '@/utils/useAccountTable'
 import { accountTableRequest } from '@/utils/accountTableRequest'
 import AccountTypeFilter from '@/components/AccountTypeFilter.vue'
+import UserAvatar from '../../../exchange-frontend/src/components/UserAvatar.vue'
 const accountTable = useAccountTable()
 const accountModes = accountTable.modes
 const walletTable = useAccountTable(), walletModes = walletTable.modes
@@ -42,6 +43,7 @@ const permissionsLoaded = ref(false) // 权限是否已加载
 const hasPermission = (menuCode: string, actionCode: string): boolean => can(`${menuCode}:${actionCode}`)
 const canSetBalance = computed(() => can('users:modify_balance'))
 
+const profileName = (row: any) => row?.nickname?.trim() || row?.email || '未填写'
 const profilePhone = (row: any) => row?.phone ? [row.countryCode, row.phone].filter(Boolean).join(' ') : '未填写'
 const profileIncome = (row: any) => row?.annualIncome != null
   ? [row.annualIncome, row.annualIncomeCurrency].filter(Boolean).join(' ') : '未填写'
@@ -1123,9 +1125,9 @@ onMounted(() => {
             </div>
           </template>
         </el-table-column>
-        <el-table-column prop="nickname" label="昵称" width="120">
+        <el-table-column prop="nickname" label="头像 / 昵称" min-width="190">
           <template #default="{ row }">
-            {{ row.nickname || '-' }}
+            <div class="user-profile-cell"><UserAvatar :src="row.avatarUrl" :name="profileName(row)" :size="36" /><span>{{ profileName(row) }}</span></div>
           </template>
         </el-table-column>
         <el-table-column label="用户类型" width="120" align="center">
@@ -1447,9 +1449,9 @@ onMounted(() => {
           <el-table-column label="手机号" min-width="160"><template #default="{ row }">{{ profilePhone(row) }}</template></el-table-column>
           <el-table-column label="年收入" min-width="150"><template #default="{ row }">{{ profileIncome(row) }}</template></el-table-column>
           <el-table-column prop="remark" label="用户备注" min-width="150" show-overflow-tooltip><template #default="{ row }">{{ row.remark || '-' }}</template></el-table-column>
-          <el-table-column prop="nickname" label="昵称" width="120">
+          <el-table-column prop="nickname" label="头像 / 昵称" min-width="190">
             <template #default="{ row }">
-              {{ row.nickname || '-' }}
+              <div class="user-profile-cell"><UserAvatar :src="row.avatarUrl" :name="profileName(row)" :size="36" /><span>{{ profileName(row) }}</span></div>
             </template>
           </el-table-column>
           <el-table-column prop="status" label="状态" width="100">
@@ -1889,7 +1891,7 @@ onMounted(() => {
         <el-descriptions v-if="userDetail" :column="2" border>
           <el-descriptions-item label="用户ID">{{ userDetail.id }}</el-descriptions-item>
           <el-descriptions-item label="邮箱">{{ userDetail.email }}</el-descriptions-item>
-          <el-descriptions-item label="昵称">{{ userDetail.nickname || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="头像 / 昵称" :span="2"><div class="user-profile-cell"><UserAvatar :src="userDetail.avatarUrl" :name="profileName(userDetail)" :size="56" /><span>{{ profileName(userDetail) }}</span></div></el-descriptions-item>
           <el-descriptions-item label="手机号">{{ profilePhone(userDetail) }}</el-descriptions-item>
           <el-descriptions-item label="年收入">{{ profileIncome(userDetail) }}</el-descriptions-item>
           <el-descriptions-item label="用户类型">
@@ -1922,6 +1924,7 @@ onMounted(() => {
 </template>
 
 <style scoped>
+.user-profile-cell{display:flex;align-items:center;gap:10px;min-width:0}.user-profile-cell>span:last-child{overflow-wrap:anywhere}
 .users-page {
   padding: 0;
 }

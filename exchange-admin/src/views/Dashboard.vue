@@ -4,6 +4,7 @@ import { ElMessage } from 'element-plus'
 import * as echarts from 'echarts'
 import request from '@/utils/request'
 import { useAuthStore } from '@/store/auth'
+import TenantFeatureOverview from '@/components/TenantFeatureOverview.vue'
 
 const auth = useAuthStore()
 // 判断当前登录用户是否是代理
@@ -196,6 +197,8 @@ onMounted(() => {
         </el-card>
       </el-col>
     </el-row>
+
+    <TenantFeatureOverview />
 
     <el-row :gutter="20" style="margin-top: 20px">
       <el-col :span="24">

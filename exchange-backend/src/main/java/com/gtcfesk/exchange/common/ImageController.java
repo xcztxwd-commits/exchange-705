@@ -92,7 +92,8 @@ public class ImageController {
                     Long owner;try{owner=Long.valueOf(parts[2]);}catch(NumberFormatException e){return ResponseEntity.notFound().build();}
                     access.checkUser(owner);
                     java.util.Set<String> modules=new java.util.HashSet<>();for(String module:java.util.Arrays.asList("kyc_review","loan_personal_info_review","loan_review","deposit_review","deposit_orders"))if(access.canReadMenu(module))modules.add(module);
-                    if(isAudio||!published.allowsReview(filename,owner,modules))return ResponseEntity.notFound().build();
+                    boolean avatar=!isAudio&&access.canReadMenu("users")&&published.allowsUserAvatar(filename,owner);
+                    if(isAudio||(!avatar&&!published.allowsReview(filename,owner,modules)))return ResponseEntity.notFound().build();
                 }else if(!ownStaff){
                     boolean materialReader=!isAudio&&auth.getAuthorities().stream().anyMatch(a->java.util.Arrays.asList("ROLE_ADMIN","ROLE_SUPER_ADMIN").contains(a.getAuthority()))&&((access.canReadMenu("announcement")&&published.allowsMaterial(filename))||(access.canReadMenu("share_templates")&&published.allowsShare(filename,false))||(access.canReadMenu("traders")&&published.allowsTraderAvatar(filename,false)));
                     if(!materialReader)return ResponseEntity.notFound().build();

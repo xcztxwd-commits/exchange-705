@@ -78,11 +78,12 @@ public class ManualOrderService {
         if(!Boolean.TRUE.equals(s.getIsEnabled()))throw new BusinessException("品种已停用");
         return prices.minutes(s,date,timezone);
     }
-    public Map<String,Object> chart(String symbol,String timezone) {
+    public Map<String,Object> chart(String symbol,String timezone) {return chart(symbol,timezone,null,null);}
+    public Map<String,Object> chart(String symbol,String timezone,Long endTime,Integer limit) {
         authorize();
         TradingSymbol s=symbols.findByTenantIdAndSymbol(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(),symbol).orElseThrow(()->new BusinessException("品种不存在"));
         if(!Boolean.TRUE.equals(s.getIsEnabled()))throw new BusinessException("品种已停用");
-        return prices.chart(s,timezone);
+        return endTime==null && limit==null?prices.chart(s,timezone):prices.chart(s,timezone,endTime,limit==null?200:limit);
     }
     public Map<String,Object> calendar(String symbol,String month,String timezone,int page) {
         authorize();
@@ -346,8 +347,19 @@ public class ManualOrderService {
         BigDecimal available=r.userId==null?BigDecimal.ZERO:(BigDecimal)account(new JdbcTemplate(dataSource),r.userId,false).get("available");
         long end=Math.floorDiv(System.currentTimeMillis(),60000)*60000,from=end-ManualOrderGenerator.RANGE;
         SimpleManualOrderGenerator.validateTimes(r,from,end);
-        NavigableMap<Long,ManualOrderGenerator.Candle> candles=prices.simpleCandles(s,from,end);
-        SimpleManualOrderGenerator.Candidate best=SimpleManualOrderGenerator.solve(r,candles,s,available,maxLeverage(s.getMaxLeverage(),s.getCategory()));
+        BigDecimal maximum=maxLeverage(s.getMaxLeverage(),s.getCategory());SimpleManualOrderGenerator.validate(r,s,maximum);
+        NavigableMap<Long,ManualOrderGenerator.Candle> candles;
+        SimpleManualOrderGenerator.Candidate best=null;
+        if(r.openTime!=null && r.closeTime!=null) candles=prices.selectedCandles(s,r.openTime,r.closeTime);
+        else if(r.openTime==null && r.closeTime==null && r.closePrice==null) {
+            // The recent two UTC windows usually contain a solution; older history is read only after a genuine miss.
+            long recentFrom=Math.max(from,Math.floorDiv(end-1,720*60000L)*720*60000L-720*60000L);
+            candles=prices.simpleCandles(s,recentFrom,end);
+            try {best=SimpleManualOrderGenerator.solve(r,candles,s,available,maximum);}
+            catch(BusinessException miss){if(miss.getCode()!=SimpleManualOrderGenerator.NO_SOLUTION)throw miss;}
+            if(best==null && from<recentFrom)candles.putAll(prices.simpleCandles(s,from,recentFrom));
+        } else candles=prices.simpleCandles(s,from,end);
+        if(best==null)best=SimpleManualOrderGenerator.solve(r,candles,s,available,maximum);
         Request generated=new Request();generated.simpleMode=true;generated.allowNetAdjustment=r.allowNetAdjustment;generated.netTolerance=r.netTolerance;
         generated.userId=r.userId;generated.symbol=r.symbol;generated.timezone=r.timezone;generated.side=best.side;generated.leverage=best.leverage;
         generated.specVersion=r.specVersion;generated.quantityUnitType=r.quantityUnitType;generated.driver="QUANTITY";generated.input=best.calculation.get("quantity");generated.targetNet=r.targetNet;

@@ -52,6 +52,14 @@ const allMenus = ref<any[]>([])
 const checkedMenuIds = ref<number[]>([])
 const permissionTree = ref<any>()
 const permissionFilter = ref('')
+const checkedPermissionCount = computed(() => {
+  const ids = new Set(checkedMenuIds.value)
+  return allMenus.value.filter(menu => ids.has(menu.id)).length
+})
+const toggleAllPermissions = (checked: boolean | string | number) => {
+  checkedMenuIds.value = checked === true ? allMenus.value.map(menu => menu.id) : []
+  permissionTree.value?.setCheckedKeys(checkedMenuIds.value)
+}
 const treeData = computed(() => {
   const nodes = new Map(allMenus.value.map(m => [m.id, { ...m, children: [] as any[] }]))
   const roots: any[] = []
@@ -66,7 +74,8 @@ const onPermissionCheck = (node: any, state: any) => {
   } else if (node.menuType === 'button') {
     ids.add(node.parentId)
   }
-  permissionTree.value?.setCheckedKeys([...ids])
+  checkedMenuIds.value = [...ids]
+  permissionTree.value?.setCheckedKeys(checkedMenuIds.value)
 }
 const collectPermissionIds = () => {
   const ids = new Set<number>(permissionTree.value?.getCheckedKeys() || [])
@@ -376,7 +385,11 @@ onMounted(() => {
         为角色 <strong>{{ currentRoleName }}</strong> 分配菜单权限：
       </div>
       
-      <el-alert title="菜单仅授予查看权限；按钮需单独勾选。保存后立即生效，不会自动授予新增按钮。" type="info" :closable="false" />
+      <el-alert title="菜单仅授予查看权限；按钮需勾选或全选。保存后立即生效，不会自动授予新增按钮。" type="info" :closable="false" />
+      <el-checkbox v-permission="'roles:assign_permission'" aria-label="全选所有权限"
+        :model-value="allMenus.length > 0 && checkedPermissionCount === allMenus.length"
+        :indeterminate="checkedPermissionCount > 0 && checkedPermissionCount < allMenus.length"
+        :disabled="loading || !allMenus.length" @change="toggleAllPermissions">全选所有权限</el-checkbox>
       <el-input v-model="permissionFilter" placeholder="搜索菜单或操作" clearable @input="permissionTree?.filter(permissionFilter)" style="margin:12px 0" />
       <el-tree style="max-height:55vh;overflow:auto" :key="currentRoleId + ':' + permissionDialogVisible" ref="permissionTree" :data="treeData" node-key="id" @check="onPermissionCheck" show-checkbox check-strictly default-expand-all
         :props="{ label: 'menuName', children: 'children' }" :default-checked-keys="checkedMenuIds"

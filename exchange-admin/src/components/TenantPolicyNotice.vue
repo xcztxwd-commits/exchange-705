@@ -1,6 +1,9 @@
 <script setup lang="ts">
-import type {PolicySnapshot} from '@/utils/tenantPolicies'
-defineProps<{snapshot:PolicySnapshot|null;error?:string}>()
-const names:Record<string,string>={registration:'注册',contract:'合约',option:'期权',financial:'理财',loan:'贷款',activity:'活动',simulation:'模拟',deposit:'充值',withdraw:'提现',support:'站内客服',external_support:'外部客服',inbox:'站内信',agent:'代理'}
+import type { PolicySnapshot } from '@/utils/tenantPolicies'
+defineProps<{ snapshot: PolicySnapshot | null; error?: string }>()
 </script>
-<template><el-alert v-if="error" :title="`总控策略加载失败，编辑已禁用：${error}`" type="error" :closable="false"/><el-alert v-else-if="!snapshot" title="尚未确认本租户总控策略，编辑已禁用" type="warning" :closable="false"/><details v-else style="margin-bottom:18px"><summary>总控授权与逐项锁定 · {{snapshot.tenantName}} · {{snapshot.status}} · 策略版本 {{snapshot.policyVersion}}</summary><p>功能关闭仅限制新增，历史与存量退出不受前端隐藏。保存仍由服务端按最新策略再次校验。</p><p><el-tag v-for="(enabled,key) in snapshot.features" :key="key" :type="enabled?'success':'info'" style="margin:3px">{{names[String(key)]||key}}：{{enabled?'已授权':'未授权'}}</el-tag></p><p v-if="snapshot.supportChannel">客服渠道由总控强制为：{{snapshot.supportChannel}}</p><admin-table table-key="tenant-policy-notice" :data="snapshot.configs" size="small" border><el-table-column prop="key" label="配置键"/><el-table-column label="编辑权限"><template #default="s">{{s.row.denied?'禁止修改':s.row.locked?'总控锁定':'租户可配'}}</template></el-table-column><el-table-column prop="version" label="策略版本"/></admin-table><p>未单列配置默认可配，但仍受功能授权及角色权限约束；不显示密钥策略值。</p></details></template>
+
+<template>
+  <el-alert v-if="error" :title="`权限信息加载失败，编辑已禁用：${error}`" type="error" :closable="false" />
+  <el-alert v-else-if="!snapshot" title="正在确认编辑权限，暂不可编辑" type="info" :closable="false" />
+</template>

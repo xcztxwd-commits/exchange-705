@@ -10,6 +10,7 @@ import java.util.*;
 @RestController @RequiredArgsConstructor @RequestMapping("/api/admin/tenant-policies")
 public class AdminTenantPolicyController {
  private final TenantRepository tenants;private final TenantPolicyRepository policies;private final AdminPermissionService permissions;
+ @GetMapping("/dashboard") @AdminPermission(menu="dashboard",action="") public Object dashboard(){permissions.require("dashboard","");return snapshot(null);}
  @GetMapping("/settings") @AdminPermission(menu="settings",action="") public Object settings(){permissions.require("settings","");return snapshot(null);}
  @GetMapping("/share-templates") @AdminPermission(menu="share_templates",action="") public Object shareTemplates(){permissions.require("share_templates","");return snapshot(Arrays.asList("share.templates","share.materials"));}
  @GetMapping("/support") @AdminPermission(menu="support_settings",action="") public Object support(){permissions.require("support_settings","");return snapshot(Arrays.asList("support.settings","support.channel","customer.service.link"));}

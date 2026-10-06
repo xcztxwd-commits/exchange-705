@@ -1136,8 +1136,13 @@ public class ForexQuoteMarketService {
         BigDecimal start = controls.previewStart(config, raw, displayed);
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("algorithmVersion", 4); result.put("startPrice", start.toPlainString()); result.put("targetPrice", target.toPlainString()); result.put("preview", true);
+        result.put("priceTick", BigDecimal.ONE.movePointLeft(PriceControlPath.precision(config)).toPlainString());
+        result.put("tiers", StabilizedControlPlan.previewTiers(start, target, duration, PriceControlPath.precision(config), options));
         try {
             TargetControlSettings settings = new TargetControlSettings(start, target, duration, PriceControlPath.precision(config), intensity, options);
+            result.putAll(settings.snapshot());
+            result.put("theoreticalMinAmount", settings.typical.multiply(settings.lowerFactor).toPlainString());
+            result.put("theoreticalMaxAmount", settings.typical.multiply(settings.upperFactor).toPlainString());
             StabilizedControlPlan.Parameters p = new StabilizedControlPlan.Parameters(start, target, duration, PriceControlPath.precision(config), intensity, StabilizedControlPlan.DEFAULT_RATIO, settings);
             result.putAll(StabilizedControlPlan.feasibility(p));
             result.putAll(controls.prepare(config, raw, displayed, duration, target, intensity, oscillation, options).preview());

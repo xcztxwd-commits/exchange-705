@@ -1,5 +1,4 @@
 <template>
-  <TenantStatus />
   <AccountModeSwitch v-if="auth.token" real-path="/trade" />
   <router-view v-slot="{ Component, route: viewRoute }">
     <component :is="presentationEdition === 'advanced' ? advancedPageForPath(viewRoute.path) || Component : Component" :key="viewKey" />
@@ -20,7 +19,6 @@ import { createPageReporter, pageCodeForPath, safePageCode } from '@/utils/pageA
 import ActivityCenter from '@/components/ActivityCenter.vue'
 import SupportNotifications from '@/components/SupportNotifications.vue'
 import AccountModeSwitch from '@/components/AccountModeSwitch.vue'
-import TenantStatus from '@/components/TenantStatus.vue'
 import { refreshTenantFeatures } from '@/utils/tenantFeatures'
 import { useUiEditionStore } from '@/store/uiEdition'
 import { advancedPageForPath } from '@/advanced/pageRegistry'

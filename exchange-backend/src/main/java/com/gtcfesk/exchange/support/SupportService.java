@@ -270,6 +270,7 @@ public class SupportService {
         if (m == null || !m.getConversationId().equals(id)) throw new IllegalArgumentException();
         if (admin) c.setAdminReadId(Math.max(through, c.getAdminReadId())); else c.setUserReadId(Math.max(through, c.getUserReadId()));
     }
+    @Transactional(readOnly = true)
     public Map<String,Object> notifications(boolean admin) {
         Long id = subject(admin); Map<String,Object> out = new LinkedHashMap<>();
         SupportSettings.Settings s = settings.get(); long waiting = 0, chat = 0, latest = 0;
@@ -285,6 +286,11 @@ public class SupportService {
         }
         Long queueLatest = admin && permissions.can("support", "claim") && "internal".equals(s.mode)
             ? tenantQuery("select max(c.id) from SupportConversation c where tenantId=:tenant and status='WAITING'", Long.class).getSingleResult() : Long.valueOf(0);
+        // Unassigned customer messages remain pending even when every receptionist is offline.
+        // Welcome/system messages and merely opening the chat must not create message alerts.
+        long queueUnread = admin && permissions.can("support", "claim") && "internal".equals(s.mode)
+            ? tenantQuery("select count(m) from SupportMessage m, SupportConversation c where m.tenantId=:tenant and c.tenantId=:tenant and m.conversationId=c.id and c.status='WAITING' and m.sender='USER' and m.id>c.adminReadId", Long.class).getSingleResult() : 0;
+        out.put("queueUnread", queueUnread);
         out.put("waiting", waiting); out.put("queueLatest", queueLatest == null ? 0 : queueLatest); out.put("chatUnread", chat); out.put("latest", latest);
         long unread = !admin && s.inboxEnabled ? tenantQuery("select count(l) from InboxLetter l where tenantId=:tenant and userId=:u and readAt is null", Long.class).setParameter("u", id).getSingleResult() : 0;
         Long inboxLatest = !admin && s.inboxEnabled ? tenantQuery("select max(l.id) from InboxLetter l where tenantId=:tenant and userId=:u", Long.class).setParameter("u", id).getSingleResult() : Long.valueOf(0);

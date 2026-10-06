@@ -5,6 +5,7 @@ import AccountModeSwitch from '@/components/AccountModeSwitch.vue'
 import Tabbar from '@/components/Tabbar.vue'
 import EditionSwitch from '@/advanced/components/EditionSwitch.vue'
 import MessageHeaderActions from '@/components/MessageHeaderActions.vue'
+import UserProfile from '@/components/UserProfile.vue'
 import { supportText } from '@/utils/support'
 import AssetPixelChart from '@/components/AssetPixelChart.vue'
 import request from '@/utils/request'
@@ -18,8 +19,6 @@ const localeStore = useLocaleStore()
 localeStore.loadLocale()
 
 // 用户信息
-const uid = ref<string | number>('')
-const nickname = ref('')
 const vipLevel = ref(0)
 const creditScore = ref(100)
 
@@ -76,8 +75,6 @@ async function loadUserInfo() {
 
   try {
     const res: any = await request.get(`/user/${userId}/info`)
-    uid.value = res.uid || res.id || userId
-    nickname.value = res.nickname || res.email || user?.email || ''
     vipLevel.value = res.vipLevel || res.vip || 0
     creditScore.value = res.creditScore || res.credit || 100
     fundBalance.value = Number(res.fundBalance || 0)
@@ -86,9 +83,6 @@ async function loadUserInfo() {
     // The history endpoint supplies the headline and curve from the same snapshot.
   } catch (e) {
     console.error(localeStore.t('loadUserInfoFailed'), e)
-    // 使用默认值
-    uid.value = user?.id || ''
-    nickname.value = user?.email || user?.nickname || ''
   }
 }
 
@@ -109,8 +103,7 @@ onMounted(() => {
     <div class="card-top">
       <div class="top-header-row">
         <div class="user-info-section">
-          <div class="user-line">{{ nickname || '111' }} </div>
-          <div class="user-line">{{ localeStore.t('uid') }} {{ uid || 9210000 }}</div>
+          <UserProfile />
           
         </div>
         <MessageHeaderActions />

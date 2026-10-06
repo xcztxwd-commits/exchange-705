@@ -8,6 +8,7 @@ import java.util.*;
 /** Simulation-only: newest feasible OHLC minute wins, never changes historical candles. */
 public final class SimpleManualOrderGenerator {
     private SimpleManualOrderGenerator() { }
+    public static final int NO_SOLUTION=422;
     private static final BigDecimal ZERO=BigDecimal.ZERO, ONE=BigDecimal.ONE, HUNDRED=new BigDecimal("100");
     public static class Request {
         public Long userId,specVersion,openTime,closeTime;
@@ -65,9 +66,9 @@ public final class SimpleManualOrderGenerator {
         if("USD".equals(s.getBaseCurrency()))return ONE;
         return "USD".equals(s.getQuoteCurrency())?p:c.marginRate;
     }
-    public static Candidate solve(Request r,NavigableMap<Long,ManualOrderGenerator.Candle> candles,TradingSymbol s,BigDecimal available,BigDecimal maxLeverage) {
+    /** Validate fixed inputs before any history read; impossible fixed-price signs cannot be repaired by more lots. */
+    public static void validate(Request r,TradingSymbol s,BigDecimal maxLeverage) {
         tolerance(r.netTolerance);
-        if(!candles.isEmpty())validateTimes(r,candles.firstKey(),candles.lastKey()+60000);
         if(r.side!=null && !Arrays.asList("BUY","SELL").contains(r.side))throw new BusinessException("方向无效");
         if(r.openPrice!=null)ManualOrderCalculation.positive(r.openPrice,"开仓价格");
         if(r.closePrice!=null)ManualOrderCalculation.positive(r.closePrice,"平仓价格");
@@ -75,32 +76,105 @@ public final class SimpleManualOrderGenerator {
         if(r.quantity!=null)QuantityRules.quantity(s,r.quantity);
         BigDecimal leverage=r.leverage==null?HUNDRED.min(maxLeverage):r.leverage;
         ManualOrderCalculation.leverage(leverage,maxLeverage);
-        if(candles.isEmpty())throw new BusinessException("最近七天没有有效的已结束分钟OHLC行情及换算率");
+        if(r.openPrice!=null && r.closePrice!=null && r.targetNet!=null && r.targetNet.signum()>0
+                && (r.openPrice.compareTo(r.closePrice)==0 || "BUY".equals(r.side) && r.closePrice.compareTo(r.openPrice)<=0 || "SELL".equals(r.side) && r.closePrice.compareTo(r.openPrice)>=0))
+            throw new BusinessException("固定开平仓价格和方向无法产生正净收益；请调整价格、重新选择图表时间或清空固定条件，增加手数不能解决；未创建订单或修改资金");
+    }
+    private static BigDecimal net(BigDecimal gross,BigDecimal fee,BigDecimal q) {
+        return ManualOrderCalculation.money(ManualOrderCalculation.money(gross.multiply(q)).subtract(ManualOrderCalculation.money(fee.multiply(q))));
+    }
+    /** Fixed prices determine per-lot profit at a close; reject impossible lot rounding before searching opening times. */
+    private static boolean fixedTargetPossible(Request r,BigDecimal pc,BigDecimal lot,BigDecimal rate,BigDecimal fee,BigDecimal step,BigDecimal minimum) {
+        if(r.openPrice==null || r.targetNet==null)return true;
+        for(String side:r.side==null?Arrays.asList("BUY","SELL"):Collections.singletonList(r.side)) {
+            BigDecimal gross=pc.subtract(r.openPrice).multiply(lot).multiply(rate).multiply("BUY".equals(side)?ONE:ONE.negate()),u=gross.subtract(fee);
+            if(r.targetNet.signum()!=0 && u.signum()!=r.targetNet.signum())continue;
+            // Sub-ledger steps may have rounding plateaus; retain the authoritative candidate checks there.
+            if(r.quantity==null && u.signum()!=0 && u.abs().multiply(step).compareTo(ONE.scaleByPowerOfTen(-16))<=0)return true;
+            Set<BigDecimal> qs=new LinkedHashSet<>();
+            if(r.quantity!=null)qs.add(r.quantity);
+            else {
+                quantities(qs,minimum,step);
+                if(u.signum()!=0) {
+                    quantities(qs,r.targetNet.divide(u,48,RoundingMode.HALF_UP),step);
+                    if(r.allowNetAdjustment)for(BigDecimal factor:Arrays.asList(ONE.subtract(r.netTolerance.divide(HUNDRED)),ONE.add(r.netTolerance.divide(HUNDRED))))
+                        quantities(qs,r.targetNet.multiply(factor).divide(u,48,RoundingMode.HALF_UP),step);
+                }
+            }
+            for(BigDecimal q:qs)try{if(q.compareTo(minimum)>=0 && matches(net(gross,fee,q),r.targetNet,r.allowNetAdjustment,r.netTolerance))return true;}catch(BusinessException invalid){ }
+        }
+        return false;
+    }
+    /** OHLC interval index: find only overlapping opening minutes, newest first, skipping disjoint pairs. */
+    private static final class OpeningIndex {
+        final List<ManualOrderGenerator.Candle> rows;final long[] times;final BigDecimal[] low,high;
+        OpeningIndex(NavigableMap<Long,ManualOrderGenerator.Candle> candles){rows=new ArrayList<>(candles.values());times=new long[rows.size()];low=new BigDecimal[rows.size()*4];high=new BigDecimal[rows.size()*4];for(int i=0;i<times.length;i++)times[i]=rows.get(i).time;build(1,0,rows.size()-1);}
+        void build(int node,int a,int b){if(a==b){low[node]=rows.get(a).low;high[node]=rows.get(a).high;return;}int middle=(a+b)/2;build(node*2,a,middle);build(node*2+1,middle+1,b);low[node]=low[node*2].min(low[node*2+1]);high[node]=high[node*2].max(high[node*2+1]);}
+        int last(int before,List<BigDecimal[]> bands){return find(1,0,rows.size()-1,before,bands);}
+        int find(int node,int a,int b,int before,List<BigDecimal[]> bands){
+            if(a>before)return -1;boolean overlaps=false;for(BigDecimal[] band:bands)if(low[node].compareTo(band[1])<=0 && high[node].compareTo(band[0])>=0){overlaps=true;break;}if(!overlaps)return -1;
+            if(a==b)return a;int middle=(a+b)/2,right=find(node*2+1,middle+1,b,before,bands);return right>=0?right:find(node*2,a,middle,before,bands);
+        }
+    }
+    private static void searchBudget(long deadline) {
+        if(System.nanoTime()-deadline>=0)throw new BusinessException("匹配范围过大，已停止长时间搜索；请固定图表开平仓分钟或调整净收益条件后重试；未创建订单或修改资金");
+    }
+    public static Candidate solve(Request r,NavigableMap<Long,ManualOrderGenerator.Candle> candles,TradingSymbol s,BigDecimal available,BigDecimal maxLeverage) {
+        validate(r,s,maxLeverage);
+        if(!candles.isEmpty())validateTimes(r,candles.firstKey(),candles.lastKey()+60000);
+        BigDecimal leverage=r.leverage==null?HUNDRED.min(maxLeverage):r.leverage;
+        if(candles.isEmpty())throw new BusinessException(NO_SOLUTION,"最近七天没有有效的已结束分钟OHLC行情及换算率");
         BigDecimal lot=s.getLotSize()==null?number("1000"):s.getLotSize(),fee=s.getFeeMultiplier()==null?number("30"):s.getFeeMultiplier();
         BigDecimal step=s.getQuantityStep()==null?number("0.01"):s.getQuantityStep(),minimum=s.getMinOrderQuantity()==null?step:s.getMinOrderQuantity();
         Candidate nonPositive=null;
-        // ponytail: at most seven days of minute pairs; add an interval index if sparse worst-case searches become measurable.
-        for(ManualOrderGenerator.Candle close:candles.descendingMap().values()) {
-            if(r.closeTime!=null && close.time!=r.closeTime)continue;
-            if(r.closeTime==null && r.closePrice==null && close!=candles.lastEntry().getValue())break;
+        // ponytail: fully overlapping OHLC can still visit O(n²) pairs. Bound CPU time; use a profit/notional index if broad searches must always finish.
+        long deadline=System.nanoTime()+1_000_000_000L;
+        OpeningIndex openings=new OpeningIndex(candles);
+        Collection<ManualOrderGenerator.Candle> closes=r.closeTime!=null ? candles.containsKey(r.closeTime)?Collections.singletonList(candles.get(r.closeTime)):Collections.emptyList()
+            :r.closePrice==null?Collections.singletonList(candles.lastEntry().getValue()):candles.descendingMap().values();
+        for(ManualOrderGenerator.Candle close:closes) {
+            searchBudget(deadline);
             BigDecimal pc=r.closePrice==null?close.price:r.closePrice;
             if(pc.compareTo(close.low)<0 || pc.compareTo(close.high)>0)continue;
-            // Fixed prices and quantity determine profit at this close rate, independent of opening time.
-            // Reject incompatible targets before scanning minute pairs (common fully-fixed failure is O(n)).
-            if(r.openPrice!=null && r.quantity!=null && r.targetNet!=null) {
-                BigDecimal gross=ManualOrderCalculation.money(pc.subtract(r.openPrice).multiply(lot).multiply(close.rate).multiply(r.quantity));
-                BigDecimal charge=ManualOrderCalculation.money(fee.multiply(r.quantity));
-                boolean buy=(r.side==null || "BUY".equals(r.side)) && matches(gross.subtract(charge),r.targetNet,r.allowNetAdjustment,r.netTolerance);
-                boolean sell=(r.side==null || "SELL".equals(r.side)) && matches(gross.negate().subtract(charge),r.targetNet,r.allowNetAdjustment,r.netTolerance);
-                if(!buy && !sell)continue;
+            if(!fixedTargetPossible(r,pc,lot,close.rate,fee,step,minimum))continue;
+            List<BigDecimal[]> bands=r.openPrice!=null?Collections.singletonList(new BigDecimal[]{r.openPrice,r.openPrice}):Arrays.asList(new BigDecimal[]{pc.multiply(number("0.992")),pc.multiply(number("0.997"))},new BigDecimal[]{pc.multiply(number("1.003")),pc.multiply(number("1.008"))});
+            if(r.openPrice==null && r.quantity==null && r.targetNet!=null) {
+                List<BigDecimal[]> feasible=new ArrayList<>();BigDecimal multiplier=lot.multiply(close.rate),rounding=ONE.scaleByPowerOfTen(-16);
+                BigDecimal allowance=r.allowNetAdjustment?r.targetNet.abs().multiply(r.netTolerance).divide(HUNDRED):ZERO;
+                for(String side:r.side==null?Arrays.asList("BUY","SELL"):Collections.singletonList(r.side))for(BigDecimal[] band:bands) {
+                    int sign="BUY".equals(side)?1:-1;
+                    if(r.targetNet.signum()==0) {
+                        // Any positive legal lot count is at least minimum; ledger rounding cannot hide a larger unit loss.
+                        BigDecimal a=opening(rounding,minimum,pc,multiplier,fee,sign),b=opening(rounding.negate(),minimum,pc,multiplier,fee,sign);
+                        BigDecimal low=band[0].max(a.min(b)),high=band[1].min(a.max(b));if(low.compareTo(high)<=0)feasible.add(new BigDecimal[]{low,high});
+                    } else {
+                        BigDecimal a=unit(band[0],pc,multiplier,fee,sign).multiply(BigDecimal.valueOf(r.targetNet.signum())),b=unit(band[1],pc,multiplier,fee,sign).multiply(BigDecimal.valueOf(r.targetNet.signum()));
+                        BigDecimal largest=a.max(b),smallest=a.min(b);
+                        if(largest.signum()>0 && largest.multiply(number("9999999999999999.9999999999999999")).add(rounding).compareTo(r.targetNet.abs().subtract(allowance))>=0
+                            && (smallest.signum()<=0 || smallest.multiply(minimum).subtract(rounding).compareTo(r.targetNet.abs().add(allowance))<=0))feasible.add(band);
+                    }
+                }
+                bands=feasible;
             }
-            for(ManualOrderGenerator.Candle open:candles.headMap(close.time,false).descendingMap().values()) {
-                if(r.openTime!=null && open.time!=r.openTime)continue;
+            if(r.openPrice==null && r.quantity!=null && r.targetNet!=null) {
+                List<BigDecimal[]> feasible=new ArrayList<>();BigDecimal allowance=r.allowNetAdjustment?r.targetNet.abs().multiply(r.netTolerance).divide(HUNDRED):ZERO;
+                BigDecimal rounding=ONE.scaleByPowerOfTen(-16),multiplier=lot.multiply(close.rate);
+                for(String side:r.side==null?Arrays.asList("BUY","SELL"):Collections.singletonList(r.side)) {
+                    int sign="BUY".equals(side)?1:-1;
+                    BigDecimal a=opening(r.targetNet.subtract(allowance).subtract(rounding),r.quantity,pc,multiplier,fee,sign),b=opening(r.targetNet.add(allowance).add(rounding),r.quantity,pc,multiplier,fee,sign);
+                    for(BigDecimal[] band:bands){BigDecimal low=band[0].max(a.min(b)),high=band[1].min(a.max(b));if(low.compareTo(high)<=0)feasible.add(new BigDecimal[]{low,high});}
+                }
+                bands=feasible;
+            }
+            int before=Arrays.binarySearch(openings.times,close.time)-1;
+            for(int index=r.openTime==null?openings.last(before,bands):Arrays.binarySearch(openings.times,r.openTime);index>=0 && index<=before;index=r.openTime==null?openings.last(index-1,bands):-1) {
+                searchBudget(deadline);
+                ManualOrderGenerator.Candle open=openings.rows.get(index);
                 List<BigDecimal[]> ranges=new ArrayList<>();
                 if(r.openPrice!=null) {
                     if(r.openPrice.compareTo(open.low)<0 || r.openPrice.compareTo(open.high)>0)continue;
                     ranges.add(new BigDecimal[]{r.openPrice,r.openPrice});
-                } else for(BigDecimal[] band:Arrays.asList(new BigDecimal[]{pc.multiply(number("0.992")),pc.multiply(number("0.997"))},new BigDecimal[]{pc.multiply(number("1.003")),pc.multiply(number("1.008"))})) {
+                } else for(BigDecimal[] band:bands) {
                     BigDecimal low=band[0].max(open.low),high=band[1].min(open.high);
                     if(low.compareTo(high)<=0)ranges.add(new BigDecimal[]{low,high});
                 }
@@ -159,6 +233,6 @@ public final class SimpleManualOrderGenerator {
             }
         }
         if(nonPositive!=null)return nonPositive;
-        throw new BusinessException("最近七天没有符合全部固定条件的开平仓组合；自动价差须为0.3%至0.8%，开仓须早于平仓，"+(r.allowNetAdjustment?"净收益须在设置容差内":"严格净收益须精确相等")+"；未创建订单或修改资金");
+        throw new BusinessException(NO_SOLUTION,"最近七天已就绪行情没有符合全部固定条件的开平仓组合；自动价差须为0.3%至0.8%，开仓须早于平仓，"+(r.allowNetAdjustment?"净收益须在设置容差内":"严格净收益须精确相等")+"；未创建订单或修改资金");
     }
 }

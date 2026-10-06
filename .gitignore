@@ -102,3 +102,6 @@ dist-control*/
 
 # Reviewed public schema-only snapshot; never allow business data dumps.
 !docs/database/schema.sql
+
+# Additive user-avatar metadata migration; no private account data.
+!exchange-backend/src/main/resources/db/migration/V2026100601__user_avatar.sql

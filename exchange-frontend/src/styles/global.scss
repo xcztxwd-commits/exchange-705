@@ -108,6 +108,12 @@ button {
   margin-bottom: 10px;
 }
 
+.registration-invite > summary { list-style: none; width: fit-content; cursor: pointer; font-size: 12px; line-height: 1.5; color: #666; }
+.registration-invite > summary::-webkit-details-marker { display: none; }
+.registration-invite > summary:focus-visible { outline: 2px solid #85bd00; outline-offset: 4px; }
+.registration-invite[open] > input { margin-top: 10px; }
+html.dark .registration-invite > summary { color: var(--night-muted, #929b94); }
+
 .input-box {
   width: 100%;
   background: #f6f6f6;

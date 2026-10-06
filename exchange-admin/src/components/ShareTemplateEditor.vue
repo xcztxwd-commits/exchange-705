@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, shallowRef, watch } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage, ElMessageBox, type AutocompleteFetchSuggestionsCallback } from 'element-plus'
 import QRCode from 'qrcode'
 import request from '@/utils/request'
 import { can } from '@/utils/access'
+import { displaySymbol } from '@/utils/displaySymbol'
 import { useAuthStore } from '@/store/auth'
 import ProtectedElementImage from './ProtectedElementImage.vue'
 import { createShareAssetLoader, fetchShareImage, prepareShareImage } from '../../../exchange-frontend/src/utils/shareTemplateAssets'
@@ -41,7 +42,7 @@ const rate = computed(() => order.value ? shareReturn(order.value) : null)
 const image = ref(''), rendering = ref(false), error = ref(''), stage = ref<HTMLElement>(), propertiesPanel = ref<HTMLElement>(), scale = ref(1)
 const users = ref<any[]>([]), userId = ref<number>(), searching = ref(false)
 const qrImage = shallowRef<HTMLImageElement>(), inviteUrl = ref(''), inviteLoading = ref(false), inviteError = ref('')
-let revision = 0, userRevision = 0, inviteRevision = 0, observer: ResizeObserver | undefined, disposed = false
+let revision = 0, symbolRevision = 0, userRevision = 0, inviteRevision = 0, observer: ResizeObserver | undefined, disposed = false
 const backgrounds = new Map<string, Promise<HTMLImageElement>>()
 async function background() {
   const file = design.value.artwork && shareBackgrounds[draft.base]
@@ -67,6 +68,21 @@ async function render() {
     image.value = canvas.toDataURL('image/png')
   } catch (e: any) { if (run === revision) { error.value = e.message || '图片生成失败，请重试'; image.value = '' } }
   finally { if (run === revision) rendering.value = false }
+}
+function searchSymbols(keyword: string, callback: AutocompleteFetchSuggestionsCallback) {
+  if (disposed) return
+  const run = ++symbolRevision, query = keyword.trim()
+  if (!query) { callback([]); return }
+  request.get('/market/search', { params: { keyword: query } }).then((result: any) => {
+    if (!disposed && run === symbolRevision) callback(query === sample.symbol.trim() ? (result.list || []).map((symbol: any) => ({
+      value: symbol.symbol, label: [displaySymbol(symbol), symbol.name || symbol.nameEn].filter(Boolean).join(' · '),
+    })) : [])
+  }).catch((e: any) => {
+    if (!disposed && run === symbolRevision) {
+      callback([])
+      if (query === sample.symbol.trim()) ElMessage.error(e.message || '品种查询失败，请重试')
+    }
+  })
 }
 async function searchUsers(keyword: string) {
   if (!can('users:view')) return
@@ -239,13 +255,13 @@ watch(tab, value => { if (value === 'materials') void loadMaterials() })
 watch(materialQuery, () => { materialPage.value = 1 })
 watch(selectedKey, () => { nextTick(() => { if (propertiesPanel.value) propertiesPanel.value.scrollTop = 0 }) })
 watch(() => auth.token, () => {
-  userRevision++; inviteRevision++; users.value = []; userId.value = undefined; searching.value = false
+  symbolRevision++; userRevision++; inviteRevision++; users.value = []; userId.value = undefined; searching.value = false
   qrImage.value = undefined; inviteUrl.value = ''; inviteError.value = ''; inviteLoading.value = false
   sample.userName = ''; sample.userEmail = ''; revision++; image.value = ''; void render()
 })
 watch([design, sample, language, brand, timezone, () => draft.base, () => auth.token], render, { deep: true, immediate: true })
 onMounted(() => { observer = new ResizeObserver(measure); if (stage.value) observer.observe(stage.value); measure() })
-onBeforeUnmount(() => { disposed = true; revision++; userRevision++; inviteRevision++; observer?.disconnect(); assets.dispose(); drag = null })
+onBeforeUnmount(() => { disposed = true; revision++; symbolRevision++; userRevision++; inviteRevision++; observer?.disconnect(); assets.dispose(); drag = null })
 </script>
 
 <template>
@@ -352,7 +368,11 @@ onBeforeUnmount(() => { disposed = true; revision++; userRevision++; inviteRevis
         </template>
         <h3>预览数据</h3>
         <el-form label-position="top" class="preview-data-form">
-          <el-form-item label="品种"><el-input v-model="sample.symbol" aria-label="预览品种" maxlength="80" /></el-form-item>
+          <el-form-item label="品种">
+            <el-autocomplete :key="auth.token" v-model="sample.symbol" :fetch-suggestions="searchSymbols" :debounce="250" :trigger-on-focus="false" clearable fit-input-width placeholder="输入品种代码或名称搜索" aria-label="预览品种" maxlength="80">
+              <template #default="{ item }">{{ item.label }}</template>
+            </el-autocomplete>
+          </el-form-item>
           <div class="geometry-form"><el-form-item label="方向"><el-select v-model="sample.buy" aria-label="预览方向"><el-option :value="true" label="做多" /><el-option :value="false" label="做空" /></el-select></el-form-item><el-form-item label="杠杆"><el-input-number v-model="sample.leverage" :min="1" :max="10000" aria-label="预览杠杆" /></el-form-item></div>
           <el-form-item label="开仓价"><el-input-number v-model="sample.openPrice" :min="0.00000001" :max="1e15" :controls="false" aria-label="预览开仓价" /></el-form-item>
           <el-form-item label="平仓价"><el-input-number v-model="sample.closePrice" :min="0.00000001" :max="1e15" :controls="false" aria-label="预览平仓价" /></el-form-item>
@@ -377,5 +397,7 @@ onBeforeUnmount(() => { disposed = true; revision++; userRevision++; inviteRevis
 
 <style scoped>
 .panel-tabs{display:flex;gap:4px;margin:-2px -2px 18px;border-bottom:1px solid #e0e5ec}.panel-tabs button{flex:1;padding:8px 2px;border:0;background:none;font:inherit;font-size:13px;color:#697386;cursor:pointer;border-bottom:2px solid transparent}.panel-tabs button[aria-selected=true]{color:#17804c;border-color:#17804c;font-weight:600}.layer-actions{display:flex;flex-wrap:wrap;gap:6px;margin:12px 0}.layer-actions .el-button+.el-button{margin:0}.layer-row{border:1px solid #edf0f4;margin:4px 0}.layer-row button>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:120px}.designer-panel h3 small{color:#77808e;font-weight:400;font-size:11px;margin-left:8px}.shape-toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:0 0 12px;font-size:12px;color:#697386}.shape-toolbar button{display:flex;align-items:center;gap:4px;border:1px solid #ccd5df;border-radius:5px;padding:5px 8px;background:#fff;color:#344155;font:inherit;cursor:pointer}.shape-toolbar button:disabled{opacity:.5;cursor:not-allowed}.shape-toolbar img{width:22px;height:18px;object-fit:contain}.material-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.material-card{border:1px solid #e0e5ec;border-radius:6px;padding:6px;min-width:0;text-align:center}.material-card>button:first-child{border:0;background:none;width:100%;padding:0;cursor:pointer;color:inherit}.material-card>button:disabled{cursor:default}.material-card img,.material-card .el-image{width:100%;height:70px;object-fit:contain;background:repeating-conic-gradient(#eef0f3 0% 25%,#fff 0% 50%) 0/12px 12px}.material-card span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;margin-top:6px}.material-pagination{display:flex;gap:6px;align-items:center;justify-content:center;font-size:12px;margin-top:14px}.layer-name{margin-bottom:14px}
-.share-designer{color:#263445}.designer-toolbar{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:18px}.designer-toolbar h2{margin:0;font-size:20px}.designer-toolbar p,.panel-hint{font-size:12px;color:#77808e;line-height:1.65}.designer-toolbar p{margin:6px 0 0}.designer-columns{display:grid;grid-template-columns:240px minmax(300px,1fr) 286px;gap:18px;align-items:start}.designer-panel{padding:16px;background:#fff;border:1px solid #e0e5ec;border-radius:10px;max-height:78vh;overflow-y:auto}.designer-panel h3{margin:0 0 14px;font-size:14px}.designer-panel h3:not(:first-child){margin-top:24px}.designer-panel .el-select,.designer-panel .el-input-number{width:100%}.designer-panel input[type=datetime-local]{box-sizing:border-box;width:100%;min-width:0;border:1px solid #dcdfe6;border-radius:4px;padding:8px;font:inherit}.designer-panel input[type=color]{width:40px;height:30px;padding:2px;border:1px solid #dcdfe6;border-radius:4px;margin-right:8px}.field-row{display:flex;gap:8px;align-items:center;padding:3px 8px;border-radius:6px}.field-row.active{background:#edf5e6}.field-row button{display:flex;justify-content:space-between;align-items:center;gap:5px;flex:1;border:0;background:none;cursor:pointer;text-align:left;font:inherit;font-size:12px;color:inherit}.field-row small{font-size:10px;color:#8b95a5}.designer-preview{padding:16px;background:#e6ebf1;border:1px solid #dbe2ea;border-radius:10px;min-width:0}.preview-toolbar{display:flex;gap:12px;justify-content:space-between;margin-bottom:14px}.preview-toolbar .el-select{width:160px}.designer-stage{position:relative;max-width:680px;margin:auto;overflow:hidden;touch-action:none}.designer-stage>img{display:block;width:100%;height:100%;position:absolute;inset:0;pointer-events:none}.content-box{position:absolute;border:1px dashed #8793a280;box-sizing:border-box;cursor:move;touch-action:none;outline:none}.content-box.selected,.content-box:focus-visible{border:2px solid #409eff;background:#409eff08}.box-caption{position:absolute;left:0;top:0;background:#263445d9;color:#fff;font-size:10px;padding:2px 4px;white-space:nowrap;opacity:0;pointer-events:none}.content-box.selected .box-caption,.content-box:hover .box-caption{opacity:1}.resize-handle{position:absolute;width:14px;height:14px;right:-1px;bottom:-1px;border:2px solid #fff;background:#409eff;cursor:nwse-resize;touch-action:none}.geometry-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 10px}.span-two{grid-column:span 2}.return-preview{padding:12px;background:#f1f7ec;border-radius:6px;display:flex;align-items:center;justify-content:space-between}.return-preview strong{font-size:20px;color:#17804c}@media(max-width:1100px){.designer-columns{grid-template-columns:210px minmax(240px,1fr)}.designer-columns>aside:last-child{grid-column:1/-1;max-height:none}.preview-data-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 16px}.designer-panel{max-height:none}}@media(max-width:680px){.designer-columns{display:flex;flex-direction:column}.designer-panel,.designer-preview{box-sizing:border-box;width:100%}.designer-preview{order:-1}.designer-toolbar{align-items:flex-start;flex-direction:column}.preview-data-form{display:block}.designer-toolbar h2{font-size:18px}}
+.share-designer{color:#263445}.designer-toolbar{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:18px}.designer-toolbar h2{margin:0;font-size:20px}.designer-toolbar p,.panel-hint{font-size:12px;color:#77808e;line-height:1.65}.designer-toolbar p{margin:6px 0 0}.designer-columns{display:grid;grid-template-columns:240px minmax(300px,1fr) 286px;gap:18px;align-items:start}.designer-panel{padding:16px;background:#fff;border:1px solid #e0e5ec;border-radius:10px;max-height:78vh;overflow-y:auto}.designer-panel h3{margin:0 0 14px;font-size:14px}.designer-panel h3:not(:first-child){margin-top:24px}.designer-panel .el-select,.designer-panel .el-autocomplete,.designer-panel .el-input-number{width:100%}.designer-panel input[type=datetime-local]{box-sizing:border-box;width:100%;min-width:0;border:1px solid #dcdfe6;border-radius:4px;padding:8px;font:inherit}.designer-panel input[type=color]{width:40px;height:30px;padding:2px;border:1px solid #dcdfe6;border-radius:4px;margin-right:8px}.field-row{display:flex;gap:8px;align-items:center;padding:3px 8px;border-radius:6px}.field-row.active{background:#edf5e6}.field-row button{display:flex;justify-content:space-between;align-items:center;gap:5px;flex:1;border:0;background:none;cursor:pointer;text-align:left;font:inherit;font-size:12px;color:inherit}.field-row small{font-size:10px;color:#8b95a5}.designer-preview{padding:16px;background:#e6ebf1;border:1px solid #dbe2ea;border-radius:10px;min-width:0}.preview-toolbar{display:flex;gap:12px;justify-content:space-between;margin-bottom:14px}.preview-toolbar .el-select{width:160px}.designer-stage{position:relative;max-width:680px;margin:auto;overflow:hidden;touch-action:none}.designer-stage>img{display:block;width:100%;height:100%;position:absolute;inset:0;pointer-events:none}.content-box{position:absolute;border:1px dashed #8793a280;box-sizing:border-box;cursor:move;touch-action:none;outline:none}.content-box.selected,.content-box:focus-visible{border:2px solid #409eff;background:#409eff08}.box-caption{position:absolute;left:0;top:0;background:#263445d9;color:#fff;font-size:10px;padding:2px 4px;white-space:nowrap;opacity:0;pointer-events:none}.content-box.selected .box-caption,.content-box:hover .box-caption{opacity:1}.resize-handle{position:absolute;width:14px;height:14px;right:-1px;bottom:-1px;border:2px solid #fff;background:#409eff;cursor:nwse-resize;touch-action:none}.geometry-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 10px}.span-two{grid-column:span 2}.return-preview{padding:12px;background:#f1f7ec;border-radius:6px;display:flex;align-items:center;justify-content:space-between}.return-preview strong{font-size:20px;color:#17804c}@media(max-width:1100px){.designer-columns{grid-template-columns:210px minmax(240px,1fr)}.designer-columns>aside:last-child{grid-column:1/-1;max-height:none}.preview-data-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 16px}.designer-panel{max-height:none}}@media(max-width:680px){.designer-columns{display:flex;flex-direction:column}.designer-panel,.designer-preview{box-sizing:border-box;width:100%}.designer-preview{order:-1}.designer-toolbar{align-items:flex-start;flex-direction:column}.preview-data-form{display:block}.designer-toolbar h2{font-size:18px}}
+/* Desktop sidebars follow the preview height, without letting long forms enlarge the grid row. */
+@media(min-width:1101px){.designer-columns{align-items:stretch}.designer-panel{contain:size;min-height:0;max-height:none}}
 </style>

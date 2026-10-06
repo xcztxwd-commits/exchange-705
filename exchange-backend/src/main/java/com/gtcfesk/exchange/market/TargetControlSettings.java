@@ -6,10 +6,12 @@ import static com.gtcfesk.exchange.market.BalancedControlPlan.Failure;
 
 /** Freeze formula output and a start-price percentage corridor exactly once per target task. */
 public final class TargetControlSettings {
-    public static final String DEFAULT_FORMULA = "start * 0.00001 * intensity";
+    public static final String LEGACY_FORMULA = "start * 0.00001 * intensity";
+    public static final String DEFAULT_FORMULA = "base * intensity";
     public static final BigDecimal BAND_PERCENT_PER_INTENSITY = new BigDecimal("0.004");
     public final String formula, bandMode;
-    public final BigDecimal typical, band, bandPercent, basisPrice;
+    public final BigDecimal typical, band, bandPercent, basisPrice, baseAmount, gapPerSecond;
+    public final boolean adaptive;
     public final BigDecimal lowerFactor = new BigDecimal("0.9"), upperFactor = new BigDecimal("1.1");
     public final BigInteger bandTicks, low = BigInteger.valueOf(97), high = BigInteger.valueOf(103);
     public final int balancePercent = 3, feedbackPercent = 5, shortWindow = 10, longWindow = 30, searchRounds = 32, searchSeconds = 5;
@@ -20,25 +22,37 @@ public final class TargetControlSettings {
             throw new Failure("INVALID_PARAMETERS", "控盘参数无效");
         this.basisPrice = start;
         formula = options == null || options.getStepFormula() == null ? DEFAULT_FORMULA : options.getStepFormula().trim();
+        adaptive = DEFAULT_FORMULA.equals(formula);
+        BigDecimal tick = BigDecimal.ONE.movePointLeft(precision), gap = target.subtract(start).abs();
+        gapPerSecond = gap.divide(BigDecimal.valueOf(duration), MathContext.DECIMAL128);
+        // Reserve one opposite-direction step; a one-second task still fails the independent path checks.
+        BigDecimal travel = gap.divide(BigDecimal.valueOf(Math.max(1, duration - 2)), MathContext.DECIMAL128);
+        // ponytail: ten ticks give the 90%–110% interval at least three amounts; full path validation remains authoritative.
+        baseAmount = start.multiply(new BigDecimal("0.00001")).max(travel).max(tick.multiply(BigDecimal.TEN)).setScale(precision, RoundingMode.CEILING);
         bandMode = options == null ? "AUTO" : options.getDeviationBandMode();
         if (!"AUTO".equals(bandMode) && !"MANUAL".equals(bandMode)) throw new Failure("INVALID_PARAMETERS", "偏差带模式必须为AUTO或MANUAL");
         BigDecimal supplied = options == null ? null : options.getDeviationBandPercent();
         if (supplied != null && (supplied.signum() <= 0 || supplied.compareTo(new BigDecimal("100")) > 0 || supplied.stripTrailingZeros().scale() > 8))
             throw new Failure("INVALID_PARAMETERS", "偏差带百分比须大于0且不超过100，最多8位小数");
         if ("MANUAL".equals(bandMode) && supplied == null) throw new Failure("INVALID_PARAMETERS", "手动偏差带需要填写百分比");
-        bandPercent = ("AUTO".equals(bandMode) ? BAND_PERCENT_PER_INTENSITY.multiply(BigDecimal.valueOf(intensity)) : supplied).stripTrailingZeros();
-        // Round inward to the instrument tick; never enlarge the requested percentage corridor.
-        band = start.multiply(bandPercent).movePointLeft(2).setScale(precision, RoundingMode.FLOOR);
-        bandTicks = band.movePointRight(precision).toBigIntegerExact();
-        if (bandTicks.signum() <= 0) throw new Failure("CORRIDOR_PRECISION_UNREPRESENTABLE", "偏差带小于品种最小跳动，无法生成；不会自动扩大");
         Map<String, BigDecimal> variables = new LinkedHashMap<>();
-        variables.put("start", start); variables.put("target", target); variables.put("gap", target.subtract(start).abs());
+        variables.put("start", start); variables.put("target", target); variables.put("gap", gap); variables.put("base", baseAmount);
         variables.put("duration", BigDecimal.valueOf(duration)); variables.put("intensity", BigDecimal.valueOf(intensity));
-        variables.put("tick", BigDecimal.ONE.movePointLeft(precision));
+        variables.put("tick", tick);
         try { typical = evaluate(formula, variables); }
         catch (IllegalArgumentException invalid) { throw new Failure("INVALID_FORMULA", "单步幅度" + invalid.getMessage()); }
         if (typical.signum() <= 0 || typical.compareTo(BigDecimal.TEN.pow(16)) >= 0)
             throw new Failure("INVALID_FORMULA", "单步典型幅度必须大于0且小于10^16，单位为价格/秒");
+        if (adaptive && "AUTO".equals(bandMode)) {
+            // Freeze an automatically derived corridor once; cap it at 100% of start. Manual corridors never change.
+            band = typical.multiply(new BigDecimal("4")).min(start).setScale(precision, RoundingMode.FLOOR);
+            bandPercent = band.movePointRight(2).divide(start, 8, RoundingMode.HALF_UP).stripTrailingZeros();
+        } else {
+            bandPercent = ("AUTO".equals(bandMode) ? BAND_PERCENT_PER_INTENSITY.multiply(BigDecimal.valueOf(intensity)) : supplied).stripTrailingZeros();
+            band = start.multiply(bandPercent).movePointLeft(2).setScale(precision, RoundingMode.FLOOR);
+        }
+        bandTicks = band.movePointRight(precision).toBigIntegerExact();
+        if (bandTicks.signum() <= 0) throw new Failure("CORRIDOR_PRECISION_UNREPRESENTABLE", "偏差带小于品种最小跳动；请增加偏差带百分比后重新预览，不会自动扩大手动范围");
     }
 
     public Map<String, Object> snapshot() {
@@ -51,6 +65,10 @@ public final class TargetControlSettings {
         values.put("balancePercent", balancePercent); values.put("feedbackPercent", feedbackPercent);
         values.put("shortWindow", shortWindow); values.put("longWindow", longWindow);
         values.put("searchRounds", searchRounds); values.put("searchSeconds", searchSeconds);
+        if (adaptive) {
+            values.put("amplitudeMode", "ADAPTIVE"); values.put("baseAmount", baseAmount.toPlainString());
+            values.put("gapPerSecond", gapPerSecond.toPlainString()); values.put("priceTick", BigDecimal.ONE.scaleByPowerOfTen(-baseAmount.scale()).toPlainString());
+        }
         return values;
     }
 
@@ -129,7 +147,7 @@ public final class TargetControlSettings {
                     else { if (!take(',')) throw error("min/max需要两个参数"); BigDecimal second = expression(); result = name.equals("min") ? first.min(second) : first.max(second); }
                     if (!take(')')) throw error("缺少函数右括号"); return bounded(result);
                 }
-                throw error("未知变量或函数；允许start/target/gap/duration/intensity/tick及abs/min/max");
+                throw error("未知变量或函数；允许start/target/gap/duration/intensity/tick/base及abs/min/max");
             } finally { depth--; }
         }
     }

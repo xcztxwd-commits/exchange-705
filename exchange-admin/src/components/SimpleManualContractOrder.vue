@@ -5,12 +5,15 @@ import request from '@/utils/request'
 import ManualOrderChart from './ManualOrderChart.vue'
 import type { OrderChartRange } from '@/utils/manualOrderChart'
 import { simpleConditions, simpleFields, simplePayload, type SimpleField } from '@/utils/simpleManualOrder'
+import { manualOrderEstimate } from '@/utils/manualOrderEstimate'
 
 const emit = defineEmits(['created'])
 const path = '/admin/orders/contract/manual'
 const initial = () => ({ userId: null as number | null, symbol: '', openTime: null as number | null, closeTime: null as number | null, openPrice: '', closePrice: '', leverage: '100', quantity: '', side: '', targetNet: '', allowNetAdjustment: true, netTolerance: '5', walletEnabled: false, historyEnabled: false })
 const form = reactive(initial()), conditions = reactive(simpleConditions())
 const visible = ref(false), busy = ref(false), saving = ref(false), error = ref(''), result = ref<any>(null)
+const estimateBasis = ref<any>(null), quantityDrivesNet = ref(false)
+let estimateKey = ''
 const dialogContent = ref<HTMLElement | null>(null)
 function resetScroll() { dialogContent.value?.closest('.el-dialog__body')?.scrollTo(0, 0); dialogContent.value?.closest('.el-overlay-dialog')?.scrollTo(0, 0) }
 const users = ref<any[]>([]), symbols = ref<any[]>([]), timezone = ref('UTC')
@@ -19,13 +22,16 @@ const unit = computed(() => symbol.value?.quantity_unit_type === 'BASE_ASSET' ? 
 const step = computed(() => Number(symbol.value?.quantity_step || 0.01))
 const minimum = computed(() => Number(symbol.value?.min_order_quantity || step.value))
 const sliderValue = computed(() => Math.max(Math.min(minimum.value, 100), Math.min(100, Number(form.quantity) || minimum.value)))
+const quoteKey = () => JSON.stringify([form.symbol, symbol.value?.spec_version, timezone.value, form.openTime, form.closeTime, form.openPrice, form.closePrice])
 const signature = computed(() => JSON.stringify({ userId: form.userId, symbol: form.symbol, openTime: form.openTime, closeTime: form.closeTime, conditions, allow: form.allowNetAdjustment, tolerance: form.netTolerance, wallet: form.walletEnabled, history: form.historyEnabled }))
 let revision = 0, session = 0, searchRevision = 0, key = '', verified = ''
-watch(signature, () => { revision++; result.value = null; error.value = ''; verified = ''; busy.value = false })
-watch(visible, value => { if (!value) { revision++; busy.value = false } })
+let generationRequest: AbortController | undefined
+watch(signature, () => { generationRequest?.abort(); revision++; result.value = null; error.value = ''; verified = ''; busy.value = false })
+watch(visible, value => { if (!value) { generationRequest?.abort(); revision++; busy.value = false } })
 watch(() => form.historyEnabled, value => { if (value) form.walletEnabled = true })
 watch(() => form.userId, value => { if (!value) { form.walletEnabled = false; form.historyEnabled = false } })
 watch(() => form.symbol, () => {
+  quantityDrivesNet.value = false
   clearChart()
   for (const field of simpleFields) { conditions[field] = ''; form[field] = '' }
   form.leverage = String(Math.min(100, Number(symbol.value?.max_leverage || 100)))
@@ -33,9 +39,28 @@ watch(() => form.symbol, () => {
 function edit(field: SimpleField, value: string | number | number[] | null | undefined) {
   const text = value == null ? '' : String(value)
   form[field] = text; conditions[field] = text
+  if (field === 'targetNet') quantityDrivesNet.value = false
   if (field === 'openPrice' || field === 'closePrice') clearChart()
+  if (field === 'quantity') { quantityDrivesNet.value = true; syncQuantityNet() }
+  else if (quantityDrivesNet.value && (field === 'side' || field === 'leverage')) syncQuantityNet()
 }
-function clearChart() { form.openTime = null; form.closeTime = null }
+function syncQuantityNet() {
+  let net = ''
+  const basis = estimateBasis.value
+  if (basis && estimateKey === quoteKey()) {
+    // A quantity edit drives profit for the displayed trade, not a new time/price search.
+    for (const field of ['openPrice', 'closePrice', 'side', 'leverage'] as const) conditions[field] = form[field]
+    const open = Date.parse(basis.openUtc), close = Date.parse(basis.closeUtc)
+    if (Number.isFinite(open) && Number.isFinite(close)) { form.openTime = open; form.closeTime = close }
+    estimateKey = quoteKey()
+    net = manualOrderEstimate({ driver: 'QUANTITY', input: form.quantity, side: form.side, leverage: form.leverage }, { ...basis, walletBefore: basis.walletBefore ?? '0' })?.netText ?? ''
+  }
+  form.targetNet = net; conditions.targetNet = net
+}
+function clearChart() {
+  form.openTime = null; form.closeTime = null; estimateBasis.value = null; estimateKey = ''
+  if (quantityDrivesNet.value) { form.targetNet = ''; conditions.targetNet = '' }
+}
 function selectChart(range: OrderChartRange) {
   edit('openPrice', range.open.price); edit('closePrice', range.close.price)
   form.openTime = range.open.timestamp; form.closeTime = range.close.timestamp
@@ -50,6 +75,7 @@ async function search(text = '') {
   } catch (e: any) { if (active === session) error.value = e.message }
 }
 function clear() {
+  quantityDrivesNet.value = false
   clearChart()
   Object.assign(conditions, simpleConditions())
   for (const field of simpleFields) form[field] = field === 'leverage' ? String(Math.min(100, Number(symbol.value?.max_leverage || 100))) : ''
@@ -66,23 +92,17 @@ async function generate() {
   await nextTick()
   const id = ++revision, expected = signature.value; busy.value = true; result.value = null; error.value = ''
   try {
-    let response: any
-    for (let attempt = 0; attempt < 20; attempt++) {
-      if (id !== revision || !visible.value) return
-      try { response = await request.post(`${path}/simple/generate`, payload, { timeout: 120000 }); break }
-      catch (e: any) {
-        if (e.response?.data?.code !== 425 || attempt === 19) throw e
-        error.value = '历史行情正在加载，完成后自动生成…'
-        await new Promise(resolve => setTimeout(resolve, 1500))
-      }
-    }
+    generationRequest?.abort(); generationRequest = new AbortController()
+    // Missing data is queued server-side; do not rerun the entire seven-day search twenty times.
+    const response: any = await request.post(`${path}/simple/generate`, payload, { timeout: 10000, signal: generationRequest.signal })
     if (id !== revision || !visible.value || expected !== signature.value) return
     const values = { openPrice: response.quotes.openPrice, closePrice: response.quotes.closePrice, leverage: response.request.leverage, quantity: response.calculation.quantity, side: response.request.side, targetNet: response.calculation.net }
     for (const field of simpleFields) form[field] = String(values[field])
+    estimateBasis.value = response; estimateKey = quoteKey()
     result.value = response; error.value = ''; key = crypto.randomUUID(); verified = signature.value
     ElMessage.success('已生成预览，尚未创建订单或修改资金')
-  } catch (e: any) { if (id === revision) error.value = e.message }
-  finally { if (id === revision) busy.value = false }
+  } catch (e: any) { if (id === revision) error.value = e.response?.data?.code === 425 ? '所需分钟行情或换算率正在后台补齐，请稍后再点一键生成；已有输入保留。' : e.code === 'ECONNABORTED' ? '生成请求超时，请固定开平仓分钟或稍后重试；未确认创建，不会修改资金。' : e.message }
+  finally { if (id === revision) { busy.value = false; generationRequest = undefined } }
 }
 const canCreate = computed(() => result.value && verified === signature.value && !busy.value && !saving.value)
 async function create() {
@@ -134,7 +154,7 @@ defineExpose({ open, openBinding })
 
 <template>
   <el-dialog v-model="visible" title="生成模拟订单 · 简版" width="min(1200px, calc(100vw - 24px))" top="4vh" :close-on-click-modal="false" :close-on-press-escape="!saving" :show-close="!saving" class="simple-order-dialog" @opened="resetScroll">
-    <ManualOrderChart class="simple-order-chart" :symbol="form.symbol" :timezone="timezone" :active="visible" :disabled="busy || saving" :open-time="form.openTime ?? undefined" :close-time="form.closeTime ?? undefined" @select="selectChart" @clear="clearChart">
+    <ManualOrderChart class="simple-order-chart" :symbol="form.symbol" :symbols="symbols" @change-symbol="form.symbol = $event" :timezone="timezone" :active="visible" :disabled="busy || saving" :open-time="form.openTime ?? undefined" :close-time="form.closeTime ?? undefined" @select="selectChart" @clear="clearChart">
       <template #intro><p ref="dialogContent" class="hint">仅品种必填；手填条件保留，空项一键补齐。</p></template>
     </ManualOrderChart>
     <el-form label-position="top" class="simple-order-form" :disabled="busy || saving">
@@ -145,7 +165,7 @@ defineExpose({ open, openBinding })
       <el-form-item label="杠杆"><el-input :model-value="form.leverage" clearable placeholder="默认100×" aria-label="杠杆" @update:model-value="(v: string | number | number[]) => edit('leverage', v)" /></el-form-item>
       <el-form-item label="方向"><el-select :model-value="form.side" clearable placeholder="自动决定" aria-label="方向" @update:model-value="(v: string | number | number[]) => edit('side', v)"><el-option value="BUY" label="做多" /><el-option value="SELL" label="做空" /></el-select></el-form-item>
       <el-form-item :label="`手数 / 数量（${unit}）`"><el-input :model-value="form.quantity" clearable placeholder="自动，可超过100" aria-label="手数" @update:model-value="(v: string | number | number[]) => edit('quantity', v)" /><el-slider :model-value="sliderValue" :min="Math.min(minimum, 100)" :max="100" :step="step" :disabled="minimum > 100 || step > 100" aria-label="手数滑块" @update:model-value="(v: string | number | number[]) => edit('quantity', v)" /><small>{{ Number(form.quantity) > 100 ? '超过滑块范围，实际值保留。' : '滑块≤100，输入不限。' }}</small></el-form-item>
-      <el-form-item label="净收益（USD）"><el-input :model-value="form.targetNet" clearable placeholder="自动，可为负或零" aria-label="净收益" @update:model-value="(v: string | number | number[]) => edit('targetNet', v)" /><div class="tolerance"><el-checkbox v-model="form.allowNetAdjustment" aria-label="允许净收益调整">允许调整</el-checkbox><el-input v-model="form.netTolerance" :disabled="!form.allowNetAdjustment" aria-label="净收益容差"><template #append>%</template></el-input></div></el-form-item>
+      <el-form-item label="净收益（USD）"><el-input :model-value="form.targetNet" clearable placeholder="自动，可为负或零" aria-label="净收益" @update:model-value="(v: string | number | number[]) => edit('targetNet', v)" /><small v-if="quantityDrivesNet && !canCreate" aria-live="polite">{{ form.targetNet ? '已按当前价格、方向、手续费和汇率同步估算；请重新生成预览后确认。' : '手数为空或无效，或缺少当前价格/汇率；请重新生成后计算净收益。' }}</small><div class="tolerance"><el-checkbox v-model="form.allowNetAdjustment" aria-label="允许净收益调整">允许调整</el-checkbox><el-input v-model="form.netTolerance" :disabled="!form.allowNetAdjustment" aria-label="净收益容差"><template #append>%</template></el-input></div></el-form-item>
       <div class="funding-options" role="group" aria-label="资金处理">
         <div class="funding-option"><span>净收益入钱包</span><el-switch v-permission="'orders:manual_order'" v-model="form.walletEnabled" :disabled="!form.userId || form.historyEnabled" aria-label="净收益入钱包" /></div>
         <div class="funding-option"><span>回填历史权益</span><el-switch v-permission="'orders:manual_order'" v-model="form.historyEnabled" :disabled="!form.userId" aria-label="回填历史权益" /></div>

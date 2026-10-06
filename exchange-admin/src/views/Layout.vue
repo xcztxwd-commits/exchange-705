@@ -146,8 +146,8 @@ const loadSoundConfig = async () => {
 }
 
 // 跳转到对应页面
-const goToPage = (type: string) => {
-  if (!canRoute(({ deposit: "/deposit-review", withdraw: "/withdraw-review", kyc: "/kyc-review", order: "/orders" } as Record<string,string>)[type] || "")) return
+const goToPage = (type: string, queueUnread = 0) => {
+  if (!canRoute(({ deposit: "/deposit-review", withdraw: "/withdraw-review", kyc: "/kyc-review", order: "/orders", support: "/support" } as Record<string,string>)[type] || "")) return
   if (type === 'deposit') {
     router.push('/deposit-review')
   } else if (type === 'withdraw') {
@@ -156,6 +156,8 @@ const goToPage = (type: string) => {
     router.push('/kyc-review')
   } else if (type === 'order') {
     router.push('/orders')
+  } else if (type === 'support') {
+    router.push({ path: '/support', query: { scope: queueUnread > 0 && can('support:claim') ? 'queue' : 'mine' } })
   }
 }
 
@@ -286,7 +288,6 @@ const handleSettingsUpdated = () => {
         
         <div class="header-right">
             
-          <SupportNotifications admin :enabled="can('support:view')" />
           <el-button v-permission="'admin_list:view'" v-if="auth.user?.isSuperAdmin && can('admin_list:view')" @click="backendAccountsVisible=true">后台账号</el-button>
           <!-- 在线用户数 -->
           <el-button v-permission="'users:view'" class="online-count-area" :disabled="!can('users:view')" @click="onlineVisible = true">
@@ -325,6 +326,19 @@ const handleSettingsUpdated = () => {
             >
               订单({{ pendingCounts.order }})
             </span>
+            <SupportNotifications admin :enabled="can('support:view')">
+              <template #chat="{ state }">
+                <button
+                  v-permission="'support:view'"
+                  v-if="state.mode === 'internal'"
+                  type="button"
+                  class="notification-item support-pending"
+                  :class="{ 'has-pending': (state.queueUnread || 0) + (state.chatUnread || 0) > 0 }"
+                  title="未接待的客户留言与我的未读客服消息"
+                  @click="goToPage('support', state.queueUnread || 0)"
+                >客服({{ (state.queueUnread || 0) + (state.chatUnread || 0) }})</button>
+              </template>
+            </SupportNotifications>
           </div>
           
           <el-dropdown>
@@ -366,7 +380,7 @@ const handleSettingsUpdated = () => {
     </el-container>
   </el-container>
 
-  <el-dialog v-model="backendAccountsVisible" title="本租户后台账号" width="min(800px,95vw)" destroy-on-close><BackendAccounts v-if="backendAccountsVisible" :load="backendAccountsLoad" :create="backendAccountsCreate" /></el-dialog>
+  <el-dialog v-model="backendAccountsVisible" title="系统后台账号" width="min(800px,95vw)" destroy-on-close><BackendAccounts v-if="backendAccountsVisible" :load="backendAccountsLoad" :create="backendAccountsCreate" /></el-dialog>
   <el-dialog v-model="onlineVisible" title="在线用户明细" width="min(1100px, 95vw)" destroy-on-close>
     <OnlineUsers v-if="onlineVisible" :load="loadOnlineUsers" />
   </el-dialog>
@@ -551,6 +565,9 @@ const handleSettingsUpdated = () => {
   border-radius: 3px;
   transition: all 0.3s;
 }
+
+.support-pending { border: 0; background: transparent; font-family: inherit; }
+.support-pending:focus-visible { outline: 2px solid #85bd00; outline-offset: 2px; }
 
 .notification-item:hover {
   background: #ecf5ff;

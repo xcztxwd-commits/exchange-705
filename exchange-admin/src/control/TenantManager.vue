@@ -95,6 +95,6 @@ onMounted(async()=>{await load();if(!disposed)stopCounts=startReadPolling(readCo
     <el-form label-width="90px"><el-form-item label="策略键"><el-select v-model="policy.key" filterable allow-create><el-option v-for="key in policyKeys" :key="key" :value="key" :label="key" /></el-select></el-form-item><el-form-item label="策略值"><el-input v-model="policy.value" /></el-form-item><el-form-item label="锁定"><el-switch v-model="policy.locked" /></el-form-item><el-form-item label="操作原因" required><el-input v-model="policy.reason" maxlength="500" /></el-form-item></el-form>
     <template #footer><el-button :loading="busy" type="primary" @click="savePolicy">保存策略</el-button></template>
   </el-dialog>
-  <el-dialog :model-value="!!accounts" @update:model-value="(v:boolean)=>{if(!v)accounts=null}" title="后台账号" width="min(800px,95vw)" destroy-on-close><BackendAccounts :control="true" v-if="accounts" :key="accounts.id" :load="accountsLoad" :create="accountsCreate" /></el-dialog>
+  <el-dialog :model-value="!!accounts" @update:model-value="(v:boolean)=>{if(!v)accounts=null}" title="系统后台账号" width="min(800px,95vw)" destroy-on-close><BackendAccounts :control="true" v-if="accounts" :key="accounts.id" :load="accountsLoad" :create="accountsCreate" /></el-dialog>
   <el-dialog :model-value="!!online" @update:model-value="(v: boolean)=>{if(!v)online=null}" :title="`在线用户 / ${online?.name || ''}`" width="min(1100px,95vw)" destroy-on-close><OnlineUsers :control="true" v-if="online" :key="online.id" :load="onlineLoad" /></el-dialog>
 </template>
