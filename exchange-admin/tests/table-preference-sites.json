@@ -97,7 +97,7 @@
   {
     "file": "src/control/TenantManager.vue",
     "binding": "table-key",
-    "key": "control.tenants"
+    "key": "control.tenants.domains.v2"
   },
   {
     "file": "src/control/TenantManager.vue",

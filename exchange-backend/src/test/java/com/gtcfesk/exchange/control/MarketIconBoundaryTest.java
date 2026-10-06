@@ -33,4 +33,17 @@ class MarketIconBoundaryTest {
    assertFalse(TenantRequestFilter.backendSharedPath(path));
   assertNull(TenantContext.currentTenantId());
  }
+ @Test void publicAdminIconExceptionNeverOpensTenantEntryBusinessRoutes() throws Exception {
+  TenantRepository tenants=mock(TenantRepository.class);
+  TenantDomainVerification domains=mock(TenantDomainVerification.class);
+  TenantHostService hosts=new TenantHostService(tenants,"forex-exchange.cc","https://admin.forex-exchange.cc","https://control.forex-exchange.cc","");
+  TenantRequestFilter boundary=new TenantRequestFilter(hosts);
+  org.springframework.test.util.ReflectionTestUtils.setField(boundary,"domains",domains);
+  MockMvc mvc=MockMvcBuilders.standaloneSetup(new MarketIconController()).addFilters(boundary).build();
+  mvc.perform(get("/api/market/icons/crypto/BTC.svg").header("Host","entry.forex-exchange.net").header("Accept","text/html"))
+   .andExpect(status().isForbidden()).andExpect(header().string("Cache-Control","no-store"))
+   .andExpect(header().doesNotExist("Location")).andExpect(jsonPath("$.code").value("TENANT_BOUNDARY_REJECTED"));
+  verifyNoInteractions(tenants,domains);
+  assertNull(TenantContext.currentTenantId());
+ }
 }
