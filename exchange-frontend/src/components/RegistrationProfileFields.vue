@@ -14,7 +14,7 @@ const words = computed(() => chinese.value ? {
   income: '年收入', dial: '国际区号', currency: '年收入币种',
   unavailable: '注册字段配置不可用',
 } : {
-  income: 'Annual income', dial: 'Country calling code', currency: 'Income currency',
+  income: locale.locale === 'ja' ? '年収' : 'Annual income', dial: 'Country calling code', currency: 'Income currency',
   unavailable: 'Registration fields unavailable',
 })
 const englishErrors: Record<string, string> = {
