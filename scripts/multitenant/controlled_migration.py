@@ -549,8 +549,8 @@ def main():
         result=record_startup(db,args.artifact,args.application_container,args.application_artifact_path,args.output)
         print(json.dumps({'result':result['result'],'startup_sha256':core.file_hash(args.output),'independent_signed_approval_claimed':False}));return
     if args.action=='owner-observe-baseline':
-        if not owner_policy or not args.ledger or not args.reviewed_baseline or not args.output:
-            raise ValueError('Explicit current owner policy, new ledger, immutable 0603 snapshot and output required')
+        if not owner_policy or not args.ledger or (not args.reviewed_baseline and not owner_policy.value.get('native_witness')) or not args.output:
+            raise ValueError('Explicit owner policy, new ledger, exact snapshot/native witness and output required')
         from owner_live_test_migration import observe_baseline
         restore=owner_policy.restore;reference=core.Database(args.restore_container,args.restore_database+'_0603_reference')
         result=observe_baseline(db,restore,reference,args.reviewed_baseline,args.output,OwnerLiveTestLedger(args.ledger,owner_policy))

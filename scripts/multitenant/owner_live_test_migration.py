@@ -20,6 +20,101 @@ DEPLOY_INSTRUCTION = '我授予你所有权限，我现在需要你将代码整�
 LIVE_TEST_INSTRUCTION = '线上无真实用户，无真实资金，都为测试数据，但你也要尽量保证数据的完整'
 ACTIVATION = 'OWNER_AUTHORIZED_LIVE_TEST_0702_ACTIVATION_NOT_SIGNED_APPROVAL'
 BASELINE_SHA256 = '3d4fae2f121413c73ad809a0a23654db99121a961a67f1242c3b0ec0ddf1506b'
+NATIVE_WITNESS = 'ACTUAL_1090_0404_AND_EXECUTED_0601_0603_TABLE_WITNESS'
+NATIVE_FILES = {
+    'frozen':'98ddf5f7eddce1fe70ace8eae83a7da89badfc962b51dcbe39aafc2c5980b42e',
+    'original_backup':'fdb8f3f9ea57a4fad1bb0ece2f55949539f2030d082aabfe45ae1910ffad5e57',
+    'tables_ddl':'94658c0a9b4d85e17cda408ed4f914cbcd9b20c2e37d19d88dcde28e38d5fae5',
+    'full_restore_proof':'bac9baea68acc5d2236a8328880dbabef35cec78d20dd60624ad1495c52fcc48',
+}
+NATIVE_PHASES = ('885e7bb6a13ffa485e5230cf0fa2b26061d65437db7dee5ca652954d0ea47c3f',
+                 'bfa8d95b582bc998b6969b9985f8d2ae5208b3e29ffaa506dcea44973338bc5a',
+                 '943d9c852d4c775c4aae88434f86b145e9f89db69edba158ef8abb06d67ebbe8')
+STORED_OBJECTS = ('database-defaults','trigger-definitions','routine-definitions','parameter-definitions','event-definitions')
+
+def witness_file(value, expected):
+    if not isinstance(value,dict) or set(value) != {'path','sha256'} or value['sha256'] != expected:
+        raise ValueError('Exact known physical witness descriptor required')
+    path = Path(value['path'])
+    if path.is_symlink() or not path.is_file() or c.core.file_hash(path) != expected:
+        raise ValueError('Known physical witness bytes changed or absent')
+    return path
+
+def same_physical(left, right):
+    return (all(left.get(key) == right.get(key) for key in ('server_uuid','database','datadir','port','version'))
+            and left.get('database') == '1090'
+            and left.get('physical',{}).get('container_id') == right.get('physical',{}).get('container_id')
+            and left.get('physical',{}).get('image_id') == right.get('physical',{}).get('image_id'))
+
+def original_table_ddl(text, frozen):
+    """Only authenticated 112 CREATE statements; each reconstructs the old raw SHOW hash."""
+    expected = {key.removeprefix('table:'):value for key,value in frozen['state']['schema']['objects'].items() if key.startswith('table:')}
+    if len(expected) != 112:raise ValueError('Exact original 112-table physical freeze required')
+    blocks = {};end = 0
+    pattern = re.compile(r'^CREATE TABLE `([A-Za-z0-9_]+)` \(\n.*?^\) ENGINE=[^\n]+;',re.M|re.S)
+    for match in pattern.finditer(text):
+        name = match[1]
+        if text[end:match.start()].strip() or name in blocks:raise ValueError('Only unique original CREATE TABLE witnesses allowed')
+        lines = match[0][:-1].splitlines();lines[0] = name+'\t'+lines[0]
+        if name not in expected or c.digest(lines) != expected[name]:raise ValueError('Original raw table witness differs from frozen SHOW hash')
+        blocks[name] = match[0];end = match.end()
+    if text[end:].strip() or set(blocks) != set(expected):raise ValueError('Physical CREATE witness incomplete or contains extra SQL')
+    return blocks
+
+def validate_native_witness(db, value):
+    if (not isinstance(value,dict) or set(value) != {'kind',*NATIVE_FILES,'phase_receipts'} or value['kind'] != NATIVE_WITNESS
+            or len(value['phase_receipts']) != 3):
+        raise ValueError('Explicit exact native physical witness contract required')
+    paths = {key:witness_file(value[key],expected) for key,expected in NATIVE_FILES.items()}
+    frozen = c.read(paths['frozen']);current = c.target(db)
+    metadata = [json.loads(row) if isinstance(row,str) else row for row in frozen['metadata']]
+    if (db.test or not same_physical(frozen['target'],current) or max(row['version'] for row in metadata) != 2026100404
+            or any(row['ready'] != 1 for row in metadata)):
+        raise ValueError('Witness belongs to another physical source or unready/non-0404 history')
+    restored = c.read(paths['full_restore_proof'])
+    if (restored.get('kind') != 'PASS_FRESH_FROZEN_FULL_RESTORE_ALL_FIELDS_AND_SCHEMA'
+            or not same_physical(restored['source'],current)
+            or restored['backup']['sha256'] != NATIVE_FILES['original_backup'] or restored['backup'].get('schema_only') is not False
+            or restored.get('actual_exact_decimal_and_binary_fields_checked') is not True
+            or restored.get('independent_signed_approval_claimed') is not False
+            or restored['restore']['server_uuid'] == current['server_uuid'] or restored['restore']['datadir'] == current['datadir']
+            or restored['restore']['physical'].get('test_instance') is not True):
+        raise ValueError('Exact historical full independent restore proof required')
+    reviewed = c.migrations()[-5:-2]
+    if tuple(item['name'] for item in reviewed) != ('V2026100601__control_policy_definitions.sql','V2026100602__user_avatar.sql','V2026100603__tenant_entry_frontend_roles.sql'):
+        raise ValueError('Exact unchanged native 0601/0602/0603 reviewed tails required')
+    previous_at = dt.datetime.fromisoformat(restored['at'])
+    for descriptor,sha,migration in zip(value['phase_receipts'],NATIVE_PHASES,reviewed):
+        phase = c.read(witness_file(descriptor,sha));at = dt.datetime.fromisoformat(phase['at'])
+        if (phase.get('kind') != 'EXACT_DDL_PHASE_COMPLETE' or phase.get('migration') != migration
+                or not same_physical(phase['target'],current) or at.tzinfo is None or at <= previous_at):
+            raise ValueError('Actual ordered same-source executed phase receipt differs')
+        previous_at = at
+    ddl = paths['tables_ddl']
+    if ddl.stat().st_size > 4*1024*1024:raise ValueError('Bounded structure-only table witness required')
+    original_table_ddl(ddl.read_text(encoding='utf-8'),frozen)
+    return frozen,paths
+
+def native_reference_definitions(db, reference, frozen):
+    """Reference has tables, NOT stored objects. Those retain their historical exact hashes."""
+    current = baseline_definitions(db);tables = baseline_definitions(reference)
+    for key in STORED_OBJECTS:
+        if current['objects'].get(key) != frozen['state']['schema']['objects'].get(key):
+            raise ValueError('Original stored object/default metadata changed; cannot normalize it away')
+    current_tables = {key:value for key,value in current['objects'].items() if key.startswith('table:') or key=='database-defaults'}
+    reference_tables = {key:value for key,value in tables['objects'].items() if key.startswith('table:') or key=='database-defaults'}
+    if len(current_tables) != 114 or current_tables != reference_tables:
+        raise ValueError('All actual 113 tables/defaults must match original physical DDL plus reviewed tails')
+    return current
+
+def native_reference_rows(reference, facts):
+    for table,value in facts['data']['tables'].items():
+        expected = 3 if table=='tenant_schema_version' else 1 if table=='control_policy_definition' else 0
+        if value['rows'] != expected:raise ValueError('Table-only reference contains unexpected rows')
+    if reference.query('SELECT version,minimum_application_epoch,business_activation_ready+0 FROM tenant_schema_version ORDER BY version') != [f'{v}\t{v}\t0' for v in (2026100601,2026100602,2026100603)]:
+        raise ValueError('Exact three inactive reference receipts required')
+    if reference.query("SELECT COUNT(*) FROM control_policy_definition WHERE policy_key='feature.registration' AND default_value='false' AND version=0") != ['1']:
+        raise ValueError('Exact original reviewed reference catalog seed required')
 
 def current_instruction(value):
     receipt = Path(value['instruction_receipt'])
@@ -148,9 +243,11 @@ def observe_baseline(db, restore, reference, snapshot, output, ledger):
     if current_instruction(policy.value) != 2 or ledger.rows():
         raise ValueError('Current owner live-test instruction and new baseline evidence required')
     reviewed = c.migrations()
+    native = policy.value.get('native_witness')
     if (c.core.EPOCH != 2026100702 or tuple(x['name'] for x in reviewed[-3:]) != ('V2026100603__tenant_entry_frontend_roles.sql',*c.CONTROL0702_TAIL)
-            or c.core.file_hash(Path(snapshot)) != BASELINE_SHA256):
+            or (native is None and c.core.file_hash(Path(snapshot)) != BASELINE_SHA256)):
         raise ValueError('Exact immutable reviewed 0603 snapshot and two-phase tail required')
+    frozen, native_paths = validate_native_witness(db,native) if native is not None else (None,None)
     source_target, restore_target = c.target(db),c.target(restore)
     reference_target = c.target(reference)
     expected_reference = dict(restore_target);expected_reference['database'] = restore.database+'_0603_reference'
@@ -172,21 +269,38 @@ def observe_baseline(db, restore, reference, snapshot, output, ledger):
     c.create_restore_database(db,restore);restore.restore_file(restored_input['path'])
     if c.state(restore) != before or c.state(db) != before:
         raise ValueError('Full single-DB restore/current source differs; no baseline accepted')
-    c.create_restore_database(db,reference);reference.restore_file(snapshot)
+    c.create_restore_database(db,reference)
+    if native is None:
+        reference.restore_file(snapshot)
+    else:
+        # The authenticated extraction is CREATE-only and intentionally contains
+        # no dump session headers; permit forward FK references in this one empty
+        # isolated import session, never on the source or its full restore.
+        reference.sql('SET FOREIGN_KEY_CHECKS=0;\n'+native_paths['tables_ddl'].read_text(encoding='utf-8')+'\nSET FOREIGN_KEY_CHECKS=1;')
+        for path in c.core.MIGRATIONS[-5:-2]:reference.sql(path.read_text(encoding='utf-8'))
     reference_state = c.state(reference)
-    if any(value['rows'] for value in reference_state['data']['tables'].values()):
-        raise ValueError('Reviewed baseline reference must contain structure only, not live data')
-    definitions = baseline_definitions(db)
-    if definitions != baseline_definitions(restore) or definitions != baseline_definitions(reference):
-        raise ValueError('Actual original definitions differ from the reviewed immutable 0603 snapshot')
+    if native is None:
+        if any(value['rows'] for value in reference_state['data']['tables'].values()):
+            raise ValueError('Reviewed baseline reference must contain structure only, not live data')
+        definitions = baseline_definitions(db)
+        if definitions != baseline_definitions(restore) or definitions != baseline_definitions(reference):
+            raise ValueError('Actual original definitions differ from the reviewed immutable 0603 snapshot')
+    else:
+        native_reference_rows(reference,reference_state)
+        definitions = native_reference_definitions(db,reference,frozen)
+        if definitions != baseline_definitions(restore):raise ValueError('Fully restored current definitions differ')
     c.maintenance(db)
     if c.state(db) != before or c.state(restore) != before:raise ValueError('Source or restored facts changed during baseline review')
     value = {'kind':'OWNER_BASELINE_OBSERVED','target':source_target,'state':before,'source_sha256':c.sources(),
              'migrations':reviewed[:-2],'backup':backup,'restore_input':restored_input,'restore':restore_target,
-             'reviewed_snapshot':{'path':str(snapshot),'sha256':BASELINE_SHA256},'reference':reference_target,
+             'reviewed_snapshot':{'path':str(snapshot),'sha256':BASELINE_SHA256} if native is None else None,'reference':reference_target,
              'reference_state':reference_state,'reviewed_definitions':definitions,
              'instruction_sha256':policy.value['instruction_sha256'],'independent_signed_approval_claimed':False,
              'past_migration_completion_invented':False,'counter_policy':'only final DDL AUTO_INCREMENT option ignored for structural reference; current/restored full counters remain exact'}
+    if native is not None:
+        value.update(native_witness=native,reference_kind='TABLES_ONLY_ORIGINAL_112_PLUS_EXACT_EXECUTED_0601_0603',
+                     reference_contains_original_stored_objects=False,
+                     original_stored_objects_historical_hashes={key:frozen['state']['schema']['objects'][key] for key in STORED_OBJECTS})
     c.publish(output,value);ledger.append(value);return value
 
 def verify_baseline(db, ledger, previous):
@@ -197,17 +311,29 @@ def verify_baseline(db, ledger, previous):
             or previous.get('source_sha256') != c.sources() or previous.get('instruction_sha256') != policy.value['instruction_sha256']
             or previous.get('target') != c.target(db) or previous.get('state') != c.state(db)
             or previous.get('migrations') != c.migrations()[:-2]
-            or previous.get('reviewed_snapshot',{}).get('sha256') != BASELINE_SHA256
-            or c.core.file_hash(Path(previous['reviewed_snapshot']['path'])) != BASELINE_SHA256
             or c.core.file_hash(Path(previous['backup']['path'])) != previous['backup']['sha256']
             or c.core.file_hash(Path(previous['restore_input']['path'])) != previous['restore_input']['sha256']
             or c.target(policy.restore) != previous.get('restore') or c.state(policy.restore) != previous['state']):
         raise ValueError('Frozen real owner baseline/source/backup/restore proof changed')
     reference = c.core.Database(policy.restore.container,previous['reference']['database'])
-    if (c.target(reference) != previous['reference'] or c.state(reference) != previous['reference_state']
-            or baseline_definitions(reference) != previous['reviewed_definitions']
-            or baseline_definitions(db) != previous['reviewed_definitions']):
+    if c.target(reference) != previous['reference'] or c.state(reference) != previous['reference_state']:
         raise ValueError('Actual reviewed baseline structure/reference changed')
+    native = policy.value.get('native_witness')
+    if native is None:
+        if (previous.get('native_witness') is not None or previous.get('reviewed_snapshot',{}).get('sha256') != BASELINE_SHA256
+                or c.core.file_hash(Path(previous['reviewed_snapshot']['path'])) != BASELINE_SHA256
+                or baseline_definitions(reference) != previous['reviewed_definitions']
+                or baseline_definitions(db) != previous['reviewed_definitions']):
+            raise ValueError('Actual reviewed baseline structure/reference changed')
+    else:
+        if (previous.get('native_witness') != native or previous.get('reviewed_snapshot') is not None
+                or previous.get('reference_kind') != 'TABLES_ONLY_ORIGINAL_112_PLUS_EXACT_EXECUTED_0601_0603'
+                or previous.get('reference_contains_original_stored_objects') is not False):
+            raise ValueError('Native table-only witness cannot impersonate a complete stored-object reference')
+        frozen,_ = validate_native_witness(db,native);native_reference_rows(reference,previous['reference_state'])
+        if (native_reference_definitions(db,reference,frozen) != previous['reviewed_definitions']
+                or previous.get('original_stored_objects_historical_hashes') != {key:frozen['state']['schema']['objects'][key] for key in STORED_OBJECTS}):
+            raise ValueError('Original native structural/historical witness changed')
 
 def proof_from_baseline(db, proposal, restore, output, ledger):
     """Bind the already verified full single-DB restore to a later immutable plan."""
