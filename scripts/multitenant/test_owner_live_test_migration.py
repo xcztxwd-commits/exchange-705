@@ -1,5 +1,7 @@
 """Offline owner-instruction contract tests; not production migration evidence."""
 import datetime as dt
+import copy
+import json
 from pathlib import Path
 from types import SimpleNamespace
 import tempfile
@@ -252,5 +254,106 @@ class OwnerLiveTestTests(unittest.TestCase):
         with patch.object(c,'package_epoch',return_value=2026100702),patch.object(owner,'inspect_application',return_value=actual),\
                 patch.object(owner,'container_artifact_hash',return_value=c.core.file_hash(artifact)):
             with self.assertRaisesRegex(ValueError,'non-SUPER'):owner.record_startup(self.db,artifact,'fixture','/app/app.jar',self.root/'startup-unused.json')
+
+    def native_fixture(self):
+        # Offline fixtures replace known witness hashes only inside unittest.mock;
+        # no CLI accepts arbitrary hashes or a caller-supplied approval policy.
+        self.source={'database':'1090','server_uuid':'OFFLINE_FIXTURE_ONLY','datadir':'/offline-source/',
+                     'port':3306,'version':'5.7.44','physical':{'container_id':'a'*64,'image_id':'sha256:'+'b'*64}}
+        objects={key:c.digest({'fixture':key}) for key in owner.STORED_OBJECTS}
+        sql=[]
+        for number in range(112):
+            name=f'offline_table_{number:03d}'
+            block=f'CREATE TABLE `{name}` (\n  `id` int(11) NOT NULL\n) ENGINE=InnoDB DEFAULT CHARSET=latin1;'
+            lines=block[:-1].splitlines();lines[0]=name+'\t'+lines[0]
+            objects['table:'+name]=c.digest(lines);sql.append(block)
+        frozen={'at':(c.now()-dt.timedelta(minutes=9)).isoformat(),'target':copy.deepcopy(self.source),
+                'metadata':[json.dumps({'version':2026100404,'epoch':2026100404,'ready':1})],
+                'state':{'schema':{'objects':objects},'data':{}}}
+        paths={key:self.root/('offline-native-'+key+('.sql' if key in ('original_backup','tables_ddl') else '.json')) for key in owner.NATIVE_FILES}
+        c.publish(paths['frozen'],frozen);paths['original_backup'].write_bytes(b'OFFLINE_SYNTHETIC_FULL_BACKUP_NOT_PRODUCTION')
+        paths['tables_ddl'].write_bytes(('\n\n'.join(sql)+'\n').encode())
+        hashes={key:c.core.file_hash(path) for key,path in paths.items() if key!='full_restore_proof'}
+        restore_proof={'kind':'PASS_FRESH_FROZEN_FULL_RESTORE_ALL_FIELDS_AND_SCHEMA','at':(c.now()-dt.timedelta(minutes=8)).isoformat(),
+                       'source':copy.deepcopy(self.source),'backup':{'sha256':hashes['original_backup'],'schema_only':False},
+                       'restore':{'server_uuid':'OFFLINE_OTHER','datadir':'/offline-restore/','physical':{'test_instance':True}},
+                       'actual_exact_decimal_and_binary_fields_checked':True,'independent_signed_approval_claimed':False}
+        c.publish(paths['full_restore_proof'],restore_proof);hashes['full_restore_proof']=c.core.file_hash(paths['full_restore_proof'])
+        reviewed=[{'name':path.name,'sha256':c.core.file_hash(path)} for path in c.core.MIGRATIONS]
+        phases=[]
+        for number,migration in enumerate(reviewed[-5:-2]):
+            path=self.root/f'offline-native-phase-{number}.json'
+            c.publish(path,{'kind':'EXACT_DDL_PHASE_COMPLETE','at':(c.now()-dt.timedelta(minutes=7-number)).isoformat(),
+                            'target':copy.deepcopy(self.source),'migration':migration})
+            phases.append({'path':str(path),'sha256':c.core.file_hash(path)})
+        for mock in (patch.object(owner,'NATIVE_FILES',hashes),patch.object(owner,'NATIVE_PHASES',tuple(x['sha256'] for x in phases)),
+                     patch.object(c,'migrations',return_value=reviewed)):
+            mock.start();self.addCleanup(mock.stop)
+        value={'kind':owner.NATIVE_WITNESS,**{key:{'path':str(path),'sha256':hashes[key]} for key,path in paths.items()},'phase_receipts':phases}
+        return value,frozen
+
+    def test_native_witness_validates_every_old_raw_create_and_actual_receipts(self):
+        value,frozen=self.native_fixture()
+        actual,paths=owner.validate_native_witness(self.db,value)
+        self.assertEqual(frozen,actual)
+        self.assertEqual(112,len(owner.original_table_ddl(paths['tables_ddl'].read_text(),actual)))
+        self.assertNotEqual(owner.BASELINE_SHA256,value['tables_ddl']['sha256'])
+
+    def test_native_witness_rejects_another_source_scope_or_self_declared_pass(self):
+        value,_=self.native_fixture()
+        for changed in [dict(value,kind='PASS'),dict(value,review_pass=True),dict(value,phase_receipts=[])]:
+            with self.subTest(changed=changed),self.assertRaises(ValueError):owner.validate_native_witness(self.db,changed)
+        self.source['server_uuid']='ANOTHER_OFFLINE_SOURCE'
+        with self.assertRaisesRegex(ValueError,'another physical'):owner.validate_native_witness(self.db,value)
+
+    def test_native_witness_rejects_mutated_backup_or_create_sql(self):
+        value,frozen=self.native_fixture();path=Path(value['original_backup']['path'])
+        path.write_bytes(b'changed old full backup')
+        with self.assertRaisesRegex(ValueError,'bytes changed'):owner.validate_native_witness(self.db,value)
+        text=Path(value['tables_ddl']['path']).read_text()
+        for changed in (text+'\nDROP TABLE offline_table_000;',text.replace('`id` int(11)','`other` int(11)',1),text+text):
+            with self.subTest(changed=changed[:50]),self.assertRaises(ValueError):owner.original_table_ddl(changed,frozen)
+
+    def test_native_witness_phase_body_must_match_current_exact_sql_not_only_sha(self):
+        value,_=self.native_fixture();path=Path(value['phase_receipts'][0]['path']);phase=c.read(path)
+        phase['migration']['sha256']='0'*64;path.write_bytes(c.canonical(phase)+b'\n')
+        sha=c.core.file_hash(path);value['phase_receipts'][0]['sha256']=sha
+        with patch.object(owner,'NATIVE_PHASES',(sha,*owner.NATIVE_PHASES[1:])):
+            with self.assertRaisesRegex(ValueError,'executed phase'):owner.validate_native_witness(self.db,value)
+
+    def native_definition_fixture(self):
+        _,frozen=self.native_fixture()
+        current={'objects':{key:value for key,value in frozen['state']['schema']['objects'].items()}}
+        current['objects']['table:control_policy_definition']='new-exact-reviewed-table'
+        reference=copy.deepcopy(current)
+        for key in owner.STORED_OBJECTS:
+            if key!='database-defaults':reference['objects'][key]='ACTUALLY_EMPTY_REFERENCE_NOT_ORIGINAL_OBJECTS'
+        current['sha256']=c.digest(current['objects']);reference['sha256']=c.digest(reference['objects'])
+        return frozen,current,reference
+
+    def test_native_table_only_reference_does_not_fake_stored_objects(self):
+        frozen,current,reference=self.native_definition_fixture()
+        with patch.object(owner,'baseline_definitions',side_effect=[current,reference]):
+            self.assertEqual(current,owner.native_reference_definitions(self.db,self.restore,frozen))
+        self.assertNotEqual(current['objects']['trigger-definitions'],reference['objects']['trigger-definitions'])
+
+    def test_native_reference_rejects_real_table_default_or_stored_mode_drift(self):
+        frozen,current,reference=self.native_definition_fixture()
+        for key in ('table:offline_table_000','database-defaults'):
+            changed=copy.deepcopy(reference);changed['objects'][key]='REAL_DEFINITION_CHANGED'
+            with patch.object(owner,'baseline_definitions',side_effect=[current,changed]),self.assertRaises(ValueError):
+                owner.native_reference_definitions(self.db,self.restore,frozen)
+        for key in owner.STORED_OBJECTS:
+            changed=copy.deepcopy(current);changed['objects'][key]='REAL_ORIGINAL_OBJECT_CHANGED'
+            with patch.object(owner,'baseline_definitions',side_effect=[changed,reference]),self.assertRaisesRegex(ValueError,'stored object/default'):
+                owner.native_reference_definitions(self.db,self.restore,frozen)
+
+    def test_native_reference_rows_allow_only_real_original_catalog_and_three_receipts(self):
+        facts={'data':{'tables':{'tenant_schema_version':{'rows':3},'control_policy_definition':{'rows':1},'original':{'rows':0}}}}
+        self.restore.query=lambda statement:[f'{v}\t{v}\t0' for v in (2026100601,2026100602,2026100603)] if statement.startswith('SELECT version,') else ['1']
+        owner.native_reference_rows(self.restore,facts)
+        for table,count in [('original',1),('control_policy_definition',0),('tenant_schema_version',4)]:
+            changed=copy.deepcopy(facts);changed['data']['tables'][table]['rows']=count
+            with self.assertRaisesRegex(ValueError,'unexpected rows'):owner.native_reference_rows(self.restore,changed)
 
 if __name__=='__main__':unittest.main()
