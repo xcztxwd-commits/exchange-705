@@ -95,3 +95,16 @@ python -B scripts/market/build_combined_candidate.py `
 6. 回滚前用正式业务 API 查询/取消/排空新队列，不能直接 SQL 改任务状态。backend 使用完整当前查询热修 JAR/image，admin/control 使用核实的原运行 image IDs。保留 additive 列、收据和历史，不 DROP/TRUNCATE/全库回灌；最低应用 epoch 不兼容则审定前滚。
 
 远端完整热修回滚 image 已再次确认存在：`sha256:3e5fcaaec6e0fe317df8a404dea2139a5fec2ac8066f469f0ccac9889b0200de`。其完整制品重建验证沿用先前本地备份，不假称本轮在线业务回滚演练。全部私有配置、容器 inspect、日志与 image-only pins 留在忽略目录，不提交 GitHub。
+
+## 提交与本地候选的最终实测
+
+代码提交 `33c759a0126d51ce3f89dd19ddf13ed1adadf7a5` 已推送至 GitHub 分支 `codex/three-chat-hot-release-20261007`，草稿 PR：<https://github.com/xcztxwd-commits/exchange-705/pull/1>。没有合并 main 或执行线上发布。后续本段为仅文档的结果补记；image OCI revision 和全部应用字节仍绑定上述代码提交。
+
+- backend image：`sha256:7b0b82e2199fdece525c60b4b7634098096de2446273f89296e8428b30e0b6c6`；artifact SHA-256：`6ca2cb3dab67993e15b72d7ed156d1700dbdd921e284e04265cc65374b40f286`。
+- admin image：`sha256:dfb9d1fc03d2a3d0522d207dfe114555e13b308e198ae63cb74deb82081ba2d8`；artifact SHA-256：`a7a153e5ce9db46f4b484c40340c1a1a086684673d3a45d12ee3d2088d5d5f23`。
+- control image：`sha256:56b2f12c98b6e9b28d33aad259d2b3450a9a07e8851cdf70301b583a19e78db4`；artifact SHA-256：`1abd5e5ef7f7a7c52f27e2c86c87b8a8782365354c0ec7f1befe6315abc48988`。
+- rollback-backend image：`sha256:715dab04585eea446092dc412a885332044928d137fe0c6a90dfefa76105a39d`；artifact SHA-256：`8907422fc03d85ab7a69b7b9816564466aa853e8fa974c1804e95fb40d1b321b`。
+
+镜像归档实际 276763648 字节，SHA-256=`012b0691ad37385b81a53d60bc3111b89c2a5cef7a56171a122a6e3341eb1ed9`，归档后重新读取并核对通过。backend/admin/control 三种 image 共 **6/6 独占无网络重建检查通过**。包内 epoch=0702，685 个 class 集合/逐字节、全部业务资源、正式 SQL、两前端全部产物、实际 nginx 配置已核验。
+
+完整清单留于 `rollback/combined-three-chat-20261007-candidate/manifest.json`。回滚制品保留完整当前热修 JAR，未把原 f30 image 当作可重建的热修。当前状态仍为 **UNRELEASED / deploymentReady=false / productionMutated=false**；这些检查只证明不可变制品持久性、Java/nginx 运行与语法，不证明生产业务启动/发布/回滚验收。线上和数据库没有修改，仍须满足上文漂移、审批与仅变化目标库的受控发布条件。
