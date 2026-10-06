@@ -210,13 +210,13 @@ onMounted(() => {
             {{ row.nickname || '-' }}
           </template>
         </el-table-column>
-        <el-table-column label="用户类型" width="100" align="center">
+        <el-table-column column-key="userType" label="用户类型" width="100" align="center">
           <template #default="{ row }">
             <el-tag v-if="row.userType === 'agent'" type="warning">代理</el-tag>
             <el-tag v-else type="success">普通用户</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="状态" width="100" align="center">
+        <el-table-column column-key="status" label="状态" width="100" align="center">
           <template #default="{ row }">
             <el-tag v-if="row.status === 'active'" type="success">正常</el-tag>
             <el-tag v-else type="danger">{{ row.status }}</el-tag>

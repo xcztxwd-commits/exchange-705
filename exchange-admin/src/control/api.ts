@@ -16,7 +16,7 @@ async function responseFor(path: string, method = 'GET', body?: unknown, signal?
   if (!path.startsWith('/control/') || path.includes('://') || path.includes('..') || path.includes('\\')) throw new Error('非法总控接口')
   const current = controlSession.value
   if (path !== '/control/auth/login' && (!current || current.expiresAt <= Date.now())) { clearSession(); throw new Error('总控登录已失效') }
-  const response = await fetch('/api' + path, { method, signal: signal || AbortSignal.timeout(30000), credentials: 'omit', cache: 'no-store', redirect: 'error', headers: { 'Content-Type': 'application/json', ...(current ? { Authorization: `Bearer ${current.token}` } : {}) }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) })
+  const response = await fetch('/api' + path, { method, signal: signal || AbortSignal.timeout(30000), credentials: 'omit', cache: 'no-store', redirect: 'error', headers: { 'Content-Type': path.startsWith('/control/table-preferences/') ? 'application/json;charset=UTF-8' : 'application/json', ...(current ? { Authorization: `Bearer ${current.token}` } : {}) }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) })
   if (response.status === 401 && controlSession.value?.token === current?.token) clearSession()
   if (path !== '/control/auth/login' && (current?.token !== controlSession.value?.token || current!.expiresAt <= Date.now())) throw new Error('总控会话已变更，已丢弃旧响应')
   if (!response.ok) { const result = await response.json().catch(() => ({})); throw new Error(result.message || `请求失败 (HTTP ${response.status})`) }

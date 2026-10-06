@@ -37,6 +37,8 @@ public class ForexQuoteMarketService {
         final Map<String, Long> publishedSequence = new HashMap<>();
         boolean started;
         int engineCursor;
+        final ConcurrentMap<Long,Long> engineRetryAt=new ConcurrentHashMap<>();
+        final ConcurrentMap<Long,Integer> engineFailures=new ConcurrentHashMap<>();
         TenantState() {
             for (String category : Arrays.asList("Crypto", "CryptoPerpetual", "Metal", "Forex", "US", "CFD", "Oil", "Other")) groups.put(category, new Group(category));
         }
@@ -1452,7 +1454,7 @@ public class ForexQuoteMarketService {
         return restoreControl(id, duration, intensity, randomOscillation, null);
     }
     public Map<String,Object> restoreControl(Long id, int duration, int intensity, boolean randomOscillation, String requestKey) {
-        return controls == null ? restoreControlLocked(id, duration, intensity, randomOscillation, requestKey) : controls.locked(id, () -> restoreControlLocked(id, duration, intensity, randomOscillation, requestKey));
+        return controls == null ? restoreControlLocked(id, duration, intensity, randomOscillation, requestKey) : controlHistory.locked(id, () -> restoreControlLocked(id, duration, intensity, randomOscillation, requestKey));
     }
     private Map<String,Object> restoreControlLocked(Long id, int duration, int intensity, boolean randomOscillation, String requestKey) {
         if (duration < 1 || duration > 86400 || intensity < 1 || intensity > 10)
@@ -1479,7 +1481,7 @@ public class ForexQuoteMarketService {
     }
 
     public Map<String,Object> manualControl(Long id, boolean enabled, BigDecimal offset) {
-        return controls == null ? manualControlLocked(id, enabled, offset) : controls.locked(id, () -> manualControlLocked(id, enabled, offset));
+        return controls == null ? manualControlLocked(id, enabled, offset) : !enabled ? controlHistory.locked(id, () -> manualControlLocked(id, false, offset)) : controls.locked(id, () -> manualControlLocked(id, true, offset));
     }
     private Map<String,Object> manualControlLocked(Long id, boolean enabled, BigDecimal offset) {
         if (offset == null || offset.abs().compareTo(new BigDecimal("10000000000000000")) >= 0 || offset.stripTrailingZeros().scale() > 16)
@@ -1489,15 +1491,20 @@ public class ForexQuoteMarketService {
             ? simulationBaseQuote(config, System.currentTimeMillis()) : getPrice(marketCode(config), sourceCategory(config));
         if (enabled && rawPrice(raw).add(offset).signum() <= 0)
             throw new BusinessException("偏移后的价格必须大于 0");
-        if (controls != null && (!RandomMarketPath.enabled(config) || durableFlow(config))) controls.stop(id, System.currentTimeMillis());
+        if (controls != null && (!RandomMarketPath.enabled(config) || durableFlow(config))) {
+            if(enabled)controls.stop(id,System.currentTimeMillis());else controls.emergencySource(id,System.currentTimeMillis());
+        }
         long now = controlTime(config);
         BigDecimal continuation = RandomMarketPath.enabled(config)
             ? RandomMarketPath.price(config, now).subtract(RandomMarketPath.basePrice(config, now)) : BigDecimal.ZERO;
         clearControl(config);
         config.setControlEnabled(enabled); config.setControlPriceOffset(enabled ? offset : continuation);
         recordSimulationControl(config, now);
-        if (controls != null) controls.recordManualPrice(config, raw, System.currentTimeMillis());
-        return saveControl(config);
+        if (controls != null && enabled) controls.recordManualPrice(config, raw, System.currentTimeMillis());
+        // SOURCE records only this valid observed return price; no freeze or source-ledger scan.
+        else if (controls != null && Boolean.TRUE.equals(raw.get("available")) && QuoteState.valid(raw))
+            controlHistory.manualPoint(id, System.currentTimeMillis(), controlledPrice(config, raw, now));
+        return saveControl(config,!enabled);
     }
 
     public Map<String,Object> stopControl(Long id) {
@@ -1531,7 +1538,8 @@ public class ForexQuoteMarketService {
         if (source.getTenantId() != null) copy.setTenantId(source.getTenantId());
         return copy;
     }
-    private Map<String, Object> saveControl(TradingSymbol config) {
+    private Map<String,Object> saveControl(TradingSymbol config) { return saveControl(config,false); }
+    private Map<String, Object> saveControl(TradingSymbol config,boolean emergencySource) {
         TradingSymbol saved = copySymbol(symbols.saveAndFlush(config));
         TenantState tenantState = state();
         afterCommit(() -> {
@@ -1545,15 +1553,16 @@ public class ForexQuoteMarketService {
                 tenantState.registry = Collections.unmodifiableMap(updated);
             }
         });
-        return publishControl(saved);
+        return publishControl(saved,emergencySource);
     }
     /** Called only by explicit writer commands, never by GET/status/quote readers. */
-    private Map<String,Object> publishControl(TradingSymbol config) {
+    private Map<String,Object> publishControl(TradingSymbol config) {return publishControl(config,false);}
+    private Map<String,Object> publishControl(TradingSymbol config,boolean emergencySource) {
         if(controls!=null) {
             long now=controlTime(config);
             Map<String,Object> raw=RandomMarketPath.enabled(config) ? simulationBaseQuote(config,now)
                 : getPrice(marketCode(config),sourceCategory(config));
-            controls.pump(config,raw,now,maxAgeMs);
+            if(emergencySource)controls.pumpSource(config,raw,now,maxAgeMs);else controls.pump(config,raw,now,maxAgeMs);
         }
         return controlStatus(config);
     }
@@ -1574,6 +1583,7 @@ public class ForexQuoteMarketService {
             try {
                 for (TradingSymbol selectedSymbol : selected) {
                     Long id=selectedSymbol.getId();
+                    if(state().engineRetryAt.getOrDefault(id,0L)>System.currentTimeMillis())continue;
                     try {
                         TradingSymbol config = copySymbol(controlSymbol(id));
                         Map<String,Object> base = RandomMarketPath.enabled(config) ? simulationBaseQuote(config, now) : getPrice(marketCode(config), sourceCategory(config));
@@ -1602,8 +1612,16 @@ public class ForexQuoteMarketService {
                                 controls.pump(fresh, base, now, maxAgeMs); return null;
                             });
                         } else controls.pump(config, base, now, maxAgeMs);
+                        state().engineFailures.remove(id);state().engineRetryAt.remove(id);
                     }
-                    catch (Exception failure) { log.error("Persistent control sampling failed for {}", id, failure); }
+                    catch (Exception failure) {
+                        String reason=MarketEngineFailure.normalize(failure);
+                        String fence="ENGINE_FENCED".equals(reason)?controlHistory.runtime.fenceReason(id):reason;
+                        int attempt=state().engineFailures.merge(id,1,(a,b)->Math.min(7,a+b));
+                        long delay=Math.min(30000,250L << attempt)+ThreadLocalRandom.current().nextLong(250);
+                        state().engineRetryAt.put(id,"AUTHORITY_LOST".equals(fence)?Long.MAX_VALUE:System.currentTimeMillis()+delay);
+                        log.warn("control_failure tenant={} symbol={} reason={} fence={} attempt={} retryMs={}",TenantContext.requireTenantId(),id,reason,fence,attempt,delay);
+                    }
                 }
             } catch (Exception failure) { log.error("Cannot read persistent control tasks", failure); }
         }

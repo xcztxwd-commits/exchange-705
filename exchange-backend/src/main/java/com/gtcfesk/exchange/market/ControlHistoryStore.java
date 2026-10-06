@@ -34,9 +34,9 @@ public class ControlHistoryStore {
         List<ControlPlanBudget.Lease> leases=new ArrayList<>();
         try {
         for (Long symbol : symbols) {
-            List<Map<String,Object>> tasks = db.queryForList("SELECT id,algorithm_version,duration_seconds FROM market_control_task WHERE tenant_id=" + tenant()
-                + " AND symbol_id=? ORDER BY started_at DESC,id DESC LIMIT 1", symbol);
-            if (!tasks.isEmpty() && ((Number)tasks.get(0).get("algorithm_version")).intValue() >= 3) {
+            List<Map<String,Object>> tasks = db.queryForList("SELECT t.id,t.algorithm_version,t.duration_seconds,t.status,t.stop_at,f.state AS flow_state FROM market_control_task t LEFT JOIN market_control_flow f ON f.tenant_id=t.tenant_id AND f.task_id=t.id WHERE t.tenant_id=" + tenant()
+                + " AND t.symbol_id=? ORDER BY t.started_at DESC,t.id DESC LIMIT 1", symbol);
+            if (!tasks.isEmpty() && !"STOPPED".equals(tasks.get(0).get("status")) && !"SOURCE".equals(tasks.get(0).get("flow_state")) && (tasks.get(0).get("stop_at")==null || "RUNNING".equals(tasks.get(0).get("status"))) && ((Number)tasks.get(0).get("algorithm_version")).intValue() >= 3) {
                 leases.add(budget.acquire(65536L+256L*(1+((Number)tasks.get(0).get("duration_seconds")).longValue())));
                 String id = (String)tasks.get(0).get("id"); prepared.put(tenant() + ":" + id, plan(id));
             }
@@ -50,6 +50,7 @@ public class ControlHistoryStore {
     }
     public ControlHistoryStore(JdbcTemplate db, PlatformTransactionManager manager) {
         this.db = db; transactions = new TransactionTemplate(manager);
+        transactions.setTimeout(5); // JDBC statements share the physical transaction deadline, not a fresh timeout per call.
         reads = new TransactionTemplate(manager); reads.setReadOnly(true);
         reads.setIsolationLevel(org.springframework.transaction.TransactionDefinition.ISOLATION_REPEATABLE_READ);
         consumerReads = new TransactionTemplate(manager);
@@ -60,12 +61,19 @@ public class ControlHistoryStore {
     @PostConstruct public void migrate() {
         // Schema-only validation; runtime must never create legacy unscoped private tables.
         db.queryForList("SELECT tenant_id FROM market_control_task WHERE 1=0");
+        db.queryForList("SELECT history_pending_until,history_retry_at,history_error FROM market_control_flow WHERE 1=0");
         db.queryForList("SELECT source_input_revision,source_dirty_from,source_dirty_to FROM market_engine_runtime WHERE 1=0");
         if(Boolean.TRUE.equals(db.execute((java.sql.Connection c)->c.getMetaData().getDatabaseProductName().equals("MySQL"))))
             db.queryForList("SELECT input_revision FROM s4_history_projection_progress WHERE 1=0");
     }
     <T> T locked(long symbol, Supplier<T> operation) {
         return transactions.execute(status -> {
+            long at=System.nanoTime();
+            org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(new org.springframework.transaction.support.TransactionSynchronization(){
+                @Override public void afterCompletion(int completion) {
+                    org.slf4j.LoggerFactory.getLogger(ControlHistoryStore.class).info("control_transaction tenant={} symbol={} traceId={} requestKey={} ms={} outcome={}",tenant(),symbol,org.slf4j.MDC.get("traceId"),org.slf4j.MDC.get("requestKey"),(System.nanoTime()-at)/1000000,completion==STATUS_COMMITTED?"COMMITTED":completion==STATUS_ROLLED_BACK?"ROLLED_BACK":"UNKNOWN");
+                }
+            });
             return runtime.locked(symbol, operation);
         });
     }
@@ -164,7 +172,9 @@ public class ControlHistoryStore {
     }
     /** Backfill uses bounded SQL batches and one OHLC write per minute, not several queries per second. */
     void generatedPoints(String task, long symbol, List<PricePoint> points) {
+        if(points.size()>runtime.sampleAllowance(symbol))throw new com.gtcfesk.exchange.common.BusinessException("ENGINE_BUDGET: 当前事务采样额度已耗尽");
         for (int offset = 0; offset < points.size(); offset += 500) {
+            runtime.requireBudget();
             int count = Math.min(500, points.size() - offset);
             String sql = "INSERT INTO market_control_sample(tenant_id,task_id,generated_at,price) VALUES "
                 + String.join(",", Collections.nCopies(count, "(" + tenant() + ",?,?,?)"));
@@ -190,6 +200,7 @@ public class ControlHistoryStore {
             addPrice(bar, minute, point.price); last = point.generatedAt;
         }
         if (bar != null) saveMinute(symbol, minute, bar, last);
+        runtime.sampled(symbol,points.size());
     }
     private static void addPrice(Map<String, Object> bar, long minute, BigDecimal price) {
         if (bar.isEmpty()) {
@@ -561,8 +572,11 @@ public class ControlHistoryStore {
         // Bulk restores can leave tiny cardinalities until asynchronous stats refresh. Keep MySQL inside the bounded index.
         // MySQL executes the conditional comment; H2 differential fixtures ignore it. No predicates or tie order change.
         String events = "SELECT symbol_id,source_time,received_at,price,event_sequence FROM market_source_event /*! FORCE INDEX (source_event_time) */ WHERE tenant_id=" + tenant() + " AND " + predicate + tail;
+        // Latest-only: an exact mirror cannot win against its positive event_sequence. Searching for an
+        // unmatched legacy tick scans the entire mirrored ledger. Full-history reads still deduplicate.
+        // Tick PK (tenant_id,symbol_id,source_time) is unique, so its other ORDER BY keys cannot break a tie.
         String ticks = "SELECT t.symbol_id,t.source_time,t.received_at,t.price,0 AS event_sequence FROM market_source_tick t WHERE t.tenant_id=" + tenant() + " AND " + predicate
-            + " AND NOT EXISTS (SELECT 1 FROM market_source_event e WHERE e.tenant_id=t.tenant_id AND e.symbol_id=t.symbol_id AND e.source_time=t.source_time AND e.received_at=t.received_at AND e.price=t.price)" + tail;
+            + (latest ? " ORDER BY t.source_time DESC LIMIT 1" : " AND NOT EXISTS (SELECT 1 FROM market_source_event e WHERE e.tenant_id=t.tenant_id AND e.symbol_id=t.symbol_id AND e.source_time=t.source_time AND e.received_at=t.received_at AND e.price=t.price)");
         return latest ? "(" + events + ") UNION ALL (" + ticks + ")" : events + " UNION ALL " + ticks;
     }
     boolean quote(long symbol, Map<String, Object> quote, long receivedAt) {

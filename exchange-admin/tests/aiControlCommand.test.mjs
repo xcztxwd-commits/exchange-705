@@ -79,14 +79,14 @@ function page(storage, api) {
     request: api.request, rawRequest: api.rawRequest, createRequestKey: () => `command-request-${String(++nextKey).padStart(4, '0')}`, displaySymbol: value => value.symbol,
     useAuthStore: () => auth, readSession, sessionStorage: storage, ...commands,
   }
-  const setup = new Function(...Object.keys(bindings), `${compiled}\nreturn { submit, fetchCommand, loadSymbols, selectedId, status, pendingCommand, commandError, receiptNotice, busy, target, mode, commandProtocol };`)
+  const setup = new Function(...Object.keys(bindings), `${compiled}\nreturn { submit, fetchCommand, loadSymbols, selectedId, status, pendingCommand, commandError, receiptNotice, busy, target, mode, commandProtocol, rescueDisabled, rescueBusy, saving, statusError, progress, progressLabel };`)
   return { ...setup(...Object.values(bindings)), messages, auth }
 }
 function fixture({ timeout = false, legacy = false, delayed = false } = {}) {
   const storage = new Storage(); storage.setItem(ADMIN_SESSION_KEY, JSON.stringify(identity))
   const events = [], status = { id: 7, enabled: false, running: false, available: true, offset: 0, remainingSeconds: 0, v3Enabled: false, v4Enabled: false }
-  let state = 'ACCEPTED', activeKey, resolvePost
-  const result = () => ({ ...receipt(state), requestKey: activeKey })
+  let state = 'ACCEPTED', activeKey, activeAction, resolvePost
+  const result = () => ({ ...receipt(state), requestKey: activeKey, action: state === 'CANCELLED' ? 'CANCEL' : activeAction.toUpperCase() })
   const api = {
     request: {
       get: async (path, options) => {
@@ -96,11 +96,14 @@ function fixture({ timeout = false, legacy = false, delayed = false } = {}) {
         if (path.endsWith('/history')) return []
         return status
       },
-      post: async (path, payload) => { events.push({ method: 'POST', path, payload }); assert(path.endsWith('/stop')); state = 'CANCELLED'; return result() },
+      post: async (path, payload) => {
+        events.push({ method: 'POST', path, payload }); assert(path.endsWith('/stop') || path.endsWith('/manual')); assert.equal(payload.requestKey, activeKey); state = 'CANCELLED'
+        return path.endsWith('/manual') ? { ...status, enabled: false, offset: 0 } : result()
+      },
     },
     rawRequest: {
       post: async (path, payload) => {
-        events.push({ method: 'POST', path, payload }); activeKey = payload.requestKey
+        events.push({ method: 'POST', path, payload }); activeKey = payload.requestKey; activeAction = path.split('/').at(-1)
         if (timeout) throw Object.assign(new Error('timeout'), { code: 'ECONNABORTED' })
         if (legacy) return { status: 200, data: { ...status, enabled: true, running: true } }
         if (delayed) return new Promise(resolve => { resolvePost = resolve })
@@ -108,7 +111,7 @@ function fixture({ timeout = false, legacy = false, delayed = false } = {}) {
       },
     },
   }
-  return { storage, api, events, status, setState: value => { state = value }, resolve: () => resolvePost({ status: 202, data: result() }) }
+  return { storage, api, events, status, setState: value => { state = value }, resolve: (lateState = state) => resolvePost({ status: 202, data: { ...result(), state: lateState, action: activeAction.toUpperCase() } }) }
 }
 const accepted = fixture(), view = page(accepted.storage, accepted.api)
 await view.loadSymbols()
@@ -143,9 +146,13 @@ assert.equal(timedOut.events.filter(event => event.method === 'POST').length, 1,
 for (const state of ['FAILED', 'CANCELLED']) { timedOut.setState(state); await refreshed.fetchCommand(true); assert(!refreshed.busy.value); assert.match(refreshed.receiptNotice.value, state === 'FAILED' ? /失败/ : /取消/) }
 
 const cancelling = fixture(), cancelView = page(cancelling.storage, cancelling.api)
-await cancelView.loadSymbols(); await cancelView.submit('start', pending.payload); await cancelView.submit('stop')
-assert.equal(cancelView.pendingCommand.value.receipt.state, 'CANCELLED')
-assert.equal(cancelling.events.find(event => event.path.endsWith('/stop')).payload.requestKey, cancelView.pendingCommand.value.requestKey)
+await cancelView.loadSymbols(); await cancelView.submit('start', pending.payload)
+const cancelKey = cancelView.pendingCommand.value.requestKey
+await cancelView.submit('stop')
+assert.equal(cancelView.pendingCommand.value, null, 'persisted cancellation plus successful status read clears pending')
+assert.equal(commands.readPendingCommand(cancelling.storage, scope, 7), null)
+assert.match(cancelView.receiptNotice.value, /取消/)
+assert.equal(cancelling.events.find(event => event.path.endsWith('/stop')).payload.requestKey, cancelKey)
 
 const old = fixture({ legacy: true }), legacyView = page(old.storage, old.api)
 await legacyView.loadSymbols(); await legacyView.submit('start', pending.payload)
@@ -214,7 +221,154 @@ resolveQuery({ ...receipt('RUNNING'), requestKey: staleView.pendingCommand.value
 await oldQuery
 assert.equal(staleView.pendingCommand.value.receipt.state, 'ACCEPTED', 'a late query for another selected symbol is discarded')
 
+// Activated receipts remain an audit result, not a pending command or current task state.
+for (const action of ['stop', 'manual']) {
+  const activated = fixture(), activatedView = page(activated.storage, activated.api)
+  await activatedView.loadSymbols(); await activatedView.submit('start', pending.payload)
+  activated.setState('RUNNING'); await activatedView.fetchCommand(true)
+  activated.api.request.post = async (path, payload) => {
+    activated.events.push({ method: 'POST', path, payload })
+    assert.equal(payload?.requestKey, undefined, 'resolved RUNNING receipt is not a pending cancellation key')
+    return { ...activated.status, enabled: false, running: false, controlState: 'SOURCE' }
+  }
+  await activatedView.submit(action, action === 'manual' ? { enabled: false, offset: 0 } : undefined)
+  assert.equal(activatedView.status.value.running, false)
+  assert(activatedView.messages.some(message => message.kind === 'success' && (action === 'manual' ? /已恢复原始行情/ : /任务已停止/).test(message.text)))
+}
+
+// RESTORE has the same persistent 202 protocol, including response-loss reconciliation.
+for (const timeout of [false, true]) {
+  const restoreFixture = fixture({ timeout }), restoreView = page(restoreFixture.storage, restoreFixture.api)
+  await restoreView.loadSymbols(); await restoreView.submit('restore', { durationSeconds: 10, intensity: 2, randomOscillation: false })
+  const restoreKey = restoreView.pendingCommand.value.requestKey
+  assert.equal(restoreView.pendingCommand.value.action, 'restore'); assert.match(restoreView.receiptNotice.value, /恢复/)
+  await restoreView.submit('restore', { durationSeconds: 20, intensity: 3, randomOscillation: true })
+  assert.equal(restoreView.pendingCommand.value.requestKey, restoreKey)
+  assert.equal(restoreFixture.events.filter(event => event.method === 'POST').length, 1)
+  restoreFixture.setState('RUNNING'); await restoreView.fetchCommand(true)
+  assert.match(restoreView.receiptNotice.value, /恢复命令已运行/)
+}
+assert.throws(() => commands.readCommandReceipt({ ...receipt('ACCEPTED'), action: 'RESTORE' }, pending), /回执不匹配/)
+assert.equal(commands.readCommandReceipt({ ...receipt('CANCELLED'), action: 'CANCEL' }, pending).state, 'CANCELLED')
+
+// A missing command is uncertainty, not permission to forget or start a new key.
+const unknown = fixture({ timeout: true }), unknownView = page(unknown.storage, unknown.api)
+await unknownView.loadSymbols(); await unknownView.submit('start', pending.payload)
+const unknownKey = unknownView.pendingCommand.value.requestKey, unknownGet = unknown.api.request.get
+unknown.api.request.get = async (...args) => { if (args[0].endsWith('/commands')) throw Object.assign(new Error('启动命令不存在'), { response: { status: 404 } }); return unknownGet(...args) }
+await unknownView.fetchCommand(true)
+assert.equal(unknownView.pendingCommand.value.requestKey, unknownKey); assert(unknownView.busy.value)
+assert.equal(unknownView.rescueDisabled.value, false, '404/pending does not disable cancellation or SOURCE')
+unknown.api.request.get = unknownGet
+await unknownView.submit('stop')
+assert.equal(unknownView.pendingCommand.value, null, 'unknown-key tombstone receipt plus status resolves uncertainty')
+assert.equal(commands.readPendingCommand(unknown.storage, scope, 7), null)
+
+const cancelFailure = fixture({ timeout: true }), cancelFailureView = page(cancelFailure.storage, cancelFailure.api)
+await cancelFailureView.loadSymbols(); await cancelFailureView.submit('start', pending.payload)
+const retainedKey = cancelFailureView.pendingCommand.value.requestKey
+cancelFailure.api.request.post = async () => { throw Object.assign(new Error('timeout'), { code: 'ECONNABORTED' }) }
+await cancelFailureView.submit('stop')
+assert.equal(commands.readPendingCommand(cancelFailure.storage, scope, 7).requestKey, retainedKey, 'lost cancellation response retains unknown original key')
+assert(cancelFailureView.busy.value); assert.equal(cancelFailureView.rescueDisabled.value, false)
+
+const readFailure = fixture(), readFailureView = page(readFailure.storage, readFailure.api)
+await readFailureView.loadSymbols(); await readFailureView.submit('start', pending.payload)
+const readFailureGet = readFailure.api.request.get
+readFailure.api.request.get = async (...args) => { if (args[0] === '/admin/ai-control/7') throw new Error('status timeout'); return readFailureGet(...args) }
+await readFailureView.submit('stop')
+assert.equal(readFailureView.pendingCommand.value.receipt.state, 'CANCELLED', 'receipt alone does not clear before status verification')
+assert.equal(commands.readPendingCommand(readFailure.storage, scope, 7).receipt.state, 'CANCELLED')
+assert.equal(readFailureView.rescueDisabled.value, false, 'failed status read still allows SOURCE')
+readFailure.api.request.get = readFailureGet
+await readFailureView.fetchCommand()
+assert.equal(readFailureView.pendingCommand.value, null, 'poll retries status confirmation for a cancelled request')
+
+// Rescue can supersede an in-flight POST; late receipts and old GETs cannot revive pending.
+for (const timedAction of ['start', 'restore']) for (const action of ['stop', 'manual']) {
+  const inFlight = fixture({ delayed: true }), inFlightView = page(inFlight.storage, inFlight.api)
+  await inFlightView.loadSymbols()
+  const sending = inFlightView.submit(timedAction, timedAction === 'restore' ? { durationSeconds: 10, intensity: 2, randomOscillation: false } : pending.payload), key = inFlightView.pendingCommand.value.requestKey
+  assert(inFlightView.saving.value); assert.equal(inFlightView.rescueDisabled.value, false)
+  await inFlightView.submit(action, action === 'manual' ? { enabled: false, offset: 0 } : undefined)
+  assert.equal(inFlightView.pendingCommand.value, null)
+  assert.equal(inFlight.events.find(event => event.path.endsWith(`/${action}`)).payload.requestKey, key)
+  inFlight.resolve('RUNNING'); await sending
+  assert.equal(inFlightView.pendingCommand.value, null, 'late old POST ignored after cancellation or SOURCE')
+  assert.equal(commands.readPendingCommand(inFlight.storage, scope, 7), null)
+  assert.equal(inFlight.events.filter(event => event.method === 'POST' && event.path.endsWith(`/${timedAction}`)).length, 1)
+  assert(!inFlightView.messages.some(message => /命令已运行/.test(message.text)), 'late receipt never replaces confirmed cancellation/SOURCE notice')
+}
+const manualUnconfirmed = fixture({ timeout: true }), manualUnconfirmedView = page(manualUnconfirmed.storage, manualUnconfirmed.api)
+await manualUnconfirmedView.loadSymbols(); await manualUnconfirmedView.submit('restore', { durationSeconds: 10, intensity: 1, randomOscillation: false })
+const manualKey = manualUnconfirmedView.pendingCommand.value.requestKey, manualGet = manualUnconfirmed.api.request.get
+manualUnconfirmed.api.request.get = async (...args) => { if (args[0].endsWith('/commands')) throw new Error('receipt unavailable'); return manualGet(...args) }
+await manualUnconfirmedView.submit('manual', { enabled: false, offset: 0 })
+assert.equal(commands.readPendingCommand(manualUnconfirmed.storage, scope, 7).requestKey, manualKey, 'SOURCE status does not replace durable original-key cancellation confirmation')
+manualUnconfirmed.api.request.get = manualGet; await manualUnconfirmedView.fetchCommand(true)
+assert.equal(manualUnconfirmedView.pendingCommand.value, null)
+// Mid-recovery rescue failures do not erase either unresolved requests or activated audit receipts.
+for (const activated of [false, true]) for (const action of ['stop', 'manual']) for (const failure of ['network', 'timeout', 'server']) {
+  const interrupted = fixture({ timeout: !activated }), interruptedView = page(interrupted.storage, interrupted.api)
+  const restorePayload = { durationSeconds: 10, intensity: 2, randomOscillation: false }
+  await interruptedView.loadSymbols(); await interruptedView.submit('restore', restorePayload)
+  if (activated) { interrupted.setState('RUNNING'); await interruptedView.fetchCommand(true) }
+  interruptedView.status.value = { ...interrupted.status, running: true, restoring: true, controlState: 'RECOVERING', progressStartedAt: 20000, progressEndAt: 30000, controlProgressWatermark: 23000 }
+  const bytes = JSON.stringify(commands.readPendingCommand(interrupted.storage, scope, 7)), originalKey = interruptedView.pendingCommand.value.requestKey
+  interrupted.api.request.post = async (path, payload) => {
+    interrupted.events.push({ method: 'POST', path, payload })
+    assert.equal(payload?.requestKey, activated ? undefined : originalKey)
+    throw Object.assign(new Error(`fixture rescue ${failure}`), failure === 'timeout' ? { code: 'ECONNABORTED' } : failure === 'server' ? { response: { status: 503 } } : { code: 'ERR_NETWORK' })
+  }
+  await interruptedView.submit(action, action === 'manual' ? { enabled: false, offset: 0 } : undefined)
+  assert.equal(JSON.stringify(commands.readPendingCommand(interrupted.storage, scope, 7)), bytes, 'failure does not pretend to cancel a durable original key')
+  assert.equal(interruptedView.status.value.controlState, 'RECOVERING'); assert.equal(interruptedView.progress.value, 30)
+  assert.equal(interruptedView.rescueDisabled.value, false); assert.equal(interruptedView.rescueBusy.value, false); assert.equal(interruptedView.saving.value, false)
+  assert(!interruptedView.messages.some(message => message.kind === 'success'))
+  if (!activated) {
+    assert(interruptedView.busy.value)
+    await interruptedView.submit('restore', { ...restorePayload, durationSeconds: 20 })
+    assert.equal(interruptedView.pendingCommand.value.requestKey, originalKey)
+    assert.equal(interrupted.events.filter(event => event.method === 'POST' && event.path.endsWith('/restore')).length, 1, 'retry reconciles original key, never replays a timed POST')
+  }
+}
+// A lost RESTORE acceptance is restored byte-for-byte after reload and queried without replay.
+const restoreLost = fixture({ timeout: true }), restoreLostView = page(restoreLost.storage, restoreLost.api)
+const restoreLostPayload = { durationSeconds: 13, intensity: 4, randomOscillation: true }
+await restoreLostView.loadSymbols(); await restoreLostView.submit('restore', restoreLostPayload)
+const restoreLostKey = restoreLostView.pendingCommand.value.requestKey, restoreLostGet = restoreLost.api.request.get
+restoreLost.api.request.get = async (...args) => { if (args[0].endsWith('/commands')) throw Object.assign(new Error('late restore acceptance unavailable'), { response: { status: 404 } }); return restoreLostGet(...args) }
+const restoreReloaded = page(restoreLost.storage, restoreLost.api); await restoreReloaded.loadSymbols()
+assert.equal(restoreReloaded.pendingCommand.value.requestKey, restoreLostKey); assert.deepEqual(restoreReloaded.pendingCommand.value.payload, restoreLostPayload)
+assert.equal(restoreReloaded.mode.value, 'restore'); assert(restoreReloaded.busy.value); assert.equal(restoreReloaded.rescueDisabled.value, false)
+restoreLost.api.request.get = restoreLostGet; restoreLost.setState('RUNNING'); await restoreReloaded.fetchCommand(true)
+assert.equal(restoreReloaded.pendingCommand.value.receipt.state, 'RUNNING')
+assert.equal(restoreLost.events.filter(event => event.method === 'POST').length, 1)
+const committedView = page(accepted.storage, accepted.api)
+committedView.status.value = { durationSeconds: 10, remainingSeconds: 0, startedAt: 1000, plannedEnd: 11000, sampledUntil: 10000 }
+assert.equal(committedView.progress.value, 90, 'elapsed wall clock never displays an uncommitted endpoint as finished')
+committedView.status.value = { durationSeconds: 10, remainingSeconds: 0, startedAt: 1000, plannedEnd: 11000, sampledUntil: 11000, progressStartedAt: 20000, progressEndAt: 30000, controlProgressWatermark: 22000 }
+assert.equal(committedView.progress.value, 20, 'recovery uses its committed watermark and current recovery segment')
+committedView.status.value = { running: true, restoring: true, progressStatus: 'WAITING_SOURCE', available: false, sampledUntil: 1000, controlProgressWatermark: 42000, progressStartedAt: 40000, progressEndAt: 50000, committedAt: 43000 }
+assert.equal(committedView.progress.value, 20); assert.equal(committedView.progressLabel.value, '等待有效原始行情')
+committedView.status.value = { ...committedView.status.value, committedAt: 59000, remainingSeconds: 0 }
+assert.equal(committedView.progress.value, 20, 'snapshot refresh and zero wall-clock remaining do not advance committed recovery')
+committedView.status.value = { ...committedView.status.value, available: true, progressStatus: 'HEALTHY', progressStartedAt: 60000, progressEndAt: 68000, controlProgressWatermark: 62000 }
+assert.equal(committedView.progress.value, 25, 'resume uses the current segment, not an expired pre-pause end')
+committedView.status.value = { ...committedView.status.value, controlProgressWatermark: 64000 }
+assert.equal(committedView.progress.value, 50)
+committedView.status.value = { durationSeconds: 10, remainingSeconds: 5 }
+assert.equal(committedView.progress.value, 50, 'legacy synchronous response remains explicit fallback')
+for (const [progressStatus, label] of Object.entries({ WAITING_SOURCE: '等待有效原始行情', WAITING_VALID_SOURCE: '等待有效原始行情', ENGINE_LAG: '控盘推进延迟', AUTHORITY_CHANGED: '授权已变化', HEALTHY: '正常' })) {
+  committedView.status.value = { progressStatus }; assert.equal(committedView.progressLabel.value, label)
+}
+assert.match(source, /timeText\(status\.controlProgressWatermark \?\? status\.sampledUntil\)/)
+assert.doesNotMatch(source, /控盘未达到预期水位/)
+assert.match(source, /:disabled="rescueDisabled"[^\n]*submit\('manual'/)
+assert.match(source, /sampledUntil.*expectedSampledUntil/s)
+assert.match(source, /最后可信价格仅供展示，不可交易/)
+
 assert.match(source, /v-permission="'ai_control:stop'"/)
-assert.match(source, /v-permission="'ai_control:view'"[^\n]*核对原启动请求/)
+assert.match(source, /v-permission="'ai_control:view'"[^\n]*核对原控盘请求/)
 assert.match(source, /commandIdentityMatches/)
-console.log('PASS S2 command receipts: all six states, scope/storage recovery, 202 without false start, RUNNING status read, timeout/refresh query-only, cancellation, explicit legacy 200, stale identity discard, persist-before-send')
+console.log('PASS durable START/RESTORE receipts: states, immutable scope/storage, 202, response loss query-only, durable unknown cancellation, SOURCE escape, read failure retention, stale response fencing, explicit legacy 200')

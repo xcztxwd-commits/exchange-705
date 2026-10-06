@@ -69,7 +69,7 @@
             {{ formatDate(row.reviewedAt) }}
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="200" fixed="right">
+        <el-table-column column-key="actions" label="操作" width="200" fixed="right">
           <template #default="{ row }">
             <el-button v-permission="'loan_personal_info_review:detail'"
               size="small" 

@@ -126,3 +126,19 @@ test('actual insight mutation handlers enforce current grants, including Enter a
   await unknown.state.change('unknown',{});unknown.state.childKind.value='unknown';await unknown.state.saveChild();unknown.state.importKind.value='unknown';await unknown.state.importRows()
   assert.deepEqual(unknown.calls,[],'unrecognized mutation kind must fail closed')
 })
+
+
+test('support channel retry is read-only and inbox switch requires save authority', () => {
+  const { descriptor } = parse(fs.readFileSync(path.join(root, 'exchange-admin/src/components/SupportChannelSettings.vue'), 'utf8'))
+  const controls = []
+  function visit(node) {
+    if (node.type === 1 && ['el-button', 'el-switch'].includes(node.tag)) controls.push(node)
+    for (const child of node.children || []) visit(child)
+  }
+  visit(parseTemplate(descriptor.template.content))
+  const permission = node => node.props.find(prop => prop.type === 7 && prop.name === 'permission')?.exp?.content
+  const retry = controls.find(node => node.tag === 'el-button' && node.children.some(child => child.type === 2 && child.content.includes('重新加载服务渠道')))
+  const inbox = controls.find(node => node.tag === 'el-switch')
+  assert.equal(permission(retry), "'support_settings:view'", 'viewer may retry a failed read without gaining write authority')
+  assert.equal(permission(inbox), "'support_settings:save'", 'read-only or temporarily unavailable permissions cannot mutate the inbox draft')
+})

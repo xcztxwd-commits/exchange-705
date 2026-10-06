@@ -22,9 +22,9 @@ onMounted(load)
  <admin-table table-key="control.policy-definitions" :data="rows" row-key="key" border v-loading="loading">
   <el-table-column prop="name" label="策略名字" min-width="170" fixed="left"/>
   <el-table-column prop="key" label="策略键" min-width="250"/>
-  <el-table-column label="选项值" min-width="180"><template #default="s">{{s.row.options.length?s.row.options.map((value:string)=>value===''?'（空值）':value).join(' / '):'自由输入'}}</template></el-table-column>
+  <el-table-column column-key="choices" label="选项值" min-width="180"><template #default="s">{{s.row.options.length?s.row.options.map((value:string)=>value===''?'（空值）':value).join(' / '):'自由输入'}}</template></el-table-column>
   <el-table-column prop="defaultValue" label="默认值" min-width="130"/>
-  <el-table-column label="操作" width="90"><template #default="s"><el-button link @click="edit(s.row)">编辑</el-button></template></el-table-column>
+  <el-table-column column-key="actions" label="操作" width="90"><template #default="s"><el-button link @click="edit(s.row)">编辑</el-button></template></el-table-column>
  </admin-table>
  <el-dialog v-model="open" :title="existing?'编辑授权策略':'新增配置策略'" width="min(680px,95vw)" :close-on-click-modal="false" :close-on-press-escape="!busy" :show-close="!busy">
   <el-alert v-if="note" :title="note" type="info" :closable="false"/>

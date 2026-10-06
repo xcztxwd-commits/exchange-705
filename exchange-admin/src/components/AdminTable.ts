@@ -1,6 +1,6 @@
 import { cloneVNode, defineComponent, Fragment, h, ref, watch, inject, onUnmounted, type VNode } from 'vue'
 import { ElTable, ElDialog, ElButton, ElMessage } from 'element-plus'
-import { mergeColumns, moveColumn, TABLE_PREFERENCES, preferenceRequests, type TablePreferenceClient, type ColumnPreference, type TableColumn } from '@/utils/tablePreferences'
+import { mergeColumns, moveColumn, parseColumnPreferences, assertPreferencesSaved, TABLE_PREFERENCES, preferenceRequests, type TablePreferenceClient, type ColumnPreference, type TableColumn } from '@/utils/tablePreferences'
 import './adminTable.css'
 
 function flatten(nodes: VNode[]): VNode[] {
@@ -28,7 +28,7 @@ export default defineComponent({
       if (!identity) return
       try {
         const result = await client.load(String(table), ticket.signal)
-        if (ticket.active()) { saved.value = Array.isArray(result) ? result : []; ready.value = true }
+        if (ticket.active()) { saved.value = parseColumnPreferences(result); ready.value = true }
       } catch (e: any) {
         if (ticket.active()) error.value = e.message || '列配置加载失败'
       }
@@ -40,8 +40,9 @@ export default defineComponent({
       if (!columns.some(column => column.visible)) { ElMessage.warning('至少保留一列'); return }
       saving.value = true
       try {
-        await client.save(table, columns, ticket.signal)
+        const result = await client.save(table, columns, ticket.signal)
         if (!ticket.active()) return
+        assertPreferencesSaved(result)
         saved.value = columns; editing.value = false
         ElMessage.success('列设置已保存至当前账号')
       } catch (e: any) { if (ticket.active()) ElMessage.error(e.message || '保存失败，请重试') }
@@ -52,6 +53,7 @@ export default defineComponent({
       const nodes = flatten(slots.default?.() || [])
       const definitions: TableColumn[] = [], columnNodes = new Map<string, VNode>(), other: VNode[] = []
       const counts = new Map<string, number>()
+      const legacyCounts = new Map<string, number>()
       for (const node of nodes) {
         if ((node.type as any)?.name !== 'ElTableColumn') { other.push(node); continue }
         const p = node.props || {}, label = String(p.label || (p.type === 'selection' ? '选择' : p.type === 'index' ? '序号' : p.type === 'expand' ? '展开' : '未命名列'))
@@ -59,7 +61,11 @@ export default defineComponent({
         const occurrence = counts.get(base) || 0
         counts.set(base, occurrence + 1)
         const id = occurrence ? `${base}#${occurrence}` : base
-        definitions.push({ id, label, visible: true, fixed: p.fixed === true || p.fixed === '' || p.fixed === 'left' ? 'left' : p.fixed === 'right' ? 'right' : '', defaultAfter: p['default-after'] || p.defaultAfter })
+        const legacyBase = String(p.prop || node.key || label)
+        const legacyOccurrence = legacyCounts.get(legacyBase) || 0
+        legacyCounts.set(legacyBase, legacyOccurrence + 1)
+        const legacyId = legacyOccurrence ? `${legacyBase}#${legacyOccurrence}` : legacyBase
+        definitions.push({ id, label, legacyIds: [legacyId], visible: true, fixed: p.fixed === true || p.fixed === '' || p.fixed === 'left' ? 'left' : p.fixed === 'right' ? 'right' : '', defaultAfter: p['default-after'] || p.defaultAfter })
         columnNodes.set(id, node)
       }
       const columns = mergeColumns(definitions, editing.value ? draft.value : saved.value)
@@ -92,9 +98,9 @@ export default defineComponent({
         ],
       })
       return h('div', { class: 'admin-table-container' }, [controls,
-        h(ElTable, { ...attrs, key: configurationKey }, { ...slots, default: () => [
+        ready.value ? h(ElTable, { ...attrs, key: configurationKey }, { ...slots, default: () => [
           ...shown.map(column => cloneVNode(columnNodes.get(column.id)!, { key: column.id, fixed: column.fixed || false })), ...other,
-        ] }), dialog,
+        ] }) : h('div', { class: 'admin-table-loading', role: 'status', 'aria-busy': !error.value }, error.value ? '列设置未恢复，请重试' : '正在恢复列设置…'), dialog,
       ])
     }
   },

@@ -272,7 +272,7 @@ onMounted(() => {
         <el-table-column prop="createdAt" label="创建时间（审计）" width="170">
           <template #default="{ row }">{{ formatDate(row.createdAt) }}</template>
         </el-table-column>
-        <el-table-column label="操作" width="180" fixed="right">
+        <el-table-column column-key="actions" label="操作" width="180" fixed="right">
           <template #default="{ row }">
             <el-button v-permission="'announcement:edit'" type="primary" size="small" @click="openDialog(row)">编辑</el-button>
             <el-button v-permission="'announcement:delete'" type="danger" size="small" @click="deleteAnnouncement(row.id)">删除</el-button>

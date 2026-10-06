@@ -115,14 +115,14 @@ onMounted(load)
         <el-tab-pane label="分类与品种" name="bindings">
           <el-card shadow="never"><template #header>分类默认策略</template>
             <admin-table table-key="MarketHours.categories" :data="categories" row-key="key">
-              <el-table-column label="分类" min-width="130"><template #default="{ row }">{{ row.label }} <small>{{ row.key }}</small></template></el-table-column>
-              <el-table-column label="策略" min-width="230"><template #default="{ row }">
+              <el-table-column column-key="category" label="分类" min-width="130"><template #default="{ row }">{{ row.label }} <small>{{ row.key }}</small></template></el-table-column>
+              <el-table-column column-key="policy" label="策略" min-width="230"><template #default="{ row }">
                 <el-select placeholder="使用来源默认策略" :model-value="settings.categories[row.key]?.strategyId || ''" :disabled="saving || !can('market_hours:save')" @update:model-value="setStrategy('categories', row.key, $event)">
                   <el-option label="默认（实际外汇来源应用周末策略）" value="" /><el-option v-for="p in settings.strategies" :key="p.id" :label="p.name" :value="p.id" />
                 </el-select></template></el-table-column>
-              <el-table-column label="模式" min-width="120"><template #default="{ row }">{{ modeLabel(settings.categories[row.key]) }}</template></el-table-column>
-              <el-table-column label="手动失效时间（UTC+8）" min-width="185"><template #default="{ row }">{{ time(settings.categories[row.key]?.until) }}</template></el-table-column>
-              <el-table-column label="手动操作" min-width="280"><template #default="{ row }">
+              <el-table-column column-key="mode" label="模式" min-width="120"><template #default="{ row }">{{ modeLabel(settings.categories[row.key]) }}</template></el-table-column>
+              <el-table-column column-key="manualExpiresAt" label="手动失效时间（UTC+8）" min-width="185"><template #default="{ row }">{{ time(settings.categories[row.key]?.until) }}</template></el-table-column>
+              <el-table-column column-key="manualActions" label="手动操作" min-width="280"><template #default="{ row }">
                 <div class="actions" v-if="can('market_hours:manual')"><el-button v-permission="'market_hours:manual'" size="small" :disabled="saving" @click="openManual('CATEGORY', row.key, row.label, 'CLOSED')">休市</el-button>
                   <el-button v-permission="'market_hours:manual'" size="small" :disabled="saving" @click="openManual('CATEGORY', row.key, row.label, 'OPEN')">开市</el-button>
                   <el-button v-permission="'market_hours:manual'" size="small" :disabled="saving" @click="openManual('CATEGORY', row.key, row.label, 'AUTO')">恢复自动</el-button></div>
@@ -132,15 +132,15 @@ onMounted(load)
           <el-card shadow="never" class="section"><template #header><div class="toolbar"><strong>品种覆盖与生效状态</strong>
             <el-input v-model="query" placeholder="搜索品种" clearable class="search" /><el-select v-model="categoryFilter" placeholder="全部分类" clearable class="filter"><el-option v-for="c in categories" :key="c.key" :label="c.label" :value="c.key" /></el-select></div></template>
             <admin-table table-key="MarketHours.symbols" :data="filtered" row-key="id" max-height="580">
-              <el-table-column label="品种" min-width="160"><template #default="{ row }"><strong>{{ row.name }}</strong><small class="block">{{ row.symbol }} · {{ row.category }}<span v-if="!row.isEnabled"> · 已停用</span></small></template></el-table-column>
-              <el-table-column label="覆盖策略" min-width="230"><template #default="{ row }">
+              <el-table-column column-key="symbol" label="品种" min-width="160"><template #default="{ row }"><strong>{{ row.name }}</strong><small class="block">{{ row.symbol }} · {{ row.category }}<span v-if="!row.isEnabled"> · 已停用</span></small></template></el-table-column>
+              <el-table-column column-key="overridePolicy" label="覆盖策略" min-width="230"><template #default="{ row }">
                 <el-select placeholder="继承分类 / 外汇默认" :model-value="settings.symbols[row.id]?.strategyId || ''" :disabled="saving || !can('market_hours:save')" @update:model-value="setStrategy('symbols', String(row.id), $event)">
                   <el-option label="继承分类 / 外汇来源默认" value="" /><el-option v-for="p in settings.strategies" :key="p.id" :label="p.name" :value="p.id" />
                 </el-select></template></el-table-column>
-              <el-table-column label="生效状态（查询时）" min-width="180"><template #default="{ row }"><el-tag :type="row.status.closed ? 'warning' : 'success'">{{ row.status.closed ? '休市' : '时段开放' }}</el-tag>
+              <el-table-column column-key="effectiveStatus" label="生效状态（查询时）" min-width="180"><template #default="{ row }"><el-tag :type="row.status.closed ? 'warning' : 'success'">{{ row.status.closed ? '休市' : '时段开放' }}</el-tag>
                 <small class="block">{{ row.status.reason }}</small><small class="block">{{ row.status.strategyId || '无计划休市' }}</small></template></el-table-column>
-              <el-table-column label="下次状态切换（UTC+8）" min-width="185"><template #default="{ row }">{{ time(row.status.nextChangeAt) }}</template></el-table-column>
-              <el-table-column label="手动操作" min-width="280"><template #default="{ row }"><div class="actions" v-if="can('market_hours:manual')">
+              <el-table-column column-key="nextTransition" label="下次状态切换（UTC+8）" min-width="185"><template #default="{ row }">{{ time(row.status.nextChangeAt) }}</template></el-table-column>
+              <el-table-column column-key="manualActions" label="手动操作" min-width="280"><template #default="{ row }"><div class="actions" v-if="can('market_hours:manual')">
                 <el-button v-permission="'market_hours:manual'" size="small" :disabled="saving" @click="openManual('SYMBOL', String(row.id), row.name, 'CLOSED')">休市</el-button>
                 <el-button v-permission="'market_hours:manual'" size="small" :disabled="saving" @click="openManual('SYMBOL', String(row.id), row.name, 'OPEN')">开市</el-button>
                 <el-button v-permission="'market_hours:manual'" size="small" :disabled="saving" @click="openManual('SYMBOL', String(row.id), row.name, 'AUTO')">恢复自动</el-button></div></template></el-table-column>

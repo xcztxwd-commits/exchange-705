@@ -229,7 +229,7 @@ class PlanPreflightTests(unittest.TestCase):
             preflight.assert_not_called();state.assert_not_called()
 
     def test_entry_roles_append_is_exact_single_tail_after_completed_0602(self):
-        files=tool.migrations();start=len(files)-1
+        files=tool.migrations()[:-2];start=len(files)-1
         self.assertEqual(tool.ENTRY0603_METADATA,tool.metadata_append_contract(start,files))
         for offset,reviewed in [(0,files),(start-1,files),(1,[files[-2],{'name':'V2026100604__unknown.sql'}]),(1,[{'name':'V2026100404__history_ordering_and_response_receipts.sql'},files[-1]])]:
             self.assertIsNone(tool.metadata_append_contract(offset,reviewed))

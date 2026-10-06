@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { access } from './access'
 import { useAuthStore } from '@/store/auth'
 import { assertAdminRequestTarget } from './adminSession'
 
@@ -20,6 +21,10 @@ for (const client of [instance, rawRequest]) {
     if (!auth.ensureValid()) {
       window.location.replace(`${import.meta.env.BASE_URL}${control ? 'access-ended' : 'login'}`)
       throw new Error('登录或总控访问已失效，请重新进入')
+    }
+    if (access.error && !['get', 'head', 'options'].includes((config.method || 'get').toLowerCase()) &&
+        !['/api/admin/auth/control-exit', '/api/admin/auth/control-activity'].includes(target.pathname)) {
+      throw new Error('权限确认暂时不可用，敏感操作已暂停，请恢复连接后重试')
     }
     config.headers.Authorization = `Bearer ${auth.token}`
     return config

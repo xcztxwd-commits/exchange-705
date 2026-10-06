@@ -72,7 +72,8 @@ CREATE TABLE IF NOT EXISTS market_control_flow (
  task_id VARCHAR(36) NOT NULL, PRIMARY KEY(tenant_id,task_id), options_json TEXT NOT NULL,
  state VARCHAR(24) NOT NULL, recovery_started_at BIGINT NULL, remaining_millis BIGINT NULL,
  recovery_offset DECIMAL(32,16) NULL, last_price DECIMAL(32,16) NOT NULL,
- last_at BIGINT NOT NULL, finished_at BIGINT NULL
+ last_at BIGINT NOT NULL, finished_at BIGINT NULL,
+ history_pending_until BIGINT NULL,history_retry_at BIGINT NULL,history_error VARCHAR(64) NULL
 );
 CREATE TABLE IF NOT EXISTS market_simulation_source_candle (
  tenant_id BIGINT NOT NULL,
@@ -102,6 +103,7 @@ CREATE TABLE IF NOT EXISTS market_control_command(
  actor_id BIGINT NOT NULL,session_id VARCHAR(64),config_revision BIGINT NOT NULL,control_revision BIGINT NOT NULL,
  writer_generation BIGINT,owner_id VARCHAR(36),seed BIGINT NOT NULL,accepted_at BIGINT NOT NULL,expires_at BIGINT NOT NULL,
  prepared_json MEDIUMTEXT,task_id VARCHAR(36),error_code VARCHAR(64),message VARCHAR(255),
+ retry_count INT NOT NULL DEFAULT 0,retry_at BIGINT NOT NULL DEFAULT 0,
  PRIMARY KEY(tenant_id,id),UNIQUE KEY command_request(tenant_id,symbol_id,request_key),KEY command_queue(tenant_id,state,accepted_at)
 ) ENGINE=InnoDB;
 

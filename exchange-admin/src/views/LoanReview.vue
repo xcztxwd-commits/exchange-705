@@ -85,7 +85,7 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="还款情况" width="120">
+        <el-table-column column-key="repayment" label="还款情况" width="120">
           <template #default="{ row }">
             <el-tag :type="getRepaymentStatusType(row)">
               {{ getRepaymentStatusText(row) }}
@@ -97,7 +97,7 @@
             {{ formatDate(row.createdAt) }}
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="340" fixed="right">
+        <el-table-column column-key="actions" label="操作" width="340" fixed="right">
           <template #default="{ row }">
             <el-button v-permission="'loan_review:detail'"
               size="small" 

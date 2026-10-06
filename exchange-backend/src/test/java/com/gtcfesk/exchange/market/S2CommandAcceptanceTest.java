@@ -167,8 +167,7 @@ class S2CommandAcceptanceTest {
             assertEquals(74,child.exitValue(),output);String marker=Arrays.stream(output.split("\\R")).filter(line->line.startsWith("S2_ACCEPTED_COMMITTED ")).findFirst().orElseThrow(()->new AssertionError("committed ACCEPTED marker absent"));
             String[] fields=marker.split(" ");assertEquals(3,fields.length);long id=Long.parseLong(fields[2]);symbol.setId(id);symbol.setSymbol("S2_COMMAND_"+id);
             market=newMarket(store,controls,symbol);commands=newCommands(store,market,audit);Map<String,Object> original=receipt(key);assertEquals("ACCEPTED",original.get("state"));assertEquals(fields[1],original.get("commandId"));assertEquals(fields[1],accept(key).get("commandId"));assertEquals(0,taskCount());
-            long leaseUntil=store.db.queryForObject("SELECT lease_until FROM market_engine_runtime WHERE tenant_id=1 AND symbol_id=?",Long.class,id);
-            Thread.sleep(Math.max(0,leaseUntil-store.runtime.clock()+100));assertTrue(store.runtime.clock()>leaseUntil,"real database-clock lease must expire after process death");
+            assertEquals(0,store.db.queryForObject("SELECT COUNT(*) FROM market_engine_runtime WHERE tenant_id=1 AND symbol_id=?",Integer.class,id),"acceptance must not acquire a writer lease, even before process death");
             prime();commands.runOne();assertEquals("RUNNING",receipt(key).get("state"));assertEquals(fields[1],accept(key).get("commandId"));assertEquals(receipt(key).get("taskId"),accept(key).get("taskId"));commands.runOne();assertEquals(1,taskCount());
         }finally{if(child.isAlive()){child.destroyForcibly();child.waitFor(10,TimeUnit.SECONDS);}}
     }
@@ -177,6 +176,7 @@ class S2CommandAcceptanceTest {
         TradingSymbol blockedSymbol=newSymbol(1L);ControlHistoryStore otherWriter=newStore();
         MarketControlCommands blocked=newCommands(otherWriter,newMarket(otherWriter,new PersistentPriceControl(otherWriter),blockedSymbol),mock(ControlAuditService.class));
         String blockedKey="s2_command_busy_first_01",healthyKey="s2_command_healthy_next_01";
+        long now=System.currentTimeMillis();new PersistentPriceControl(otherWriter).sourceQuote(blockedSymbol,raw(now),now);
         blocked.accept(blockedSymbol.getId(),20,new BigDecimal("91"),1,false,blockedKey,options());
         try {
             prime();accept(healthyKey);commands.runOne();
@@ -217,13 +217,14 @@ class S2CommandAcceptanceTest {
         }
     }
 
-    @Test void readyTransientFailureRemainsRecoverableAndKeepsSeed(){
+    @Test void readyTransientFailureRemainsRecoverableAndKeepsSeed() throws Exception {
         prime();String key="s2_command_ready_recovery_01";accept(key);AtomicBoolean fail=new AtomicBoolean(true);
         doAnswer(call->{if(fail.getAndSet(false))throw new TransientDataAccessResourceException("injected activation outage before commit");return call.callRealMethod();})
             .when(market).activateCommand(anyLong(),anyInt(),any(BigDecimal.class),anyInt(),anyBoolean(),anyString(),any(TargetControlOptions.class),any(PersistentPriceControl.Prepared.class));
         commands.runOne();assertEquals("READY",receipt(key).get("state"));assertEquals(0,taskCount());
         Map<String,Object> row=store.db.queryForMap("SELECT seed,prepared_json FROM market_control_command WHERE tenant_id=1 AND symbol_id=? AND request_key=?",symbol.getId(),key);
         assertNotNull(row.get("prepared_json"));long seed=((Number)row.get("seed")).longValue();assertEquals(0L,store.budget.metrics().get("globalPlanBytes"));
+        Thread.sleep(Math.max(0,((Number)receipt(key).get("retryAt")).longValue()-store.runtime.clock()+10));
         commands.runOne();assertEquals("RUNNING",receipt(key).get("state"),()->receipt(key).toString());assertEquals(seed,store.db.queryForObject("SELECT seed FROM market_control_plan WHERE tenant_id=1 AND task_id=?",Long.class,controls.latest(symbol.getId()).id));assertEquals(1,taskCount());
         commands.runOne();assertEquals(1,taskCount());assertEquals(0L,store.budget.metrics().get("globalPlanBytes"));
     }

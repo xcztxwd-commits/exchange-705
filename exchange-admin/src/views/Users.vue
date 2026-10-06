@@ -1088,9 +1088,9 @@ onMounted(() => {
           </template>
         </el-table-column>
         <el-table-column prop="email" label="邮箱" min-width="180" />
-        <el-table-column label="手机号" min-width="160"><template #default="{ row }">{{ profilePhone(row) }}</template></el-table-column>
-        <el-table-column label="年收入" min-width="150"><template #default="{ row }">{{ profileIncome(row) }}</template></el-table-column>
-        <el-table-column label="登录IP / 地区" width="250">
+        <el-table-column column-key="phone" label="手机号" min-width="160"><template #default="{ row }">{{ profilePhone(row) }}</template></el-table-column>
+        <el-table-column column-key="annualIncome" label="年收入" min-width="150"><template #default="{ row }">{{ profileIncome(row) }}</template></el-table-column>
+        <el-table-column column-key="loginLocation" label="登录IP / 地区" width="250">
           <template #default="{ row }">
             <div v-if="row.lastLoginIp">
               <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
@@ -1130,7 +1130,7 @@ onMounted(() => {
             <div class="user-profile-cell"><UserAvatar :src="row.avatarUrl" :name="profileName(row)" :size="36" /><span>{{ profileName(row) }}</span></div>
           </template>
         </el-table-column>
-        <el-table-column label="用户类型" width="120" align="center">
+        <el-table-column column-key="userType" label="用户类型" width="120" align="center">
           <template #default="{ row }">
             <el-tag v-if="row.userType === 'agent'" type="warning">代理</el-tag>
             <el-tag v-else type="success">正常用户</el-tag>
@@ -1161,7 +1161,7 @@ onMounted(() => {
           </template>
         </el-table-column>
         <el-table-column prop="createdAt" label="注册时间" width="180" />
-        <el-table-column label="操作" width="120" fixed="right">
+        <el-table-column column-key="actions" label="操作" width="120" fixed="right">
           <template #default="{ row }">
             <el-dropdown trigger="click" @command="(cmd: string) => handleCommand(cmd, row)">
               <el-button v-permission="'users:view'" type="primary" link>
@@ -1348,7 +1348,7 @@ onMounted(() => {
               <el-table-column prop="swift" label="SWIFT" width="120" />
               <el-table-column prop="recipientName" label="收款人" width="120" />
               <el-table-column prop="recipientAccount" label="收款账户" min-width="150" />
-              <el-table-column label="操作" width="150" fixed="right">
+              <el-table-column column-key="actions" label="操作" width="150" fixed="right">
                 <template #default="{ row }">
                   <el-button v-permission="'users:bank_edit'" link type="primary" size="small" @click="handleEditBankCard(row)" :disabled="accountModes.includes('DEMO') || !accountModes.length">编辑</el-button>
                   <el-button v-permission="'users:bank_delete'" link type="danger" size="small" @click="handleDeleteBankCard(row.id)" :disabled="accountModes.includes('DEMO') || !accountModes.length">删除</el-button>
@@ -1400,7 +1400,7 @@ onMounted(() => {
               <el-table-column prop="currency" label="货币" width="100" />
               <el-table-column prop="network" label="网络" width="120" />
               <el-table-column prop="address" label="地址" min-width="300" />
-              <el-table-column label="操作" width="150" fixed="right">
+              <el-table-column column-key="actions" label="操作" width="150" fixed="right">
                 <template #default="{ row }">
                   <el-button v-permission="'users:address_edit'" link type="primary" size="small" @click="handleEditAddress(row)" :disabled="accountModes.includes('DEMO') || !accountModes.length">编辑</el-button>
                   <el-button v-permission="'users:address_delete'" link type="danger" size="small" @click="handleDeleteAddress(row.id)" :disabled="accountModes.includes('DEMO') || !accountModes.length">删除</el-button>
@@ -1446,8 +1446,8 @@ onMounted(() => {
 <el-table-column prop="accountModeLabel" label="账户类型" width="110" />
           <el-table-column prop="id" label="ID" width="80" />
           <el-table-column prop="email" label="邮箱" min-width="180" />
-          <el-table-column label="手机号" min-width="160"><template #default="{ row }">{{ profilePhone(row) }}</template></el-table-column>
-          <el-table-column label="年收入" min-width="150"><template #default="{ row }">{{ profileIncome(row) }}</template></el-table-column>
+          <el-table-column column-key="phone" label="手机号" min-width="160"><template #default="{ row }">{{ profilePhone(row) }}</template></el-table-column>
+          <el-table-column column-key="annualIncome" label="年收入" min-width="150"><template #default="{ row }">{{ profileIncome(row) }}</template></el-table-column>
           <el-table-column prop="remark" label="用户备注" min-width="150" show-overflow-tooltip><template #default="{ row }">{{ row.remark || '-' }}</template></el-table-column>
           <el-table-column prop="nickname" label="头像 / 昵称" min-width="190">
             <template #default="{ row }">
@@ -1509,12 +1509,12 @@ onMounted(() => {
 <el-table-column prop="accountModeLabel" label="账户类型" width="110" />
               <el-table-column prop="typeText" label="类型" width="100" />
               <el-table-column prop="id" label="ID" width="80" />
-              <el-table-column label="金额" width="120">
+              <el-table-column column-key="amount" label="金额" width="120">
                 <template #default="{ row }">
                   {{ formatAmount(row.amount) }}
                 </template>
               </el-table-column>
-              <el-table-column label="盈亏/实际金额" width="120">
+              <el-table-column column-key="profitOrActualAmount" label="盈亏/实际金额" width="120">
                 <template #default="{ row }">
                   <span v-if="row.profit != null">{{ formatAmount(row.profit) }}</span>
                   <span v-else-if="row.actualAmount != null">{{ formatAmount(row.actualAmount) }}</span>
@@ -1522,7 +1522,7 @@ onMounted(() => {
                   <span v-else>-</span>
                 </template>
               </el-table-column>
-              <el-table-column label="状态" width="100">
+              <el-table-column column-key="status" label="状态" width="100">
                 <template #default="{ row }">
                   <el-tag 
                     v-if="row.type === 'contract' || row.type === 'option'"
@@ -1555,7 +1555,7 @@ onMounted(() => {
                   <span v-else>-</span>
                 </template>
               </el-table-column>
-              <el-table-column label="详情" min-width="200">
+              <el-table-column column-key="details" label="详情" min-width="200">
                 <template #default="{ row }">
                   <div v-if="row.type === 'contract'">
                     交易对: {{ displaySymbol(row) }} | 方向: {{ row.side === 'BUY' ? '买入' : '卖出' }} | 数量: {{ row.quantity }}
@@ -1577,7 +1577,7 @@ onMounted(() => {
                   </div>
                 </template>
               </el-table-column>
-              <el-table-column label="时间" width="180">
+              <el-table-column column-key="time" label="时间" width="180">
                 <template #default="{ row }">
                   {{ formatDateTime(row.createdAt || row.purchaseTime) }}
                 </template>

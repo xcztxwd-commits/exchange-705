@@ -362,7 +362,7 @@ onUnmounted(() => {
             <el-tag type="info">{{ categoryAllowsLeverage(row.category) ? `${row.maxLeverage ?? 100}x` : '无杠杆（1x）' }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="200" fixed="right">
+        <el-table-column column-key="actions" label="操作" width="200" fixed="right">
           <template #default="{ row }">
             <el-button v-permission="'symbols:edit_symbol'"
               link 
@@ -536,14 +536,14 @@ onUnmounted(() => {
           <el-input v-model="row.label" placeholder="显示名称" />
         </template>
       </el-table-column>
-      <el-table-column label="行情源" width="150">
+      <el-table-column column-key="quoteSource" label="行情源" width="150">
         <template #default="{ row }">
           <el-select v-model="row.marketSource" @change="row.sourceCategory = sourceCategories(row.marketSource)[0]?.value">
             <el-option v-for="source in sourceOptions" :key="source.value" :value="source.value" :label="source.label" />
           </el-select>
         </template>
       </el-table-column>
-      <el-table-column label="源分类" min-width="210">
+      <el-table-column column-key="sourceCategory" label="源分类" min-width="210">
         <template #default="{ row }">
           <el-select v-model="row.sourceCategory">
             <el-option v-for="cat in sourceCategories(row.marketSource)" :key="cat.value" :value="cat.value" :label="cat.label" />
@@ -555,7 +555,7 @@ onUnmounted(() => {
           <el-input-number v-model="row.sortOrder" :min="0" :max="999" />
         </template>
       </el-table-column>
-      <el-table-column label="允许杠杆" width="110">
+      <el-table-column column-key="leverageAllowed" label="允许杠杆" width="110">
         <template #default="{ row }">
           <el-switch v-permission="'symbols:view'" v-model="row.leverageEnabled" :aria-label="`${row.key}允许杠杆`" />
         </template>

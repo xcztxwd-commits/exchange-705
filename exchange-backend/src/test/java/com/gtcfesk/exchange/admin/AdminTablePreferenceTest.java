@@ -8,11 +8,42 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 class AdminTablePreferenceTest {
+    @Test void httpRoundTripPreservesUtf8AndStableIds() throws Exception {
+        ObjectMapper mapper = new ObjectMapper();
+        AdminTablePreferenceRepository repo = mock(AdminTablePreferenceRepository.class);
+        Map<String, AdminTablePreference> data = new HashMap<>();
+        when(repo.findByTenantIdAndId(eq(1L), anyString())).thenAnswer(c -> Optional.ofNullable(data.get(c.getArgument(1))));
+        when(repo.save(any())).thenAnswer(c -> { AdminTablePreference p = c.getArgument(0); data.put(p.getId(), p); return p; });
+        MockMvc http = MockMvcBuilders.standaloneSetup(new AdminTablePreferenceController(repo, mapper)).build();
+        try (com.gtcfesk.exchange.tenant.TenantContext.Scope ignored = com.gtcfesk.exchange.tenant.TenantContext.open(1L)) {
+            login("1", "ROLE_ADMIN");
+            for (String id : Arrays.asList("手机号", "年收入", "登录IP / 地区", "用户类型", "操作", "annualIncome")) {
+                String body = "[" + mapper.createObjectNode().put("id", id).put("visible", true).put("fixed", "left").toString() + "]";
+                for (String contentType : Arrays.asList("application/json", "application/json;charset=UTF-8")) {
+                    http.perform(put("/api/admin/table-preferences/Users.1").contentType(contentType).content(body.getBytes(StandardCharsets.UTF_8)))
+                            .andExpect(status().isOk()).andExpect(content().json("{\"success\":true}"));
+                    String response = http.perform(get("/api/admin/table-preferences/Users.1"))
+                            .andExpect(status().isOk()).andExpect(content().contentType("application/json;charset=UTF-8"))
+                            .andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
+                    assertEquals(mapper.readTree(body), mapper.readTree(response));
+                    assertEquals(mapper.readTree(body), mapper.readTree(data.get("tenant:1:admin:1:Users.1").getColumnsJson()));
+                }
+            }
+            doThrow(new IllegalStateException("database unavailable")).when(repo).save(any());
+            assertThrows(IllegalStateException.class, () -> new AdminTablePreferenceController(repo, mapper)
+                    .save("Users.1", mapper.readTree("[{\"id\":\"id\",\"visible\":true,\"fixed\":\"\"}]")));
+        } finally { SecurityContextHolder.clearContext(); }
+    }
     private void login(String id, String role) {
         SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(id, null,
                 Collections.singletonList(new SimpleGrantedAuthority(role))));

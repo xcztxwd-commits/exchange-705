@@ -1,5 +1,6 @@
--- Exchange 705 structure-only snapshot 2026-10-06; schema epoch 2026100603.
+-- Exchange 705 structure-only snapshot 2026-10-07; schema epoch 2026100702.
 -- No business data, migration receipts or activation approval.
+
 
 /*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
 /*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
@@ -2171,6 +2172,8 @@ CREATE TABLE `market_control_command` (
   `task_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `error_code` varchar(64) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `message` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `retry_count` int(11) NOT NULL DEFAULT '0',
+  `retry_at` bigint(20) NOT NULL DEFAULT '0',
   PRIMARY KEY (`tenant_id`,`id`),
   UNIQUE KEY `command_request` (`tenant_id`,`symbol_id`,`request_key`),
   KEY `command_queue` (`tenant_id`,`state`,`accepted_at`),
@@ -2207,6 +2210,9 @@ CREATE TABLE `market_control_flow` (
   `last_at` bigint(20) NOT NULL,
   `finished_at` bigint(20) DEFAULT NULL,
   `tenant_id` bigint(20) NOT NULL,
+  `history_pending_until` bigint(20) DEFAULT NULL,
+  `history_retry_at` bigint(20) DEFAULT NULL,
+  `history_error` varchar(64) DEFAULT NULL,
   PRIMARY KEY (`tenant_id`,`task_id`),
   CONSTRAINT `mt_fk_6d66d213c682628f995f` FOREIGN KEY (`tenant_id`, `task_id`) REFERENCES `market_control_task` (`tenant_id`, `id`),
   CONSTRAINT `mt_t_market_control_flow` FOREIGN KEY (`tenant_id`) REFERENCES `tenant` (`id`)

@@ -253,7 +253,7 @@ class PersistentPriceControlTest extends TenantMarketTestContext {
         assertEquals(old,store.mixed(1,0,Long.MAX_VALUE)); assertEquals(1,count("market_mixed_minute"));
         assertEquals(start+120000,store.lastQuote(1).get("timestamp"));
     }
-    @Test @SuppressWarnings("unchecked") void marketIntegrationExecutesRunningAndHeldPricesDuringOutageUntilExplicitRestore() {
+    @Test @SuppressWarnings("unchecked") void marketIntegrationKeepsCommittedRunningPricesButHeldOutageIsNotTradable() {
         ForexQuoteMarketService market = new ForexQuoteMarketService();
         com.gtcfesk.exchange.repository.TradingSymbolRepository repository = org.mockito.Mockito.mock(com.gtcfesk.exchange.repository.TradingSymbolRepository.class);
         symbol.setCategory("Metal"); symbol.setSourceCategory("Metal"); symbol.setMarketSource(com.gtcfesk.exchange.market.MarketInstrumentCatalog.inferredSource("Metal"));
@@ -311,20 +311,22 @@ class PersistentPriceControlTest extends TenantMarketTestContext {
             assertEquals(0,task.price(task.sampledUntil).compareTo(duringControl.getOpenPrice()));
             assertFalse(ControlHistoryStore.rows(market.internalKline("TEST","1m",100)).isEmpty());
             market.stopControl(1L);market.completeControls(); assertEquals("HOLDING",market.controlStatus(1L).get("controlState"));
-            BigDecimal heldPrice=market.freshPrice("TEST");
+            BigDecimal heldPrice=ControlHistoryStore.number(market.internalPrice("TEST").get("price"));
+            assertNull(market.freshPrice("TEST"),"A source-dependent hold must not authorize stale raw quotes during outage");
             long oldSample=System.currentTimeMillis()-60000;
             store.db.update("UPDATE market_control_hold SET generated_at=? WHERE task_id=?",oldSample,task.id);
             long samples=count("market_control_sample");
             org.springframework.test.util.ReflectionTestUtils.setField(market,"controls",new PersistentPriceControl(store));
             market.completeControls();
             Map<String,Object> held=market.internalPrice("TEST");
-            assertEquals(oldSample,held.get("timestamp")); assertEquals(true,held.get("tradeAvailable"));
+            assertEquals(oldSample,held.get("timestamp")); assertEquals(false,held.get("tradeAvailable"));
             assertTrue(QuoteState.time(held.get("executionExpiresAt"))>System.currentTimeMillis());
             assertEquals(samples,count("market_control_sample"),"Renewing execution must not manufacture history");
             when(orders.findByTenantIdAndId(1L, 2L)).thenReturn(Optional.of(duringControl));
-            assertEquals(0,heldPrice.compareTo(trading.closeOrder(1L,2L,BigDecimal.ONE).getClosePrice()));
-            assertEquals(0,heldPrice.compareTo(trading.createOrder(1L,request).getOpenPrice()));
-            market.stopControl(1L); assertEquals(0,heldPrice.compareTo(market.freshPrice("TEST")));
+            assertThrows(com.gtcfesk.exchange.common.BusinessException.class,()->trading.closeOrder(1L,2L,BigDecimal.ONE));
+            assertThrows(com.gtcfesk.exchange.common.BusinessException.class,()->trading.createOrder(1L,request));
+            market.stopControl(1L); assertNull(market.freshPrice("TEST"));
+            assertEquals(0,heldPrice.compareTo(ControlHistoryStore.number(market.internalPrice("TEST").get("price"))),"Last committed hold remains display-only");
             market.manualControl(1L,false,BigDecimal.ZERO);market.completeControls();
             assertNull(market.freshPrice("TEST"));
             live=raw(System.currentTimeMillis(),true); live.put("fetchedAt",System.currentTimeMillis()); live.put("sourceAvailable",true); quotes.put("TEST",live);market.completeControls();

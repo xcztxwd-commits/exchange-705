@@ -63,7 +63,7 @@
             />
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="200" fixed="right">
+        <el-table-column column-key="actions" label="操作" width="200" fixed="right">
           <template #default="{ row }">
             <el-button v-permission="'deposit_settings:edit'" size="small" type="primary" @click="handleEdit(row)">编辑</el-button>
             <el-button v-permission="'deposit_settings:delete'" size="small" type="danger" @click="handleDelete(row)">删除</el-button>

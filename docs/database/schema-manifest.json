@@ -1,15 +1,15 @@
 {
-  "snapshot_date": "2026-10-06",
-  "schema_epoch": 2026100603,
-  "source_code_commit": "8679fff2ead54e53a90757366ab6a2e9270af763",
-  "source_kind": "published 0404 structure imported into owned MySQL 5.7 fixture; reviewed 0601/0602/0603 applied; structure-only stable capture",
+  "snapshot_date": "2026-10-07",
+  "schema_epoch": 2026100702,
+  "source_code_commit": null,
+  "source_kind": "Merged candidate; immutable 0603 structure imported into owned MySQL 5.7; exact 0701/0702 executed; data-free stable capture; not production approval",
   "database_defaults": {
     "collation": "utf8mb4_unicode_ci",
     "character_set": "utf8mb4"
   },
   "counts": {
     "tables": 113,
-    "columns": 1333,
+    "columns": 1338,
     "indexes": 452,
     "foreign_keys": 188,
     "triggers": 161,
@@ -262,10 +262,18 @@
     {
       "name": "V2026100603__tenant_entry_frontend_roles.sql",
       "sha256": "31f9a2e51fe4bd7b0d195ca8724a68d8fbae4509716b0b4acbba709135d858b3"
+    },
+    {
+      "name": "V2026100701__control_command_retry.sql",
+      "sha256": "3b91805f8750ba5f310a192e6c36d6b51dd04c7cd131cb38fa5de208e07c23f4"
+    },
+    {
+      "name": "V2026100702__control_history_finalization.sql",
+      "sha256": "ad96d9a17ac8aaac7fd6995c1ef35bb32b3e97f579c56e1b96039e28d81fa087"
     }
   ],
   "sha256": {
-    "scripts/multitenant/table_manifest.json": "b742c05aa84e90d1113ed412fa288ec46d77dbc7ce0aba673fdef6d4d6521c2c",
+    "scripts/multitenant/table_manifest.json": "045cb6cd83701eab824ec910b9898027b02bb1db7e9dcd45c5e54b6b1314b2c2",
     "scripts/multitenant/legacy-schema.sql": "6cbf7e0bb75eed06cc46f0c39ee16af8c8557e0416b8c45d5b186bcee382fcf1",
     "scripts/multitenant/legacy-feature-tables.sql": "fd58712b25fa33152b13db4a25f4cb0657ad86d3f0a4cc86170fd16e852c42bc",
     "exchange-backend/src/main/resources/db/migration/V2026092900__legacy_feature_prerequisites.sql": "eab055fb009441768ce3b277f5545e94cfabc1f4249cf17fec4851b8f9aa9859",
@@ -293,11 +301,13 @@
     "exchange-backend/src/main/resources/db/migration/V2026100402__joint_s4_history_projection.sql": "58ddcf5aac26f8f7d53fb9f69230c3308357bc5d92d1ef3fb2f0437bfb8cc277",
     "exchange-backend/src/main/resources/db/migration/V2026100403__source_history_input_revision.sql": "232fd47233ba1b2a219bbbaad51483c3f565db4966377a362b3fe1949cea9671",
     "exchange-backend/src/main/resources/db/migration/V2026100404__history_ordering_and_response_receipts.sql": "8689d5bc2192161ed60db148c7792984da92f5f34493a5c8d094555dd396d1ae",
-    "docs/database/schema.sql": "3d4fae2f121413c73ad809a0a23654db99121a961a67f1242c3b0ec0ddf1506b",
-    "docs/database/data-dictionary.md": "6a5a22ed96333e9df7f20584ca85dc45502fec463378dacd1dec1c8efdd79e33",
+    "docs/database/schema.sql": "01bc0f78efb1e277de0e5009f550095d5c787ceec21164fe70c4401d28acce91",
+    "docs/database/data-dictionary.md": "68080f56273afd7a7014a6b852bbcb00b78d6c2e940961028bdd4c66d02780da",
     "exchange-backend/src/main/resources/db/migration/V2026100601__control_policy_definitions.sql": "6cc7cb85247b77f55e6e155c6f0571d1188eeef808e011a94a51074e90b97a7f",
     "exchange-backend/src/main/resources/db/migration/V2026100602__user_avatar.sql": "457641a432f2248891f0051b8b3a12cfd0c3e0d09230763e7d0a397eda79d6ff",
-    "exchange-backend/src/main/resources/db/migration/V2026100603__tenant_entry_frontend_roles.sql": "31f9a2e51fe4bd7b0d195ca8724a68d8fbae4509716b0b4acbba709135d858b3"
+    "exchange-backend/src/main/resources/db/migration/V2026100603__tenant_entry_frontend_roles.sql": "31f9a2e51fe4bd7b0d195ca8724a68d8fbae4509716b0b4acbba709135d858b3",
+    "exchange-backend/src/main/resources/db/migration/V2026100701__control_command_retry.sql": "3b91805f8750ba5f310a192e6c36d6b51dd04c7cd131cb38fa5de208e07c23f4",
+    "exchange-backend/src/main/resources/db/migration/V2026100702__control_history_finalization.sql": "ad96d9a17ac8aaac7fd6995c1ef35bb32b3e97f579c56e1b96039e28d81fa087"
   },
   "verification": {
     "offline_contract": "PASS",
@@ -305,7 +315,7 @@
     "fresh_mysql57_import": "PASS",
     "mysql_version": "5.7.44",
     "normalized_ddl_roundtrip": "PASS",
-    "normalized_ddl_sha256": "189fe406ad54e687c9ab461a2263f833095f17c6ce4b5f72840ee37981eaaff5",
+    "normalized_ddl_sha256": "9174d3fe12bf1b7f8e7e8f839ebfb75c8d1397f1e6797576f47ce7b833e2f69c",
     "empty_table_check": "PASS",
     "total_business_table_rows": 0,
     "foreign_key_checks_restored": true,
@@ -315,17 +325,31 @@
     "unchanged_other_table_ddl": "PASS",
     "tail_migrations": [
       {
-        "name": "V2026100601__control_policy_definitions.sql",
-        "sha256": "6cc7cb85247b77f55e6e155c6f0571d1188eeef808e011a94a51074e90b97a7f"
+        "name": "V2026100701__control_command_retry.sql",
+        "sha256": "3b91805f8750ba5f310a192e6c36d6b51dd04c7cd131cb38fa5de208e07c23f4"
       },
       {
-        "name": "V2026100602__user_avatar.sql",
-        "sha256": "457641a432f2248891f0051b8b3a12cfd0c3e0d09230763e7d0a397eda79d6ff"
-      },
-      {
-        "name": "V2026100603__tenant_entry_frontend_roles.sql",
-        "sha256": "31f9a2e51fe4bd7b0d195ca8724a68d8fbae4509716b0b4acbba709135d858b3"
+        "name": "V2026100702__control_history_finalization.sql",
+        "sha256": "ad96d9a17ac8aaac7fd6995c1ef35bb32b3e97f579c56e1b96039e28d81fa087"
       }
-    ]
+    ],
+    "phase_boundary_full_restore": "PASS",
+    "phase_boundary_mysql_restart_data_definitions": "PASS",
+    "known_empty_mysql57_counter_reset": true,
+    "original_metadata_preserved": true,
+    "minimum_application_epoch": 2026100603,
+    "new_tail_receipt_inactive": true,
+    "production_approval": false,
+    "negative_cases": {
+      "empty_mysql57_counter_reset_run03": {
+        "strict_raw_state_restart": "BLOCKED_EMPTY_MYSQL57_INNODB_COUNTER_RESET",
+        "evidence": "reports/control0702-schema-20261007-03",
+        "preserved_for_audit": true
+      }
+    },
+    "strict_raw_state_restart": "PASS",
+    "legal_synthetic_fixture_floor_anchor": true,
+    "native_verification_run": "reports/control0702-schema-20261007-04",
+    "production_controlled_apply_resume": "NOT_EXECUTED"
   }
 }

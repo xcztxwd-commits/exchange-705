@@ -66,7 +66,7 @@
             <el-tag v-else-if="row.status === 'REJECTED'" type="danger">已拒绝</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="证件正面" width="120">
+        <el-table-column column-key="identityFront" label="证件正面" width="120">
           <template #default="{ row }">
             <ProtectedElementImage
               v-if="row.idFrontImage"
@@ -88,7 +88,7 @@
             <span v-else>-</span>
           </template>
         </el-table-column>
-        <el-table-column label="证件反面" width="120">
+        <el-table-column column-key="identityBack" label="证件反面" width="120">
           <template #default="{ row }">
             <ProtectedElementImage
               v-if="row.idBackImage"
@@ -121,7 +121,7 @@
             {{ row.reviewedAt ? formatDateTime(row.reviewedAt) : '-' }}
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="200" fixed="right">
+        <el-table-column column-key="actions" label="操作" width="200" fixed="right">
           <template #default="{ row }">
             <el-button v-permission="'kyc_review:approve_kyc'"
               v-if="row.status === 'PENDING'"

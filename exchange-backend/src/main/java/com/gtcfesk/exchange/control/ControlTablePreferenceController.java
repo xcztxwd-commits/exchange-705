@@ -11,7 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 import java.util.*;
 /** Only an independent CONTROL identity can address this repository. */
-@RestController @RequestMapping("/api/control/table-preferences") @RequiredArgsConstructor
+@RestController @RequestMapping(value="/api/control/table-preferences", produces="application/json;charset=UTF-8") @RequiredArgsConstructor
 public class ControlTablePreferenceController {
  private final ControlTablePreferenceRepository repository;
  private final ObjectMapper mapper;

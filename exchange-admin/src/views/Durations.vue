@@ -37,7 +37,7 @@
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="200" fixed="right">
+      <el-table-column column-key="actions" label="操作" width="200" fixed="right">
         <template #default="{ row }">
           <el-button v-permission="'durations:edit'" type="primary" size="small" :icon="Edit" @click="handleEdit(row)">编辑</el-button>
           <el-button v-permission="'durations:delete'" type="danger" size="small" :icon="Delete" @click="handleDelete(row)">删除</el-button>

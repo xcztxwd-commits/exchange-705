@@ -119,8 +119,15 @@ HISTORY0404_METADATA = {'table':'tenant_schema_version','version':2026100404,
 ENTRY0603_METADATA = {'table':'tenant_schema_version','version':2026100603,
                       'minimum_application_epoch':2026100603,'business_activation_ready':False}
 
+CONTROL0702_TAIL = ('V2026100701__control_command_retry.sql', 'V2026100702__control_history_finalization.sql')
+CONTROL0702_METADATA = {'table':'tenant_schema_version','version':2026100702,
+                        'minimum_application_epoch':2026100603,'business_activation_ready':False}
+
 def metadata_append_contract(start,reviewed):
     # Only these individually reviewed additive tails; never infer arbitrary future metadata.
+    if (start>0 and tuple(x['name'] for x in reviewed[start:])==CONTROL0702_TAIL
+            and reviewed[start-1]['name']=='V2026100603__tenant_entry_frontend_roles.sql'):
+        return dict(CONTROL0702_METADATA)
     tails = {
         'V2026100403__source_history_input_revision.sql': SOURCE0403_METADATA,
         'V2026100404__history_ordering_and_response_receipts.sql': HISTORY0404_METADATA,
@@ -137,7 +144,7 @@ def metadata_append_contract(start,reviewed):
     return None
 
 def metadata_version(contract):
-    if contract not in (SOURCE0403_METADATA,HISTORY0404_METADATA,ENTRY0603_METADATA):
+    if contract not in (SOURCE0403_METADATA,HISTORY0404_METADATA,ENTRY0603_METADATA,CONTROL0702_METADATA):
         raise ValueError('Unreviewed metadata append contract')
     return contract['version']
 
@@ -147,10 +154,17 @@ def metadata_absent_before_plan(db,contract):
         if db.query(f'SELECT COUNT(*) FROM tenant_schema_version WHERE version={version}')!=['0']:
             raise ValueError(f'{version} metadata already exists; no additive plan/replay may infer a completed phase')
 
-def metadata_receipt_after_phase(db,contract):
+def metadata_receipt_after_phase(db,contract,phase_name=None):
     if contract is not None:
         version=metadata_version(contract)
-        if db.query(f'SELECT COUNT(*) FROM tenant_schema_version WHERE version={version} AND minimum_application_epoch={version} AND business_activation_ready=0 AND applied_at IS NOT NULL')!=['1']:
+        if contract==CONTROL0702_METADATA and phase_name==CONTROL0702_TAIL[0]:
+            # 0701 implicitly commits DDL, but cannot claim that the final receipt already exists.
+            metadata_absent_before_plan(db,contract)
+            return
+        if contract==CONTROL0702_METADATA and phase_name not in (None,CONTROL0702_TAIL[1]):
+            raise ValueError('Unknown phase in exact control0702 additive tail')
+        minimum=contract['minimum_application_epoch']
+        if db.query(f'SELECT COUNT(*) FROM tenant_schema_version WHERE version={version} AND minimum_application_epoch={minimum} AND business_activation_ready=0 AND applied_at IS NOT NULL')!=['1']:
             raise ValueError(f'Exact newly approved {version} inactive metadata receipt is missing or changed')
 
 def preserved(db,columns,metadata_append=None):
@@ -421,7 +435,7 @@ def apply(db,proposal,proof,restore_db,approval,ledger,resume=False,after_phase=
         if core.file_hash(Path(approval['payload']['acceptance_file']))!=approval['payload'].get('acceptance_sha256'):raise ValueError('Acceptance hash differs from approval')
     metadata_append=metadata_append_contract(proposal['start'],proposal['migrations'])
     if proposal.get('allowed_metadata_append')!=metadata_append:
-        raise ValueError('Approved plan lacks the exact additive0403 metadata preservation contract; replan/reapprove')
+        raise ValueError('Approved plan lacks the exact additive metadata preservation contract; replan/reapprove')
     if metadata_append and 'tenant_schema_version' not in proposal['preservation_columns']:
         raise ValueError('Original schema-version rows are not frozen in the approved plan')
     ledger.policy.verify(approval,binding(proposal,proof),scope)
@@ -453,6 +467,8 @@ def apply(db,proposal,proof,restore_db,approval,ledger,resume=False,after_phase=
         if last['plan_sha256']!=digest(proposal) or last['target']!=target(db) or state(db)!=last['state'] or proof['restored']!=last['state'] or proof.get('next')!=last['next'] or not tip_matches:raise ValueError('Receipt/plan/latest source differs; preserve all increments and use a new reviewed forward plan')
         start=last['next']
         verify_preserved(proposal,preserved(restore_db,proposal['preservation_columns'],metadata_append),start-1)
+        if metadata_append==CONTROL0702_METADATA and start>proposal['start']:
+            metadata_receipt_after_phase(restore_db,metadata_append,proposal['migrations'][start-1]['name'])
         ledger.append({'kind':'RESUME_VERIFIED','plan_sha256':digest(proposal),'target':target(db),'state':last['state'],'next':start,'binding':binding(proposal,proof),'previous_tip':proof['ledger_tip']})
     else:
         observed=local and len(rows)==1 and rows[0]['kind']=='LOCAL_BASELINE_OBSERVED' and rows[0]['target']==proposal['target'] and rows[0]['state']==proposal['initial'] and rows[0]['migrations']==proposal['migrations'][:proposal['start']] and rows[0]['source_sha256']==proposal['source_sha256']
@@ -470,7 +486,7 @@ def apply(db,proposal,proof,restore_db,approval,ledger,resume=False,after_phase=
             core_path=core.MIGRATIONS[index]
             execution=execute_phase(db,core_path,legacy_reuse)
             verify_preserved(proposal,preserved(db,proposal['preservation_columns'],metadata_append),index)
-            metadata_receipt_after_phase(db,metadata_append)
+            metadata_receipt_after_phase(db,metadata_append,core_path.name)
             ledger.append({'kind':'PHASE_COMPLETE','plan_sha256':digest(proposal),'target':target(db),'state':state(db),'next':index+1,'binding':binding(proposal,proof),'migration':proposal['migrations'][index],'execution':execution})
         except BaseException as error:
             ledger.append({'kind':'FAILED_UNCERTAIN','plan_sha256':digest(proposal),'target':target(db),'index':index,'failure_type':type(error).__name__})

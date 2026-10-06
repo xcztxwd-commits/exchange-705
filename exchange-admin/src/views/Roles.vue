@@ -288,13 +288,13 @@ onMounted(() => {
         <el-table-column prop="roleName" label="角色名称" width="150" />
         <el-table-column prop="roleCode" label="角色代码" width="150" />
         <el-table-column prop="description" label="描述" min-width="200" />
-        <el-table-column label="超级管理员" width="120" align="center">
+        <el-table-column column-key="superAdmin" label="超级管理员" width="120" align="center">
           <template #default="{ row }">
             <el-tag v-if="row.isSuper" type="danger" size="small">是</el-tag>
             <el-tag v-else type="info" size="small">否</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="菜单权限数" width="120" align="center">
+        <el-table-column column-key="menuPermissionCount" label="菜单权限数" width="120" align="center">
           <template #default="{ row }">
             <el-tag type="primary" size="small">{{ row.menuCount }}个</el-tag>
           </template>
@@ -305,7 +305,7 @@ onMounted(() => {
             <el-tag v-else type="info" size="small">禁用</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="280" fixed="right">
+        <el-table-column column-key="actions" label="操作" width="280" fixed="right">
           <template #default="{ row }">
             <el-button v-permission="'roles:edit'"
               link 

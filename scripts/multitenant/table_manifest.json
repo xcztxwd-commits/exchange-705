@@ -1,5 +1,5 @@
 {
-  "schema_epoch": 2026100603,
+  "schema_epoch": 2026100702,
   "default_tenant_id": 1,
   "private": [
     "activity_campaign",
@@ -752,7 +752,9 @@
     "V2026100404__history_ordering_and_response_receipts.sql",
     "V2026100601__control_policy_definitions.sql",
     "V2026100602__user_avatar.sql",
-    "V2026100603__tenant_entry_frontend_roles.sql"
+    "V2026100603__tenant_entry_frontend_roles.sql",
+    "V2026100701__control_command_retry.sql",
+    "V2026100702__control_history_finalization.sql"
   ],
   "superseded_authoring_inputs": {
     "V2026093001__simple_manual_orders.sql": "V2026100102__stage1_current_business_schema.sql",
