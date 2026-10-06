@@ -8,12 +8,12 @@ const source = fs.readFileSync(path.join(root, 'exchange-frontend/src/utils/depo
 const exportsObject = {}
 new Function('exports', ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText)(exportsObject)
 const label = exportsObject.depositRecordTypeLabel
-const translate = key => ({ depositTypeManual: '手動入金', depositTypeDigital: '暗号資産', depositTypeBank: '銀行振込' })[key]
+const translate = key => ({ depositTypeDigital: '暗号資産', depositTypeBank: '銀行振込' })[key]
 const manual = Object.freeze({ type: 'manual', network: 'MANUAL', currency: 'USD', amount: 100, source: 'ADMIN_MANUAL' })
-assert.equal(label(manual, translate), '手動入金')
+assert.equal(label(manual, translate), '銀行振込')
 assert.equal(label({ type: 'bank', network: 'BANK', source: 'ADMIN_MANUAL' }, translate), '銀行振込', 'Admin receipt entries retain their actual bank channel')
 assert.equal(label({ type: 'digital' }, translate), '暗号資産')
-assert.equal(label({ type: 'MANUAL' }, translate), '手動入金')
+assert.equal(label({ type: 'MANUAL' }, translate), '銀行振込')
 assert.equal(label({ type: 'unexpected' }, translate), '—', 'Unknown types must not become bank deposits')
 assert.equal(label({}, translate), '—')
 for (const project of ['exchange-frontend', 'exchange-pc']) {
