@@ -20,6 +20,18 @@ assert.deepEqual(moveColumn(columns, 2, 0).map(c => c.id), ['action', 'id', 'ema
 assert.deepEqual(moveColumn(columns, -1, 0), columns)
 assert.equal(mergeColumns(columns.slice(0, 1), [{ id: 'id', visible: false, fixed: '' }])[0].visible, true)
 assert.deepEqual(mergeColumns(columns, []), columns)
+const orderColumns = ['profit', 'netProfit', 'fee', 'status', 'action'].map((id, index) => ({ id, label: id, visible: true, fixed: id === 'action' ? 'right' : '', ...(index === 1 ? { defaultAfter: 'profit' } : index === 2 ? { defaultAfter: 'netProfit' } : {}) }))
+const oldOrderColumns = orderColumns.filter(c => !['netProfit', 'fee'].includes(c.id)).map(({ id, visible, fixed }) => ({ id, visible, fixed }))
+assert.deepEqual(mergeColumns(orderColumns, oldOrderColumns).map(c => c.id), ['profit', 'netProfit', 'fee', 'status', 'action'])
+const reordered = [{ id: 'status', visible: true, fixed: 'left' }, { id: 'profit', visible: false, fixed: '' }, { id: 'action', visible: true, fixed: 'right' }]
+const upgraded = mergeColumns(orderColumns, reordered)
+assert.deepEqual(upgraded.map(c => c.id), ['status', 'profit', 'netProfit', 'fee', 'action'])
+assert.equal(upgraded[0].fixed, 'left'); assert.equal(upgraded[1].visible, false); assert.equal(upgraded[2].visible, true)
+const explicit = [...reordered, { id: 'fee', visible: false, fixed: 'left' }, { id: 'netProfit', visible: true, fixed: '' }]
+assert.deepEqual(mergeColumns(orderColumns, explicit).map(c => c.id), explicit.map(c => c.id))
+assert.equal(mergeColumns(orderColumns, explicit).find(c => c.id === 'fee').visible, false)
+assert.deepEqual(mergeColumns(orderColumns, []), orderColumns)
+assert.equal(mergeColumns([{ id: 'fee', label: 'fee', visible: true, fixed: '', defaultAfter: 'missing' }], []).length, 1)
 const keys = [], files = [], sites = []
 function walk(dir) { for (const entry of fs.readdirSync(dir, { withFileTypes: true })) { const p = path.join(dir, entry.name); if (entry.isDirectory()) walk(p); else if (p.endsWith('.vue')) files.push(p) } }
 walk(fileURLToPath(new URL('../src', import.meta.url)))
@@ -50,4 +62,3 @@ assert.ok(component.includes('draft.value = []') && component.includes('ticket.a
 const independent = fs.readFileSync(new URL('../control/main.ts', import.meta.url), 'utf8')
 assert.ok(independent.includes('/control/table-preferences/') && !independent.includes('pinia') && !independent.includes('useAuthStore'))
 console.log(`PASS: merge/order/visibility/fixed defaults, identity cancellation, two credential domains, ${sites.length} reviewed table sites`)
-

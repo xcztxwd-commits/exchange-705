@@ -55,6 +55,30 @@ class TenantDomainLifecycleTest{
  void markOldVerified(){TenantDomainBinding b=bindings.findById(oldHost).orElseThrow();b.setVerifiedAt(Instant.now());bindings.saveAndFlush(b);}
  java.util.List<TenantDomainVerification.Selection> selections(){java.util.List<TenantDomainVerification.Selection> all=new java.util.ArrayList<>();for(Map<String,Object> b:domains.candidates(id)){TenantDomainVerification.Selection s=new TenantDomainVerification.Selection();s.role=(String)b.get("role");s.hostname=(String)b.get("hostname");s.version=((Number)b.get("version")).longValue();all.add(s);}return all;}
  void verifyBoth(){for(TenantDomainVerification.Selection s:selections())domains.verify(id,s.role,s.hostname,s.version,domainVersion());}
+ @Test void absentReasonsAreOptionalAcrossDomainFlowsButAuditsAreRetained(){
+  markOldVerified();probeBoth();domains.prepareChange(id,entry(),newHost,domainVersion(),null);verifyBoth();
+  domains.activateChange(id,domainVersion(),selections(),true,"");assertEquals(newHost,domains.entryTarget(entry()));
+  long session=tenants.findById(id).orElseThrow().getSessionVersion();domains.setEntryEnabled(id,false,domainVersion()," \t ");assertEquals(session,tenants.findById(id).orElseThrow().getSessionVersion());
+  TenantDomainBinding retired=bindings.findById(oldHost).orElseThrow();domains.release(id,oldHost,retired.getVersion(),null);
+  Map<String,Object> prepared=domains.prepare(id,oldHost,"");Map<String,Object> verified=domains.verify(id,oldHost,version(prepared));domains.activate(id,oldHost,version(verified)," \t ");
+  retired=bindings.findById(newHost).orElseThrow();domains.release(id,"FRONTEND",newHost,retired.getVersion(),"");
+  domains.prepare(id,"ENTRY","pendingentry"+id+".forex-exchange.net",domainVersion(),null);
+  assertEquals(oldHost,tenants.findById(id).orElseThrow().getFrontendHost());
+  verify(audit,times(3)).record(eq(51L),eq(id),isNull(),eq("DOMAIN_PREPARE"),anyString(),eq("SUCCESS"),anyString(),eq("总控域名管理"));
+  verify(audit,times(2)).record(eq(51L),eq(id),isNull(),eq("DOMAIN_ACTIVATE"),anyString(),eq("SUCCESS"),anyString(),eq("总控域名管理"));
+  verify(audit).record(eq(51L),eq(id),isNull(),eq("DOMAIN_ENTRY_SWITCH"),anyString(),eq("SUCCESS"),anyString(),eq("总控域名管理"));
+  verify(audit,times(2)).record(eq(51L),eq(id),isNull(),eq("DOMAIN_REUSE_RELEASE"),anyString(),eq("SUCCESS"),anyString(),eq("总控域名管理"));
+ }
+ @Test void suppliedReasonIsPreservedAndValidationRemainsScoped(){
+  long initial=domainVersion();domains.prepare(id,newHost,"  reviewed custom reason  ");
+  verify(audit).record(eq(51L),eq(id),isNull(),eq("DOMAIN_PREPARE"),eq(newHost),eq("SUCCESS"),anyString(),eq("reviewed custom reason"));
+  long prepared=domainVersion();assertEquals(initial+1,prepared);
+  for(String invalid:Arrays.asList("短",String.join("",Collections.nCopies(513,"x")))){
+   assertThrows(IllegalArgumentException.class,()->domains.setEntryEnabled(id,false,prepared,invalid));assertEquals(prepared,domainVersion());
+  }
+  assertThrows(IllegalArgumentException.class,()->TenantManagementService.reason(null));
+  assertThrows(IllegalArgumentException.class,()->TenantManagementService.reason(""));
+ }
  @Test void roleCandidatesNeverOverwriteEachOtherAndChallengeBindsRole(){
   domains.prepare(id,"ENTRY",entry(),domainVersion(),"prepare entry");Map<String,Object> front=domains.prepare(id,newHost,"prepare frontend");assertEquals(2,domains.candidates(id).size());
   domains.prepare(id,"ENTRY","nextentry"+id+".forex-exchange.net",domainVersion(),"replace entry");assertEquals("PENDING",bindings.findById(newHost).orElseThrow().getStatus());assertEquals("RETIRED",bindings.findById(entry()).orElseThrow().getStatus());

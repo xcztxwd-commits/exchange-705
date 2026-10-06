@@ -3,7 +3,6 @@ package com.gtcfesk.exchange.control;
 import com.gtcfesk.exchange.common.BusinessException;
 import com.gtcfesk.exchange.repository.SystemConfigRepository;
 import com.gtcfesk.exchange.security.OutboundEndpointPolicy;
-import com.gtcfesk.exchange.service.EmailService;
 import com.gtcfesk.exchange.support.SupportSettings;
 import com.gtcfesk.exchange.tenant.TenantContext;
 import com.gtcfesk.exchange.tenant.TenantSecrets;
@@ -45,11 +44,8 @@ public class TenantReadinessService {
             if(!exists("AdminUser","e.enabled=true AND e.role='super_admin' AND EXISTS (SELECT b.id FROM BackendLogin b WHERE b.tenantId=e.tenantId AND b.adminUserId=e.id AND b.enabled=true AND b.subjectType='ADMIN')"))add(missing,"backend.admin","至少一个有效租户负责人及其全局登录项");
             Set<String> features=new HashSet<>();
             if(onlyFeature!=null)features.add(onlyFeature);else for(TenantPolicy p:policies.findByTenantId(tenant))if(p.getKey().startsWith("feature.")&&"true".equals(p.getValue()))features.add(p.getKey().substring(8));
-            if(features.contains("registration")){
-                check(missing,"mail.endpoint",()->outbound.smtp(value("mail.host"),value("mail.port")));
-                for(String key:Arrays.asList("mail.username","mail.password"))check(missing,key,()->{if(blank(value(key)))throw new BusinessException("必需配置缺失");});
-                check(missing,"mail.from",()->EmailService.address(value("mail.from")));
-            }
+            // AuthService.register uses a graphical captcha, not email verification.
+            // EmailService still validates SMTP credentials, outbound authorization and TLS when sending reset codes.
             if(features.contains("contract")||features.contains("option")){
                 if(!exists("TradingSymbol","e.isEnabled=true AND e.marketSource IS NOT NULL AND e.marketSource<>'' AND e.sourceCategory IS NOT NULL AND e.sourceCategory<>'' AND e.baseCurrency<>'' AND e.quoteCurrency<>''"))add(missing,"market.symbol","至少一个启用且来源、币种完整的交易品种");
                 if(exists("TradingSymbol","e.isEnabled=true AND UPPER(e.marketSource)='ALLTICK'"))check(missing,"market.quote.token",()->{if(blank(value("market.quote.token")))throw new BusinessException("行情源密钥缺失");});

@@ -198,8 +198,6 @@ onMounted(() => {
       </el-col>
     </el-row>
 
-    <TenantFeatureOverview />
-
     <el-row :gutter="20" style="margin-top: 20px">
       <el-col :span="24">
         <el-card>
@@ -210,6 +208,8 @@ onMounted(() => {
         </el-card>
       </el-col>
     </el-row>
+
+    <TenantFeatureOverview style="margin-top: 20px" />
   </div>
 </template>
 

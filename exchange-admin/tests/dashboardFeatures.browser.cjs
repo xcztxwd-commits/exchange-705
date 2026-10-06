@@ -48,6 +48,11 @@ const policy = (id, version, open, status = 'ACTIVE') => ({tenantId:id,tenantNam
   await cards.last().waitFor();assert.equal(await cards.count(),13);assert.equal(await page.locator('.feature-card.is-open').count(),4)
   assert.equal(await page.getByText('总控授权与逐项锁定',{exact:false}).count(),0);assert.equal(await page.getByText('80',{exact:true}).count(),1)
   checks.push('Dashboard shows all 13 functions, 4 open and 9 closed; original statistics retained')
+  const assertStatisticsBeforeFeatures=async()=>assert.ok(await page.locator('.dashboard').evaluate(el=>{
+   const statistics=el.querySelectorAll(':scope > .el-row')[1],features=el.querySelector('.feature-overview')
+   return statistics?.textContent.includes('充值与提现统计') && statistics.getBoundingClientRect().bottom+19<=features.getBoundingClientRect().top
+  }),'feature permissions stay below statistics with a separate gap')
+  await assertStatisticsBeforeFeatures();checks.push('Desktop statistics precede feature permissions with 20px spacing')
   await filters.nth(1).click();assert.equal(await cards.count(),4);assert.equal(await page.locator('.feature-card.is-open').count(),4)
   await filters.nth(2).click();assert.equal(await cards.count(),9);assert.equal(await page.locator('.feature-card.is-open').count(),0)
   await filters.first().click()
@@ -81,6 +86,7 @@ const policy = (id, version, open, status = 'ACTIVE') => ({tenantId:id,tenantNam
   release();await page.waitForTimeout(150);assert.equal(await page.locator('.feature-card.is-open').count(),2);assert.ok(await page.getByText('授权版本 12',{exact:true}).isVisible())
   checks.push('Session/tenant changes reload own snapshot; delayed old response cannot overwrite current tenant; status restriction remains explicit')
   await page.setViewportSize({width:390,height:844});await page.locator('.feature-overview').scrollIntoViewIfNeeded();await page.waitForTimeout(100)
+  await assertStatisticsBeforeFeatures();checks.push('Mobile statistics also precede feature permissions')
   assert.ok(await page.locator('.feature-overview').evaluate(el=>el.scrollWidth<=el.clientWidth+1),'phone card has no horizontal overflow')
   assert.equal(await page.locator('.feature-grid').evaluate(el=>getComputedStyle(el).gridTemplateColumns.split(' ').length),1)
   await page.screenshot({path:path.join(out,'dashboard-mobile.png'),fullPage:true})

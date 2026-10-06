@@ -1,7 +1,7 @@
 export type ColumnPreference = { id: string; visible: boolean; fixed: '' | 'left' | 'right' }
-export type TableColumn = ColumnPreference & { label: string }
+export type TableColumn = ColumnPreference & { label: string; defaultAfter?: string }
 
-// Ignore removed/unauthorized columns; append new columns with their original defaults.
+// Preserve saved choices; new columns may opt into a default neighbor without resetting preferences.
 export function mergeColumns(columns: TableColumn[], saved: ColumnPreference[]): TableColumn[] {
   const remaining = new Map(columns.map(column => [column.id, column]))
   const result: TableColumn[] = []
@@ -11,7 +11,11 @@ export function mergeColumns(columns: TableColumn[], saved: ColumnPreference[]):
     result.push({ ...column, visible: item.visible !== false, fixed: ['', 'left', 'right'].includes(item.fixed) ? item.fixed : column.fixed })
     remaining.delete(item.id)
   }
-  result.push(...remaining.values())
+  for (const column of remaining.values()) {
+    const after = column.defaultAfter ? result.findIndex(item => item.id === column.defaultAfter) : -1
+    if (after < 0) result.push(column)
+    else result.splice(after + 1, 0, column)
+  }
   if (result.length && !result.some(column => column.visible)) result[0]!.visible = true
   return result
 }

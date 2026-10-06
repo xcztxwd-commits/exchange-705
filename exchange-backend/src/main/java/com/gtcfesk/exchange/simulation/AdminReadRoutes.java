@@ -10,6 +10,7 @@ public final class AdminReadRoutes {
             if (path.matches("/api/admin/orders/(contract|option)/query")) return "orders";
         }
         if ("GET".equals(method)) {
+            if(path.matches("/api/admin/orders/(contract|option)/[1-9][0-9]*/share-preview"))return "orders";
             if(path.equals("/api/admin/users"))return "users";
             if(path.equals("/api/admin/statistics"))return "statistics";
             if(path.equals("/api/admin/support/inbox"))return "inbox";

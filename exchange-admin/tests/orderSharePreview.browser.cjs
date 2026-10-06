@@ -1,0 +1,172 @@
+// Run with ADMIN_URL / EVIDENCE_DIR against an isolated local Vite server. All APIs are mocked; no writes are allowed.
+const { chromium } = require(process.env.PLAYWRIGHT_PATH || 'playwright')
+const assert = require('node:assert/strict'), fs = require('node:fs'), path = require('node:path')
+const base = process.env.ADMIN_URL, out = process.env.EVIDENCE_DIR
+if (!base || !out || !['127.0.0.1', 'localhost'].includes(new URL(base).hostname)) throw Error('Use an isolated local server and evidence directory')
+fs.mkdirSync(out, { recursive: true })
+;(async () => {
+  const browser = await chromium.launch({ headless: true, ...(process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : {}) })
+  const page = await browser.newPage({ viewport: { width: 1360, height: 960 } })
+  const requests = [], errors = [], checks = []
+  let config, configFailure = false, chartFailure = false, invalidSettlement = false, inviteFailure = false, delayShare = false, release, blocked = false
+  const contract = { id: 81, userId: 700, userName: 'Alice', userEmail: 'alice@example.com', symbol: 'JPY=X', side: 'SELL', type: 'MARKET', quantity: '282.86', leverage: 100, status: 'CLOSED', deleted: false, profit: '4828.58', netProfit: '4705.13', margin: '10000', fee: '123.45', openPrice: '158.189', closePrice: '158.162', openTime: '2026-10-06T01:20:00', closeTime: '2026-10-06T01:28:00', createdAt: '2026-10-06T01:20:00' }
+  const option = { ...contract, id: 82, userId: 701, userName: 'Bob', userEmail: 'bob@example.com', symbol: 'BTCUSDT', direction: 'DOWN', amount: '100', profit: '-10.11', netProfit: null, leverage: null, quantity: null, margin: null, fee: null }
+  const rows = [contract, { ...contract, id: 83, status: 'OPEN', profit: '2.50', netProfit: '-2.50', fee: '5' }, { ...contract, id: 84, deleted: true, profit: '-10.11', netProfit: '-15.11', fee: '5' }, { ...contract, id: 85, userId: null, orderSource: 'MANUAL_TEST', profit: '0', netProfit: '0', fee: '0' }, { ...contract, id: 86, deleted: true, netProfit: contract.profit }, { ...contract, id: 87, status: 'CANCELLED', profit: '0', netProfit: '0', fee: '25' }, { ...contract, id: 88, status: 'OPEN', profit: null, netProfit: null, fee: null }]
+  page.on('pageerror', e => errors.push(e.message))
+  const dialog = () => page.getByRole('dialog', { name: '查看分享图', exact: true })
+  const ready = async () => { await page.locator('.order-share-stage .el-image__inner').waitFor(); await page.getByRole('button', { name: '保存图片', exact: true }).waitFor(); await page.waitForFunction(() => !document.querySelector('.order-share-preview-dialog .el-dialog__footer button:last-child')?.disabled) }
+  const poster = () => page.evaluate(() => { const src = document.querySelector('.order-share-stage img')?.src; const { image, ...data } = window.__qa.exports.findLast(p => p.image === src) || {}; return data })
+  const choose = async (field, label) => {
+    const old = await page.locator('.order-share-stage img').getAttribute('src')
+    await dialog().locator('.el-select').filter({ has: page.getByRole('combobox', { name: field, exact: true }) }).click()
+    await page.getByRole('option', { name: label, exact: true }).click()
+    await ready(); await page.waitForFunction(old => document.querySelector('.order-share-stage img')?.src !== old, old)
+  }
+  const close = async () => { await dialog().getByRole('button', { name: '关闭', exact: true }).click(); await dialog().waitFor({ state: 'detached' }) }
+  try {
+    await page.addInitScript(() => {
+      sessionStorage.setItem('exchange.admin.session.v2', JSON.stringify({ mode: 'admin', token: 'QA', user: { id: 1, tenantId: 1, userType: 'admin', role: 'admin', email: 'administrator@example.com' } }))
+      const texts = new WeakMap(), draw = CanvasRenderingContext2D.prototype.fillText, toDataURL = HTMLCanvasElement.prototype.toDataURL
+      window.__posterExports = []
+      CanvasRenderingContext2D.prototype.fillText = function (text, ...args) { const list = texts.get(this.canvas) || []; list.push(String(text)); texts.set(this.canvas, list); return draw.call(this, text, ...args) }
+      HTMLCanvasElement.prototype.toDataURL = function (...args) { const image = toDataURL.apply(this, args); window.__posterExports.push({ image, width: this.width, height: this.height, texts: texts.get(this) || [] }); return image }
+    })
+    await page.route('**/__qa', route => route.fulfill({ contentType: 'text/html', body: '<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"></head><body><div id="app"></div></body></html>' }))
+    await page.route('**/api/**', async route => {
+      const request = route.request(), url = new URL(request.url()), method = request.method(), routePath = url.pathname
+      const body = request.postDataJSON()
+      requests.push({ method, path: routePath, body, authorization: request.headers().authorization })
+      if (method === 'POST' && routePath === '/api/admin/account-query') {
+        assert.ok(['GET', 'POST'].includes(body.method)); assert.ok(/^\/api\/admin\/orders\/(contract|option)\/(query|[1-9][0-9]*\/share-preview)$/.test(body.path))
+        if (body.path.endsWith('/share-preview')) { assert.equal(body.method, 'GET'); return route.fulfill({ json: { ...contract, userName: 'Demo Alice', userEmail: 'demo@example.com', profit: '0' } }) }
+        assert.equal(body.method, 'POST'); return route.fulfill({ json: { list: [{ ...contract, userName: 'Demo Alice', userEmail: 'demo@example.com', profit: '0', netProfit: '-1.23', fee: '1.23' }], total: 1 } })
+      }
+      if (method === 'POST' && /^\/api\/admin\/orders\/(contract|option)\/query$/.test(routePath)) return route.fulfill({ json: { list: routePath.includes('/contract/') ? rows : [option], total: routePath.includes('/contract/') ? rows.length : 1 } })
+      assert.equal(method, 'GET', 'Sharing cannot change orders, users, funds, configs or market state')
+      if (routePath === '/api/admin/menus/current') return route.fulfill({ json: { success: true, superAdmin: false, menus: [{ menuCode: 'orders', path: '/orders' }, { menuCode: 'users', path: '/users' }], groups: [], actions: { orders: [], users: [] } } })
+      if (routePath === '/api/admin/users/agents/simple') return route.fulfill({ json: { list: [] } })
+      if (routePath === '/api/admin/config/get') { assert.equal(url.searchParams.get('key'), 'share.templates'); return route.fulfill({ json: { value: configFailure ? '{invalid' : config } }) }
+      if (routePath === '/api/user/system/timezone') return route.fulfill({ json: { timezone: 'America/New_York' } })
+      if (/^\/api\/admin\/orders\/(contract\/81|option\/82)\/share-preview$/.test(routePath)) {
+        if (delayShare) { blocked = true; await new Promise(resolve => release = resolve); blocked = false; release = undefined }
+        return route.fulfill({ json: { ...(routePath.includes('/contract/') ? contract : option), ...(invalidSettlement ? { profit: null } : {}) } })
+      }
+      if (/^\/api\/admin\/users\/70[01]\/invite-preview$/.test(routePath)) {
+        if (inviteFailure) return route.fulfill({ status: 400, json: { message: '域名未验证' } })
+        const id = Number(routePath.split('/')[4]); return route.fulfill({ json: { userId: id, inviteCode: 'OWN' + id, inviteUrl: 'https://tenant.example.com/?register=1&invite=OWN' + id } })
+      }
+      if (routePath === '/api/market/kline/JPY%3DX') { assert.equal(url.searchParams.get('interval'), '1m'); return route.fulfill({ json: { ret: chartFailure ? 503 : 200, data: { symbol: 'JPY=X', source: 'yahoo', kline_list: [{ timestamp: Date.now() - 60000, open_price: 158.1, high_price: 158.3, low_price: 158, close_price: 158.2 }] } } }) }
+      throw Error('Unexpected API: ' + method + ' ' + routePath)
+    })
+    await page.goto(base + '/__qa')
+    config = await page.evaluate(async () => {
+      const source = await (await fetch('/src/components/OrderSharePreview.vue')).text(), authSource = await (await fetch('/src/store/auth.ts')).text()
+      const dep = (s, n) => s.match(new RegExp('from ["\']([^"\']*' + n + '\\.js[^"\']*)["\']'))[1]
+      const { createApp, h, reactive } = await import(dep(source, 'vue')), { createPinia, setActivePinia } = await import(dep(authSource, 'pinia'))
+      const element = await import((await (await fetch('/src/main.ts')).text()).match(/from ["']([^"']*element-plus\.js[^"']*)["']/)[1])
+      const pinia = createPinia(); setActivePinia(pinia)
+      const access = await import('/src/utils/access.ts'); await access.loadAccess()
+      await import('/node_modules/element-plus/dist/index.css'); await import('/src/styles/global.scss')
+      const { default: Orders } = await import('/src/views/Orders.vue'), { default: Preview } = await import('/src/components/OrderSharePreview.vue')
+      const { default: AdminTable } = await import('/src/components/AdminTable.ts'), { TABLE_PREFERENCES } = await import('/src/utils/tablePreferences.ts')
+      const { useAuthStore } = await import('/src/store/auth.ts')
+      const model = reactive({ view: 'orders', orderId: 81, kind: 'contract', accountMode: 'REAL' })
+      window.__qa = { exports: window.__posterExports, model, access: access.access, auth: useAuthStore(), mount() {
+        createApp({ render: () => model.view === 'orders' ? h(Orders) : model.view === 'preview' ? h(Preview, { ...model, onClose: () => model.view = 'empty' }) : null })
+          .use(pinia).use(element.default).directive('permission', access.permissionDirective).component('AdminTable', AdminTable)
+          .provide(TABLE_PREFERENCES, { identityKey: () => 'QA', load: async table => table === 'Orders.1' ? ['accountModeLabel', 'id', 'userId', 'userEmail', 'userRemark', 'symbol', 'side', 'type', 'quantity', 'openPrice', 'currentPrice', 'stopLoss', 'takeProfit', 'profit', 'status', 'createdAt', '操作'].map(id => ({ id, visible: true, fixed: id === 'accountModeLabel' ? 'left' : id === '操作' ? 'right' : '' })) : [], save: () => { throw Error('Test must not save preferences') } }).mount('#app')
+      } }
+      const { createShareDesign } = await import(source.match(/from ["']([^"']*shareTemplateDesign\.ts[^"']*)["']/)[1])
+      const design = createShareDesign('light', 'amount'); design.artwork = false; design.boxes.filter(b => ['userName', 'userEmail'].includes(b.field)).forEach(b => b.visible = true)
+      const rule = (id, name, languages, base = 'light', custom = true) => ({ id, name, languages, base, focus: 'amount', enabled: true, ...(custom ? { design } : {}) })
+      return JSON.stringify({ version: 3, templates: [rule('custom-owner', '用户模板', ['*']), rule('custom-english', '英语专属', ['en']), { ...rule('dark', '已停用模板', ['*'], 'dark', false), enabled: false }, rule('chart', '行情复盘', ['*'], 'chart', false)] })
+    })
+    await page.evaluate(() => window.__qa.mount())
+    const shares = page.locator('#pane-contract').getByRole('button', { name: '查看分享图', exact: true })
+    await shares.first().waitFor(); assert.equal(await shares.count(), 2); assert.equal(await shares.nth(1).isDisabled(), true)
+    const table = page.locator('#pane-contract .el-table'), headers = await table.locator('.el-table__header th .cell').allTextContents(), profitIndex = headers.indexOf('盈亏')
+    assert.deepEqual(headers.slice(profitIndex, profitIndex + 4), ['盈亏', '净盈亏', '手续费', '状态'], 'New columns must follow profit even with old saved preferences')
+    const moneyCells = async row => (await row.locator('td .cell').allTextContents()).slice(profitIndex, profitIndex + 3).map(text => text.trim())
+    const realRows = table.locator('.el-table__body tr')
+    for (const [index, expected] of [['4,828.58', '4,705.13', '123.45'], ['2.50', '-2.50', '5.00'], ['-10.11', '-15.11', '5.00'], ['0.00', '0.00', '0.00'], ['4,828.58', '4,828.58', '123.45'], ['0.00', '0.00', '25.00'], ['—', '—', '—']].entries()) assert.deepEqual(await moneyCells(realRows.nth(index)), expected)
+    assert.equal(await realRows.nth(1).locator('td').nth(profitIndex + 1).locator('span').evaluate(el => getComputedStyle(el).color), 'rgb(245, 108, 108)')
+    assert.equal(await realRows.nth(0).locator('td').nth(profitIndex + 1).locator('span').evaluate(el => getComputedStyle(el).color), 'rgb(103, 194, 58)')
+    assert.ok((await realRows.nth(2).getAttribute('class')).includes('deleted-order'))
+    await table.locator('.el-scrollbar__wrap').first().evaluate(el => el.scrollLeft = el.scrollWidth)
+    await page.screenshot({ path: path.join(out, 'order-net-fee-columns.png') })
+    checks.push('Contract table inserts net P&L and fee after gross P&L without resetting old column preferences; positive, negative, zero, legacy refunds, cancellations, unbound/manual/deleted and missing amounts retain correct formatting and styling')
+    await shares.first().click(); await ready()
+    let data = await poster()
+    assert.equal(data.width, 1080); assert.equal(data.height, 1440)
+    for (const text of ['Alice', 'alice@example.com', '+4,828.58', '+48.29%', 'USD/JPY', '100×', '2026-10-05 21:28:00']) assert.ok(data.texts.includes(text), text)
+    assert.ok(!data.texts.includes('administrator@example.com')); assert.equal(requests.filter(r => r.path.endsWith('/invite-preview')).length, 0)
+    checks.push('Bound settled rows expose the action; open/deleted rows do not, unbound rows disable it; recorded P&L, leverage, tenant timezone and owner identity render without recalculation')
+    await choose('分享图语言', '英语'); data = await poster(); assert.ok(data.texts.includes('Realized P&L (USD)'))
+    await dialog().locator('.el-select').filter({ has: page.getByRole('combobox', { name: '分享图模板', exact: true }) }).click()
+    assert.equal(await page.getByRole('option', { name: '英语专属', exact: true }).count(), 1); assert.equal(await page.getByRole('option', { name: '已停用模板', exact: true }).count(), 0)
+    await page.getByRole('option', { name: '英语专属', exact: true }).click(); await ready()
+    await choose('分享图预览内容', '收益率'); data = await poster(); assert.ok(data.texts.includes('+48.29%')); assert.ok(!data.texts.includes('+4,828.58'))
+    await choose('分享图预览内容', '盈亏金额'); data = await poster(); assert.ok(data.texts.includes('+4,828.58')); assert.ok(!data.texts.includes('+48.29%'))
+    await dialog().getByText('显示该用户名字和邮箱', { exact: true }).click(); await ready(); data = await poster(); assert.ok(!data.texts.includes('alice@example.com'))
+    await dialog().getByText('显示该用户名字和邮箱', { exact: true }).click(); await ready()
+    inviteFailure = true; await dialog().getByText('该用户邀请二维码', { exact: true }).click()
+    await dialog().getByRole('alert').filter({ hasText: '域名未验证' }).waitFor(); assert.equal(await page.locator('.order-share-stage img').count(), 0); assert.ok(await dialog().getByRole('button', { name: '保存图片', exact: true }).isDisabled())
+    inviteFailure = false; await dialog().getByRole('button', { name: '重新预览', exact: true }).click(); await ready()
+    assert.ok(requests.some(r => r.path === '/api/admin/users/700/invite-preview')); assert.ok(!requests.some(r => r.path === '/api/admin/users/1/invite-preview'))
+    checks.push('Published templates filter by language; amount/rate preview, identity visibility and owning-user QR work; invite failure clears stale image and can retry')
+    await page.locator('.order-share-stage .el-image').click(); await page.locator('.el-image-viewer__wrapper').waitFor(); await page.keyboard.press('Escape')
+    const downloading = page.waitForEvent('download'); await dialog().getByRole('button', { name: '保存图片', exact: true }).click()
+    const download = await downloading, file = path.join(out, download.suggestedFilename()); await download.saveAs(file)
+    assert.ok(download.suggestedFilename().startsWith('REAL-contract-81-en-')); const png = fs.readFileSync(file); assert.equal(png.subarray(1, 4).toString(), 'PNG'); assert.equal(png.readUInt32BE(16), 1080); assert.equal(png.readUInt32BE(20), 1440)
+    await page.screenshot({ path: path.join(out, 'share-desktop.png') }); await page.setViewportSize({ width: 390, height: 844 }); await page.screenshot({ path: path.join(out, 'share-mobile.png') })
+    assert.ok(await dialog().evaluate(el => el.scrollWidth <= el.clientWidth + 1)); await page.setViewportSize({ width: 1360, height: 960 })
+    await choose('分享图语言', '日语'); await dialog().locator('.el-select').filter({ has: page.getByRole('combobox', { name: '分享图模板', exact: true }) }).click()
+    assert.equal(await page.getByRole('option', { name: '英语专属', exact: true }).count(), 0)
+    chartFailure = true; await page.getByRole('option', { name: '行情复盘', exact: true }).click()
+    await dialog().getByRole('alert').filter({ hasText: '行情暂不可用' }).waitFor(); assert.equal(await page.locator('.order-share-stage img').count(), 0)
+    chartFailure = false; await dialog().getByRole('button', { name: '重新预览', exact: true }).click(); await ready()
+    assert.ok(requests.some(r => r.path === '/api/market/kline/JPY%3DX')); assert.ok((await poster()).texts.some(text => text.includes('4,828.58')))
+    checks.push('Other languages exclude English-only templates; built-in chart template reads source candles, preserves recorded P&L and shows retryable market errors instead of fabricated candles')
+    await close(); await page.getByRole('tab', { name: '期货订单', exact: true }).click(); await page.locator('#pane-option').getByRole('button', { name: '查看分享图', exact: true }).click(); await ready()
+    data = await poster(); assert.ok(data.texts.includes('Bob')); assert.ok(data.texts.includes('bob@example.com')); assert.ok(data.texts.includes('-10.11')); assert.ok(data.texts.includes('-10.11%')); assert.ok(data.texts.includes('—')); await close()
+    checks.push('Image enlarges and downloads a valid 1080×1440 PNG; controls fit mobile; term orders use their own user and negative recorded P&L')
+    // Same numeric ids in REAL and DEMO must remain distinct, even in a mixed table.
+    await page.getByRole('tab', { name: '合约订单', exact: true }).click()
+    await page.locator('#pane-contract .account-type-filter').getByText('模拟账户', { exact: true }).click()
+    const demoRow = page.getByRole('row').filter({ hasText: 'demo@example.com' })
+    await demoRow.waitFor(); assert.deepEqual(await moneyCells(demoRow), ['0.00', '-1.23', '1.23'])
+    await demoRow.getByRole('button', { name: '查看分享图', exact: true }).click(); await ready()
+    data = await poster(); assert.ok(data.texts.includes('Demo Alice')); assert.ok(data.texts.includes('0.00')); assert.ok(data.texts.includes('DEMO / 模拟账户'))
+    assert.ok(await dialog().getByRole('checkbox', { name: '该用户邀请二维码', exact: true }).isDisabled()); await close()
+    checks.push('Mixed REAL/DEMO rows read the correct realm via the read-only proxy; zero P&L remains zero, demo poster is watermarked and cannot use a real-user QR')
+    // Failure and stale-response checks use the same real component without the table.
+    invalidSettlement = true
+    await page.evaluate(() => { window.__qa.model.view = 'preview' }); await dialog().getByRole('alert').filter({ hasText: 'Incomplete settled order' }).waitFor()
+    assert.equal(await page.locator('.order-share-stage img').count(), 0); invalidSettlement = false
+    await dialog().getByRole('button', { name: '重新预览', exact: true }).click(); await ready()
+    configFailure = true; await page.evaluate(() => { window.__qa.access.actions = { orders: [] } })
+    await dialog().getByRole('alert').waitFor(); assert.equal(await page.locator('.order-share-stage img').count(), 0)
+    assert.ok(await dialog().getByRole('checkbox', { name: '该用户邀请二维码', exact: true }).isDisabled())
+    configFailure = false; await dialog().getByRole('button', { name: '重新预览', exact: true }).click(); await ready()
+    delayShare = true; await page.evaluate(() => { window.__qa.model.orderId = '81' }); await page.waitForFunction(() => !document.querySelector('.order-share-stage img'))
+    let until = Date.now() + 5000; while (!blocked && Date.now() < until) await page.waitForTimeout(20); assert.ok(blocked, 'Delayed share request must start')
+    await close(); release(); delayShare = false; await page.waitForTimeout(100)
+    assert.equal(await page.locator('.order-share-stage img').count(), 0)
+    await page.evaluate(() => { window.__qa.model.orderId = 81; window.__qa.model.view = 'preview' }); await ready()
+    delayShare = true; await page.evaluate(() => { window.__qa.model.orderId = '81' })
+    until = Date.now() + 5000; while (!blocked && Date.now() < until) await page.waitForTimeout(20); assert.ok(blocked)
+    await page.evaluate(() => { const auth = window.__qa.auth; auth.setAuth('QA-2', { ...auth.user, id: 2 }) })
+    release(); delayShare = false; await page.waitForTimeout(100)
+    assert.equal(await page.locator('.order-share-stage img').count(), 0, 'Session change must discard the old owner/order response')
+    await page.evaluate(async () => { await (await import('/src/utils/access.ts')).loadAccess() }); await ready()
+    assert.equal(requests.findLast(r => r.path === '/api/admin/orders/contract/81/share-preview').authorization, 'Bearer QA-2')
+    assert.ok((await poster()).texts.includes('Alice'), 'Changing administrators must not change the sharing customer')
+    await page.evaluate(() => { window.__qa.access.actions = {} }); await dialog().getByRole('alert').filter({ hasText: '没有订单查看权限' }).waitFor()
+    assert.equal(await page.locator('.order-share-stage img').count(), 0); assert.equal(await dialog().getByRole('button', { name: '保存图片', exact: true }).count(), 0)
+    checks.push('Invalid settlement/config cannot export stale images; missing user permission disables QR but not preview; close/session changes discard delayed responses; administrator change reloads the same customer; revoked order access clears preview')
+    assert.deepEqual(errors, [])
+    fs.writeFileSync(path.join(out, 'browser-result.json'), JSON.stringify({ checks, requests, errors, mockedApis: true }, null, 2))
+    console.log('PASS: ' + checks.join('; '))
+  } catch (e) { await page.screenshot({ path: path.join(out, 'browser-failure.png') }).catch(() => {}); throw e }
+  finally { if (release) release(); await browser.close() }
+})().catch(e => { console.error(e); process.exitCode = 1 })

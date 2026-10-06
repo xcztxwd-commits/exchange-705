@@ -1,5 +1,7 @@
 export type OrderCandle = { timestamp: number; local: string; offset: string; price: string; low: string; high: string; close: string }
 export type OrderChartRange = { open: OrderCandle; close: OrderCandle }
+export const orderChartIntervals = { '1m': 60000, '5m': 300000, '15m': 900000, '30m': 1800000, '1h': 3600000, '1d': 86400000 } as const
+export type OrderChartInterval = keyof typeof orderChartIntervals
 
 // Number is only for drawing. Selected prices retain their original ledger-precision strings.
 export function orderChartCandles(values: unknown, now = Date.now()): OrderCandle[] {
@@ -13,6 +15,22 @@ export function orderChartCandles(values: unknown, now = Date.now()): OrderCandl
     rows.set(value.timestamp, { timestamp: value.timestamp, local: value.local, offset: value.offset, price: String(value.price), low: String(value.low), high: String(value.high), close: String(value.close) })
   }
   return [...rows.values()].sort((a, b) => a.timestamp - b.timestamp)
+}
+
+// UTC buckets use only loaded minutes. Keep the first real minute's time and exact open for order selection.
+export function orderChartAggregate(rows: OrderCandle[], interval: OrderChartInterval): OrderCandle[] {
+  if (interval === '1m') return rows
+  const duration = orderChartIntervals[interval], candles: OrderCandle[] = []
+  for (const row of rows) {
+    const last = candles[candles.length - 1]
+    if (!last || Math.floor(last.timestamp / duration) !== Math.floor(row.timestamp / duration)) candles.push({ ...row })
+    else {
+      if (Number(row.low) < Number(last.low)) last.low = row.low
+      if (Number(row.high) > Number(last.high)) last.high = row.high
+      last.close = row.close
+    }
+  }
+  return candles
 }
 
 export function orderChartRange(rows: OrderCandle[], first: number, last: number): OrderChartRange {

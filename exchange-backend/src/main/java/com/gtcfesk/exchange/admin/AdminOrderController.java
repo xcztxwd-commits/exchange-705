@@ -134,9 +134,39 @@ public class AdminOrderController {
         return ResponseEntity.ok(result);
     }
 
-    /**
-     * 将合约订单转换为Map并添加用户备注
-     */
+    /** Read a settled order and its owning customer's display identity in the selected account realm. */
+    @GetMapping("/{kind:contract|option}/{id}/share-preview")
+    @com.gtcfesk.exchange.config.AdminPermission(menu = "orders", action = "")
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public ResponseEntity<?> sharePreview(@PathVariable String kind, @PathVariable Long id) {
+        Long tenant = com.gtcfesk.exchange.tenant.TenantContext.requireTenantId();
+        Map<String, Object> row;
+        if ("contract".equals(kind)) {
+            ContractOrder order = contractOrderRepository.findByTenantIdAndId(tenant, id)
+                    .orElseThrow(() -> new BusinessException("订单不存在"));
+            com.gtcfesk.exchange.tenant.TenantContext.require(order.getTenantId());
+            row = convertContractOrderToMap(order);
+        } else if ("option".equals(kind)) {
+            OptionOrder order = optionOrderRepository.findByTenantIdAndId(tenant, id)
+                    .orElseThrow(() -> new BusinessException("订单不存在"));
+            com.gtcfesk.exchange.tenant.TenantContext.require(order.getTenantId());
+            row = convertOptionOrderToMap(order);
+        } else throw new BusinessException("订单类型无效");
+        if (Boolean.TRUE.equals(row.get("deleted")) || !"CLOSED".equals(row.get("status")))
+            throw new BusinessException("仅支持查看未删除的已平仓订单分享图");
+        if (row.get("userId") == null) throw new BusinessException("请先绑定用户，再查看该用户的分享图");
+        UserAccount user = userAccountRepository.findByTenantIdAndId(tenant, (Long) row.get("userId"))
+                .orElseThrow(() -> new BusinessException("订单用户不存在"));
+        com.gtcfesk.exchange.tenant.TenantContext.require(user.getTenantId());
+        Long agent = com.gtcfesk.exchange.config.BackendAccess.agentId();
+        if (agent != null && !agent.equals(user.getParentUserId()))
+            throw new org.springframework.security.access.AccessDeniedException("无权查看该用户订单");
+        // Only the order owner's display identity, never the signed-in administrator or internal user fields.
+        row.put("userName", user.getNickname()); row.put("userEmail", user.getEmail());
+        return ResponseEntity.ok().cacheControl(org.springframework.http.CacheControl.noStore()).body(row);
+    }
+
+    /** 将合约订单转换为Map。 */
     private Map<String, Object> convertContractOrderToMap(ContractOrder order) {
         Map<String, Object> map = new HashMap<>();
         map.put("id", order.getId());
@@ -149,6 +179,7 @@ public class AdminOrderController {
         map.put("side", order.getSide());
         map.put("type", order.getType());
         map.put("quantity", order.getQuantity());
+        map.put("leverage", order.getLeverage());
         map.put("orderSource", order.getOrderSource());
         map.put("bindingStatus",order.getUserId()==null?"UNBOUND":"BOUND");
         map.put("quantityUnitType", order.getQuantityUnitType());
@@ -159,6 +190,11 @@ public class AdminOrderController {
         map.put("margin", order.getMargin());
         map.put("fee", order.getFee());
         map.put("profit", order.getProfit());
+        BigDecimal netProfit = order.getProfit();
+        // Match settlement: legacy fee reservations and unfilled/cancelled orders are refunded.
+        if (order.getLotSize() != null && ("OPEN".equals(order.getStatus()) || "CLOSED".equals(order.getStatus())))
+            netProfit = netProfit == null || order.getFee() == null ? null : netProfit.subtract(order.getFee());
+        map.put("netProfit", netProfit);
         map.put("status", order.getStatus());
         map.put("createdAt", order.getCreatedAt());
         map.put("closeTime", order.getCloseTime());

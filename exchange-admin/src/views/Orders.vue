@@ -17,6 +17,14 @@ import { useAuthStore } from '@/store/auth'
 import { usePermissions } from '@/composables/usePermissions'
 import { displaySymbol } from '@/utils/displaySymbol'
 import { formatPrice } from '@/utils/formatPrice'
+import OrderSharePreview from '@/components/OrderSharePreview.vue'
+import type { ShareKind } from '@/utils/orderShare'
+import type { AccountMode } from '@/utils/accountTableData'
+const shareOrder = ref<{ id: number; kind: ShareKind; accountMode: AccountMode }>()
+function viewShare(row: any, kind: ShareKind) {
+  if (row.deleted || row.status !== 'CLOSED' || row.userId == null) return
+  shareOrder.value = { id: row.id, kind, accountMode: row.accountMode || 'REAL' }
+}
 
 const auth = useAuthStore()
 const { isAgent, hasPermission } = usePermissions()
@@ -231,8 +239,9 @@ const handleClearPreset = async (row: any) => {
 }
 
 const formatMoney = (v: number | string | null | undefined) => {
-  const n = Number(v || 0)
-  return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  if (v == null || (typeof v === 'string' && !v.trim())) return '—'
+  const n = Number(v)
+  return Number.isFinite(n) ? n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'
 }
 
 const formatDate = (date: string | null) => {
@@ -418,6 +427,18 @@ onMounted(() => {
               </span>
             </template>
           </el-table-column>
+          <el-table-column prop="netProfit" label="净盈亏" width="120" default-after="profit">
+            <template #default="{ row }">
+              <span :style="{ color: row.netProfit == null ? '#909399' : Number(row.netProfit) >= 0 ? '#67c23a' : '#f56c6c' }" title="按原订单结算规则计算；挂单、撤单及历史退款订单不扣预留手续费">
+                {{ formatMoney(row.netProfit) }}
+              </span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="fee" label="手续费" width="120" default-after="netProfit">
+            <template #default="{ row }">
+              <span title="订单记录的完整手续费；挂单为预留费用，撤单及历史退款订单按原规则退还">{{ formatMoney(row.fee) }}</span>
+            </template>
+          </el-table-column>
           <el-table-column prop="status" label="状态" width="100">
             <template #default="{ row }">
               <el-tag v-if="row.deleted" type="info">已删除</el-tag>
@@ -431,9 +452,10 @@ onMounted(() => {
               {{ formatDate(row.createdAt) }}
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="200" fixed="right">
+          <el-table-column label="操作" width="240" fixed="right">
             <template #default="{ row }">
               <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                <el-button v-permission="'orders:view'" v-if="!row.deleted && row.status === 'CLOSED'" type="primary" plain size="small" :disabled="row.userId == null" :title="row.userId == null ? '请先绑定用户' : '使用本行订单所属用户生成分享图'" @click="viewShare(row, 'contract')">查看分享图</el-button>
                 <el-button v-permission="'orders:manual_order'" v-if="!row.deleted && row.status === 'CLOSED' && row.userId == null && row.orderSource === 'MANUAL_TEST' && (auth.user?.isSuperAdmin || auth.user?.role === 'super_admin')" type="primary" size="small" :disabled="accountModes.length !== 1 || accountModes[0] !== 'REAL'" @click="simpleManualForm?.openBinding(row)">绑定用户</el-button>
                 <el-button v-permission="'orders:close_order'"
                   v-if="!row.deleted && row.status === 'OPEN'"
@@ -605,6 +627,7 @@ onMounted(() => {
           <el-table-column label="操作" width="300" fixed="right">
             <template #default="{ row }">
               <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                <el-button v-permission="'orders:view'" v-if="!row.deleted && row.status === 'CLOSED'" type="primary" plain size="small" :disabled="row.userId == null" :title="row.userId == null ? '请先绑定用户' : '使用本行订单所属用户生成分享图'" @click="viewShare(row, 'option')">查看分享图</el-button>
                 <el-button v-permission="'orders:set_profit'"
                   v-if="!row.deleted && row.status === 'TRADING'"
                   type="success" 
@@ -656,6 +679,7 @@ onMounted(() => {
         </div>
       </el-tab-pane>
     </el-tabs>
+    <OrderSharePreview v-if="shareOrder" :key="`${shareOrder.accountMode}:${shareOrder.kind}:${shareOrder.id}`" :order-id="shareOrder.id" :kind="shareOrder.kind" :account-mode="shareOrder.accountMode" @close="shareOrder = undefined" />
   </div>
 </template>
 

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { orderChartCandles, orderChartRange, orderMinuteTimestamp, orderChartPriceExtent } from '../src/utils/manualOrderChart.ts'
+import { orderChartCandles, orderChartAggregate, orderChartIntervals, orderChartRange, orderMinuteTimestamp, orderChartPriceExtent } from '../src/utils/manualOrderChart.ts'
 const minute = (timestamp, price = '100.1234567890123456') => ({ timestamp, price, low: '99', high: '102', close: '100', local: '1970-01-01T00:01', offset: 'Z' })
 const rows = orderChartCandles([minute(180000), minute(60000), minute(120000), minute(240000), { ...minute(120001) }, { ...minute(0), high: '98' }, { ...minute(0), close: null }], 240000)
 assert.deepEqual(rows.map(r => r.timestamp), [60000, 120000, 180000])
@@ -13,6 +13,34 @@ assert.equal(orderMinuteTimestamp('2026-11-01T01:30', '-04:00') + 3600000, order
 assert.equal(orderMinuteTimestamp('', ''), undefined)
 assert.equal(orderMinuteTimestamp('invalid', 'Z'), undefined)
 console.log('order chart selection, precision, completed candles and DST checks passed')
+
+assert.deepEqual(Object.keys(orderChartIntervals), ['1m', '5m', '15m', '30m', '1h', '1d'])
+const periodRows = orderChartCandles(Array.from({ length: 2880 }, (_, i) => ({ ...minute((i + 3) * 60000), low: i % 2 ? '98.1234567890123456' : '99', high: i % 3 ? '102' : '103.1234567890123456', close: i % 2 ? '101.1234567890123456' : '100' })), 2883 * 60000)
+const originalRows = structuredClone(periodRows)
+assert.equal(orderChartAggregate(periodRows, '1m'), periodRows)
+for (const [interval, duration] of Object.entries(orderChartIntervals)) {
+  const aggregated = orderChartAggregate(periodRows, interval)
+  const buckets = [...new Set(periodRows.map(r => Math.floor(r.timestamp / duration)))]
+  assert.equal(aggregated.length, buckets.length, interval)
+  for (const [i, bucket] of buckets.entries()) {
+    const minutes = periodRows.filter(r => Math.floor(r.timestamp / duration) === bucket), candle = aggregated[i]
+    assert.equal(candle.timestamp, minutes[0].timestamp, interval + ': select a real minute, not a synthetic bucket boundary')
+    assert.equal(candle.local, minutes[0].local); assert.equal(candle.offset, minutes[0].offset)
+    assert.equal(candle.price, minutes[0].price); assert.equal(candle.close, minutes.at(-1).close)
+    assert.equal(Number(candle.low), Math.min(...minutes.map(r => Number(r.low))))
+    assert.equal(Number(candle.high), Math.max(...minutes.map(r => Number(r.high))))
+  }
+  const selected = orderChartRange(aggregated, 0, aggregated.length - 1)
+  assert.ok(periodRows.some(r => r.timestamp === selected.open.timestamp && r.price === selected.open.price))
+  assert.ok(periodRows.some(r => r.timestamp === selected.close.timestamp && r.price === selected.close.price))
+}
+assert.deepEqual(periodRows, originalRows, 'Aggregating must not mutate minute quotes or their exact prices')
+assert.deepEqual(orderChartAggregate([], '1d'), [])
+const gapRows = [minute(60000), minute(240000), minute(900000)]
+const gaps = orderChartAggregate(gapRows, '5m')
+assert.deepEqual(gaps.map(r => r.timestamp), [60000, 900000], 'Missing minutes and empty periods must not be fabricated')
+assert.equal(gaps[0].price, gapRows[0].price)
+console.log('six chart periods, UTC boundaries, partial/gapped buckets, exact selectable minutes, OHLC and immutable source checks passed')
 
 // Exercise the real simple-form script: a chart selection pins time as well as price,
 // and Axios resolves the route once (a duplicated /api prefix must not regress).
@@ -60,8 +88,8 @@ const chartJs = ts.transpileModule(chartSource, { compilerOptions: { target: ts.
 const chartProps = vue.reactive({ symbol: '', symbols: [{ symbol: 'FIXTURE', name: 'fixture' }], timezone: 'UTC', active: false, disabled: false })
 const chartGets = [], chartEvents = [], chartScope = vue.effectScope()
 let closeDuringChoice = false
-const chartNames = ['computed','nextTick','onBeforeUnmount','ref','watch','echarts','request','orderChartCandles','orderChartRange','orderChartPriceExtent','defineProps','defineEmits']
-const chart = chartScope.run(() => new Function(...chartNames, chartJs + ';return {toggle,selectSymbol,symbolPicker,symbolChoice,expanded,stop,dispose};')(...[vue.computed,vue.nextTick,()=>{},vue.ref,vue.watch,{}, { get: async (url, options) => { chartGets.push({url,params:options.params}); return {candles:[],hasMore:false,from:0} } },orderChartCandles,orderChartRange,orderChartPriceExtent,()=>chartProps,()=> (event, value) => { chartEvents.push({event,value}); chartProps.symbol=value; if (closeDuringChoice) chartProps.active=false }]))
+const chartNames = ['computed','nextTick','onBeforeUnmount','ref','watch','echarts','request','orderChartCandles','orderChartAggregate','orderChartIntervals','orderChartRange','orderChartPriceExtent','defineProps','defineEmits']
+const chart = chartScope.run(() => new Function(...chartNames, chartJs + ';return {toggle,selectSymbol,symbolPicker,symbolChoice,expanded,stop,dispose,interval,changeInterval};')(...[vue.computed,vue.nextTick,()=>{},vue.ref,vue.watch,{}, { get: async (url, options) => { chartGets.push({url,params:options.params}); return {candles:[],hasMore:false,from:0} } },orderChartCandles,orderChartAggregate,orderChartIntervals,orderChartRange,orderChartPriceExtent,()=>chartProps,()=> (event, value) => { chartEvents.push({event,value}); chartProps.symbol=value; if (closeDuringChoice) chartProps.active=false }]))
 try {
   chart.toggle(); assert.equal(chart.symbolPicker.value, false); assert.equal(chartGets.length, 0)
   chartProps.active=true; await vue.nextTick(); chartProps.disabled=true; chart.toggle(); assert.equal(chart.symbolPicker.value, false)
@@ -72,6 +100,10 @@ try {
   assert.deepEqual(chartEvents, [{event:'change-symbol',value:'FIXTURE'}]); assert.equal(chartProps.symbol,'FIXTURE')
   assert.equal(chart.symbolPicker.value,false); assert.equal(chart.expanded.value,true)
   assert.equal(chartGets.length,1); assert.equal(chartGets[0].params.symbol,'FIXTURE'); assert.equal(chartGets[0].params.limit,200)
+  await new Promise(setImmediate)
+  chartProps.disabled=true; await chart.changeInterval('5m'); assert.equal(chart.interval.value,'1m')
+  chartProps.disabled=false; await chart.changeInterval('5m'); assert.equal(chart.interval.value,'5m'); assert.equal(chartEvents.length,1,'Changing period must not clear or emit an order selection')
+  await chart.changeInterval('1m')
   chart.toggle(); assert.equal(chart.expanded.value,false); chart.toggle(); assert.equal(chart.symbolPicker.value,false); assert.equal(chart.expanded.value,true)
   assert.equal(chartGets.length,2, 'An existing symbol opens the chart directly, without an extra symbol prompt')
   chartProps.symbol=''; await vue.nextTick(); chart.toggle(); chart.symbolChoice.value='FIXTURE'; closeDuringChoice=true; await chart.selectSymbol()

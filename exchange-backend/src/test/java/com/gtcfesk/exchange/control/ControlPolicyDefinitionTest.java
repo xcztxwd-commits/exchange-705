@@ -64,7 +64,7 @@ class ControlPolicyDefinitionTest {
    TenantFixture fixture=new TenantFixture();fixture.tenant(2L).setStatus(status);fixture.tenant(2L).setConfigReady(false);fixture.tenant(2L).setDomainVerified(false);
    assertTrue(fixture.management.applyDefault(2L,"feature.registration","true"));verifyNoInteractions(fixture.readiness);assertEquals(status,fixture.tenant(2L).getStatus());assertFalse(fixture.tenant(2L).isConfigReady());
    TenantPolicyService runtime=new TenantPolicyService(fixture.tenants,fixture.grants);ReflectionTestUtils.setField(runtime,"readiness",fixture.readiness);TenantContext.open(2L);assertThrows(AccessDeniedException.class,()->runtime.requireNewBusiness("registration"));
-   doThrow(new AccessDeniedException("邮件依赖未齐备")).when(fixture.readiness).requireReady(2L);ControlController.TenantInput activate=new ControlController.TenantInput();activate.status="ACTIVE";activate.configReady=true;activate.reason="测试激活核验";assertThrows(AccessDeniedException.class,()->fixture.management.update(2L,activate));assertEquals(status,fixture.tenant(2L).getStatus());
+   doThrow(new AccessDeniedException("注册基础配置未齐备")).when(fixture.readiness).requireReady(2L);ControlController.TenantInput activate=new ControlController.TenantInput();activate.status="ACTIVE";activate.configReady=true;activate.reason="测试激活核验";assertThrows(AccessDeniedException.class,()->fixture.management.update(2L,activate));assertEquals(status,fixture.tenant(2L).getStatus());
   }
  }
  @Test void automaticSupportChannelRejectsConflictAndPreservesMatchingExistingLock(){
@@ -101,7 +101,7 @@ class ControlPolicyDefinitionTest {
   verify(audit,times(3)).record(eq(7L),eq(2L),isNull(),eq("POLICY_UPDATE"),eq("feature.registration"),eq("SUCCESS"),anyString(),eq("总控授权策略管理"));verifyNoInteractions(fixture.readiness);assertThrows(IllegalArgumentException.class,()->TenantManagementService.reason(null));assertEquals("人工调整",TenantManagementService.policyReason(" 人工调整 "));
  }
  @Test void allowedRegistrationGrantStillRequiresRealFeatureReadiness(){
-  TenantFixture fixture=new TenantFixture();doThrow(new AccessDeniedException("邮件依赖未齐备")).when(fixture.readiness).requireFeatureReady(2L,"registration");
+  TenantFixture fixture=new TenantFixture();doThrow(new AccessDeniedException("注册基础配置未齐备")).when(fixture.readiness).requireFeatureReady(2L,"registration");
   assertThrows(AccessDeniedException.class,()->fixture.management.policy(2L,fixture.input("feature.registration","true")));verify(fixture.readiness).requireFeatureReady(2L,"registration");verifyNoInteractions(audit);
  }
  @Test void unsupportedChoiceAndIndirectSupportGrantAreRejectedBeforeTenantPolicyWrite(){
@@ -135,7 +135,7 @@ class ControlPolicyDefinitionTest {
    org.springframework.beans.factory.ObjectProvider<TenantManagementService> lazy=mock(org.springframework.beans.factory.ObjectProvider.class);when(lazy.getObject()).thenReturn(tenantService);ReflectionTestUtils.setField(catalogTarget,"tenants",registrations);ReflectionTestUtils.setField(catalogTarget,"management",lazy);ReflectionTestUtils.setField(target,"definitions",catalogService);ReflectionTestUtils.setField(target,"readiness",readiness);ReflectionTestUtils.setField(target,"outbound",mock(com.gtcfesk.exchange.security.OutboundEndpointPolicy.class));
    Tenant draft=new Tenant(),active=new Tenant();draft.setCode("default-draft");draft.setName("草稿租户");active.setCode("default-active");active.setName("正常租户");active.setStatus("ACTIVE");active.setConfigReady(true);active.setDomainVerified(true);
    tx.executeWithoutResult(status->{em.persist(stored.get("feature.registration"));em.persist(draft);em.persist(active);});
-   doThrow(new AccessDeniedException("邮件依赖未齐备")).when(readiness).requireFeatureReady(active.getId(),"registration");
+   doThrow(new AccessDeniedException("注册基础配置未齐备")).when(readiness).requireFeatureReady(active.getId(),"registration");
    ControlPolicyDefinitionService.Input change=input("feature.registration","自动注册授权","true","false","true");assertThrows(AccessDeniedException.class,()->catalogService.save(change));
    tx.executeWithoutResult(status->{ControlPolicyDefinition original=em.find(ControlPolicyDefinition.class,change.key);assertEquals("false",original.getDefaultValue());assertEquals(0L,original.getVersion());assertEquals(0L,em.createQuery("select count(p) from TenantPolicy p",Long.class).getSingleResult());assertEquals(0L,em.createQuery("select count(a) from ControlAuditLog a",Long.class).getSingleResult());assertEquals(0L,em.find(Tenant.class,draft.getId()).getPolicyVersion());assertEquals(0L,em.find(Tenant.class,active.getId()).getPolicyVersion());});
    doNothing().when(readiness).requireFeatureReady(active.getId(),"registration");ControlPolicyDefinitionService.View result=catalogService.save(change);assertEquals(2,result.appliedTenants);assertEquals(0,result.retainedTenants);assertEquals(1L,result.version);

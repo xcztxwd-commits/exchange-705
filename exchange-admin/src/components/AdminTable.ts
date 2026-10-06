@@ -59,7 +59,7 @@ export default defineComponent({
         const occurrence = counts.get(base) || 0
         counts.set(base, occurrence + 1)
         const id = occurrence ? `${base}#${occurrence}` : base
-        definitions.push({ id, label, visible: true, fixed: p.fixed === true || p.fixed === '' || p.fixed === 'left' ? 'left' : p.fixed === 'right' ? 'right' : '' })
+        definitions.push({ id, label, visible: true, fixed: p.fixed === true || p.fixed === '' || p.fixed === 'left' ? 'left' : p.fixed === 'right' ? 'right' : '', defaultAfter: p['default-after'] || p.defaultAfter })
         columnNodes.set(id, node)
       }
       const columns = mergeColumns(definitions, editing.value ? draft.value : saved.value)

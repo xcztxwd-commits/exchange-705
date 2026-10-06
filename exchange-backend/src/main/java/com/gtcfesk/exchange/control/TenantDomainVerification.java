@@ -25,6 +25,7 @@ public class TenantDomainVerification {
   if(a==null||!a.isAuthenticated()||a.getAuthorities().stream().noneMatch(r->"ROLE_CONTROL".equals(r.getAuthority()))||i==null||i.getActorId()==null||i.getActorId()<=0||i.getTenantId()!=null||i.getAccessSessionId()!=null||TenantContext.currentTenantId()!=null)throw new AccessDeniedException("需要独立总控身份");return i.getActorId();
  }
  private static String role(String role){if(!Arrays.asList("ENTRY","FRONTEND").contains(role))throw new IllegalArgumentException("域名角色无效");return role;}
+ private static String domainReason(String value){String reason=value==null||value.trim().isEmpty()?"总控域名管理":value.trim();TenantManagementService.reason(reason);return reason;}
  private static void version(Tenant t,long expected){if(t.getDomainVersion()!=expected)throw new IllegalArgumentException("域名配置已变更，请刷新后重试");}
  private String activeHost(Tenant t,String role){return "ENTRY".equals(role)?t.getEntryHost():t.getFrontendHost();}
  private boolean verified(Tenant t,String role){return "ENTRY".equals(role)?t.isEntryVerified():t.isDomainVerified();}
@@ -37,12 +38,12 @@ public class TenantDomainVerification {
  @Transactional(readOnly=true) public List<Map<String,Object>> candidates(Long id){actor();tenants.findById(id).orElseThrow(ControlService::invalid);List<Map<String,Object>> rows=new ArrayList<>();for(TenantDomainBinding b:bindings.findByTenantIdAndStatusIn(id,CANDIDATES))rows.add(view(b));return rows;}
  @Transactional public Map<String,Object> prepare(Long id,String raw,String reason){return prepare(id,"FRONTEND",raw,null,reason);}
  @Transactional public Map<String,Object> prepare(Long id,String role,String raw,Long expected,String reason){
-  long actor=actor();TenantManagementService.reason(reason);Tenant t=tenants.lock(id).orElseThrow(ControlService::invalid);if(expected!=null)version(t,expected);
+  long actor=actor();reason=domainReason(reason);Tenant t=tenants.lock(id).orElseThrow(ControlService::invalid);if(expected!=null)version(t,expected);
   TenantDomainBinding b=reserve(t,role(role),raw);t.setDomainVersion(t.getDomainVersion()+1);tenants.saveAndFlush(t);
   audit.record(actor,id,null,"DOMAIN_PREPARE",b.getHostname(),"SUCCESS","role="+role+";active hosts unchanged;ttl=900s;domainVersion="+t.getDomainVersion(),reason);return view(b);
  }
  @Transactional public Map<String,Object> prepareChange(Long id,String entry,String frontend,long expected,String reason){
-  long actor=actor();TenantManagementService.reason(reason);Tenant t=tenants.lock(id).orElseThrow(ControlService::invalid);version(t,expected);boolean changed=false;
+  long actor=actor();reason=domainReason(reason);Tenant t=tenants.lock(id).orElseThrow(ControlService::invalid);version(t,expected);boolean changed=false;
   for(String r:Arrays.asList("ENTRY","FRONTEND")){
    String raw="ENTRY".equals(r)?entry:frontend;if(raw==null)continue;
    if(raw.isEmpty()){if(activeHost(t,r)!=null)throw new IllegalArgumentException("现用域名不能用空值解绑；入口可独立关闭");continue;}
@@ -76,13 +77,13 @@ public class TenantDomainVerification {
   return new TransactionTemplate(manager).execute(tx->{Tenant locked=tenants.lock(id).orElseThrow(ControlService::invalid);version(locked,snapshotVersion);TenantDomainBinding b=bindings.lock(host).orElseThrow(ControlService::invalid);candidate(b,id,role,bindingVersion,"PENDING");if(!challenge.equals(b.getChallenge()))throw new IllegalArgumentException("挑战已变更");b.setStatus("VERIFIED");b.setVerifiedAt(Instant.now());bindings.saveAndFlush(b);audit.record(actor,id,null,"DOMAIN_CANDIDATE_VERIFIED",host,"SUCCESS","role="+role+";TLS hostname and nonce-bound tenant route checked",null);return view(b);});
  }
  @Transactional public Map<String,Object> activate(Long id,String raw,long bindingVersion,String reason){
-  long actor=actor();TenantManagementService.reason(reason);Tenant t=tenants.lock(id).orElseThrow(ControlService::invalid);String host=hosts.validateAssignment(raw);TenantDomainBinding b=bindings.lock(host).orElseThrow(ControlService::invalid);
+  long actor=actor();reason=domainReason(reason);Tenant t=tenants.lock(id).orElseThrow(ControlService::invalid);String host=hosts.validateAssignment(raw);TenantDomainBinding b=bindings.lock(host).orElseThrow(ControlService::invalid);
   if(id.equals(b.getTenantId())&&"FRONTEND".equals(b.getRole())&&"ACTIVE".equals(b.getStatus())&&host.equals(t.getFrontendHost())&&t.isDomainVerified())return view(b);
   List<TenantDomainBinding> pending=bindings.findByTenantIdAndStatusIn(id,CANDIDATES);if(pending.size()!=1)throw new IllegalArgumentException("须一次原子激活全部角色候选");
   candidate(b,id,"FRONTEND",bindingVersion,"VERIFIED");switchHost(t,b);finish(t,actor,reason);return view(b);
  }
  @Transactional public Map<String,Object> activateChange(Long id,long expected,List<Selection> selected,Boolean enabled,String reason){
-  long actor=actor();TenantManagementService.reason(reason);Tenant t=tenants.lock(id).orElseThrow(ControlService::invalid);version(t,expected);
+  long actor=actor();reason=domainReason(reason);Tenant t=tenants.lock(id).orElseThrow(ControlService::invalid);version(t,expected);
   List<TenantDomainBinding> pending=bindings.findByTenantIdAndStatusIn(id,CANDIDATES);
   if(selected==null||pending.isEmpty()||pending.size()!=selected.size()||selected.size()>2)throw new IllegalArgumentException("须一次提交全部角色候选及版本");
   Set<String> roles=new HashSet<>();List<TenantDomainBinding> checked=new ArrayList<>();
@@ -106,7 +107,7 @@ public class TenantDomainVerification {
   audit.record(actor,t.getId(),null,"DOMAIN_ACTIVATE",String.valueOf(t.getId()),"SUCCESS","entry="+Objects.toString(t.getEntryHost(),"")+";frontend="+Objects.toString(t.getFrontendHost(),"")+";entryEnabled="+t.isEntryEnabled()+";domainVersion="+t.getDomainVersion(),reason);
  }
  @Transactional public Map<String,Object> setEntryEnabled(Long id,boolean enabled,long expected,String reason){
-  long actor=actor();TenantManagementService.reason(reason);Tenant t=tenants.lock(id).orElseThrow(ControlService::invalid);version(t,expected);if(enabled)requireEntryReady(t);
+  long actor=actor();reason=domainReason(reason);Tenant t=tenants.lock(id).orElseThrow(ControlService::invalid);version(t,expected);if(enabled)requireEntryReady(t);
   t.setEntryEnabled(enabled);t.setDomainVersion(t.getDomainVersion()+1);t.setPolicyVersion(t.getPolicyVersion()+1);tenants.saveAndFlush(t);
   audit.record(actor,id,null,"DOMAIN_ENTRY_SWITCH",Objects.toString(t.getEntryHost(),"unconfigured"),"SUCCESS","entryEnabled="+enabled+";domainVersion="+t.getDomainVersion()+";sessions unchanged",reason);return state(t);
  }
@@ -116,7 +117,7 @@ public class TenantDomainVerification {
  @Transactional(readOnly=true) public String entryTarget(String host){Tenant t=tenants.findByEntryHost(host).orElseThrow(()->new AccessDeniedException("入口不可用"));if(!t.isEntryEnabled())throw new AccessDeniedException("入口不可用");try{requireEntryReady(t);return hosts.validateAssignment(t.getFrontendHost(),"FRONTEND");}catch(IllegalArgumentException e){throw new AccessDeniedException("入口不可用");}}
  @Transactional public Map<String,Object> release(Long id,String raw,long version,String reason){actor();TenantDomainBinding b=bindings.findById(hosts.normalizeHost(raw)).orElseThrow(ControlService::invalid);return release(id,b.getRole(),raw,version,reason);}
  @Transactional public Map<String,Object> release(Long id,String role,String raw,long version,String reason){
-  long actor=actor();TenantManagementService.reason(reason);tenants.lock(id).orElseThrow(ControlService::invalid);String host=hosts.validateAssignment(raw,role(role));TenantDomainBinding b=bindings.lock(host).orElseThrow(ControlService::invalid);
+  long actor=actor();reason=domainReason(reason);tenants.lock(id).orElseThrow(ControlService::invalid);String host=hosts.validateAssignment(raw,role(role));TenantDomainBinding b=bindings.lock(host).orElseThrow(ControlService::invalid);
   if(!id.equals(b.getTenantId())||!role.equals(b.getRole())||version!=b.getVersion()||!"RETIRED".equals(b.getStatus())||tenants.findByFrontendHost(host).isPresent()||tenants.findByEntryHost(host).isPresent())throw new IllegalArgumentException("仅能审查释放未被使用的退役域名");
   b.setStatus("RELEASED");bindings.saveAndFlush(b);audit.record(actor,id,null,"DOMAIN_REUSE_RELEASE",host,"SUCCESS","role="+role+";explicit reuse review;history retained",reason);return view(b);
  }

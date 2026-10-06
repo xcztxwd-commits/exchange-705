@@ -6,7 +6,7 @@ fs.mkdirSync(out,{recursive:true})
 ;(async()=>{
  const browser=await chromium.launch({headless:true,...(process.env.CHROME_PATH?{executablePath:process.env.CHROME_PATH}:{})}),page=await browser.newPage({viewport:{width:1300,height:800}})
  const requests=[],errors=[],checks=[],finished=Math.floor(Date.now()/60000)*60000,from=finished-7*86400000
- let failOlder=false,blockOlder=false,release,blocked=false,pendingPages=0,emptyPage=false
+ let failOlder=false,blockOlder=false,release,blocked=false,pendingPages=0,emptyPage=false,olderDelay=650
  page.on('pageerror',e=>errors.push(e.message))
  const count=async n=>page.getByText(new RegExp('已显示 '+n+' 根')).waitFor({timeout:7500})
  const visible=()=>page.evaluate(()=>{const c=window.__qa.chart(),o=c.getOption(),data=o.xAxis[0].data,z=o.dataZoom[0];return [data[Math.round(z.start/100*(data.length-1))],data[Math.round(z.end/100*(data.length-1))]]})
@@ -22,7 +22,7 @@ fs.mkdirSync(out,{recursive:true})
    const isOlder=cursor!==null&&Number(cursor)<finished-1
    if(isOlder&&failOlder){failOlder=false;return route.fulfill({status:503,json:{message:'隔离测试：行情暂不可用'}})}
    if(isOlder&&blockOlder){blocked=true;await new Promise(resolve=>release=resolve);blocked=false;release=undefined}
-   else if(isOlder)await new Promise(resolve=>setTimeout(resolve,650))
+   else if(isOlder&&olderDelay)await new Promise(resolve=>setTimeout(resolve,olderDelay))
    const to=Math.floor((cursor===null?finished-1:Number(cursor))/60000)*60000+60000,eur=symbol==='EURUSD=X'
    const candles=Array.from({length:200},(_,i)=>{const t=to-(200-i)*60000;return {timestamp:t,local:new Date(t-4*3600000).toISOString().slice(0,16),offset:'-04:00',price:eur?'1.0812345678901234':'157.5751234567890123',low:eur?'1':'157',high:eur?'1.1':'158',close:eur?'1.09':'157.6'}}).filter(c=>c.timestamp>=from)
    const pending=pendingPages>0;if(pending)pendingPages--;const shown=emptyPage?[]:pending?candles.slice(-100):candles;emptyPage=false
@@ -81,6 +81,35 @@ fs.mkdirSync(out,{recursive:true})
   await page.getByRole('status').filter({hasText:'这一段不足两根'}).waitFor();assert.equal(await page.locator('.candles canvas').count(),0)
   await page.getByRole('button',{name:'加载更早行情',exact:true}).click();await count(200)
   checks.push('An empty current page stays explicit and allows an older-page request without inventing candles')
+
+  olderDelay=0
+  await page.locator('.candles').focus();await page.keyboard.press('ArrowLeft')
+  const pinned=await page.evaluate(()=>({openTime:window.__qa.model.openTime,closeTime:window.__qa.model.closeTime,selection:window.__qa.selections.at(-1),events:window.__qa.selections.length}))
+  for(const interval of ['1m','5m','15m','30m','1h','1d']){
+   const button=page.getByRole('group',{name:'时间周期',exact:true}).getByRole('button',{name:interval,exact:true});await button.click();await page.waitForFunction(value=>document.querySelector('.chart-periods [aria-pressed="true"]')?.textContent.trim()===value,interval)
+   await page.waitForFunction(()=>{const c=window.__qa.chart(),count=c?.getOption().xAxis[0].data.length;return count>=2&&(count>=120||!document.querySelector('.chart-progress button'))&&!document.querySelector('.chart-toolbar-actions .is-loading')},{},{timeout:20000})
+   const state=await page.evaluate(()=>({option:window.__qa.chart().getOption(),openTime:window.__qa.model.openTime,closeTime:window.__qa.model.closeTime,selection:window.__qa.selections.at(-1),events:window.__qa.selections.length}))
+   assert.equal(state.openTime,pinned.openTime);assert.equal(state.closeTime,pinned.closeTime);assert.deepEqual(state.selection,pinned.selection);assert.equal(state.events,pinned.events,'Period changes are read-only and must not reselect an order')
+   const duration={'1m':60000,'5m':300000,'15m':900000,'30m':1800000,'1h':3600000,'1d':86400000}[interval],times=state.option.xAxis[0].data.map(Number)
+   assert.equal(new Set(times.map(t=>Math.floor(t/duration))).size,times.length)
+   assert.ok(times.length>=2,interval+' must automatically read enough minute pages to allow selection')
+   assert.ok(state.option.series[0].data.every(row=>row[0]===Number('1.0812345678901234')&&row[1]===1.09&&row[2]===1&&row[3]===1.1))
+   for(const line of state.option.series[0].markLine.data)assert.ok(times.includes(Number(line.xAxis)),'Pinned-minute markers must project into a visible period candle')
+   if(interval==='1d')assert.ok(await page.evaluate(()=>{const axis=window.__qa.chart().getOption().xAxis[0],labels=axis.data.map(t=>axis.axisLabel.formatter(t));return new Set(labels).size===labels.length}),'Partial edge days must retain distinct date labels')
+  }
+  await page.locator('.candles').focus();await page.keyboard.press('ArrowLeft')
+  const dailySelection=await page.evaluate(()=>window.__qa.selections.at(-1));assert.ok(dailySelection.open.timestamp<dailySelection.close.timestamp);assert.equal(dailySelection.open.price,'1.0812345678901234');assert.equal(dailySelection.open.timestamp%60000,0)
+  assert.ok(await page.locator('.chart-panel').evaluate(el=>el.scrollWidth<=el.clientWidth+1))
+  await page.screenshot({path:path.join(out,'chart-periods-mobile.png')});await page.setViewportSize({width:1300,height:800});await page.screenshot({path:path.join(out,'chart-periods-desktop.png')})
+  await page.evaluate(()=>window.__qa.model.disabled=true)
+  for(const interval of ['1m','5m','15m','30m','1h','1d'])assert.equal(await page.getByRole('group',{name:'时间周期',exact:true}).getByRole('button',{name:interval,exact:true}).isDisabled(),true)
+  checks.push('All six periods aggregate real minute OHLC, preload bounded earlier pages, preserve pinned exact prices/times and markers, support daily selection, fit mobile and respect disabled state')
+  await page.evaluate(()=>{window.__qa.model.disabled=false;window.__qa.model.symbol='JPY=X'})
+  blockOlder=true;await page.getByRole('button',{name:'图表选择开平仓',exact:true}).click();while(!blocked)await page.waitForTimeout(20)
+  await page.getByRole('group',{name:'时间周期',exact:true}).getByRole('button',{name:'1m',exact:true}).click();await count(200)
+  release();blockOlder=false;await page.waitForTimeout(200);await count(200)
+  assert.equal(await page.evaluate(()=>window.__qa.chart().getOption().series[0].data.length),200)
+  checks.push('Switching back to 1m during a delayed daily-history fill cancels it and ignores stale responses')
   assert.deepEqual(errors,[]);fs.writeFileSync(path.join(out,'browser-result.json'),JSON.stringify({checks,firstBatchMs,requests,errors,mockedApis:true},null,2));console.log('PASS '+checks.join('; '))
  }catch(e){await page.screenshot({path:path.join(out,'browser-failure.png')}).catch(()=>{});throw e}finally{if(release)release();await browser.close()}
 })().catch(e=>{console.error(e);process.exitCode=1})

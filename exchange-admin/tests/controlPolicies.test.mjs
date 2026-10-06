@@ -54,6 +54,27 @@ assert.equal(saveBindings.busy.value, false)
 saveBindings.currentDefinition.value = { tenantEditable: false }
 await save();assert.equal(writes.length, 1, 'retention/special pages cannot be written through authorization form')
 
+// Exercise every implemented feature through the screenshot's actual handler, including both lock states.
+const policyService = fs.readFileSync(new URL('../../exchange-backend/src/main/java/com/gtcfesk/exchange/control/TenantPolicyService.java', import.meta.url), 'utf8')
+const featureList = policyService.match(/FEATURES=.*?Arrays\.asList\(([^)]+)\)/)
+assert.ok(featureList, 'read actual backend feature catalog')
+const featureNames = [...featureList[1].matchAll(/"([a-z_]+)"/g)].map(match => match[1])
+assert.ok(featureNames.includes('registration'))
+for (const feature of featureNames) for (const locked of [true, false]) for (const value of ['true', 'false']) {
+ saveBindings.currentDefinition.value = { key: `feature.${feature}`, options: ['false', 'true'], tenantEditable: true }
+ Object.assign(saveBindings.policy, { key: `feature.${feature}`, value, locked, reason: '' })
+ await save()
+ const [path, method, body] = writes.at(-1)
+ assert.equal(path, '/control/tenants/2/policies');assert.equal(method, 'PUT')
+ assert.deepEqual(body, { key: `feature.${feature}`, value, locked, reason: '' })
+ assert.equal(saveBindings.busy.value, false)
+}
+assert.equal(writes.length, 1 + featureNames.length * 4)
+// Do not disguise an old backend's SMTP error as a successful save or silently change its grant.
+const legacyError = '租户配置未就绪：mail.endpoint（SMTP 端口无效）'
+const failPolicy = await handler('TenantManager.vue', 'savePolicy', { ...saveBindings, api: async () => { throw new Error(legacyError) } }, 'let policyGeneration=0')
+await failPolicy();assert.equal(messages.at(-1), legacyError);assert.equal(saveBindings.busy.value, false)
+
 // Out-of-order read responses cannot mix one tenant's grant values into another tenant's form.
 const pending = [], loadBindings = { selected: { value: null }, policies: { value: [] }, policyDefinitions: { value: [] }, policiesError: { value: '' }, policiesOpen: { value: false }, policiesLoading: { value: false }, policy: {}, api: path => new Promise(resolve => pending.push({ path, resolve })), dataRows: response => response.data, editableDefinitions: { value: definitions.value }, choosePolicy: () => {} }
 const load = await handler('TenantManager.vue', 'policyList', loadBindings, 'let policyGeneration=0')
@@ -68,6 +89,9 @@ assert.match(tenantTemplate, /:data="namedPolicies"[^>]*><el-table-column prop="
 assert.doesNotMatch(tenantTemplate, /label="操作原因" required><el-input v-model="policy.reason"/)
 assert.match(tenantTemplate, /@change="choosePolicy"/)
 assert.match(tenantTemplate, /currentDefinition\.options/)
+assert.match(tenantTemplate, /功能授权、锁定和租户激活不依赖未使用的 SMTP 配置/)
+assert.match(tenantTemplate, /实际发信操作仍须配置邮件/)
+assert.match(tenantTemplate, /各功能的实际业务依赖仍会核验/)
 assert.match(source('App.vue'), /<PolicyDefinitions v-else-if="tab==='policies'"/)
 for (const file of ['PolicyDefinitions.vue', 'TenantManager.vue', 'App.vue']) {
  const descriptor = parse(source(file)).descriptor
@@ -75,4 +99,4 @@ for (const file of ['PolicyDefinitions.vue', 'TenantManager.vue', 'App.vue']) {
  assert.deepEqual(result.errors, [], `${file} template compiles`)
 }
 assert.match(source('PolicyDefinitions.vue'), /已有明确值和锁定项不覆盖/);assert.match(source('PolicyDefinitions.vue'), /草稿租户仍须配置齐备后激活/)
-console.log('PASS control policies: catalog automatic-assignment counts, readiness failure, preserved tenant values, named first column, optional reason, no retention bypass or stale cross-tenant response')
+console.log(`PASS control policies: ${featureNames.length} feature types × enabled/disabled × locked/unlocked; catalog counts, readiness failures, preserved tenant values, optional reason, no retention bypass or stale cross-tenant response`)

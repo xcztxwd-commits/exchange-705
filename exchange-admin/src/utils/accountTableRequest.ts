@@ -10,6 +10,7 @@ export function accountTableRequest(table: ReturnType<typeof useAccountTable>, e
   }
   return {
     get(url: string, config?: any): any {
+      if (/^\/admin\/orders\/(contract|option)\/[1-9][0-9]*\/share-preview$/.test(url)) return table.detail(url, config?.params)
       if (url === '/admin/support/inbox') return table.fixedQuery(url, config?.params || {}, 30, true)
       if (url === '/admin/activities' || /^\/admin\/activities\/\d+\/recipients$/.test(url) || /^\/admin\/activities\/users\/\d+\/ledger$/.test(url)) return table.fixedQuery(url, config?.params || {}, 50)
       if (/^\/admin\/activities\/\d+\/stats$/.test(url) || /^\/admin\/activities\/users\/\d+\/account$/.test(url)) return table.counters(url)
