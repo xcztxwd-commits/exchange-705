@@ -58,4 +58,36 @@ class KlineSchedulingTest extends TenantMarketTestContext {
             assertEquals(true, ((Map<?, ?>) uncovered.get("data")).get("pending"));
         } finally { market.stop(); }
     }
+
+    @Test void historicalCursorsNeverShareLatestOrOtherCursorCaches() {
+        ForexQuoteMarketService market = new ForexQuoteMarketService();
+        Map<?, ?> groups = (Map<?, ?>) ReflectionTestUtils.getField(marketState(market), "groups");
+        Object group = groups.get("Crypto");
+        ReflectionTestUtils.setField(group, "codes", Collections.singletonList("BTCUSDT"));
+        @SuppressWarnings("unchecked")
+        Map<String, Map<String, Object>> cache = (Map<String, Map<String, Object>>) ReflectionTestUtils.getField(group, "klines");
+        long end = 1800000000000L;
+        List<Map<String, Object>> candles = new ArrayList<>();
+        for (int i = 0; i < 200; i++) candles.add(Map.of("timestamp", end - (199 - i) * 300000L,
+            "open_price", 80d, "high_price", 82d, "low_price", 79d, "close_price", 81d));
+        Map<String, Object> response = Map.of("ret", 200, "fetchedAt", System.currentTimeMillis(),
+            "data", Map.of("kline_list", candles));
+        cache.put("BTCUSDT:5m:200:" + end, response);
+        try {
+            Map<String, Object> smaller = market.getKline("BTCUSDT", "5m", 100, "Crypto", end);
+            assertEquals(candles.subList(100, 200), ControlHistoryStore.rows(smaller));
+            assertEquals(false, ((Map<?, ?>) smaller.get("data")).get("pending"));
+            for (Long cursor : Arrays.asList(end + 3 * 3600000L, null)) {
+                Map<String, Object> other = market.getKline("BTCUSDT", "5m", 200, "Crypto", cursor);
+                assertEquals(503, other.get("ret"));
+                assertTrue(ControlHistoryStore.rows(other).isEmpty());
+                assertEquals(true, ((Map<?, ?>) other.get("data")).get("pending"));
+            }
+            cache.clear();
+            cache.put("BTCUSDT:5m:200", response);
+            Map<String, Object> history = market.getKline("BTCUSDT", "5m", 200, "Crypto", end - 300000L);
+            assertEquals(503, history.get("ret"));
+            assertTrue(ControlHistoryStore.rows(history).isEmpty());
+        } finally { market.stop(); }
+    }
 }

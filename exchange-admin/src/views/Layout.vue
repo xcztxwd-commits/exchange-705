@@ -381,7 +381,7 @@ const handleSettingsUpdated = () => {
   </el-container>
 
   <el-dialog v-model="backendAccountsVisible" title="系统后台账号" width="min(800px,95vw)" destroy-on-close><BackendAccounts v-if="backendAccountsVisible" :load="backendAccountsLoad" :create="backendAccountsCreate" /></el-dialog>
-  <el-dialog v-model="onlineVisible" title="在线用户明细" width="min(1100px, 95vw)" destroy-on-close>
+  <el-dialog v-model="onlineVisible" title="在线用户明细" width="min(1300px, 95vw)" destroy-on-close>
     <OnlineUsers v-if="onlineVisible" :load="loadOnlineUsers" />
   </el-dialog>
   <!-- 管理员设置对话框 -->

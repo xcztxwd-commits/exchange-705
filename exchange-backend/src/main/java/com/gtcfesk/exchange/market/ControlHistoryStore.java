@@ -584,9 +584,10 @@ public class ControlHistoryStore {
         }, symbol);
         return rows.isEmpty() ? Collections.emptyMap() : rows.get(0);
     }
+    // Repair facts are chart-only. Filter before LIMIT so they cannot displace a real control start basis.
     Map<String, Object> lastClose(long symbol, long now) {
-        List<Map<String, Object>> rows = db.query("SELECT body,period,received_at FROM market_source_candle WHERE tenant_id=" + tenant() + " AND symbol_id=? AND candle_at<? ORDER BY candle_at DESC LIMIT 100",
-            (rs, n) -> { Map<String, Object> row = decode(rs.getString(1)); row.put("period", rs.getString(2)); row.put("receivedAt", rs.getLong(3)); return row; }, symbol, now);
+        List<Map<String, Object>> rows = db.query("SELECT body,period,received_at FROM market_source_candle WHERE tenant_id=" + tenant() + " AND symbol_id=? AND candle_at<? AND body NOT LIKE ? ORDER BY candle_at DESC LIMIT 100",
+            (rs, n) -> { Map<String, Object> row = decode(rs.getString(1)); row.put("period", rs.getString(2)); row.put("receivedAt", rs.getLong(3)); return row; }, symbol, now, "%\"historyOnly\":true%");
         Map<String, Object> latest = Collections.emptyMap();
         long latestClose = 0;
         for (Map<String, Object> row : rows) {

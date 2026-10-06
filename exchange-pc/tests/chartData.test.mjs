@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
 for (const app of ['exchange-pc', 'exchange-frontend']) {
-  const { normalizeCandles, candleFromQuote, chartPeriod } = await import('../../' + app + '/src/utils/chartData.ts')
+  const { normalizeCandles, candleFromQuote, chartPeriod, contiguousCryptoCandles, historyRepairPolicy } = await import('../../' + app + '/src/utils/chartData.ts')
   const { convertIntervalToKlineType } = await import('../../' + app + '/src/utils/kline.ts')
   const { normalizeQuote } = await import('../../' + app + '/src/utils/marketWebSocket.ts')
   test(app + ': candles are validated, sorted, deduplicated, and strictly older than the cursor', () => {
@@ -40,6 +40,35 @@ for (const app of ['exchange-pc', 'exchange-frontend']) {
     assert.deepEqual(normalizeCandles([session], Infinity, '1d'), [session])
     const daily = [0, 1, 2, 3].map(i => ({ ...bar, timestamp: bar.timestamp + i * 86400000 + (i < 2 ? 23 : 22) * 3600000 }))
     assert.deepEqual(normalizeCandles([...daily, { ...bar, timestamp: daily.at(-1).timestamp + 86400000 + 96000 }], Infinity, '1d'), daily)
+  })
+  test(app + ': crypto cache gaps expose only the contiguous cursor-adjacent suffix, never invented bars', () => {
+    const bar = { timestamp: 1_800_000_000_000, open: 10, high: 12, low: 9, close: 11, volume: 3 }
+    const rows = [0, 1, 5, 6].map(i => ({ ...bar, timestamp: bar.timestamp + i * 300000 }))
+    const original = structuredClone(rows)
+    const before = bar.timestamp + 7 * 300000
+    assert.deepEqual(contiguousCryptoCandles(rows, before, '5m', 'Crypto'), rows.slice(-2))
+    assert.deepEqual(contiguousCryptoCandles(rows, Infinity, '5m', 'cryptoperpetual'), rows.slice(-2))
+    assert.deepEqual(contiguousCryptoCandles(rows, before + 300000, '5m', 'Crypto'), [])
+    assert.deepEqual(contiguousCryptoCandles(rows.slice(-2), before, '5m', 'Crypto'), rows.slice(-2))
+    assert.equal(contiguousCryptoCandles(rows, before, '5m', 'Forex'), rows)
+    assert.equal(contiguousCryptoCandles(rows, before, '5m', 'US'), rows)
+    assert.deepEqual(rows, original)
+    const months = ['2026-01-01', '2026-02-01'].map(day => ({ ...bar, timestamp: Date.parse(day + 'T00:00:00Z') }))
+    assert.deepEqual(contiguousCryptoCandles(months, Date.parse('2026-03-01T00:00:00Z'), '1M', 'Crypto'), months)
+    const weekly = [0, 1, 3, 4].map(i => ({ ...bar, timestamp: bar.timestamp + i * 604800000 }))
+    assert.deepEqual(contiguousCryptoCandles(weekly, bar.timestamp + 5 * 604800000, '1w', 'Crypto'), weekly.slice(-2))
+  })
+  test(app + ': only explicit valid backend gap receipts release continuity; protected reason takes priority', () => {
+    assert.equal(historyRepairPolicy(null), null)
+    assert.equal(historyRepairPolicy({ pending: false }), null)
+    assert.equal(historyRepairPolicy({ historyRepair: { pending: 'false', gaps: [] } }), null)
+    assert.equal(historyRepairPolicy({ historyRepair: { pending: false, gaps: [{}] } }), null)
+    const gaps = [{ reason: 'upstream_no_data' }, { reason: 'missing_control_samples' }]
+    assert.deepEqual(historyRepairPolicy({ historyRepair: { pending: false, gaps, nextCursor: 1_800_000_000_000 } }), {
+      terminal: true, pending: false, reason: 'missing_control_samples', nextCursor: 1_800_000_000_000,
+    })
+    assert.equal(historyRepairPolicy({ historyRepair: { pending: true, gaps } }).terminal, false)
+    assert.equal(historyRepairPolicy({ historyRepair: { pending: false, gaps: [] } }).terminal, false)
   })
   test(app + ': legacy freshness uses source time; invalid or delayed prices never become live', () => {
     const now = 1_800_000_000_000

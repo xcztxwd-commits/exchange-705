@@ -192,6 +192,54 @@ public class MarketQuoteSource {
         }
     }
 
+    /** Exact history-only source read. No snapshot/cache reuse and no Yahoo retention-start clamping. */
+    static boolean nativeYahooHistoryPeriod(String period) {
+        return Arrays.asList("1m", "5m", "15m", "30m", "1h", "1d", "1w", "1M").contains(period);
+    }
+    Map<String,Object> getHistoryWindow(String code, String interval, int limit, String category, long from, long to) {
+        if (org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive())
+            throw new IllegalStateException("Historical network read inside transaction");
+        if (ExchangeQuoteSource.supports(category)) return exchange.kline(code, interval, limit, category, to);
+        if (!Arrays.asList("Forex", "US", "CFD", "Oil").contains(category)) throw new MarketHttp.Failure("unsupported_history_source", 0);
+        // Compatibility conversion may aggregate 60m into 2h+; source repair must never relabel native bars.
+        if (!nativeYahooHistoryPeriod(interval)) throw new MarketHttp.Failure("unsupported_source_period", 0);
+        try {
+            String yahooInterval = convertIntervalToYahoo(interval)[0];
+            String url = yahooUrl + "/chart/" + urlEncode(mapSymbolToYahoo(code, category)) + "?interval=" + yahooInterval
+                + "&includePrePost=false&period1=" + from / 1000 + "&period2=" + (to / 1000 + 1);
+            ResponseEntity<String> response = http.get(URI.create(url));
+            Map<String,Object> raw = objectMapper.readValue(response.getBody(), new TypeReference<Map<String,Object>>() {});
+            Object chartValue = raw.get("chart");
+            if (!(chartValue instanceof Map)) throw new MarketHttp.Failure("invalid_history_response", 0);
+            Map<?,?> chart = (Map<?,?>)chartValue;
+            if (chart.get("error") != null) throw new MarketHttp.Failure("history_source_unavailable", 0);
+            if (!(chart.get("result") instanceof List)) throw new MarketHttp.Failure("invalid_history_response", 0);
+            List<?> results = (List<?>)chart.get("result");
+            List<Map<String,Object>> rows = new ArrayList<>();
+            if (!results.isEmpty()) {
+                Map<?,?> data = (Map<?,?>)results.get(0);
+                List<?> timestamps = data.get("timestamp") == null ? Collections.emptyList() : (List<?>)data.get("timestamp");
+                if (!timestamps.isEmpty()) {
+                    Map<?,?> quote = (Map<?,?>)((List<?>)((Map<?,?>)data.get("indicators")).get("quote")).get(0);
+                    List<?> open = (List<?>)quote.get("open"), high = (List<?>)quote.get("high"), low = (List<?>)quote.get("low"), close = (List<?>)quote.get("close"), volume = (List<?>)quote.get("volume");
+                    for (int i = 0; i < timestamps.size(); i++) {
+                        // Null session slots are not upstream candles. Never manufacture zero OHLCV for them.
+                        if (open.get(i) == null && close.get(i) == null) continue;
+                        Map<String,Object> row = new LinkedHashMap<>(); row.put("timestamp", parseLong(timestamps.get(i)));
+                        row.put("open_price", parseDouble(open.get(i))); row.put("high_price", parseDouble(high.get(i)));
+                        row.put("low_price", parseDouble(low.get(i))); row.put("close_price", parseDouble(close.get(i)));
+                        row.put("volume", parseDouble(volume.get(i))); rows.add(row);
+                    }
+                }
+            }
+            rows.sort(Comparator.comparingLong(ControlHistoryStore::time));
+            if (rows.size() > limit) rows = new ArrayList<>(rows.subList(rows.size() - limit, rows.size()));
+            Map<String,Object> result = new HashMap<>(); result.put("ret", 200);
+            result.put("data", Collections.singletonMap("kline_list", rows)); return result;
+        } catch (MarketHttp.Failure failure) { throw failure; }
+        catch (Exception invalid) { throw new MarketHttp.Failure("invalid_history_response", 0); }
+    }
+
     Map<String, Map<String, Object>> getBatchPrices(List<String> codes, String category) {
         if (codes == null || codes.isEmpty()) {
             return new HashMap<>();

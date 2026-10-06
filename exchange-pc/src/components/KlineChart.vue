@@ -7,7 +7,7 @@ import marketWebSocket, { showSourceConnectionWarning } from '@/utils/marketWebS
 import { useLocaleStore } from '@/store/locale'
 import { chartLocale } from '@/utils/chartLocale'
 import request from '@/utils/request'
-import { candleFromQuote, chartPeriod, normalizeCandles } from '@/utils/chartData'
+import { candleFromQuote, chartPeriod, contiguousCryptoCandles, historyRepairPolicy, normalizeCandles } from '@/utils/chartData'
 import { registerTradingDrawingOverlays } from '@/utils/chartOverlays'
 import { indicatorCatalog, normalizePreferences, validParameters, validTimezone } from '@/utils/chartPreferences'
 import { displaySymbol } from '@/utils/displaySymbol'
@@ -82,7 +82,7 @@ let historyRetryAt = 0
 let historyRetryTimer: ReturnType<typeof setTimeout> | undefined
 let historyFailures = 0
 let activeHistoryLoads = 0
-let pendingHistory: { before: number; oldest: number; seen: Set<number>; attempts: number; limit: number } | null = null
+let pendingHistory: { before: number; oldest: number; seen: Set<number>; attempts: number; limit: number; nextCursor?: number } | null = null
 let pendingLatestTimer: ReturnType<typeof setTimeout> | undefined
 let pendingLatestAttempts = 0
 let gapCheckTimer: ReturnType<typeof setTimeout> | undefined
@@ -292,8 +292,12 @@ function keydown(event: KeyboardEvent) {
 }
 
 const sourceMissing = ref(false)
+const historyGap = ref('')
+const historyPaused = ref(false)
+let historyCursor: number | null = null
+let historySkips = 0
 
-type PageResult = { candles: KLineData[]; pending: boolean; exhausted: boolean; retryAt: number; limited?: boolean }
+type PageResult = { candles: KLineData[]; pending: boolean; exhausted: boolean; retryAt: number; limited?: boolean; terminal?: boolean; nextCursor?: number }
 
 function roundedRequestSize(missing: number): number {
   return Math.ceil((Math.max(0, Math.ceil(missing)) + 100) / 100) * 100
@@ -313,6 +317,9 @@ function requestedBarCount(history: boolean): number {
 
 async function requestBars(before: number, signal: AbortSignal, limit: number): Promise<PageResult> {
   const history = Number.isFinite(before)
+  const instruments = 'symbols' in market && Array.isArray(market.symbols) ? market.symbols : []
+  const instrument = instruments.find(item => item.symbol === props.symbol)
+  const category = instrument?.sourceCategory || instrument?.category || props.category || ''
   const url = '/market/kline/' + (history ? 'history/' : '') + encodeURIComponent(props.symbol)
   const query = { interval: interval.value, limit, ...(history ? { endTime: before - 1 } : { category: props.category || 'Crypto' }) }
   for (let attempt = 0; attempt < 8; attempt++) {
@@ -330,11 +337,21 @@ async function requestBars(before: number, signal: AbortSignal, limit: number): 
       if (rows.length && !validated.length) throw new Error('Invalid candle data')
       const aligned = normalizeCandles(rows, Infinity, interval.value)
       if (validated.length && !aligned.length) throw new Error('No aligned candles')
-      const candles = aligned.filter(bar => bar.timestamp < before)
-      if (history && aligned.length && !candles.length) throw new Error('History cursor was not honored')
+      const candidates = aligned.filter(bar => bar.timestamp < before)
+      if (history && aligned.length && !candidates.length) throw new Error('History cursor was not honored')
+      const repair = history ? historyRepairPolicy(response.data) : null
+      // Sealed legacy bodies cannot gain repair metadata. Preserve marked controlled bars without rewriting the response.
+      const protectedDisplay = history && !repair && response.data?.pending === false
+        && rows.some((row: any) => row?.controlled === true || row?.historyReplaced === true)
+      const terminal = repair?.terminal === true || protectedDisplay
+      // Confirmed protected/no-data gaps must not hide real older bars forever.
+      const candles = terminal ? candidates : contiguousCryptoCandles(candidates, before, interval.value, category)
+      const pending = !terminal && (!!response.data?.pending || candles.length < candidates.length)
+      if (history && repair) historyGap.value = repair.reason
+      else if (protectedDisplay) historyGap.value = 'protected_control_history'
       sourceMissing.value = !!response.data?.missingData
-      if (candles.length || !response.data?.pending || attempt === 7)
-        return { candles, pending: !!response.data?.pending, exhausted: response.data?.exhausted === true, retryAt: Number(response.data?.retryAt) || 0 }
+      if (candles.length || !pending || attempt === 7)
+        return { candles, pending, exhausted: !pending && response.data?.exhausted === true, retryAt: Number(response.data?.retryAt) || 0, terminal, nextCursor: repair?.nextCursor }
     } else if (!response?.data?.pending) {
       throw new Error('Chart data unavailable')
     } else if (attempt === 7) {
@@ -412,28 +429,33 @@ async function loadBars(params: DataLoaderGetBarsParams, version: number, signal
   else loading.value = true
   error.value = false
   const unfinished = history ? pendingHistory : null
-  const before = history ? unfinished?.before ?? params.timestamp ?? Infinity : Infinity
+  const before = history ? unfinished?.before ?? historyCursor ?? params.timestamp ?? Infinity : Infinity
   const limit = history ? unfinished?.limit ?? requestedBarCount(true) : 200
   try {
     const result = history ? await fetchHistory(before, signal, limit) : await fetchBars(Infinity, signal, 200)
     if (version !== revision || signal.aborted) return
     let candles = result.candles
     if (unfinished) {
-      if (candles.some(bar => bar.timestamp >= unfinished.oldest && bar.timestamp < before && !unfinished.seen.has(bar.timestamp)))
+      if (!result.terminal && candles.some(bar => bar.timestamp >= unfinished.oldest && bar.timestamp < before && !unfinished.seen.has(bar.timestamp)))
         throw new Error('Partial history has a middle gap')
       candles = candles.filter(bar => bar.timestamp < unfinished.oldest)
     }
-    if (!result.candles.length && !result.pending && !result.exhausted && !result.limited)
+    if (!result.candles.length && !result.pending && !result.exhausted && !result.limited && !result.terminal)
       throw new Error('Empty history page is not proof of exhaustion')
+    if (history) {
+      historyCursor = !result.candles.length && result.terminal && result.nextCursor && result.nextCursor < before ? result.nextCursor : null
+      if (result.candles.length) historySkips = 0
+    }
     historyLimited.value = !!result.limited
     exhausted.value = result.exhausted
-    const partial = history && result.pending && result.candles.length < limit
+    // Row count cannot prove completeness: persisted sparse rows may fill a pending page.
+    const partial = history && result.pending
     if (partial) {
       pendingHistory = { before, oldest: candles[0]?.timestamp ?? unfinished?.oldest ?? before,
         seen: new Set([...(unfinished?.seen || []), ...result.candles.map(bar => bar.timestamp)]),
-        attempts: (unfinished?.attempts || 0) + 1, limit }
+        attempts: (unfinished?.attempts || 0) + 1, limit, nextCursor: result.nextCursor }
       historyWaiting.value = true
-    } else if (history) { pendingHistory = null; historyWaiting.value = false }
+    } else if (history) { pendingHistory = null; historyWaiting.value = false; historyPaused.value = false }
     loading.value = false // A valid page is visible before the next page starts.
     params.callback(candles, { forward: !!(result.candles.length && !partial && !result.limited && !result.exhausted), backward: false })
     cacheBars()
@@ -449,15 +471,22 @@ async function loadBars(params: DataLoaderGetBarsParams, version: number, signal
       if (pendingHistory!.attempts <= 8) {
         const resume = () => {
           if (version !== revision || signal.aborted || !pendingHistory) return
-          if (historyLoading.value) { historyRetryTimer = setTimeout(resume, 1000); return }
+          if (historyLoading.value) { historyRetryTimer = setTimeout(resume, Math.max(1000, result.retryAt - Date.now())); return }
           retry?.()
         }
-        historyRetryTimer = setTimeout(resume, 1000)
-      }
+        historyPaused.value = false
+        historyRetryTimer = setTimeout(resume, Math.max(1000, result.retryAt - Date.now()))
+      } else historyPaused.value = !!pendingHistory!.nextCursor && pendingHistory!.nextCursor! < before
     } else {
       retry = null; historyFailures = 0
       if (!history && !candles.length && result.pending) retry = () => { void syncLatest() }
-      if (history && !candles.length && !result.exhausted && !result.limited && chart.getVisibleRange().from === 0)
+      if (history && historyCursor !== null && !result.exhausted) {
+        retry = () => { void loadBars(params, version, signal) }
+        // ponytail: at most three empty-window skips per load; further traversal is explicit, never an endless calendar scan.
+        if (++historySkips <= 3) historyRetryTimer = setTimeout(() => {
+          if (version === revision && !signal.aborted && !historyLoading.value) retry?.()
+        }, Math.max(1000, result.retryAt - Date.now()))
+      } else if (history && !candles.length && !result.exhausted && !result.limited && chart.getVisibleRange().from === 0)
         queueMicrotask(() => { if (version === revision) chart?.scrollByDistance(0, 0) })
     }
   } catch {
@@ -483,6 +512,17 @@ async function loadBars(params: DataLoaderGetBarsParams, version: number, signal
       replayQuote()
     }
   }
+}
+
+// Only an explicit backend window boundary may be skipped. Pending work continues; no gap is declared repaired.
+function continueOlderHistory() {
+  const next = pendingHistory?.nextCursor
+  if (!historyPaused.value || !pendingHistory || !next || next >= pendingHistory.before) return
+  const resume = retry
+  clearTimeout(historyRetryTimer)
+  pendingHistory = null; historyWaiting.value = false; historyPaused.value = false
+  historyCursor = next; historySkips = 3
+  resume?.()
 }
 
 async function syncLatest() {
@@ -574,6 +614,10 @@ function resetMarket() {
   historyFailures = 0
   activeHistoryLoads = 0
   pendingHistory = null
+  historyCursor = null
+  historySkips = 0
+  historyGap.value = ''
+  historyPaused.value = false
   pendingLatestAttempts = 0
   pageRequests = new Map()
   historyLimited.value = false
@@ -730,7 +774,15 @@ onUnmounted(() => {
     </div>
     <div class="chart-footer" role="status" aria-live="polite">
       <span v-if="showSourceConnectionWarning(market.quoteStatusMap[props.symbol])">{{ text('數據源連接失敗，正在重試', 'Data source connection failed; retrying') }}</span>
-      <span v-if="sourceMissing">{{ text('原始行情缺失，未补造数据', 'Original source data missing; no fabricated candles') }}</span>
+      <span v-if="historyGap">{{ /protected|frozen|sealed|control_samples|simulation|projection/.test(historyGap)
+        ? text('受保護歷史缺口，需原控盤樣本；未替換行情', 'Protected history gap; original control samples required')
+        : historyGap === 'upstream_no_data' ? text('上游未提供此區間；可繼續查看更早歷史', 'No upstream data in this window; older history remains accessible')
+        : /conflict|invalid|calendar|unsupported/.test(historyGap) ? text('來源衝突、異常或日曆未驗證；未自動改寫', 'Conflicting, invalid or unverified history; not rewritten')
+        : historyGap === 'source_fetch_or_write_failed' ? text('歷史補採失敗；稍後可重試', 'History repair failed; retry later')
+        : text('原始行情缺口，正在非同步補採', 'Source gap; asynchronous repair pending') }}</span>
+      <button v-if="historyPaused" class="skip-pending-history" @click="continueOlderHistory">{{ text('補採仍未完成 · 查看更早歷史', 'Repair still pending · View older history') }}</button>
+      <button v-if="historyCursor !== null && !historyWaiting" class="retry-history" @click="retryLoad">{{ text('繼續更早歷史', 'Continue to older history') }}</button>
+      <span v-if="sourceMissing && !historyGap">{{ text('原始行情缺失，未补造数据', 'Original source data missing; no fabricated candles') }}</span>
       <span v-if="historyLoading">{{ text('正在載入更早行情…', 'Loading older candles…') }}</span>
       <button v-else-if="historyWaiting" class="retry-history" @click="retryLoad">{{ text('歷史頁待刷新 · 重試', 'History page pending · Retry') }}</button>
       <button v-else-if="error" class="retry-history" @click="retryLoad">{{ count ? text('歷史載入失敗 · 點擊重試', 'History failed · Retry') : text('行情載入失敗 · 重試', 'Candles unavailable · Retry') }}</button>
