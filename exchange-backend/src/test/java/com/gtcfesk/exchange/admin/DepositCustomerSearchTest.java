@@ -33,6 +33,19 @@ class DepositCustomerSearchTest {
    clearInvocations(users);
    assertThrows(AccessDeniedException.class,()->controller.customers("alice"));
    verifyNoInteractions(users);
+   assertEquals("alice@example.com",controller.manualCustomers(" ALICE ").get(0).get("email"));
+   verify(access).checkDeposit("manual_deposit");
+   verify(users).findDepositCustomers(42L,"ALICE%","%alice%",PageRequest.of(0,20));
+   controller.manualCustomers("70");
+   verify(users).findDepositCustomers(42L,"70%","%70%",PageRequest.of(0,20));
+   controller.manualCustomers("a_%");
+   verify(users).findDepositCustomers(42L,"a!_!%%","%a!_!%%",PageRequest.of(0,20));
+   assertTrue(controller.manualCustomers(" ").isEmpty());
+   assertThrows(org.springframework.web.server.ResponseStatusException.class,()->controller.manualCustomers(String.join("",Collections.nCopies(255,"a"))));
+   doThrow(new AccessDeniedException("denied")).when(access).checkDeposit("manual_deposit");
+   clearInvocations(users);
+   assertThrows(AccessDeniedException.class,()->controller.manualCustomers("alice"));
+   verifyNoInteractions(users);
   } finally {SecurityContextHolder.clearContext();}
  }
 }

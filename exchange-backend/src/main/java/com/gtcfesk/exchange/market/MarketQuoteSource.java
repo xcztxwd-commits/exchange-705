@@ -200,39 +200,39 @@ public class MarketQuoteSource {
             if (ExchangeQuoteSource.supports(category)) {
                 return exchange.prices(codes, category);
             } else if ("Forex".equalsIgnoreCase(category) || "US".equalsIgnoreCase(category) || "CFD".equalsIgnoreCase(category) || "Oil".equalsIgnoreCase(category)) {
-                String yahooSymbols = codes.stream()
-                        .map(c -> mapSymbolToYahoo(c, category))
-                        .reduce((a, b) -> a + "," + b)
-                        .orElse("");
-                
-                String urlStr = yahooUrl + "/spark?symbols=" + urlEncode(yahooSymbols) + "&range=1d&interval=1m";
-                URI uri = URI.create(urlStr);
-
-                HttpHeaders headers = new HttpHeaders();
-                headers.add("User-Agent", "Mozilla/5.0");
-                headers.add("Accept", "application/json");
-                HttpEntity<String> entity = new HttpEntity<>(headers);
-
-                ResponseEntity<String> resp = http.get(uri);
-                if (!resp.getStatusCode().is2xxSuccessful() || resp.getBody() == null) {
-                    throw new RuntimeException("批量获取最新价失败(Yahoo): " + resp.getStatusCode());
-                }
-
-                Map<String, Object> raw = objectMapper.readValue(resp.getBody(), new TypeReference<Map<String, Object>>() {});
-                Map<String, Map<String, Object>> allPrices = normalizeYahooSparkResponse(raw);
-
-                Map<String, Map<String, Object>> prices = new HashMap<>();
-                for (String code : codes) {
-                    String yahooSymbol = mapSymbolToYahoo(code, category);
-                    if (allPrices.containsKey(yahooSymbol)) {
-                        Map<String, Object> found = allPrices.get(yahooSymbol);
-                        found.put("symbol", code); // restore internal code
-                        prices.put(code, found);
+                Map<String, Map<String, Object>> prices = new LinkedHashMap<>();
+                final int batchLimit = 20;
+                Deque<String> pendingCodes = new ArrayDeque<>(new LinkedHashSet<>(codes));
+                MarketHttp.Failure lastFailure = null;
+                // Rebuild the FIFO from current subscriptions each poll, including conversion subscriptions.
+                // Drain automatically on the existing provider lane; never create concurrent requests.
+                while (!pendingCodes.isEmpty()) {
+                    List<String> batch = new ArrayList<>(Math.min(batchLimit, pendingCodes.size()));
+                    while (batch.size() < batchLimit && !pendingCodes.isEmpty())
+                        batch.add(pendingCodes.removeFirst());
+                    String yahooSymbols = batch.stream().map(c -> mapSymbolToYahoo(c, category))
+                            .distinct().collect(java.util.stream.Collectors.joining(","));
+                    URI uri = URI.create(yahooUrl + "/spark?symbols=" + urlEncode(yahooSymbols) + "&range=1d&interval=1m");
+                    try {
+                        ResponseEntity<String> resp = http.get(uri);
+                        if (!resp.getStatusCode().is2xxSuccessful() || resp.getBody() == null)
+                            throw new MarketHttp.Failure("invalid_response", 0);
+                        Map<String, Object> raw = objectMapper.readValue(resp.getBody(), new TypeReference<Map<String, Object>>() {});
+                        Map<String, Map<String, Object>> allPrices = normalizeYahooSparkResponse(raw);
+                        for (String code : batch) {
+                            Map<String, Object> found = allPrices.get(mapSymbolToYahoo(code, category));
+                            if (found != null) {
+                                found = new HashMap<>(found);
+                                found.put("symbol", code);
+                                prices.put(code, found);
+                            }
+                        }
+                    } catch (MarketHttp.Failure failure) {
+                        lastFailure = failure;
                     }
                 }
-
-
-
+                // A failed subset must not discard other symbols' valid source facts.
+                if (prices.isEmpty() && lastFailure != null) throw lastFailure;
                 return prices;
             } else {
                 // Alltick
@@ -362,18 +362,7 @@ public class MarketQuoteSource {
                             prevClose = parseDouble(dataMap.get("chartPreviousClose"));
                         }
                         
-                        double change24h = 0.0;
-                        double changePct24h = 0.0;
-                        if (price != null && prevClose != null && prevClose > 0) {
-                            change24h = price - prevClose;
-                            changePct24h = (change24h / prevClose) * 100.0;
-                        }
-                        
-                        // 即使 Yahoo 给了 previousClose，我们还是通过统一的 savePriceWith24h 处理，或者这里直接赋值
-                        // 这里我们优先将解析出的数据存入，让 savePriceWith24h 来做兜底，为了避免 savePriceWith24h 覆盖，我们不覆盖它
-                        priceData.put("changeBasis", "previousClose");
-                        priceData.put("change24h", change24h);
-                        priceData.put("changePct24h", changePct24h);
+                        previousCloseChange(priceData, price, prevClose);
                         
                         result.put(symbol, priceData);
                     }
@@ -402,15 +391,7 @@ public class MarketQuoteSource {
                                     priceData.put("price", price != null ? price : 0.0);
                                     priceData.put("timestamp", parseLong(meta.get("regularMarketTime")) == null ? null : parseLong(meta.get("regularMarketTime")) * 1000);
                                     
-                                    double change24h = 0.0;
-                                    double changePct24h = 0.0;
-                                    if (price != null && prevClose != null && prevClose > 0) {
-                                        change24h = price - prevClose;
-                                        changePct24h = (change24h / prevClose) * 100.0;
-                                    }
-                                    priceData.put("changeBasis", "previousClose");
-                        priceData.put("change24h", change24h);
-                                    priceData.put("changePct24h", changePct24h);
+                                    previousCloseChange(priceData, price, prevClose);
                                     
                                     result.put(resSymbol, priceData);
                                 }
@@ -423,6 +404,16 @@ public class MarketQuoteSource {
             // Malformed items are rejected by the snapshot owner.
         }
         return result;
+    }
+
+    private static void previousCloseChange(Map<String, Object> quote, Double price, Double previousClose) {
+        if (price == null || !Double.isFinite(price) || previousClose == null
+                || !Double.isFinite(previousClose) || previousClose <= 0) return;
+        double change = price - previousClose;
+        quote.put("previousClose", previousClose);
+        quote.put("changeBasis", "previousClose");
+        quote.put("change24h", change);
+        quote.put("changePct24h", change / previousClose * 100.0);
     }
 
     private Map<String, Object> normalizeAlltickSingleKlineResponse(Map<String, Object> raw, String code, String interval) {
@@ -493,9 +484,7 @@ public class MarketQuoteSource {
             priceData.put("symbol", code);
             priceData.put("price", price != null ? price : 0.0);
             priceData.put("timestamp", tickTime);
-            // change24h / changePct24h 由Redis保存时计算；这里先填0，WS/HTTP侧会覆写
-            priceData.put("change24h", 0.0);
-            priceData.put("changePct24h", 0.0);
+            // A tick without a verified comparison price has no known change; do not invent zero.
             result.put(code, priceData);
         }
         return result;

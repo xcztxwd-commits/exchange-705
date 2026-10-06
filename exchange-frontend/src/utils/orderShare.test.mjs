@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { settledShareOrder, shareReturn, shareNumber, historyWindow, coveredCandles, recentShareChart, drawSharePoster, shareCopy, shareTemplates, shareNeedsChart, shareBackgrounds } from './orderShare.ts'
 
-// Only import location and admin price precision may differ across the three clients.
+// PC/mobile share the net-settlement policy; admin keeps its recorded-P&L adapter. The renderer stays shared.
 const rendererSource = url => readFileSync(url, 'utf8').replace(/\r\n/g, '\n')
   .replace(/from '[^']*shareTemplateDesign\.ts'/, "from './shareTemplateDesign.ts'")
   .replace("import { formatPrice } from './formatPrice.ts'\n", '')
@@ -157,5 +157,5 @@ for (const template of shareTemplates) {
 assert.equal(shareCopy('ja').entry, '新規約定価格')
 assert.equal(shareCopy('ja').exit, '決済約定価格')
 assert.equal(shareCopy('ja').pnl, '実現損益')
-assert.equal(rendererSource(new URL('./orderShare.ts', import.meta.url)), rendererSource(new URL('../../../exchange-admin/src/utils/orderShare.ts', import.meta.url)))
+assert.equal(rendererSource(new URL('./orderShare.ts', import.meta.url)).split('export function shareReturn(')[1], rendererSource(new URL('../../../exchange-admin/src/utils/orderShare.ts', import.meta.url)).split('export function shareReturn(')[1])
 console.log('Redesign: all 16 templates, both emphasis modes, positive/negative/zero, privacy and Japanese terminology passed')

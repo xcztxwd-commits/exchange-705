@@ -6,6 +6,7 @@ import Tabbar from '@/components/Tabbar.vue'
 import KlineChart from '@/components/KlineChart.vue'
 import SuccessModal from '@/components/SuccessModal.vue'
 import { useMarketStore } from '@/store/market'
+import { formatChangePercent } from '@/utils/quoteChange'
 import { useAuthStore } from '@/store/auth'
 import { useLocaleStore } from '@/store/locale'
 import request from '@/utils/request'
@@ -1174,6 +1175,9 @@ function getSymbolPrice(symbol: string): number {
 }
 
 // 获取币种的涨跌幅
+function getChangeColor(value: number, up = '#85bd00') {
+  return !Number.isFinite(value) ? '#999' : value >= 0 ? up : '#ef5350'
+}
 function getSymbolChange(symbol: string) {
   return marketStore.getChange24h(symbol)
 }
@@ -1402,17 +1406,17 @@ onUnmounted(() => {
         <span class="dropdown-icon ui-chevron ui-chevron--down" :class="{ active: showSymbolDropdown }" aria-hidden="true"></span>
       </div>
       <div class="price-display">
-        <span v-if="!isMarketClosed" class="price-value" :style="{ color: (change24h?.changePct || 0) >= 0 ? '#85bd00' : '#ef5350' }">
+        <span v-if="!isMarketClosed" class="price-value" :style="{ color: getChangeColor(change24h.changePct) }">
           {{ formatPrice(currentPrice, currentDisplayInfo?.pricePrecision ?? 2) }}
         </span>
         <span v-else class="price-value market-closed" style="color: #999;">{{ localeStore.t('marketClosed') }}</span>
         <span
           v-if="!isMarketClosed"
           class="price-change"
-          :style="{ color: (change24h?.changePct || 0) >= 0 ? '#85bd00' : '#ef5350' }"
+          :style="{ color: getChangeColor(change24h.changePct) }"
         >
-          <span class="change-icon ui-inline-arrow">{{ (change24h?.changePct || 0) >= 0 ? '▲' : '▼' }}</span>
-          {{ (change24h?.changePct || 0) >= 0 ? '+' : '' }}{{ (change24h?.changePct || 0).toFixed(2) }}%
+          <span v-if="Number.isFinite(change24h.changePct)" class="change-icon ui-inline-arrow">{{ change24h.changePct >= 0 ? '▲' : '▼' }}</span>
+          {{ formatChangePercent(change24h.changePct, true) }}
         </span>
         <span v-else class="price-change" style="color: #999;">-</span>
       </div>
@@ -1485,7 +1489,7 @@ onUnmounted(() => {
           <span class="symbol-item-name" style="display:flex;align-items:center;gap:8px"><ProtectedImage v-if="symbol.iconUrl" :src="getImageUrl(symbol.iconUrl)" alt="" width="28" height="28" />{{ displaySymbol(symbol) }}</span>
           <span
             class="symbol-item-price"
-            :style="{ color: (getSymbolChange(symbol.symbol)?.changePct || 0) >= 0 ? '#26a69a' : '#ef5350' }"
+            :style="{ color: getChangeColor(getSymbolChange(symbol.symbol).changePct, '#26a69a') }"
           >
             {{ formatPrice(getSymbolPrice(symbol.symbol), symbol.pricePrecision || 2) }}
           </span>
@@ -1700,7 +1704,7 @@ onUnmounted(() => {
         <!-- 交易对和价格（移动到方向选择下方） -->
         <div class="term-modal-header">
           <span class="term-modal-symbol">{{ currentDisplaySymbol }}</span>
-          <span class="term-modal-price" :style="{ color: (change24h?.changePct || 0) >= 0 ? '#85bd00' : '#ef5350' }">
+          <span class="term-modal-price" :style="{ color: getChangeColor(change24h.changePct) }">
             {{ formatPrice(currentPrice) }}
           </span>
         </div>
