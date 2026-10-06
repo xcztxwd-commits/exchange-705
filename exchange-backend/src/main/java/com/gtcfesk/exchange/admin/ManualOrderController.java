@@ -18,7 +18,7 @@ public class ManualOrderController {
     public Map<String,Object> minutes(@RequestParam String symbol,@RequestParam String date,@RequestParam String timezone) {return service.minutes(symbol,date,timezone);}
     @GetMapping("/chart")
     @com.gtcfesk.exchange.config.AdminPermission(menu = "orders", action = "manual_order")
-    public Map<String,Object> chart(@RequestParam String symbol,@RequestParam String timezone) {return service.chart(symbol,timezone);}
+    public Map<String,Object> chart(@RequestParam String symbol,@RequestParam String timezone,@RequestParam(required=false) Long endTime,@RequestParam(required=false) Integer limit) {return service.chart(symbol,timezone,endTime,limit);}
     @GetMapping("/calendar")
     @com.gtcfesk.exchange.config.AdminPermission(menu = "orders", action = "manual_order")
     public Map<String,Object> calendar(@RequestParam String symbol,@RequestParam String month,@RequestParam String timezone,@RequestParam int page) {return service.calendar(symbol,month,timezone,page);}

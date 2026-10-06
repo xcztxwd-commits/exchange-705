@@ -2,11 +2,16 @@
 const SCALE = 10n ** 32n
 const MONEY = 10n ** 16n
 function decimal(value: unknown): bigint {
-  const text = String(value)
-  if (!/^-?\d+(\.\d{1,16})?$/.test(text)) throw new Error('decimal')
-  const [whole, fraction = ''] = text.replace('-', '').split('.')
-  if (whole!.replace(/^0+/, '').length > 16) throw new Error('range')
-  return (BigInt(whole!) * SCALE + BigInt(fraction.padEnd(32, '0'))) * (text.startsWith('-') ? -1n : 1n)
+  const match = /^([+-]?)(?:(\d+)(?:\.(\d*))?|\.(\d+))(?:[eE]([+-]?\d+))?$/.exec(String(value).trim())
+  if (!match) throw new Error('decimal')
+  const fraction = match[3] ?? match[4] ?? ''
+  let digits = ((match[2] ?? '0') + fraction).replace(/^0+/, '')
+  if (!digits) return 0n
+  const exponent = Number(match[5] ?? 0), trailing = /0+$/.exec(digits)?.[0].length ?? 0
+  const scale = fraction.length - exponent - trailing
+  if (!Number.isSafeInteger(exponent) || scale > 16 || digits.length - trailing - scale > 16) throw new Error('range')
+  if (trailing) digits = digits.slice(0, -trailing)
+  return BigInt(digits) * 10n ** BigInt(32 - scale) * (match[1] === '-' ? -1n : 1n)
 }
 function divide(a: bigint, b: bigint, mode: 'half' | 'ceil' | 'floor' = 'half'): bigint {
   if (!b) throw new Error('division')
@@ -18,7 +23,11 @@ function divide(a: bigint, b: bigint, mode: 'half' | 'ceil' | 'floor' = 'half'):
 }
 const mul = (a: bigint, b: bigint) => a * b / SCALE
 const money = (a: bigint, mode: 'half' | 'ceil' = 'half') => divide(a, MONEY, mode) * MONEY
-const display = (a: bigint) => { const digits = (a < 0n ? -a : a).toString().padStart(33, '0'); return Number((a < 0n ? '-' : '') + digits.slice(0,-32) + '.' + digits.slice(-32)) }
+const text = (a: bigint) => {
+  const digits = (a < 0n ? -a : a).toString().padStart(33, '0'), fraction = digits.slice(-32).replace(/0+$/, '')
+  return (a < 0n ? '-' : '') + digits.slice(0, -32) + (fraction ? '.' + fraction : '')
+}
+const display = (a: bigint) => Number(text(a))
 export function manualOrderEstimate(form: { driver: string; input: string; side: string; leverage: string }, basis: any) {
   if (!basis || !form.input.trim() || !['BUY', 'SELL'].includes(form.side)) return null
   try {
@@ -44,8 +53,10 @@ export function manualOrderEstimate(form: { driver: string; input: string; side:
     } else return null
     if (quantity < minimum || mul(mul(mul(quantity,lot),p0),r0) < decimal(basis.minOrderNotional ?? 0)) return null
     const margin = money(divide(quantity * lot * rate, SCALE * leverage, 'ceil'), 'ceil')
-    const totalFee = money(mul(quantity,fee)), profit = money(mul(quantity,unitProfit)), net = profit-totalFee
+    // Round only after the full quantity/price/lot/rate product, as the server does.
+    const totalFee = money(mul(quantity,fee)), profit = money(quantity * (p1-p0) * lot * r1 * (form.side === 'BUY' ? 1n : -1n) / (SCALE ** 3n)), net = profit-totalFee
+    if ([margin,totalFee,profit,net].some(v => (v < 0n ? -v : v) / SCALE >= 10n ** 16n)) return null
     const percent = balance > 0n ? Number(divide((margin+totalFee)*100n*100000000n,balance))/1e8 : null
-    return { quantity: display(quantity), margin: display(margin), profit: display(profit), fee: display(totalFee), net: display(net), percent }
+    return { quantity: display(quantity), margin: display(margin), profit: display(profit), fee: display(totalFee), net: display(net), netText: text(net), percent }
   } catch { return null }
 }

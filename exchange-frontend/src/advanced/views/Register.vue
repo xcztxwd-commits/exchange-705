@@ -11,7 +11,6 @@ import { resumableClaim, steadyWall } from '@/utils/claimContinuation'
 import { useBusinessLifecycle } from '@/advanced/components/business/useBusinessLifecycle'
 import RegistrationCaptcha from '@/components/RegistrationCaptcha.vue'
 import RegistrationProfileFields from '@/components/RegistrationProfileFields.vue'
-import { captchaText } from '@/utils/captchaText'
 
 const router = useRouter()
 const route = useRoute()
@@ -193,15 +192,16 @@ const onSubmit = async () => {
 
       <RegistrationCaptcha ref="captcha" :disabled="loading" @ready="captchaReady = $event" />
 
-      <div class="form-group">
-      <div class="form-label">{{ localeStore.t('inviteCode') }}（{{ captchaText(localeStore.locale, 'optional') }}）</div>
-      <input
-        v-model="inviteCode"
-        class="input-box"
-        :readonly="inviteLocked"
-        :placeholder="inviteLocked ? localeStore.t('inviteCodeFilled') : localeStore.t('inviteCodeEmpty')"
-      />
-      </div>
+      <details class="form-group registration-invite">
+        <summary>{{ localeStore.text('已有邀请码', 'Have an invitation code?') }}</summary>
+        <input
+          v-model="inviteCode"
+          class="input-box"
+          :aria-label="localeStore.t('inviteCode')"
+          :readonly="inviteLocked"
+          :placeholder="inviteLocked ? localeStore.t('inviteCodeFilled') : localeStore.t('inviteCodeEmpty')"
+        />
+      </details>
 
       <button v-if="canStartBusiness('registration')" class="primary" :disabled="loading || !captchaReady || !profile?.ready" @click="onSubmit">
         {{ loading ? localeStore.t('submitting') : localeStore.t('register') }}

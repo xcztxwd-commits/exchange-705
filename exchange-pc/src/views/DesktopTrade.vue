@@ -41,7 +41,7 @@
         </el-switch>
 
         <template v-if="auth.token">
-          <button @click="showUserCenter = true" class="hover:text-[#8cc63f] transition-colors">{{ auth.user?.email || '111@test.com' }}</button>
+          <button @click="showUserCenter = true" class="hover:text-[#8cc63f] transition-colors">{{ auth.user?.nickname?.trim() || auth.user?.email || localeStore.t('tabbarPersonalCenter') }}</button>
         </template>
         <template v-else>
           <button @click="showLoginModal = true" class="hover:text-[#8cc63f] transition-colors font-bold">{{ localeStore.t('login') }}</button>
@@ -624,13 +624,14 @@
           </div>
         </div>
         <div class="flex-1 p-8 overflow-y-auto bg-white dark:bg-[#131722] custom-scrollbar relative">
+          <UserProfile v-if="showUserCenter && auth.token" class="mb-6" />
           <div v-if="activeUserMenu === 'assets'" class="max-w-2xl mx-auto">
             <div id="profile-activities"></div>
             <CurrencyPicker v-model="displayCurrency" />
             <p v-if="displayRate === null" role="alert">{{ localeStore.text('匯率暫不可用，請稍後重試', 'Exchange rate unavailable; please retry later') }}</p>
             <div class="text-center mb-10 bg-gray-50 dark:bg-[#181c27] p-8 rounded-2xl border border-gray-100 dark:border-[#2b3139] shadow-sm relative overflow-hidden">
               <div class="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-[#8cc63f] to-[#aae061]"></div>
-              <div class="inline-block bg-white dark:bg-[#131722] px-4 py-1.5 rounded-full text-gray-500 dark:text-gray-400 dark:text-gray-500 text-sm font-medium mb-4 shadow-sm border border-gray-100 dark:border-[#2b3139]">UID:< {{ auth.user?.id || '8959285729' }}</div>
+              <div class="inline-block bg-white dark:bg-[#131722] px-4 py-1.5 rounded-full text-gray-500 dark:text-gray-400 dark:text-gray-500 text-sm font-medium mb-4 shadow-sm border border-gray-100 dark:border-[#2b3139]">UID: {{ auth.user?.id || '—' }}</div>
               <div class="text-gray-500 dark:text-gray-400 dark:text-gray-500 font-medium mb-2">{{ localeStore.t('totalAssetsEquivalent') }}</div>
               <div class="text-4xl text-[#8cc63f] font-bold font-mono tracking-tight">{{ chartTotal === undefined ? formatAsset(totalAsset) : chartTotal === null ? '—' : formatAsset(chartTotal) }}</div>
             </div>
@@ -1483,12 +1484,12 @@
             </el-icon>
           </div>
         </div>
-        <RegistrationProfileFields v-if="showRegisterModal" ref="registerProfile" />
+        <RegistrationProfileFields v-if="showRegisterModal" ref="registerProfile" desktop />
         <RegistrationCaptcha v-if="showRegisterModal" ref="registerCaptcha" desktop :disabled="registerLoading" @ready="registerCaptchaReady = $event" />
-        <div>
-          <div class="text-gray-600 dark:text-gray-300 font-medium text-sm mb-2">{{ localeStore.t('inviteCode') }}（{{ captchaText(localeStore.locale, 'optional') }}）</div>
-          <input v-model="registerInviteCode" :readonly="registerInviteLocked" type="text" class="w-full bg-gray-50 dark:bg-[#181c27] border border-gray-200 dark:border-[#2b3139]-none rounded-lg px-4 py-3 outline-none focus:ring-1 focus:ring-[#8cc63f]/30 transition-all text-gray-700 dark:text-gray-200" :placeholder="registerInviteLocked ? localeStore.t('inviteCodeFilled') : localeStore.t('inviteCodeEmpty')" />
-        </div>
+        <details class="registration-invite">
+          <summary>{{ localeStore.text('已有邀请码', 'Have an invitation code?') }}</summary>
+          <input v-model="registerInviteCode" :aria-label="localeStore.t('inviteCode')" :readonly="registerInviteLocked" type="text" class="w-full bg-gray-50 dark:bg-[#181c27] border border-gray-200 dark:border-[#2b3139]-none rounded-lg px-4 py-3 outline-none focus:ring-1 focus:ring-[#8cc63f]/30 transition-all text-gray-700 dark:text-gray-200" :placeholder="registerInviteLocked ? localeStore.t('inviteCodeFilled') : localeStore.t('inviteCodeEmpty')" />
+        </details>
         <div class="text-center text-sm text-gray-500 dark:text-gray-400 dark:text-gray-500 mt-4">
           {{ localeStore.t('gotoLogin') }}
           <a @click="showRegisterModal = false; showLoginModal = true" class="text-[#8cc63f] cursor-pointer font-bold hover:underline">{{ localeStore.t('login') }}</a>
@@ -1589,9 +1590,9 @@ import { DEFAULT_LEVERAGE, leverageLimit, contractMargin, calculateContractProfi
 import request from '@/utils/request';
 import RegistrationCaptcha from '@/components/RegistrationCaptcha.vue';
 import RegistrationProfileFields from '@/components/RegistrationProfileFields.vue';
+import UserProfile from '../../../exchange-frontend/src/components/UserProfile.vue';
 import { useTrialWallet } from '@/utils/useTrialWallet';
 import { reconcileFunding, selectedAvailable, type FundingSource, type FundingChoice } from '@/utils/trialLifecycle';
-import { captchaText } from '@/utils/captchaText';
 import { formatDateTime } from '@/utils/dateTime';
 import { getImageUrl } from '@/utils/imageUrl';
 import { displaySymbol, forexLotUnit } from '@/utils/displaySymbol';

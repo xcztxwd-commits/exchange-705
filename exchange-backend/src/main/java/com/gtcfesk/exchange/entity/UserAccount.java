@@ -44,6 +44,9 @@ public class UserAccount extends com.gtcfesk.exchange.tenant.TenantOwnedEntity {
     @Column(length = 50)
     private String nickname;
 
+    @Column(name = "avatar_url", length = 300)
+    private String avatarUrl;
+
     @Column(name = "invite_code", length = 32)
     private String inviteCode; // 注册时使用的邀请码（上级的邀请码）
 

@@ -63,4 +63,18 @@ class ImageAuthorizationTest {
   assertEquals(404,controller(p,a).getFile(new MockHttpServletRequest("GET","/api/uploads/images/1/user/12/private.png")).getStatusCodeValue());
   verify(a).checkUser(12L);verify(p).allowsReview("1/user/12/private.png",12L,Collections.emptySet());
  }
+ @Test void userAvatarsRequireUsersModuleExactProfileReferenceAndOwnerScope()throws Exception{
+  actor("10","ROLE_ADMIN");PublishedTenantFiles p=mock(PublishedTenantFiles.class);BackendAccess a=mock(BackendAccess.class);ImageController c=controller(p,a);
+  java.nio.file.Path dir=storage.images().resolve("1/user/12");java.nio.file.Files.createDirectories(dir);
+  String file="1/user/12/avatar.png";java.nio.file.Files.write(storage.images().resolve(file),new byte[]{(byte)137,80,78,71,13,10,26,10});
+  MockHttpServletRequest request=new MockHttpServletRequest("GET","/api/uploads/images/"+file);
+  when(p.allowsUserAvatar(file,12L)).thenReturn(true);assertEquals(404,c.getFile(request).getStatusCodeValue());
+  when(a.canReadMenu("users")).thenReturn(true);assertEquals(200,c.getFile(request).getStatusCodeValue());verify(a,atLeastOnce()).checkUser(12L);
+  when(p.allowsUserAvatar(file,12L)).thenReturn(false);assertEquals(404,c.getFile(request).getStatusCodeValue());
+  when(p.allowsUserAvatar(file,12L)).thenReturn(true);doThrow(new org.springframework.security.access.AccessDeniedException("not subordinate")).when(a).checkUser(12L);
+  assertThrows(org.springframework.security.access.AccessDeniedException.class,()->c.getFile(request));
+  actor("13","ROLE_USER");assertEquals(404,c.getFile(request).getStatusCodeValue());
+  SecurityContextHolder.clearContext();assertEquals(401,c.getFile(request).getStatusCodeValue());
+  assertEquals(404,c.getFile(new MockHttpServletRequest("GET","/api/uploads/images/2/user/12/avatar.png")).getStatusCodeValue());
+ }
 }

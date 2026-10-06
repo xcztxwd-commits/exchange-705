@@ -30,7 +30,7 @@ type ControlStatus = Partial<RecoveryOptions> & {
 }
 type ControlTask = { id: string; kind: string; status: string; startSource: string; sourceTime: number; startedAt: number; endedAt: number | null; startPrice: number; targetPrice: number; algorithmVersion?: number; holding?: boolean; historyReplacedAt?: number | null }
 type PreviewTier = { intensity: number; minAmount?: string; maxAmount?: string; feasible: boolean; errorCode?: string; message?: string }
-type Preview = { algorithmVersion?: number; deviationBandPercent?: string; corridorAmount?: string; typicalAmount?: string; feasible?: boolean; errorCode?: string; message?: string; startPrice?: string; minAmount?: string; maxAmount?: string; amountRandom?: boolean; summary?: ControlStatus['planSummary']; tiers?: PreviewTier[] }
+type Preview = { amplitudeMode?: string; baseAmount?: string; gapPerSecond?: string; priceTick?: string; theoreticalMinAmount?: string; theoreticalMaxAmount?: string; algorithmVersion?: number; deviationBandPercent?: string; corridorAmount?: string; typicalAmount?: string; feasible?: boolean; errorCode?: string; message?: string; startPrice?: string; minAmount?: string; maxAmount?: string; amountRandom?: boolean; summary?: ControlStatus['planSummary']; tiers?: PreviewTier[] }
 const history = ref<ControlTask[]>([])
 const sourceName = (source: string) => ({ LIVE_DISPLAY: '实时展示价', COMPLETED_CANDLE: '已完成 K 线收盘价', LAST_VALID_QUOTE: '最后有效报价', CONTROL_DISPLAY: '控盘展示价', LEGACY_PARAMETERS: '旧任务参数' }[source] || source)
 const timeText = (value: number | null | undefined) => value ? new Date(value).toLocaleString() : '—'
@@ -56,12 +56,11 @@ function formatPrice(value: number | string | null | undefined): string {
   if (value == null || value === '' || !Number.isFinite(Number(value))) return '—'
   return new Intl.NumberFormat('en-US', { minimumFractionDigits: precision.value, maximumFractionDigits: precision.value }).format(Number(value))
 }
-const defaultFormula = 'start * 0.00001 * intensity'
+const defaultFormula = 'base * intensity'
 const stepFormula = ref(defaultFormula), formulaDraft = ref(defaultFormula), formulaError = ref('')
 const formulaOpen = ref(false), formulaBusy = ref(false), formulaPreview = ref<Preview | null>(null)
-const bandManual = ref(false), bandPercent = ref('0.004'), advanced = ref<string[]>([])
-const automaticBand = () => ((target.value.intensity ?? 1) * 4 / 1000).toFixed(3).replace(/0+$/, '').replace(/\.$/, '')
-function restoreAutomaticBand() { bandManual.value = false; bandPercent.value = automaticBand() }
+const bandManual = ref(false), bandPercent = ref(''), advanced = ref<string[]>([])
+function restoreAutomaticBand() { bandManual.value = false; bandPercent.value = '' }
 function changeBand(value: string) { bandPercent.value = value; bandManual.value = true }
 function targetPayload(formula = stepFormula.value) {
   return { ...target.value, ...(status.value?.v4Enabled ? {
@@ -151,7 +150,7 @@ function restoreCommandInputs() {
     for (const key of Object.keys(defaultRecovery()) as (keyof RecoveryOptions)[]) if (payload[key] !== undefined) (recovery.value as any)[key] = payload[key]
     if (typeof payload.stepFormula === 'string') stepFormula.value = payload.stepFormula
     bandManual.value = payload.deviationBandMode === 'MANUAL'
-    bandPercent.value = bandManual.value ? String(payload.deviationBandPercent) : automaticBand()
+    bandPercent.value = bandManual.value ? String(payload.deviationBandPercent) : ''
   }
 }
 function acceptCommandReceipt(value: unknown, pending: PendingCommand, scope: string) {
@@ -185,7 +184,7 @@ function applyStatus(value: ControlStatus, reset = false) {
     target.value = { ...(value.restoring && value.autoRestore === undefined ? defaultTiming : savedTiming),
       targetPrice: (!value.restoring || value.autoRestore !== undefined ? value.targetPrice : null) ?? value.currentPrice ?? undefined }
     bandManual.value = value.algorithmVersion === 4 && value.deviationBandMode === 'MANUAL'
-    bandPercent.value = bandManual.value ? String(value.deviationBandPercent) : automaticBand()
+    bandPercent.value = bandManual.value ? String(value.deviationBandPercent) : ''
     restore.value = { ...(value.restoring && value.autoRestore === undefined ? savedTiming : defaultTiming) }
     if (value.running) mode.value = value.restoring && value.autoRestore === undefined ? 'restore' : 'target'
   }
@@ -207,7 +206,7 @@ async function fetchStatus(reset = false) {
 }
 async function fetchPreview() {
   const id = selectedId.value, version = ++previewVersion
-  if (id == null || commandAwaiting.value || !(status.value?.v3Enabled || status.value?.v4Enabled) || mode.value !== 'target') return
+  if (id == null || commandAwaiting.value || loading.value || formulaLoading.value || formulaLoadError.value || !(status.value?.v3Enabled || status.value?.v4Enabled) || mode.value !== 'target') return
   const { durationSeconds, intensity, targetPrice, randomOscillation } = target.value
   if (!Number.isInteger(durationSeconds) || !Number.isInteger(intensity) || !Number.isFinite(targetPrice) || targetPrice! <= 0) return
   if (!validBand()) { previewError.value = '偏差带百分比须大于0且不超过100，最多8位小数'; return }
@@ -361,6 +360,9 @@ function runTimed() {
   else {
     if (!Number.isFinite(target.value.targetPrice) || target.value.targetPrice! <= 0) { ElMessage.warning('请输入大于 0 的目标价格'); return }
     if (status.value?.v4Enabled && (!validBand() || formulaLoadError.value)) { ElMessage.warning(formulaLoadError.value || '请填写有效偏差带百分比'); return }
+    if ((status.value?.v3Enabled || status.value?.v4Enabled) && (previewBusy.value || preview.value?.feasible !== true)) {
+      ElMessage.warning(preview.value?.message || previewError.value || '当前参数尚未通过完整轨迹预览，不能开始控盘'); return
+    }
     void submit('start', { ...targetPayload(), ...recovery.value })
   }
 }
@@ -377,13 +379,14 @@ watch(() => [auth.token, auth.user?.tenantId, auth.user?.id, auth.accessSession?
 watch(mode, value => {
   if (value === 'manual' && status.value) manual.value = { enabled: status.value.enabled, offset: Number(status.value.offset || 0) }
 })
-watch(() => target.value.intensity, () => { if (!bandManual.value) bandPercent.value = automaticBand() })
 watch(() => [formulaDraft.value, bandPercent.value, bandManual.value, target.value.randomOscillation, target.value.targetPrice, target.value.durationSeconds, target.value.intensity], () => { ++formulaVersion; formulaPreview.value = null })
-watch(() => [selectedId.value, mode.value, status.value?.v3Enabled, target.value.durationSeconds,
-  target.value.intensity, target.value.targetPrice, target.value.randomOscillation, bandPercent.value, bandManual.value, stepFormula.value], () => {
+// Compare input values, not newly allocated status arrays: unchanged polls must not discard a slow full preview.
+watch([selectedId, mode, () => status.value?.v3Enabled, () => status.value?.v4Enabled, () => status.value?.startBasis?.price,
+  loading, formulaLoading, formulaLoadError, commandAwaiting, () => target.value.durationSeconds, () => target.value.intensity,
+  () => target.value.targetPrice, () => target.value.randomOscillation, bandPercent, bandManual, stepFormula], () => {
   preview.value = null; previewError.value = ''; previewBusy.value = false; ++previewVersion
   clearTimeout(previewTimer)
-  if (!commandAwaiting.value && status.value?.v3Enabled && mode.value === 'target') previewTimer = setTimeout(() => void fetchPreview(), 350)
+  if (!commandAwaiting.value && (status.value?.v3Enabled || status.value?.v4Enabled) && mode.value === 'target') previewTimer = setTimeout(() => void fetchPreview(), 350)
 })
 onMounted(async () => { await loadSymbols(); void poll() })
 onUnmounted(() => { disposed = true; ++commandVersion; ++operationVersion; ++requestVersion; ++previewVersion; ++formulaVersion; ++formulaLoadVersion; clearTimeout(timer); clearTimeout(previewTimer) })
@@ -450,18 +453,19 @@ onUnmounted(() => { disposed = true; ++commandVersion; ++operationVersion; ++req
           <el-form-item v-if="mode === 'restore'" label="开启随机震荡" for="control-random-oscillation">
             <el-switch v-permission="'ai_control:start'" id="control-random-oscillation" v-model="timing.randomOscillation" aria-label="开启随机震荡" :disabled="busy" />
           </el-form-item>
-          <p v-if="mode === 'target'" class="hint">{{ status?.v4Enabled ? '单步幅度和偏差带初始化后固定，不随剩余时间放大。偏差带约束相对参考路径的偏离，仅用于TARGET阶段。' : status?.v3Enabled ? '均衡随机 V3：强度决定每秒绝对涨跌额的固定范围。关闭随机后仍为可复现的均衡排列，不是直线。' : '新建目标轨迹已暂停。' }}</p>
+          <p v-if="mode === 'target'" class="hint">{{ status?.v4Enabled ? '默认按起点价、目标价差、执行时长和最小价格跳动计算1档基础幅度，再生成1–10档。单步幅度和自动偏差带初始化后固定，不随剩余时间放大。' : status?.v3Enabled ? '均衡随机 V3：强度决定每秒绝对涨跌额的固定范围。关闭随机后仍为可复现的均衡排列，不是直线。' : '新建目标轨迹已暂停。' }}</p>
           <el-form-item label="波动强度" for="control-intensity">
             <el-input-number id="control-intensity" :key="String(busy)" v-model="timing.intensity" :min="1" :max="10" :precision="0" :disabled="busy" />
           </el-form-item>
           <template v-if="mode === 'target' && status?.v4Enabled">
+            <p class="hint">保留你选择的波动强度，不会自动升档。当前参数未通过完整预览时禁止启动，请根据提示增加时间或调整波动强度。</p>
             <el-form-item label="偏差带半宽（%）" for="control-band-percent">
               <div class="band-field">
-                <el-input id="control-band-percent" :model-value="bandPercent" inputmode="decimal" :disabled="busy" aria-label="偏差带半宽百分比" @input="changeBand"><template #append>%</template></el-input>
+                <el-input id="control-band-percent" :model-value="bandManual ? bandPercent : (preview?.deviationBandPercent ?? '')" placeholder="预览后自动计算" inputmode="decimal" :disabled="busy" aria-label="偏差带半宽百分比" @input="changeBand"><template #append>%</template></el-input>
                 <el-tag :type="bandManual ? 'warning' : 'info'">{{ bandManual ? '手动' : '自动联动' }}</el-tag>
                 <el-button v-permission="'ai_control:start'" :disabled="busy || !bandManual" @click="restoreAutomaticBand">恢复自动</el-button>
               </div>
-              <p class="hint">以任务起点价为固定基准；手动修改后不随强度覆盖。按品种最小跳动向内取整，不扩大范围。</p>
+              <p class="hint">默认自动带宽随本次幅度计算。手动模式以起点价为基准，按最小价格跳动向内取整，不会被自动覆盖或扩大。</p>
             </el-form-item>
             <el-alert v-if="formulaLoadError" :title="formulaLoadError" type="error" :closable="false" />
           </template>
@@ -469,11 +473,15 @@ onUnmounted(() => { disposed = true; ++commandVersion; ++operationVersion; ++req
           <el-alert v-if="previewError" :title="previewError" type="error" :closable="false" />
           <el-alert v-else-if="preview?.feasible === false" :title="`${preview.errorCode}: ${preview.message}`" type="warning" :closable="false" />
           <div v-if="preview" class="preview">
-            <p>预览起点 {{ formatPrice(preview.startPrice) }}；当前档单秒幅度 {{ formatPrice(preview.minAmount) }}～{{ formatPrice(preview.maxAmount) }}。{{ preview.amountRandom === false ? '当前精度不支持金额随机。' : '' }}</p>
-            <p v-if="preview.algorithmVersion === 4">偏差带 {{ preview.deviationBandPercent }}%，固定半宽 ±{{ formatPrice(preview.corridorAmount) }}；典型幅度 {{ formatPrice(preview.typicalAmount) }}。</p>
+            <p v-if="preview.amplitudeMode === 'ADAPTIVE'">自适应1档基础幅度 {{ formatPrice(preview.baseAmount) }}；目标平均每秒价差 {{ preview.gapPerSecond == null ? '—' : Number(preview.gapPerSecond).toLocaleString('en-US', { maximumSignificantDigits: 8 }) }}；最小价格跳动 {{ preview.priceTick }}。所选强度 {{ target.intensity }} 档。</p>
+            <p v-else-if="status?.v4Enabled">当前使用自定义公式；如需自适应档位，请在公式编辑中恢复默认公式、试算并保存。</p>
+            <p>预览起点 {{ formatPrice(preview.startPrice) }}；<template v-if="preview.minAmount != null && preview.maxAmount != null">当前档单秒幅度 {{ formatPrice(preview.minAmount) }}～{{ formatPrice(preview.maxAmount) }}。{{ preview.amountRandom === false ? '当前精度不支持金额随机。' : '' }}</template><template v-else>当前档尚无可执行的单秒幅度。</template></p>
+            <p v-if="preview.errorCode === 'AMPLITUDE_PRECISION_UNREPRESENTABLE' && preview.theoreticalMinAmount != null && preview.theoreticalMaxAmount != null">最小价格跳动 {{ preview.priceTick }}；理论单秒幅度 {{ preview.theoreticalMinAmount }}～{{ preview.theoreticalMaxAmount }}，区间内没有合法价格刻度。</p>
+            <p v-if="preview.algorithmVersion === 4 && preview.deviationBandPercent != null && preview.corridorAmount != null">偏差带 {{ preview.deviationBandPercent }}%，固定半宽 ±{{ formatPrice(preview.corridorAmount) }}；典型单秒幅度 {{ preview.typicalAmount }}。</p>
             <p v-if="preview.summary?.maxDeviation != null">候选最大偏离 {{ formatPrice(preview.summary.maxDeviation) }}，未超过固定偏差带。</p>
             <p v-if="preview.summary">候选 {{ preview.summary.points }} 点；最高 {{ formatPrice(preview.summary.maxPrice) }}，最低 {{ formatPrice(preview.summary.minPrice) }}；最大单秒涨跌 {{ formatPrice(preview.summary.maxStep) }}。候选仅供预览，启动时重验起点。</p>
             <p v-if="preview.summary">前／中／后三段均幅 {{ preview.summary.segmentAverages.map(formatPrice).join(' / ') }}；10 秒窗口 {{ formatPrice(preview.summary.rolling10Min) }}～{{ formatPrice(preview.summary.rolling10Max) }}；30 秒窗口 {{ formatPrice(preview.summary.rolling30Min) }}～{{ formatPrice(preview.summary.rolling30Max) }}。</p>
+            <p v-if="preview.tiers">档位表仅做参数筛选；完整轨迹生成及启动时仍会重新校验。</p>
             <admin-table table-key="AiControl.1" v-if="preview.tiers" :data="preview.tiers" size="small" max-height="250">
               <el-table-column prop="intensity" label="强度" width="70" />
               <el-table-column label="固定单秒幅度"><template #default="{ row }">{{ formatPrice(row.minAmount) }}～{{ formatPrice(row.maxAmount) }}</template></el-table-column>
@@ -500,7 +508,7 @@ onUnmounted(() => { disposed = true; ++commandVersion; ++operationVersion; ++req
           </el-collapse-item></el-collapse>
         </template>
           <el-form-item>
-            <el-button v-permission="mode === 'restore' ? 'ai_control:restore' : 'ai_control:start'" type="primary" :loading="saving" :disabled="busy || (mode === 'target' ? !(status?.canStart ?? status?.available) || status?.running || !currentSymbol?.isEnabled || status?.v4Enabled === false || (!!status?.v3Enabled && (previewBusy || preview?.feasible !== true || !!formulaLoadError)) : !status?.available)" @click="runTimed">
+            <el-button v-permission="mode === 'restore' ? 'ai_control:restore' : 'ai_control:start'" type="primary" :loading="saving" :disabled="busy || (mode === 'target' ? !(status?.canStart ?? status?.available) || status?.running || !currentSymbol?.isEnabled || status?.v4Enabled === false || ((status?.v3Enabled || status?.v4Enabled) && (previewBusy || preview?.feasible !== true || !!formulaLoadError)) : !status?.available)" @click="runTimed">
               {{ mode === 'restore' ? '按设定恢复原始行情' : '开始自动控盘' }}
             </el-button>
           </el-form-item>
@@ -516,7 +524,8 @@ onUnmounted(() => { disposed = true; ++commandVersion; ++operationVersion; ++req
       <el-dialog v-model="formulaOpen" title="编辑单步典型幅度公式" width="min(640px, calc(100vw - 32px))" :before-close="closeFormula" :close-on-click-modal="false">
         <el-input v-model="formulaDraft" type="textarea" :rows="3" maxlength="256" :disabled="formulaBusy" aria-label="单步典型幅度公式" />
         <p class="hint">结果单位为价格/秒；实际单秒幅度为典型值的90%～110%，按品种精度校验。只在任务初始化时计算一次。</p>
-        <p class="hint">变量：start 起点价、target 目标价、gap 绝对价差、duration 秒数、intensity 强度、tick 最小跳动。支持 + − * /、括号、abs/min/max。</p>
+        <p class="hint">默认 base * intensity：base 取起点价比例、为涨跌预留时间后的平均价差、10个最小跳动三者中的最大值，再向上对齐价格精度。只计算一次，不修改目标价、时长或报价精度。</p>
+        <p class="hint">变量：base 自适应基础幅度、start 起点价、target 目标价、gap 绝对价差、duration 秒数、intensity 强度、tick 最小跳动。支持 + − * /、括号、abs/min/max。自定义公式保留原来的百分比偏差带规则。</p>
         <p v-if="! /\bintensity\b/.test(formulaDraft)" class="hint">此公式没有引用intensity，波动强度不会影响单步幅度；偏差带自动联动仍独立生效。</p>
         <el-alert v-if="formulaError" :title="formulaError" type="error" :closable="false" />
         <el-alert v-else-if="formulaPreview?.feasible === false" :title="`${formulaPreview.errorCode}: ${formulaPreview.message}`" type="warning" :closable="false" />

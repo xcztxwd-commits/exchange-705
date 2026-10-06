@@ -67,6 +67,8 @@ class AdminPermissionIntegrationTest {
     @Autowired JwtUtil jwt;
     @Autowired RequestMappingHandlerMapping mappings;
     @Autowired OptionDurationRepository durations;
+    @Autowired ContractOrderRepository contracts;
+    @Autowired OptionOrderRepository options;
     @Autowired com.gtcfesk.exchange.control.TenantPolicyRepository tenantPolicies;
     AdminRole role;
     AdminUser actor;
@@ -145,6 +147,57 @@ class AdminPermissionIntegrationTest {
         grant("durations:delete"); assertEquals(200,call("DELETE","/api/admin/durations/"+id,null,token));
         assertEquals(403,call("GET","/api/admin/statistics",null,token));
         assertEquals(401,mvc.perform(get("/api/admin/durations")).andReturn().getResponse().getStatus());
+    }
+    @Test void orderListsAcceptBlankOptionalUserFiltersWithoutGrantingPermissions() throws Exception {
+        String query = "{\"binding\":\"\",\"userId\":\"\",\"userEmail\":\"\",\"status\":\"\",\"deletion\":\"\",\"page\":0,\"size\":10}";
+        for (String kind : Arrays.asList("contract", "option"))
+            assertEquals(403, call("POST", "/api/admin/orders/" + kind + "/query", query, token));
+        grant("orders");
+        assertAll("The two order tabs send an empty userId on page entry",
+            () -> assertEquals(200, call("POST", "/api/admin/orders/contract/query", query, token)),
+            () -> assertEquals(200, call("POST", "/api/admin/orders/option/query", query, token)),
+            () -> assertEquals(200, call("POST", "/api/admin/orders/contract/query", query, superToken)),
+            () -> assertEquals(200, call("POST", "/api/admin/orders/option/query", query, superToken)));
+        for (String kind : Arrays.asList("contract", "option")) {
+            String path = "/api/admin/orders/" + kind + "/query";
+            assertEquals(200, call("POST", path, "{\"userId\":null}", token));
+            assertEquals(200, call("POST", path, "{}", token));
+            for (String invalid : Arrays.asList("0", "-1", "\"invalid\"", "{}", "[]"))
+                assertEquals(403, call("POST", path, "{\"userId\":" + invalid + "}", superToken));
+        }
+        assertEquals(403, call("POST", "/api/admin/orders/option/1/preset-profit", "{\"userId\":\"\",\"presetType\":\"PROFIT\"}", superToken));
+    }
+    @Test void blankOrderFiltersPreserveAgentAndTenantIsolation() throws Exception {
+        UserAccount agent = new UserAccount(); agent.setEmail("orders_" + UUID.randomUUID() + "@example.invalid"); agent.setUserType("agent"); agent.setPasswordHash("test-hash"); agent.setStatus("normal"); agent.setCurrentToken(UUID.randomUUID().toString()); agent = users.saveAndFlush(agent);
+        backendNames.register("AGENT", agent.getId(), agent.getEmail());
+        UserMenu grant = new UserMenu(); grant.setUserId(agent.getId()); grant.setMenuId(menu("orders").getId()); userMenus.saveAndFlush(grant);
+        Map<String,Object> claims = new HashMap<>(); claims.put("userType", "agent"); claims.put("sid", agent.getCurrentToken()); claims.put("credential", jwt.credentialKey(agent.getPasswordHash())); claims.put("id", agent.getId());
+        String agentToken = jwt.generateToken("agent-" + agent.getId(), claims);
+        UserAccount own = new UserAccount(); own.setEmail("own_" + UUID.randomUUID() + "@example.invalid"); own.setPasswordHash("test-hash"); own.setParentUserId(agent.getId()); own = users.saveAndFlush(own);
+        UserAccount other = new UserAccount(); other.setEmail("other_" + UUID.randomUUID() + "@example.invalid"); other.setPasswordHash("test-hash"); other = users.saveAndFlush(other);
+        UserAccount foreign;
+        com.gtcfesk.exchange.tenant.TenantContext.clear();
+        try (com.gtcfesk.exchange.tenant.TenantContext.Scope ignored = com.gtcfesk.exchange.tenant.TenantContext.open(2L)) {
+            foreign = new UserAccount(); foreign.setEmail("foreign_" + UUID.randomUUID() + "@example.invalid"); foreign.setPasswordHash("test-hash"); foreign = users.saveAndFlush(foreign);
+        } finally { com.gtcfesk.exchange.tenant.TenantContext.open(1L); }
+        for (UserAccount owner : Arrays.asList(own, other)) {
+            ContractOrder contract = new ContractOrder(); contract.setUserId(owner.getId()); contract.setSymbol("BTCUSDT"); contract.setSide("BUY"); contract.setType("MARKET"); contract.setQuantity(java.math.BigDecimal.ONE); contract.setStatus("CLOSED"); contracts.saveAndFlush(contract);
+            OptionOrder option = new OptionOrder(); option.setUserId(owner.getId()); option.setSymbol("BTCUSDT"); option.setDirection("UP"); option.setAmount(java.math.BigDecimal.TEN); option.setStatus("CLOSED"); options.saveAndFlush(option);
+        }
+        grant("orders");
+        for (String kind : Arrays.asList("contract", "option")) {
+            String path = "/api/admin/orders/" + kind + "/query";
+            MvcResult listed = mvc.perform(post(path).header("Authorization", "Bearer " + agentToken).contentType("application/json").content("{\"userId\":\"\",\"page\":0,\"size\":10}")).andReturn();
+            assertEquals(200, listed.getResponse().getStatus(), listed.getResponse().getContentAsString());
+            JsonNode result = json.readTree(listed.getResponse().getContentAsByteArray());
+            assertEquals(1, result.path("total").asInt()); assertEquals(1, result.path("list").size()); assertEquals(own.getId().longValue(), result.path("list").get(0).path("userId").asLong());
+            assertEquals(200, call("POST", path, "{\"userId\":\"" + own.getId() + "\"}", agentToken));
+            assertEquals(200, call("POST", path, "{\"userId\":" + own.getId() + "}", token));
+            assertEquals(403, call("POST", path, "{\"userId\":" + other.getId() + "}", agentToken));
+            assertEquals(403, call("POST", path, "{\"userId\":\"\",\"filterAgentId\":" + other.getId() + "}", agentToken));
+            for (String caller : Arrays.asList(token, superToken, agentToken))
+                assertEquals(403, call("POST", path, "{\"userId\":" + foreign.getId() + "}", caller));
+        }
     }
     @Test void dynamicBodyActionsAndBatchConfigCannotBypassGuards() throws Exception {
         grant("users"); grant("orders"); grant("settings");

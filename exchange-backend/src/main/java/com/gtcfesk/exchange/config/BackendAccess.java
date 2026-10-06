@@ -177,8 +177,12 @@ public class BackendAccess extends RequestBodyAdviceAdapter implements HandlerIn
         JsonNode node = mapper.valueToTree(body);
         if (agent != null && node.hasNonNull("filterAgentId") && node.get("filterAgentId").asLong() != agent) deny();
         if (agent != null && node.hasNonNull("agentId") && node.get("agentId").asLong() != agent) deny();
-        if (node.hasNonNull("userId")) checkUser(node.get("userId").asLong());
         String method = p.getMethod().getName();
+        // Only order-list filters may omit userId as an empty string; mutation targets remain mandatory.
+        boolean blankOrderFilter = p.getContainingClass() == AdminOrderController.class
+                && (method.equals("queryContractOrders") || method.equals("queryOptionOrders"))
+                && node.path("userId").isTextual() && node.path("userId").asText().isEmpty();
+        if (node.hasNonNull("userId") && !blankOrderFilter) checkUser(node.get("userId").asLong());
         if (p.getContainingClass().getSimpleName().equals("SystemConfigController") && (method.equals("saveConfig") || method.equals("saveBatchConfig"))) {
             Iterable<JsonNode> configs = node.isArray() ? node : Collections.singletonList(node);
             for (JsonNode cfg : configs) {

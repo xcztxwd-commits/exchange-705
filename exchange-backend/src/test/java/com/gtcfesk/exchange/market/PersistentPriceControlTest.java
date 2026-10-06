@@ -594,7 +594,8 @@ class PersistentPriceControlTest extends TenantMarketTestContext {
     @Test void v4PercentageFormulaSnapshotReplaysAfterColdRestartAndCannotCrossTenants() throws Exception {
         Map<String,Object> quote = raw(System.currentTimeMillis(), true); quote.put("price", new BigDecimal("100000.00"));
         BigDecimal start = new BigDecimal("100000.00"), target = new BigDecimal("100300.00");
-        TargetControlOptions options = StabilizedControlPlanTest.options(null, "AUTO", null);
+        // Durable pre-adaptive snapshots keep their explicit legacy formula and checksum after upgrades.
+        TargetControlOptions options = StabilizedControlPlanTest.options(TargetControlSettings.LEGACY_FORMULA, "AUTO", null);
         PersistentPriceControl.Prepared prepared = controls.prepare(symbol, quote, start, 300, target, 10, false, options);
         PersistentPriceControl.Task task = controls.startPrepared(symbol, quote, start, 300, target, 10, false, "v4-snapshot", null, prepared);
         assertEquals(4, task.algorithmVersion); assertEquals(1, count("market_control_plan"));

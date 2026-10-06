@@ -103,6 +103,7 @@ public class AuthService {
         userMap.put("tenantId", com.gtcfesk.exchange.tenant.TenantContext.requireTenantId());
         userMap.put("email", user.getEmail());
         userMap.put("nickname", user.getNickname());
+        userMap.put("avatarUrl", user.getAvatarUrl());
         userMap.put("status", user.getStatus());
         // 签名会话绑定当前凭据和单设备会话标识
         Map<String, Object> claims = new HashMap<>();
@@ -140,8 +141,8 @@ public class AuthService {
         user.setEmail(req.getEmail());
         user.setPasswordHash(passwordEncoder.encode(req.getPassword()));
         user.setInviteCode(req.getInvitationCode());
-        int nicknameEnd = normalizedEmail.offsetByCodePoints(0, Math.min(50, normalizedEmail.codePointCount(0, normalizedEmail.length())));
-        user.setNickname(normalizedEmail.substring(0, nicknameEnd));
+        // An unset nickname displays the full email; never persist a truncated email as a nickname.
+        user.setNickname(null);
         systemConfigService.registrationFields().apply(req, user);
         if (user.getPhone() != null && userAccountRepository.findByTenantIdAndPhone(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), user.getPhone()).isPresent()) {
             throw new BusinessException("phone exists");
@@ -187,6 +188,7 @@ public class AuthService {
         userMap.put("tenantId", com.gtcfesk.exchange.tenant.TenantContext.requireTenantId());
         userMap.put("email", user.getEmail());
         userMap.put("nickname", user.getNickname());
+        userMap.put("avatarUrl", user.getAvatarUrl());
         // 签名会话绑定当前凭据和单设备会话标识
         Map<String, Object> claims = new HashMap<>();
         claims.put("userType", "user");

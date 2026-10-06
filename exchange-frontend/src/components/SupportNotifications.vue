@@ -124,22 +124,24 @@ onUnmounted(() => {
   </Teleport>
   <nav
     v-if="
-      auth.token && enabled && route.path !== '/inbox' && (state.mode === 'internal' || state.inboxEnabled) && (!mobile || state.chatUnread)
+      auth.token && enabled && (admin || route.path !== '/inbox') && (state.mode === 'internal' || state.inboxEnabled) && (!mobile || state.chatUnread)
     "
     class="support-notifications"
     :class="{ floating: !admin, detail: ['/customer-service', '/inbox'].includes(route.path) }"
     :aria-label="t('消息通知', 'Message notifications')"
   >
-    <button
-      v-if="
-        state.mode === 'internal' &&
-        (admin || (state.chatUnread && !['/customer-service', '/inbox'].includes(route.path)))
-      "
-      @click="router.push(admin ? '/support' : '/customer-service')"
-    >
-      {{ admin ? '客服' : t('客服回复', 'Support')
-      }}<b v-if="state.waiting + state.chatUnread">{{ state.waiting + state.chatUnread }}</b>
-    </button>
+    <slot name="chat" :state="state">
+      <button
+        v-if="
+          state.mode === 'internal' &&
+          (admin || (state.chatUnread && !['/customer-service', '/inbox'].includes(route.path)))
+        "
+        @click="router.push(admin ? '/support' : '/customer-service')"
+      >
+        {{ admin ? '客服' : t('客服回复', 'Support')
+        }}<b v-if="state.waiting + state.chatUnread">{{ state.waiting + state.chatUnread }}</b>
+      </button>
+    </slot>
     <button
       v-if="!admin && !mobile && !inboxTarget && state.inboxEnabled && !['/customer-service', '/inbox'].includes(route.path)"
       @click="router.push('/inbox')"

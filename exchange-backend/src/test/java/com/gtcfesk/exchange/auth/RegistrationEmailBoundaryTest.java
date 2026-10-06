@@ -25,7 +25,7 @@ import static org.mockito.Mockito.*;
 
 @ExtendWith(TenantOneFixture.class)
 class RegistrationEmailBoundaryTest {
-    @Test void registrationKeepsFullEmailAndBoundsDisplayNickname() {
+    @Test void registrationKeepsFullEmailAndLeavesNicknameUnset() {
         UserAccountRepository users = mock(UserAccountRepository.class);
         AssetAccountRepository assets = mock(AssetAccountRepository.class);
         PasswordEncoder encoder = mock(PasswordEncoder.class);
@@ -57,12 +57,12 @@ class RegistrationEmailBoundaryTest {
                 assertTrue(factory.getValidator().validate(req).isEmpty(), "valid " + length);
                 assertNotNull(service.register(req));
                 assertEquals(email, saved.get().getEmail());
-                assertEquals(email.substring(0, Math.min(50, length)), saved.get().getNickname());
+                assertNull(saved.get().getNickname(), "unset nickname falls back to the full email");
             }
             RegisterRequest astral = request(repeat('a', 49) + "\uD83D\uDE00@example.invalid");
             service.register(astral);
-            assertEquals(50, saved.get().getNickname().codePointCount(0, saved.get().getNickname().length()));
-            assertTrue(saved.get().getNickname().endsWith("\uD83D\uDE00"));
+            assertNull(saved.get().getNickname());
+            assertEquals(astral.getEmail(), saved.get().getEmail());
             RegisterRequest tooLong = request(repeat('a', 61) + "@" + repeat('b', 60) + ".c.test");
             assertEquals(129, tooLong.getEmail().length());
             assertFalse(factory.getValidator().validate(tooLong).isEmpty());

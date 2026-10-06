@@ -2,7 +2,7 @@ import {ref,computed,watch} from 'vue'
 import request from '@/utils/request'
 import {useAuthStore} from '@/store/auth'
 import {configEditable,type PolicySnapshot} from '@/utils/tenantPolicies'
-export function useTenantPolicies(area:'settings'|'support'|'agents'|'website'|'share-templates') {
+export function useTenantPolicies(area:'settings'|'support'|'agents'|'website'|'share-templates'|'dashboard') {
  const snapshot=ref<PolicySnapshot|null>(null),policyError=ref(''),auth=useAuthStore()
  let generation=0
  watch(()=>auth.token,()=>{generation++;snapshot.value=null;policyError.value=''})

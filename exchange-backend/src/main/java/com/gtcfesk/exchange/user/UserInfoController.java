@@ -61,6 +61,7 @@ public class UserInfoController {
         resp.put("uid", user.getId());
         resp.put("email", user.getEmail());
         resp.put("nickname", user.getNickname());
+        resp.put("avatarUrl", user.getAvatarUrl());
         resp.put("status", user.getStatus());
         resp.put("fundBalance", fund);
         resp.put("contractBalance", contract);
