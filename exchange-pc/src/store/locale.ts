@@ -498,6 +498,7 @@ export type MessageKeys =
   | 'depositAmountLabel'
   | 'depositTypeDigital'
   | 'depositTypeBank'
+  | 'depositTypeManual'
   // 出金相关
   | 'withdraw'
   | 'withdrawRecords'
@@ -1616,6 +1617,7 @@ const messages: Messages = {
     depositAmountLabel: '充值金額',
     depositTypeDigital: '數字貨幣',
     depositTypeBank: '銀行卡',
+    depositTypeManual: "人工入金",
     // 出金相关
     withdraw: '出金',
     withdrawRecords: '提幣記錄',
@@ -2628,6 +2630,7 @@ const messages: Messages = {
     depositAmountLabel: 'Deposit Amount',
     depositTypeDigital: 'Digital Currency',
     depositTypeBank: 'Bank Card',
+    depositTypeManual: "Manual deposit",
     // Withdraw related
     withdraw: 'Withdraw',
     withdrawRecords: 'Withdraw Records',
@@ -3637,6 +3640,7 @@ const messages: Messages = {
     depositAmountLabel: 'Montant du dépôt',
     depositTypeDigital: 'Monnaie numérique',
     depositTypeBank: 'Carte bancaire',
+    depositTypeManual: "Dépôt manuel",
     // Withdraw related
     withdraw: 'Retirer',
     withdrawRecords: 'Historique des retraits',
@@ -4641,6 +4645,7 @@ const messages: Messages = {
     depositAmountLabel: 'Einzahlungsbetrag',
     depositTypeDigital: 'Digitale Währung',
     depositTypeBank: 'Bankkarte',
+    depositTypeManual: "Manuelle Einzahlung",
     // Withdraw related
     withdraw: 'Abheben',
     withdrawRecords: 'Abhebungsaufzeichnungen',
@@ -5657,6 +5662,7 @@ const messages: Messages = {
     depositAmountLabel: 'Сумма депозита',
     depositTypeDigital: 'Цифровая валюта',
     depositTypeBank: 'Банковская карта',
+    depositTypeManual: "Ручное пополнение",
     // Withdraw related
     withdraw: 'Вывод',
     withdrawRecords: 'Записи о выводах',
@@ -6639,6 +6645,7 @@ const messages: Messages = {
     depositAmountLabel: 'Valor do depósito',
     depositTypeDigital: 'Moeda digital',
     depositTypeBank: 'Cartão bancário',
+    depositTypeManual: "Depósito manual",
     // Withdraw related
     withdraw: 'Sacar',
     withdrawRecords: 'Registros de saque',
@@ -7649,6 +7656,7 @@ const messages: Messages = {
     depositAmountLabel: 'Monto del depósito',
     depositTypeDigital: 'Moneda digital',
     depositTypeBank: 'Tarjeta bancaria',
+    depositTypeManual: "Depósito manual",
     // Withdraw related
     withdraw: 'Retirar',
     withdrawRecords: 'Registros de retiro',
@@ -8657,6 +8665,7 @@ const messages: Messages = {
     depositAmountLabel: 'Importo deposito',
     depositTypeDigital: 'Valuta digitale',
     depositTypeBank: 'Carta bancaria',
+    depositTypeManual: "Deposito manuale",
     // Withdraw related
     withdraw: 'Prelievo',
     withdrawRecords: 'Registri prelievo',
@@ -9667,6 +9676,7 @@ const messages: Messages = {
     depositAmountLabel: 'مبلغ الإيداع',
     depositTypeDigital: 'عملة رقمية',
     depositTypeBank: 'بطاقة بنكية',
+    depositTypeManual: "إيداع يدوي",
     // Withdraw related
     withdraw: 'سحب',
     withdrawRecords: 'سجلات السحب',
@@ -10677,6 +10687,7 @@ const messages: Messages = {
     depositAmountLabel: 'Yatırma tutarı',
     depositTypeDigital: 'Dijital para',
     depositTypeBank: 'Banka kartı',
+    depositTypeManual: "Manuel para yatırma",
     // Withdraw related
     withdraw: 'Çekme',
     withdrawRecords: 'Çekme kayıtları',
@@ -11687,6 +11698,7 @@ const messages: Messages = {
     depositAmountLabel: 'Jumlah setoran',
     depositTypeDigital: 'Mata uang digital',
     depositTypeBank: 'Kartu bank',
+    depositTypeManual: "Setoran manual",
     // Withdraw related
     withdraw: 'Penarikan',
     withdrawRecords: 'Catatan penarikan',
@@ -12697,6 +12709,7 @@ const messages: Messages = {
     depositAmountLabel: 'ငွေသွင်းမှုပမာဏ',
     depositTypeDigital: 'ဒစ်ဂျစ်တယ်ငွေကြေး',
     depositTypeBank: 'ဘဏ်ကတ်',
+    depositTypeManual: "ကိုယ်တိုင် ငွေသွင်းခြင်း",
     // Withdraw related
     withdraw: 'ငွေထုတ်',
     withdrawRecords: 'ငွေထုတ်မှုမှတ်တမ်းများ',
@@ -13707,6 +13720,7 @@ const messages: Messages = {
     depositAmountLabel: 'जमा राशि',
     depositTypeDigital: 'डिजिटल मुद्रा',
     depositTypeBank: 'बैंक कार्ड',
+    depositTypeManual: "मैन्युअल जमा",
     // Withdraw related
     withdraw: 'निकासी',
     withdrawRecords: 'निकासी रिकॉर्ड',
@@ -14717,6 +14731,7 @@ const messages: Messages = {
     depositAmountLabel: 'Částka vkladu',
     depositTypeDigital: 'Digitální měna',
     depositTypeBank: 'Bankovní karta',
+    depositTypeManual: "Ruční vklad",
     // Withdraw related
     withdraw: 'Výběr',
     withdrawRecords: 'Záznamy o výběrech',
@@ -15727,6 +15742,7 @@ const messages: Messages = {
     depositAmountLabel: 'Kwota wpłaty',
     depositTypeDigital: 'Waluta cyfrowa',
     depositTypeBank: 'Karta bankowa',
+    depositTypeManual: "Wpłata ręczna",
     // Withdraw related
     withdraw: 'Wypłata',
     withdrawRecords: 'Zapisy wypłat',
@@ -16737,6 +16753,7 @@ const messages: Messages = {
     depositAmountLabel: '入金額',
     depositTypeDigital: "暗号資産",
     depositTypeBank: "銀行振込",
+    depositTypeManual: "手動入金",
     // Withdraw related
     withdraw: '出金',
     withdrawRecords: "出金履歴",
@@ -17747,6 +17764,7 @@ const messages: Messages = {
     depositAmountLabel: '입금 금액',
     depositTypeDigital: '디지털 화폐',
     depositTypeBank: '은행 카드',
+    depositTypeManual: "수동 입금",
     // Withdraw related
     withdraw: '출금',
     withdrawRecords: '출금 기록',
@@ -18788,6 +18806,7 @@ const messages: Messages = {
     depositAmountLabel: 'จำนวนการเติมเงิน',
     depositTypeDigital: 'สกุลเงินดิจิทัล',
     depositTypeBank: 'บัตรธนาคาร',
+    depositTypeManual: "ฝากเงินด้วยตนเอง",
     // Withdraw related
     withdraw: 'ถอนเงิน',
     withdrawRecords: 'บันทึกการถอนเหรียญ',
@@ -19799,6 +19818,7 @@ const messages: Messages = {
     depositAmountLabel: 'Số tiền nạp',
     depositTypeDigital: 'tiền kỹ thuật số',
     depositTypeBank: 'thẻ ngân hàng',
+    depositTypeManual: "Nạp tiền thủ công",
     // Withdraw related
     withdraw: 'Rút tiền',
     withdrawRecords: 'Kỷ lục rút tiền',

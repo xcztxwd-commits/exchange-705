@@ -804,7 +804,7 @@
                     </div>
                   </div>
                   <div class="text-sm text-gray-600 dark:text-gray-300 mb-1">
-                    {{ record.type === 'digital' ? localeStore.t('digitalCurrencyDeposit') : localeStore.t('bankCardDeposit2') }}
+                    {{ depositRecordTypeLabel(record, localeStore.t) }}
                   </div>
                   <el-button v-if="record.status === 'PENDING' && record.source === 'USER_SUBMITTED'" size="small" :disabled="cancellingDeposit !== null" @click="cancelDeposit(record)">{{ localeStore.text('取消申请', 'Cancel request') }}</el-button>
                   <div v-if="record.status === 'REJECTED' && record.remark" class="text-xs text-red-500 bg-red-50 p-2 rounded mb-1">
@@ -1554,7 +1554,8 @@
 </template>
 
 <script setup lang="ts">
-import { useDepositChannels } from '@/utils/depositChannels'
+import { depositRecordTypeLabel } from '../../../exchange-frontend/src/utils/depositRecords'
+import { useDepositChannels, useDepositChannelRefresh } from '@/utils/depositChannels'
 import { canStartBusiness } from '@/utils/tenantFeatures'
 import ProtectedImage from '../../../exchange-frontend/src/components/ProtectedImage.vue'
 import { reportPageView } from '@/utils/pageActivity'
@@ -3241,7 +3242,7 @@ const loadDepositSettings = async () => {
     const res: any = await request.get('/deposit/settings/list?type=digital');
     if (res && res.success !== false) {
       depositSettings.value = res.list || res.data || [];
-      selectedDepositSetting.value = depositSettings.value[0] || null;
+      selectedDepositSetting.value = depositSettings.value.find(setting => setting.id === selectedDepositSetting.value?.id) || depositSettings.value[0] || null;
     }
     
     const bankRes: any = await request.get('/deposit/settings/bank');
@@ -3747,6 +3748,11 @@ const submitPasswordChange = async () => {
 };
 
 
+
+useDepositChannelRefresh(loadDepositSettings, () => showUserCenter.value && activeUserMenu.value === 'deposit' && !depositSubmitting.value)
+watch(showUserCenter, visible => {
+  if (visible && activeUserMenu.value === 'deposit') void loadDepositSettings()
+})
 
 // watch for user menu actions
 watch(activeUserMenu, async (val) => {

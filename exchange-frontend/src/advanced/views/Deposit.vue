@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { useDepositChannels } from '@/utils/depositChannels'
+import { depositRecordTypeLabel } from '@/utils/depositRecords'
+import { useDepositChannels, useDepositChannelRefresh } from '@/utils/depositChannels'
 import BusinessPage from '@/advanced/components/business/BusinessPage.vue'
 const { request, error: advancedError, writing: advancedWriting, setTimeout } = useBusinessLifecycle()
 import { canStartBusiness } from '@/utils/tenantFeatures'
@@ -68,8 +69,8 @@ const toastMessage = ref('')
 const toastType = ref<'success' | 'error' | ''>('')
 
 // 加载网络列表
-async function loadNetworks() {
-  loadingNetworks.value = true
+async function loadNetworks(background = false) {
+  if (!background) loadingNetworks.value = true
   try {
     const res: any = await request.get('/deposit/settings/list', {
       params: { type: 'digital' }
@@ -81,22 +82,25 @@ async function loadNetworks() {
         value: item.network
       }))
       
-      // 如果没有选中的网络，选择第一个
-      if (networks.value.length > 0 && !selectedNetwork.value && networks.value[0]) {
-        selectedNetwork.value = networks.value[0].value
-        loadDepositSettings()
+      // Keep an enabled selection; discard the address when its channel is disabled.
+      if (!networks.value.some(item => item.value === selectedNetwork.value)) {
+        selectedNetwork.value = networks.value[0]?.value || ''
+        depositAddress.value = ''
+        qrCodeUrl.value = ''
+        showNetworkModal.value = false
+        if (selectedNetwork.value) await loadDepositSettings()
       }
     }
   } catch (e: any) {
     console.error('加载网络列表失败:', e)
   } finally {
-    loadingNetworks.value = false
+    if (!background) loadingNetworks.value = false
   }
 }
 
 // 加载银行卡信息
-async function loadBankInfo() {
-  loadingBankInfo.value = true
+async function loadBankInfo(background = false) {
+  if (!background) loadingBankInfo.value = true
   try {
     const res: any = await request.get('/deposit/settings/bank')
     
@@ -112,7 +116,7 @@ async function loadBankInfo() {
     console.error('加载银行卡信息失败:', e)
     bankInfo.value = { hasBank: false }
   } finally {
-    loadingBankInfo.value = false
+    if (!background) loadingBankInfo.value = false
   }
 }
 
@@ -122,11 +126,12 @@ async function loadDepositSettings() {
     return
   }
   
+  const network = selectedNetwork.value
   try {
     const res: any = await request.get('/deposit/settings', {
-      params: { network: selectedNetwork.value }
+      params: { network }
     })
-    
+    if (selectedNetwork.value !== network || !networks.value.some(item => item.value === network)) return
     if (res && res.success !== false) {
       depositAddress.value = res.address || ''
       // 处理二维码URL，使用统一的 getImageUrl 函数
@@ -352,6 +357,11 @@ async function loadRecords() {
   }
 }
 
+useDepositChannelRefresh(
+  () => Promise.all([loadNetworks(true), loadBankInfo(true)]),
+  () => !uploading.value && !loadingNetworks.value && !loadingBankInfo.value
+)
+
 onMounted(() => {
   loadNetworks()
   loadBankInfo()
@@ -366,7 +376,7 @@ onMounted(() => {
 <section v-else class="card"><h2>{{ localeStore.text('银行收款信息','Bank payment details') }}</h2><p v-if="loadingBankInfo">{{ localeStore.t('loading') }}</p><template v-else-if="bankInfo.hasBank"><div class="row"><span>{{ localeStore.t('bankName') }}</span><span>{{ bankInfo.bankName }}</span></div><div class="row"><span>{{ localeStore.t('recipientAccount') }}</span><span>{{ bankInfo.bankAccount }}</span></div><div class="row"><span>{{ localeStore.t('recipientName') }}</span><span>{{ bankInfo.accountName }}</span></div><button @click="copyBankAccount">{{ localeStore.text('复制银行账号','Copy bank account') }}</button></template><template v-else><p>{{ localeStore.text('银行收款信息尚未配置','Bank payment details are not configured') }}</p><button @click="contactService">{{ localeStore.t('customerService') }}</button></template></section>
 <section v-if="depositType==='digital' || bankInfo.hasBank" class="card"><h2>{{ localeStore.text('入金信息','Deposit details') }}</h2><label class="field">{{ localeStore.t('depositAmountLabel') }}<input v-model.number="depositAmount" type="number" min="0" step="0.01" :placeholder="localeStore.t('enterAmount')" /></label><div class="row"><span>{{ localeStore.t('currency') }}</span><CurrencyPicker v-model="currency" /></div><div class="row"><span>{{ localeStore.text('折合 USD','USD equivalent') }}</span><span>{{ depositAmount ? usdPreview(depositAmount) : '—' }}</span></div><input ref="proofInputRef" type="file" accept="image/*" hidden @change="handleFileSelect" /><button v-if="!proofPreview" class="upload" @click="triggerFileSelect"><img src="@/advanced/assets/business/upload.svg" alt="" width="24" height="24" />{{ localeStore.t('pleaseUploadDepositProof') }}</button><div v-else class="upload"><img :src="proofPreview" :alt="localeStore.t('pleaseUploadDepositProof')" style="max-height:160px" /><button @click="removeProof">{{ localeStore.t('delete') }}</button></div></section>
 <button v-if="canStartBusiness('deposit') && (depositType==='digital' || bankInfo.hasBank)" class="primary" :disabled="uploading || loadingNetworks || loadingBankInfo || advancedError!=='' || rate===null || (depositType==='bank' && !bankInfo.hasBank) || (depositType==='digital' && (!selectedNetwork || !depositAddress))" @click="submitDeposit">{{ uploading ? localeStore.t('submitting') : localeStore.text('提交入金','Submit deposit') }}</button>
-<div class="row"><h2>{{ localeStore.text('最近记录','Recent records') }}</h2><button class="text-button" @click="router.push('/deposit/records')">{{ localeStore.text('全部','All') }} ›</button></div><p v-if="loadingRecords" class="empty">{{ localeStore.t('loading') }}</p><p v-else-if="!depositRecords.length" class="empty">{{ localeStore.t('noRecords') }}</p><div v-for="r in depositRecords.slice(0,3)" :key="r.id" class="card"><div class="row"><span>{{ formatMoney(r.amount) }} USD</span><span>{{ getStatusText(r.status) }}</span></div><p class="muted">{{ formatDateTime(r.createdAt) }} · {{ r.network }}</p></div><button v-if="advancedError" @click="advancedError='';loadNetworks();loadBankInfo();loadRecords()">{{ localeStore.text('重试','Retry') }}</button>
+<div class="row"><h2>{{ localeStore.text('最近记录','Recent records') }}</h2><button class="text-button" @click="router.push('/deposit/records')">{{ localeStore.text('全部','All') }} ›</button></div><p v-if="loadingRecords" class="empty">{{ localeStore.t('loading') }}</p><p v-else-if="!depositRecords.length" class="empty">{{ localeStore.t('noRecords') }}</p><div v-for="r in depositRecords.slice(0,3)" :key="r.id" class="card"><div class="row"><span>{{ formatMoney(r.amount) }} USD</span><span>{{ getStatusText(r.status) }}</span></div><p class="muted">{{ formatDateTime(r.createdAt) }} · {{ depositRecordTypeLabel(r, localeStore.t) }} · {{ r.type==='digital' ? r.network : r.currency || 'USD' }}</p></div><button v-if="advancedError" @click="advancedError='';loadNetworks();loadBankInfo();loadRecords()">{{ localeStore.text('重试','Retry') }}</button>
 <div v-if="showNetworkModal" class="modal-overlay" @click="showNetworkModal = false">
       <div class="modal-content" @click.stop>
         <div class="modal-header">

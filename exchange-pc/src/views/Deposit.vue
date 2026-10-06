@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { useDepositChannels } from '@/utils/depositChannels'
+import { depositRecordTypeLabel } from '../../../exchange-frontend/src/utils/depositRecords'
+import { useDepositChannels, useDepositChannelRefresh } from '@/utils/depositChannels'
 import { canStartBusiness } from '@/utils/tenantFeatures'
 import ProtectedImage from '../../../exchange-frontend/src/components/ProtectedImage.vue'
 import { accountMode } from "@/utils/accountMode"
@@ -66,8 +67,8 @@ const toastMessage = ref('')
 const toastType = ref<'success' | 'error' | ''>('')
 
 // 加载网络列表
-async function loadNetworks() {
-  loadingNetworks.value = true
+async function loadNetworks(background = false) {
+  if (!background) loadingNetworks.value = true
   try {
     const res: any = await request.get('/deposit/settings/list', {
       params: { type: 'digital' }
@@ -79,22 +80,25 @@ async function loadNetworks() {
         value: item.network
       }))
       
-      // 如果没有选中的网络，选择第一个
-      if (networks.value.length > 0 && !selectedNetwork.value && networks.value[0]) {
-        selectedNetwork.value = networks.value[0].value
-        loadDepositSettings()
+      // Keep an enabled selection; discard the address when its channel is disabled.
+      if (!networks.value.some(item => item.value === selectedNetwork.value)) {
+        selectedNetwork.value = networks.value[0]?.value || ''
+        depositAddress.value = ''
+        qrCodeUrl.value = ''
+        showNetworkModal.value = false
+        if (selectedNetwork.value) await loadDepositSettings()
       }
     }
   } catch (e: any) {
     console.error('加载网络列表失败:', e)
   } finally {
-    loadingNetworks.value = false
+    if (!background) loadingNetworks.value = false
   }
 }
 
 // 加载银行卡信息
-async function loadBankInfo() {
-  loadingBankInfo.value = true
+async function loadBankInfo(background = false) {
+  if (!background) loadingBankInfo.value = true
   try {
     const res: any = await request.get('/deposit/settings/bank')
     
@@ -110,7 +114,7 @@ async function loadBankInfo() {
     console.error('加载银行卡信息失败:', e)
     bankInfo.value = { hasBank: false }
   } finally {
-    loadingBankInfo.value = false
+    if (!background) loadingBankInfo.value = false
   }
 }
 
@@ -120,11 +124,12 @@ async function loadDepositSettings() {
     return
   }
   
+  const network = selectedNetwork.value
   try {
     const res: any = await request.get('/deposit/settings', {
-      params: { network: selectedNetwork.value }
+      params: { network }
     })
-    
+    if (selectedNetwork.value !== network || !networks.value.some(item => item.value === network)) return
     if (res && res.success !== false) {
       depositAddress.value = res.address || ''
       // 处理二维码URL，使用统一的 getImageUrl 函数
@@ -347,6 +352,11 @@ async function loadRecords() {
     loadingRecords.value = false
   }
 }
+
+useDepositChannelRefresh(
+  () => Promise.all([loadNetworks(true), loadBankInfo(true)]),
+  () => !uploading.value && !loadingNetworks.value && !loadingBankInfo.value
+)
 
 onMounted(() => {
   loadNetworks()
@@ -620,11 +630,11 @@ onMounted(() => {
           </div>
           <div class="record-row">
             <div class="record-label">{{ localeStore.t('depositType') }}</div>
-            <div class="record-value">{{ record.type === 'digital' ? localeStore.t('depositTypeDigital') : localeStore.t('depositTypeBank') }}</div>
+            <div class="record-value">{{ depositRecordTypeLabel(record, localeStore.t) }}</div>
           </div>
           <div class="record-row">
             <div class="record-label">{{ localeStore.t('unit') }}</div>
-            <div class="record-value">{{ record.network || record.unit || '-' }}</div>
+            <div class="record-value">{{ record.currency || 'USD' }}</div>
           </div>
           <div class="record-row">
             <div class="record-label">{{ localeStore.t('time') }}</div>

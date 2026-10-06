@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { depositRecordTypeLabel } from '@/utils/depositRecords'
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import Tabbar from '@/components/Tabbar.vue'
@@ -84,7 +85,7 @@ onMounted(() => {
         </div>
         <div class="record-row">
           <span class="record-label">{{ localeStore.t('depositType') }}</span>
-          <span class="record-value">{{ record.type === 'digital' ? localeStore.t('depositTypeDigital') : localeStore.t('depositTypeBank') }}</span>
+          <span class="record-value">{{ depositRecordTypeLabel(record, localeStore.t) }}</span>
         </div>
         <div class="record-row">
           <span class="record-label">{{ localeStore.t('status') }}</span>
@@ -103,7 +104,7 @@ onMounted(() => {
         </div>
         <div class="record-row">
           <span class="record-label">{{ localeStore.t('unit') }}</span>
-          <span class="record-value">{{ record.network || record.unit || '-' }}</span>
+          <span class="record-value">{{ record.currency || 'USD' }}</span>
         </div>
         <div class="record-row">
           <span class="record-label">{{ localeStore.t('time') }}</span>
