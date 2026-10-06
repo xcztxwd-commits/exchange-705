@@ -22,7 +22,15 @@ export function contractMargin(quantity: number, lotSize: number, price: number,
   return decimalMargin(quantity, lotSize, price, leverage, conversionRate)
 }
 
+// The stored P&L is gross. fee is the complete charged round-trip fee, not each leg.
+// Legacy NULL lotSize reservations were refunded by settlement; do not charge them again.
+export function settledContractProfit(order: any): number {
+  if (order.profit == null || (order.lotSize != null && (order.fee == null || String(order.fee).trim() === ''))) return NaN
+  return decimalSum(order.profit, order.lotSize == null ? 0 : -Number(order.fee))
+}
+
 export function calculateContractProfit(order: any, currentPrice: number, conversionRate = 1): number {
+  if (order.status === 'CLOSED') return settledContractProfit(order)
   if (order.status && order.status !== 'OPEN') return Number(order.profit ?? 0)
   const quantity = Number(order.quantity || 0)
   const openPrice = Number(order.openPrice || 0)

@@ -49,7 +49,7 @@ for (const app of ['exchange-pc', 'exchange-frontend']) {
   assert.equal(calculateContractProfit({ ...order, side: 'SELL' }, 101), -10)
   assert.equal(calculateContractProfit({ ...order, lotSize: null, leverage: 10 }, 101), 0.1)
   assert.equal(calculateContractProfit({ ...order, status: 'PENDING' }, 101), 0)
-  assert.equal(calculateContractProfit({ ...order, status: 'CLOSED', profit: 7 }, 101), 7)
+  assert.equal(calculateContractProfit({ ...order, status: 'CLOSED', profit: 7 }, 101), 6.7)
   assert.equal(contractEquity(1, [{ ...order, profit: -11 }]), 0)
   // Exact decimal equity: 1 + 10 - 11 + 0.3 = 0.3 (not binary floating-point residue).
   assert.equal(contractEquity(1, [{ ...order, lotSize: null, profit: -11 }]), 0.3)

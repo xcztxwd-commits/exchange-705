@@ -36,7 +36,7 @@ const active = () => !disposed && auth.token === owner
 const watchedKey = `advanced-watchlist:${location.host}:${auth.user?.tenantId || 'guest'}:${auth.user?.id || 'guest'}:${accountMode()}`
 try { const list = JSON.parse(localStorage.getItem(watchedKey) || '[]'); if (Array.isArray(list)) watched.value = list.filter(s => typeof s === 'string') } catch { /* Unreadable preference never changes account state. */ }
 const money = (value: unknown, precision = 2) => value === null || value === undefined || !Number.isFinite(Number(value)) ? '—' : Number(value).toLocaleString(locale.locale, { minimumFractionDigits: precision, maximumFractionDigits: precision })
-const pct = (value: number | null) => value === null ? '—' : `${value > 0 ? '+' : ''}${money(value)}%`
+const pct = (value: number | null) => value === null || !Number.isFinite(value) ? '—' : `${value > 0 ? '+' : ''}${money(value)}%`
 const quoteStatus = (symbol: any) => market.getQuoteStatus(symbol.symbol, now.value)
 const quotePrice = (symbol: any) => quoteStatus(symbol) === 'unavailable' ? null : market.getPrice(symbol.symbol) || null
 const change = (symbol: any) => quoteStatus(symbol) === 'available' ? market.getChange24h(symbol.symbol).changePct : null

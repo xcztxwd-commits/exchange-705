@@ -11,7 +11,7 @@ export function imageLocation(value: string | null | undefined, origin: string, 
     return mode === 'DEMO' ? url.pathname.replace(/^\/api/, '').replace('/uploads/', '/demo-uploads/') : '/api' + url.pathname.replace(/^\/api/, '')
   }
   if (url.origin !== origin) return url.href // Public external image only; no bearer attached.
-  return url.pathname.startsWith('/market/icons/') ? '/api' + url.pathname : url.pathname + url.search + url.hash
+  return (url.pathname.startsWith('/market/icons/') ? '/api' + url.pathname : url.pathname) + url.search + url.hash
 }
 export function privateImagePath(value: string, origin: string): string | null {
   const normalized = imageLocation(value, origin)

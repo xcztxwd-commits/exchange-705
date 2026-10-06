@@ -5,7 +5,7 @@ import TradeSheet from './TradeSheet.vue'
 import request from '@/utils/request'
 import { useMarketStore } from '@/store/market'
 import { useLocaleStore } from '@/store/locale'
-import { quantityUnit, displayFee, calculateContractProfit, estimateLiquidationPrice } from '@/utils/contract'
+import { quantityUnit, displayFee, calculateContractProfit, settledContractProfit, estimateLiquidationPrice } from '@/utils/contract'
 import { orderTimestamp, protectionError, validIncrement } from '@/utils/tradeValidation'
 import { displaySymbol } from '@/utils/displaySymbol'
 import marketWebSocket from '@/utils/marketWebSocket'
@@ -73,7 +73,7 @@ function sideLabel(order: any) { return props.mode==='term' ? order.direction===
 function money(value: any) { return value != null && Number.isFinite(Number(value)) ? Number(value).toLocaleString(locale.locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—' }
 function price(value: any, order: any) { return Number(value) > 0 ? Number(value).toLocaleString(locale.locale, { minimumFractionDigits: info(order)?.pricePrecision ?? 2, maximumFractionDigits: info(order)?.pricePrecision ?? 2 }) : '—' }
 function livePrice(order: any) { return market.getQuoteStatus(order.symbol, now.value) === 'available' ? market.getPrice(order.symbol) : NaN }
-function profit(order: any) { return order.status === 'OPEN' ? (Number.isFinite(livePrice(order)) ? calculateContractProfit(order, livePrice(order), market.getConversionRate(order.symbol, order.quoteCurrency)) : NaN) : Number(order.profit) }
+function profit(order: any) { return order.status === 'OPEN' ? (Number.isFinite(livePrice(order)) ? calculateContractProfit(order, livePrice(order), market.getConversionRate(order.symbol, order.quoteCurrency)) : NaN) : props.mode === 'contract' && order.status === 'CLOSED' ? settledContractProfit(order) : Number(order.profit) }
 function liquidation(order: any) {
   if (available.value == null || order.status !== 'OPEN' || !Number.isFinite(livePrice(order))) return null
   const quote = livePrice(order), pnl = profit(order)

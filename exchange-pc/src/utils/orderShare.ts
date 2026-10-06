@@ -1,3 +1,4 @@
+import { settledContractProfit } from './contract.ts'
 import { drawShareDesign, type ShareDesign } from '../../../exchange-frontend/src/utils/shareTemplateDesign.ts'
 import { posterLocales, shareLanguage } from './orderShareLocales.ts'
 export { shareLanguage } from './orderShareLocales.ts'
@@ -39,7 +40,7 @@ const en = {
   saveError: 'Unable to save. Long-press or open the preview to save it.', shareError: 'Sharing unavailable. Please save the image instead.',
   saved: 'Download requested. You can also long-press the preview to save.', tip: '1080 × 1440 PNG · Long-press the preview to save on mobile.',
   privacy: 'Personal details and account balances are never included.',
-  accounting: 'Uses the recorded settlement P&L; no additional fee deduction. Amounts use account units when the currency is unavailable.',
+  accounting: 'Shows net settlement P&L after all charged trading fees, without deducting them twice. Amounts use account units when the currency is unavailable.',
   rateNote: 'Return = recorded P&L / margin (contracts) or investment (term trades). Fees are not deducted again.',
   ratePrivacy: 'Return-only mode hides quantity, capital and fees.',
   closed: 'Closed', contract: 'Contract', option: 'Term trade', buy: 'Buy / Long', sell: 'Sell / Short',
@@ -78,7 +79,7 @@ function baseShareCopy(locale: string): typeof en {
     saveError: '無法下載，請長按或開啟預覽圖儲存。', shareError: '無法使用系統分享，請先儲存圖片。',
     saved: '已請求下載，也可長按預覽圖片儲存。', tip: '1080 × 1440 PNG · 手機可長按預覽圖片儲存',
     privacy: '圖片不包含個人資訊及帳戶餘額。',
-    accounting: '採用訂單結算盈虧，不額外扣減手續費。幣種缺失時使用帳戶計價單位。',
+    accounting: '採用扣除全部已收取交易手續費後的淨盈虧，不重複扣費。幣種缺失時使用帳戶計價單位。',
     rateNote: '收益率＝結算盈虧 ÷ 合約保證金或期限投入金額，不再次扣減手續費。',
     ratePrivacy: '僅顯示收益率時，隱藏數量、保證金、投入金額及手續費。',
     closed: '已平倉', contract: '合約', option: '期限', buy: '買入 / 做多', sell: '賣出 / 做空',
@@ -105,7 +106,7 @@ function baseShareCopy(locale: string): typeof en {
     loading: '画像を作成中…', retry: '再試行', error: '注文を取得できません。再試行してください。',
     saveError: '保存できません。プレビュー画像を長押ししてください。', shareError: 'シェアできません。画像を保存してください。',
     saved: 'ダウンロードを開始しました。画像の長押しでも保存できます。', tip: '1080 × 1440 PNG · 長押しで画像を保存',
-    privacy: '個人情報や口座残高は含まれません。', accounting: '記録された決済損益を使用。手数料は再控除しません。通貨不明時は口座単位で表示。',
+    privacy: '個人情報や口座残高は含まれません。', accounting: '取引手数料控除後の決済損益を使用。二重控除はしません。通貨不明時は口座単位で表示。',
     rateNote: '収益率＝決済損益 ÷ 証拠金または投資額。手数料は再控除しません。', ratePrivacy: '収益率のみの場合、数量・証拠金・投資額・手数料を非表示。',
     closed: '決済済み', contract: '証拠金取引', option: 'オプション取引', buy: '買い / ロング', sell: '売り / ショート', up: '上昇を予想', down: '下落を予想',
     pnl: '実現損益', entry: '新規約定価格', exit: '決済約定価格', units: '口座単位', margin: '証拠金', investment: '投資額',
@@ -124,7 +125,7 @@ function optionalNumber(value: unknown): number | null {
   return Number.isFinite(n) ? n : null
 }
 export function settledShareOrder(raw: Record<string, unknown>, kind: ShareKind): ShareOrder {
-  const profit = optionalNumber(raw.profit)
+  const profit = optionalNumber(kind === 'contract' ? settledContractProfit(raw) : raw.profit)
   const openPrice = optionalNumber(raw.openPrice)
   const closePrice = optionalNumber(raw.closePrice)
   const direction = String(kind === 'contract' ? raw.side : raw.direction)

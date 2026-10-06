@@ -1823,7 +1823,7 @@ const messages: Messages = {
     closePosition: '平倉',
     action: '操作',
     closeTimeLabel: "平倉時間",
-    openTimeLabel: "開倉成交時間",
+    openTimeLabel: "開倉時間",
     save: '保存',
     remarkLabel: '備註',
     timeLabel: '時間',

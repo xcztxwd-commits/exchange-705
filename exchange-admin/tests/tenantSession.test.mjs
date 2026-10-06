@@ -61,6 +61,11 @@ assert.doesNotThrow(()=>assertAdminRequestTarget(new URL(gateway.getUri({url:'/a
 for(const url of ['https://evil.test/uploads/images/2/user/1/a.png','/uploads/images/2/user/1/a.png?token=secret']) assert.equal(imageLocation(url,site),'')
 assert.equal(privateImagePath('/uploads/images/2/user/1/a.png',site),'/api/uploads/images/2/user/1/a.png')
 assert.equal(imageLocation('/uploads/images/2/user/1/a.png',site,'DEMO'),'/demo-uploads/images/2/user/1/a.png')
+for(const value of ['/market/icons/crypto/BTC.svg?v=2','/api/market/icons/crypto/BTC.svg?v=2',site+'/market/icons/crypto/BTC.svg?v=2']) {
+ assert.equal(imageLocation(value,site),'/api/market/icons/crypto/BTC.svg?v=2','bundled icons keep their version across admin, mobile and PC')
+ assert.equal(privateImagePath(value,site),null,'public SVG icons are not credential-bearing private attachments')
+}
+assert.equal(imageLocation('/market/icons/forex/AUD-USD.svg?v=1',site),'/api/market/icons/forex/AUD-USD.svg?v=1')
 a.setItem('balance-pending:2:control:1','money');clearAdminSession(a);assert.equal(a.getItem('balance-pending:2:control:1'),null)
 console.log('PASS bearer destination and private image origin restrictions; balance request opener cleanup')
 

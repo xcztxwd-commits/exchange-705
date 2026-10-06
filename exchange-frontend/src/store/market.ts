@@ -1,5 +1,6 @@
 import { accountMode, getAccountApiBase } from '@/utils/accountMode'
 import { defineStore } from 'pinia'
+import { quoteNumber } from '@/utils/quoteChange'
 import request from '@/utils/request'
 import { createHomeSparklineClient, emptyHomeSparkline, homeSparklineScope, type HomeSparklineState } from '@/utils/homeSparklineCache'
 import { ref, computed } from 'vue'
@@ -130,9 +131,9 @@ export const useMarketStore = defineStore('market', () => {
         const old = priceMap.value[internal]
         tickDataMap.value[internal] = { symbol: internal, price: quote.price, timestamp: quote.timestamp || 0 }
         priceMap.value[internal] = {
-          price: quote.price, change24h: quote.change24h ?? old?.change24h ?? 0,
-          changePct24h: quote.changePct24h ?? old?.changePct24h ?? 0,
-          price24hAgo: quote.price24hAgo ?? old?.price24hAgo ?? quote.price,
+          price: quote.price, change24h: quoteNumber(quote.change24h),
+          changePct24h: quoteNumber(quote.changePct24h),
+          price24hAgo: quoteNumber(quote.price24hAgo ?? (quote.price - quoteNumber(quote.change24h))),
           firstPriceTime: old?.firstPriceTime || Date.now(),
         }
       }
@@ -403,8 +404,8 @@ export const useMarketStore = defineStore('market', () => {
             const internalSymbol = symbolMap.get(alltickSymbol) || symbolMapping.value[alltickSymbol] || alltickSymbol
             if (!recordQuoteStatus(internalSymbol, priceData)) continue
             const price = Number((priceData as any).price || 0)
-            const change24h = Number((priceData as any).change24h || 0)
-            const changePct24h = Number((priceData as any).changePct24h || 0)
+            const change24h = quoteNumber((priceData as any).change24h)
+            const changePct24h = quoteNumber((priceData as any).changePct24h)
             
             if (price > 0) {
               const priceInfo = {
@@ -859,7 +860,7 @@ export const useMarketStore = defineStore('market', () => {
         changePct: priceInfo.changePct24h,
       }
     }
-    return { change: 0, changePct: 0 }
+    return { change: NaN, changePct: NaN }
   }
 
   /**

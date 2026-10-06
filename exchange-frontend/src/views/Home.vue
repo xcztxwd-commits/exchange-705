@@ -10,6 +10,7 @@ import Sparkline from '@/components/Sparkline.vue'
 import request from '@/utils/request'
 import { useAuthStore } from '@/store/auth'
 import { useMarketStore } from '@/store/market'
+import { formatChangePercent } from '@/utils/quoteChange'
 import { useLocaleStore } from '@/store/locale'
 import { getAccountApiBase } from '@/utils/accountMode'
 import { HOME_SPARKLINE_REFRESH_MS, homeSparklineScope } from '@/utils/homeSparklineCache'
@@ -134,20 +135,20 @@ function getRealTimeChange(symbol: any): { change: number; changePct: number } {
   
   for (const key of symbolKeys) {
     const wsChange = marketStore.getChange24h(key)
-    if (wsChange.changePct !== 0) {
+    if (marketStore.priceMap[key]) {
       return wsChange
     }
   }
   
   return {
-    change: Number(symbol.priceChange24h || 0),
-    changePct: Number(symbol.priceChangePct24h || 0),
+    change: NaN,
+    changePct: NaN,
   }
 }
 
 function getChangeColor(change: number | null | undefined) {
-  const val = Number(change || 0)
-  return val >= 0 ? '#2abf4b' : '#e25d4d'
+  if (change == null || !Number.isFinite(change)) return '#999'
+  return change >= 0 ? '#2abf4b' : '#e25d4d'
 }
 
 // 缓存键名
@@ -758,8 +759,8 @@ const logoUrl = '/img/logo.svg'
             <div class="market-price" v-if="!isMarketClosed(s)">{{ formatPrice(getRealTimePrice(s), s.pricePrecision) }}</div>
             <div class="market-price market-closed" v-else>{{ localeStore.t('marketClosed') }}</div>
             <div class="market-change" v-if="!isMarketClosed(s)" :style="{ color: getChangeColor(getRealTimeChange(s).changePct) }">
-              <span class="change-icon ui-inline-arrow">{{ getRealTimeChange(s).changePct >= 0 ? '▲' : '▼' }}</span>
-              {{ getRealTimeChange(s).changePct >= 0 ? '+' : '' }}{{ (getRealTimeChange(s).changePct || 0).toFixed(2) }}%
+              <span v-if="Number.isFinite(getRealTimeChange(s).changePct)" class="change-icon ui-inline-arrow">{{ getRealTimeChange(s).changePct >= 0 ? '▲' : '▼' }}</span>
+              {{ formatChangePercent(getRealTimeChange(s).changePct, true) }}
             </div>
             <div class="market-change" v-else style="color: #999;">-</div>
           </div>
@@ -821,8 +822,8 @@ const logoUrl = '/img/logo.svg'
             <div class="symbol-price" v-if="!isMarketClosed(s)">{{ formatPrice(getRealTimePrice(s), s.pricePrecision) }}</div>
             <div class="symbol-price market-closed" v-else>{{ localeStore.t('marketClosed') }}</div>
             <div class="symbol-change" v-if="!isMarketClosed(s)" :style="{ color: getChangeColor(getRealTimeChange(s).changePct) }">
-              <span class="change-icon ui-inline-arrow">{{ getRealTimeChange(s).changePct >= 0 ? '▲' : '▼' }}</span>
-              {{ Math.abs(getRealTimeChange(s).changePct).toFixed(2) }}%
+              <span v-if="Number.isFinite(getRealTimeChange(s).changePct)" class="change-icon ui-inline-arrow">{{ getRealTimeChange(s).changePct >= 0 ? '▲' : '▼' }}</span>
+              {{ formatChangePercent(Math.abs(getRealTimeChange(s).changePct)) }}
             </div>
             <div class="symbol-change" v-else style="color: #999;">-</div>
           </div>

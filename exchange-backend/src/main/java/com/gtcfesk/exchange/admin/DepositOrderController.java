@@ -52,7 +52,12 @@ public class DepositOrderController {
  @GetMapping("/{id}") public Map<String,Object> detail(@PathVariable Long id){permit("view_deposit_orders");permit("detail");Map<String,Object> out=dto(visible(id));
   out.put("credit",credits.findByTenantIdAndDepositRecordId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), id).map(c->{Map<String,Object> m=mapper.convertValue(c,Map.class);m.put("amountUsd",DepositOrderService.decimal(c.getAmountUsd()));m.put("balanceBefore",DepositOrderService.decimal(c.getBalanceBefore()));m.put("balanceAfter",DepositOrderService.decimal(c.getBalanceAfter()));return m;}).orElse(null));return out;}
  @GetMapping("/customers") public List<Map<String,Object>> customers(@RequestParam String query) {
-  permit("view_deposit_orders");
+  permit("view_deposit_orders");return customerMatches(query);
+ }
+ @GetMapping("/recipient/customers") public List<Map<String,Object>> manualCustomers(@RequestParam String query) {
+  permit("manual_deposit");return customerMatches(query);
+ }
+ private List<Map<String,Object>> customerMatches(String query) {
   String value=query.trim();
   if(value.isEmpty())return Collections.emptyList();
   if(value.length()>254)throw error(400,"搜索内容过长");

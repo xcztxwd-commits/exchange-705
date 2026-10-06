@@ -603,7 +603,8 @@ function resetMarket() {
   })
 }
 
-watch(() => [props.symbol, props.category, interval.value], resetMarket)
+watch([() => props.symbol, () => props.category, () => interval.value,
+  () => market.symbols.find(item => item.symbol === props.symbol)?.pricePrecision], resetMarket)
 function replayQuote() {
   // Persisted mixed candles are authoritative; never rebuild their OHLC from client ticks.
   if (market.quoteStatusMap[props.symbol]?.controlHistory) {

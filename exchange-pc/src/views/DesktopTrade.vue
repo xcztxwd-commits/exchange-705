@@ -72,11 +72,11 @@
               <span class="font-bold text-gray-700 dark:text-gray-200 truncate">{{ displaySymbol(symbol) }}</span>
             </div>
             <div class="flex-1 text-center">
-              <span :class="['font-bold font-mono', parseFloat(getSymbolChange(symbol.symbol)) >= 0 ? 'text-[#8cc63f]' : 'text-[#ff4d4f]']">{{ getSymbolPrice(symbol.symbol) }}</span>
+              <span :class="['font-bold font-mono', !Number.isFinite(marketStore.getChange24h(symbol.symbol).changePct) ? 'text-gray-500' : marketStore.getChange24h(symbol.symbol).changePct >= 0 ? 'text-[#8cc63f]' : 'text-[#ff4d4f]']">{{ getSymbolPrice(symbol.symbol) }}</span>
             </div>
             <div class="flex flex-col items-end w-[25%]">
-              <span :class="['px-2 py-1 rounded text-white text-[12px] font-bold w-full text-center', parseFloat(getSymbolChange(symbol.symbol)) >= 0 ? 'bg-[#8cc63f]' : 'bg-[#ff4d4f]']">
-                {{ parseFloat(getSymbolChange(symbol.symbol)) > 0 ? '+' : '' }}{{ getSymbolChange(symbol.symbol) }}%
+              <span :title="Number.isFinite(marketStore.getChange24h(symbol.symbol).changePct) ? undefined : localeStore.text('暂无有效涨跌幅数据', 'Change data is unavailable')" :class="['px-2 py-1 rounded text-white text-[12px] font-bold w-full text-center', !Number.isFinite(marketStore.getChange24h(symbol.symbol).changePct) ? 'bg-gray-400' : marketStore.getChange24h(symbol.symbol).changePct >= 0 ? 'bg-[#8cc63f]' : 'bg-[#ff4d4f]']">
+                {{ getSymbolChange(symbol.symbol) }}
               </span>
             </div>
           </div>
@@ -132,7 +132,7 @@
                    <th class="py-3 px-2 font-medium whitespace-nowrap">{{ localeStore.t('stopLossPrice') }}</th>
                    <th class="py-3 px-2 font-medium whitespace-nowrap">{{ localeStore.t('handlingFee') }} (USD)</th>
                    <th class="py-3 px-2 font-medium whitespace-nowrap">{{ localeStore.t('margin') }} (USD)</th>
-                   <th class="py-3 px-2 font-medium whitespace-nowrap">{{ orderSubTab === 'history' ? localeStore.text('已實現盈虧（不含手續費）', 'Realized P&L (excluding fees)') : localeStore.t('profitAndLoss') }} (USD)</th>
+                   <th class="py-3 px-2 font-medium whitespace-nowrap">{{ orderSubTab === 'history' ? localeStore.text('已實現盈虧', 'Realized P&L') : localeStore.t('profitAndLoss') }} (USD)</th>
                    <th class="py-3 px-2 font-medium whitespace-nowrap">{{ orderSubTab === 'pending' ? localeStore.t('createTime') : orderSubTab === 'history' ? `${localeStore.t('openTimeLabel')} / ${localeStore.t('closeTimeLabel')}` : localeStore.t('openTimeLabel') }}</th>
                    <th class="py-3 px-4 font-medium whitespace-nowrap text-right">{{ localeStore.t('action') }}</th>
                  </tr>
@@ -148,10 +148,10 @@
                     <td class="py-3 px-2 text-gray-500 dark:text-gray-400 dark:text-gray-500">#{{ order.id }}</td>
                     <td class="py-3 px-2"><span :class="['inline-block whitespace-nowrap text-white px-2 py-0.5 rounded text-[11px] font-bold', order.type === 'buy' ? 'bg-[#8cc63f]' : 'bg-[#ff4d4f]']">{{ order.type === 'buy' ? localeStore.t('buy') : localeStore.t('sell') }}</span></td>
                     <td class="py-3 px-2">{{ order.lots }} {{ quantityUnit(order, localeStore.t('lots')) }} <span class="text-gray-500 text-xs">{{ order.leverage }}×</span></td>
-                    <td class="py-3 px-2 font-mono">{{ (orderSubTab === 'pending' ? order.price : order.openPrice).toFixed(4) }}</td>
-                    <td class="py-3 px-2 font-mono font-bold text-gray-700 dark:text-gray-200">{{ contractDisplayPrice(order)?.toFixed(4) ?? '—' }}</td>
-                    <td class="py-3 px-2 text-gray-400 dark:text-gray-500">{{ order.takeProfit || 0 }}</td>
-                    <td class="py-3 px-2 text-gray-400 dark:text-gray-500">{{ order.stopLoss || 0 }}</td>
+                    <td class="py-3 px-2 font-mono">{{ formatSymbolPrice(orderSubTab === 'pending' ? order.price : order.openPrice, order.symbol) }}</td>
+                    <td class="py-3 px-2 font-mono font-bold text-gray-700 dark:text-gray-200">{{ formatSymbolPrice(contractDisplayPrice(order), order.symbol) }}</td>
+                    <td class="py-3 px-2 text-gray-400 dark:text-gray-500">{{ order.takeProfit ? formatSymbolPrice(order.takeProfit, order.symbol) : '—' }}</td>
+                    <td class="py-3 px-2 text-gray-400 dark:text-gray-500">{{ order.stopLoss ? formatSymbolPrice(order.stopLoss, order.symbol) : '—' }}</td>
                     <td class="py-3 px-2">{{ displayFee(order.fee) }}</td>
                     <td class="py-3 px-2">{{ order.margin.toFixed(2) }}</td>
                     <td :class="['py-3 px-2 font-bold', order.profit >= 0 ? 'text-[#8cc63f]' : 'text-[#ff4d4f]']">{{ formatMoney(order.profit) }}</td>
@@ -197,8 +197,8 @@
                     <td class="py-3 px-4 font-bold text-gray-700 dark:text-gray-200">{{ displaySymbol(order) }}</td>
                     <td class="py-3 px-2"><span :class="['inline-block whitespace-nowrap text-white px-2 py-0.5 rounded text-[11px] font-bold', order.type === 'buy' || order.type === 'up' ? 'bg-[#8cc63f]' : 'bg-[#ff4d4f]']">{{ order.type === 'buy' || order.type === 'up' ? localeStore.t('buyUpText') : localeStore.t('buyDownText') }}</span></td>
                     <td class="py-3 px-2 font-mono">{{ order.amount ? order.amount.toFixed(2) : '0.00' }}</td>
-                    <td class="py-3 px-2 font-mono">{{ order.openPrice ? order.openPrice.toFixed(4) : '0.0000' }}</td>
-                    <td class="py-3 px-2 font-mono">{{ order.closePrice && order.closePrice > 0 ? order.closePrice.toFixed(4) : '-' }}</td>
+                    <td class="py-3 px-2 font-mono">{{ formatSymbolPrice(order.openPrice, order.symbol) }}</td>
+                    <td class="py-3 px-2 font-mono">{{ order.closePrice && order.closePrice > 0 ? formatSymbolPrice(order.closePrice, order.symbol) : '—' }}</td>
                     <td class="py-3 px-2">{{ order.period }}</td>
                     <td class="py-3 px-2 text-[#8cc63f]">{{ order.expectedProfit ? order.expectedProfit.toFixed(2) : '0.00' }}</td>
                     <td :class="['py-3 px-2 font-bold', order.profit > 0 ? 'text-[#8cc63f]' : (order.profit < 0 ? 'text-[#ff4d4f]' : 'text-gray-500 dark:text-gray-400 dark:text-gray-500')]">{{ order.status === 'CLOSED' ? (order.profit ? formatMoney(order.profit) : '0.00') : '-' }}</td>
@@ -1575,7 +1575,8 @@ import OrderShareModal from "@/components/OrderShareModal.vue";
 import { orderTimestamp, shareCopy, type ShareKind } from "@/utils/orderShare";
 import { ref, onMounted, computed, watch, onUnmounted, nextTick } from 'vue';
 import marketWebSocket from '@/utils/marketWebSocket';
-import { useMarketStore } from '@/store/market';
+import { useMarketStore } from '@/store/market'
+import { formatChangePercent } from '@/utils/quoteChange';
 import { useAuthStore } from '@/store/auth';
 import { useTradeKyc } from '@/utils/useTradeKyc';
 import { useLocaleStore } from '@/store/locale';
@@ -1931,7 +1932,7 @@ const quantityStep = computed(() => Number(currentSymbolInfo.value?.quantityStep
 const unitLabel = computed(() => quantityUnit(currentSymbolInfo.value, localeStore.t('lots')));
 const selectedLeverage = ref(DEFAULT_LEVERAGE);
 
-const currentSymbolInfo = ref<any>(null);
+const currentSymbolInfo = computed(() => marketStore.symbols.find((symbol: any) => symbol.symbol === currentSymbol.value) || null);
 const currentDisplaySymbol = computed(() => displaySymbol(currentSymbolInfo.value?.symbol === currentSymbol.value ? currentSymbolInfo.value : currentSymbol.value));
 
 // 获取每手数量
@@ -3054,6 +3055,15 @@ const updateTime = () => {
 };
 
 let timeInterval: any;
+let lastSymbolRefresh = 0;
+let symbolRefresh: Promise<void> | undefined;
+const refreshSymbols = () => {
+  if (symbolRefresh) return symbolRefresh;
+  lastSymbolRefresh = Date.now();
+  symbolRefresh = marketStore.fetchSymbols().finally(() => { symbolRefresh = undefined; });
+  return symbolRefresh;
+};
+onMounted(() => { window.addEventListener('focus', refreshSymbols); });
 
 const loadCategories = async () => {
   try {
@@ -3070,7 +3080,7 @@ const loadCategories = async () => {
 
 onMounted(async () => {
   await loadCategories();
-  await marketStore.fetchSymbols();
+  await refreshSymbols();
   // 当加载完所有 symbols 之后，批量订阅所有的市场${localeStore.t('tradeText')}对，以${localeStore.t('getText')}整个左侧列表的实时价格
   if (marketStore.symbols && marketStore.symbols.length > 0) {
 
@@ -3099,6 +3109,7 @@ onMounted(async () => {
   timeInterval = setInterval(() => {
     updateTime();
     updateOrdersRealTime();
+    if (document.visibilityState !== 'hidden' && Date.now() - lastSymbolRefresh >= 15000) void refreshSymbols();
   }, 1000);
 });
 
@@ -3111,6 +3122,7 @@ watch(orderSubTab, () => {
 });
 
 onUnmounted(() => {
+  window.removeEventListener('focus', refreshSymbols);
   if (timeInterval) {
     clearInterval(timeInterval);
   }
@@ -3146,14 +3158,16 @@ const currentSymbolObj = computed(() => {
   return marketStore.priceMap[currentSymbol.value] || null;
 });
 
-const getSymbolPrice = (symbol: string) => {
-  const p = marketStore.priceMap[symbol];
-  return p && p.price ? Number(p.price).toFixed(2) : '0.00';
+const formatSymbolPrice = (value: unknown, symbol: string = currentSymbol.value) => {
+  if (value == null || String(value).trim() === '' || !Number.isFinite(Number(value))) return '—';
+  const precision = marketStore.symbols.find((item: any) => item.symbol === symbol)?.pricePrecision;
+  return Number(value).toFixed(Number.isInteger(precision) && precision >= 0 && precision <= 8 ? precision : 2);
 };
 
+const getSymbolPrice = (symbol: string) => formatSymbolPrice(marketStore.priceMap[symbol]?.price, symbol);
+
 const getSymbolChange = (symbol: string) => {
-  const p = marketStore.priceMap[symbol];
-  return p && p.changePct24h ? Number(p.changePct24h).toFixed(2) : '0.00';
+  return formatChangePercent(marketStore.getChange24h(symbol).changePct, true);
 };
 
 const currentKline = computed(() => {
@@ -3162,24 +3176,23 @@ const currentKline = computed(() => {
     const last = klines[klines.length - 1];
     if (last) {
       return {
-        open: last.open.toFixed(2),
-        high: last.high.toFixed(2),
-        low: last.low.toFixed(2),
-        close: last.close.toFixed(2)
+        open: formatSymbolPrice(last.open),
+        high: formatSymbolPrice(last.high),
+        low: formatSymbolPrice(last.low),
+        close: formatSymbolPrice(last.close)
       };
     }
   }
-  return { open: '0.00', high: '0.00', low: '0.00', close: '0.00' };
+  return { open: '—', high: '—', low: '—', close: '—' };
 });
 
 const getPriceColor = (symbol: any) => {
-  if (!symbol || !symbol.changePct24h) return 'text-gray-500 dark:text-gray-400';
+  if (!symbol || !Number.isFinite(symbol.changePct24h)) return 'text-gray-500 dark:text-gray-400';
   return parseFloat(symbol.changePct24h) >= 0 ? 'text-[#8cc63f]' : 'text-[#ff4d4f]';
 };
 
 const selectSymbol = (symbol: any) => {
   currentSymbol.value = symbol.symbol;
-  currentSymbolInfo.value = symbol;
   // 我们已经在 onMounted 中批量订阅了所有的 symbol，因此这里不${localeStore.t('requiredText2')}再单独订阅
   // 但如果出于某些原因（比如组件销毁重建），可以保留这行
 };

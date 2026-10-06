@@ -11,7 +11,7 @@ import javax.servlet.*;import javax.servlet.http.*;import java.io.IOException;
 public class TenantRequestFilter extends OncePerRequestFilter {
  private final TenantHostService hosts;
  @org.springframework.beans.factory.annotation.Autowired private TenantDomainVerification domains;
- public static boolean backendSharedPath(String path){return path.equals("/api/market/currencies")||path.equals("/api/upload/image")||path.equals("/api/upload/audio")||path.equals("/api/user/support/config")||path.startsWith("/api/uploads/images/")||path.startsWith("/api/uploads/audio/")||path.equals("/api/user/support/tones/arrival.wav")||path.equals("/api/user/support/tones/reply.wav");}
+ public static boolean backendSharedPath(String path){return path.matches("/api/market/icons/(crypto|forex|stocks|metal|oil|index|symbol)/[A-Z0-9._-]{1,40}\\.svg")||path.equals("/api/market/currencies")||path.equals("/api/upload/image")||path.equals("/api/upload/audio")||path.equals("/api/user/support/config")||path.startsWith("/api/uploads/images/")||path.startsWith("/api/uploads/audio/")||path.equals("/api/user/support/tones/arrival.wav")||path.equals("/api/user/support/tones/reply.wav");}
  @Override protected void doFilterInternal(HttpServletRequest request,HttpServletResponse response,FilterChain chain)throws IOException,ServletException{
   TenantContext.clear();String path=request.getRequestURI();
   try{
