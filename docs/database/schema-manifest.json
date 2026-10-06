@@ -1,16 +1,16 @@
 {
-  "snapshot_date": "2026-10-05",
-  "schema_epoch": 2026100404,
-  "source_code_commit": "50d65fdc59083f9c3d029fa78d42794f5eabf86c",
-  "source_kind": "migrated isolated MySQL 5.7 fixture; structure-only metadata capture",
+  "snapshot_date": "2026-10-06",
+  "schema_epoch": 2026100603,
+  "source_code_commit": "8679fff2ead54e53a90757366ab6a2e9270af763",
+  "source_kind": "published 0404 structure imported into owned MySQL 5.7 fixture; reviewed 0601/0602/0603 applied; structure-only stable capture",
   "database_defaults": {
     "collation": "utf8mb4_unicode_ci",
     "character_set": "utf8mb4"
   },
   "counts": {
-    "tables": 112,
-    "columns": 1319,
-    "indexes": 448,
+    "tables": 113,
+    "columns": 1333,
+    "indexes": 452,
     "foreign_keys": 188,
     "triggers": 161,
     "routines": 1,
@@ -20,9 +20,9 @@
   "categories": {
     "private": 94,
     "shared": 6,
-    "control": 12
+    "control": 13
   },
-  "registered_table_count": 113,
+  "registered_table_count": 114,
   "registered_without_ddl": [
     "tenant_migration_history"
   ],
@@ -63,6 +63,7 @@
     "control_admin",
     "control_audit_log",
     "control_chat_archive_job",
+    "control_policy_definition",
     "control_table_preference",
     "demo_account",
     "demo_ledger",
@@ -144,7 +145,6 @@
     "definer": "CURRENT_USER (source accounts omitted)",
     "live_auto_increment_counters": "removed; user_account table-level floor 7000001 retained from reviewed tenant DDL; ORM uses user_id_sequence with INITIAL_PARAM=752911 independently",
     "definer_replacements": 162,
-    "removed_table_counters": 35,
     "stored_sql_mode": "recognized MySQL 5.7 dump headers verified against actual trigger/routine metadata"
   },
   "contains_business_rows": false,
@@ -250,12 +250,22 @@
     {
       "name": "V2026100404__history_ordering_and_response_receipts.sql",
       "sha256": "8689d5bc2192161ed60db148c7792984da92f5f34493a5c8d094555dd396d1ae"
+    },
+    {
+      "name": "V2026100601__control_policy_definitions.sql",
+      "sha256": "6cc7cb85247b77f55e6e155c6f0571d1188eeef808e011a94a51074e90b97a7f"
+    },
+    {
+      "name": "V2026100602__user_avatar.sql",
+      "sha256": "457641a432f2248891f0051b8b3a12cfd0c3e0d09230763e7d0a397eda79d6ff"
+    },
+    {
+      "name": "V2026100603__tenant_entry_frontend_roles.sql",
+      "sha256": "31f9a2e51fe4bd7b0d195ca8724a68d8fbae4509716b0b4acbba709135d858b3"
     }
   ],
   "sha256": {
-    "docs/database/schema.sql": "112118fbd7e5b474dd64b035907c7ccdca80944e956a48a1ab5742569401ea6a",
-    "docs/database/data-dictionary.md": "592a7a6cbfce1addf80b5a50a5703df10a350f777379887a1cc90a5d1a44aa90",
-    "scripts/multitenant/table_manifest.json": "3f3a2e704d60487545a9a4c8fe2ca455a8d939c7e18429e3dae90c1720aea12b",
+    "scripts/multitenant/table_manifest.json": "b742c05aa84e90d1113ed412fa288ec46d77dbc7ce0aba673fdef6d4d6521c2c",
     "scripts/multitenant/legacy-schema.sql": "6cbf7e0bb75eed06cc46f0c39ee16af8c8557e0416b8c45d5b186bcee382fcf1",
     "scripts/multitenant/legacy-feature-tables.sql": "fd58712b25fa33152b13db4a25f4cb0657ad86d3f0a4cc86170fd16e852c42bc",
     "exchange-backend/src/main/resources/db/migration/V2026092900__legacy_feature_prerequisites.sql": "eab055fb009441768ce3b277f5545e94cfabc1f4249cf17fec4851b8f9aa9859",
@@ -282,7 +292,12 @@
     "exchange-backend/src/main/resources/db/migration/V2026100401__joint_s3_money_progress.sql": "123d14ba9a8767a5e2f81e624a0100a5282a34603f40ce366561b26b320e60bb",
     "exchange-backend/src/main/resources/db/migration/V2026100402__joint_s4_history_projection.sql": "58ddcf5aac26f8f7d53fb9f69230c3308357bc5d92d1ef3fb2f0437bfb8cc277",
     "exchange-backend/src/main/resources/db/migration/V2026100403__source_history_input_revision.sql": "232fd47233ba1b2a219bbbaad51483c3f565db4966377a362b3fe1949cea9671",
-    "exchange-backend/src/main/resources/db/migration/V2026100404__history_ordering_and_response_receipts.sql": "8689d5bc2192161ed60db148c7792984da92f5f34493a5c8d094555dd396d1ae"
+    "exchange-backend/src/main/resources/db/migration/V2026100404__history_ordering_and_response_receipts.sql": "8689d5bc2192161ed60db148c7792984da92f5f34493a5c8d094555dd396d1ae",
+    "docs/database/schema.sql": "3d4fae2f121413c73ad809a0a23654db99121a961a67f1242c3b0ec0ddf1506b",
+    "docs/database/data-dictionary.md": "6a5a22ed96333e9df7f20584ca85dc45502fec463378dacd1dec1c8efdd79e33",
+    "exchange-backend/src/main/resources/db/migration/V2026100601__control_policy_definitions.sql": "6cc7cb85247b77f55e6e155c6f0571d1188eeef808e011a94a51074e90b97a7f",
+    "exchange-backend/src/main/resources/db/migration/V2026100602__user_avatar.sql": "457641a432f2248891f0051b8b3a12cfd0c3e0d09230763e7d0a397eda79d6ff",
+    "exchange-backend/src/main/resources/db/migration/V2026100603__tenant_entry_frontend_roles.sql": "31f9a2e51fe4bd7b0d195ca8724a68d8fbae4509716b0b4acbba709135d858b3"
   },
   "verification": {
     "offline_contract": "PASS",
@@ -290,11 +305,27 @@
     "fresh_mysql57_import": "PASS",
     "mysql_version": "5.7.44",
     "normalized_ddl_roundtrip": "PASS",
-    "normalized_ddl_sha256": "3ed3c40c445acee4dcf4f963ec63b0002343eff41dbb01225c66bb90be231b5d",
+    "normalized_ddl_sha256": "189fe406ad54e687c9ab461a2263f833095f17c6ce4b5f72840ee37981eaaff5",
     "empty_table_check": "PASS",
     "total_business_table_rows": 0,
     "foreign_key_checks_restored": true,
     "unique_checks_restored": true,
-    "application_or_production_acceptance": false
+    "application_or_production_acceptance": false,
+    "reviewed_tail_execution": "PASS",
+    "unchanged_other_table_ddl": "PASS",
+    "tail_migrations": [
+      {
+        "name": "V2026100601__control_policy_definitions.sql",
+        "sha256": "6cc7cb85247b77f55e6e155c6f0571d1188eeef808e011a94a51074e90b97a7f"
+      },
+      {
+        "name": "V2026100602__user_avatar.sql",
+        "sha256": "457641a432f2248891f0051b8b3a12cfd0c3e0d09230763e7d0a397eda79d6ff"
+      },
+      {
+        "name": "V2026100603__tenant_entry_frontend_roles.sql",
+        "sha256": "31f9a2e51fe4bd7b0d195ca8724a68d8fbae4509716b0b4acbba709135d858b3"
+      }
+    ]
   }
 }

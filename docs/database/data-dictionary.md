@@ -1,12 +1,12 @@
 # Exchange 705 当前数据库数据字典
 
-快照日期：2026-10-05。结构版本：`2026100404`。对应业务源码提交：`50d65fdc59083f9c3d029fa78d42794f5eabf86c`。
+快照日期：2026-10-06。结构版本：`2026100603`。对应业务源码提交：`8679fff2ead54e53a90757366ab6a2e9270af763`。
 
 本文件由已迁移的隔离 MySQL 5.7 库的 `information_schema` 生成，只包含结构元数据。权威 DDL 见 [schema.sql](schema.sql)，导入边界、版本差异和校验方法见 [README](README.md)。
 
-实测结构：112 张表、1319 个字段、448 个索引、188 个外键、161 个触发器、1 个存储过程；没有视图、事件或存储函数。索引和外键按约束对象计数，复合约束不重复计数。
+实测结构：113 张表、1333 个字段、452 个索引、188 个外键、161 个触发器、1 个存储过程；没有视图、事件或存储函数。索引和外键按约束对象计数，复合约束不重复计数。
 
-机器清单登记 113 张表，其中 `tenant_migration_history` 只有登记，没有审定创建语句，也没有出现在此实际库中。因此该名称不被伪造为已存在的第 113 张表；迁移证据仍走现有受控 JSON 回执。
+机器清单登记 114 张表，其中 `tenant_migration_history` 只有登记，没有审定创建语句，也没有出现在此实际库中。因此该名称不被伪造为已存在的第 114 张表；迁移证据仍走现有受控 JSON 回执。
 
 默认值栏 `NULL` 表示元数据未提供非 NULL 默认值；可空字段与 NOT NULL 字段的具体默认行为以 DDL 为准。旧表注释存在历史编码乱码，照录元数据，不推测或改写。
 
@@ -50,6 +50,7 @@
 | [control_admin](#control_admin) | 控制面 | 8 | 历史基线或前置结构 |
 | [control_audit_log](#control_audit_log) | 控制面 | 12 | 历史基线或前置结构 |
 | [control_chat_archive_job](#control_chat_archive_job) | 控制面 | 22 | V2026093006__chat_archive_jobs.sql |
+| [control_policy_definition](#control_policy_definition) | 控制面 | 5 | V2026100601__control_policy_definitions.sql |
 | [control_table_preference](#control_table_preference) | 控制面 | 4 | V2026093002__control_table_preferences.sql |
 | [demo_account](#demo_account) | 租户私有 | 7 | 历史基线或前置结构 |
 | [demo_ledger](#demo_ledger) | 租户私有 | 9 | 历史基线或前置结构 |
@@ -104,9 +105,9 @@
 | [symbol_duration](#symbol_duration) | 租户私有 | 13 | 历史基线或前置结构 |
 | [system_config](#system_config) | 租户私有 | 7 | 历史基线或前置结构 |
 | [t_ai_model](#t_ai_model) | 租户私有 | 14 | 历史基线或前置结构 |
-| [tenant](#tenant) | 控制面 | 12 | 历史基线或前置结构 |
-| [tenant_domain_binding](#tenant_domain_binding) | 控制面 | 7 | V2026093004__tenant_domain_candidates.sql |
-| [tenant_domain_history](#tenant_domain_history) | 控制面 | 4 | 历史基线或前置结构 |
+| [tenant](#tenant) | 控制面 | 16 | 历史基线或前置结构 |
+| [tenant_domain_binding](#tenant_domain_binding) | 控制面 | 10 | V2026093004__tenant_domain_candidates.sql |
+| [tenant_domain_history](#tenant_domain_history) | 控制面 | 5 | 历史基线或前置结构 |
 | [tenant_policy](#tenant_policy) | 控制面 | 6 | 历史基线或前置结构 |
 | [tenant_schema_version](#tenant_schema_version) | 控制面 | 4 | 历史基线或前置结构 |
 | [trader_audit](#trader_audit) | 租户私有 | 11 | V2026100303__curated_traders.sql |
@@ -118,7 +119,7 @@
 | [trial_account](#trial_account) | 租户私有 | 11 | 历史基线或前置结构 |
 | [trial_grant](#trial_grant) | 租户私有 | 14 | V2026100102__stage1_current_business_schema.sql |
 | [trial_ledger](#trial_ledger) | 租户私有 | 8 | 历史基线或前置结构 |
-| [user_account](#user_account) | 租户私有 | 32 | 历史基线或前置结构 |
+| [user_account](#user_account) | 租户私有 | 33 | 历史基线或前置结构 |
 | [user_action](#user_action) | 租户私有 | 6 | 历史基线或前置结构 |
 | [user_bank_card](#user_bank_card) | 租户私有 | 11 | 历史基线或前置结构 |
 | [user_digital_address](#user_digital_address) | 租户私有 | 8 | 历史基线或前置结构 |
@@ -1305,6 +1306,22 @@
 
 - `archive_actor`：(`actor_id`) 引用 `control_admin` (`id`)；UPDATE RESTRICT；DELETE RESTRICT。
 - `archive_tenant`：(`tenant_id`) 引用 `tenant` (`id`)；UPDATE RESTRICT；DELETE RESTRICT。
+
+## control_policy_definition
+
+分类：控制面。引擎：`InnoDB`。排序规则：`utf8mb4_unicode_ci`。
+
+| 字段 | 类型 | 可空 | 默认值 | 属性 | 排序规则 | 注释 |
+| --- | --- | --- | --- | --- | --- | --- |
+| `policy_key` | `varchar(128)` | NO | NULL |  | utf8mb4_bin |  |
+| `policy_name` | `varchar(128)` | NO | NULL |  | utf8mb4_unicode_ci |  |
+| `options_json` | `longtext` | NO | NULL |  | utf8mb4_unicode_ci |  |
+| `default_value` | `text` | NO | NULL |  | utf8mb4_unicode_ci |  |
+| `version` | `bigint(20)` | NO | "0" |  | — |  |
+
+### 索引
+
+- `PRIMARY`：主键，BTREE，(`policy_key`)。
 
 ## control_table_preference
 
@@ -3171,12 +3188,17 @@
 | `domain_verified` | `bit(1)` | NO | "b'0'" |  | — |  |
 | `row_version` | `bigint(20)` | NO | "0" |  | — |  |
 | `created_at` | `datetime(6)` | NO | NULL |  | — |  |
+| `entry_host` | `varchar(253)` | YES | NULL |  | utf8mb4_general_ci |  |
+| `entry_enabled` | `bit(1)` | NO | "b'0'" |  | — |  |
+| `entry_verified` | `bit(1)` | NO | "b'0'" |  | — |  |
+| `domain_version` | `bigint(20)` | NO | "0" |  | — |  |
 
 ### 索引
 
 - `PRIMARY`：主键，BTREE，(`id`)。
 - `uk_tenant_code`：唯一索引，BTREE，(`code`)。
 - `uk_tenant_host`：唯一索引，BTREE，(`frontend_host`)。
+- `uq_tenant_entry_host`：唯一索引，BTREE，(`entry_host`)。
 
 ## tenant_domain_binding
 
@@ -3191,11 +3213,16 @@
 | `expires_at` | `datetime(6)` | YES | NULL |  | — |  |
 | `verified_at` | `datetime(6)` | YES | NULL |  | — |  |
 | `version` | `bigint(20)` | NO | "0" |  | — |  |
+| `domain_role` | `varchar(16)` | NO | "FRONTEND" |  | utf8mb4_unicode_ci |  |
+| `active_role` | `varchar(16)` | YES | NULL | STORED GENERATED | utf8mb4_unicode_ci |  |
+| `candidate_role` | `varchar(16)` | YES | NULL | STORED GENERATED | utf8mb4_unicode_ci |  |
 
 ### 索引
 
 - `ix_domain_candidate`：普通索引，BTREE，(`tenant_id`, `status`)。
 - `PRIMARY`：主键，BTREE，(`hostname`)。
+- `uq_domain_active_role`：唯一索引，BTREE，(`tenant_id`, `active_role`)。
+- `uq_domain_candidate_role`：唯一索引，BTREE，(`tenant_id`, `candidate_role`)。
 
 ### 外键
 
@@ -3211,6 +3238,7 @@
 | `tenant_id` | `bigint(20)` | NO | NULL |  | — |  |
 | `hostname` | `varchar(253)` | NO | NULL |  | utf8mb4_general_ci |  |
 | `retired_at` | `datetime(6)` | YES | NULL |  | — |  |
+| `domain_role` | `varchar(16)` | NO | "FRONTEND" |  | utf8mb4_general_ci |  |
 
 ### 索引
 
@@ -3669,6 +3697,7 @@
 | `last_device_type` | `varchar(16)` | YES | NULL |  | utf8mb4_general_ci |  |
 | `annual_income` | `decimal(14,2)` | YES | NULL |  | — |  |
 | `annual_income_currency` | `varchar(3)` | YES | NULL |  | utf8mb4_general_ci |  |
+| `avatar_url` | `varchar(300)` | YES | NULL |  | utf8mb4_general_ci |  |
 
 ### 索引
 
@@ -3691,10 +3720,6 @@
 
 - `mt_fk_72d601353dacb02f6447`：(`tenant_id`, `parent_user_id`) 引用 `user_account` (`tenant_id`, `id`)；UPDATE RESTRICT；DELETE RESTRICT。
 - `mt_t_user_account`：(`tenant_id`) 引用 `tenant` (`id`)；UPDATE RESTRICT；DELETE RESTRICT。
-
-### 触发器
-
-- `mt_immutable_user_account`：BEFORE UPDATE，同类执行顺序 1。完整保护条件及 SQL_MODE 在 `schema.sql` 中保留。
 
 ## user_action
 

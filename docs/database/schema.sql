@@ -1,9 +1,6 @@
--- Exchange 705 schema-only snapshot, 2026-10-05.
--- Schema epoch: 2026100404; source code: 50d65fdc59083f9c3d029fa78d42794f5eabf86c.
--- Empty-database import only. No business rows, credentials or migration receipts.
--- Source DEFINER identities and live AUTO_INCREMENT counters are not published.
--- user_account table AUTO_INCREMENT floor: 7000001; ORM uses user_id_sequence separately.
--- Importing this file does not grant activation or initialize any sequence rows.
+-- Exchange 705 structure-only snapshot 2026-10-06; schema epoch 2026100603.
+-- No business data, migration receipts or activation approval.
+
 /*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
 /*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
 /*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */;
@@ -1423,6 +1420,17 @@ CREATE TABLE `control_chat_archive_job` (
   CONSTRAINT `archive_actor` FOREIGN KEY (`actor_id`) REFERENCES `control_admin` (`id`),
   CONSTRAINT `archive_tenant` FOREIGN KEY (`tenant_id`) REFERENCES `tenant` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `control_policy_definition` (
+  `policy_key` varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
+  `policy_name` varchar(128) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `options_json` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `default_value` text COLLATE utf8mb4_unicode_ci NOT NULL,
+  `version` bigint(20) NOT NULL DEFAULT '0',
+  PRIMARY KEY (`policy_key`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
@@ -4858,9 +4866,14 @@ CREATE TABLE `tenant` (
   `domain_verified` bit(1) NOT NULL DEFAULT b'0',
   `row_version` bigint(20) NOT NULL DEFAULT '0',
   `created_at` datetime(6) NOT NULL,
+  `entry_host` varchar(253) DEFAULT NULL,
+  `entry_enabled` bit(1) NOT NULL DEFAULT b'0',
+  `entry_verified` bit(1) NOT NULL DEFAULT b'0',
+  `domain_version` bigint(20) NOT NULL DEFAULT '0',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_tenant_code` (`code`),
-  UNIQUE KEY `uk_tenant_host` (`frontend_host`)
+  UNIQUE KEY `uk_tenant_host` (`frontend_host`),
+  UNIQUE KEY `uq_tenant_entry_host` (`entry_host`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
@@ -4873,7 +4886,12 @@ CREATE TABLE `tenant_domain_binding` (
   `expires_at` datetime(6) DEFAULT NULL,
   `verified_at` datetime(6) DEFAULT NULL,
   `version` bigint(20) NOT NULL DEFAULT '0',
+  `domain_role` varchar(16) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'FRONTEND',
+  `active_role` varchar(16) COLLATE utf8mb4_unicode_ci GENERATED ALWAYS AS ((case when (`status` = 'ACTIVE') then `domain_role` else NULL end)) STORED,
+  `candidate_role` varchar(16) COLLATE utf8mb4_unicode_ci GENERATED ALWAYS AS ((case when (`status` in ('PENDING','VERIFIED')) then `domain_role` else NULL end)) STORED,
   PRIMARY KEY (`hostname`),
+  UNIQUE KEY `uq_domain_active_role` (`tenant_id`,`active_role`),
+  UNIQUE KEY `uq_domain_candidate_role` (`tenant_id`,`candidate_role`),
   KEY `ix_domain_candidate` (`tenant_id`,`status`),
   CONSTRAINT `mt_domain_binding_tenant` FOREIGN KEY (`tenant_id`) REFERENCES `tenant` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -4885,6 +4903,7 @@ CREATE TABLE `tenant_domain_history` (
   `tenant_id` bigint(20) NOT NULL,
   `hostname` varchar(253) NOT NULL,
   `retired_at` datetime(6) DEFAULT NULL,
+  `domain_role` varchar(16) NOT NULL DEFAULT 'FRONTEND',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_domain_history` (`hostname`),
   KEY `fk_domain_history_tenant` (`tenant_id`),
@@ -5270,6 +5289,7 @@ CREATE TABLE `user_account` (
   `last_device_type` varchar(16) DEFAULT NULL,
   `annual_income` decimal(14,2) DEFAULT NULL,
   `annual_income_currency` varchar(3) DEFAULT NULL,
+  `avatar_url` varchar(300) DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `mt_tenant_identity` (`tenant_id`,`id`),
   UNIQUE KEY `my_invite_code` (`tenant_id`,`my_invite_code`),
