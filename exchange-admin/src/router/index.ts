@@ -40,6 +40,7 @@ const router = createRouter({
     { path: '/control-exchange', component: () => import('@/views/ControlExchange.vue') },
     { path: '/access-ended', component: () => import('@/views/AccessEnded.vue') },
     { path: '/forbidden', component: () => import('@/views/Forbidden.vue') },
+    { path: '/access-unavailable', component: () => import('@/views/Forbidden.vue') },
     {
       path: '/',
       component: Layout,
@@ -83,20 +84,29 @@ const router = createRouter({
   ],
 })
 
-router.beforeEach(async (to) => {
+router.beforeEach(async (to, from) => {
   if (['/control-exchange', '/access-ended'].includes(to.path)) return true
   const auth = useAuthStore()
   if (!auth.token || !auth.user) auth.load()
   const ended = auth.isControl ? '/access-ended' : '/login'
   if (!auth.ensureValid()) return to.path === '/login' ? true : ended
   if (auth.user?.mustChangePassword) return to.path === '/login' ? true : '/login'
-  try { await loadAccess(true) } catch {
+  if (to.path === '/forbidden' && access.loaded && !access.error && !access.menus.length) return true
+  const recovering = ['/forbidden', '/access-unavailable'].includes(from.path) && access.loaded && !access.error
+  try { await loadAccess(!recovering) } catch {
     if (!auth.token) return ended
-    return to.path === '/forbidden' ? true : '/forbidden'
+    // A failed read must not unmount a working page or discard its drafts.
+    if (access.loaded && from.matched.some(record => record.path === '/')) return false
+    return to.path === '/access-unavailable' ? true : { path: '/access-unavailable', query: { redirect: to.fullPath } }
   }
   if (!auth.token) return ended
   const first = access.menus[0]?.path || '/forbidden'
   if (to.path === '/login' || to.path === '/') return first
+  if (to.path === '/access-unavailable') {
+    const intended = to.query.redirect
+    if (typeof intended === 'string' && intended.startsWith('/') && !intended.startsWith('//') && canRoute(router.resolve(intended).path)) return intended
+    return first
+  }
   if (to.path === '/forbidden') return first === '/forbidden' ? true : first
   if (!canRoute(to.path)) return first === to.path ? '/forbidden' : first
   return true

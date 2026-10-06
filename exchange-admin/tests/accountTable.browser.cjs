@@ -6,7 +6,7 @@ const assert=require('node:assert/strict');
  await page.addInitScript(()=>{localStorage.setItem('admin_token','table-qa');localStorage.setItem('admin_user',JSON.stringify({id:1,userType:'admin',isSuperAdmin:true}))});
  await page.route('**/api/**',async route=>{const req=route.request(),url=new URL(req.url());let p=url.pathname,mode='REAL',params=req.method()==='POST'?req.postDataJSON():Object.fromEntries(url.searchParams);
   if(p==='/api/admin/menus/current')return route.fulfill({json:{success:true,superAdmin:true,menus:[{id:1,menuCode:'users',menuName:'用户',path:'/users'},{id:2,menuCode:'orders',menuName:'订单',path:'/orders'}],groups:[],actions:{users:['*'],orders:['*']}}});
-  if(p.includes('table-preferences'))return route.fulfill({json:{success:true,data:[],columns:[]}});
+  if(p.includes('table-preferences'))return route.fulfill({json:req.method()==='PUT'?{success:true}:[]});
   if(p==='/api/admin/account-query'){mode='DEMO';p=params.path;params=params.body||params.params||{};if(fail)return route.fulfill({status:503,json:{message:'模拟查询失败；未回退到真实账户'}})}
   queries.push({mode,path:p,params});
   const user={id:101,email:mode==='REAL'?'real@example.test':'demo@example.test',nickname:mode+' User',status:'active',userType:'user',createdAt:'2026-09-29T00:00:00',fundBalance:mode==='REAL'?100:999,tradeBalance:0,parentUserId:null};

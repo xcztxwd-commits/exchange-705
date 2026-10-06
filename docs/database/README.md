@@ -1,8 +1,8 @@
-# Exchange 705 当前数据库结构（2026-10-06）
+# Exchange 705 当前数据库结构（2026-10-07）
 
 ## 版本与文件
 
-本目录发布与业务源码提交 `8679fff2ead54e53a90757366ab6a2e9270af763`、结构版本 `2026100603` 对应的**无业务数据结构快照**。来源为已发布的 0404 无数据结构导入本机独立 MySQL 5.7 库后，实际执行审定的 0601、0602、0603 增量迁移并稳定采集结构，不是旧的 `1090.sql`，也不是生产数据备份。本次只读取结构、生成文档和提交 GitHub，不执行业务库迁移、服务切换或业务激活。
+本目录为合并候选源码、结构版本 `2026100702` 对应的**无业务数据结构快照**。来源为不可变的既有 0603 无数据结构导入本轮专属 MySQL 5.7 库，实际执行唯一的 0701、0702 双尾迁移，再稳定采集并在另一专属实例往返验证。不是旧 `1090.sql`、生产数据备份或已批准上线的证明。`source_code_commit=null` 明确表示本次生成时合并候选尚未提交，最终发布须另以 Git 提交、制品和签名批准绑定；不能把结构包装当作生产授权。
 
 | 文件 | 用途 |
 | --- | --- |
@@ -14,7 +14,7 @@
 ### 实际对象数量
 
 - 113 张表：94 张租户私有表、6 张共享表、13 张控制面表。
-- 1333 个字段、452 个索引、188 个外键。
+- 1338 个字段、452 个索引、188 个外键。
 - 161 个触发器、1 个存储过程 `joint_s4_fence`；没有视图、事件或存储函数。
 - 索引和外键按对象计数，复合索引/外键的多个字段不重复计数。
 
@@ -45,9 +45,9 @@ python scripts/database/check_snapshot.py --self-test
 python scripts/database/check_snapshot.py
 ```
 
-检查覆盖实际表集合、结构版本、索引/外键/触发器/过程数量、28 份迁移的明确顺序、必要文件校验和、源 DEFINER 泄漏及顶层数据/破坏性 SQL。变更 schema、数据字典、清单或审定迁移后必须重新生成快照与校验和，不应仅修改 JSON 来绕过失败。
+检查覆盖实际表集合、结构版本、索引/外键/触发器/过程数量、30 份迁移的明确顺序、必要文件校验和、源 DEFINER 泄漏及顶层数据/破坏性 SQL。变更 schema、数据字典、清单或审定迁移后必须重新生成快照与校验和，不应仅修改 JSON 来绕过失败。
 
-本次先证明其余原表 DDL 不变及三条新版本回执保持未激活，再在第二个新建、无宿主端口、无网络、使用独立 tmpfs 的 MySQL 5.7 容器中执行空库导入、113 张表逐表零行检查、约束检查恢复、再次无数据导出及规范化 DDL 逐字节比对。实际结果以 `schema-manifest.json` 的 `verification` 为准。检查容器只按本次新建的精确 ID 清理，未操作共享服务或旧数据库。
+本次先证明除 `market_control_command`、`market_control_flow` 新列外，原表、161 个触发器与过程定义不变，旧版本回执保持。0701 后做完整夹具备份、另一独立实例恢复及原实例实际重启；不重放已提交 0701，再执行 0702，校验唯一 inactive 收据及最低应用 epoch 0603。随后在第二个专属实例的新空库导入公开无数据结构，检查 113 张表逐表零行和规范化 DDL 逐字节往返。实例无网络/无宿主端口、独立匿名数据卷，只按完整容器 ID、名称与 owner 标签验证后清理。实际结果以 `schema-manifest.json` 的 `verification` 为准。没有执行生产库恢复或完整受控 `apply/resume` 签名流程。
 
 这些是**结构导入与往返验证**，不是应用启动、所有业务 API/UI、生产备份恢复或正式发布验收，也不改变 `release_approved` 或业务激活门禁。
 
@@ -75,13 +75,28 @@ mysql -u DB_ADMIN -p --default-character-set=utf8mb4 exchange705_empty \
 
 新环境还需要独立审定的初始化流程：租户及策略、总控身份和 MFA、用户编号序列、角色/菜单、交易品种、必要业务配置、密钥/域名/文件存储，以及真实版本与激活门禁。密码、邮件及其他凭据应通过受限配置注入，不得提交到公开 SQL。
 
-当前后端使用 Hibernate `ddl-auto=validate`，不能依靠启动自动补表。本快照已经包含当前版本的结构，**不要在其上再次执行 28 份旧迁移**；旧库则必须走原有明确授权、备份恢复证明和受控前向迁移流程。
+当前后端使用 Hibernate `ddl-auto=validate`，不能依靠启动自动补表。本快照已经包含当前版本的结构，**不要在其上再次执行 30 份旧迁移**；旧库则必须走原有明确授权、备份恢复证明和受控前向迁移流程。
 
 默认 [compose.yaml](../../compose.yaml) 仍引用本地 `1090.sql`。本次没有把默认 Docker 初始化改为快照，也不声称克隆仓库后即可直接启动业务。换用此快照必须配套上述初始化与门禁设计，不能只替换挂载文件。
 
+## 0702 双尾与批准边界
+
+- 0603 之后只允许 `[V2026100701__control_command_retry.sql, V2026100702__control_history_finalization.sql]` 的精确双尾，不能仅补末条或推断中途 DDL 已完成。
+- 0701 只加命令 retry 两列，无新版本回执；0702 加历史最终化三列并写唯一 0702 inactive 收据，最低应用 epoch 仍为 0603。全部旧回执和业务字段受原全列指纹保护。
+- 保留原独立签名、来源审定、物理目标、备份恢复与 append-only ledger 门禁。新增可执行本地契约不更新 `approved/release_approved`，也不能替代生产批准；不手工执行 SQL 绕过受控入口。
+- 0603 最低 epoch 只说明 additive 结构兼容。旧应用不认识新版 RESTORE 持久队列，应用回滚前仍须通过授权 API 排空/取消 pending，保留历史、取消凭证及新增列；不能带新命令直接回切旧 worker。
+
+复用本轮完整结构验证：
+
+```powershell
+python scripts/database/verify_control_recovery_package.py --baseline PATH_TO_IMMUTABLE_0603_STRUCTURE.sql --output NEW_EVIDENCE_DIRECTORY
+```
+
+默认只写新证据目录。`--write-snapshot` 仅在全部实际验证通过后同步公开无数据结构、实际新列字典与校验和；须先备份公开原文件。测试内的 0603 fixture 收据不导出，既不是迁移历史伪造也不是业务激活。
+
 ## 既有迁移与相关文档
 
-28 份审定迁移的**唯一顺序**为 [table_manifest.json](../../scripts/multitenant/table_manifest.json) 的 `migration_files`；逐份原始 SHA-256 已保存在 [schema-manifest.json](schema-manifest.json)。不按目录名字盲目遍历，也不重复执行 `superseded_authoring_inputs` 中的旧草稿。
+30 份登记迁移（原 28 份及本轮双尾候选）的**唯一顺序**为 [table_manifest.json](../../scripts/multitenant/table_manifest.json) 的 `migration_files`；逐份原始 SHA-256 已保存在 [schema-manifest.json](schema-manifest.json)。不按目录名字盲目遍历，也不重复执行 `superseded_authoring_inputs` 中的旧草稿。
 
 - [历史结构基线](../../scripts/multitenant/legacy-schema.sql) 与 [前置功能结构](../../scripts/multitenant/legacy-feature-tables.sql)：历史定义，不等于当前快照。
 - [受控迁移入口](../../scripts/multitenant/controlled_migration.py)：备份、恢复证明、授权和前向迁移边界。

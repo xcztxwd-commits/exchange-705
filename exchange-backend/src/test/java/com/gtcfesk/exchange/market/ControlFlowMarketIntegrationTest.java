@@ -158,7 +158,8 @@ class ControlFlowMarketIntegrationTest extends TenantMarketTestContext {
         Map<String,Object> status = market.restoreControl(1L, 1, 1, false, "restore-manual-offset");
         assertEquals(true, status.get("restoring"));
         samePrice("95", database.controls.latest(1L).startPrice);
-        Thread.sleep(1100); fixture.raw(91); market.completeControls();
+        Thread.sleep(550); market.completeControls();
+        Thread.sleep(550); fixture.raw(91); market.completeControls();
         samePrice("91", market.freshPrice("TEST"));
         assertEquals(false, market.controlStatus(1L).get("enabled"));
     }

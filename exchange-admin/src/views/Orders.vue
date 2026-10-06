@@ -452,7 +452,7 @@ onMounted(() => {
               {{ formatDate(row.createdAt) }}
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="240" fixed="right">
+          <el-table-column column-key="actions" label="操作" width="240" fixed="right">
             <template #default="{ row }">
               <div style="display: flex; gap: 8px; flex-wrap: wrap;">
                 <el-button v-permission="'orders:view'" v-if="!row.deleted && row.status === 'CLOSED'" type="primary" plain size="small" :disabled="row.userId == null" :title="row.userId == null ? '请先绑定用户' : '使用本行订单所属用户生成分享图'" @click="viewShare(row, 'contract')">查看分享图</el-button>
@@ -624,7 +624,7 @@ onMounted(() => {
               <span v-else style="color: #999;">未设置</span>
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="300" fixed="right">
+          <el-table-column column-key="actions" label="操作" width="300" fixed="right">
             <template #default="{ row }">
               <div style="display: flex; gap: 8px; flex-wrap: wrap;">
                 <el-button v-permission="'orders:view'" v-if="!row.deleted && row.status === 'CLOSED'" type="primary" plain size="small" :disabled="row.userId == null" :title="row.userId == null ? '请先绑定用户' : '使用本行订单所属用户生成分享图'" @click="viewShare(row, 'option')">查看分享图</el-button>

@@ -27,7 +27,7 @@ const auth = useAuthStore()
 const tablePreferences: TablePreferenceClient = {
   identityKey: () => auth.token ? `${auth.user?.tenantId}:${auth.isControl ? 'CONTROL_ACCESS' : auth.user?.userType || auth.user?.role}:${auth.user?.id}:${auth.token}` : '',
   load: (table, signal) => request.get(`/admin/table-preferences/${encodeURIComponent(table)}`, { signal }),
-  save: (table, columns, signal) => request.put(`/admin/table-preferences/${encodeURIComponent(table)}`, columns, { signal }),
+  save: (table, columns, signal) => request.put(`/admin/table-preferences/${encodeURIComponent(table)}`, columns, { signal, headers: { 'Content-Type': 'application/json;charset=UTF-8' } }),
 }
 app.provide(TABLE_PREFERENCES, tablePreferences)
 app.use(router)

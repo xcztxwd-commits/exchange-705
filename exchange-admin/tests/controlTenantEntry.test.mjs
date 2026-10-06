@@ -48,7 +48,7 @@ function environment(options = {}) {
    const storeModule = new Function('defineStore', 'computed', 'ref', 'clearAccess', ...Object.keys(sessions), 'window', 'location', 'sessionStorage', 'localStorage', authCode + ';return {useAuthStore, exchangeOpener}')(
     defineStore, computed, ref, () => {}, ...Object.values(sessions), child, child.location, childStorage, storage())
    child.auth = storeModule.useAuthStore(createPinia())
-   const router = { currentRoute: { value: { path: '/control-exchange' } }, replace: async path => { assert.equal(path, '/');if (options.navigationError) throw new Error('后台导航失败');router.currentRoute.value.path = options.forbidden ? '/forbidden' : '/dashboard';child.unmount();return undefined } }
+   const router = { currentRoute: { value: { path: '/control-exchange' } }, replace: async path => { assert.equal(path, '/');if (options.navigationError) throw new Error('后台导航失败');router.currentRoute.value.path = options.forbidden ? '/forbidden' : options.unavailable ? '/access-unavailable' : '/dashboard';child.unmount();return undefined } }
    const request = { get: async path => { assert.equal(path, '/admin/auth/control-exchange-config');return options.config || { adminOrigin, controlOrigin } }, post: (path, body) => { assert.equal(path, '/admin/auth/control-exchange');const response = deferred();pending.push({ child, body, ...response });return response.promise } }
    let mount
    const view = new Function('ref', 'onMounted', 'onUnmounted', 'useRouter', 'useAuthStore', 'exchangeOpener', 'exactOrigin', 'matchesExchangeMessage', 'request', 'window', 'location', 'crypto', 'setTimeout', 'clearTimeout', exchangeCode + ';return {status}')(
@@ -112,7 +112,7 @@ for (const response of [access(3), access(2, { user: { userType: 'admin', tenant
  const exchange = failed.pending[0];response instanceof Error ? exchange.reject(response) : exchange.resolve(response);await flush()
  assert(result.error);assert.equal(exchange.child.auth.token, null);assert.equal(exchange.child.closed, true);assert.equal(exchange.child.sessionStorage.getItem(sessions.ADMIN_SESSION_KEY), null);cleaned(failed)
 }
-for (const option of ['navigationError', 'forbidden']) {
+for (const option of ['navigationError', 'forbidden', 'unavailable']) {
  const failed = environment({ [option]: true }), result = observed(failed.openTenant(2));await flush();failed.pending[0].resolve(access(2));await flush();assert(result.error);assert.equal(failed.opened[0].auth.token, null);cleaned(failed)
 }
 const wrongConfig = environment({ config: { adminOrigin: 'https://wrong.example.test', controlOrigin } }), wrongResult = observed(wrongConfig.openTenant(2));await flush();assert.equal(wrongConfig.pending.length, 0);assert.match(wrongConfig.opened[0].status.value, /配置不匹配/);wrongConfig.fire(65000);await flush();assert(wrongResult.error);cleaned(wrongConfig)

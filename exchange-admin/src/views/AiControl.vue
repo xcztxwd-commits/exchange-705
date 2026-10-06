@@ -18,6 +18,9 @@ const defaultRecovery = (): RecoveryOptions => ({ autoRestore: false, restoreMod
 const recovery = ref<RecoveryOptions>(defaultRecovery())
 type ControlStatus = Partial<RecoveryOptions> & {
   canStart?: boolean; sourceAvailable?: boolean; controlState?: string; startSource?: string; sourceTime?: number; holding?: boolean
+  sampledUntil?: number; expectedSampledUntil?: number; controlLagMillis?: number; lastControlProgressAt?: number
+  plannedEnd?: number; progressStartedAt?: number; progressEndAt?: number; controlProgressWatermark?: number
+  sourceEventAt?: number; lastSourceReceivedAt?: number; committedAt?: number; degraded?: boolean; progressStatus?: string
   startBasis?: { source: string; timestamp: number; price: number }
   virtualTrading: boolean; randomMarketEnabled: boolean; randomMarketBasePrice: number | null
   id: number; enabled: boolean; running: boolean; restoring: boolean; available: boolean; randomOscillation: boolean
@@ -50,7 +53,10 @@ const formulaLoading = ref(false), formulaLoadError = ref('')
 const auth = useAuthStore()
 const pendingCommand = ref<PendingCommand | null>(null), commandError = ref(''), commandStorageError = ref(''), commandBusy = ref(false), commandProtocol = ref('')
 const commandAwaiting = computed(() => commandBlocksStart(pendingCommand.value))
-const receiptNotice = computed(() => commandNotice(pendingCommand.value))
+const commandResultNotice = ref(''), rescueBusy = ref(false)
+const receiptNotice = computed(() => commandNotice(pendingCommand.value) || commandResultNotice.value)
+// An unknown command blocks another start, not a permission-checked cancellation or SOURCE escape.
+const rescueDisabled = computed(() => loading.value || rescueBusy.value || (saving.value && !commandAwaiting.value) || selectedId.value == null || !currentCommandScope())
 const busy = computed(() => loading.value || saving.value || formulaLoading.value || commandAwaiting.value || !!commandStorageError.value || !status.value || !!statusError.value || !precisionReady.value)
 function formatPrice(value: number | string | null | undefined): string {
   if (value == null || value === '' || !Number.isFinite(Number(value))) return '—'
@@ -116,8 +122,13 @@ async function saveFormula() {
   } catch (error: any) { if (!disposed && id === selectedId.value) formulaError.value = error?.message || '公式保存失败' }
   finally { formulaBusy.value = false }
 }
+const progressLabel = computed(() => ({ WAITING_SOURCE: '等待有效原始行情', WAITING_VALID_SOURCE: '等待有效原始行情', ENGINE_LAG: '控盘推进延迟', AUTHORITY_CHANGED: '授权已变化', HEALTHY: '正常' } as Record<string, string>)[status.value?.progressStatus || ''] || status.value?.progressStatus || '待确认')
 const progress = computed(() => {
   const state = status.value
+  const from = state?.progressStartedAt ?? state?.startedAt, until = state?.progressEndAt ?? state?.plannedEnd
+  const committed = state?.controlProgressWatermark ?? state?.sampledUntil
+  if (from != null && until != null && committed != null && until > from) return Math.min(100, Math.max(0, (committed - from) / (until - from) * 100))
+  // Older synchronous servers have no committed watermark fields.
   return state?.durationSeconds ? Math.min(100, Math.max(0, (1 - state.remainingSeconds / state.durationSeconds) * 100)) : 0
 })
 let timer: ReturnType<typeof setTimeout> | undefined
@@ -130,7 +141,7 @@ let commandVersion = 0, operationVersion = 0
 const currentCommandScope = () => commandScope(readSession(sessionStorage))
 const commandIdentityMatches = (scope: string, token: string | null, id: number) => !disposed && id === selectedId.value && scope === currentCommandScope() && token === auth.token
 function restorePendingCommand() {
-  ++commandVersion; commandBusy.value = false; pendingCommand.value = null; commandError.value = ''; commandStorageError.value = ''; commandProtocol.value = ''
+  ++commandVersion; commandBusy.value = false; pendingCommand.value = null; commandError.value = ''; commandStorageError.value = ''; commandProtocol.value = ''; commandResultNotice.value = ''
   const scope = currentCommandScope(), id = selectedId.value
   if (!scope || id == null) return
   try { pendingCommand.value = readPendingCommand(sessionStorage, scope, id) }
@@ -159,18 +170,28 @@ function acceptCommandReceipt(value: unknown, pending: PendingCommand, scope: st
   try { writePendingCommand(sessionStorage, scope, next); commandStorageError.value = '' }
   catch { commandStorageError.value = '回执保存失败；原请求仍保留，刷新后只查询原请求' }
 }
+async function confirmCancellation(pending: PendingCommand, scope: string, token: string | null) {
+  if (pendingCommand.value?.receipt?.state !== 'CANCELLED' || !await fetchStatus()) return
+  if (!commandIdentityMatches(scope, token, pending.symbolId) || pendingCommand.value?.requestKey !== pending.requestKey || pendingCommand.value.receipt?.state !== 'CANCELLED') return
+  const notice = commandNotice(pendingCommand.value)
+  try {
+    removePendingCommand(sessionStorage, scope, pending.symbolId)
+    pendingCommand.value = null; commandStorageError.value = ''; commandResultNotice.value = notice
+  } catch { commandStorageError.value = '取消已确认，但本地请求清理失败；不会另建命令' }
+}
 async function fetchCommand(force = false) {
   const pending = pendingCommand.value, scope = currentCommandScope(), token = auth.token
-  if (!pending || !scope || commandBusy.value || (!force && !commandBlocksStart(pending))) return
+  if (!pending || !scope || commandBusy.value || (!force && !commandBlocksStart(pending) && pending.receipt?.state !== 'CANCELLED')) return
   const version = ++commandVersion, id = pending.symbolId
   commandBusy.value = true
   try {
     const value = await request.get(`/admin/ai-control/${id}/commands`, { params: { requestKey: pending.requestKey } })
     if (version !== commandVersion || !commandIdentityMatches(scope, token, id) || pendingCommand.value?.requestKey !== pending.requestKey) return
     acceptCommandReceipt(value, pending, scope)
+    if (pendingCommand.value?.receipt?.state === 'CANCELLED') await confirmCancellation(pending, scope, token)
     if (pendingCommand.value?.receipt?.state === 'RUNNING') { await fetchStatus(); void fetchHistory(true) }
   } catch (error: any) {
-    if (version === commandVersion && commandIdentityMatches(scope, token, id)) commandError.value = `原启动请求结果待确认，仅查询，不会重复启动：${error?.message || '网络异常'}`
+    if (version === commandVersion && commandIdentityMatches(scope, token, id)) commandError.value = `原控盘请求结果待确认，仅查询，不会重复启动：${error?.message || '网络异常'}`
   } finally { if (version === commandVersion) commandBusy.value = false }
 }
 function applyStatus(value: ControlStatus, reset = false) {
@@ -199,10 +220,12 @@ async function fetchStatus(reset = false) {
     if (!disposed && id === selectedId.value && version === requestVersion) {
       applyStatus(value, resetPending)
       resetPending = false
+      return true
     }
   } catch (error: any) {
     if (!disposed && id === selectedId.value && version === requestVersion) statusError.value = readError(error, '控盘状态')
   } finally { --statusRequests }
+  return false
 }
 async function fetchPreview() {
   const id = selectedId.value, version = ++previewVersion
@@ -298,11 +321,14 @@ async function poll() {
 }
 async function submit(action: 'start' | 'restore' | 'manual' | 'stop' | 'random-market', payload?: object) {
   const id = selectedId.value, scope = currentCommandScope(), token = auth.token
-  if (id == null || saving.value) return
+  const emergency = action === 'manual' && (payload as any)?.enabled === false && Number((payload as any)?.offset) === 0
+  const rescue = action === 'stop' || emergency
+  if (id == null || rescueBusy.value || (saving.value && (!rescue || !commandAwaiting.value))) return
   if (!scope) { ElMessage.error('会话身份无效，请重新登录'); return }
   const version = ++operationVersion
   let attempted: PendingCommand | null = null
-  saving.value = true
+  saving.value = true; rescueBusy.value = rescue
+  if (rescue) { ++commandVersion; commandBusy.value = false }
   ++requestVersion
   try {
     if (action === 'start' || action === 'restore') {
@@ -313,11 +339,12 @@ async function submit(action: 'start' | 'restore' | 'manual' | 'stop' | 'random-
       // Persist the immutable request before sending. Refresh and timeout only query this key.
       writePendingCommand(sessionStorage, scope, pending)
       attempted = pending
-      pendingCommand.value = pending; commandError.value = ''; commandProtocol.value = 'S2'
+      pendingCommand.value = pending; commandError.value = ''; commandResultNotice.value = ''; commandProtocol.value = 'S2'
       const response = await rawRequest.post(`/api/admin/ai-control/${id}/${action}`, { ...pending.payload, requestKey: pending.requestKey })
       if (!commandIdentityMatches(scope, token, id) || version !== operationVersion) return
       if (response.status === 202) {
         acceptCommandReceipt(response.data, pending, scope)
+        if (pendingCommand.value?.receipt?.state === 'CANCELLED') await confirmCancellation(pending, scope, token)
         if (pendingCommand.value?.receipt?.state === 'RUNNING') { await fetchStatus(); void fetchHistory(true) }
         ElMessage.info(receiptNotice.value)
         return
@@ -333,22 +360,29 @@ async function submit(action: 'start' | 'restore' | 'manual' | 'stop' | 'random-
       return
     }
     const pending = pendingCommand.value
+    const reconcilePending = commandBlocksStart(pending) || pending?.receipt?.state === 'CANCELLED'
     if (action === 'stop' && commandBlocksStart(pending)) payload = { requestKey: pending!.requestKey }
+    if (emergency && pending && reconcilePending) payload = { ...payload, requestKey: pending.requestKey }
     const value = await request.post(`/admin/ai-control/${id}/${action}`, payload) as unknown as ControlStatus
     if (commandIdentityMatches(scope, token, id) && version === operationVersion) {
-      if (action === 'stop' && pending && 'commandId' in value) acceptCommandReceipt(value, pending, scope)
-      else { applyStatus(value); manual.value = { enabled: value.enabled, offset: Number(value.offset || 0) } }
+      if (action === 'stop' && pending && 'commandId' in value) {
+        acceptCommandReceipt(value, pending, scope)
+        if (pendingCommand.value?.receipt?.state === 'CANCELLED') await confirmCancellation(pending, scope, token)
+      } else { applyStatus(value); manual.value = { enabled: value.enabled, offset: Number(value.offset || 0) } }
       void fetchHistory(true)
-      if (action === 'stop' && commandBlocksStart(pending)) { await fetchCommand(true); ElMessage.info(receiptNotice.value || '停止请求已完成，正在核对原启动命令'); return }
-      ElMessage.success(action === 'random-market' ? (value.randomMarketEnabled ? '随机行情已开启' : '随机行情已关闭') : action === 'stop' ? '任务已停止，历史已保存' : value.enabled ? '偏移已保存' : '已恢复原始行情')
+      if (rescue && pending && reconcilePending) {
+        if (pendingCommand.value) await fetchCommand(true)
+        if (commandBlocksStart(pendingCommand.value) || pendingCommand.value?.receipt?.state === 'CANCELLED' || (action === 'stop' && !pendingCommand.value)) { ElMessage.info(receiptNotice.value || '操作已返回，正在核对原控盘命令'); return }
+      }
+      ElMessage.success(action === 'random-market' ? (value.randomMarketEnabled ? '随机行情已开启' : '随机行情已关闭') : action === 'stop' ? '任务已停止，历史已保存' : value.enabled ? '偏移已保存' : value.available ? '已恢复原始行情' : '已解除控盘，等待有效原始行情')
     }
   } catch (error: any) {
     if (commandIdentityMatches(scope, token, id) && version === operationVersion) {
       const message = [error?.response?.data?.errorCode, error?.message || '操作失败'].filter(Boolean).join('：')
-      if (attempted && pendingCommand.value?.requestKey === attempted.requestKey) { commandError.value = `启动结果待确认；保留原请求，仅查询，不会重复启动：${message}`; ElMessage.warning(commandError.value) }
+      if (attempted && pendingCommand.value?.requestKey === attempted.requestKey) { commandError.value = `${attempted.action === 'restore' ? '恢复' : '启动'}结果待确认；保留原请求，仅查询，不会重复启动：${message}`; ElMessage.warning(commandError.value) }
       else ElMessage.error(message)
     }
-  } finally { if (version === operationVersion) saving.value = false }
+  } finally { if (version === operationVersion) { saving.value = false; rescueBusy.value = false } }
 }
 function runTimed() {
   const { durationSeconds, randomOscillation } = timing.value
@@ -372,7 +406,7 @@ function saveManual() {
 }
 watch(() => [auth.token, auth.user?.tenantId, auth.user?.id, auth.accessSession?.id, auth.loginSessionId], () => {
   ++operationVersion; ++requestVersion; ++historyVersion; ++previewVersion; ++formulaVersion; ++formulaLoadVersion
-  saving.value = false; status.value = null; history.value = []; preview.value = null; formulaLoading.value = false
+  saving.value = false; rescueBusy.value = false; status.value = null; history.value = []; preview.value = null; formulaLoading.value = false
   selectedId.value = undefined; restorePendingCommand()
   if (currentCommandScope()) void loadSymbols()
 })
@@ -414,9 +448,9 @@ onUnmounted(() => { disposed = true; ++commandVersion; ++operationVersion; ++req
         <p v-if="pendingCommand" class="hint">原请求 {{ pendingCommand.requestKey }}；命令 {{ pendingCommand.receipt?.commandId || '待确认' }}；提交时长 {{ pendingCommand.payload.durationSeconds }} 秒。刷新与超时只查询原请求。</p>
         <el-alert v-if="commandError || commandStorageError" :title="commandStorageError || commandError" type="warning" :closable="false" show-icon />
         <el-alert v-if="commandProtocol.startsWith('旧协议')" :title="commandProtocol" type="warning" :closable="false" />
-        <el-button v-permission="'ai_control:view'" v-if="pendingCommand" :loading="commandBusy" :disabled="saving" @click="fetchCommand(true)">核对原启动请求</el-button>
+        <el-button v-permission="'ai_control:view'" v-if="pendingCommand" :loading="commandBusy" :disabled="saving" @click="fetchCommand(true)">核对原控盘请求</el-button>
         <el-alert v-if="statusError" :title="statusError" type="error" :closable="false" show-icon />
-        <el-alert v-else-if="status && !status.available" title="无可用行情源" type="warning" :closable="false" show-icon />
+        <el-alert v-else-if="status && !status.available" title="等待有效行情源；最后可信价格仅供展示，不可交易" type="warning" :closable="false" show-icon />
         <div v-if="status" class="quotes">
           <div><span>{{ status.randomMarketEnabled ? '随机基础价' : '原始行情' }}</span><strong>{{ formatPrice(status.rawPrice) }}</strong></div>
           <div><span>当前控盘价</span><strong>{{ formatPrice(status.currentPrice) }}</strong></div>
@@ -426,10 +460,12 @@ onUnmounted(() => { disposed = true; ++commandVersion; ++operationVersion; ++req
           :title="`均衡随机 V3 · TARGET 固定单秒幅度 ${formatPrice(status.minStepAmount)}～${formatPrice(status.maxStepAmount)}；HOLDING/恢复不受此范围约束`" />
         <el-alert v-if="status?.algorithmVersion === 4" type="success" :closable="false"
           :title="`稳定轨迹 V4 · TARGET 单秒幅度 ${formatPrice(status.minStepAmount)}～${formatPrice(status.maxStepAmount)}；固定偏差带 ±${formatPrice(status.corridorAmount)}（${status.deviationBandPercent}%）`" />
+        <el-alert v-if="status?.degraded" :title="`${progressLabel}；快照刷新不代表控盘推进`" type="warning" :closable="false" show-icon />
+        <p v-if="status?.progressStatus" class="hint">进度 {{ progressLabel }}；已提交水位 {{ timeText(status.controlProgressWatermark ?? status.sampledUntil) }}；预期水位 {{ timeText(status.expectedSampledUntil) }}；延迟 {{ status.controlLagMillis ?? 0 }} 毫秒；最后推进 {{ timeText(status.lastControlProgressAt) }}。<br>源事件 {{ timeText(status.sourceEventAt) }}；接收 {{ timeText(status.lastSourceReceivedAt) }}；快照提交 {{ timeText(status.committedAt) }}。</p>
         <el-progress v-if="status?.running" :percentage="Math.round(progress)" />
         <div class="actions">
-          <el-button v-permission="'ai_control:stop'" v-if="status?.running || commandAwaiting" :disabled="loading || saving" :loading="saving" @click="submit('stop')">{{ commandAwaiting ? '取消待启动命令' : '停止任务并保存历史' }}</el-button>
-          <el-button v-permission="'ai_control:manual'" type="danger" plain :disabled="busy || !status?.enabled" :loading="saving" @click="submit('manual', { enabled: false, offset: 0 })">{{ status?.randomMarketEnabled ? '取消指定并继续随机' : '一键恢复原始行情' }}</el-button>
+          <el-button v-permission="'ai_control:stop'" v-if="status?.running || commandAwaiting" :disabled="rescueDisabled" :loading="rescueBusy" @click="submit('stop')">{{ commandAwaiting ? '取消待确认命令' : '停止任务并保存历史' }}</el-button>
+          <el-button v-permission="'ai_control:manual'" type="danger" plain :disabled="rescueDisabled" :loading="rescueBusy" @click="submit('manual', { enabled: false, offset: 0 })">{{ status?.randomMarketEnabled ? '取消指定并继续随机' : '一键恢复原始行情' }}</el-button>
         </div>
         <el-divider />
         <el-form-item label="控盘方式">
@@ -484,8 +520,8 @@ onUnmounted(() => { disposed = true; ++commandVersion; ++operationVersion; ++req
             <p v-if="preview.tiers">档位表仅做参数筛选；完整轨迹生成及启动时仍会重新校验。</p>
             <admin-table table-key="AiControl.1" v-if="preview.tiers" :data="preview.tiers" size="small" max-height="250">
               <el-table-column prop="intensity" label="强度" width="70" />
-              <el-table-column label="固定单秒幅度"><template #default="{ row }">{{ formatPrice(row.minAmount) }}～{{ formatPrice(row.maxAmount) }}</template></el-table-column>
-              <el-table-column label="可行性"><template #default="{ row }">{{ row.feasible ? '可行' : row.errorCode || '不可行' }}</template></el-table-column>
+              <el-table-column column-key="perSecondAmplitude" label="固定单秒幅度"><template #default="{ row }">{{ formatPrice(row.minAmount) }}～{{ formatPrice(row.maxAmount) }}</template></el-table-column>
+              <el-table-column column-key="feasibility" label="可行性"><template #default="{ row }">{{ row.feasible ? '可行' : row.errorCode || '不可行' }}</template></el-table-column>
             </admin-table>
           </div>
           <el-collapse v-model="advanced" class="advanced-settings"><el-collapse-item title="高级设置" name="target">
@@ -539,14 +575,14 @@ onUnmounted(() => { disposed = true; ++commandVersion; ++operationVersion; ++req
       <h3>控盘任务历史</h3>
       <el-alert v-if="historyError" :title="historyError" type="warning" :closable="false" show-icon />
       <admin-table table-key="AiControl.2" :data="history" empty-text="暂无持久化控盘任务">
-        <el-table-column label="开始时间" min-width="180"><template #default="{ row }">{{ timeText(row.startedAt) }}</template></el-table-column>
-        <el-table-column label="起点依据" min-width="180"><template #default="{ row }">{{ sourceName(row.startSource) }}<br>{{ timeText(row.sourceTime) }}</template></el-table-column>
+        <el-table-column column-key="startTime" label="开始时间" min-width="180"><template #default="{ row }">{{ timeText(row.startedAt) }}</template></el-table-column>
+        <el-table-column column-key="startBasis" label="起点依据" min-width="180"><template #default="{ row }">{{ sourceName(row.startSource) }}<br>{{ timeText(row.sourceTime) }}</template></el-table-column>
         <el-table-column prop="startPrice" label="起点价格"><template #default="{ row }">{{ formatPrice(row.startPrice) }}</template></el-table-column>
         <el-table-column prop="targetPrice" label="目标价格"><template #default="{ row }">{{ formatPrice(row.targetPrice) }}</template></el-table-column>
-        <el-table-column label="算法" width="85"><template #default="{ row }">V{{ row.algorithmVersion || 1 }}</template></el-table-column>
-        <el-table-column label="状态" min-width="120"><template #default="{ row }">{{ row.holding ? '保持偏移' : row.status }}</template></el-table-column>
-        <el-table-column label="轨迹结束时间" min-width="180"><template #default="{ row }">{{ timeText(row.endedAt) }}</template></el-table-column>
-        <el-table-column label="历史行情" min-width="155" fixed="right"><template #default="{ row }">
+        <el-table-column column-key="algorithm" label="算法" width="85"><template #default="{ row }">V{{ row.algorithmVersion || 1 }}</template></el-table-column>
+        <el-table-column column-key="status" label="状态" min-width="120"><template #default="{ row }">{{ row.holding ? '保持偏移' : row.status }}</template></el-table-column>
+        <el-table-column column-key="trajectoryEndTime" label="轨迹结束时间" min-width="180"><template #default="{ row }">{{ timeText(row.endedAt) }}</template></el-table-column>
+        <el-table-column column-key="history" label="历史行情" min-width="155" fixed="right"><template #default="{ row }">
           <el-button v-permission="'ai_control:replace_history'" size="small" :disabled="saving || !row.endedAt" @click="replaceHistory(row)">{{ row.historyReplacedAt ? '更新已发布区间' : '替代历史行情' }}</el-button>
           <div v-if="row.historyReplacedAt" class="hint">{{ timeText(row.historyReplacedAt) }}</div>
         </template></el-table-column>

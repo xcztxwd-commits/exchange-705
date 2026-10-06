@@ -1,7 +1,7 @@
 import type { AdminSession } from './adminSession'
 
 export type CommandState = 'ACCEPTED' | 'PREPARING' | 'READY' | 'RUNNING' | 'FAILED' | 'CANCELLED'
-export type CommandReceipt = { commandId: string | number; requestKey: string; state: CommandState; symbolId: number; errorCode?: string | null; message?: string | null }
+export type CommandReceipt = { commandId: string | number; requestKey: string; state: CommandState; symbolId: number; action?: 'START' | 'RESTORE' | 'CANCEL'; errorCode?: string | null; message?: string | null }
 export type PendingCommand = { symbolId: number; action: 'start' | 'restore'; requestKey: string; payload: Record<string, unknown>; receipt?: CommandReceipt }
 export const COMMAND_STORAGE_PREFIX = 'ai-control-pending:'
 const states = new Set(['ACCEPTED', 'PREPARING', 'READY', 'RUNNING', 'FAILED', 'CANCELLED'])
@@ -19,9 +19,9 @@ const storageKey = (scope: string, symbolId: number) => `${COMMAND_STORAGE_PREFI
 export function commandBlocksStart(pending: PendingCommand | null): boolean {
   return !!pending && (!pending.receipt || !['RUNNING', 'FAILED', 'CANCELLED'].includes(pending.receipt.state))
 }
-export function readCommandReceipt(value: any, pending: Pick<PendingCommand, 'symbolId' | 'requestKey'>): CommandReceipt {
+export function readCommandReceipt(value: any, pending: Pick<PendingCommand, 'symbolId' | 'requestKey' | 'action'>): CommandReceipt {
   const validId = typeof value?.commandId === 'string' ? value.commandId.length > 0 && value.commandId.length <= 128 : Number.isSafeInteger(value?.commandId) && value.commandId > 0
-  if (!validId || value.requestKey !== pending.requestKey || value.symbolId !== pending.symbolId || !states.has(value.state) || (value.errorCode != null && typeof value.errorCode !== 'string') || (value.message != null && typeof value.message !== 'string')) throw new Error('启动命令回执不匹配；保留原请求，仅查询结果')
+  if (!validId || value.requestKey !== pending.requestKey || value.symbolId !== pending.symbolId || !states.has(value.state) || (value.action != null && value.action !== pending.action.toUpperCase() && !(value.action === 'CANCEL' && value.state === 'CANCELLED')) || (value.errorCode != null && typeof value.errorCode !== 'string') || (value.message != null && typeof value.message !== 'string')) throw new Error('控盘命令回执不匹配；保留原请求，仅查询结果')
   return value as CommandReceipt
 }
 function validPending(value: any, symbolId: number): value is PendingCommand {
@@ -66,7 +66,8 @@ export function savedCommandSymbol(storage: Storage, scope: string): number | un
 }
 export function commandNotice(pending: PendingCommand | null): string {
   const receipt = pending?.receipt
-  if (!receipt) return pending ? '启动结果待确认；保留原请求，仅查询，不会重复启动' : ''
-  const labels: Record<CommandState, string> = { ACCEPTED: '启动命令已受理，尚未开始运行', PREPARING: '启动命令准备中，尚未开始运行', READY: '启动命令已准备完成，等待引擎启动', RUNNING: '启动命令已运行', FAILED: '启动命令失败', CANCELLED: '启动命令已取消' }
+  if (!receipt) return pending ? `${pending.action === 'restore' ? '恢复' : '启动'}结果待确认；保留原请求，仅查询，不会重复启动` : ''
+  const action = pending?.action === 'restore' ? '恢复' : '启动'
+  const labels: Record<CommandState, string> = { ACCEPTED: `${action}命令已受理，尚未开始运行`, PREPARING: `${action}命令准备中，尚未开始运行`, READY: `${action}命令已准备完成，等待引擎启动`, RUNNING: `${action}命令已运行`, FAILED: `${action}命令失败`, CANCELLED: `${action}命令已取消` }
   return [labels[receipt.state], receipt.errorCode, receipt.message].filter(Boolean).join('：')
 }

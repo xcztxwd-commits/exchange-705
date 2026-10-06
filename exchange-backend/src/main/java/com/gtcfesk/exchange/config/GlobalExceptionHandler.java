@@ -41,6 +41,12 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<Map<String, Object>> handleBusinessException(BusinessException e) {
+        String engine=com.gtcfesk.exchange.market.MarketEngineFailure.normalize(e);
+        if(!"COMMAND_FAILED".equals(engine)) {
+            Map<String,Object> failure=new HashMap<>();failure.put("success",false);failure.put("errorCode",engine);
+            failure.put("message","引擎操作未确认，请按原请求键查询状态，不要重复启动");
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).header("Retry-After","1").body(failure);
+        }
         Map<String, Object> result = new HashMap<>();
         result.put("success", false);
         result.put("error", com.gtcfesk.exchange.common.SafeErrors.message(e));
@@ -89,6 +95,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler({org.springframework.dao.OptimisticLockingFailureException.class,
             org.springframework.dao.PessimisticLockingFailureException.class, javax.persistence.OptimisticLockException.class})
     public ResponseEntity<Map<String, Object>> handleConflict(Exception e) {
+        if(e instanceof org.springframework.dao.PessimisticLockingFailureException)return handleException(e);
         Map<String, Object> result = new HashMap<>();
         result.put("success", false);
         result.put("message", "数据已变更，请刷新后重试");
@@ -107,10 +114,26 @@ public class GlobalExceptionHandler {
         if(e.getSupportedHttpMethods()!=null)headers.setAllow(e.getSupportedHttpMethods());
         return new ResponseEntity<>(result,headers,HttpStatus.METHOD_NOT_ALLOWED);
     }
+    @ExceptionHandler(org.apache.catalina.connector.ClientAbortException.class)
+    public void handleClientAbort(org.apache.catalina.connector.ClientAbortException e) {
+        org.slf4j.LoggerFactory.getLogger(getClass()).info("control_disconnect traceId={} classification=CLIENT_DISCONNECTED",org.slf4j.MDC.get("traceId"));
+        // The socket is closed. Do not try to send a second error response.
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, Object>> handleException(Exception e) {
+        if(RequestLoggingFilter.clientDisconnected(e)) {
+            org.slf4j.LoggerFactory.getLogger(getClass()).info("control_disconnect traceId={} classification=CLIENT_DISCONNECTED",org.slf4j.MDC.get("traceId"));
+            return null;
+        }
         Map<String, Object> result = new HashMap<>();
         result.put("success", false);
+        String engine=com.gtcfesk.exchange.market.MarketEngineFailure.normalize(e);
+        if(!"COMMAND_FAILED".equals(engine)) {
+            result.put("errorCode",engine);result.put("message","引擎操作未确认，请按原请求键查询状态，不要重复启动");
+            org.slf4j.LoggerFactory.getLogger(getClass()).warn("control_exception traceId={} requestKey={} reason={}",org.slf4j.MDC.get("traceId"),org.slf4j.MDC.get("requestKey"),engine);
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).header("Retry-After","1").body(result);
+        }
         result.put("error", "Internal Server Error");
         result.put("message", "Unable to confirm the result. Check the relevant history or status before submitting again.");
         System.err.println("未处理的异常: " + e.getMessage());

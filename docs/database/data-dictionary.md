@@ -1,10 +1,10 @@
 # Exchange 705 当前数据库数据字典
 
-快照日期：2026-10-06。结构版本：`2026100603`。对应业务源码提交：`8679fff2ead54e53a90757366ab6a2e9270af763`。
+快照日期：2026-10-07。结构版本：`2026100702`。对应合并候选源码；未宣称已发布或获得生产批准。
 
 本文件由已迁移的隔离 MySQL 5.7 库的 `information_schema` 生成，只包含结构元数据。权威 DDL 见 [schema.sql](schema.sql)，导入边界、版本差异和校验方法见 [README](README.md)。
 
-实测结构：113 张表、1333 个字段、452 个索引、188 个外键、161 个触发器、1 个存储过程；没有视图、事件或存储函数。索引和外键按约束对象计数，复合约束不重复计数。
+实测结构：113 张表、1338 个字段、452 个索引、188 个外键、161 个触发器、1 个存储过程；没有视图、事件或存储函数。索引和外键按约束对象计数，复合约束不重复计数。
 
 机器清单登记 114 张表，其中 `tenant_migration_history` 只有登记，没有审定创建语句，也没有出现在此实际库中。因此该名称不被伪造为已存在的第 114 张表；迁移证据仍走现有受控 JSON 回执。
 
@@ -68,8 +68,8 @@
 | [loan_setting](#loan_setting) | 租户私有 | 11 | 历史基线或前置结构 |
 | [manual_order_binding](#manual_order_binding) | 租户私有 | 8 | V2026100102__stage1_current_business_schema.sql |
 | [manual_order_record](#manual_order_record) | 租户私有 | 9 | 历史基线或前置结构 |
-| [market_control_command](#market_control_command) | 租户私有 | 20 | V2026100304__market_engine_runtime.sql |
-| [market_control_flow](#market_control_flow) | 租户私有 | 10 | 历史基线或前置结构 |
+| [market_control_command](#market_control_command) | 租户私有 | 22 | V2026100304__market_engine_runtime.sql |
+| [market_control_flow](#market_control_flow) | 租户私有 | 13 | 历史基线或前置结构 |
 | [market_control_hold](#market_control_hold) | 租户私有 | 10 | 历史基线或前置结构 |
 | [market_control_plan](#market_control_plan) | 租户私有 | 7 | 历史基线或前置结构 |
 | [market_control_publication](#market_control_publication) | 租户私有 | 5 | 历史基线或前置结构 |
@@ -2032,6 +2032,8 @@
 | `task_id` | `varchar(36)` | YES | NULL |  | utf8mb4_unicode_ci |  |
 | `error_code` | `varchar(64)` | YES | NULL |  | utf8mb4_unicode_ci |  |
 | `message` | `varchar(255)` | YES | NULL |  | utf8mb4_unicode_ci |  |
+| `retry_count` | `int(11)` | NO | "0" |  | — |  |
+| `retry_at` | `bigint(20)` | NO | "0" |  | — |  |
 
 ### 索引
 
@@ -2064,6 +2066,9 @@
 | `last_at` | `bigint(20)` | NO | NULL |  | — |  |
 | `finished_at` | `bigint(20)` | YES | NULL |  | — |  |
 | `tenant_id` | `bigint(20)` | NO | NULL |  | — |  |
+| `history_pending_until` | `bigint(20)` | YES | NULL |  | — |  |
+| `history_retry_at` | `bigint(20)` | YES | NULL |  | — |  |
+| `history_error` | `varchar(64)` | YES | NULL |  | latin1_swedish_ci |  |
 
 ### 索引
 

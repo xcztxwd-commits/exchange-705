@@ -57,7 +57,7 @@ onBeforeUnmount(() => { revision++ })
     </div>
     <TenantPolicyNotice :snapshot="snapshot" :error="policyError" />
     <el-alert v-if="error" :title="error" type="error" :closable="false" />
-    <el-button v-if="error" @click="load">重新加载服务渠道</el-button>
+    <el-button v-permission="'support_settings:view'" v-if="error" @click="load">重新加载服务渠道</el-button>
     <el-form v-if="settings" label-position="top" :disabled="!canEdit" @submit.prevent="save">
       <el-form-item :label="'客服模式' + policyLabel('support.channel')">
         <el-radio-group v-model="settings.mode" :disabled="!channelEditable" aria-label="客服模式">
@@ -68,7 +68,7 @@ onBeforeUnmount(() => { revision++ })
       </el-form-item>
       <p class="hint">外部地址沿用「系统配置 → 客服配置 → 客服链接」。切换渠道不会删除历史会话；关闭站内客服后禁止创建和回复。</p>
       <el-form-item label="站内信">
-        <el-switch v-model="settings.inboxEnabled" :disabled="!canEdit || snapshot?.features.inbox !== true" aria-label="开放站内信入口及发送" active-text="开放站内信入口及发送" inactive-text="关闭" />
+        <el-switch v-permission="'support_settings:save'" v-model="settings.inboxEnabled" :disabled="!canEdit || snapshot?.features.inbox !== true" aria-label="开放站内信入口及发送" active-text="开放站内信入口及发送" inactive-text="关闭" />
       </el-form-item>
       <el-form-item label="每位客服同时接待上限">
         <el-input-number v-model="settings.capacity" :min="1" :max="50" :precision="0" aria-label="每位客服同时接待上限" />

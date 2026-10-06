@@ -758,11 +758,16 @@ class MinimalFixRegressionTest {
         assertEquals(400, status(request("POST", base + "/start", token, map("durationSeconds", 1.5, "targetPrice", 100, "intensity", 1, "requestKey", firstKey))));
         assertEquals(400, status(request("POST", base + "/restore", token, map("durationSeconds", 10, "intensity", 1.5))));
         assertEquals(400, status(request("POST", base + "/manual", token, map("enabled", true))));
-        assertEquals(200, status(request("POST", base + "/restore", token, map("durationSeconds", 10, "intensity", 3))));
-        org.mockito.Mockito.verify(quotes).restoreControl(1L, 10, 3, false);
-        assertEquals(200, status(request("POST", base + "/restore", token, map("durationSeconds", 10, "intensity", 3, "randomOscillation", true))));
-        org.mockito.Mockito.verify(quotes).restoreControl(1L, 10, 3, true);
+        String restoreKey="s2-menu-restore-"+UUID.randomUUID(),restoreOscillationKey="s2-menu-restore-wave-"+UUID.randomUUID();
+        org.mockito.Mockito.doAnswer(call->map("symbolId",call.getArgument(0),"requestKey",OrderRequest.required(call.getArgument(4)),"commandId","restore-fixture","action","RESTORE","state","ACCEPTED"))
+                .when(controlCommands).acceptRestore(org.mockito.ArgumentMatchers.anyLong(),org.mockito.ArgumentMatchers.anyInt(),org.mockito.ArgumentMatchers.anyInt(),org.mockito.ArgumentMatchers.anyBoolean(),org.mockito.ArgumentMatchers.anyString());
+        assertEquals(400,status(request("POST",base+"/restore",token,map("durationSeconds",10,"intensity",3))));
+        assertEquals(202, status(request("POST", base + "/restore", token, map("durationSeconds", 10, "intensity", 3,"requestKey",restoreKey))));
+        org.mockito.Mockito.verify(controlCommands).acceptRestore(1L, 10, 3, false,restoreKey);
+        assertEquals(202, status(request("POST", base + "/restore", token, map("durationSeconds", 10, "intensity", 3, "randomOscillation", true,"requestKey",restoreOscillationKey))));
+        org.mockito.Mockito.verify(controlCommands).acceptRestore(1L, 10, 3, true,restoreOscillationKey);
         assertEquals(200, status(request("POST", base + "/manual", token, map("enabled", false, "offset", 0))));
+        org.mockito.Mockito.verify(controlCommands).manualControl(1L,false,BigDecimal.ZERO,null);
     }
 
     @Test @SuppressWarnings("unchecked") void timedControlPersistsAndSymbolEditsCannotEraseIt() throws Exception {

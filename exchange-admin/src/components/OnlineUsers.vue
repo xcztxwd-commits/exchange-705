@@ -45,9 +45,9 @@ onUnmounted(() => { active = false; generation++; stop?.() })
         <div style="color: var(--el-text-color-secondary); font-size: 12px;">{{ scope.row.lastLoginRegion || '-' }}</div>
       </template>
     </el-table-column>
-    <el-table-column label="最近页面" width="110"><template #default="scope">{{ pages[scope.row.lastPageCode] || '未知' }}</template></el-table-column>
-    <el-table-column label="页面时间" min-width="175"><template #default="scope">{{ time(scope.row.lastPageSeenAt) }}</template></el-table-column>
-    <el-table-column label="活动时间" min-width="175"><template #default="scope">{{ time(scope.row.lastActiveAt) }}</template></el-table-column>
+    <el-table-column column-key="recentPage" label="最近页面" width="110"><template #default="scope">{{ pages[scope.row.lastPageCode] || '未知' }}</template></el-table-column>
+    <el-table-column column-key="pageTime" label="页面时间" min-width="175"><template #default="scope">{{ time(scope.row.lastPageSeenAt) }}</template></el-table-column>
+    <el-table-column column-key="activityTime" label="活动时间" min-width="175"><template #default="scope">{{ time(scope.row.lastActiveAt) }}</template></el-table-column>
     <el-table-column prop="deviceType" label="端类型" width="100" />
   </admin-table>
   <el-pagination v-model:current-page="page" :page-size="20" :total="total" layout="total, prev, pager, next" />

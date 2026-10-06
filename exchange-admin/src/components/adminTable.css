@@ -1,6 +1,7 @@
 .admin-table-container{width:100%;min-width:0}
 .admin-table-toolbar{display:flex;justify-content:flex-end;align-items:center;gap:12px;margin:0 0 8px}
 .admin-table-error{color:var(--el-color-danger);font-size:12px}
+.admin-table-loading{padding:32px;text-align:center;color:var(--el-text-color-secondary)}
 .admin-table-help{color:var(--el-text-color-secondary);line-height:1.6;margin-top:0}
 .admin-table-column-list{max-height:55vh;overflow:auto}
 .admin-table-column{display:flex;gap:8px;align-items:center;padding:10px 4px;border-bottom:1px solid var(--el-border-color-lighter);cursor:grab}

@@ -171,15 +171,15 @@ function changePage(delta: number) {
             label="标题"
             min-width="150"
             show-overflow-tooltip
-          /><el-table-column label="状态" width="80"
+          /><el-table-column column-key="status" label="状态" width="80"
             ><template #default="{ row }"
               ><el-tag :type="row.readAt ? 'success' : 'info'" size="small">{{
                 row.readAt ? '已读' : '未读'
               }}</el-tag></template
             ></el-table-column
-          ><el-table-column label="发送时间" width="150"
+          ><el-table-column column-key="sentTime" label="发送时间" width="150"
             ><template #default="{ row }">{{ supportDate(row.createdAt) }}</template></el-table-column
-          ><el-table-column type="expand"
+          ><el-table-column column-key="expand" type="expand"
             ><template #default="{ row }"
               ><div class="letter-detail">
                 <p>{{ row.content }}</p>

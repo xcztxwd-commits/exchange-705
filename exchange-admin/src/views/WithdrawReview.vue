@@ -130,7 +130,7 @@
             {{ formatDateTime(row.createdAt) }}
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="340" fixed="right">
+        <el-table-column column-key="actions" label="操作" width="340" fixed="right">
           <template #default="{ row }">
             <el-button v-permission="'withdraw_review:approve_withdraw'"
               v-if="row.status === 'PENDING' && hasPermission('withdraw_review', 'approve_withdraw')"

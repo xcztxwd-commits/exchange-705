@@ -14,7 +14,7 @@ import java.util.*;
 
 /** Presentation preferences only; never grants access to columns or business data. */
 @RestController
-@RequestMapping("/api/admin/table-preferences")
+@RequestMapping(value = "/api/admin/table-preferences", produces = "application/json;charset=UTF-8")
 @RequiredArgsConstructor
 public class AdminTablePreferenceController {
     private final AdminTablePreferenceRepository repository;

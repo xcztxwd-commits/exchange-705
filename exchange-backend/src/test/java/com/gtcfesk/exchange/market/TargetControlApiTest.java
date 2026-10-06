@@ -190,4 +190,65 @@ class TargetControlApiTest extends TenantMarketTestContext {
                 .andExpect(jsonPath("$.errorCode").value("ALGORITHM_DISABLED"));
         assertEquals(0, store.db.queryForObject("SELECT COUNT(*) FROM market_control_task", Integer.class));
     }
+    @Test void restoreSharesDurableQueueAndLostResponseFindsOriginalReceipt() throws Exception {
+        String key="api-restore-queued-20261007";
+        String input="{\"durationSeconds\":10,\"intensity\":3,\"requestKey\":\""+key+"\"}";
+        mvc.perform(post("/api/admin/ai-control/1/restore").contentType(MediaType.APPLICATION_JSON).content(input))
+                .andExpect(status().isAccepted()).andExpect(jsonPath("$.action").value("RESTORE"))
+                .andExpect(jsonPath("$.state").value("ACCEPTED"));
+        assertEquals(0,store.db.queryForObject("SELECT COUNT(*) FROM market_control_task",Integer.class));
+        String original=String.valueOf(commands.query(1,key).get("commandId"));
+        mvc.perform(post("/api/admin/ai-control/1/restore").contentType(MediaType.APPLICATION_JSON).content(input))
+                .andExpect(status().isAccepted()).andExpect(jsonPath("$.commandId").value(original));
+        commands.runOne();
+        mvc.perform(get("/api/admin/ai-control/1/commands").param("requestKey",key))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.state").value("RUNNING"));
+        assertEquals(1,store.db.queryForObject("SELECT COUNT(*) FROM market_control_command",Integer.class));
+        commands.runOne();assertEquals(original,commands.query(1,key).get("commandId"));
+    }
+    @Test void unknownCancellationPersistsAndBothLateActionsStayCancelled() throws Exception {
+        String key="api-unknown-cancel-20261007";
+        mvc.perform(post("/api/admin/ai-control/1/stop").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"requestKey\":\""+key+"\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.state").value("CANCELLED"))
+                .andExpect(jsonPath("$.action").value("CANCEL"));
+        String original=String.valueOf(commands.query(1,key).get("commandId"));
+        mvc.perform(post("/api/admin/ai-control/1/start").contentType(MediaType.APPLICATION_JSON)
+                .content("{"+INPUT+",\"requestKey\":\""+key+"\"}"))
+                .andExpect(status().isAccepted()).andExpect(jsonPath("$.state").value("CANCELLED"))
+                .andExpect(jsonPath("$.commandId").value(original));
+        mvc.perform(post("/api/admin/ai-control/1/restore").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"durationSeconds\":10,\"intensity\":3,\"requestKey\":\""+key+"\"}"))
+                .andExpect(status().isAccepted()).andExpect(jsonPath("$.state").value("CANCELLED"));
+        MarketControlCommands restarted=new MarketControlCommands(store,market,mock(com.gtcfesk.exchange.tenant.TenantJobRunner.class),mock(com.gtcfesk.exchange.control.ControlAuditService.class));
+        try{restarted.runOne();assertEquals("CANCELLED",restarted.query(1,key).get("state"));}finally{restarted.stop();}
+        assertEquals(0,store.db.queryForObject("SELECT COUNT(*) FROM market_control_task",Integer.class));
+    }
+    @Test void restoreRequiresOriginalRequestKeyAndRejectsCrossActionReuse() throws Exception {
+        mvc.perform(post("/api/admin/ai-control/1/restore").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"durationSeconds\":10,\"intensity\":3}"))
+                .andExpect(status().isBadRequest());
+        String key="api-start-restore-conflict-20261007";
+        commands.accept(1,300,new BigDecimal("100300"),10,false,key,new TargetControlOptions());
+        assertThrows(com.gtcfesk.exchange.common.BusinessException.class,()->commands.acceptRestore(1,300,10,false,key));
+    }
+    @Test void wrappedFenceRetriesAreBoundedPersistedAndDoNotActivate() throws Exception {
+        ForexQuoteMarketService failing=spy(market);MarketControlCommands retrying=new MarketControlCommands(store,failing,mock(com.gtcfesk.exchange.tenant.TenantJobRunner.class),mock(com.gtcfesk.exchange.control.ControlAuditService.class));
+        String key="api-bounded-fence-retry-20261007";
+        doThrow(new org.springframework.jdbc.UncategorizedSQLException("activation","UPDATE market_control_hold",new java.sql.SQLException("ENGINE_FENCED","45000",1644)))
+                .when(failing).restoreControl(eq(1L),eq(10),eq(3),eq(false),eq(key));
+        try{
+            retrying.acceptRestore(1,10,3,false,key);
+            for(int attempt=1;attempt<=5;attempt++){
+                retrying.runOne();Map<String,Object> receipt=retrying.query(1,key);
+                assertEquals(attempt,((Number)receipt.get("retryCount")).intValue());
+                assertEquals(attempt==5?"FAILED":"PREPARING",receipt.get("state"));
+                if(attempt<5)Thread.sleep(Math.max(0,((Number)receipt.get("retryAt")).longValue()-store.runtime.clock()+10));
+            }
+            assertEquals("COMMAND_RETRY_EXHAUSTED",retrying.query(1,key).get("errorCode"));
+            retrying.runOne();assertEquals(5,((Number)retrying.query(1,key).get("retryCount")).intValue());
+            assertEquals(0,store.db.queryForObject("SELECT COUNT(*) FROM market_control_task",Integer.class));
+        }finally{retrying.stop();}
+    }
+
 }

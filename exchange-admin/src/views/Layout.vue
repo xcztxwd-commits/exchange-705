@@ -161,9 +161,18 @@ const goToPage = (type: string, queueUnread = 0) => {
   }
 }
 
-const loadMenus = async () => {
+let permissionActive = false
+const loadMenus = async (force = false) => {
+  if (loadingMenus.value) return false
   loadingMenus.value = true
-  try { await loadAccess() } finally { loadingMenus.value = false }
+  const token = auth.token
+  try {
+    await loadAccess(force)
+    if (!permissionActive || token !== auth.token || !access.loaded || access.error) return false
+    if (!canRoute(route.path)) await router.replace(access.menus[0]?.path || '/forbidden')
+    return !access.error
+  } catch { return false }
+  finally { loadingMenus.value = false }
 }
 let permissionTimer: number | null = null
 let lastInteraction = Date.now(), lastTouch = 0, ending = false
@@ -188,11 +197,9 @@ onMounted(() => {
   window.addEventListener('pointerdown', controlInteraction)
   window.addEventListener('keydown', controlInteraction)
   accessTimer = window.setInterval(checkControlDeadline, 5000)
-  loadMenus().catch(() => { if (auth.token) void router.replace('/forbidden') })
-  permissionTimer = window.setInterval(async () => {
-    try { await loadAccess(true) } catch { /* Failed refresh closes access rather than granting defaults. */ }
-    if (auth.token && !canRoute(route.path)) router.replace(access.menus[0]?.path || '/forbidden')
-  }, 30000)
+  permissionActive = true
+  void loadMenus()
+  permissionTimer = window.setInterval(() => { void loadMenus(true) }, 30000)
   loadSoundConfig()
   pollingActive = true
   stopPendingPolling = startReadPolling(loadPendingCounts)
@@ -204,6 +211,7 @@ onUnmounted(() => {
   window.removeEventListener('pointerdown', controlInteraction)
   window.removeEventListener('keydown', controlInteraction)
   clearInterval(accessTimer)
+  permissionActive = false
   if (permissionTimer !== null) clearInterval(permissionTimer)
   pollingActive = false
   stopPendingPolling?.()
@@ -372,6 +380,11 @@ const handleSettingsUpdated = () => {
         </div>
       </el-header>
 
+      <el-alert v-if="access.error" class="permission-warning" :title="access.error" type="warning" :closable="false" show-icon>
+        <p>当前页面和未提交内容已保留；权限确认恢复前暂停敏感操作，正在自动重试。
+          <el-button v-permission="'session:self'" :loading="loadingMenus" @click="loadMenus(true)">重新加载权限</el-button>
+        </p>
+      </el-alert>
       <el-alert v-if="auth.isControl" :title="`总控管理 / ${auth.accessSession?.tenantName || ''} · 租户 ID ${auth.user?.tenantId} · 具有本租户业务写权限，操作留审计`" type="warning" :closable="false" show-icon />
       <!-- 内容区 -->
       <el-main class="layout-main">
@@ -591,6 +604,8 @@ const handleSettingsUpdated = () => {
 }
 
 .layout-content { min-width: 0; }
+.permission-warning { flex-shrink: 0; position: relative; z-index: 3000; }
+.permission-warning p { margin: 4px 0; }
 .collapse-btn:focus-visible { outline: 2px solid #85bd00; outline-offset: 2px; }
 @media (max-width: 600px) {
   .layout-aside { position: fixed; inset: 0 auto 0 0; z-index: 1001; }

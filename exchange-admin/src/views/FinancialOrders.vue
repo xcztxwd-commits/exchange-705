@@ -77,7 +77,7 @@
             {{ formatDate(row.endTime) }}
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="120" fixed="right">
+        <el-table-column column-key="actions" label="操作" width="120" fixed="right">
           <template #default="{ row }">
             <el-button v-permission="'financial_orders:detail'" size="small" type="primary" @click="viewYieldList(row)">查看收益</el-button>
           </template>
@@ -150,7 +150,7 @@
             {{ row.paidAt ? formatDate(row.paidAt) : '-' }}
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="100">
+        <el-table-column column-key="actions" label="操作" width="100">
           <template #default="{ row }">
             <el-button v-permission="'financial_orders:payout'"
               v-if="row.status === 'PENDING'"

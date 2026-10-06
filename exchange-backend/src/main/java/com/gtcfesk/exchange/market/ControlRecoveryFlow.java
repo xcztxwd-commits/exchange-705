@@ -34,6 +34,31 @@ final class ControlRecoveryFlow {
         store.db.update("UPDATE market_control_flow SET state=?,finished_at=? WHERE tenant_id=" + tenant() + " AND task_id=?",
             hold ? "HOLDING" : "SOURCE", hold ? null : now, t.id);
     }
+    /** Emergency only: enqueue publication of committed facts, never advance or activate a hold. */
+    void source(PersistentPriceControl.Task t,long now) {
+        Map<String,Object> f=get(t.id);
+        if(f.isEmpty())return; // Legacy history already has always-visible semantics.
+        long committed=Math.max(t.sampledUntil,((Number)f.get("last_at")).longValue());
+        boolean publish=Boolean.TRUE.equals(store.decode((String)f.get("options_json")).get("autoReplaceHistory")) && committed>=t.startedAt;
+        store.db.update("UPDATE market_control_flow SET state='SOURCE',finished_at=?,history_pending_until=?,history_retry_at=?,history_error=NULL WHERE tenant_id=? AND task_id=?",
+            now,publish?committed:null,publish?now+1000:null,tenant(),t.id);
+    }
+    /** Existing engine lane retries one persisted finalization per turn. No source-ledger scan. */
+    void finalizeOne(long symbol,long now) {
+        if(!store.runtime.hasBudget(2000))return;
+        List<Map<String,Object>> pending=store.db.queryForList("SELECT f.task_id,f.history_pending_until,t.started_at FROM market_control_flow f JOIN market_control_task t ON t.tenant_id=f.tenant_id AND t.id=f.task_id WHERE f.tenant_id=? AND t.symbol_id=? AND f.history_pending_until IS NOT NULL AND f.history_retry_at<=? ORDER BY f.history_retry_at LIMIT 1",tenant(),symbol,now);
+        if(pending.isEmpty())return;
+        Map<String,Object> row=pending.get(0);String id=(String)row.get("task_id");
+        long until=((Number)row.get("history_pending_until")).longValue(),from=((Number)row.get("started_at")).longValue();
+        try {
+            if(store.historyOrdering.publicationNeeded(symbol,id,from,until))
+                store.db.update("INSERT INTO market_control_publication(tenant_id,task_id,published_at,from_at,to_at) VALUES(?,?,?,?,?) ON DUPLICATE KEY UPDATE to_at=GREATEST(to_at,VALUES(to_at))",tenant(),id,now,from,until);
+            store.db.update("UPDATE market_control_flow SET history_pending_until=NULL,history_retry_at=NULL,history_error=NULL WHERE tenant_id=? AND task_id=?",tenant(),id);
+        } catch(com.gtcfesk.exchange.common.BusinessException protectedHistory) {
+            if(protectedHistory.getMessage()==null || !protectedHistory.getMessage().startsWith("HISTORY_LEGACY_ORDER_PENDING"))throw protectedHistory;
+            store.db.update("UPDATE market_control_flow SET history_retry_at=?,history_error='HISTORY_LEGACY_ORDER_PENDING' WHERE tenant_id=? AND task_id=?",now+60000,tenant(),id);
+        }
+    }
     private void pause(PersistentPriceControl.Task t, Map<String,Object> f, Map<String,Object> options) {
         long remaining = f.get("remaining_millis") == null ? ((Number)options.get("restoreDurationSeconds")).longValue()*1000 : ((Number)f.get("remaining_millis")).longValue();
         long elapsed = Math.max(0, ((Number)f.get("last_at")).longValue() - ((Number)f.get("recovery_started_at")).longValue());
@@ -44,8 +69,9 @@ final class ControlRecoveryFlow {
         if (f.isEmpty()) return f;
         Map<String,Object> options = store.decode((String) f.get("options_json"));
         String state = (String) f.get("state");
-        // A fresh process must not count its unobserved downtime as recovery progress.
-        if ("RECOVERING".equals(state) && ((Number)f.get("last_at")).longValue() < openedAt) {
+        // A fresh process or stalled scheduler must not consume unobserved downtime.
+        if ("RECOVERING".equals(state) && (((Number)f.get("last_at")).longValue() < openedAt
+                || now - ((Number)f.get("last_at")).longValue() > 2000)) {
             pause(t, f, options); f = get(t.id); state = "WAITING_SOURCE";
         }
         boolean available = Boolean.TRUE.equals(raw.get("available")) && raw.get("price") instanceof Number
@@ -72,6 +98,7 @@ final class ControlRecoveryFlow {
             }
             return f; // Never synthesize outage samples or consume unobserved recovery time.
         }
+        if(store.runtime.sampleAllowance(t.symbolId)==0)return f;
         BigDecimal source = ControlHistoryStore.number(raw.get("price"));
         if ("WAITING_SOURCE".equals(state)) {
             holds.release(t.id, now);

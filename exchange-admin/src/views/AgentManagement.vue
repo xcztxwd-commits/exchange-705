@@ -534,26 +534,26 @@ onMounted(() => {
             {{ row.remark || '-' }}
           </template>
         </el-table-column>
-        <el-table-column label="用户类型" width="100" align="center">
+        <el-table-column column-key="userType" label="用户类型" width="100" align="center">
           <template #default="{ row }">
             <el-tag type="warning">代理</el-tag>
           </template>
         </el-table-column>
         <el-table-column prop="myInviteCode" label="推广码" width="120" />
-        <el-table-column label="下级数量" width="100" align="center">
+        <el-table-column column-key="subordinateCount" label="下级数量" width="100" align="center">
           <template #default="{ row }">
             <el-link v-permission="'agents:view_subordinates'" type="primary" @click="handleViewSubAgents(row)">
               {{ row.subordinateCount || 0 }}人
             </el-link>
           </template>
         </el-table-column>
-        <el-table-column label="余额" width="150" align="right">
+        <el-table-column column-key="balance" label="余额" width="150" align="right">
           <template #default="{ row }">
             <div>USDT: {{ row.usdtBalance || 0 }}</div>
             <div>CNY: {{ row.cnyBalance || 0 }}</div>
           </template>
         </el-table-column>
-        <el-table-column label="状态" width="100" align="center">
+        <el-table-column column-key="status" label="状态" width="100" align="center">
           <template #default="{ row }">
             <el-switch v-permission="'agents:status'"
               v-model="row.status"
@@ -563,7 +563,7 @@ onMounted(() => {
             :disabled="accountModes.includes('DEMO') || !accountModes.length" />
           </template>
         </el-table-column>
-        <el-table-column label="登录信息" width="150">
+        <el-table-column column-key="loginInfo" label="登录信息" width="150">
           <template #default="{ row }">
             <div style="font-size: 12px; color: #606266;">
               <div>IP: {{ row.lastLoginIp || '-' }}</div>
@@ -572,7 +572,7 @@ onMounted(() => {
           </template>
         </el-table-column>
         <el-table-column prop="createdAt" label="注册时间" width="160" />
-        <el-table-column label="操作" width="250" fixed="right">
+        <el-table-column column-key="actions" label="操作" width="250" fixed="right">
           <template #default="{ row }">
             <el-button v-permission="'agents:assign_permission'" link type="primary" size="small" @click="handleAssignMenus(row)" :disabled="accountModes.includes('DEMO') || !accountModes.length">
               分配权限
@@ -761,20 +761,20 @@ onMounted(() => {
             {{ row.nickname || '-' }}
           </template>
         </el-table-column>
-        <el-table-column label="用户类型" width="100" align="center">
+        <el-table-column column-key="userType" label="用户类型" width="100" align="center">
           <template #default="{ row }">
             <el-tag v-if="row.userType === 'agent'" type="warning">代理</el-tag>
             <el-tag v-else type="success">普通用户</el-tag>
           </template>
         </el-table-column>
         <el-table-column prop="myInviteCode" label="推广码" width="120" />
-        <el-table-column label="余额" width="150" align="right">
+        <el-table-column column-key="balance" label="余额" width="150" align="right">
           <template #default="{ row }">
             <div>USDT: {{ row.usdtBalance || 0 }}</div>
             <div>CNY: {{ row.cnyBalance || 0 }}</div>
           </template>
         </el-table-column>
-        <el-table-column label="状态" width="100" align="center">
+        <el-table-column column-key="status" label="状态" width="100" align="center">
           <template #default="{ row }">
             <el-tag v-if="row.status === 'active'" type="success">正常</el-tag>
             <el-tag v-else type="danger">{{ row.status }}</el-tag>

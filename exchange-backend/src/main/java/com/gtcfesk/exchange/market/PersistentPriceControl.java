@@ -73,23 +73,55 @@ public class PersistentPriceControl {
     public Task startRealtimeRestore(TradingSymbol config, Map<String,Object> raw, BigDecimal displayed,
             int duration, int intensity, boolean oscillation, String requestKey) {
         TenantContext.require(config.getTenantId());
-        return locked(config.getId(), () -> {
-            Task previous = latest(config.getId());
-            Map<String,Object> previousFlow = previous == null ? Collections.emptyMap() : flows.get(previous.id);
-            Map<String,Object> view = display(config, raw, System.currentTimeMillis());
-            BigDecimal start = view.get("price") instanceof Number ? ControlHistoryStore.number(view.get("price")) : displayed;
-            Task task = start(config, raw, start, duration, ControlHistoryStore.number(raw.get("price")), intensity, oscillation, true, requestKey);
-            if (flows.get(task.id).isEmpty()) {
-                RecoveryOptions options = new RecoveryOptions();
-                options.setAutoRestore(true);
-                options.setRestoreDurationSeconds(duration); options.setRestoreIntensity(intensity); options.setRestoreRandomOscillation(oscillation);
-                if (!previousFlow.isEmpty()) options.setAutoReplaceHistory(Boolean.TRUE.equals(store.decode((String)previousFlow.get("options_json")).get("autoReplaceHistory")));
-                flows.create(task, options);
-                store.db.update("UPDATE market_control_task SET status='COMPLETED',ended_at=? WHERE tenant_id=" + tenant() + " AND id=?", task.startedAt, task.id);
-                store.db.update("UPDATE market_control_flow SET state='WAITING_SOURCE' WHERE tenant_id=" + tenant() + " AND task_id=?", task.id);
+        return store.locked(config.getId(), () -> {
+            if(requestKey!=null) {
+                List<Task> existing=store.db.query(TASK_SELECT+"WHERE t.tenant_id=? AND t.symbol_id=? AND t.request_key=?",TASK,tenant(),config.getId(),requestKey);
+                if(!existing.isEmpty()) {
+                    Task t=existing.get(0);t.store=store;
+                    if(!"RESTORE".equals(t.kind) || t.durationSeconds!=duration || t.intensity!=intensity || t.oscillation!=oscillation)
+                        throw new BusinessException("任务请求标识已用于不同参数");
+                    return t;
+                }
             }
-            return latest(config.getId());
+            if(!Boolean.TRUE.equals(raw.get("available")) || !QuoteState.valid(raw))throw new BusinessException("原始行情不可用，无法开始渐进恢复");
+            long now=System.currentTimeMillis();Task previous=latest(config.getId());
+            Map<String,Object> previousFlow=previous==null?Collections.emptyMap():flows.get(previous.id);
+            Map<String,Object> committed=store.runtime.read(config.getId(),false,now);
+            BigDecimal start=committed.get("price") instanceof Number && QuoteState.valid(committed)?ControlHistoryStore.number(committed.get("price")):displayed;
+            if(start==null || start.signum()<=0)throw new BusinessException("没有已提交的有效控盘价格");
+            // Supersede only committed state. Recovery never needs the old endpoint or hold activation.
+            endCommitted(previous,now);
+            store.runtime.invalidate(config.getId());
+            if(previous!=null)now=Math.max(now,Math.max(previous.startedAt,previous.sampledUntil)+1);
+            store.captureLegacyMinute(config.getId(),now);store.freeze(config.getId(),now);
+            String id=UUID.randomUUID().toString();
+            store.db.update("INSERT INTO market_control_task(tenant_id,id,symbol_id,symbol,algorithm_version,kind,status,start_price,target_price,duration_seconds,intensity,oscillation,price_precision,start_source,source_time,started_at,planned_end,sampled_until,ended_at,request_key) VALUES(?,?,?,?,2,'RESTORE','COMPLETED',?,?,?,?,?,?,'CONTROL_DISPLAY',?,?,?,?,?,?)",
+                tenant(),id,config.getId(),config.getSymbol(),start,raw.get("price"),duration,intensity,oscillation,PriceControlPath.precision(config),QuoteState.time(raw.get("sourceTimestamp")),now,now+duration*1000L,now,now,requestKey);
+            Task task=latest(config.getId());RecoveryOptions options=new RecoveryOptions();options.setAutoRestore(true);
+            options.setRestoreDurationSeconds(duration);options.setRestoreIntensity(intensity);options.setRestoreRandomOscillation(oscillation);
+            if(!previousFlow.isEmpty())options.setAutoReplaceHistory(Boolean.TRUE.equals(store.decode((String)previousFlow.get("options_json")).get("autoReplaceHistory")));
+            flows.create(task,options);
+            store.generatedPoints(id,config.getId(),Collections.singletonList(new ControlHistoryStore.PricePoint(now,start)));
+            store.db.update("UPDATE market_control_flow SET state='WAITING_SOURCE' WHERE tenant_id=? AND task_id=?",tenant(),id);
+            return task;
         });
+    }
+    /** Authorized emergency SOURCE: no catch-up, plan decoding, hold activation or ledger scan. */
+    public void emergencySource(long symbol,long now) {
+        store.locked(symbol,()->{
+            store.runtime.invalidate(symbol);
+            store.db.update("UPDATE market_control_command SET state='CANCELLED',prepared_json=NULL,error_code='CONTROL_CANCELLED',message='应急回源已取消准备' WHERE tenant_id=? AND symbol_id=? AND state IN ('ACCEPTED','PREPARING','READY')",tenant(),symbol);
+            Task task=latest(symbol);endCommitted(task,now);
+            org.slf4j.LoggerFactory.getLogger(getClass()).info("control_source tenant={} symbol={} task={} sampledUntil={} plannedEnd={} missingSamplesDiscarded=true",tenant(),symbol,task==null?null:task.id,task==null?null:task.sampledUntil,task==null?null:task.plannedEnd);
+            return null;
+        });
+    }
+    private void endCommitted(Task task,long now) {
+        if(task==null)return;
+        flows.source(task,now);holds.release(task.id,now);
+        // STOPPED ends at the last committed sample, not an invented wall-clock endpoint.
+        if(task.running())store.db.update("UPDATE market_control_task SET status='STOPPED',ended_at=?,stop_at=? WHERE tenant_id=? AND id=?",Math.max(task.startedAt,task.sampledUntil),now,tenant(),task.id);
+        else store.db.update("UPDATE market_control_task SET stop_at=? WHERE tenant_id=? AND id=?",now,tenant(),task.id);
     }
     public boolean hasFlow(long symbol) {
         Task t = latest(symbol);
@@ -150,16 +182,23 @@ public class PersistentPriceControl {
         int allowance=store.runtime.sampleAllowance(task.symbolId);
         if(allowance==0) return;
         until = Math.min(until, Math.max(task.startedAt - 1000, task.sampledUntil) + allowance*1000L);
-        List<ControlHistoryStore.PricePoint> points = new ArrayList<>();
-        // Include both endpoints. Samples follow start+n seconds, not wall-clock rounding.
-        for (long time = task.sampledUntil < task.startedAt ? task.startedAt : task.sampledUntil + 1000; time <= until; time += 1000) {
-            BigDecimal price = task.price(time);
-            points.add(new ControlHistoryStore.PricePoint(time, price));
-            task.sampledUntil = time;
+        long before=task.sampledUntil;
+        // Each bounded sub-batch is persisted before checking elapsed time again. The physical
+        // transaction still shares the existing 512-point allowance across symbols/nested calls.
+        while(task.sampledUntil<until && store.runtime.hasBudget(2000)) {
+            List<ControlHistoryStore.PricePoint> points=new ArrayList<>();
+            long first=task.sampledUntil<task.startedAt?task.startedAt:task.sampledUntil+1000;
+            for(long time=first;time<=until && points.size()<64 && store.runtime.hasBudget(2000);time+=1000)
+                points.add(new ControlHistoryStore.PricePoint(time,task.price(time)));
+            if(points.isEmpty())break;
+            store.runtime.phase(task.symbolId,"sampling",()->{store.generatedPoints(task.id,task.symbolId,points);return null;});
+            task.sampledUntil=points.get(points.size()-1).generatedAt;
         }
-        store.generatedPoints(task.id, task.symbolId, points);
-        store.runtime.sampled(task.symbolId,points.size());
-        if (task.sampledUntil >= task.plannedEnd && (task.stopAt == null || task.stopAt >= task.plannedEnd)) { task.status = "COMPLETED"; task.endedAt = task.plannedEnd; holds.activate(task); }
+        if (task.sampledUntil >= task.plannedEnd && (task.stopAt == null || task.stopAt >= task.plannedEnd) && store.runtime.hasBudget(1500)) {
+            store.runtime.phase(task.symbolId,"hold_activation",()->{holds.activate(task);return null;});
+            task.status="COMPLETED";task.endedAt=task.plannedEnd;
+        }
+        org.slf4j.LoggerFactory.getLogger(getClass()).info("control_progress tenant={} symbol={} task={} before={} after={} expected={} state={}",tenant(),task.symbolId,task.id,before,task.sampledUntil,until,task.status);
         store.db.update("UPDATE market_control_task SET sampled_until=?,status=?,ended_at=? WHERE tenant_id=" + tenant() + " AND id=?",
             task.sampledUntil, task.status, task.endedAt, task.id);
     }
@@ -392,7 +431,7 @@ public class PersistentPriceControl {
             }
             final long cutoff=task!=null && task.stopAt!=null?task.stopAt:now;
             Map<String,Object> flow = task == null ? Collections.emptyMap() : flows.get(task.id);
-            if (!flow.isEmpty() && "RECOVERING".equals(flow.get("state"))) {
+            if (!flow.isEmpty() && Arrays.asList("RECOVERING","WAITING_SOURCE").contains(flow.get("state"))) {
                 store.db.update("DELETE FROM market_control_hold WHERE tenant_id=" + tenant() + " AND task_id=?", task.id);
                 holds.prepare(task, store.lastQuote(symbol));
                 holds.activate(task, cutoff, ControlHistoryStore.number(flow.get("last_price")));
@@ -436,24 +475,25 @@ public class PersistentPriceControl {
             Map<String,Object> committed = store.lastQuote(config.getId());
             if (QuoteState.time(raw.get("timestamp")) < QuoteState.time(committed.get("timestamp"))) return null;
             if (!store.quote(config.getId(), raw, receivedAt)) return null;
+            Map<String,Object> observedRaw=new LinkedHashMap<>(raw);observedRaw.put("sourceReceivedAt",receivedAt);
             Task task = latest(config.getId()); advance(task, receivedAt);
             Map<String,Object> flow = task == null ? Collections.emptyMap() : flows.get(task.id);
-            if (!flow.isEmpty() && !"SOURCE".equals(flow.get("state"))) flows.observe(task, raw, receivedAt);
-            else if (task != null && !holds.active(task.id).isEmpty()) holds.observe(task, raw, receivedAt);
+            if (!flow.isEmpty() && !"SOURCE".equals(flow.get("state"))) flows.observe(task, observedRaw, receivedAt);
+            else if (task != null && !holds.active(task.id).isEmpty()) holds.observe(task, observedRaw, receivedAt);
             // Only actual later quotes may extend a mixed minute. Late provider bars never rewrite it.
-            else if (Boolean.TRUE.equals(raw.get("available")) && (task == null || !task.running())
-                    && (manual(config, task) || task == null || task.endedAt == null || QuoteState.time(raw.get("timestamp")) > task.endedAt)) {
-                BigDecimal price = ForexQuoteMarketService.controlledPrice(config, raw, receivedAt);
+            else if (Boolean.TRUE.equals(observedRaw.get("available")) && (task == null || !task.running())
+                    && (manual(config, task) || task == null || task.endedAt == null || QuoteState.time(observedRaw.get("timestamp")) > task.endedAt)) {
+                BigDecimal price = ForexQuoteMarketService.controlledPrice(config, observedRaw, receivedAt);
                 boolean manualRule = manual(config, task);
                 // Before the first task, identity source prices are already retained in the frozen legacy OHLC.
                 boolean sourceEquivalent = task == null && (config.getControlPriceOffset() == null || config.getControlPriceOffset().signum() == 0)
-                    && price.compareTo(BigDecimal.valueOf(((Number)raw.get("price")).doubleValue())) == 0;
+                    && price.compareTo(BigDecimal.valueOf(((Number)observedRaw.get("price")).doubleValue())) == 0;
                 if (manualRule && !sourceEquivalent) store.manualPoint(config.getId(), receivedAt, price);
                 else store.point(config.getId(), receivedAt, price, manualRule);
             }
             // Facts and the corresponding committed reader snapshot share this writer transaction.
             // Old/duplicate events returned above cannot renew execution validity or append manual points.
-            pump(config,raw,receivedAt,maxAgeMs);
+            pump(config,observedRaw,receivedAt,maxAgeMs);
             return null;
         });
     }
@@ -505,8 +545,11 @@ public class PersistentPriceControl {
         return store.runtime.read(config.getId(), false, now);
     }
     /** Exactly one bounded physical transaction per engine turn; consumers never call this. */
-    public void pump(TradingSymbol config, Map<String,Object> raw,long now,long maxAge) {
+    public void pump(TradingSymbol config, Map<String,Object> raw,long now,long maxAge) { pump(config,raw,now,maxAge,true); }
+    void pumpSource(TradingSymbol config,Map<String,Object> raw,long now,long maxAge) { pump(config,raw,now,maxAge,false); }
+    private void pump(TradingSymbol config,Map<String,Object> raw,long now,long maxAge,boolean finalizeHistory) {
         locked(config.getId(), () -> {
+            if(finalizeHistory)flows.finalizeOne(config.getId(),now);
             Map<String,Object> quote=displayLocked(config,raw,now);
             Task task=latest(config.getId());
             if(task!=null && task.running() && task.stopAt!=null && task.sampledUntil+1000>Math.min(task.stopAt,task.plannedEnd)) {
@@ -520,18 +563,21 @@ public class PersistentPriceControl {
             long expiry=controlled && !lag ? now+maxAge : QuoteState.time(raw.get("expiresAt"));
             if(expiry==0) expiry=QuoteState.time(raw.get("timestamp"))+maxAge;
             quote.put("controlActive",controlled);quote.put("executionExpiresAt",expiry);quote.put("expiresAt",expiry);
-            quote.put("available",!lag && QuoteState.valid(quote) && (controlled || Boolean.TRUE.equals(raw.get("available"))));
+            boolean waitingSource=Arrays.asList("WAITING_SOURCE","HOLDING","RECOVERING","MANUAL").contains(quote.get("controlState")) && !Boolean.TRUE.equals(raw.get("available"));
+            quote.put("available",!lag && !waitingSource && QuoteState.valid(quote) && (controlled || Boolean.TRUE.equals(raw.get("available"))));
             quote.put("tradeAvailable",quote.get("available"));quote.put("engineLag",lag);
             quote.put("stale",!Boolean.TRUE.equals(quote.get("available")));
             quote.put("status",Boolean.TRUE.equals(quote.get("available"))?"available":"unavailable");
             if(lag){quote.put("executionExpiresAt",0L);quote.put("status","engine_lag");}
             if(task!=null){quote.put("sampledUntil",task.sampledUntil);quote.put("plannedEnd",task.plannedEnd);quote.put("stopAt",task.stopAt);}
             Map<String,Object> status=new LinkedHashMap<>();statusLocked(config,status,raw,now,quote);
+            status.put("executionExpiresAt",quote.get("executionExpiresAt"));status.put("tradeAvailable",quote.get("tradeAvailable"));
             // Current read under the same runtime lock; raw instrument refresh must retain committed FX companions.
             Map<String,Object> prior=store.db.queryForMap("SELECT quote_json FROM market_engine_runtime WHERE tenant_id=? AND symbol_id=? FOR UPDATE",tenant(),config.getId());
             if(prior.get("quote_json")!=null) quote.put(FundingConversions.BOOK,FundingConversions.retain(store.decode((String)prior.get("quote_json")),config));
             FundingQuoteAuthority.stamp(quote,config);
-            store.runtime.snapshot(config.getId(),quote,status,now);return null;
+            final Map<String,Object> snapshotQuote=quote;
+            store.runtime.phase(config.getId(),"snapshot",()->{store.runtime.snapshot(config.getId(),snapshotQuote,status,now);return null;});return null;
         });
     }
     private Map<String, Object> displayLocked(TradingSymbol config, Map<String, Object> raw, long now) {
@@ -589,6 +635,10 @@ public class PersistentPriceControl {
             result.put("generatedAt", hold.get("generated_at")); result.put("displayAvailable", true);
             return result;
         }
+        if(!task.running() && task.stopAt!=null) {
+            result.put("controlState","SOURCE");result.put("controlRunning",false);result.put("controlSourceResumed",true);result.put("controlOffset",BigDecimal.ZERO);
+            return result;
+        }
         boolean running = task.running();
         result.put("controlState", running ? "RUNNING" : sourceAvailable ? "SOURCE" : "WAITING_SOURCE");
         if (!running && Boolean.TRUE.equals(config.getControlEnabled()) && !PriceControlPath.running(config)) return result;
@@ -643,18 +693,28 @@ public class PersistentPriceControl {
             basis.put("timestamp", display.get("generatedAt"));
         }
         result.put("sourceAvailable", Boolean.TRUE.equals(raw.get("available"))); result.put("canStart", !basis.isEmpty());
+        result.put("sourceEventAt",raw.get("sourceTimestamp"));result.put("lastSourceReceivedAt",raw.getOrDefault("sourceReceivedAt",raw.get("fetchedAt")));
         result.put("startBasis", basis); result.put("controlState", display.get("controlState")); result.put("currentPrice", display.get("price"));
         result.put("enabled",Boolean.TRUE.equals(config.getControlEnabled()));result.put("running",false);result.put("restoring",false);
         result.put("available",Boolean.TRUE.equals(display.get("available")));result.put("rawPrice",raw.get("price"));
         result.put("offset",display.get("controlOffset")==null ? config.getControlPriceOffset() : display.get("controlOffset"));
         if (task == null || manual) return;
         result.put("taskId", task.id); result.put("running", task.running() && now < task.plannedEnd);
+        result.put("sampledUntil",task.sampledUntil);result.put("plannedEnd",task.plannedEnd);result.put("stopAt",task.stopAt);
+        Map<String,Object> progressFlow=flows.get(task.id);
+        long watermark=progressFlow.isEmpty() || "TARGET".equals(progressFlow.get("state"))?task.sampledUntil:QuoteState.time(progressFlow.get("last_at"));
+        Map<String,Object> previous=store.runtime.read(config.getId(),true,now);
+        boolean progressed=!Objects.equals(task.id,previous.get("taskId")) || watermark!=QuoteState.time(previous.get("controlProgressWatermark"));
+        result.put("controlProgressWatermark",watermark);result.put("progressStartedAt",task.startedAt);result.put("progressEndAt",task.plannedEnd);
+        result.put("lastControlProgressAt",progressed?System.currentTimeMillis():previous.get("lastControlProgressAt"));
+        result.put("sourceEventAt",raw.get("sourceTimestamp"));result.put("lastSourceReceivedAt",raw.getOrDefault("sourceReceivedAt",raw.get("fetchedAt")));
+        result.put("historyFinalizationPending",store.db.queryForObject("SELECT COUNT(*) FROM market_control_flow f JOIN market_control_task t ON t.tenant_id=f.tenant_id AND t.id=f.task_id WHERE f.tenant_id=? AND t.symbol_id=? AND f.history_pending_until IS NOT NULL",Integer.class,tenant(),config.getId())>0);
         result.put("enabled", task.running() || task.holding); result.put("holding", task.holding); result.put("restoring", "RESTORE".equals(task.kind));
         if (display.get("controlOffset") != null) result.put("offset", display.get("controlOffset"));
         result.put("startPrice", task.startPrice); result.put("targetPrice", task.targetPrice);
         result.put("durationSeconds", task.durationSeconds); result.put("intensity", task.intensity); result.put("randomOscillation", task.oscillation);
         result.put("algorithmVersion", task.algorithmVersion);
-        if (task.algorithmVersion == BalancedControlPlan.VERSION || task.algorithmVersion == StabilizedControlPlan.VERSION) {
+        if ((task.algorithmVersion == BalancedControlPlan.VERSION || task.algorithmVersion == StabilizedControlPlan.VERSION) && !"SOURCE".equals(progressFlow.get("state")) && !"STOPPED".equals(task.status)) {
             TargetControlPlan plan = store.plan(task.id);
             Map<String, Object> metadata = plan.snapshot();
             result.put("minStepAmount", new BigDecimal((String) metadata.get("minStep")).movePointLeft(plan.precision()).toPlainString());
@@ -678,6 +738,8 @@ public class PersistentPriceControl {
                 Map<String,Object> options = store.decode((String)flow.get("options_json"));
                 long duration = flow.get("remaining_millis") == null ? ((Number)options.get("restoreDurationSeconds")).longValue()*1000 : ((Number)flow.get("remaining_millis")).longValue();
                 long end = ((Number)flow.get("recovery_started_at")).longValue() + duration;
+                result.put("recoveryStartedAt",flow.get("recovery_started_at"));result.put("recoveryExpectedEnd",end);
+                result.put("progressStartedAt",flow.get("recovery_started_at"));result.put("progressEndAt",end);
                 result.put("remainingSeconds", Math.max(0, (end-now+999)/1000));
             }
         }

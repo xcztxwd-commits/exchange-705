@@ -45,11 +45,13 @@ class ControlRecoveryFlowTest extends PersistentPriceControlTest {
         long now=System.currentTimeMillis();
         price(105,display(now,103,true));
         assertEquals(6000,((Number)flow(t).get("remaining_millis")).longValue());
+        for(long at=now+1000;at<now+6000;at+=1000)display(at,103,true);
         price(104,display(now+6000,104,true));
     }
     @Test void recoveryOutagePausesAndRebasesContinuously() {
         PersistentPriceControl.Task t=start(enabledRecovery());
         display(t.plannedEnd,100,true);
+        for(long at=t.plannedEnd+1000;at<t.plannedEnd+4000;at+=1000)display(at,100,true);
         Map<String,Object> before=display(t.plannedEnd+4000,100,true);
         Map<String,Object> outage=display(t.plannedEnd+5000,0,false);
         assertEquals("WAITING_SOURCE",outage.get("controlState"));
@@ -57,6 +59,7 @@ class ControlRecoveryFlowTest extends PersistentPriceControlTest {
         display(t.plannedEnd+50000,0,false);assertEquals(count,count("market_control_sample"));
         Map<String,Object> resumed=display(t.plannedEnd+60000,103,true);
         assertEquals(before.get("price"),resumed.get("price"));
+        for(long at=t.plannedEnd+61000;at<t.plannedEnd+66000;at+=1000)display(at,103,true);
         price(104,display(t.plannedEnd+66000,104,true));
     }
     @Test void legacyMinutePrefixRemainsWhenNewFlowIsUnpublished() {
@@ -77,6 +80,7 @@ class ControlRecoveryFlowTest extends PersistentPriceControlTest {
         Map<String,Object> first = display(t.plannedEnd, 100, true);
         price(110, first); assertEquals("RECOVERING", first.get("controlState"));
         assertEquals(1, count("market_control_publication"));
+        for(long at=t.plannedEnd+1000;at<t.plannedEnd+10000;at+=1000)display(at,100,true);
         price(107, display(t.plannedEnd + 10000, 107, true));
         assertEquals("SOURCE", flow(t).get("state"));
         assertEquals(t.plannedEnd + 10000, ((Number)store.db.queryForMap("SELECT * FROM market_control_publication").get("to_at")).longValue());
@@ -101,6 +105,7 @@ class ControlRecoveryFlowTest extends PersistentPriceControlTest {
         price(110, display(t.plannedEnd + 90000, 103, true));
         assertEquals(t.plannedEnd + 90000, ((Number)flow(t).get("recovery_started_at")).longValue());
         controls = new PersistentPriceControl(store);
+        for(long at=t.plannedEnd+91000;at<t.plannedEnd+100000;at+=1000)display(at,103,true);
         price(108, display(t.plannedEnd + 100000, 108, true));
         assertEquals("SOURCE", flow(t).get("state"));
     }
@@ -116,6 +121,7 @@ class ControlRecoveryFlowTest extends PersistentPriceControlTest {
     @Test void stopDuringRecoveryRetainsLastPriceAndNeverRestarts() {
         PersistentPriceControl.Task t = start(enabledRecovery());
         display(t.plannedEnd, 100, true);
+        display(t.plannedEnd+1000,100,true);display(t.plannedEnd+2000,100,true);
         Map<String,Object> last = display(t.plannedEnd + 3000, 100, true);
         controls.stopAndHold(1, t.plannedEnd + 3000);
         assertEquals("HOLDING", flow(t).get("state"));
@@ -162,9 +168,29 @@ class ControlRecoveryFlowTest extends PersistentPriceControlTest {
         o.setRestoreDurationSeconds(20);
         assertThrows(BusinessException.class, () -> start(o));
     }
+    @Test void sameProcessValidSourceSchedulerGapKeepsFirstDisplayContinuous() throws Exception {
+        PersistentPriceControl.Task t=controls.startRealtimeRestore(symbol,raw(System.currentTimeMillis(),true),BigDecimal.valueOf(120),3,1,false,"same-process-gap");
+        Map<String,Object> before=display(System.currentTimeMillis(),90,true);
+        Map<String,Object> committed=flow(t);long samples=count("market_control_sample");
+        assertEquals("RECOVERING",committed.get("state"));
+        long elapsed=((Number)committed.get("last_at")).longValue()-((Number)committed.get("recovery_started_at")).longValue();
+        // This is a scheduler gap, not a source outage or a component restart.
+        Thread.sleep(4100);
+        long resumedAt=System.currentTimeMillis();Map<String,Object> valid=raw(resumedAt,true);valid.put("price",95);
+        assertTrue(QuoteState.valid(valid));assertEquals(true,valid.get("available"));
+        assertEquals(false,controls.display(symbol,valid,resumedAt).get("tradeAvailable"));
+        assertEquals(samples,count("market_control_sample"));assertEquals(committed,flow(t));
+        Map<String,Object> resumed=display(resumedAt,95,true);
+        assertEquals("RECOVERING",resumed.get("controlState"));assertEquals(true,resumed.get("sourceAvailable"));
+        assertEquals(0,ControlHistoryStore.number(before.get("price")).compareTo(ControlHistoryStore.number(resumed.get("price"))));
+        long remaining=((Number)flow(t).get("remaining_millis")).longValue();assertEquals(Math.max(1,3000-elapsed),remaining);
+        for(long at=resumedAt+1000;at<resumedAt+remaining;at+=1000)display(at,95,true);
+        price(97,display(resumedAt+remaining,97,true));assertEquals("SOURCE",flow(t).get("state"));
+    }
     @Test void manualRealtimeRestoreUsesChangingQuote() {
         PersistentPriceControl.Task t = controls.startRealtimeRestore(symbol, raw(System.currentTimeMillis(),true), BigDecimal.valueOf(120), 3, 1, false, "manual");
         display(t.startedAt, 90, true);
+        display(t.startedAt+1000,90,true);display(t.startedAt+2000,90,true);
         price(95, display(t.startedAt + 3000, 95, true));
         assertEquals("SOURCE", flow(t).get("state"));
     }

@@ -100,7 +100,7 @@ fs.mkdirSync(out, { recursive: true })
 
     policy = { ...policy, supportChannel: null, configs: [], features: { support: true, external_support: true, inbox: true } }
     supportSave = false; await mount('Settings'); await page.getByRole('tab', { name: '客服配置', exact: true }).click(); await channel.getByRole('spinbutton').waitFor()
-    assert(await save.isHidden()); assert(await channel.getByRole('spinbutton').isDisabled()); assert(await channel.getByRole('switch').isDisabled()); for (const radio of await channel.getByRole('radio').all()) assert(await radio.isDisabled())
+    assert(await save.isHidden()); assert(await channel.getByRole('spinbutton').isDisabled()); assert(await channel.getByRole('switch', { includeHidden: true }).isHidden()); for (const radio of await channel.getByRole('radio').all()) assert(await radio.isDisabled())
     supportView = false; const readCount = requests.filter(item => item.path === '/api/admin/support/settings').length
     await mount('Settings'); await page.getByRole('tab', { name: '客服配置', exact: true }).click()
     assert.equal(await channel.count(), 0); assert.equal(requests.filter(item => item.path === '/api/admin/support/settings').length, readCount)

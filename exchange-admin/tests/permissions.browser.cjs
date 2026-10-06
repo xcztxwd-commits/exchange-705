@@ -24,12 +24,14 @@ const duration = { id: 500, duration: 60, label: 'QA 60s', profitRate: .8, lossR
     page.on('pageerror', e => errors.push(e.message))
     page.on('console', message => { if (message.type() === 'error' && !/status of 503|权限加载失败/.test(message.text())) errors.push(message.text()) })
     await page.addInitScript(() => {
+      sessionStorage.setItem('exchange.admin.session.v2', JSON.stringify({ token: 'qa-one', mode: 'admin', user: { id: 1, tenantId: 2, userType: 'admin' } }))
       localStorage.setItem('admin_token', 'qa-one')
       // Forging a local super flag must never grant frontend access.
       localStorage.setItem('admin_user', JSON.stringify({ id: 1, userType: 'admin', role: 'super_admin', isSuperAdmin: true }))
     })
     await page.route('**/api/**', async route => {
       const request = route.request(), url = new URL(request.url()), p = url.pathname
+      if (p.startsWith('/api/admin/table-preferences/')) return route.fulfill({ json: request.method() === 'GET' ? [] : { success: true } })
       if (p === '/api/admin/menus/current') return route.fulfill(fail ? { status: 503, json: { message: '权限加载失败' } } : { json: snapshot() })
       if (p === '/api/admin/menus' || p === '/api/admin/menus/list') return route.fulfill({ json: { success: true, list: all } })
       if (p === '/api/admin/notification/sounds') return route.fulfill({ json: [] })
@@ -87,7 +89,7 @@ const duration = { id: 500, duration: 60, label: 'QA 60s', profitRate: .8, lossR
     await page.getByRole('dialog').getByRole('button', { name: '取消', exact: true }).click()
     await page.waitForTimeout(450)
     await page.setViewportSize({ width: 1024, height: 768 }); await page.screenshot({ path: path.join(output, 'compact.png'), fullPage: true })
-    fail = true; await go('/durations'); assert.ok(page.url().endsWith('/forbidden')); checks.push('权限接口失败关闭访问，不回退全部菜单')
+    fail = true; await go('/durations'); assert.equal(new URL(page.url()).pathname, '/access-unavailable'); checks.push('首次权限加载失败进入服务异常页，不误报无权限、不授予默认菜单')
     assert.deepEqual(errors, [])
     console.log(JSON.stringify({ pass: true, base, viewports: ['1440x1000','1024x768'], checks, consoleErrors: errors, screenshots: output },null,2))
   } finally { await browser.close() }

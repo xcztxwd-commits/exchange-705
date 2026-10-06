@@ -92,7 +92,7 @@
             {{ formatDateTime(row.createdAt) }}
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="100" fixed="right">
+        <el-table-column column-key="actions" label="操作" width="100" fixed="right">
           <template #default="{ row }">
             <el-button v-permission="'operation_log:detail'" link type="primary" @click="handleViewDetail(row)">详情</el-button>
           </template>

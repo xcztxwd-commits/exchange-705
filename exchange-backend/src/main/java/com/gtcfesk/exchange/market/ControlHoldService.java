@@ -33,9 +33,11 @@ final class ControlHoldService {
             "SELECT * FROM market_control_hold WHERE tenant_id=" + tenant() + " AND task_id=? AND activated_at IS NULL AND released_at IS NULL", task.id);
         if (pending.isEmpty()) return;
         Map<String,Object> reference = pending.get(0);
-        List<Map<String,Object>> ticks = store.db.queryForList(
-            "SELECT price,source_time FROM (" + ControlHistoryStore.sourceEvents("symbol_id=? AND received_at<=? AND source_time<=?", true) + ") ticks ORDER BY source_time DESC,received_at DESC,event_sequence DESC LIMIT 1",
-            task.symbolId, at, at, task.symbolId, at, at);
+        store.runtime.requireBudget();
+        List<Map<String,Object>> ticks = store.runtime.phase(task.symbolId,"latest_source",()->store.db.queryForList(
+            "SELECT /*+ MAX_EXECUTION_TIME(1000) */ price,source_time FROM (" + ControlHistoryStore.sourceEvents("symbol_id=? AND received_at<=? AND source_time<=?", true) + ") ticks ORDER BY source_time DESC,received_at DESC,event_sequence DESC LIMIT 1",
+            task.symbolId, at, at, task.symbolId, at, at));
+        store.runtime.requireBudget();
         BigDecimal price = ControlHistoryStore.number(reference.get("reference_price"));
         long time = ((Number) reference.get("reference_time")).longValue();
         if (!ticks.isEmpty() && ((Number) ticks.get(0).get("source_time")).longValue() >= time) {
@@ -49,7 +51,7 @@ final class ControlHoldService {
         return store.locked(task.symbolId, () -> {
             Map<String,Object> hold = active(task.id);
             long sourceTime = QuoteState.time(raw.get("sourceTimestamp"));
-            if (hold.isEmpty() || !Boolean.TRUE.equals(raw.get("available"))
+            if (hold.isEmpty() || store.runtime.sampleAllowance(task.symbolId)==0 || !Boolean.TRUE.equals(raw.get("available"))
                     || sourceTime < ((Number) hold.get("source_time")).longValue() || now <= ((Number) hold.get("activated_at")).longValue()) return hold;
             BigDecimal price = ControlHistoryStore.number(raw.get("price"))
                 .add(ControlHistoryStore.number(hold.get("offset_price")))

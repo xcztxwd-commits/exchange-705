@@ -20,10 +20,12 @@ HISTORY_MIGRATION = 'V2026100404__history_ordering_and_response_receipts.sql'
 def phase():
     # Explicit reviewed phases only. A 0403 namespace may continue to 0404 without rebuilding capacity data.
     reviewed={2026100403:(2026100402,MIGRATION,'403'),
-              2026100404:(2026100403,HISTORY_MIGRATION,'(?:403|404)')}
+              2026100404:(2026100403,HISTORY_MIGRATION,'(?:403|404)'),
+              2026100702:(2026100603,c.CONTROL0702_TAIL[-1],'702')}
     value=reviewed.get(core.EPOCH)
-    if value is None or c.migrations()[-1]['name']!=value[1]:
-        raise ValueError('Only the individually reviewed local0402-to0403 or local0403-to0404 phases are supported')
+    if (value is None or c.migrations()[-1]['name']!=value[1]
+            or (core.EPOCH==2026100702 and tuple(x['name'] for x in c.migrations()[-3:])!=('V2026100603__tenant_entry_frontend_roles.sql',*c.CONTROL0702_TAIL))):
+        raise ValueError('Only the exact reviewed local0403, local0404 or local0603-to0702 tails are supported')
     return value
 
 RESTORE_ROLES = {'prerestore', 'restore', 'resume_restore', 'terminal_restore', 'rollback_restore'}
@@ -92,7 +94,7 @@ class LocalPolicy:
             if exists == '0' and database is restore_db: continue
             metadata = database.query('SELECT MAX(version),MAX(minimum_application_epoch),'
                                       'SUM(CAST(business_activation_ready AS UNSIGNED)) FROM tenant_schema_version')
-            if metadata not in ([f'{previous_epoch}\t{previous_epoch}\t0'], [f'{core.EPOCH}\t{core.EPOCH}\t0']):
+            if metadata not in ([f'{previous_epoch}\t{previous_epoch}\t0'], [f'{core.EPOCH}\t{previous_epoch if core.EPOCH==2026100702 else core.EPOCH}\t0']):
                 raise ValueError('Only inactive baseline/current schemas for the reviewed phase are authorized')
         if db.query('SELECT COUNT(*) FROM market_engine_runtime WHERE lease_until>'
                     'CAST(UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3))*1000 AS UNSIGNED)') != ['0']:
@@ -157,7 +159,7 @@ def observe_local_baseline(db, restore_db, reference_state, imported_backup, led
     if db.query(f'SELECT COUNT(*) FROM tenant_schema_version WHERE version={core.EPOCH}') != ['0']:
         raise ValueError('Do not infer current-phase completion from an existing database')
     value = {'kind':'LOCAL_BASELINE_OBSERVED', 'target':c.target(db), 'state':reference_state,
-             'migrations':c.migrations()[:-1], 'imported_backup':imported_backup,
+             'migrations':c.migrations()[:-2 if core.EPOCH==2026100702 else -1], 'imported_backup':imported_backup,
              'restore':c.target(restore_db), 'source_sha256':c.sources(),
              'authorization_sha256':core.file_hash(ledger.policy.path), 'activation_ready':False,
              'qualification':'Actual imported reviewed baseline full-state observation; not a signed or fabricated past COMPLETE'}

@@ -24,18 +24,19 @@ public class AdminAiControlController {
         @NotNull @DecimalMin(value = "0", inclusive = false) @Digits(integer = 16, fraction = 8) private BigDecimal targetPrice;
         @NotNull @Min(1) @Max(10) @Digits(integer = 2, fraction = 0) private BigDecimal intensity;
         @NotNull private Boolean randomOscillation = true;
-        @Size(max = 64) private String requestKey;
+        @Pattern(regexp = "[A-Za-z0-9_-]{16,64}") private String requestKey;
     }
 
     @Getter @Setter
     public static class ManualRequest {
+        @Pattern(regexp = "[A-Za-z0-9_-]{16,64}") private String requestKey;
         @NotNull private Boolean enabled;
         @NotNull @Digits(integer = 16, fraction = 16) private BigDecimal offset;
     }
 
     @Getter @Setter
     public static class RestoreRequest {
-        @Size(max = 64) private String requestKey;
+        @NotBlank @Pattern(regexp = "[A-Za-z0-9_-]{16,64}") private String requestKey;
         @NotNull @Min(1) @Max(86400) @Digits(integer = 5, fraction = 0) private BigDecimal durationSeconds;
         @NotNull @Min(1) @Max(10) @Digits(integer = 2, fraction = 0) private BigDecimal intensity;
         @NotNull private Boolean randomOscillation = false;
@@ -70,6 +71,7 @@ public class AdminAiControlController {
     @PostMapping("/{id}/start")
     @com.gtcfesk.exchange.config.AdminPermission(menu = "ai_control", action = "start")
     public org.springframework.http.ResponseEntity<Map<String,Object>> startControl(@PathVariable Long id, @Valid @RequestBody StartRequest request) {
+        org.slf4j.MDC.put("requestKey", request.getRequestKey());
         return org.springframework.http.ResponseEntity.accepted().body(commands.accept(id, request.getDurationSeconds().intValueExact(), request.getTargetPrice(), request.getIntensity().intValueExact(), request.getRandomOscillation(), request.getRequestKey(), request));
     }
     @GetMapping("/{id}/commands")
@@ -102,21 +104,22 @@ public class AdminAiControlController {
     @PostMapping("/{id}/manual")
     @com.gtcfesk.exchange.config.AdminPermission(menu = "ai_control", action = "manual")
     public Map<String, Object> manualControl(@PathVariable Long id, @Valid @RequestBody ManualRequest request) {
-        return market.manualControl(id, request.getEnabled(), request.getOffset());
+        if(request.getRequestKey()!=null)org.slf4j.MDC.put("requestKey", request.getRequestKey());
+        return commands.manualControl(id, request.getEnabled(), request.getOffset(), request.getRequestKey());
     }
 
     @PostMapping("/{id}/stop")
     @com.gtcfesk.exchange.config.AdminPermission(menu = "ai_control", action = "stop")
     public Map<String, Object> stopControl(@PathVariable Long id,@RequestBody(required=false) Map<String,Object> body) {
         String key=body==null || body.get("requestKey")==null?null:com.gtcfesk.exchange.common.OrderRequest.required(body.get("requestKey"));
+        if(key!=null)org.slf4j.MDC.put("requestKey", key);
         return commands.stopControl(id,key);
     }
 
     @PostMapping("/{id}/restore")
     @com.gtcfesk.exchange.config.AdminPermission(menu = "ai_control", action = "restore")
-    public Map<String, Object> restoreControl(@PathVariable Long id, @Valid @RequestBody RestoreRequest request) {
-        if (request.getRequestKey() != null)
-            return market.restoreControl(id, request.getDurationSeconds().intValueExact(), request.getIntensity().intValueExact(), request.getRandomOscillation(), request.getRequestKey());
-        return market.restoreControl(id, request.getDurationSeconds().intValueExact(), request.getIntensity().intValueExact(), request.getRandomOscillation());
+    public org.springframework.http.ResponseEntity<Map<String,Object>> restoreControl(@PathVariable Long id, @Valid @RequestBody RestoreRequest request) {
+        org.slf4j.MDC.put("requestKey", request.getRequestKey());
+        return org.springframework.http.ResponseEntity.accepted().body(commands.acceptRestore(id, request.getDurationSeconds().intValueExact(), request.getIntensity().intValueExact(), request.getRandomOscillation(), request.getRequestKey()));
     }
 }

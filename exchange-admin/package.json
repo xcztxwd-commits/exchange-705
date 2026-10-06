@@ -9,6 +9,8 @@
     "preview": "vite preview",
     "dev:control": "vite --config vite.control.config.ts",
     "build:control": "vue-tsc -b && vite build --config vite.control.config.ts",
+    "test:tables": "node tests/tablePreferences.test.mjs",
+    "dev:tables": "node tests/tablePreferences.fixture.mjs",
     "test:entry": "node --experimental-strip-types tests/controlTenantEntry.test.mjs",
     "test:tenant": "node --experimental-strip-types tests/tenantSession.test.mjs",
     "test:control": "node --experimental-strip-types tests/controlAccounts.test.mjs",

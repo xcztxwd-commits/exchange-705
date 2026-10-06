@@ -29,7 +29,7 @@ onMounted(async () => {
         if (data.user?.userType !== 'control' || data.user?.tenantId !== event.data.tenantId || data.accessSession?.tenantId !== event.data.tenantId) throw new Error('交换身份或目标租户不一致')
         auth.setAuth(data.token, data.user, data.accessSession)
         if (await router.replace('/')) throw new Error('后台导航未完成，请重新进入')
-        if (!auth.isControl || auth.user?.tenantId !== event.data.tenantId || ['/login', '/access-ended', '/forbidden'].includes(router.currentRoute.value.path)) throw new Error('总控后台访问未建立，请重新进入')
+        if (!auth.isControl || auth.user?.tenantId !== event.data.tenantId || ['/login', '/access-ended', '/forbidden', '/access-unavailable'].includes(router.currentRoute.value.path)) throw new Error('总控后台访问未建立，请重新进入')
         exchangeOpener!.postMessage({ type: 'control-exchange-result', challenge, tenantId: event.data.tenantId, success: true }, origin)
       } catch (error: any) {
         auth.logout(); status.value = error.message || '交换失败，请重新进入'
