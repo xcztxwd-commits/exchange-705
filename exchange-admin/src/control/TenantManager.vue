@@ -22,15 +22,43 @@ async function readCounts() {
 const readiness=ref<any>(null),readinessOpen=ref(false),readinessError=ref(''),readinessTenant=ref<any>(null),readinessBusy=ref(false)
 let readinessGeneration=0
 async function checkReadiness(row:any){const generation=++readinessGeneration;readinessTenant.value=row;readinessOpen.value=true;readiness.value=null;readinessError.value='';readinessBusy.value=true;try{const result=await api(`/control/tenants/${row.id}/readiness`);if(generation===readinessGeneration)readiness.value=result.data}catch(e:any){if(generation===readinessGeneration)readinessError.value=e.message}finally{if(generation===readinessGeneration)readinessBusy.value=false}}
-const domainOpen=ref(false),domainTenant=ref<any>(null),candidate=ref<any>(null),domainError=ref(''),domainBusy=ref(false)
-const domainForm=reactive({hostname:'',reason:''});let domainGeneration=0
-async function domain(row:any){const seq=++domainGeneration;domainTenant.value=row;candidate.value=null;domainError.value='';domainOpen.value=true;Object.assign(domainForm,{hostname:'',reason:''});try{const r=await api(`/control/tenants/${row.id}/domains`);if(seq!==domainGeneration)return;candidate.value=r.data[0]||null;domainForm.hostname=candidate.value?.hostname||''}catch(e:any){if(seq===domainGeneration)domainError.value=e.message}}
-async function domainAction(action:'prepare'|'verify'|'activate'){
- if(domainBusy.value||!domainTenant.value)return;const seq=domainGeneration,target=domainTenant.value.id;domainError.value='';domainBusy.value=true
- try{if(action!=='verify'&&!domainForm.reason.trim())throw new Error('请填写操作原因');if(action==='activate'){await ElMessageBox.confirm(`将租户 ${domainTenant.value.name} 的现用域名 ${domainTenant.value.frontendHost||'未分配'} 切换到 ${candidate.value.hostname}。旧域名退役；只在本次核验仍有效时原子生效。`,'确认激活域名',{type:'warning'});if(seq!==domainGeneration)return}
- const body=action==='prepare'?{hostname:domainForm.hostname,reason:domainForm.reason}:{hostname:candidate.value?.hostname,version:candidate.value?.version,...action==='activate'?{reason:domainForm.reason}:{}}
- const r=await api(`/control/tenants/${target}/domains/${action}`,'POST',body);if(seq!==domainGeneration)return;candidate.value=r.data;if(action==='activate'){domainOpen.value=false;await load();ElMessage.success('新域名已激活，旧域名已退役')}else ElMessage.success(action==='prepare'?'候选已保留，现用域名未变更':'挑战与HTTPS核验通过；尚未激活')
+const domainOpen=ref(false),domainTenant=ref<any>(null),domainState=ref<any>(null),domainError=ref(''),domainBusy=ref(false)
+const domainForm=reactive({entryHost:'',frontendHost:'',entryEnabled:false,reason:''});let domainGeneration=0
+const domainCandidates=computed<any[]>(()=>domainState.value?.bindings.filter((b:any)=>['PENDING','VERIFIED'].includes(b.status))||[])
+const retiredDomains=computed<any[]>(()=>domainState.value?.bindings.filter((b:any)=>b.status==='RETIRED')||[])
+const domainRoles=[{role:'ENTRY',field:'entryHost',name:'入口域名'},{role:'FRONTEND',field:'frontendHost',name:'前台域名'}] as const
+const preparedMatches=computed(()=>domainRoles.every(r=>domainForm[r.field]===(domainCandidates.value.find(b=>b.role===r.role)?.hostname||domainState.value?.[r.field]||'')))
+function applyDomainState(state:any,preserveEntry=false){const enabled=domainForm.entryEnabled;domainState.value=state;for(const r of domainRoles)domainForm[r.field]=state.bindings.find((b:any)=>b.role===r.role&&['PENDING','VERIFIED'].includes(b.status))?.hostname||state[r.field]||'';domainForm.entryEnabled=preserveEntry?enabled:state.entryEnabled}
+async function domain(row:any){
+ const seq=++domainGeneration;domainTenant.value=row;domainState.value=null;domainError.value='';domainOpen.value=true;domainBusy.value=true;Object.assign(domainForm,{entryHost:'',frontendHost:'',entryEnabled:false,reason:''})
+ try{const r=await api(`/control/tenants/${row.id}/domains/state`);if(seq===domainGeneration)applyDomainState(r.data)}catch(e:any){if(seq===domainGeneration)domainError.value=e.message}finally{if(seq===domainGeneration)domainBusy.value=false}
+}
+async function domainAction(action:'prepare'|'verify'|'activate'|'switch'|'release',binding?:any){
+ if(domainBusy.value||!domainTenant.value||!domainState.value)return;const seq=domainGeneration,target=domainTenant.value.id;domainError.value='';domainBusy.value=true
+ try{
+  if(action!=='verify'&&domainForm.reason.trim().length<3)throw new Error('请填写至少3个字符的操作原因')
+  if(['verify','activate'].includes(action)&&!preparedMatches.value)throw new Error('输入已修改，请重新准备候选后核验')
+  if(action==='activate'){
+   if(!domainCandidates.value.length||domainCandidates.value.some(b=>b.status!=='VERIFIED'))throw new Error('须全部候选独立核验后才能激活')
+   await ElMessageBox.confirm(`将租户 ${domainTenant.value.name} 的全部已核验候选一次生效，旧域名退役。前台切换可能需要重新登录；入口自动指向同租户新前台。`,'确认原子激活',{type:'warning'});if(seq!==domainGeneration)return
+  }
+  if(action==='release'){await ElMessageBox.confirm(`审查释放 ${binding.hostname}（${binding.role}）后允许重新分配，历史归属仍保留。`,'确认退役域名释放',{type:'warning'});if(seq!==domainGeneration)return}
+  const version={domainVersion:domainState.value.domainVersion},reason={reason:domainForm.reason}
+  const endpoint={prepare:'prepare-change',verify:'verify',activate:'activate-change',switch:'entry-switch',release:'release'}[action]
+  let body:any
+  if(action==='prepare')body={...version,...reason,entryHost:domainForm.entryHost,frontendHost:domainForm.frontendHost}
+  else if(action==='activate')body={...version,...reason,entryEnabled:domainForm.entryEnabled,candidates:domainCandidates.value.map(({hostname,role,version})=>({hostname,role,version}))}
+  else if(action==='switch')body={...version,...reason,entryEnabled:domainForm.entryEnabled}
+  else{if(!binding)throw new Error('请选择角色候选');body={...version,...reason,hostname:binding.hostname,role:binding.role,version:binding.version}}
+  await api(`/control/tenants/${target}/domains/${endpoint}`,'POST',body);if(seq!==domainGeneration)return
+  const r=await api(`/control/tenants/${target}/domains/state`);if(seq!==domainGeneration)return;applyDomainState(r.data,['prepare','verify','release'].includes(action));await load()
+  if(seq===domainGeneration)ElMessage.success(action==='activate'?'全部域名已原子生效':action==='switch'?'入口开关已保存；前台会话不变':action==='verify'?'该角色HTTPS与挑战核验通过；尚未激活':'已保存；现用域名不变')
  }catch(e:any){if(seq===domainGeneration&&e!=='cancel'&&e!=='close')domainError.value=e.message}finally{if(seq===domainGeneration)domainBusy.value=false}
+}
+async function copyAddress(row:any,kind:'ENTRY'|'FRONTEND'|'EXTERNAL'){
+ const enabled=row.entryEnabled&&row.entryHost,host=kind==='ENTRY'?row.entryHost:kind==='FRONTEND'?row.frontendHost:enabled?row.entryHost:row.frontendHost
+ if(!host){ElMessage.warning('该域名未配置');return}
+ try{await navigator.clipboard.writeText(`https://${host}/`);if(!enabled&&kind!=='FRONTEND')ElMessage.warning(kind==='ENTRY'?'入口已关闭，此保留地址不能访问；只能访问前台':'入口未配置或关闭；已复制前台地址，只能直访前台');else ElMessage.success('地址已复制，不含登录令牌')}catch{ElMessage.error('复制失败，请手动复制当前生效地址')}
 }
 const accounts = ref<any>(null)
 const accountsLoad=(userEmail?:string)=>api(`/control/tenants/${accounts.value.id}/backend-accounts?${new URLSearchParams(userEmail?{userEmail}:{})}`)
@@ -77,15 +105,38 @@ onMounted(async()=>{await load();if(!disposed)stopCounts=startReadPolling(readCo
   <el-alert v-if="error" :title="error" type="error" :closable="false" />
   <p>租户 {{ tenants.length }} 个 · 平台在线账号 {{ totalOnline ?? '未知' }} 个 · {{ countsAt ? `统计时点 ${countsAt}` : '等待统计' }}。按各租户账号数相加，不合并同邮箱；最近 5 分钟有效活动，默认 5 秒刷新。</p>
   <el-alert v-if="countsError" :title="countsError" type="warning" :closable="false" />
-  <admin-table table-key="control.tenants" :data="tenants" row-key="id" border>
+  <admin-table table-key="control.tenants.domains.v2" :data="tenants" row-key="id" border>
     <el-table-column prop="id" label="ID" width="70" /><el-table-column prop="name" label="租户" min-width="140" />
-    <el-table-column prop="frontendHost" label="唯一前台域名" min-width="210" />
+    <el-table-column prop="entryHost" label="入口域名" min-width="230"><template #default="s">{{s.row.entryHost||'未配置'}}<el-button link :disabled="!s.row.entryHost" @click="copyAddress(s.row,'ENTRY')">复制入口地址</el-button></template></el-table-column>
+    <el-table-column prop="frontendHost" label="前台域名" min-width="230"><template #default="s">{{s.row.frontendHost||'未配置'}}<el-button link :disabled="!s.row.frontendHost" @click="copyAddress(s.row,'FRONTEND')">复制前台地址</el-button></template></el-table-column>
+    <el-table-column label="入口状态" min-width="150"><template #default="s">{{s.row.entryEnabled?'已开启':'已关闭；只能访问前台'}}<el-button link @click="copyAddress(s.row,'EXTERNAL')">复制对外地址</el-button></template></el-table-column>
     <el-table-column label="在线账号" width="100"><template #default="s"><el-button link @click="online=s.row">{{ counts[s.row.id] ?? '未知' }}</el-button></template></el-table-column>
     <el-table-column label="状态" width="110"><template #default="s">{{ states[s.row.status] || s.row.status }}</template></el-table-column>
     <el-table-column label="开放条件" min-width="140"><template #default="s">配置{{ s.row.configReady ? '齐备':'未齐' }} / 域名{{ s.row.domainVerified ? '已核查':'未核查' }}</template></el-table-column>
-    <el-table-column label="操作" min-width="430"><template #default="s"><el-button link @click="edit(s.row)">编辑</el-button><el-button link @click="domain(s.row)">域名三步骤</el-button><el-button link @click="checkReadiness(s.row)">配置核查</el-button><el-button link @click="policyList(s.row)">授权 / 锁定</el-button><el-button link @click="accounts=s.row">后台账号</el-button><el-button link @click="online=s.row">在线明细</el-button><el-button type="primary" @click="enter(s.row)">进入后台</el-button></template></el-table-column>
+    <el-table-column label="操作" min-width="430"><template #default="s"><el-button link @click="edit(s.row)">编辑</el-button><el-button link @click="domain(s.row)">域名管理</el-button><el-button link @click="checkReadiness(s.row)">配置核查</el-button><el-button link @click="policyList(s.row)">授权 / 锁定</el-button><el-button link @click="accounts=s.row">后台账号</el-button><el-button link @click="online=s.row">在线明细</el-button><el-button type="primary" @click="enter(s.row)">进入后台</el-button></template></el-table-column>
   </admin-table>
-  <el-dialog v-model="domainOpen" :title="`域名准备 / 核验 / 激活 · ${domainTenant?.name||''}`" width="min(700px,95vw)" :close-on-click-modal="false" @closed="domainGeneration++;candidate=null;domainError='';domainBusy=false"><p>现用域名：{{domainTenant?.frontendHost||'未分配'}}。准备、核验失败均不切换现用域名。候选15分钟过期；重新准备将替换挑战并使旧响应失效。</p><el-alert v-if="domainError" :title="domainError" type="error" :closable="false"/><el-form label-width="110px" :disabled="domainBusy"><el-form-item label="候选域名"><el-input v-model="domainForm.hostname" maxlength="253" placeholder="基础域下单层子域名"/></el-form-item><el-form-item label="操作原因"><el-input v-model="domainForm.reason" maxlength="500"/></el-form-item></el-form><el-descriptions v-if="candidate" :column="1" border><el-descriptions-item label="已保留候选">{{candidate.hostname}}</el-descriptions-item><el-descriptions-item label="状态 / 版本">{{candidate.status}} / {{candidate.version}}</el-descriptions-item><el-descriptions-item label="到期">{{candidate.expiresAt||'已生效'}}</el-descriptions-item></el-descriptions><template #footer><el-button :loading="domainBusy" @click="domainAction('prepare')">1. 准备候选</el-button><el-button :disabled="candidate?.status!=='PENDING'||domainBusy" @click="domainAction('verify')">2. 核验HTTPS与挑战</el-button><el-button type="danger" :disabled="candidate?.status!=='VERIFIED'||domainBusy" @click="domainAction('activate')">3. 确认激活</el-button></template></el-dialog>
+  <el-dialog v-model="domainOpen" :title="`域名管理 · ${domainTenant?.name||''}`" width="min(860px,95vw)" :close-on-click-modal="false" :close-on-press-escape="!domainBusy" :show-close="!domainBusy" @closed="domainGeneration++;domainState=null;domainError='';domainBusy=false">
+    <p>入口与前台按角色分别核验；不同前缀也可以映射。准备或核验失败不改变现用域名；候选15分钟过期。全部候选核验通过后一次原子激活。前台换域可能需要重新登录，不共享跨域令牌。</p>
+    <el-alert v-if="domainError" :title="domainError" type="error" :closable="false"/>
+    <template v-if="domainState">
+      <el-alert v-if="!domainState.entryEnabled" title="入口关闭或未配置：只能直访前台；不会退出已登录的前台会话。" type="warning" :closable="false"/>
+      <p>当前配置版本：{{domainState.domainVersion}}；当前入口开关：{{domainState.entryEnabled?'开启':'关闭'}}。</p>
+      <el-form label-width="110px" :disabled="domainBusy">
+        <template v-for="r in domainRoles" :key="r.role">
+          <p>{{r.name}}现用：{{domainState[r.field]||'未配置'}}；核验：{{(r.role==='ENTRY'?domainState.entryVerified:domainState.domainVerified)?'已核验':'未核验'}}。</p>
+          <el-form-item :label="r.name+'候选'"><el-input v-model="domainForm[r.field]" maxlength="253" :placeholder="r.role==='ENTRY'?'单层子域.forex-exchange.net':'单层子域.forex-exchange.cc'"/></el-form-item>
+          <el-descriptions v-if="domainCandidates.find(b=>b.role===r.role)" :column="1" border><el-descriptions-item label="候选 / 状态 / 版本">{{domainCandidates.find(b=>b.role===r.role)?.hostname}} / {{domainCandidates.find(b=>b.role===r.role)?.status}} / {{domainCandidates.find(b=>b.role===r.role)?.version}}</el-descriptions-item><el-descriptions-item label="核验到期">{{domainCandidates.find(b=>b.role===r.role)?.expiresAt}}</el-descriptions-item></el-descriptions>
+          <el-button :disabled="domainBusy||!preparedMatches||domainCandidates.find(b=>b.role===r.role)?.status!=='PENDING'" @click="domainAction('verify',domainCandidates.find(b=>b.role===r.role))">核验{{r.name}}HTTPS与挑战</el-button>
+        </template>
+        <el-form-item label="入口开关"><el-switch v-model="domainForm.entryEnabled"/><span>开启要求两类现用域名均已核验、属于同租户且允许访问。</span></el-form-item>
+        <el-form-item label="操作原因"><el-input v-model="domainForm.reason" maxlength="500"/></el-form-item>
+      </el-form>
+      <el-button :disabled="domainBusy||domainForm.entryEnabled===domainState.entryEnabled" @click="domainAction('switch')">仅保存入口开关</el-button>
+      <p v-if="!preparedMatches">输入已修改，需重新准备；不允许用旧核验覆盖新输入。</p>
+      <details v-if="retiredDomains.length"><summary>退役域名（保留归属；显式审查后才能释放）</summary><p v-for="b in retiredDomains" :key="b.hostname">{{b.role}} / {{b.hostname}} / 版本{{b.version}} <el-button link :disabled="domainBusy" @click="domainAction('release',b)">审查释放</el-button></p></details>
+    </template>
+    <template #footer><el-button :disabled="domainBusy" @click="domain(domainTenant)">刷新配置</el-button><el-button :disabled="!domainState" :loading="domainBusy" @click="domainAction('prepare')">1. 准备全部变更</el-button><el-button type="danger" :disabled="domainBusy||!preparedMatches||!domainCandidates.length||domainCandidates.some(b=>b.status!=='VERIFIED')" @click="domainAction('activate')">2. 全部核验后原子激活</el-button></template>
+  </el-dialog>
   <el-dialog v-model="editOpen" :title="form.id ? '修改租户':'安全模板创建租户'" width="min(620px,95vw)">
     <el-form label-width="100px" @submit.prevent="save">
       <el-form-item v-if="!form.id" label="租户编号"><el-input v-model="form.code" maxlength="64" /></el-form-item>

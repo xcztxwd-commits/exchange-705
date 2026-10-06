@@ -65,7 +65,7 @@ public class TenantManagementService {
   t.setPolicyVersion(t.getPolicyVersion()+1);
   audit.record(ControlIdentity.actorId(),id,null,"POLICY_UPDATE",input.key,"SUCCESS","policyVersion="+t.getPolicyVersion()+";locked="+p.isLocked(),input.reason);return p;
  }
- public Object verifyDomain(Long id){List<Map<String,Object>> pending=verification.candidates(id);if(pending.size()!=1)throw new IllegalArgumentException("请先准备唯一候选域名");Map<String,Object> b=pending.get(0);return verification.verify(id,b.get("hostname").toString(),((Number)b.get("version")).longValue());}
+ public Object verifyDomain(Long id){List<Map<String,Object>> pending=verification.candidates(id).stream().filter(b->"FRONTEND".equals(b.get("role"))).collect(java.util.stream.Collectors.toList());if(pending.size()!=1)throw new IllegalArgumentException("请先准备唯一候选域名");Map<String,Object> b=pending.get(0);return verification.verify(id,b.get("hostname").toString(),((Number)b.get("version")).longValue());}
  private final TenantDomainVerification verification;
  static String policyReason(String value){String reason=value==null||value.trim().isEmpty()?"总控授权策略管理":value.trim();reason(reason);return reason;}
  static void reason(String value){if(value==null||value.trim().length()<3||value.length()>512)throw new IllegalArgumentException("请填写操作原因（3 至 512 字符）");}

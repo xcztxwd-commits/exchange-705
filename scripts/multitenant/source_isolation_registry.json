@@ -3756,7 +3756,7 @@
       "review_reason": "Explicit opt-in environment bootstrap of independent control identity; no hidden tenant administrator."
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/control/ControlController.java": {
-      "sha256": "b32a19fc4127dbb654d1c66415ccb127bd6b23e1a2642006f06f796b2a8ea6e3",
+      "sha256": "cfd2e81e675fb3c2f9d74b0d433d8203a8581b34b67f3a1fade246e9497f1347",
       "surfaces": [
         {
           "kind": "identity_boundary",
@@ -3775,23 +3775,23 @@
         },
         {
           "kind": "identity_boundary",
-          "line": 27,
+          "line": 32,
           "statement_sha256": "b7968e61e9cc879c50759b081826897de6ac47a211d65665cbd9da7fbf3ffa78"
         },
         {
           "kind": "identity_boundary",
-          "line": 31,
+          "line": 36,
           "statement_sha256": "6219fe19023021522597d6c0d5d672f82dd6a3ea9c0e7261a97b9315e1976437"
         },
         {
           "kind": "identity_boundary",
-          "line": 33,
+          "line": 38,
           "statement_sha256": "856d15fafcb67e3c163f1e97f0d298407bb16348c6465dcefe08f00f2dd756bf"
         }
       ],
       "classification": "boundary",
-      "review_reason": "Added GET/PUT independent catalog endpoints delegated to control-guarded service. Existing JWT Host/CONTROL boundaries and explicit tenant policy path retained; no production migration/approval endpoint.",
-      "prior_review_reason": "New lifecycle endpoints delegate independent-identity domain service; caller version required for verify/activate/release, actor and target never body-overridden. Existing control endpoints unchanged. No production migration/approval action exposed."
+      "review_reason": "New state/batch prepare/batch activate/entry-switch endpoints remain under /api/control/** ROLE_CONTROL and canonical control origin; independent actor enforced by service. Mandatory domainVersion for new role workflow and binding versions for verification/release. No user-provided owner/target/actor. Legacy FRONTEND-only API cannot partial-activate two roles.",
+      "prior_review_reason": "Added GET/PUT independent catalog endpoints delegated to control-guarded service. Existing JWT Host/CONTROL boundaries and explicit tenant policy path retained; no production migration/approval endpoint."
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/control/ControlExchangeController.java": {
       "sha256": "c47c688ebd9ae69af7fe61e18c49ac033895c9b8d89ccb020c8a1f98688c772e",
@@ -4068,54 +4068,54 @@
       "review_reason": "Independent control-plane identities/policies/sessions; business tenant access uses explicit verified scope and audit. Review file-specific occurrence list."
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/control/ControlService.java": {
-      "sha256": "2a104872ed9fab838cdae9efc544a90d0ac0bf6693f762f54772e1652a53a4a9",
+      "sha256": "b7197e3dec1d968712fa396a206dfbd19fa651aada2a5d760ac9a30e9e2d2c21",
       "surfaces": [
         {
           "kind": "identity_boundary",
-          "line": 13,
+          "line": 14,
           "statement_sha256": "3135f415fa594df69bcaedce34c229f5696bd80a55a9c70bbfaed4836053c145"
         },
         {
           "kind": "identity_boundary",
-          "line": 15,
+          "line": 16,
           "statement_sha256": "59ff6d09c489409f63bd084da0fa5ccb21e03f6321f5f88ac73749f459bcd9b2"
         },
         {
           "kind": "identity_boundary",
-          "line": 28,
+          "line": 29,
           "statement_sha256": "98d7a47c60c34c63a8724e8e01fae5990b4b1ab27696c1d3ddef9ffc41214491"
         },
         {
           "kind": "identity_boundary",
-          "line": 30,
+          "line": 31,
           "statement_sha256": "d44cb20402ba527c5978865fb5a3ae27bcdba1f2aa80a0e5b82c3d8f7543a8ab"
         },
         {
           "kind": "identity_boundary",
-          "line": 47,
+          "line": 48,
           "statement_sha256": "a52b5104634dc9f6daefbaf5065a87fbdb3a9d97fb35d5c40724e923fb681791"
         },
         {
           "kind": "identity_boundary",
-          "line": 50,
+          "line": 51,
           "statement_sha256": "328402566a806d8ceaaa8aed2d715346b0e5002a57140ae219381aa0923c13cd"
         },
         {
           "kind": "identity_boundary",
-          "line": 52,
+          "line": 53,
           "statement_sha256": "a119ecf3875311898a80d1dd36d4af18127027f43840628517bc3917d59142fa"
         },
         {
           "kind": "identity_boundary",
-          "line": 54,
+          "line": 55,
           "statement_sha256": "7a8ae9f70e748eb69b0af11c3f096e14bbd0ee409888165eb1fa020311d403ea"
         }
       ],
       "classification": "control_plane",
-      "review_reason": "Independent control-plane identities/policies/sessions; business tenant access uses explicit verified scope and audit. Review file-specific occurrence list."
+      "review_reason": "Independent control-plane identity, MFA and actor/session-version checks retained. Platform control login explicitly signs a 7-day (604800-second) JWT and returns its 7-day client deadline from one shared lifetime constant; ordinary JWT configuration unchanged. Browser-bound one-use ticket remains 60 seconds, target-tenant access remains 60 minutes with 15-minute idle limit, and logout, disablement, MFA change and revocation remain immediate."
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/control/Tenant.java": {
-      "sha256": "6a51ceec55ac7f2bcf8ee223619f923c43b205ce5d2e78f761b3671df103c40c",
+      "sha256": "b6863d5263a8110493711052e24ba78cf77505d76116704e5b36b5bea2419865",
       "surfaces": [
         {
           "kind": "tenant_entity",
@@ -4124,10 +4124,11 @@
         }
       ],
       "classification": "control_plane",
-      "review_reason": "Independent control-plane identities/policies/sessions; business tenant access uses explicit verified scope and audit. Review file-specific occurrence list."
+      "review_reason": "Add nullable globally unique entryHost, independent entryEnabled/entryVerified default false, and domainVersion. Frontend verification/readiness and sessionVersion unchanged. CONTROL table remains global; no tenant business rows exposed.",
+      "prior_review_reason": "Independent control-plane identities/policies/sessions; business tenant access uses explicit verified scope and audit. Review file-specific occurrence list."
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/control/TenantDomainHistory.java": {
-      "sha256": "993c2eb23d43a798a3891b6a89f6d20604bd0cc583fe8318e60f5dd25dc1c2ee",
+      "sha256": "cc23ee23727982cb8dfdfe7fdceb0aa662f28c9dc39a73e0d173cacbd3195ec5",
       "surfaces": [
         {
           "kind": "tenant_entity",
@@ -4136,7 +4137,8 @@
         }
       ],
       "classification": "control_plane",
-      "review_reason": "Independent control-plane identities/policies/sessions; business tenant access uses explicit verified scope and audit. Review file-specific occurrence list."
+      "review_reason": "Role on retired ownership default FRONTEND; global history and explicit release retained. No deletion or transfer of historical owners.",
+      "prior_review_reason": "Independent control-plane identities/policies/sessions; business tenant access uses explicit verified scope and audit. Review file-specific occurrence list."
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/control/TenantDomainHistoryRepository.java": {
       "sha256": "acd0f323cf19f421fb4a1f9e7d739723d5ac1dacdcb96653cb7979a756a8e0c6",
@@ -4151,7 +4153,7 @@
       "review_reason": "Independent control-plane identities/policies/sessions; business tenant access uses explicit verified scope and audit. Review file-specific occurrence list."
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/control/TenantDomainVerification.java": {
-      "sha256": "c0ab8f0c939d0a6f9114f2b0b9a2ba479df0c17a8b9e066ec801c3bc3e3dc0ea",
+      "sha256": "a37ee52a456bc8e63255815b64ecf73ce776d0ca4af75e8e12c05fad942edda2",
       "surfaces": [
         {
           "kind": "identity_boundary",
@@ -4170,22 +4172,28 @@
         },
         {
           "kind": "identity_boundary",
-          "line": 22,
+          "line": 24,
           "statement_sha256": "e5b78ecfd4945fe3f5e9b93e84b5ec6a95139bf69d7a9a8b92451d5ae464ef5e"
         },
         {
           "kind": "identity_boundary",
-          "line": 23,
+          "line": 25,
           "statement_sha256": "d7bbb09ab9fd19184563b132f2174cb8799c511db9fb0513df24c77f8d06fc9a"
         },
         {
           "kind": "cache_lock",
-          "line": 25,
-          "statement_sha256": "74848cb0d1821f583557a274feb18b85a4ac5b1e9d1514bec47aab3da366cd92"
+          "line": 31,
+          "statement_sha256": "7eba60316c92c91c72413e7edbb834e1c644c6ae1a7f2c352c1d438dfc1bcd46"
+        },
+        {
+          "kind": "cache_lock",
+          "line": 32,
+          "statement_sha256": "ea2ec1dbad26a26c6c107448f1349c35c772457414629b657762f0867bbab3fe"
         }
       ],
       "classification": "boundary",
-      "review_reason": "Read full state machine: independent ROLE_CONTROL only; prepare reserves globally unique hostname without modifying active route; nonce/version/owner/15-minute TTL guards; pinned TLS probe outside DB locks; verify result rechecked under locks; activate audits atomically, retires old host, increments policyVersion, never opens business state. Explicit retired release keeps history/audit. Public nonce reply is GET-only and never establishes business TenantContext."
+      "review_reason": "Independent ROLE_CONTROL plus server ControlIdentity, no tenant/access-session context. Root/role validation before reservation; all writes lock explicit tenant. Per-role retirement, DNS/TLS outside locks with binding+config recheck, exact tenant/nonce/role reply. Batch activation requires complete VERIFIED candidate set and versions in one transaction with audit; active target read from same tenant, no arbitrary target field. Entry switch never revokes frontend sessions. Release checks role/owner/version/non-use. Public nonce reply and entryTarget grant no business authority. Legacy release also validates the independent actor before reading ownership.",
+      "prior_review_reason": "Read full state machine: independent ROLE_CONTROL only; prepare reserves globally unique hostname without modifying active route; nonce/version/owner/15-minute TTL guards; pinned TLS probe outside DB locks; verify result rechecked under locks; activate audits atomically, retires old host, increments policyVersion, never opens business state. Explicit retired release keeps history/audit. Public nonce reply is GET-only and never establishes business TenantContext."
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/control/TenantFeatureController.java": {
       "sha256": "b943000d1676a571ed508fa3532ab8edd2505ab848fa5fa49939bbc990293ad3",
@@ -4194,7 +4202,7 @@
       "review_reason": "Independent control-plane identities/policies/sessions; business tenant access uses explicit verified scope and audit. Review file-specific occurrence list."
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/control/TenantHostService.java": {
-      "sha256": "61bb28da552eed71430c717c46049fd83ea8bb738b5e8fdef9f24241d6d8b4b4",
+      "sha256": "249f7e114b244391301e651fb8f92d72dfa4a0849d3be6b439ab6b0b94ec02f4",
       "surfaces": [
         {
           "kind": "identity_boundary",
@@ -4202,20 +4210,25 @@
           "statement_sha256": "3d78dc36c38316051c3782d2cae85a3565db80e16798b5c5e63a025559247d30"
         },
         {
+          "kind": "cache_lock",
+          "line": 16,
+          "statement_sha256": "29cbe80776e33d018a228e6895268104a38ab1b679c08bd8a33a2b4c432da39d"
+        },
+        {
           "kind": "identity_boundary",
-          "line": 15,
-          "statement_sha256": "8d152241fdaaed5d4f3b1e9e549ec59630e5cd46808c654e6e386f71a7a84603"
+          "line": 17,
+          "statement_sha256": "3a6d7f20162a35da1e1d343fc0bf738b19920f06231589e6eb5d13076ac2f088"
         }
       ],
       "classification": "boundary",
-      "review_reason": "Added frontendOrigin delegates to the operator-only OutboundEndpointPolicy. Assigned host normalization, single-level allowed base domain, trusted-proxy-only forwarding and precise admin/control origin checks remain intact; no request-supplied tenant or arbitrary alternate port is accepted.",
-      "prior_review_reason": "Independent control-plane identities/policies/sessions; business tenant access uses explicit verified scope and audit. Review file-specific occurrence list.",
+      "review_reason": "Exact real Host required once; trusted forwarding must agree with Host; trusted edge TLS SNI must agree when supplied. Separate operations-configured single-level roots and reserved platform labels; assignment rejects ports/external roots/cross-role names. Frontend resolver remains frontend-only; no CORS expansion. Duplicate edge-SNI headers are rejected, just like duplicate real/forwarded Host.",
+      "prior_review_reason": "Added frontendOrigin delegates to the operator-only OutboundEndpointPolicy. Assigned host normalization, single-level allowed base domain, trusted-proxy-only forwarding and precise admin/control origin checks remain intact; no request-supplied tenant or arbitrary alternate port is accepted.",
       "phase2_review_tests": [
         "OutboundEndpointPolicyTest"
       ]
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/control/TenantManagementService.java": {
-      "sha256": "7360e62fbcd15429c6526048e467e736d2f7ce9eebaf5a53e61c51efa633a059",
+      "sha256": "22db3d37e428d1804c047f12c05cb12b3c0214c9d5b400547730942d8baeb119",
       "surfaces": [
         {
           "kind": "identity_boundary",
@@ -4269,8 +4282,8 @@
         }
       ],
       "classification": "boundary",
-      "review_reason": "Automatic defaults use explicit target tenant anchor and tenant_id+policy_key predicates, preserve every existing row/value/lock/version, and reuse ordinary audited policy writes and policyVersion. ACTIVE default grants still require real feature/all-configuration readiness; closed tenants stay closed and activation/new-business runtime gates are unchanged. Internal support defaults reject existing conflicting grants, preserve matching rows and fill only missing related grants. New tenants receive locked non-secret catalog defaults under serialized catalog initialization while remaining safe-v1 DRAFT/configReady=false/domainVerified=false; no business data, credentials or funding addresses copied. Optional policy reasons only; other required reasons unchanged. Outbound destination validation also runs before any new-tenant insert or initialization.",
-      "prior_review_reason": "Policy-only blank reasons receive audited default; other tenant/domain/destructive reasons unchanged. Actor checked before mutation, choices validated including indirect support grants. Existing explicit target tenant lock, readiness checks, secret rejection, policyVersion and safe-v1 disabled initialization retained; definition defaults do not grant permissions.\nEarlier review: Existing safe-v1 feature-off initialization preserved. Initial host now a pending reservation; general update cannot rebind active hostname. Compatibility verify only verifies prepared candidate, does not activate. Policies/readiness/sessionVersion and tenant locks remain; existing status and funds responsibilities are not reset by domain prepare."
+      "review_reason": "Compatibility verify-domain filters FRONTEND candidates explicitly, cannot choose ENTRY by position. Tenant creation/update/template/policy/readiness rules untouched; general updates still cannot rebind domains.",
+      "prior_review_reason": "Automatic defaults use explicit target tenant anchor and tenant_id+policy_key predicates, preserve every existing row/value/lock/version, and reuse ordinary audited policy writes and policyVersion. ACTIVE default grants still require real feature/all-configuration readiness; closed tenants stay closed and activation/new-business runtime gates are unchanged. Internal support defaults reject existing conflicting grants, preserve matching rows and fill only missing related grants. New tenants receive locked non-secret catalog defaults under serialized catalog initialization while remaining safe-v1 DRAFT/configReady=false/domainVerified=false; no business data, credentials or funding addresses copied. Optional policy reasons only; other required reasons unchanged. Outbound destination validation also runs before any new-tenant insert or initialization."
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/control/TenantPolicy.java": {
       "sha256": "d92f8069875c714b8dfa3cc449c379bc9f7e6c1462da35ad8f11202d6a8afffa",
@@ -4416,7 +4429,7 @@
       "review_reason": "Stage1 backend/schema source review: fixed entity/current-tenant predicates evaluate effective configuration/policies and never return secrets. Genuine readiness bug fixed: requires enabled super_admin owner plus matching active BackendLogin rather than any staff. Client configReady is not accepted; configured feature prerequisites remain server-validated."
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/control/TenantRepository.java": {
-      "sha256": "bb23d4d5d190a06d5277c46dfdd1c0a83b4e38e2369fd62504c741067409e29d",
+      "sha256": "f2adb297f6a1abcdc31b8e833a9d20232142817146686517da1ce2067efb245c",
       "surfaces": [
         {
           "kind": "repository",
@@ -4425,20 +4438,21 @@
         },
         {
           "kind": "native_sql",
-          "line": 6,
+          "line": 7,
           "statement_sha256": "9f1f3e8ab5d8cead0fcf7ee4062d7183629a717b2b8dbeed6547ed8b9586ed0b"
         },
         {
           "kind": "entity_manager_jpql",
-          "line": 6,
+          "line": 7,
           "statement_sha256": "9f1f3e8ab5d8cead0fcf7ee4062d7183629a717b2b8dbeed6547ed8b9586ed0b"
         }
       ],
       "classification": "control_plane",
-      "review_reason": "Independent control-plane identities/policies/sessions; business tenant access uses explicit verified scope and audit. Review file-specific occurrence list."
+      "review_reason": "Explicit exact entryHost lookup in CONTROL namespace; no default tenant or suffix conversion. All domain mutations retain pessimistic tenant anchor lock.",
+      "prior_review_reason": "Independent control-plane identities/policies/sessions; business tenant access uses explicit verified scope and audit. Review file-specific occurrence list."
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/control/TenantRequestFilter.java": {
-      "sha256": "616bb4a4a3943d7d6a3fdc77a312b637db9dcbd877b8d41c97ae5375bef4568b",
+      "sha256": "8f81abd43a988c8560f0e4316f32358ea72d2353fa3eb892a95cdac23c47d21d",
       "surfaces": [
         {
           "kind": "identity_boundary",
@@ -4447,33 +4461,53 @@
         },
         {
           "kind": "identity_boundary",
-          "line": 12,
+          "line": 13,
           "statement_sha256": "4f394ed6b4ccb65fb867cb68155954a3d32c2efd9565d74029d2d4192009c82f"
         },
         {
-          "kind": "identity_boundary",
+          "kind": "cache_lock",
           "line": 16,
+          "statement_sha256": "358ef66974c631e591226648ded3b96fe2806ae5903e78b45f97b7d45896c38d"
+        },
+        {
+          "kind": "cache_lock",
+          "line": 17,
+          "statement_sha256": "171421a222fdca1a2d713b6ee2753ccf74e850ef8be1a8a7685269587ecc0ae6"
+        },
+        {
+          "kind": "cache_lock",
+          "line": 18,
+          "statement_sha256": "23786fc2671ec499df3c70f5b36b7e52455f9ab3f76c18790930fd4622f9dfcb"
+        },
+        {
+          "kind": "cache_lock",
+          "line": 19,
+          "statement_sha256": "b0ab13805bbda7b3b08b9c794ac2cdeb27790532dd67e114bc14be3f9c14569d"
+        },
+        {
+          "kind": "identity_boundary",
+          "line": 37,
           "statement_sha256": "005cfc2219bff4641018753b4d248a55dd23d24fc0511fde0a53352016a31a91"
         },
         {
           "kind": "identity_boundary",
-          "line": 20,
+          "line": 56,
           "statement_sha256": "8da350f4bfddcff4f6089bb325b4619f14a25902ca5533802352395a93c291d0"
         },
         {
           "kind": "identity_boundary",
-          "line": 33,
+          "line": 64,
           "statement_sha256": "af049d3dd3550860c9a360512953cb68b51ce0faa04fad979a4fe2d4601ba492"
         },
         {
           "kind": "identity_boundary",
-          "line": 35,
+          "line": 66,
           "statement_sha256": "2adc1836712644bc7fa275fd6ccb6efe8ceec030194e093ed2830da170c0fb19"
         }
       ],
       "classification": "boundary",
-      "review_reason": "Tenant frontend Origin is compared against the exact operator-resolved HTTPS origin. Host-based recognized tenant, verified/non-disabled checks, private simulation inspection forwarding and control/admin host separation remain unchanged. TenantContext is cleared before entry and in finally on all exits.",
-      "prior_review_reason": "Full review includes host/origin/proxy/active-tenant flow unchanged and new server-local simulation read forward. Only private VerifiedRead attribute created by authenticated fixed read dispatcher can carry explicit target. Context cleared at entry/finally and reopened for that single forwarded read; public/normal requests still require recognized Host, no client tenant header or default fallback. Actual HTTP tests now rerun.",
+      "review_reason": "Challenge is fixed GET nonce JSON with no-store before entry branch. Entry branch precedes admin/control, health, business and inspection routes, grants no TenantContext. Only GET/HEAD document/html allowlisted pages and bounded ASCII query keys; redirect target comes from explicit same-tenant verified active mapping, credentials dropped and no-referrer. Uniform no-store 403 without Location for closed/unknown/disallowed entry. Trusted internal gateway classification before static SPA fallback. Existing frontend status/Origin/context and control/admin boundaries retained.",
+      "prior_review_reason": "Tenant frontend Origin is compared against the exact operator-resolved HTTPS origin. Host-based recognized tenant, verified/non-disabled checks, private simulation inspection forwarding and control/admin host separation remain unchanged. TenantContext is cleared before entry and in finally on all exits.",
       "phase2_review_tests": [
         "OutboundEndpointPolicyTest",
         "SimulationPersistenceTest"
@@ -11616,7 +11650,7 @@
       "review_reason": "Unscoped repository is appropriate only for global independent CONTROL preferences. Only identity-guarded new controller calls it; never used by tenant endpoints."
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/control/TenantDomainBinding.java": {
-      "sha256": "16ad2f36284695959f7833be53b9948a75b20c0e7d14a7b97305cb8923020ca8",
+      "sha256": "69f16ad96efb91af38686d7929b04671ac2cd0c4533ca24309ace051c036ba93",
       "surfaces": [
         {
           "kind": "tenant_entity",
@@ -11625,10 +11659,11 @@
         }
       ],
       "classification": "control_plane",
-      "review_reason": "Single global hostname primary key covers pending/active/retired/released reservations. Server-owned tenantId, version, random nonce and UTC expiry; nonce hidden in ordinary views. Explicit forward migration backfills existing active/history and fails conflicts."
+      "review_reason": "Independent ENTRY/FRONTEND role default FRONTEND preserves old bindings. Global hostname primary key and optimistic binding version retained; nonce remains JsonIgnore.",
+      "prior_review_reason": "Single global hostname primary key covers pending/active/retired/released reservations. Server-owned tenantId, version, random nonce and UTC expiry; nonce hidden in ordinary views. Explicit forward migration backfills existing active/history and fails conflicts."
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/control/TenantDomainBindingRepository.java": {
-      "sha256": "1f675d6a3d7dcdfbccb5ae89224141ba12a759b044e4f8ea350de632dc6afdfb",
+      "sha256": "b9f9bbead34d6a676ffcce030fa19e7508f189ee69dcc092f0558278ab8188cf",
       "surfaces": [
         {
           "kind": "repository",
@@ -11647,7 +11682,8 @@
         }
       ],
       "classification": "control_plane",
-      "review_reason": "Only global control lifecycle service accesses reservations. Host primary key prevents active/pending namespace races; pessimistic hostname lock under tenant lock, tenant/status query for current candidate; no tenant business data."
+      "review_reason": "Role-scoped candidate query prevents sibling retirement; state inventory always takes explicit tenant id after independent actor validation. Existing global hostname lock remains the uniqueness anchor.",
+      "prior_review_reason": "Only global control lifecycle service accesses reservations. Host primary key prevents active/pending namespace races; pessimistic hostname lock under tenant lock, tenant/status query for current candidate; no tenant business data."
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/admin/ControlledExitController.java": {
       "sha256": "dbc66c2930c2dbf153595a95c17454f76c0f140f22a8be47834fb336ae19308a",

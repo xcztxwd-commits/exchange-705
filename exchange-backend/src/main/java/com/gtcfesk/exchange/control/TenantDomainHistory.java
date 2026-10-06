@@ -9,6 +9,7 @@ import lombok.Setter;
 public class TenantDomainHistory {
  @Id @GeneratedValue(strategy=GenerationType.IDENTITY) private Long id;
  @Column(nullable=false) private Long tenantId;
+ @Column(name="domain_role",nullable=false,length=16) private String role="FRONTEND";
  @Column(nullable=false,unique=true,length=253) private String hostname;
  @Column(nullable=false) private LocalDateTime retiredAt=LocalDateTime.now();
 }

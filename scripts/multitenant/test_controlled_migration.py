@@ -228,4 +228,30 @@ class PlanPreflightTests(unittest.TestCase):
                 tool.plan(db,Path('unused-plan.json'))
             preflight.assert_not_called();state.assert_not_called()
 
+    def test_entry_roles_append_is_exact_single_tail_after_completed_0601(self):
+        files=tool.migrations();start=len(files)-1
+        self.assertEqual(tool.ENTRY0602_METADATA,tool.metadata_append_contract(start,files))
+        for offset,reviewed in [(0,files),(start-1,files),(1,[files[-2],{'name':'V2026100603__unknown.sql'}]),(1,[{'name':'V2026100404__history_ordering_and_response_receipts.sql'},files[-1]])]:
+            self.assertIsNone(tool.metadata_append_contract(offset,reviewed))
+        self.assertIsNone(tool.metadata_append_contract(start,files+[{'name':'V2026100603__unknown.sql'}]))
+
+    def test_entry_roles_metadata_replay_or_business_activation_fails_closed(self):
+        db=SimpleNamespace(query=lambda sql:['0'])
+        tool.metadata_absent_before_plan(db,tool.ENTRY0602_METADATA)
+        with self.assertRaises(ValueError):tool.metadata_absent_before_plan(SimpleNamespace(query=lambda sql:['1']),tool.ENTRY0602_METADATA)
+        queries=[]
+        tool.metadata_receipt_after_phase(SimpleNamespace(query=lambda sql:queries.append(sql) or ['1']),tool.ENTRY0602_METADATA)
+        self.assertIn('version=2026100602 AND minimum_application_epoch=2026100602 AND business_activation_ready=0',queries[0])
+        with self.assertRaises(ValueError):tool.metadata_receipt_after_phase(db,tool.ENTRY0602_METADATA)
+        for bad in [dict(tool.ENTRY0602_METADATA,business_activation_ready=True),dict(tool.ENTRY0602_METADATA,version=2026100603)]:
+            with self.assertRaises(ValueError):tool.metadata_version(bad)
+
+    def test_entry_roles_preservation_excludes_only_new_receipt_not_old_facts(self):
+        queries=[];db=SimpleNamespace(query=lambda sql:queries.append(sql) or [])
+        tool.preserved(db,{'tenant':['frontend_host','domain_verified','session_version'], 'tenant_domain_binding':['hostname','tenant_id','status'], 'tenant_schema_version':['version','minimum_application_epoch'],'user_account':['current_token']},tool.ENTRY0602_METADATA)
+        self.assertEqual(1,sum('WHERE version<>2026100602' in sql for sql in queries))
+        self.assertTrue(any('`current_token`' in sql and 'NULL' not in sql for sql in queries))
+        tenant_statement=next(statement for batch in queries for statement in batch.split(';') if 'FROM `tenant` ' in statement)
+        self.assertIn('`frontend_host`',tenant_statement);self.assertNotIn('WHERE',tenant_statement)
+
 if __name__=='__main__':unittest.main()
