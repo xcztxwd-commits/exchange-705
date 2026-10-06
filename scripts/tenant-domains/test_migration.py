@@ -19,7 +19,7 @@ def main():
         p=sql(text,False);assert p.returncode!=0,'SQL constraint accepted invalid row';assert b'1062' in p.stderr,p.stderr.decode();return 1
     created=False
     try:
-        run(['docker','run','-d','--name',name,'--label','com.gtcfesk.tenant-entry.test='+token,'--network','none','-e','MYSQL_ROOT_PASSWORD','-e','MYSQL_DATABASE=fixture',args.image]);created=True
+        run(['docker','run','-d','--name',name,'--label','com.gtcfesk.tenant-entry.test='+token,'--network','none','-e','MYSQL_ROOT_PASSWORD','-e','MYSQL_DATABASE=fixture',args.image,'--innodb-use-native-aio=0']);created=True
         for _ in range(100):
             if sql('SELECT 1;',False).returncode==0:break
             time.sleep(1)
