@@ -67,5 +67,24 @@ assert.match(desktop, /removeEventListener\('focus', refreshSymbols\)/)
 for (const field of ['open', 'high', 'low', 'close']) assert.match(desktop, new RegExp(`${field}: formatSymbolPrice\\(last\\.${field}\\)`))
 assert.match(desktop, /formatSymbolPrice\(contractDisplayPrice\(order\), order\.symbol\)/)
 assert.doesNotMatch(desktop, /(?:openPrice|closePrice|last\.(?:open|high|low|close))[^\n]*toFixed/)
-assert.match(desktop, /tradingAvailable\.toFixed\(2\)/, 'Money retains currency precision')
-console.log('PASS: per-symbol 0–8 digits, reactive refresh, chart stability, raw quotes and money unchanged')
+// The available-funds card is display-only: invalid balances render zero without changing account readiness.
+const moneySource = desktop.match(/const formatMoney = [\s\S]*?\n};/)[0]
+const formatMoney = new Function('localeStore', compile(moneySource) + '\nreturn formatMoney')({ locale: 'ja' })
+const balanceExpression = desktop.match(/localeStore\.t\('availableFund'\)[\s\S]*?\$\{\{ ([^\n]+) \}\}/)[1]
+const cardAmount = new Function('formatMoney', 'tradeMode', 'tradingAvailable', 'optionTradingAvailable', 'return ' + balanceExpression)
+for (const value of [undefined, null, '', ' ', 'bad', 'NaN', NaN, Infinity, -Infinity]) {
+  assert.equal(cardAmount(formatMoney, 'contract', value, 100), '0.00')
+  assert.equal(cardAmount(formatMoney, 'options', 100, value), '0.00')
+}
+for (const value of [0, 1.2, '42.5', 1234.567]) {
+  const expected = Number(value).toLocaleString('ja', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  assert.equal(cardAmount(formatMoney, 'contract', value, 100), expected)
+  assert.equal(cardAmount(formatMoney, 'options', 100, value), expected)
+}
+assert.equal(formatMoney(NaN), '--', 'Other unavailable values retain their existing placeholder')
+const { selectedAvailable, trialState } = await import('../src/utils/trialLifecycle.ts')
+const unavailable = selectedAvailable({}, 'OPTION', trialState(null, NaN))
+assert.ok(Number.isNaN(unavailable), 'Invalid account balances remain unavailable for trading')
+assert.equal(cardAmount(formatMoney, 'options', 100, unavailable), '0.00')
+assert.match(desktop, /formatMoney\(tradingAvailable, '0\.00'\)/, 'The balance detail uses the same fallback')
+console.log('PASS: quote precision, refresh, raw prices unchanged; missing/invalid balances display 0.00, trading sentinel preserved')

@@ -15,13 +15,14 @@ const script = ast.statements.filter(node => !ts.isImportDeclaration(node)).map(
 const compiled = (await transform(script, { loader: 'ts', target: 'es2022' })).code
 const bindingNames = name => ts.isIdentifier(name) ? [name.text] : name.elements.flatMap(element => element.name ? bindingNames(element.name) : [])
 const exposed = ast.statements.flatMap(node => ts.isVariableStatement(node) ? node.declarationList.declarations.flatMap(declaration => bindingNames(declaration.name)) : ts.isFunctionDeclaration(node) ? [node.name.text] : [])
+const supportAllowed = Vue.ref(false)
 const snapshot = Vue.ref(null), policyReady = Vue.computed(() => !!snapshot.value), writes = [], messages = []
 let reloadFailure = false
 const policies = { snapshot, policyReady, policyError: Vue.ref(''), reloadPolicies: async () => { if (reloadFailure) { snapshot.value = null;throw new Error('策略加载失败') } }, editable: key => configEditable(snapshot.value, key), policyLabel: key => configEditable(snapshot.value, key) ? '' : '（总控锁定或未授权）' }
 const request = { get: async () => [], post: async (path, payload) => { writes.push({ path, payload });return {} } }
 const scope = Vue.effectScope()
-const editor = scope.run(() => new Function('ref', 'computed', 'watch', 'onMounted', 'useTenantPolicies', 'request', 'ElMessage', 'playProtectedAudio', compiled + `;return {${exposed.join(',')}};`)(
- Vue.ref, Vue.computed, Vue.watch, () => {}, area => { assert.equal(area, 'settings');return policies }, request, { success: text => messages.push(text), error: text => messages.push(text) }, async () => {}
+const editor = scope.run(() => new Function('ref', 'computed', 'watch', 'onMounted', 'useTenantPolicies', 'request', 'ElMessage', 'playProtectedAudio', 'can', compiled + `;return {${exposed.join(',')}};`)(
+ Vue.ref, Vue.computed, Vue.watch, () => {}, area => { assert.equal(area, 'settings');return policies }, request, { success: text => messages.push(text), error: text => messages.push(text) }, async () => {}, code => code === 'support_settings:view' && supportAllowed.value
 ))
 const authorized = { tenantId: 2, tenantName: 'A', status: 'ACTIVE', policyVersion: 7, features: { external_support: true, support: true }, supportChannel: null, configs: [] }
 const template = compileTemplate({ source: descriptor.template.content, filename: 'Settings.vue', id: 'settings-support-test', compilerOptions: { expressionPlugins: ['typescript'] } })
@@ -33,7 +34,7 @@ new Function('require', 'module', 'exports', rendered)(() => Vue, module, module
 async function html() {
  const app = Vue.createSSRApp({ setup: () => ({ ...editor, ...policies }), render: module.exports.render })
  const plain = { name: 'SettingsTestElement', setup: (_, { slots }) => () => Vue.h('div', slots.default?.()) }
- for (const tag of new Set([...descriptor.template.content.matchAll(/<(el-[a-z-]+|TenantPolicyNotice|MarketDepthHealth)\b/g)].map(match => match[1]))) if (tag !== 'el-tab-pane') app.component(tag, plain)
+ for (const tag of new Set([...descriptor.template.content.matchAll(/<(el-[a-z-]+|TenantPolicyNotice|MarketDepthHealth|SupportChannelSettings)\b/g)].map(match => match[1]))) if (tag !== 'el-tab-pane') app.component(tag, plain)
  app.component('el-tab-pane', { props: ['label', 'name'], setup: (props, { slots }) => () => Vue.h('section', { 'data-pane': props.name }, [Vue.h('span', props.label), slots.default?.()]) })
  app.directive('permission', { getSSRProps: () => ({}) })
  return renderToString(app)
@@ -58,5 +59,13 @@ try {
  editor.activeTab.value = 'service';snapshot.value = null;assert.equal(editor.activeTab.value, 'mail');const count = writes.length;await editor.saveConfigs();assert.equal(writes.length, count)
  snapshot.value = authorized;editor.activeTab.value = 'service';reloadFailure = true;await editor.loadConfigs();assert.equal(editor.activeTab.value, 'mail');assert.equal(editor.loading.value, false);assert.equal(messages.at(-1), '策略加载失败')
  assert.doesNotMatch(await html(), /data-pane="service"/)
- console.log('PASS actual Settings.vue: external-support grant controls tab rendering; revoke/internal/DENY/unknown hide it; active pane fallback; hidden fields excluded; locked authorized link stays read-only; drafts/internal support untouched')
+ supportAllowed.value = true
+ snapshot.value = { ...authorized, features: { external_support: false, support: true }, supportChannel: 'internal' }
+ editor.activeTab.value = 'service'
+ assert.equal(editor.serviceConfigVisible.value, true, 'internal-only tenants can still configure service channels')
+ assert.equal(editor.supportChannelsVisible.value, true);assert.equal(editor.externalServiceConfigVisible.value, false)
+ assert.match(await html(), /data-pane="service"/);assert.doesNotMatch(await html(), /class="external-service-config"/)
+ await editor.saveConfigs();assert(!writes.at(-1).payload.some(row => ['customer.service.link', 'complaint.email', 'support.settings'].includes(row.key)), 'independent module is never included in the system batch save')
+ supportAllowed.value = false;assert.equal(editor.serviceConfigVisible.value, false);assert.equal(editor.activeTab.value, 'mail')
+ console.log('PASS actual Settings.vue: independent channel module for internal tenants; module permissions preserved; external addresses and support configuration excluded from unauthorized batch saves; external-support grant controls tab rendering; revoke/internal/DENY/unknown hide it; active pane fallback; hidden fields excluded; locked authorized link stays read-only; drafts/internal support untouched')
 } finally { scope.stop() }

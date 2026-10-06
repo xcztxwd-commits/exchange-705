@@ -2,9 +2,11 @@
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import request from '@/utils/request'
+import SupportChannelSettings from '@/components/SupportChannelSettings.vue'
+import { saveSupportSettings } from '@/utils/supportSettings'
 import { useTenantPolicies } from '@/composables/useTenantPolicies'
 import TenantPolicyNotice from '@/components/TenantPolicyNotice.vue'
-const {snapshot,policyError,policyReady,reloadPolicies,editable,policyLabel}=useTenantPolicies('support')
+const {snapshot,policyError,reloadPolicies,editable}=useTenantPolicies('support')
 import { can } from '@/utils/access'
 import { playProtectedAudio } from '@/utils/audioUrl'
 const settings = ref<any>(),
@@ -49,10 +51,11 @@ async function load() {
   }
 }
 async function save() {
-  if (busy.value || !editable('support.settings')) return
+  if (busy.value || !settings.value || !can('support_settings:save') || !editable('support.settings')) return
   busy.value = true
   try {
-    await request.post('/admin/support/settings', settings.value)
+    const { welcome, offline, fallbackLocale, replies, rules, adminSound, userSound } = settings.value
+    await saveSupportSettings({ welcome, offline, fallbackLocale, replies, rules, adminSound, userSound })
     ElMessage.success('配置已保存，客户端将在下次刷新时生效')
   } catch (e: any) {
     ElMessage.error(e.message)
@@ -77,36 +80,14 @@ onMounted(load)
       <h1>客服与消息设置</h1>
       <p>保留原客服入口，按业务需要切换服务方式。</p>
     </header>
+    <SupportChannelSettings />
     <TenantPolicyNotice :snapshot="snapshot" :error="policyError"/><el-alert v-if="error" :title="error" type="error" :closable="false" />
     <el-form
       v-if="settings"
       label-position="top"
-      :disabled="!can('support_settings:save') || !editable('support.settings')"
+      :disabled="busy || !can('support_settings:save') || !editable('support.settings')"
       @submit.prevent="save"
     >
-      <div class="setting-card">
-        <h2>01 / 服务渠道</h2>
-        <el-form-item label="客服模式"
-          ><el-radio-group v-model="settings.mode" :disabled="!editable('support.channel')"
-            ><el-radio-button value="off" label="off">关闭客服</el-radio-button
-            ><el-radio-button value="external" label="external" :disabled="!snapshot?.features.external_support">外部客服</el-radio-button
-            ><el-radio-button value="internal" label="internal" :disabled="!snapshot?.features.support">站内客服</el-radio-button></el-radio-group
-          ></el-form-item
-        >
-        <p class="hint">
-          外部地址沿用「系统配置 → 客服配置 →
-          客服链接」。切换渠道不会删除历史会话；关闭站内客服后禁止创建和回复。
-        </p>
-        <el-form-item label="站内信"
-          ><el-switch
-            v-permission="'support_settings:save'"
-            v-model="settings.inboxEnabled" :disabled="!snapshot?.features.inbox"
-            active-text="开放站内信入口及发送"
-            inactive-text="关闭" /></el-form-item
-        ><el-form-item label="每位客服同时接待上限"
-          ><el-input-number v-model="settings.capacity" :min="1" :max="50"
-        /></el-form-item>
-      </div>
       <div class="setting-card">
         <h2>02 / 欢迎与离线回复</h2>
         <el-form-item label="编辑回复语言">
@@ -209,7 +190,7 @@ onMounted(load)
         type="primary"
         native-type="submit"
         :loading="busy"
-        >保存客服与消息设置</el-button
+        >保存回复与提示音</el-button
       >
     </el-form>
   </section>

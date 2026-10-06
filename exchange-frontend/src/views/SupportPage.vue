@@ -96,21 +96,20 @@ function changePage(delta: number) {
 }
 </script>
 <template>
-  <main class="support-page">
+  <main class="support-page" :class="{ 'external-mode': config?.mode === 'external' }">
     <header>
       <button class="back" :aria-label="t('返回', 'Back')" @click="router.back()">‹</button>
       <div>
         <h1>{{ t('在线客服', 'Customer support') }}</h1>
         <p>{{ t('专属协助 · 安心沟通', 'Personal assistance. A conversation you can trust.') }}</p>
       </div>
-      <span class="header-mark">{{ localeStore.text('客服', 'Support') }}</span>
+      <a v-if="config?.mode === 'external' && config.link" class="external-open" :href="config.link" target="_blank" rel="noopener noreferrer">{{ t('在新窗口打开客服', 'Open support in a new window') }} ↗</a>
+      <span v-else class="header-mark">{{ localeStore.text('客服', 'Support') }}</span>
     </header>
     <p v-if="error" class="page-error" role="alert">{{ error }}</p>
     <div v-if="!config" class="welcome">{{ t('加载中…', 'Loading…') }}</div>
     <section v-else-if="config.mode === 'external'" class="external">
       <template v-if="config.link"
-        ><a :href="config.link" target="_blank" rel="noopener noreferrer"
-          >{{ t('在新窗口打开客服', 'Open support in a new window') }} ↗</a
         ><iframe
           :src="config.link"
           :title="t('在线客服', 'Customer support')"
@@ -189,6 +188,7 @@ function changePage(delta: number) {
   display: flex;
   align-items: center;
   gap: 14px;
+  flex-shrink: 0;
   padding: 22px 26px;
   border-bottom: 1px solid #edf0f3;
 }
@@ -283,21 +283,42 @@ function changePage(delta: number) {
   background: #fff7ea;
   color: #997744;
 }
-.external {
-  padding: 20px;
-  height: calc(100dvh - 130px);
+.support-page.external-mode {
+  width: 100%;
+  max-width: none;
+  min-height: 0;
 }
-.external a {
-  display: block;
+.external-mode header > div {
+  flex: 1;
+  min-width: 0;
+}
+.external-open {
+  margin-left: auto;
+  max-width: 44%;
+  flex-shrink: 0;
   color: #638b35;
   font-size: 12px;
-  margin-bottom: 14px;
+  line-height: 1.5;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+.external {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+.external > p {
+  margin: auto;
+  padding: 24px;
+  text-align: center;
 }
 .external iframe {
+  display: block;
+  flex: 1;
+  min-width: 0;
   width: 100%;
-  height: 94%;
+  height: 100%;
   border: 0;
-  border-radius: 12px;
 }
 .history-pages {
   display: flex;
@@ -323,4 +344,17 @@ function changePage(delta: number) {
     padding: 60px 26px;
   }
 }
+</style>
+
+<style>
+/* The optional account banner keeps its real height; external support fills the remaining viewport. */
+#app:has(> .support-page.external-mode) {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+}
+#app:has(> .support-page.external-mode) > .account-mode-bar { flex-shrink: 0; }
+#app > .support-page.external-mode { flex: 1; height: auto; min-height: 0; }
 </style>

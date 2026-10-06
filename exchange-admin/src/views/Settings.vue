@@ -5,6 +5,8 @@ import request from '@/utils/request'
 import { useTenantPolicies } from '@/composables/useTenantPolicies'
 import TenantPolicyNotice from '@/components/TenantPolicyNotice.vue'
 import MarketDepthHealth from '@/components/MarketDepthHealth.vue'
+import SupportChannelSettings from '@/components/SupportChannelSettings.vue'
+import { can } from '@/utils/access'
 const {snapshot,policyError,policyReady,reloadPolicies,editable,policyLabel}=useTenantPolicies('settings')
 import { playProtectedAudio } from '@/utils/audioUrl'
 
@@ -25,9 +27,11 @@ function setRegistrationEnabled(field: RegistrationFieldPolicy, enabled: boolean
 
 const loading = ref(false)
 const activeTab = ref('mail')
-const serviceConfigVisible = computed(() => snapshot.value?.features.external_support === true
+const externalServiceConfigVisible = computed(() => snapshot.value?.features.external_support === true
   && snapshot.value.supportChannel !== 'internal'
   && !snapshot.value.configs.some(config => config.key === 'customer.service.link' && config.denied))
+const supportChannelsVisible = computed(() => policyReady.value && can('support_settings:view'))
+const serviceConfigVisible = computed(() => externalServiceConfigVisible.value || supportChannelsVisible.value)
 watch([serviceConfigVisible, activeTab], ([visible, tab]) => {
   if (!visible && tab === 'service') activeTab.value = 'mail'
 }, { flush: 'sync' })
@@ -252,7 +256,7 @@ const saveConfigs = async () => {
       ...smsConfig.value,
       ...riskConfig.value,
       ...marketConfig.value,
-      ...(serviceConfigVisible.value ? serviceConfig.value : []),
+      ...(externalServiceConfigVisible.value ? serviceConfig.value : []),
       ...soundConfig.value,
       ...domainConfig.value,
       ...systemConfig.value
@@ -426,8 +430,9 @@ onMounted(() => {
         </el-tab-pane>
 
         <el-tab-pane v-if="serviceConfigVisible" label="客服配置" name="service">
-          <el-alert type="info" :closable="false" title="站内客服、站内信开关、欢迎语与客服提示音请前往独立的「客服与消息设置」；此处保留外部客服地址。" style="margin-bottom: 20px" />
-          <el-form label-width="150px">
+          <SupportChannelSettings v-if="supportChannelsVisible && activeTab === 'service'" />
+          <el-alert type="info" :closable="false" title="服务渠道使用模块内的按钮独立保存；欢迎语、离线回复与客服提示音仍在「客服与消息设置」配置。" style="margin-bottom: 20px" />
+          <el-form v-if="externalServiceConfigVisible" class="external-service-config" label-width="150px">
             <el-form-item
               v-for="cfg in serviceConfig"
               :key="cfg.key"
