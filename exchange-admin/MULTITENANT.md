@@ -2,18 +2,16 @@
 
 业务 API 必须走当前域名的 `/api` 网关；模拟域使用同源 `/demo-api`，不接受跨域 API 基址。PC 与移动端使用租户的唯一前台域名，移动端可部署于同域 `/mobile`；后台和总控使用各自的独立域名。代理必须保留校验过的原始 Host，不能由客户端任意租户头选择租户。
 
-总控是独立 Vite 入口，不加载租户后台 Pinia 身份。构建前在未跟踪的 `.env.local` 配置实际批准来源：
+总控是独立 Vite 入口，不加载租户后台 Pinia 身份。“进入后台”在点击时立即请求独立浏览器窗口；浏览器策略仍可能阻止弹窗或改为标签页。后台入口使用总控认证接口返回的 `adminOrigin`，交换页从同源 `GET /api/admin/auth/control-exchange-config` 读取 `platform.admin-origin`、`platform.control-origin`。不再依赖容易漏设的 `VITE_ADMIN_ORIGIN`、`VITE_CONTROL_ORIGIN`，不猜测域名、不使用 URL 参数或 referrer 作为可信来源。
 
-```dotenv
-VITE_CONTROL_ORIGIN=https://<总控实际域名>
-VITE_ADMIN_ORIGIN=https://<后台实际域名>
-```
+配置接口只公开两个精确来源，`Cache-Control: no-store`，仍经过后台 Host/Origin 边界；只有此 GET 可匿名，不开放其他后台权限。生产入口必须为 HTTPS 精确来源。前后端需一起发布，旧后端没有此接口时不会降级。不得把令牌、交换票据或 MFA 密钥写入 URL、构建变量或日志。
 
-仅接受 HTTPS 精确来源；本地 localhost/127.0.0.1 可用 HTTP 做界面开发。缺少来源时交换入口拒绝，不猜测生产域名。不得把令牌、交换票据或 MFA 密钥写入 URL、构建变量或日志。
+新窗口的总控凭据副本在空白页阶段清除；票据仍绑定目标租户、真实总控身份和浏览器随机值，只可消费一次。父窗口等待新窗口实际交换、导航完成后才判定成功，失败或关闭会清理握手监听和超时，不影响原总控或租户人员会话。
 
 ```powershell
 npm run build -- --outDir dist-multitenant
 npm run build:control
+npm run test:entry
 npm run test:tenant
 node tests/readPolling.test.mjs
 node tests/permissionCoverage.test.mjs

@@ -19,7 +19,7 @@ const changeRequired = computed(() => auth.user?.mustChangePassword === true)
 const passwordForm = reactive({ oldPassword: '', newPassword: '', confirmPassword: '' })
 async function changeInitialPassword() {
   if (loading.value) return
-  if (passwordForm.newPassword.length < 12 || passwordForm.newPassword !== passwordForm.confirmPassword) { ElMessage.error('新密码至少 12 位且两次输入一致'); return }
+  if (passwordForm.newPassword.length < 6 || passwordForm.newPassword !== passwordForm.confirmPassword) { ElMessage.error('新密码至少 6 位，允许纯数字，且两次输入一致'); return }
   loading.value = true
   try {
     await request.put('/admin/auth/profile/password', { oldPassword: passwordForm.oldPassword, newPassword: passwordForm.newPassword })

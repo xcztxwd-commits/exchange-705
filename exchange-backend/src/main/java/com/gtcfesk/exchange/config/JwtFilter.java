@@ -24,7 +24,7 @@ public class JwtFilter extends OncePerRequestFilter {
  @org.springframework.beans.factory.annotation.Autowired(required=false) private com.gtcfesk.exchange.simulation.SimulationEnvironment simulation;
  @org.springframework.beans.factory.annotation.Autowired(required=false) private com.gtcfesk.exchange.simulation.SimulationGateway simulationGateway;
  @org.springframework.beans.factory.annotation.Autowired(required=false) private com.gtcfesk.exchange.simulation.SimulationProvisioner simulationProvisioner;
- @Override protected boolean shouldNotFilter(HttpServletRequest r){return Arrays.asList("/api/auth/login","/api/auth/captcha","/api/auth/register","/api/auth/sendEmailCode","/api/auth/resetPassword","/api/admin/auth/login","/api/admin/auth/control-exchange","/api/control/auth/login").contains(r.getRequestURI());}
+ @Override protected boolean shouldNotFilter(HttpServletRequest r){return ("GET".equals(r.getMethod())&&"/api/admin/auth/control-exchange-config".equals(r.getRequestURI()))||Arrays.asList("/api/auth/login","/api/auth/captcha","/api/auth/register","/api/auth/sendEmailCode","/api/auth/resetPassword","/api/admin/auth/login","/api/admin/auth/control-exchange","/api/control/auth/login").contains(r.getRequestURI());}
  @Override protected void doFilterInternal(HttpServletRequest request,HttpServletResponse response,FilterChain chain)throws ServletException,IOException{
   String header=request.getHeader("Authorization");TenantContext.Scope scope=null;Long activeUser=null;ControlIdentity identity=null;Long failedActor=null,failedTenant=null;boolean controlAttempt=false;
   try{

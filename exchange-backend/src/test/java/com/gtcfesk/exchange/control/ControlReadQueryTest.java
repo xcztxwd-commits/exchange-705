@@ -59,6 +59,35 @@ class ControlReadQueryTest {
   assertEquals(before,jdbc.queryForMap("SELECT * FROM support_conversation WHERE tenant_id=? AND id=?",tenant,chat[0]));
   switchTenant(tenant+1000);assertTrue(queries.conversations(user,null,null,null,0).isEmpty());
  }
+ @Test void allConversationsAreGloballyPagedFilteredLabelledAndReadOnly(){
+  String email="chat-all-"+UUID.randomUUID()+"@test.invalid";long other=tenant+10000;
+  for(long owner:new long[]{tenant,other})jdbc.update("INSERT INTO tenant(id,code,name,status,template_version,policy_version,session_version,config_ready,domain_verified,row_version) VALUES (?,?,?,'ACTIVE','safe-v1',0,0,TRUE,TRUE,0)",owner,"chat-all-"+owner,"Tenant "+owner);
+  jdbc.update("UPDATE user_account SET email=? WHERE tenant_id=? AND id=?",email,tenant,user);
+  Long[] users={user,null},admins={null,null};List<Long> expected=new ArrayList<>();
+  switchTenant(other);tx(()->{UserAccount u=new UserAccount();u.setEmail(email);u.setRemark("Other tenant remark");u.setPasswordHash("never-return-password");em.persist(u);users[1]=u.getId();});
+  for(int index=0;index<2;index++){final int n=index;switchTenant(index==0?tenant:other);tx(()->{AdminUser a=new AdminUser();a.setAccount("chat-admin-"+UUID.randomUUID());a.setEmail("staff-"+UUID.randomUUID()+"@test.invalid");a.setPasswordHash("never-return-password");a.setRole("admin");em.persist(a);admins[n]=a.getId();});}
+  for(int index=0;index<35;index++){
+   final int n=index%2;long owner=n==0?tenant:other;switchTenant(owner);
+   tx(()->{SupportConversation c=new SupportConversation();c.setUserId(users[n]);c.setAdminId(admins[n]);c.setClientIp("192.0.2.1");c.setStatus("CLOSED");c.setLegalHold(n==1);c.setAdminReadId(9);c.setUserReadId(7);em.persist(c);expected.add(c.getId());});
+   jdbc.update("UPDATE support_conversation SET created_at=?,closed_at=? WHERE tenant_id=? AND id=?",java.time.LocalDateTime.parse("2026-01-02T00:00:00").plusSeconds(index/2),java.time.LocalDateTime.parse("2026-01-03T00:00:00"),owner,expected.get(index));
+  }
+  List<Map<String,Object>> before=jdbc.queryForList("SELECT * FROM support_conversation WHERE tenant_id IN (?,?) ORDER BY id",tenant,other);
+  TenantContext.clear();asControl(false);
+  List<Map<String,Object>> first=queries.allConversations(null,null,email,null,null,0),second=queries.allConversations(null,null,email,null,null,1);
+  assertEquals(30,first.size());assertEquals(5,second.size());assertTrue(queries.allConversations(null,null,email,null,null,2).isEmpty());
+  List<Long> actual=new ArrayList<>();for(Map<String,Object> row:first)actual.add(((Number)row.get("id")).longValue());for(Map<String,Object> row:second)actual.add(((Number)row.get("id")).longValue());Collections.reverse(expected);assertEquals(expected,actual);
+  Set<Long> owners=new HashSet<>();for(Map<String,Object> row:first){long owner=((Number)row.get("tenant_id")).longValue();owners.add(owner);assertEquals("Tenant "+owner,row.get("tenant_name"));assertEquals(email,row.get("user_email"));assertEquals(owner==tenant?"内部客户备注":"Other tenant remark",row.get("user_remark"));assertFalse(row.containsKey("password_hash"));assertFalse(row.containsKey("client_ip"));}
+  assertEquals(new HashSet<>(Arrays.asList(tenant,other)),owners);assertEquals(18,queries.allConversations(user,null,email,null,null,0).size());assertEquals(17,queries.allConversations(null,admins[1],email,null,null,0).size());assertTrue(queries.allConversations(null,null,"missing-"+email,null,null,0).isEmpty());
+  assertEquals(10,queries.allConversations(null,null,email,"2026-01-02T08:00:00+08:00","2026-01-02T08:00:05+08:00",0).size());
+  assertEquals(before,jdbc.queryForList("SELECT * FROM support_conversation WHERE tenant_id IN (?,?) ORDER BY id",tenant,other));assertNull(TenantContext.currentTenantId());
+  switchTenant(other);List<Map<String,Object>> scoped=queries.conversations(null,null,email,null,null,0);assertEquals(17,scoped.size());assertTrue(scoped.stream().allMatch(row->((Number)row.get("tenant_id")).longValue()==other));
+ }
+ @Test void allConversationsRequireIndependentControlWithoutAnyTenantScope(){
+  assertThrows(org.springframework.security.access.AccessDeniedException.class,()->queries.allConversations(null,null,null,null,null,0));
+  TenantContext.clear();asControl(true);assertThrows(org.springframework.security.access.AccessDeniedException.class,()->queries.allConversations(null,null,null,null,null,0));
+  asUser();assertThrows(org.springframework.security.access.AccessDeniedException.class,()->queries.allConversations(null,null,null,null,null,0));SecurityContextHolder.clearContext();assertThrows(org.springframework.security.access.AccessDeniedException.class,()->queries.allConversations(null,null,null,null,null,0));
+  asControl(false);assertThrows(IllegalArgumentException.class,()->queries.allConversations(-1L,null,null,null,null,0));assertThrows(IllegalArgumentException.class,()->queries.allConversations(null,null,null,null,null,-1));assertThrows(IllegalArgumentException.class,()->queries.allConversations(null,null,null,null,null,100001));assertThrows(IllegalArgumentException.class,()->queries.allConversations(null,null,null,"2026-01-01T00:00:00Z",null,0));
+ }
  @Test void supportRangesRequireOffsetPairIncreasingAndBounded(){
   for(String[] r:new String[][]{{"2026-01-01T00:00:00", "2026-01-02T00:00:00"},{"2026-01-02T00:00:00Z","2026-01-01T00:00:00Z"},{"2026-01-01T00:00:00Z","2026-01-01T00:00:00Z"},{"2025-01-01T00:00:00Z","2026-01-03T00:00:00Z"},{"2026-01-01T00:00:00Z",null}})assertThrows(RuntimeException.class,()->queries.conversations(null,null,r[0],r[1],0));
   assertThrows(RuntimeException.class,()->queries.conversations(-1L,null,null,null,0));assertThrows(RuntimeException.class,()->queries.conversations(null,null,null,null,100001));asControl(true);assertThrows(RuntimeException.class,()->queries.conversations(null,null,null,null,0));

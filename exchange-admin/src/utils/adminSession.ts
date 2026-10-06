@@ -38,7 +38,8 @@ export function clearAdminSession(storage: Storage) {
 }
 
 export function exactOrigin(value: string): string {
-  const parsed = new URL(value)
+  let parsed: URL
+  try { parsed = new URL(value) } catch { throw new Error('后台来源配置缺失或无效，请检查平台入口配置') }
   if (!['https:', 'http:'].includes(parsed.protocol) || parsed.username || parsed.password || parsed.pathname !== '/' || parsed.search || parsed.hash) throw new Error('后台来源配置无效')
   if (parsed.protocol !== 'https:' && !['localhost', '127.0.0.1', '[::1]'].includes(parsed.hostname)) throw new Error('后台来源必须使用 HTTPS')
   return parsed.origin

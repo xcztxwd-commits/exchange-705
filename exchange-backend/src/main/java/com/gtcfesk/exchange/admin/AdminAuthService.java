@@ -87,8 +87,8 @@ public class AdminAuthService {
         }
         
         // 验证新密码长度
-        if (newPassword == null || newPassword.length() < 12 || newPassword.length() > 128) {
-            throw new BusinessException("新密码长度须为12至128个字符");
+        if (newPassword == null || newPassword.length() < 6 || newPassword.length() > 128) {
+            throw new BusinessException("新密码长度须为6至128个字符，允许纯数字");
         }
         
         // 更新密码
@@ -145,8 +145,8 @@ public class AdminAuthService {
         }
         
         // 验证新密码长度
-        if (newPassword == null || newPassword.length() < 12 || newPassword.length() > 128) {
-            throw new BusinessException("新密码长度须为12至128个字符");
+        if (newPassword == null || newPassword.length() < 6 || newPassword.length() > 128) {
+            throw new BusinessException("新密码长度须为6至128个字符，允许纯数字");
         }
         
         // 更新密码

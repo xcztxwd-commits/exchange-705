@@ -26,6 +26,7 @@ public class SecurityConfig {
             .authenticationEntryPoint((req, res, e) -> error(res, 401, "请先登录"))
             .accessDeniedHandler((req, res, e) -> error(res, 403, "无权访问")).and()
             .authorizeRequests()
+            .antMatchers(org.springframework.http.HttpMethod.GET, "/api/admin/auth/control-exchange-config").permitAll()
             .antMatchers("/api/control/auth/login", "/api/admin/auth/control-exchange").permitAll()
             .antMatchers("/api/control/**").hasRole("CONTROL")
             .antMatchers(org.springframework.http.HttpMethod.GET,"/api/tenant/features").permitAll()

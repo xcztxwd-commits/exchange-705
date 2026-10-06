@@ -85,6 +85,11 @@
     "key": "control.operations.issues"
   },
   {
+    "file": "src/control/PolicyDefinitions.vue",
+    "binding": "table-key",
+    "key": "control.policy-definitions"
+  },
+  {
     "file": "src/control/StatisticsSupervision.vue",
     "binding": ":table-key",
     "key": "`control.statistics.${table.key}`"
@@ -107,7 +112,7 @@
   {
     "file": "src/control/TenantManager.vue",
     "binding": "table-key",
-    "key": "control.policies"
+    "key": "control.policies.v2"
   },
   {
     "file": "src/views/AdminList.vue",

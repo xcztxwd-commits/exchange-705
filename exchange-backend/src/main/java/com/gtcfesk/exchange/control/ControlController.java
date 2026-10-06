@@ -6,12 +6,15 @@ import java.util.*;
 @RestController @RequestMapping("/api/control") @RequiredArgsConstructor
 public class ControlController {
  @org.springframework.beans.factory.annotation.Autowired private TenantReadinessService readiness;
+ @org.springframework.beans.factory.annotation.Autowired private ControlPolicyDefinitionService definitions;
  @org.springframework.beans.factory.annotation.Autowired private TenantDomainVerification domains;
  private final ControlService service;private final ControlAdminRepository admins;private final TenantManagementService management;
  private final TenantRepository tenants;private final TenantPolicyRepository policies;private final ControlAuditLogRepository audit;private final ControlAccessSessionRepository sessions;
  @PostMapping("/auth/login") public Object login(@RequestBody Login body){return service.login(body.account,body.password,body.totp);}
  @GetMapping("/auth/me") public Object me(){return ok(admins.findById(ControlIdentity.actorId()).orElseThrow(ControlService::invalid));}
  @PostMapping("/auth/logout") public Object logout(){service.logout();return ok(true);}
+ @GetMapping("/policy-definitions") public Object definitions(){return ok(definitions.list());}
+ @PutMapping("/policy-definitions") public Object definition(@RequestBody ControlPolicyDefinitionService.Input body){return ok(definitions.save(body));}
  @GetMapping("/tenants") public Object tenants(){ControlIdentity.actorId();return ok(tenants.findAll());}
  @PostMapping("/tenants") public Object create(@RequestBody TenantInput body){return ok(management.create(body));}
  @PutMapping("/tenants/{id}") public Object update(@PathVariable Long id,@RequestBody TenantInput body){return ok(management.update(id,body));}

@@ -37,7 +37,7 @@ public class ControlAccountService {
   audit.record(actorId,null,null,"CONTROL_ACCOUNT_UPDATE",String.valueOf(id),"SUCCESS","enabled="+target.isEnabled()+";credentialsChanged="+(input.newPassword!=null),input.reason);return target;
  }
  private ControlAdmin reauth(Input input){ControlAdmin actor=admins.lock(ControlIdentity.actorId()).orElseThrow(ControlService::invalid);verify(actor,input);return actor;}
- private void verify(ControlAdmin actor,Input input){TenantManagementService.reason(input.reason);if(!actor.isEnabled()||input.password==null||!passwords.matches(input.password,actor.getPasswordHash())||!actor.isMfaEnabled()||!mfa.verify(actor.getMfaSecret(),input.totp))throw ControlService.invalid();}
- private static void validatePassword(String value){if(value==null||value.length()<16||value.length()>128)throw new IllegalArgumentException("总控密码长度须为 16 至 128 位");}
+ private void verify(ControlAdmin actor,Input input){if(input.reason==null||input.reason.trim().isEmpty())input.reason="总控账号管理";TenantManagementService.reason(input.reason);if(!actor.isEnabled()||input.password==null||!passwords.matches(input.password,actor.getPasswordHash())||!actor.isMfaEnabled()||!mfa.verify(actor.getMfaSecret(),input.totp))throw ControlService.invalid();}
+ private static void validatePassword(String value){if(value==null||value.length()<6||value.length()>128)throw new IllegalArgumentException("总控密码长度须为 6 至 128 位，允许纯数字");}
  public static class Input {public String account,password,totp,newPassword,newSecret,newTotp,reason;public Boolean enabled;}
 }

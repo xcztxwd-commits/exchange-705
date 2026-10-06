@@ -3,7 +3,9 @@ import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { api, dataRows, clearSession } from './api'
 import ControlAccounts from './ControlAccounts.vue'
+import { generateTotpSecret } from './totp'
 const mfa=reactive({password:'',totp:'',newSecret:'',newTotp:''}),mfaOpen=ref(false)
+function generateSecret(){mfa.newSecret=generateTotpSecret();mfa.newTotp='';ElMessage.success('新密钥已生成，请绑定身份验证器后填写新动态码')}
 async function changeMfa(){try{await api('/control/security/mfa','POST',{...mfa});Object.assign(mfa,{password:'',totp:'',newSecret:'',newTotp:''});clearSession();ElMessage.success('MFA 已更新，请重新登录')}catch(e:any){ElMessage.error(e.message)}}
 const props=defineProps<{security?:boolean}>()
 const rows=ref<any[]>([]),error=ref(''),page=ref(1),total=ref(0)
@@ -18,7 +20,7 @@ onMounted(load)
     <template v-if="security"><el-table-column prop="expiresAt" label="绝对到期" min-width="180" /><el-table-column prop="lastActivityAt" label="最近交互" min-width="180" /><el-table-column label="状态" width="110"><template #default="s">{{ s.row.revoked?'已撤销':s.row.consumed?'已交换':'待交换' }}</template></el-table-column><el-table-column label="操作" width="100"><template #default="s"><el-button :disabled="s.row.revoked" type="danger" link @click="revoke(s.row)">撤销</el-button></template></el-table-column></template>
     <template v-else><el-table-column prop="action" label="动作" min-width="160" /><el-table-column prop="objectRef" label="对象" min-width="100" /><el-table-column prop="outcome" label="结果" width="110" /><el-table-column prop="reason" label="原因" min-width="200" /><el-table-column prop="detail" label="脱敏变化" min-width="200" /></template>
   </admin-table>
-  <el-dialog v-model="mfaOpen" title="更换总控 MFA" width="min(550px,95vw)" @closed="Object.assign(mfa,{password:'',totp:'',newSecret:'',newTotp:''})"><p>需验证当前与新设备。首次 MFA 通过受控部署引导配置，不提供无验证的网页绑定。成功后撤销全部总控会话。</p><el-form label-width="120px"><el-form-item label="当前密码"><el-input v-model="mfa.password" type="password" autocomplete="current-password"/></el-form-item><el-form-item label="当前动态码"><el-input v-model="mfa.totp" inputmode="numeric" maxlength="6"/></el-form-item><el-form-item label="新 TOTP 密钥"><el-input v-model="mfa.newSecret" type="password" autocomplete="off"/></el-form-item><el-form-item label="新设备动态码"><el-input v-model="mfa.newTotp" inputmode="numeric" maxlength="6"/></el-form-item></el-form><template #footer><el-button type="danger" @click="changeMfa">验证并更换</el-button></template></el-dialog>
+  <el-dialog v-model="mfaOpen" title="更换总控 MFA" width="min(550px,95vw)" @closed="Object.assign(mfa,{password:'',totp:'',newSecret:'',newTotp:''})"><p>需验证当前与新设备。首次 MFA 通过受控部署引导配置，不提供无验证的网页绑定。成功后撤销全部总控会话。</p><el-form label-width="120px"><el-form-item label="当前密码"><el-input v-model="mfa.password" type="password" autocomplete="current-password"/></el-form-item><el-form-item label="当前动态码"><el-input v-model="mfa.totp" inputmode="numeric" maxlength="6"/></el-form-item><el-form-item label="新 TOTP 密钥"><el-input v-model="mfa.newSecret" type="password" show-password autocomplete="off"><template #append><el-button @click="generateSecret">随机生成</el-button></template></el-input></el-form-item><el-form-item label="新设备动态码"><el-input v-model="mfa.newTotp" inputmode="numeric" maxlength="6"/></el-form-item></el-form><template #footer><el-button type="danger" @click="changeMfa">验证并更换</el-button></template></el-dialog>
   <el-pagination v-model:current-page="page" :page-size="20" :total="total" layout="total,prev,pager,next" @current-change="load" />
   <ControlAccounts v-if="security" style="margin-top:36px" />
 </template>

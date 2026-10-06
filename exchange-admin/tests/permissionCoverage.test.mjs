@@ -79,11 +79,11 @@ test('shared control widgets keep total-control and tenant grants distinct', () 
   assert.match(manager, /<BackendAccounts :control="true"/)
   assert.match(manager, /<OnlineUsers :control="true"/)
 })
-test('backend administrator create and reset forms require twelve-character passwords', () => {
+test('backend administrator create and reset forms allow six-character passwords', () => {
   const source = fs.readFileSync(path.join(root, 'exchange-admin/src/views/AdminList.vue'), 'utf8')
-  assert.equal([...source.matchAll(/value\.length < 12/g)].length, 2)
-  assert.doesNotMatch(source, /value\.length < 6/)
-  assert.equal([...source.matchAll(/密码长度至少12个字符/g)].length, 2)
+  assert.equal([...source.matchAll(/value\.length < 6/g)].length, 2)
+  assert.doesNotMatch(source, /value\.length < 12/)
+  assert.equal([...source.matchAll(/密码长度至少6个字符，允许纯数字/g)].length, 2)
 })
 
 test('actual insight mutation handlers enforce current grants, including Enter and confirmation revocation', async () => {
