@@ -223,7 +223,7 @@
         <div class="p-4 bg-[#8cc63f] text-white mx-4 mt-4 rounded-lg shadow-md bg-gradient-to-r from-[#8cc63f] to-[#9cd64f]">
           <div class="text-sm opacity-90 font-medium">{{ localeStore.t('availableFund') }}</div>
           <div class="text-2xl font-bold mt-1 mb-0 font-mono tracking-tight">
-            ${{ tradeMode === 'contract' ? tradingAvailable.toFixed(2) : optionTradingAvailable.toFixed(2) }}
+            ${{ formatMoney(tradeMode === 'contract' ? tradingAvailable : optionTradingAvailable, '0.00') }}
           </div>
         </div>
         
@@ -275,7 +275,7 @@
                <div class="flex justify-between items-center"><span class="font-medium text-gray-600 dark:text-gray-300">{{ localeStore.t('fee') }}</span><span class="font-mono text-gray-800 dark:text-gray-100 font-medium">{{ displayFee(estimatedFee) }} USD</span></div>
                <p v-if="currentSymbolInfo?.quantityUnitType === 'BASE_ASSET'" class="text-xs">{{ localeStore.locale === 'ja' ? `1 ${unitLabel}あたりの往復手数料：${feeMultiplier} USD（固定）` : `每1 ${unitLabel} 固定往返佣金 ${feeMultiplier} USD` }}</p>
                <div class="flex justify-between items-center"><span class="font-medium text-gray-600 dark:text-gray-300">{{ localeStore.t('margin') }}</span><span class="font-mono text-gray-800 dark:text-gray-100 font-medium">{{ Number.isFinite(estimatedMargin) ? estimatedMargin.toFixed(2) : '--' }} USD</span></div>
-               <div class="flex justify-between items-center"><span class="font-medium text-gray-600 dark:text-gray-300">{{ localeStore.t('balance') }}</span><span class="font-mono text-gray-800 dark:text-gray-100 font-medium">{{ formatMoney(tradingAvailable) }} USD</span></div>
+               <div class="flex justify-between items-center"><span class="font-medium text-gray-600 dark:text-gray-300">{{ localeStore.t('balance') }}</span><span class="font-mono text-gray-800 dark:text-gray-100 font-medium">{{ formatMoney(tradingAvailable, '0.00') }} USD</span></div>
              </div>
 
              </PositionSizing>
@@ -2284,9 +2284,9 @@ const submitPersonalInfoFromKyc = async () => {
   finally { identitySubmitting.value = false; }
 };
 
-const formatMoney = (v: number | string | undefined | null) => {
+const formatMoney = (v: number | string | undefined | null, fallback = '--') => {
   const n = Number(v ?? 0)
-  if (!Number.isFinite(n)) return '--';
+  if (!Number.isFinite(n)) return fallback;
   return n.toLocaleString(localeStore.locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 };
 
