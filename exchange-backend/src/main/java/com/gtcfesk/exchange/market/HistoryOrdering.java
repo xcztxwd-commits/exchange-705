@@ -50,7 +50,7 @@ final class HistoryOrdering {
                     || number(request,"limit")<1 || number(request,"limit")>1000
                     || !(request.get("interval") instanceof String) || !(request.get("utcAnchors") instanceof Boolean)
                     || !new TreeSet<>(request.keySet()).equals(new TreeSet<>(Arrays.asList("tenant","symbol","interval","limit","cursor","utcAnchors","code","source")))
-                    || !store.encode(new TreeMap<>(request)).equals(response.request))
+                    || !store.encodeHistoryRequest(new TreeMap<>(request)).equals(response.request))
                 throw new IllegalArgumentException("Invalid exact archived request identity");
             Map<String,Object> body=store.decode(response.body);
             List<Map<String,Object>> bars=ControlHistoryStore.rows(body);
@@ -110,7 +110,7 @@ final class HistoryOrdering {
         request.put("limit",Math.min(1000,Math.max(1,limit)));request.put("cursor",cursor);request.put("utcAnchors",utcAnchors);
         request.put("code",data.get("code"));request.put("source",data.get("source"));
         for(String field:Arrays.asList("code","source")) if(request.get(field)!=null && !(request.get(field) instanceof String)) throw new IllegalArgumentException("Invalid history source identity");
-        return store.encode(request);
+        return store.encodeHistoryRequest(request);
     }
     /** Called only within caller's read-only RR; never stores a response on a read miss. */
     Map<String,Object> readExact(long symbol,String interval,int limit,Long cursor,boolean utcAnchors,Map<String,Object> external,boolean hasCallback) {

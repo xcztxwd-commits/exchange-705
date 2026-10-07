@@ -1,6 +1,8 @@
 package com.gtcfesk.exchange.market;
 
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.core.JsonGenerator;
+import java.nio.charset.StandardCharsets;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.gtcfesk.exchange.tenant.TenantContext;
@@ -24,7 +26,7 @@ public class ControlHistoryStore {
     static long tenant() { return TenantContext.requireTenantId(); }
     private final TransactionTemplate transactions;
     private final TransactionTemplate reads, consumerReads;
-    private final ObjectMapper json = new ObjectMapper().enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS);
+    private final ObjectMapper json = new ObjectMapper().enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS).enable(JsonGenerator.Feature.ESCAPE_NON_ASCII);
     final ControlPlanBudget budget=new ControlPlanBudget();
     private final ThreadLocal<Map<String,TargetControlPlan>> preparedPlans = new ThreadLocal<>();
     /** Pin immutable plans for one operation so LRU eviction cannot cause decoding under its symbol locks. */
@@ -148,6 +150,33 @@ public class ControlHistoryStore {
             if (!plan.checksum().equals(row.get("checksum"))) throw new IllegalStateException("Checksum mismatch");
             return plan;
         } catch (Exception invalid) { throw new BalancedControlPlan.Failure("PLAN_CORRUPTED", "目标轨迹计划损坏：" + invalid.getMessage()); }
+    }
+    // ASCII storage keeps native latin1 command columns lossless without a schema rewrite.
+    private static final String COMMAND_MESSAGE_PREFIX = "~mcc1~";
+    static String encodeCommandMessage(String message) {
+        if (message == null) return null;
+        String stored = message;
+        if (message.startsWith(COMMAND_MESSAGE_PREFIX) || message.chars().anyMatch(c -> c > 127)) {
+            byte[] bytes = message.getBytes(StandardCharsets.UTF_8);
+            if (!message.equals(new String(bytes, StandardCharsets.UTF_8))) throw new IllegalArgumentException("Invalid command message UTF-16");
+            stored = COMMAND_MESSAGE_PREFIX + Base64.getEncoder().encodeToString(bytes);
+        }
+        if (stored.length() > 255) throw new IllegalArgumentException("Command message exceeds persisted VARCHAR(255)");
+        return stored;
+    }
+    static String decodeCommandMessage(String stored) {
+        if (stored == null || !stored.startsWith(COMMAND_MESSAGE_PREFIX)) return stored;
+        try {
+            byte[] bytes = Base64.getDecoder().decode(stored.substring(COMMAND_MESSAGE_PREFIX.length()));
+            String message = new String(bytes, StandardCharsets.UTF_8);
+            // A malformed legacy prefix remains plain; never replace invalid bytes silently.
+            return Arrays.equals(bytes, message.getBytes(StandardCharsets.UTF_8)) ? message : stored;
+        } catch (IllegalArgumentException legacyPlain) { return stored; }
+    }
+    /** Immutable history request identity predates ASCII storage; preserve its exact hash bytes. */
+    String encodeHistoryRequest(Map<String, Object> row) {
+        try { return json.writer().without(JsonGenerator.Feature.ESCAPE_NON_ASCII).writeValueAsString(row); }
+        catch (Exception e) { throw new IllegalStateException("Cannot serialize exact history request", e); }
     }
     String encode(Map<String, Object> row) {
         try { return json.writeValueAsString(row); }

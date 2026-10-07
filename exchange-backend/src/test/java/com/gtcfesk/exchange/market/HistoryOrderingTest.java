@@ -69,6 +69,25 @@ class HistoryOrderingTest extends TenantMarketTestContext {
             }}).get(10,TimeUnit.SECONDS); } finally {worker.shutdownNow();}
         }
     }
+    @Test void legacyUnicodeArchivedRequestAndOriginalBodyHashesSurviveAsciiStorageUpgrade()throws Exception {
+        ControlHistoryStore store=fixture(false);long cut=future();
+        Map<String,Object> external=external();Map<String,Object> data=(Map<String,Object>)external.get("data");data.put("code","测试🚀");data.put("source","历史来源");
+        Map<String,Object> oldBody=store.decode(body("old83.json"));Map<String,Object> oldData=(Map<String,Object>)oldBody.get("data");oldData.put("code",data.get("code"));oldData.put("source",data.get("source"));
+        com.fasterxml.jackson.databind.ObjectMapper legacy=new com.fasterxml.jackson.databind.ObjectMapper();
+        String body=legacy.writeValueAsString(oldBody);
+        Map<String,Object> identity=new TreeMap<>();identity.put("tenant",1);identity.put("symbol",1);identity.put("interval","1m");identity.put("limit",5);identity.put("cursor",CURSOR);identity.put("utcAnchors",true);identity.put("code",data.get("code"));identity.put("source",data.get("source"));
+        String originalRequest=legacy.writeValueAsString(identity),originalHash=HistoryOrdering.sha(originalRequest),originalBodyHash=HistoryOrdering.sha(body);
+        assertEquals(originalRequest,store.historyOrdering.request(1,"1m",5,CURSOR,true,external));assertNotEquals(originalRequest,store.encode(identity));
+        HistoryOrdering.ArchivedResponse archive=new HistoryOrdering.ArchivedResponse(originalRequest,body,originalBodyHash,HistoryOrdering.sha("legacy-unicode-fixture-artifact"),"/legacy");
+        String scope=HistoryOrdering.sha("legacy-unicode-fixture-scope"),evidence=HistoryOrdering.sha("legacy-unicode-fixture-evidence");
+        assertTrue(store.historyOrdering.seal(1,cut,scope,evidence,List.of(archive)));
+        Map<String,Object> oldReceipt=store.db.queryForMap("SELECT * FROM market_history_response WHERE tenant_id=1 AND symbol_id=1");
+        assertEquals(originalHash,oldReceipt.get("request_sha256"));assertEquals(originalBodyHash,oldReceipt.get("response_sha256"));assertEquals(body,oldReceipt.get("response_json"));
+        assertFalse(store.historyOrdering.seal(1,cut,scope,evidence,List.of(archive)));
+        ControlHistoryStore reopened=new ControlHistoryStore(store.db,new DataSourceTransactionManager(store.db.getDataSource()));
+        assertEquals(oldBody,reopened.readSnapshot(()->reopened.historyOrdering.readExact(1,"1m",5,CURSOR,true,external,false)));
+        assertEquals(oldReceipt,store.db.queryForMap("SELECT * FROM market_history_response WHERE tenant_id=1 AND symbol_id=1"),"Never rewrite old bytes/hashes to mask identity regression");
+    }
     @Test void receiptFailureRollsBackWholeSealThenRetryCommitsOnce()throws Exception {
         ControlHistoryStore store=fixture(false);long cut=future();String scope=HistoryOrdering.sha("failure-fixture"), evidence=HistoryOrdering.sha("failure-evidence");
         store.db.execute("ALTER TABLE market_history_response ADD CONSTRAINT injected_receipt_failure CHECK (artifact_pointer<>'/reject')");
