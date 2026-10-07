@@ -1,3 +1,4 @@
+import { preferredTimeLocale } from '../utils/displayTimezone'
 import { japaneseServerMessage } from '../utils/serverJapanese'
 import { defineStore } from 'pinia'
 import { computed, ref, watch } from 'vue'
@@ -20331,6 +20332,7 @@ export const useLocaleStore = defineStore('locale', () => {
   const setLocale = (val: LocaleKey) => {
     if (!Object.prototype.hasOwnProperty.call(messages, val)) return
     locale.value = val
+    preferredTimeLocale.value = val
     localStorage.setItem('locale', val)
     console.log('[LocaleStore] Language changed to:', val)
   }
@@ -20350,6 +20352,7 @@ export const useLocaleStore = defineStore('locale', () => {
     const detected = detectBrowserLocale()
     locale.value = saved && Object.prototype.hasOwnProperty.call(messages, saved)
       ? saved : Object.prototype.hasOwnProperty.call(messages, detected) ? detected as LocaleKey : 'en'
+    preferredTimeLocale.value = saved && Object.prototype.hasOwnProperty.call(messages, saved) ? saved : ''
     // Only explicit choices are saved; first visits follow browser preferences, not IP.
   }
 

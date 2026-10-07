@@ -156,6 +156,11 @@ function getRealTimePrice(symbol: any): number {
   return Number(symbol.currentPrice || 0)
 }
 
+function formatQuotePrice(symbol: any): string {
+  const price = getRealTimePrice(symbol)
+  return Number.isFinite(price) && price > 0 ? formatPrice(price, symbol.pricePrecision) : '—'
+}
+
 // 判断是否显示休市
 // 休市判断已由后端处理（基于美股交易时间），前端不再基于K线数据判断
 // Only the backend calendar determines closure; stale quotes are a different state.
@@ -905,7 +910,7 @@ const logoUrl = `${import.meta.env.BASE_URL}img/logo.svg`
             />
           </div>
           <div class="market-bottom">
-            <div class="market-price" v-if="!isMarketClosed(s)">{{ formatPrice(getRealTimePrice(s), s.pricePrecision) }}</div>
+            <div class="market-price" v-if="!isMarketClosed(s)">{{ formatQuotePrice(s) }}</div>
             <div class="market-price market-closed" v-else>{{ localeStore.t('marketClosed') }}</div>
             <div class="market-change" v-if="!isMarketClosed(s)" :style="{ color: getChangeColor(getRealTimeChange(s).changePct) }">
               <span v-if="Number.isFinite(getRealTimeChange(s).changePct)" class="change-icon ui-inline-arrow">{{ getRealTimeChange(s).changePct >= 0 ? '▲' : '▼' }}</span>
@@ -970,7 +975,7 @@ const logoUrl = `${import.meta.env.BASE_URL}img/logo.svg`
             />
           </div>
           <div class="symbol-price-group">
-            <div class="symbol-price" v-if="!isMarketClosed(s)">{{ formatPrice(getRealTimePrice(s), s.pricePrecision) }}</div>
+            <div class="symbol-price" v-if="!isMarketClosed(s)">{{ formatQuotePrice(s) }}</div>
             <div class="symbol-price market-closed" v-else>{{ localeStore.t('marketClosed') }}</div>
             <div class="symbol-change" v-if="!isMarketClosed(s)" :style="{ color: getChangeColor(getRealTimeChange(s).changePct) }">
               <span v-if="Number.isFinite(getRealTimeChange(s).changePct)" class="change-icon ui-inline-arrow">{{ getRealTimeChange(s).changePct >= 0 ? '▲' : '▼' }}</span>

@@ -13,7 +13,7 @@ for (const app of ['exchange-pc', 'exchange-frontend']) {
       send(message) { this.sent.push(JSON.parse(message)) }
       close() { this.readyState = 3; this.onclose?.() }
       open() { this.readyState = 1; this.onopen?.() }
-      price(data) { this.onmessage?.({ data: JSON.stringify({ type: 'price', data }) }) }
+      price(data, klines = []) { this.onmessage?.({ data: JSON.stringify({ type: 'price', data, klines }) }) }
     }
     globalThis.window = new EventTarget()
     globalThis.document = Object.assign(new EventTarget(), { visibilityState: 'visible' })
@@ -44,6 +44,23 @@ for (const app of ['exchange-pc', 'exchange-frontend']) {
       sockets[0].price({ AAPL: { ...quote, epoch: 'two', quoteVersion: 1 } })
       sockets[0].price({ AAPL: { ...quote, epoch: 'one', quoteVersion: 999 } })
       assert.equal(seen.at(-1).AAPL.epoch, 'two')
+      const candles = [], bars = [{timestamp:now,open:100,high:102,low:99,close:102,volume:1}]
+      const stopKline = market.onKlineUpdate('AAPL','1m', update => candles.push(update))
+      assert(sockets[0].sent.some(message => message.action === 'subscribeKline' && message.interval === '1m'))
+      const incoming = { symbol:'AAPL',interval:'1m',bars }
+      sockets[0].price({AAPL:{...quote,epoch:'two',quoteVersion:2}},[incoming])
+      assert.equal(candles.length,1)
+      assert.equal(candles[0].quote.quoteVersion,2)
+      sockets[0].price({AAPL:{...quote,epoch:'two',quoteVersion:1}},[incoming])
+      sockets[0].price({AAPL:{...quote,epoch:'one',quoteVersion:999}},[incoming])
+      sockets[0].price({AAPL:{...quote,epoch:'two',quoteVersion:3}},[{...incoming,interval:'5m'}])
+      assert.equal(candles.length,1,'stale generations and other chart periods cannot replace candles')
+      const stopSecond = market.onKlineUpdate('AAPL','1m', () => {})
+      const unsubscribed = () => sockets[0].sent.filter(message => message.action === 'unsubscribeKline').length
+      stopKline();assert.equal(unsubscribed(),0,'another chart still owns this period')
+      stopSecond();assert.equal(unsubscribed(),1)
+      sockets[0].price({AAPL:{...quote,epoch:'two',quoteVersion:4}},[incoming])
+      assert.equal(candles.length,1,'unmounted charts receive no more candles')
       market.release('trade')
       assert.equal(sockets[0].sent.at(-1).action, 'unsubscribe')
       assert.ok(requests.every(request => request.url.includes('/market/price/batch')))

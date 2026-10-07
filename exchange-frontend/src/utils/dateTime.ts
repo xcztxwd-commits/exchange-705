@@ -1,12 +1,15 @@
 import { initVisitorRegion, visitorRegion } from './visitorRegion'
+import { getDisplayTimezone } from './displayTimezone'
 
 export const systemTimezoneReady = initVisitorRegion()
-export function getSystemTimezone() { return visitorRegion.value.timezone }
+export function getSystemTimezone() {
+  return getDisplayTimezone(visitorRegion.value.timezone || 'UTC')
+}
 
 /**
  * 日期时间格式化工具
  * 注意：后端可能返回服务器本地时间（北京时间 UTC+8），而不是UTC时间
- * 前端需要将其转换为UTC，然后转换为访问者 IP 时区（自动处理夏令时）显示
+ * 前端按用户保存的语言对应时区显示；未选择语言时使用浏览器时区，自动处理夏令时。
  */
 
 /**
@@ -54,7 +57,7 @@ export function formatDate(dateTime: string | Date | null | undefined): string {
     
     // 使用 Intl.DateTimeFormat 格式化访问者时区的日期
     const formatter = new Intl.DateTimeFormat('en-GB', {
-      timeZone: visitorRegion.value.timezone, // 使用访问者时区
+      timeZone: getSystemTimezone(), // 用户语言优先，否则使用浏览器时区
       year: 'numeric',
       month: '2-digit',
       day: '2-digit'
@@ -135,7 +138,7 @@ export function formatDateTime(dateTime: string | Date | null | undefined): stri
       if (process.env.NODE_ENV === 'development') {
         const utcTime = date.toISOString()
         const ukFormatter = new Intl.DateTimeFormat('en-GB', {
-          timeZone: visitorRegion.value.timezone,
+          timeZone: getSystemTimezone(),
           year: 'numeric',
           month: '2-digit',
           day: '2-digit',
@@ -159,7 +162,7 @@ export function formatDateTime(dateTime: string | Date | null | undefined): stri
     
     // 使用 Intl.DateTimeFormat 格式化访问者时区的日期时间
     const formatter = new Intl.DateTimeFormat('en-GB', {
-      timeZone: visitorRegion.value.timezone, // 使用访问者时区
+      timeZone: getSystemTimezone(), // 用户语言优先，否则使用浏览器时区
       year: 'numeric',
       month: '2-digit',
       day: '2-digit',
@@ -230,7 +233,7 @@ export function formatTime(dateTime: string | Date | null | undefined): string {
     
     // 使用 Intl.DateTimeFormat 格式化访问者时区的时间
     const formatter = new Intl.DateTimeFormat('en-GB', {
-      timeZone: visitorRegion.value.timezone, // 使用访问者时区
+      timeZone: getSystemTimezone(), // 用户语言优先，否则使用浏览器时区
       hour: '2-digit',
       minute: '2-digit',
       second: '2-digit',
@@ -292,7 +295,7 @@ export function formatDateTimeLocalized(
       minute: '2-digit',
       second: '2-digit',
       hour12: false,
-      timeZone: visitorRegion.value.timezone, // 默认使用访问者时区
+      timeZone: getSystemTimezone(), // 默认遵循用户语言与浏览器时区
       ...options // 如果options中指定了timeZone，会覆盖默认值
     }
     
@@ -304,3 +307,12 @@ export function formatDateTimeLocalized(
   }
 }
 
+// Reformat existing order rows without changing their source timestamps or countdowns.
+export function refreshOrderTimes(orders: any[], format: (value: any) => string = formatDateTime) {
+  for (const order of orders) {
+    if (!order) continue
+    for (const field of ['createdTime', 'openTime', 'closeTime', 'manualCloseTime']) {
+      if (Object.prototype.hasOwnProperty.call(order, field + 'Raw')) order[field] = format(order[field + 'Raw'])
+    }
+  }
+}

@@ -21,16 +21,23 @@ for (const app of ['exchange-pc', 'exchange-frontend']) {
   })
   test(`${app}: publication revision clears every cached period only for the current symbol`, () => {
     const source = readFileSync(new URL(`../../${app}/src/components/KlineChart.vue`, import.meta.url),'utf8')
-    const start = source.indexOf('watch(() => market.quoteStatusMap[props.symbol]?.controlHistoryRevision')
+    const start = source.indexOf('watch(() => market.quoteStatusMap[props.symbol], (quote, previous)')
     assert.ok(start >= 0)
     const end = source.indexOf('watch(() => market.quoteStatusMap[props.symbol], replayQuote)',start)
     const block = ts.transpile(source.slice(start,end), {target:ts.ScriptTarget.ES2022})
     const market={quoteStatusMap:{},klineDataMap:{TEST_1m:[1],TEST_5m:[2],TEST_1h:[3],OTHER_1m:[4]}}
     let callback, resets=0
-    new Function('watch','market','props','resetMarket',block)((get,changed)=>{callback=changed},market,{symbol:'TEST'},()=>resets++)
-    callback('first',undefined);assert.equal(resets,0)
-    callback('first','first');assert.equal(resets,0)
-    callback('published','first');assert.equal(resets,1)
+    let replays = 0
+    new Function('watch','market','props','resetMarket','replayQuote',block)((get,changed)=>{callback=changed},market,{symbol:'TEST'},()=>resets++,()=>replays++)
+    const quote = (revision, state = 'SOURCE', publication = '0:0') => ({controlHistoryRevision:revision,controlState:state,controlPublicationRevision:publication})
+    callback(quote('first'),undefined);assert.equal(resets,0)
+    callback(quote('first'),quote('first'));assert.equal(resets,0)
+    callback(quote('manual:2','MANUAL'),quote('first'));assert.equal(resets,0)
+    callback(quote('manual:3','MANUAL'),quote('manual:2','MANUAL'));assert.equal(resets,0)
+    callback(quote('first'),quote('manual:3','MANUAL'));assert.equal(resets,0)
+    assert.equal(replays,3)
+    assert.deepEqual(market.klineDataMap,{TEST_1m:[1],TEST_5m:[2],TEST_1h:[3],OTHER_1m:[4]})
+    callback(quote('published','MANUAL','1:100'),quote('manual:3','MANUAL'));assert.equal(resets,1)
     assert.deepEqual(market.klineDataMap,{OTHER_1m:[4]})
   })
 }

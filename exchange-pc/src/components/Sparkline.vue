@@ -10,7 +10,7 @@ const props = defineProps<{
 
 const width = props.width || 60
 const height = props.height || 20
-const color = props.color || '#e25d4d'
+const color = computed(() => props.color || '#e25d4d')
 
 // 控制是否显示动画（只在首次加载时显示）
 const showAnimation = ref(true)
@@ -74,29 +74,6 @@ const areaPath = computed(() => {
   return `M ${firstPoint} L ${points.join(' L ')} L ${lastX},${height} L ${firstX},${height} Z`
 })
 
-const fillColor = computed(() => {
-  // 根据主颜色生成半透明填充色
-  const baseColor = props.color || '#e25d4d'
-  
-  // 解析颜色值
-  if (baseColor.startsWith('#')) {
-    // 十六进制颜色
-    const hex = baseColor.replace('#', '')
-    const r = parseInt(hex.substring(0, 2), 16)
-    const g = parseInt(hex.substring(2, 4), 16)
-    const b = parseInt(hex.substring(4, 6), 16)
-    return `rgba(${r}, ${g}, ${b}, 0.15)`
-  } else if (baseColor.startsWith('rgb')) {
-    // RGB颜色
-    const match = baseColor.match(/\d+/g)
-    if (match && match.length >= 3) {
-      return `rgba(${match[0]}, ${match[1]}, ${match[2]}, 0.15)`
-    }
-  }
-  
-  // 默认浅红色填充
-  return 'rgba(232, 109, 67, 0.15)'
-})
 </script>
 
 <template>
@@ -105,7 +82,8 @@ const fillColor = computed(() => {
     <path
       v-if="areaPath"
       :d="areaPath"
-      :fill="fillColor"
+      :fill="color"
+      fill-opacity="0.15"
       :class="{ 'sparkline-area-animate': showAnimation }"
     />
     <!-- 折线 -->
@@ -153,4 +131,3 @@ const fillColor = computed(() => {
   }
 }
 </style>
-

@@ -147,11 +147,16 @@ class ControlFlowMarketIntegrationTest extends TenantMarketTestContext {
         Thread.sleep(1100); market.completeControls();
         assertTrue(database.count("market_source_event") > before, "Manual simulation must keep recording actual generated ticks");
         quote = market.internalPrice("TEST"); closePrice(ControlHistoryStore.number(quote.get("price")).toPlainString());
-        BigDecimal previous = market.freshPrice("TEST");
+        com.gtcfesk.exchange.entity.TradingSymbol beforeDisable = fixture.copy(saved.get());
+        // Cross a generated tick: disabling must preserve the path, not freeze the previous second's price.
+        Thread.sleep(1100);
         status = market.manualControl(1L, false, BigDecimal.ZERO);
         assertEquals(false, status.get("enabled")); assertEquals(true, status.get("randomMarketEnabled"));
-        assertEquals(0, previous.compareTo(ControlHistoryStore.number(status.get("currentPrice"))));
-        assertEquals(0, previous.compareTo(market.freshPrice("TEST")));
+        quote = market.internalPrice("TEST");
+        expected = RandomMarketPath.price(beforeDisable, QuoteState.time(quote.get("timestamp")));
+        assertEquals(0, expected.compareTo(ControlHistoryStore.number(quote.get("price"))));
+        assertEquals(0, expected.compareTo(ControlHistoryStore.number(status.get("currentPrice"))));
+        assertEquals(0, expected.compareTo(market.freshPrice("TEST")));
     }
     @Test void manualOffsetCanGraduallyRestoreFromItsActualDisplayPrice() throws Exception {
         market.manualControl(1L, true, new BigDecimal("5"));

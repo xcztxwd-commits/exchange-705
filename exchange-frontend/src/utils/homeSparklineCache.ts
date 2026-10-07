@@ -9,6 +9,17 @@ export const emptyHomeSparkline = (symbol: string): HomeSparklineItem => ({
   symbol, points: [], status: 'empty', updatedAt: null, reason: 'cache_miss',
 })
 
+function normalizeHomeSparkline(raw: any): HomeSparklineItem | null {
+  if (!raw || typeof raw.symbol !== 'string' || !raw.symbol) return null
+  const points = Array.isArray(raw.points) ? raw.points.filter((p: unknown) => typeof p === 'number' && Number.isFinite(p) && p > 0).slice(-20) : []
+  return {
+    symbol: raw.symbol, points,
+    status: !points.length ? 'empty' : raw.status === 'fresh' ? 'fresh' : 'stale',
+    updatedAt: Number.isFinite(raw.updatedAt) ? raw.updatedAt : null,
+    reason: typeof raw.reason === 'string' ? raw.reason : null,
+  }
+}
+
 // Host is the anonymous tenant boundary; actor/mode also isolate authenticated browser state.
 export function homeSparklineScope(apiBase: string, host = location.host): string {
   let actor = ''
@@ -30,9 +41,22 @@ export function createHomeSparklineClient(
     const current = context()
     if (current.key !== scope) {
       scope = current.key; lastAttempt = -Infinity; items = {}; pending = undefined; version++
+      try {
+        const saved = JSON.parse(localStorage.getItem('exchange:home-sparkline:v1:' + scope) || 'null')
+        if (saved?.scope === scope && saved.items && typeof saved.items === 'object') {
+          for (const [name, raw] of Object.entries(saved.items)) {
+            const item = normalizeHomeSparkline(raw)
+            if (item?.symbol === name && item.points.length) items[name] = { ...item, status: 'stale', reason: 'cached_snapshot' }
+          }
+        }
+      } catch { /* Storage may be unavailable or contain an invalid snapshot. */ }
       publish({ scope, items })
     }
     return current
+  }
+  const commit = () => {
+    publish({ scope, items })
+    try { localStorage.setItem('exchange:home-sparkline:v1:' + scope, JSON.stringify({ scope, items })) } catch { /* Keep the in-memory snapshot. */ }
   }
   async function refresh(symbols: string[]) {
     const current = synchronize(), names = [...new Set(symbols)].filter(Boolean)
@@ -51,18 +75,19 @@ export function createHomeSparklineClient(
           if (response?.ret !== 200 || data?.mode !== current.mode || !Array.isArray(data.items)) throw new Error('Invalid homepage snapshot')
           for (const raw of data.items) {
             if (!batch.includes(raw?.symbol)) continue
-            const points = Array.isArray(raw.points) ? raw.points.filter((p: unknown) => typeof p === 'number' && Number.isFinite(p) && p > 0).slice(-20) : []
-            received[raw.symbol] = {
-              symbol: raw.symbol, points,
-              status: !points.length ? 'empty' : raw.status === 'fresh' ? 'fresh' : 'stale',
-              updatedAt: Number.isFinite(raw.updatedAt) ? raw.updatedAt : null,
-              reason: typeof raw.reason === 'string' ? raw.reason : null,
+            const item = normalizeHomeSparkline(raw)
+            if (item) received[item.symbol] = item
+          }
+          for (const name of batch) {
+            received[name] ||= emptyHomeSparkline(name)
+            const previous = items[name]
+            if (!received[name].points.length && previous?.points.length) {
+              received[name] = { ...previous, status: 'stale', reason: received[name].reason || 'source_empty' }
             }
           }
-          for (const name of batch) received[name] ||= emptyHomeSparkline(name)
         }
         if (version !== requestVersion || context().key !== requestScope) return
-        items = { ...items, ...received }; publish({ scope, items })
+        items = { ...items, ...received }; commit()
       } catch {
         if (version !== requestVersion || context().key !== requestScope) return
         const next = { ...items }
@@ -70,11 +95,12 @@ export function createHomeSparklineClient(
           const previous = items[name] || emptyHomeSparkline(name)
           next[name] = { ...previous, status: previous.points.length ? 'stale' : 'empty', reason: 'request_failed' }
         }
-        items = next; publish({ scope, items })
+        items = next; commit()
       }
     })()
     pending = task
     try { await task } finally { if (pending === task) pending = undefined }
   }
+  synchronize()
   return { refresh }
 }

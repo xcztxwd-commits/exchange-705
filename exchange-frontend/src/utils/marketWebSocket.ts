@@ -20,6 +20,7 @@ export interface PriceUpdate {
     controlSourceResumed?: boolean
     controlHistory?: boolean
     controlHistoryRevision?: string
+    controlPublicationRevision?: string
     controlState?: string
     sourceTimestamp?: number
     sourceAvailable?: boolean
@@ -40,6 +41,14 @@ export interface PriceUpdate {
     executionExpiresAt?: number
     timestamp?: number
   }
+}
+
+export interface KlineUpdate {
+  symbol: string
+  interval: string
+  bars: unknown[]
+  quote: PriceUpdate[string]
+  pending: boolean
 }
 
 export function showSourceConnectionWarning(quote?: { sourceConnectionFailed?: boolean; controlActive?: boolean; controlState?: string; simulated?: boolean }) {
@@ -76,6 +85,8 @@ class MarketWebSocket {
   private owners = new Map<string, Set<string>>()
   private priceUpdateCallbacks = new Set<(prices: PriceUpdate) => void>()
   private connectedCallbacks = new Set<() => void>()
+  private klineCallbacks = new Map<string, { symbol: string; interval: string; callback: (update: KlineUpdate) => void }>()
+  private nextKlineOwner = 0
   private received = new Set<string>()
   private acknowledged = new Set<string>()
   private versions = new Map<string, number>()
@@ -127,6 +138,7 @@ class MarketWebSocket {
           this.generation++; this.snapshotRequest?.abort(); this.snapshotRequest = null
           this.received.clear(); this.acknowledged.clear(); this.lastMessage = Date.now(); this.reconnectAttempts = 0
           this.send({ action: 'subscribe', symbols: this.symbols(), fastSymbols: [...(this.owners.get('active') || [])] })
+          this.klineCallbacks.forEach(({ symbol, interval }) => this.send({ action: 'subscribeKline', symbol, interval }))
           this.startHeartbeat()
           this.connectedCallbacks.forEach(callback => callback())
           resolve()
@@ -136,7 +148,10 @@ class MarketWebSocket {
           if (this.ws !== socket) return
           try {
             const message = JSON.parse(event.data); this.lastMessage = Date.now()
-            if (message.type === 'price' && message.data) { Object.keys(message.data).forEach(symbol => this.acknowledged.add(symbol)); this.deliver(message.data) }
+            if (message.type === 'price' && message.data) {
+              Object.keys(message.data).forEach(symbol => this.acknowledged.add(symbol))
+              this.deliverKlines(message.klines, this.deliver(message.data))
+            }
             if (message.type === 'subscribed') this.acknowledged = new Set(message.symbols || [])
             if (message.type === 'pong' && this.pongTimer) { clearTimeout(this.pongTimer); this.pongTimer = null }
           } catch { /* Invalid frames never refresh quote freshness. */ }
@@ -184,6 +199,32 @@ class MarketWebSocket {
   unsubscribeAll() { const symbols = this.symbols(); this.owners.clear(); this.received.clear(); this.send({ action: 'unsubscribe', symbols }) }
   onPriceUpdate(callback: (prices: PriceUpdate) => void): () => void { this.priceUpdateCallbacks.add(callback); return () => { this.priceUpdateCallbacks.delete(callback) } }
   onConnected(callback: () => void): () => void { this.connectedCallbacks.add(callback); return () => { this.connectedCallbacks.delete(callback) } }
+  onKlineUpdate(symbol: string, interval: string, callback: (update: KlineUpdate) => void): () => void {
+    const owner = 'kline:' + ++this.nextKlineOwner
+    this.klineCallbacks.set(owner, { symbol, interval, callback })
+    this.setSubscriptions(owner, [symbol])
+    this.send({ action: 'subscribeKline', symbol, interval })
+    return () => {
+      this.klineCallbacks.delete(owner)
+      if (![...this.klineCallbacks.values()].some(item => item.symbol === symbol && item.interval === interval))
+        this.send({ action: 'unsubscribeKline', symbol, interval })
+      this.release(owner)
+    }
+  }
+  private deliverKlines(rows: unknown, prices: PriceUpdate) {
+    if (!Array.isArray(rows)) return
+    for (const row of rows) {
+      if (!row || typeof row.symbol !== 'string' || typeof row.interval !== 'string' || !Array.isArray(row.bars) || !row.bars.length) continue
+      const quote = prices[row.symbol]
+      if (!quote || normalizeQuote(quote)?.status !== 'available') continue
+      const update: KlineUpdate = { symbol: row.symbol, interval: row.interval, bars: row.bars, quote, pending: row.pending === true }
+      this.klineCallbacks.forEach(item => {
+        if (item.symbol === update.symbol && item.interval === update.interval) {
+          try { item.callback(update) } catch (error) { console.error(error) }
+        }
+      })
+    }
+  }
   private deliver(prices: PriceUpdate) {
     const accepted: PriceUpdate = {}
     for (const [symbol, quote] of Object.entries(prices)) {
@@ -199,6 +240,7 @@ class MarketWebSocket {
       this.received.add(symbol); accepted[symbol] = quote
     }
     if (Object.keys(accepted).length) this.priceUpdateCallbacks.forEach(callback => { try { callback(accepted) } catch (error) { console.error(error) } })
+    return accepted
   }
   async syncSnapshot() {
     const symbols = this.symbols()

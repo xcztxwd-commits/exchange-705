@@ -110,10 +110,18 @@ function handleImageError(event: Event) {
 // 获取实时价格（使用市场数据存储的价格）
 function getRealTimePrice(symbol: any): number {
   const wsPrice = marketStore.getPrice(symbol.symbol || symbol.alltickSymbol)
-  if (wsPrice > 0) {
+  if (Number.isFinite(wsPrice) && wsPrice > 0) {
     return wsPrice
   }
-  return Number(symbol.currentPrice || 0)
+  const savedPrice = Number(symbol.currentPrice || 0)
+  if (Number.isFinite(savedPrice) && savedPrice > 0) return savedPrice
+  const points = homeSparkline(symbol).points
+  return points[points.length - 1] || 0
+}
+
+function formatQuotePrice(symbol: any): string {
+  const price = getRealTimePrice(symbol)
+  return Number.isFinite(price) && price > 0 ? formatPrice(price, symbol.pricePrecision) : '—'
 }
 
 // 判断是否显示休市
@@ -153,8 +161,16 @@ function getChangeColor(change: number | null | undefined) {
 
 // 缓存键名
 const SYMBOLS_CACHE_KEY = 'home_symbols_cache:' + homeSparklineScope(getAccountApiBase())
-const SYMBOLS_CACHE_TIME_KEY = SYMBOLS_CACHE_KEY + ':time'
-const CACHE_EXPIRE_TIME = 5 * 60 * 1000 // 缓存有效期：5分钟（缩短缓存时间，确保数据及时更新）
+
+function restoreHomeCatalog() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(SYMBOLS_CACHE_KEY) || 'null')
+    if (!Array.isArray(saved)) return
+    allSymbols.value = saved.filter((symbol: any) => symbol && typeof symbol.symbol === 'string' && symbol.symbol)
+    hotSymbols.value = allSymbols.value.filter((symbol: any) => symbol.isHot === true && symbol.isEnabled !== false)
+    updateCategorySymbols()
+  } catch { /* Retain the current catalog when browser storage is unavailable. */ }
+}
 
 // 一次性加载所有币种数据（优先使用API最新数据，缓存仅作为降级方案）
 async function loadAllSymbols(forceRefresh = false) {
@@ -162,7 +178,6 @@ async function loadAllSymbols(forceRefresh = false) {
     // 如果强制刷新，清除缓存
     if (forceRefresh) {
       localStorage.removeItem(SYMBOLS_CACHE_KEY)
-      localStorage.removeItem(SYMBOLS_CACHE_TIME_KEY)
       console.log('[Home] Cache cleared, forcing refresh')
     }
     
@@ -229,7 +244,6 @@ async function loadAllSymbols(forceRefresh = false) {
             console.warn(`[Home] ⚠️ Symbol count mismatch: API=${apiCount}, Cache=${cachedCount}, diffRatio=${diffRatio.toFixed(2)}`)
             console.warn('[Home] ⚠️ Clearing stale cache (data changed significantly)')
             localStorage.removeItem(SYMBOLS_CACHE_KEY)
-            localStorage.removeItem(SYMBOLS_CACHE_TIME_KEY)
           } else {
             console.log(`[Home] ✅ Symbol count consistent: API=${apiCount}, Cache=${cachedCount}`)
           }
@@ -244,39 +258,14 @@ async function loadAllSymbols(forceRefresh = false) {
       // 保存到缓存
       try {
         localStorage.setItem(SYMBOLS_CACHE_KEY, JSON.stringify(symbols))
-        localStorage.setItem(SYMBOLS_CACHE_TIME_KEY, String(Date.now()))
         console.log('[Home] ✅ Updated cache with latest symbols from API')
       } catch (e) {
         console.warn('[Home] Failed to cache symbols', e)
       }
     } else {
-      // API调用失败，尝试使用缓存（降级方案）
-      const cachedTime = localStorage.getItem(SYMBOLS_CACHE_TIME_KEY)
-      const cachedData = localStorage.getItem(SYMBOLS_CACHE_KEY)
-      
-      if (cachedData && cachedTime) {
-        const cacheAge = Date.now() - Number(cachedTime)
-        if (cacheAge < CACHE_EXPIRE_TIME) {
-          try {
-            const cachedSymbols = JSON.parse(cachedData)
-            console.log(`[Home] ⚠️ Using cached symbols as fallback: ${cachedSymbols.length} symbols (cache age: ${Math.round(cacheAge / 1000)}s)`)
-            symbols = cachedSymbols
-            allSymbols.value = symbols
-          } catch (e) {
-            console.error('[Home] Failed to parse cached symbols', e)
-            allSymbols.value = []
-            return
-          }
-        } else {
-          console.log('[Home] Cache expired, cannot use fallback')
-          allSymbols.value = []
-          return
-        }
-      } else {
-        console.log('[Home] No cache available, cannot use fallback')
-        allSymbols.value = []
-        return
-      }
+      // 超时保留已显示的品种和历史快照，不因缓存年龄清空页面。
+      restoreHomeCatalog()
+      symbols = allSymbols.value
     }
     
     // 如果 symbols 为空，直接返回
@@ -358,19 +347,7 @@ async function loadAllSymbols(forceRefresh = false) {
     }
   } catch (e) {
     console.error('load all symbols error', e)
-    // 如果接口调用失败，尝试使用缓存（即使已过期）
-    const cachedData = localStorage.getItem(SYMBOLS_CACHE_KEY)
-    if (cachedData) {
-      try {
-        const symbols = JSON.parse(cachedData)
-        allSymbols.value = symbols
-        hotSymbols.value = symbols.filter((s: any) => s.isHot === true)
-        updateCategorySymbols()
-        console.log('[Home] Using expired cache as fallback')
-      } catch (parseError) {
-        console.error('[Home] Failed to parse fallback cache', parseError)
-      }
-    }
+    restoreHomeCatalog()
   }
 }
 
@@ -570,6 +547,7 @@ async function checkAnnouncement() {
 }
 
 onMounted(async () => {
+  restoreHomeCatalog()
   // 检查是否需要显示公告（未登录时，异步加载最新公告）
   await checkAnnouncement()
   
@@ -756,7 +734,7 @@ const logoUrl = '/img/logo.svg'
             />
           </div>
           <div class="market-bottom">
-            <div class="market-price" v-if="!isMarketClosed(s)">{{ formatPrice(getRealTimePrice(s), s.pricePrecision) }}</div>
+            <div class="market-price" v-if="!isMarketClosed(s)">{{ formatQuotePrice(s) }}<small v-if="marketStore.getQuoteStatus(s.symbol) !== 'available' && getRealTimePrice(s) > 0" class="historical-quote">{{ localeStore.text('歷史快照', 'Historical snapshot') }}</small></div>
             <div class="market-price market-closed" v-else>{{ localeStore.t('marketClosed') }}</div>
             <div class="market-change" v-if="!isMarketClosed(s)" :style="{ color: getChangeColor(getRealTimeChange(s).changePct) }">
               <span v-if="Number.isFinite(getRealTimeChange(s).changePct)" class="change-icon ui-inline-arrow">{{ getRealTimeChange(s).changePct >= 0 ? '▲' : '▼' }}</span>
@@ -819,7 +797,7 @@ const logoUrl = '/img/logo.svg'
             />
           </div>
           <div class="symbol-price-group">
-            <div class="symbol-price" v-if="!isMarketClosed(s)">{{ formatPrice(getRealTimePrice(s), s.pricePrecision) }}</div>
+            <div class="symbol-price" v-if="!isMarketClosed(s)">{{ formatQuotePrice(s) }}<small v-if="marketStore.getQuoteStatus(s.symbol) !== 'available' && getRealTimePrice(s) > 0" class="historical-quote">{{ localeStore.text('歷史快照', 'Historical snapshot') }}</small></div>
             <div class="symbol-price market-closed" v-else>{{ localeStore.t('marketClosed') }}</div>
             <div class="symbol-change" v-if="!isMarketClosed(s)" :style="{ color: getChangeColor(getRealTimeChange(s).changePct) }">
               <span v-if="Number.isFinite(getRealTimeChange(s).changePct)" class="change-icon ui-inline-arrow">{{ getRealTimeChange(s).changePct >= 0 ? '▲' : '▼' }}</span>
@@ -1099,6 +1077,13 @@ const logoUrl = '/img/logo.svg'
   font-size: 18px;
   font-weight: 800;
   color: #333;
+}
+.historical-quote {
+  display: block;
+  margin-top: 3px;
+  color: #999;
+  font-size: 10px;
+  font-weight: 400;
 }
 .market-change {
   font-size: 13px;

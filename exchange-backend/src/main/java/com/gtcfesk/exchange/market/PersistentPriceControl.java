@@ -17,6 +17,8 @@ import java.util.*;
 /** Target lifecycle is independent of provider availability and the mutable TradingSymbol settings. */
 @Service
 public class PersistentPriceControl {
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private org.springframework.context.ApplicationEventPublisher events;
     private final ControlHistoryStore store;
     private final ControlHoldService holds;
     private final ControlRecoveryFlow flows;
@@ -577,7 +579,9 @@ public class PersistentPriceControl {
             if(prior.get("quote_json")!=null) quote.put(FundingConversions.BOOK,FundingConversions.retain(store.decode((String)prior.get("quote_json")),config));
             FundingQuoteAuthority.stamp(quote,config);
             final Map<String,Object> snapshotQuote=quote;
-            store.runtime.phase(config.getId(),"snapshot",()->{store.runtime.snapshot(config.getId(),snapshotQuote,status,now);return null;});return null;
+            store.runtime.phase(config.getId(),"snapshot",()->{store.runtime.snapshot(config.getId(),snapshotQuote,status,now);return null;});
+            MarketQuoteCommitted.publish(events, tenant(), config.getSymbol());
+            return null;
         });
     }
     private Map<String, Object> displayLocked(TradingSymbol config, Map<String, Object> raw, long now) {
@@ -595,10 +599,12 @@ public class PersistentPriceControl {
             }
         }
         boolean hasHistory = task != null || !store.db.queryForList("SELECT minute_at FROM market_mixed_minute WHERE tenant_id=" + tenant() + " AND symbol_id=? LIMIT 1", Long.class, config.getId()).isEmpty();
+        result.put("controlPublicationRevision", "0:0");
         if (hasHistory || Boolean.TRUE.equals(config.getControlEnabled())) result.put("controlHistory", true);
         if (task != null) {
             result.put("controlTaskId", task.id);
             Map<String,Object> publicationVersion = store.db.queryForMap("SELECT COUNT(*) AS n,COALESCE(SUM(p.to_at),0) AS total FROM market_control_publication p JOIN market_control_task t ON t.tenant_id=p.tenant_id AND t.id=p.task_id WHERE t.tenant_id=" + tenant() + " AND t.symbol_id=?", config.getId());
+            result.put("controlPublicationRevision", publicationVersion.get("n") + ":" + publicationVersion.get("total"));
             result.put("controlHistoryRevision", task.id + ":" + publicationVersion.get("n") + ":" + publicationVersion.get("total"));
         }
         // A committed manual rule supersedes an ended task, including its retained SOURCE flow.

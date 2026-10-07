@@ -852,6 +852,7 @@ export const uiMessages: Record<string, Record<string, string>> = {
     "No matching indicators": "該当する指標がありません",
     "Changes displayed chart times; candle data and periods stay the same.": "チャートの時刻表示のみ変更します。ローソク足のデータと期間は変わりません。",
     "Use device timezone": "端末のタイムゾーンを使用",
+    "Follow language and browser": "選択言語・ブラウザのタイムゾーンに従う",
     "Search city / timezone, e.g. America/New_York": "都市・タイムゾーンを検索（例：Asia/Tokyo）",
     "Search timezones": "タイムゾーンを検索",
     "No matching timezones": "該当するタイムゾーンがありません",

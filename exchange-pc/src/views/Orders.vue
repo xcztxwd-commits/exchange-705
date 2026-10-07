@@ -5,7 +5,7 @@ import request from '@/utils/request'
 import { displayFee, quantityUnit, calculateContractProfit, contractEquity } from '@/utils/contract'
 import { useMarketStore } from '@/store/market'
 import { useLocaleStore } from '@/store/locale'
-import { formatDateTime } from '@/utils/dateTime'
+import { formatDateTime, getSystemTimezone, refreshOrderTimes } from '@/utils/dateTime'
 import { displaySymbol } from '@/utils/displaySymbol'
 
 const marketStore = useMarketStore()
@@ -62,6 +62,7 @@ async function loadDurationOptions() {
 // 订单详情弹窗相关
 const showOrderDetailModal = ref(false) // 显示订单详情弹窗
 const detailOrder = ref<any>(null) // 当前查看的订单
+watch(getSystemTimezone, () => refreshOrderTimes([...positionsData.value, ...pendingOrdersData.value, ...historyData.value, ...termTradingData.value, ...termClosedData.value, detailOrder.value]))
 const closePrice = ref(0) // 平仓价格
 const stopLossEnabled = ref(false) // 止损开关
 const takeProfitEnabled = ref(false) // 止盈开关
@@ -100,8 +101,10 @@ function transformContractOrder(order: any) {
     profit: calculatedProfit,
     margin: Number(order.margin || 0),
     fee: Number(order.fee || 0),
+    openTimeRaw: displayTime,
     openTime: formatDateTime(displayTime), // 使用创建时间或开仓时间
     closeTime: formatDateTime(order.closeTime),
+    closeTimeRaw: order.closeTime,
     status: order.status, // 保留状态
     side: order.side, // 保留原始side用于计算
     quantity: order.quantity, // 保留原始quantity用于计算
@@ -225,6 +228,7 @@ function transformOptionOrder(order: any) {
     openTime: formatDateTime(order.openTime),
     openTimeRaw: order.openTime, // 保留原始时间用于计算倒计时
     closeTime: formatDateTime(order.closeTime),
+    closeTimeRaw: order.closeTime,
     direction: order.direction, // 保留原始direction用于计算
     status: order.status, // 保留状态用于计算
     baseCurrency: symbolInfo.baseCurrency, // 基础货币

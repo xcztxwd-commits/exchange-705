@@ -1596,7 +1596,7 @@ import RegistrationProfileFields from '@/components/RegistrationProfileFields.vu
 import UserProfile from '../../../exchange-frontend/src/components/UserProfile.vue';
 import { useTrialWallet } from '@/utils/useTrialWallet';
 import { reconcileFunding, selectedAvailable, type FundingSource, type FundingChoice } from '@/utils/trialLifecycle';
-import { formatDateTime } from '@/utils/dateTime';
+import { formatDateTime, getSystemTimezone, refreshOrderTimes } from '@/utils/dateTime';
 import { getImageUrl } from '@/utils/imageUrl';
 import { displaySymbol, forexLotUnit } from '@/utils/displaySymbol';
 import KlineChart from '@/components/KlineChart.vue';
@@ -2666,6 +2666,8 @@ const formatOrderTime = (value: string | null | undefined) => {
   return Number.isFinite(timestamp) ? formatDateTime(new Date(timestamp).toISOString()) : '';
 };
 
+watch(getSystemTimezone, () => refreshOrderTimes([...positionsData.value, ...pendingOrdersData.value, ...historyData.value], formatOrderTime));
+
 const transformContractOrder = (order: any) => {
   const pInfo = marketStore.priceMap[order.symbol];
   const currentPrice = pInfo ? Number(pInfo.price) : 0;
@@ -2690,6 +2692,10 @@ const transformContractOrder = (order: any) => {
     orderSource: order.orderSource,
     manualCloseTime: order.manualCloseTimeUtc != null ? formatDateTime(new Date(order.manualCloseTimeUtc).toISOString()) : '',
     createdTime: formatOrderTime(order.createdAt),
+    createdTimeRaw: order.createdAt,
+    manualCloseTimeRaw: order.manualCloseTimeUtc != null ? new Date(order.manualCloseTimeUtc).toISOString() : null,
+    openTimeRaw: order.manualOpenTimeUtc != null ? new Date(order.manualOpenTimeUtc).toISOString() : order.openTime,
+    closeTimeRaw: order.manualCloseTimeUtc != null ? new Date(order.manualCloseTimeUtc).toISOString() : order.closeTime,
     openTime: formatOrderTime(order.manualOpenTimeUtc != null ? new Date(order.manualOpenTimeUtc).toISOString() : order.openTime),
     closeTime: formatOrderTime(order.manualCloseTimeUtc != null ? new Date(order.manualCloseTimeUtc).toISOString() : order.closeTime),
     stopLoss: order.stopLoss ? Number(order.stopLoss) : 0,
@@ -2739,6 +2745,8 @@ const loadOptionOrders = async () => {
         expectedProfit,
         profit: Number(order.profit ?? 0),
         openTime: formatOrderTime(order.openTime),
+        openTimeRaw: order.openTime,
+        closeTimeRaw: order.closeTime,
         closeTime: formatOrderTime(order.closeTime),
         status: order.status,
         side: order.side || order.direction

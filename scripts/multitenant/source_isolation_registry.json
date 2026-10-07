@@ -4492,7 +4492,7 @@
       "prior_review_reason": "Independent control-plane identities/policies/sessions; business tenant access uses explicit verified scope and audit. Review file-specific occurrence list."
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/control/TenantRequestFilter.java": {
-      "sha256": "bffbe8fac769dce4cce0eae4cac31ee8cc2a37ca1d7cad6c8a2c983c5c272f46",
+      "sha256": "2fcb9eddcbfceaa466bff00fe12c57aa2bfe19a764be43d3031c731d02208352",
       "surfaces": [
         {
           "kind": "identity_boundary",
@@ -4506,52 +4506,47 @@
         },
         {
           "kind": "cache_lock",
-          "line": 16,
+          "line": 21,
           "statement_sha256": "358ef66974c631e591226648ded3b96fe2806ae5903e78b45f97b7d45896c38d"
         },
         {
           "kind": "cache_lock",
-          "line": 17,
+          "line": 22,
           "statement_sha256": "171421a222fdca1a2d713b6ee2753ccf74e850ef8be1a8a7685269587ecc0ae6"
         },
         {
           "kind": "cache_lock",
-          "line": 18,
+          "line": 23,
           "statement_sha256": "23786fc2671ec499df3c70f5b36b7e52455f9ab3f76c18790930fd4622f9dfcb"
         },
         {
           "kind": "cache_lock",
-          "line": 19,
+          "line": 24,
           "statement_sha256": "b0ab13805bbda7b3b08b9c794ac2cdeb27790532dd67e114bc14be3f9c14569d"
         },
         {
           "kind": "identity_boundary",
-          "line": 37,
+          "line": 42,
           "statement_sha256": "005cfc2219bff4641018753b4d248a55dd23d24fc0511fde0a53352016a31a91"
         },
         {
           "kind": "identity_boundary",
-          "line": 56,
+          "line": 61,
           "statement_sha256": "8da350f4bfddcff4f6089bb325b4619f14a25902ca5533802352395a93c291d0"
         },
         {
           "kind": "identity_boundary",
-          "line": 64,
+          "line": 69,
           "statement_sha256": "af049d3dd3550860c9a360512953cb68b51ce0faa04fad979a4fe2d4601ba492"
         },
         {
           "kind": "identity_boundary",
-          "line": 66,
+          "line": 71,
           "statement_sha256": "2adc1836712644bc7fa275fd6ccb6efe8ceec030194e093ed2830da170c0fb19"
         }
       ],
       "classification": "boundary",
-      "review_reason": "Challenge is fixed GET nonce JSON with no-store before entry branch. Entry branch precedes admin/control, health, business and inspection routes, grants no TenantContext. Only GET/HEAD document/html allowlisted pages and bounded ASCII query keys; redirect target comes from explicit same-tenant verified active mapping, credentials dropped and no-referrer. Uniform no-store 403 without Location for closed/unknown/disallowed entry. Trusted internal gateway classification before static SPA fallback. Existing frontend status/Origin/context and control/admin boundaries retained. Five-chat integration review 2026-10-06: Merge retains only validated public SVG icon paths on the admin host while the verified same-tenant entry branch still executes first and denies all entry APIs/icons, with no TenantContext or cached redirects.",
-      "prior_review_reason": "Tenant frontend Origin is compared against the exact operator-resolved HTTPS origin. Host-based recognized tenant, verified/non-disabled checks, private simulation inspection forwarding and control/admin host separation remain unchanged. TenantContext is cleared before entry and in finally on all exits.",
-      "phase2_review_tests": [
-        "OutboundEndpointPolicyTest",
-        "SimulationPersistenceTest"
-      ]
+      "review_reason": "Challenge is fixed GET nonce JSON with no-store before entry branch. Entry branch precedes admin/control, health, business and inspection routes, grants no TenantContext. Only GET/HEAD document/html allowlisted pages and bounded ASCII query keys; redirect target comes from explicit same-tenant verified active mapping, credentials dropped and no-referrer. Uniform no-store 403 without Location for closed/unknown/disallowed entry. Trusted internal gateway classification before static SPA fallback. Existing frontend status/Origin/context and control/admin boundaries retained. Five-chat integration review 2026-10-06: Merge retains only validated public SVG icon paths on the admin host while the verified same-tenant entry branch still executes first and denies all entry APIs/icons, with no TenantContext or cached redirects. 2026-10-07 combined review: shared admin preview allows only bounded GET timezone/search/single-symbol kline paths after verified backend JWT tenant resolution. Unknown entries, invalid tenant identities and cross-origin paths still fail closed; request scope is cleared."
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/control/TenantSafeTemplate.java": {
       "sha256": "57c6760e6a501cf28209a7ee7411ec07395cd6cc1861855e8291fd460c92cde7",
@@ -6126,7 +6121,7 @@
       "review_reason": "DTO, pure calculation or delegated controller/service; all production Java files are fingerprinted even without a detector match."
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/market/MarketWebSocketHandler.java": {
-      "sha256": "db4b60b37f2491d1a8b974b0f8e10fc72976e99744957537754206d4ef929204",
+      "sha256": "ce4179bea023f2df33a4491d320d1201385a07d351fb8ca66946a9cab971a88d",
       "surfaces": [
         {
           "kind": "identity_boundary",
@@ -6135,57 +6130,75 @@
         },
         {
           "kind": "cache_lock",
-          "line": 32,
+          "line": 28,
+          "statement_sha256": "a3eaa73dbdcd0c73b759fa005c8677ff493594533cca95c2eb0e7feefd9995a8"
+        },
+        {
+          "kind": "cache_lock",
+          "line": 38,
           "statement_sha256": "e2954f7be79cc6d48efe0ff4d1060b20086df4e3b3131e5a5ba13f7ef5731521"
         },
         {
           "kind": "cache_lock",
-          "line": 33,
+          "line": 39,
           "statement_sha256": "47254122e0e1ad1b61c2cb755cbf100ad90d12dba3e3be435be0a76933e9bbb8"
         },
         {
           "kind": "cache_lock",
-          "line": 35,
+          "line": 41,
           "statement_sha256": "2ecdbac8f4a5948b5a5e34ab4620aaf25b6ccd4d3b5104ba00bb2b5dec4fdd5f"
         },
         {
           "kind": "cache_lock",
-          "line": 45,
+          "line": 42,
+          "statement_sha256": "3327fc1bba91680e0b365b6ac9fb28e90f1432b31d051986b3b83d13a1147503"
+        },
+        {
+          "kind": "cache_lock",
+          "line": 52,
           "statement_sha256": "fb4cb2783a9cdddb6b4d31f8248e6bca1e42fa31eac96a2076de8b0e6b4035d9"
         },
         {
+          "kind": "cache_lock",
+          "line": 53,
+          "statement_sha256": "ae13fdd72e45f4668cae6f5571d0d16a28ab40d9cb803d8b4ce5be9e1c68fb9c"
+        },
+        {
           "kind": "async_job",
-          "line": 46,
+          "line": 55,
           "statement_sha256": "51337dbea21f9910d8728e20700552ea172fa50ecd4cd226cbe7c8c533985be5"
         },
         {
           "kind": "async_job",
-          "line": 48,
+          "line": 57,
           "statement_sha256": "3b3c5286da5f27407179efd5724148f87b6c423dd6951258ec54bba1f18b45f2"
         },
         {
           "kind": "startup",
-          "line": 49,
+          "line": 58,
           "statement_sha256": "74a5b3fea1361c2ba0c3edb5588a6f0800461001f1fb59b39bf9aacc968ead53"
         },
         {
+          "kind": "async_job",
+          "line": 65,
+          "statement_sha256": "83d3f53de02997b634aa33db553af5ea093e909a792648902e4baa56d792d0ec"
+        },
+        {
           "kind": "identity_boundary",
-          "line": 71,
+          "line": 92,
           "statement_sha256": "30ce6204e6467183f69a3bf89b76efdfa275932ab1925645b3483fd09a3a69c5"
         },
         {
           "kind": "identity_boundary",
-          "line": 155,
+          "line": 199,
           "statement_sha256": "ea09b8467ad28408ac84079930941f048523a78df649396e52424ceffcea3d23"
         }
       ],
       "classification": "private_scoped",
-      "review_reason": "ROOT complete push/send/binding review: freeze clients per already verified tenant, union each symbol once in one outer RO RR, captured complete price batch sent only after COMMIT/context close. Ambient transaction fail-closed; no tenant switching within shared caller TX. Original times1 sharing restored, original perclient sending CAS/4workers/128 queue, depth revision, slowclient and host revalidation preserved. No global cap added; union/pool/auth deployment capacity remain open."
+      "review_reason": "ROOT complete push/send/binding review: freeze clients per already verified tenant, union each symbol once in one outer RO RR, captured complete price batch sent only after COMMIT/context close. Ambient transaction fail-closed; no tenant switching within shared caller TX. Original times1 sharing restored, original perclient sending CAS/4workers/128 queue, depth revision, slowclient and host revalidation preserved. No global cap added; union/pool/auth deployment capacity remain open. 2026-10-07 combined review: quote/candle subscriptions validate tenant-bound known symbols and bounded periods/counts. Committed wake-ups are filtered by tenant, host bindings are revalidated, and each tenant batch reads quote and candles in its own fresh repeatable-read snapshot. Network sends begin after that scope closes; queued candle subscriptions are rechecked at send time and existing bounded transport queues remain."
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/market/PersistentPriceControl.java": {
-      "classification": "private_scoped",
-      "review_reason": "conversionQuotes validates both original/reloaded tenant identity, visits symbol IDs ascending under runtime writer transaction, never touches user/assets/order locks. pump retains only still-configured companions under current runtime lock. No old OHLC/history facts rewritten by new helper. Independent static review only; actual tests and release approval remain separate. First-task source-equivalent identity review: before any control task, null/zero offset with display price numerically equal to the source uses the existing tenant-scoped controlled OHLC point without introducing an auxiliary manualPoints fact. Explicit manual commands, nonzero offsets, post-task auxiliary points and all historical facts remain unchanged; no comparator, tenant predicate, SQL, cache, lease or callback boundary is relaxed. 2026-10-07 independent delta review with exact-SHA prior directed evidence: emergency SOURCE uses direct existing scoped writer transaction, ends at last committed sample, invalidates pending commands/revision/releases hold, and defers history publication; it never waits for an old plan/endpoint or activates a hold. RESTORE requires valid source plus trusted committed price and creates the current flow without forcing the old target to complete. Advance uses bounded64-point chunks/shared512 allowance, reserve deadline and committed watermarks; later turns complete endpoint. All task/flow/runtime SQL preserves server tenant and symbol/task checks; captured task tenant is verified. SOURCE uses only valid observed raw price and outage remains unavailable. Existing manual/cache/conversion and private/funds/history boundaries retained, no new scheduler/global authority. 2026-10-07 independent a42fbb3 command-codec delta review: only emergency cancellation message persistence changes from a SQL literal to encoded bind 1; trusted tenant and symbol move consistently to binds 2 and 3, with the exact tenant/symbol/pending-state WHERE predicate unchanged. Writer lock, runtime invalidation, last-committed endpoint, scoped task/flow/hold updates and SOURCE outage behavior are untouched. All other SQL literals, captured task/config ownership, tenant-scoped keys, history and funds boundaries exactly match the registered prior source. No production schema/JAR/epoch changes or formal release approval are included.",
-      "sha256": "b142aa2862ccb1f577179ec522f9e2f7907b8075511789c4fd5daa67c6b04e83",
+      "sha256": "2cc894194810d634ff7f029d801735cc840f7b24ff2e1c3ea12a893bf0b277cd",
       "surfaces": [
         {
           "kind": "identity_boundary",
@@ -6194,255 +6207,257 @@
         },
         {
           "kind": "identity_boundary",
-          "line": 50,
+          "line": 52,
           "statement_sha256": "9a689575a2622711684f60c9460f8ec48504adff0364750db66a4542b7966f86"
         },
         {
           "kind": "native_sql",
-          "line": 58,
+          "line": 60,
           "statement_sha256": "d185da3240ee06f753d3e30805313fbcceee06fb0af648aec3267021270e6cc7"
         },
         {
           "kind": "identity_boundary",
-          "line": 75,
+          "line": 77,
           "statement_sha256": "65347da3738b331fb190fd26c5851eb3d820f7dfefdcf726cd1f6b37cde50478"
         },
         {
           "kind": "native_sql",
-          "line": 98,
+          "line": 100,
           "statement_sha256": "4f98282e8ea4850796f6b58085bb717296abf0cd570077c3654dac336a19c047"
         },
         {
           "kind": "native_sql",
-          "line": 105,
+          "line": 107,
           "statement_sha256": "6c2436828684bd1705e71deecfe61f80b3c6ea2658959cf4034e23caa0b2f2f4"
         },
         {
           "kind": "native_sql",
-          "line": 113,
+          "line": 115,
           "statement_sha256": "a6b530eec0423d436b4551f233f8c317e045617b9e28fe767596d6dd6bee75ac"
         },
         {
           "kind": "native_sql",
-          "line": 123,
+          "line": 125,
           "statement_sha256": "d965b1634a6673ca64b79021ff4709ef53f17546443995bc38d6c02fd5d2f717"
         },
         {
           "kind": "native_sql",
-          "line": 124,
+          "line": 126,
           "statement_sha256": "e3e0bb3fd24c27f8d1528364c15b540725df78c6e758486427b5e6582ea3576a"
         },
         {
           "kind": "native_sql",
-          "line": 140,
+          "line": 142,
           "statement_sha256": "17518761ee631f9d75dd4a83407299d00404906faa81551d8a93bf0df957ba69"
         },
         {
           "kind": "native_sql",
-          "line": 158,
+          "line": 160,
           "statement_sha256": "281a49162de76880b43934ad800a76e62c75e9b963175dec945130016120a3c0"
         },
         {
           "kind": "identity_boundary",
-          "line": 165,
+          "line": 167,
           "statement_sha256": "65347da3738b331fb190fd26c5851eb3d820f7dfefdcf726cd1f6b37cde50478"
         },
         {
           "kind": "native_sql",
-          "line": 169,
+          "line": 171,
           "statement_sha256": "fb547f3b658ecebf0303bc37ef068cbc7eec283e00545223fd24439774b192f7"
         },
         {
           "kind": "native_sql",
-          "line": 170,
+          "line": 172,
           "statement_sha256": "181d308256193ac4ea9dcee4057285c4f3e77cd0c1b6ad1414e47c5940351033"
         },
         {
           "kind": "native_sql",
-          "line": 202,
+          "line": 204,
           "statement_sha256": "195ea53ed537f2f9f8dc77ebe5acbdabd36d9e97a68957e144f971060dde99f2"
         },
         {
           "kind": "identity_boundary",
-          "line": 206,
+          "line": 208,
           "statement_sha256": "65347da3738b331fb190fd26c5851eb3d820f7dfefdcf726cd1f6b37cde50478"
         },
         {
           "kind": "native_sql",
-          "line": 213,
+          "line": 215,
           "statement_sha256": "102267ba75c8d40ef08f00d3cf0ece2e489badc278b27d4e4dae2ee76fe08cab"
         },
         {
           "kind": "identity_boundary",
-          "line": 276,
+          "line": 278,
           "statement_sha256": "65347da3738b331fb190fd26c5851eb3d820f7dfefdcf726cd1f6b37cde50478"
         },
         {
           "kind": "native_sql",
-          "line": 280,
+          "line": 282,
           "statement_sha256": "6ef03294b7a640bd5c9ef5e738c8078426b18cfc2aceaa236e2f9ab7afc6a3c2"
         },
         {
           "kind": "identity_boundary",
-          "line": 288,
+          "line": 290,
           "statement_sha256": "65347da3738b331fb190fd26c5851eb3d820f7dfefdcf726cd1f6b37cde50478"
         },
         {
           "kind": "identity_boundary",
-          "line": 300,
+          "line": 302,
           "statement_sha256": "65347da3738b331fb190fd26c5851eb3d820f7dfefdcf726cd1f6b37cde50478"
         },
         {
           "kind": "identity_boundary",
-          "line": 313,
+          "line": 315,
           "statement_sha256": "65347da3738b331fb190fd26c5851eb3d820f7dfefdcf726cd1f6b37cde50478"
         },
         {
           "kind": "native_sql",
-          "line": 315,
+          "line": 317,
           "statement_sha256": "0df961f0a9ab5cf08d72eb34241822c267afff960072aefb41fe3bbdd160dc96"
         },
         {
           "kind": "identity_boundary",
-          "line": 329,
+          "line": 331,
           "statement_sha256": "65347da3738b331fb190fd26c5851eb3d820f7dfefdcf726cd1f6b37cde50478"
         },
         {
           "kind": "native_sql",
-          "line": 331,
+          "line": 333,
           "statement_sha256": "7a1bdcd48f5c1b39218b3ff99cbfe8bdd0f162ab018fa784192b2a2f64c989c5"
         },
         {
           "kind": "identity_boundary",
-          "line": 343,
+          "line": 345,
           "statement_sha256": "65347da3738b331fb190fd26c5851eb3d820f7dfefdcf726cd1f6b37cde50478"
         },
         {
           "kind": "native_sql",
-          "line": 407,
+          "line": 409,
           "statement_sha256": "9ea8cee9bbfb4aa1a702a03d8a938b50ee6d1dba5e3a50a43d9c9d5ede0d22fc"
         },
         {
           "kind": "native_sql",
-          "line": 426,
+          "line": 428,
           "statement_sha256": "475a6646227a8e1659aa1952791bff9cb209c51e3e1cedae0278bed35b587d34"
         },
         {
           "kind": "native_sql",
-          "line": 435,
+          "line": 437,
           "statement_sha256": "1ce65254be47be783effd12bdae89451987b66e6a1efe1fedf763a514965816c"
         },
         {
           "kind": "native_sql",
-          "line": 443,
+          "line": 445,
           "statement_sha256": "5c96d99d06918194d2bde059b428652523a6f606cc1d05e2a57a10dfbf2188e3"
         },
         {
           "kind": "native_sql",
-          "line": 447,
+          "line": 449,
           "statement_sha256": "4441d3c321491c32b6f3330c4946863971484e946ab418fdd79b186504bb554a"
         },
         {
           "kind": "native_sql",
-          "line": 459,
+          "line": 461,
           "statement_sha256": "73b85a34f7e4004a3b3a057223356a3ad111b5fce4da6d219c3d10a2dc5c73a3"
         },
         {
           "kind": "identity_boundary",
-          "line": 466,
+          "line": 468,
           "statement_sha256": "65347da3738b331fb190fd26c5851eb3d820f7dfefdcf726cd1f6b37cde50478"
         },
         {
           "kind": "identity_boundary",
-          "line": 473,
+          "line": 475,
           "statement_sha256": "65347da3738b331fb190fd26c5851eb3d820f7dfefdcf726cd1f6b37cde50478"
         },
         {
           "kind": "identity_boundary",
-          "line": 508,
+          "line": 510,
           "statement_sha256": "9cda3b5046bfd27ce84daaca8a065237f25c978ab5172591ae327a023ccf0ca9"
         },
         {
           "kind": "identity_boundary",
-          "line": 512,
+          "line": 514,
           "statement_sha256": "73b0e42d1e9228a392eb73fad84f05494ecdf2faeac70fc9b8fa62e677da7b12"
         },
         {
           "kind": "native_sql",
-          "line": 519,
+          "line": 521,
           "statement_sha256": "f0e5cd6fa6942f50c9a0e66871183a20542b25afe3c29f396ff5799c11d2a258"
         },
         {
           "kind": "identity_boundary",
-          "line": 531,
+          "line": 533,
           "statement_sha256": "65347da3738b331fb190fd26c5851eb3d820f7dfefdcf726cd1f6b37cde50478"
         },
         {
           "kind": "identity_boundary",
-          "line": 534,
+          "line": 536,
           "statement_sha256": "73b0e42d1e9228a392eb73fad84f05494ecdf2faeac70fc9b8fa62e677da7b12"
         },
         {
           "kind": "identity_boundary",
-          "line": 544,
+          "line": 546,
           "statement_sha256": "65347da3738b331fb190fd26c5851eb3d820f7dfefdcf726cd1f6b37cde50478"
         },
         {
           "kind": "native_sql",
-          "line": 576,
+          "line": 578,
           "statement_sha256": "5ea8043eb5e1016d9b3c0631b51ffb68d8cbd1bfcfa01b8e668a449178c68ae2"
         },
         {
           "kind": "cache_lock",
-          "line": 583,
+          "line": 587,
           "statement_sha256": "064c458f52fef1f916cca41909fa92ff3e71dfd2bb3ba77a44d8a3526db9599b"
         },
         {
           "kind": "native_sql",
-          "line": 597,
+          "line": 601,
           "statement_sha256": "59e1be29861f00d39971e3c6f8788404d9e32b96612a8580ee9450afa9650262"
         },
         {
           "kind": "native_sql",
-          "line": 601,
+          "line": 606,
           "statement_sha256": "8cbe2209e9afcdccc284f5e202d82dbb92cd297dcab11e6cb6ad6dc5b8af8d79"
         },
         {
           "kind": "native_sql",
-          "line": 646,
+          "line": 652,
           "statement_sha256": "7200bf709c96b5e7b57bca42689bd72b4650a36ceb70347db66dbe5aba993382"
         },
         {
           "kind": "native_sql",
-          "line": 652,
+          "line": 658,
           "statement_sha256": "b8985791cf6215964bd3cd183199149b2ef901bc6816fb8c2e7191e197528fad"
         },
         {
           "kind": "native_sql",
-          "line": 654,
+          "line": 660,
           "statement_sha256": "6ec50773c7abc0344ded8a4ee2a11120f3ed18a92bbdb15ae2ebfdb4b2eb3846"
         },
         {
           "kind": "native_sql",
-          "line": 660,
+          "line": 666,
           "statement_sha256": "cfb77073540c288a7a0993ce535b29c191916b21108fb52b9b8d0d2a83c3461e"
         },
         {
           "kind": "identity_boundary",
-          "line": 684,
+          "line": 690,
           "statement_sha256": "a5c196c901343960f1a0f7ed4c62ae51ea4835d2002d7fb4b58b2d03224feaa8"
         },
         {
           "kind": "identity_boundary",
-          "line": 687,
+          "line": 693,
           "statement_sha256": "65347da3738b331fb190fd26c5851eb3d820f7dfefdcf726cd1f6b37cde50478"
         },
         {
           "kind": "native_sql",
-          "line": 711,
+          "line": 717,
           "statement_sha256": "736fb0defe0f9fc1ffba68840389d0e3d92358f15e7d8bca3f92c5359a445925"
         }
-      ]
+      ],
+      "classification": "private_scoped",
+      "review_reason": "conversionQuotes validates both original/reloaded tenant identity, visits symbol IDs ascending under runtime writer transaction, never touches user/assets/order locks. pump retains only still-configured companions under current runtime lock. No old OHLC/history facts rewritten by new helper. Independent static review only; actual tests and release approval remain separate. First-task source-equivalent identity review: before any control task, null/zero offset with display price numerically equal to the source uses the existing tenant-scoped controlled OHLC point without introducing an auxiliary manualPoints fact. Explicit manual commands, nonzero offsets, post-task auxiliary points and all historical facts remain unchanged; no comparator, tenant predicate, SQL, cache, lease or callback boundary is relaxed. 2026-10-07 independent delta review with exact-SHA prior directed evidence: emergency SOURCE uses direct existing scoped writer transaction, ends at last committed sample, invalidates pending commands/revision/releases hold, and defers history publication; it never waits for an old plan/endpoint or activates a hold. RESTORE requires valid source plus trusted committed price and creates the current flow without forcing the old target to complete. Advance uses bounded64-point chunks/shared512 allowance, reserve deadline and committed watermarks; later turns complete endpoint. All task/flow/runtime SQL preserves server tenant and symbol/task checks; captured task tenant is verified. SOURCE uses only valid observed raw price and outage remains unavailable. Existing manual/cache/conversion and private/funds/history boundaries retained, no new scheduler/global authority. 2026-10-07 independent a42fbb3 command-codec delta review: only emergency cancellation message persistence changes from a SQL literal to encoded bind 1; trusted tenant and symbol move consistently to binds 2 and 3, with the exact tenant/symbol/pending-state WHERE predicate unchanged. Writer lock, runtime invalidation, last-committed endpoint, scoped task/flow/hold updates and SOURCE outage behavior are untouched. All other SQL literals, captured task/config ownership, tenant-scoped keys, history and funds boundaries exactly match the registered prior source. No production schema/JAR/epoch changes or formal release approval are included. 2026-10-07 combined review: committed snapshot notification captures only the required tenant identity and symbol. Notification is delivered after commit and failures cannot roll back durable state. Publication revision retains tenant/symbol predicates; existing write fences and tenant runtime ownership remain."
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/market/PriceControlPath.java": {
       "sha256": "be35e554fc9390754d826f3f254382056945b714a9f4c9dfa6e6bab2805a54fd",
@@ -13737,9 +13752,7 @@
       "review_reason": "Instrument visibility/enabled queries and per-tenant config require current tenant. Leases capture tenant and REST owner prefix; background config reads open captured TenantContext, shared public provider book cache bounded32/worker queue32/leases512/REST16. Late REST callbacks require same Entry identity; disable after transaction commit. Shared source metrics are public process aggregates, not private account/order data."
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/market/MarketRuntime.java": {
-      "classification": "private_scoped",
-      "review_reason": "ROOT actual SELECT/body authority review: quote/status and current generation/control revision/snapshot version are read from one tenant+symbol selected row in the display RR. Tuple mismatch renders quote unavailable without changing expiry or persistence. Existing captured writer identity, lease/STOP lock/funding final authorization, source revision receipts and cleanup untouched; affected real funding tests still required. 2026-10-07 independent delta review with exact-SHA prior directed evidence: native runtime queries/updates always bind server tenant and symbol; captured/uncertain generations are tenant:symbol keys. 4.5s monotonic budget, 5s transaction timeout and 2s lock wait do not extend original15s lease or allow old owner/generation re-acquisition. ThreadLocal context/quota/deadline is cleaned on completion; native connection restores session lock timeout and clears fence variables, cleanup failure evicts unsafe connection rather than returning it to pool. Read-only fenceReason never claims ownership. TARGET/sample/completion-stall and recovery progress are distinguished; inconsistent tuple/stale source is unavailable without synthetic quotes or read-side lease write. No new independent jobs or cross-tenant cache; existing funds final fences retained.",
-      "sha256": "53e49cf2a467ba1ffd4fc1f57b8e75b3eb7385db468fb47ce2d72dfc6aabb30b",
+      "sha256": "cbb9b456607d38b51e8b131a9420a9cb59784bf16c9573539b26397a9ad9728a",
       "surfaces": [
         {
           "kind": "cache_lock",
@@ -13833,15 +13846,17 @@
         },
         {
           "kind": "native_sql",
-          "line": 231,
+          "line": 232,
           "statement_sha256": "e8488fd41154b8e7caccc6dfb325f3929f0e2b469f344c989eb3f74d0922743a"
         },
         {
           "kind": "native_sql",
-          "line": 241,
+          "line": 242,
           "statement_sha256": "98c7b5d6b73a011c75f8dcc9a9da9434d249f40ad56acfc02bd633667834d5aa"
         }
-      ]
+      ],
+      "classification": "private_scoped",
+      "review_reason": "ROOT actual SELECT/body authority review: quote/status and current generation/control revision/snapshot version are read from one tenant+symbol selected row in the display RR. Tuple mismatch renders quote unavailable without changing expiry or persistence. Existing captured writer identity, lease/STOP lock/funding final authorization, source revision receipts and cleanup untouched; affected real funding tests still required. 2026-10-07 independent delta review with exact-SHA prior directed evidence: native runtime queries/updates always bind server tenant and symbol; captured/uncertain generations are tenant:symbol keys. 4.5s monotonic budget, 5s transaction timeout and 2s lock wait do not extend original15s lease or allow old owner/generation re-acquisition. ThreadLocal context/quota/deadline is cleaned on completion; native connection restores session lock timeout and clears fence variables, cleanup failure evicts unsafe connection rather than returning it to pool. Read-only fenceReason never claims ownership. TARGET/sample/completion-stall and recovery progress are distinguished; inconsistent tuple/stale source is unavailable without synthetic quotes or read-side lease write. No new independent jobs or cross-tenant cache; existing funds final fences retained. 2026-10-07 combined review: publication revision is derived inside the existing tenant/symbol transaction from a tenant-matched task/publication join. No global cache, scheduling or writer-fence change."
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/activity/OrderPromotionEvents.java": {
       "sha256": "20f7ab32b01e4cb168b22ebafc1e2fd7ba6ed5315e09049f41b4dee465040385",
@@ -14726,6 +14741,12 @@
       "review_reason": "2026-10-07 independent new-source review: pure cycle-deduplicated error-category traversal with local identity seen-set and deque, including SQLException cause/nextException. ENGINE_FENCED uses an explicit message marker, not every45000; busy/budget/transient classifications use explicit vendor codes/SQLState. Returns fixed category strings only. No database access, cache, static mutable business state, identity/tenant operation, files, callback or scheduler. Exact SHA matches prior directed review; stateless classification is explicit, not auto-approved production release.",
       "sha256": "3c241108902086195248e16bef2e3b17bc30aeb609ccf68e38359b5ce503ad28",
       "surfaces": []
+    },
+    "exchange-backend/src/main/java/com/gtcfesk/exchange/market/MarketQuoteCommitted.java": {
+      "sha256": "2eb4ad28fd938efb8377244c72c7fcf7fcdef3e45cb9f54a2110f0ea518cb80f",
+      "surfaces": [],
+      "classification": "private_scoped",
+      "review_reason": "2026-10-07 combined review: immutable wake-up captures tenant ID and symbol only, never quote/customer data. Transactional callers register afterCommit so rollback emits no notification. Consumers must open their own tenant snapshot; optional publisher and observer failures cannot invalidate committed market state."
     }
   },
   "release_approved": false,

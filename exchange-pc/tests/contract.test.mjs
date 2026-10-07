@@ -1,7 +1,38 @@
 import assert from 'node:assert/strict'
 
 for (const app of ['exchange-pc', 'exchange-frontend']) {
-  const { contractMargin, calculateContractProfit, contractEquity, leverageLimit, leverageChoices, quantityFromAllocation, estimateLiquidationPrice } = await import(`../../${app}/src/utils/contract.ts`)
+  const { contractMargin, calculateContractProfit, contractEquity, leverageLimit, leverageChoices, quantityFromAllocation, estimateLiquidationPrice, stepQuantity, validQuantity } = await import(`../../${app}/src/utils/contract.ts`)
+  const lotSpec = { quantityStep: '0.01', minOrderQuantity: '0.01' }
+  let quantity = 0.01
+  for (let i = 0; i < 240; i++) {
+    quantity = stepQuantity(quantity, 1, lotSpec)
+    assert(validQuantity(quantity, lotSpec))
+  }
+  assert.equal(quantity, 2.41)
+  assert.equal(String(quantity), '2.41')
+  for (let i = 0; i < 300; i++) quantity = stepQuantity(quantity, -1, lotSpec)
+  assert.equal(quantity, 0.01)
+  assert.equal(stepQuantity(2.4100000000000024, 1, lotSpec), 2.42)
+  assert.equal(stepQuantity(2.4100000000000024, -1, lotSpec), 2.4)
+  assert(!validQuantity(2.415, lotSpec), 'Manual quantities must still match the configured step')
+  for (const step of ['0.005', '0.00000001', '0.0000000000000001', '1']) {
+    const spec = { quantityStep: step, minOrderQuantity: step }
+    let value = Number(step)
+    for (let i = 0; i < 500; i++) {
+      const next = stepQuantity(value, 1, spec)
+      assert(validQuantity(next, spec))
+      assert.equal(stepQuantity(next, -1, spec), value)
+      value = next
+    }
+  }
+  const minSpec = { quantityStep: '0.005', minOrderQuantity: '0.02' }
+  assert.equal(stepQuantity(0.02, -1, minSpec), 0.02)
+  assert.equal(stepQuantity('', 1, minSpec), 0.02)
+  assert.equal(stepQuantity(0.02, 1, minSpec), 0.025)
+  assert.equal(stepQuantity(0.01, 1, null), 0.02)
+  for (const value of [NaN, Infinity, 'bad']) assert(Number.isNaN(stepQuantity(value, 1, lotSpec)))
+  for (const step of [0, -0.01, 'bad']) assert(Number.isNaN(stepQuantity(1, 1, { quantityStep: step })))
+  assert(Number.isNaN(stepQuantity(1, 0.5, lotSpec)))
   assert.equal(leverageLimit(null), 100)
   assert.equal(leverageLimit(100, false), 1)
   assert.deepEqual(leverageChoices(100), [1, 5, 10, 20, 50, 100])

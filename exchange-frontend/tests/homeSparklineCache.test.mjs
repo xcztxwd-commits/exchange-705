@@ -24,6 +24,56 @@ test('failure uses stale/empty and never retries before 300 seconds', async () =
   f.scope = { key: 'tenant-B|REAL', mode: 'REAL' }; await f.client.refresh(['EURUSD'])
   assert.equal(f.state.items.EURUSD.status, 'empty'); assert.deepEqual(f.state.items.EURUSD.points, [])
 })
+
+test('historical snapshots survive a reload and a timed-out first request without crossing scopes', async () => {
+  const originalStorage = globalThis.localStorage
+  const saved = new Map()
+  globalThis.localStorage = { getItem: key => saved.get(key) || null, setItem: (key, value) => saved.set(key, value) }
+  try {
+    const context = () => ({ key: 'tenant-A|REAL', mode: 'REAL' })
+    const first = createHomeSparklineClient(async () => response('REAL', [157, 158, 159], 123), context, () => {}, () => 0)
+    await first.refresh(['EURUSD'])
+    let state
+    const restored = createHomeSparklineClient(async () => { throw Error('timeout') }, context, next => { state = next }, () => 300_000)
+    assert.deepEqual(state.items.EURUSD.points, [157, 158, 159])
+    assert.equal(state.items.EURUSD.status, 'stale')
+    await restored.refresh(['EURUSD'])
+    assert.deepEqual(state.items.EURUSD.points, [157, 158, 159])
+    assert.equal(state.items.EURUSD.updatedAt, 123)
+    for (const key of ['tenant-B|REAL', 'tenant-A|DEMO']) {
+      const isolated = createHomeSparklineClient(async () => { throw Error('timeout') }, () => ({ key, mode: key.endsWith('DEMO') ? 'DEMO' : 'REAL' }), next => { state = next })
+      await isolated.refresh(['EURUSD'])
+      assert.deepEqual(state.items.EURUSD.points, [])
+    }
+  } finally { globalThis.localStorage = originalStorage }
+})
+
+test('empty snapshots preserve the last valid historical graph and its original time', async () => {
+  let state, time = 0, points = [1, 2, 3]
+  const client = createHomeSparklineClient(async () => response('REAL', points, time), () => ({ key: 'empty-test|REAL', mode: 'REAL' }), next => { state = next }, () => time)
+  await client.refresh(['EURUSD'])
+  time = 300_000; points = []
+  await client.refresh(['EURUSD'])
+  assert.deepEqual(state.items.EURUSD.points, [1, 2, 3])
+  assert.equal(state.items.EURUSD.status, 'stale')
+  assert.equal(state.items.EURUSD.updatedAt, 0)
+})
+test('blocked browser storage still preserves snapshots in memory after timeout', async () => {
+  const originalStorage = globalThis.localStorage
+  globalThis.localStorage = { getItem() { throw Error('blocked') }, setItem() { throw Error('quota') } }
+  try {
+    let state, time = 0
+    const client = createHomeSparklineClient(async () => {
+      if (time) throw Error('timeout')
+      return response('REAL', [1, 2, 3], 123)
+    }, () => ({ key: 'blocked|REAL', mode: 'REAL' }), next => { state = next }, () => time)
+    await client.refresh(['EURUSD'])
+    time = 300_000; await client.refresh(['EURUSD'])
+    assert.deepEqual(state.items.EURUSD.points, [1, 2, 3])
+    assert.equal(state.items.EURUSD.status, 'stale')
+    assert.equal(state.items.EURUSD.updatedAt, 123)
+  } finally { globalThis.localStorage = originalStorage }
+})
 test('mode and tenant switch discard delayed responses', async () => {
   let resolveOld, scope = { key: 'A|REAL', mode: 'REAL' }, state, calls = 0
   const client = createHomeSparklineClient(() => ++calls === 1 ? new Promise(resolve => { resolveOld = resolve }) : Promise.resolve(response('DEMO', [8, 9], 20)), () => scope, s => { state = s }, () => 0)

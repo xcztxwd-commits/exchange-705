@@ -24,7 +24,7 @@ async function fetchMarketKline(url: string, options?: RequestInit): Promise<Res
 export const useMarketStore = defineStore('market', () => {
   // 当前选中的交易对
   const currentSymbol = ref<string>('')
-  const quoteStatusMap = ref<Record<string, { status: string, fetchedAt: number, expiresAt: number, timestamp: number, epoch?: string, quoteVersion?: number, simulated?: boolean, simulationSession?: number, marketRevision?: number, controlSourceResumed?: boolean, controlHistory?: boolean, controlHistoryRevision?: string, controlState?: string, controlTaskId?: string, sourceAvailable?: boolean, sourceConnectionFailed?: boolean, controlActive?: boolean, quoteToUsdRate?: number | null, conversionAvailable?: boolean, conversionExpiresAt?: number, marginBaseToUsdRate?: number, marginRateExpiresAt?: number }>>({})
+  const quoteStatusMap = ref<Record<string, { status: string, fetchedAt: number, expiresAt: number, timestamp: number, epoch?: string, quoteVersion?: number, simulated?: boolean, simulationSession?: number, marketRevision?: number, controlSourceResumed?: boolean, controlHistory?: boolean, controlHistoryRevision?: string, controlPublicationRevision?: string, controlState?: string, controlTaskId?: string, sourceAvailable?: boolean, sourceConnectionFailed?: boolean, controlActive?: boolean, quoteToUsdRate?: number | null, conversionAvailable?: boolean, conversionExpiresAt?: number, marginBaseToUsdRate?: number, marginRateExpiresAt?: number }>>({})
   let activeQuoteEpoch: string | undefined
   const retiredQuoteEpochs = new Set<string>()
   const recordQuoteStatus = (symbol: string, quote: any): boolean => {
@@ -60,8 +60,8 @@ export const useMarketStore = defineStore('market', () => {
     const sameSource = previous?.simulationSession === valid.simulationSession && previous?.controlState === valid.controlState && previous?.controlTaskId === valid.controlTaskId && previous?.controlSourceResumed === valid.controlSourceResumed
     if (previous && previous.epoch === quote.epoch && sameSource && (valid.timestamp < previous.timestamp ||
       (valid.timestamp === previous.timestamp && quote.fetchedAt != null && valid.fetchedAt < previous.fetchedAt))) return false
-    const { status, fetchedAt, expiresAt, timestamp, simulated, simulationSession, marketRevision, controlSourceResumed, controlHistoryRevision, controlHistory, controlState, controlTaskId, sourceAvailable, sourceConnectionFailed, controlActive } = valid
-    quoteStatusMap.value[symbol] = { marginBaseToUsdRate: quote.marginBaseToUsdRate, marginRateExpiresAt: quote.marginRateExpiresAt, quoteToUsdRate: valid.quoteToUsdRate, conversionAvailable: valid.conversionAvailable, conversionExpiresAt: valid.conversionExpiresAt, status, fetchedAt, expiresAt, timestamp, epoch: quote.epoch, quoteVersion: quote.quoteVersion, simulated, simulationSession, marketRevision, controlSourceResumed, controlHistoryRevision, controlHistory, controlState, controlTaskId, sourceAvailable, sourceConnectionFailed, controlActive }
+    const { status, fetchedAt, expiresAt, timestamp, simulated, simulationSession, marketRevision, controlSourceResumed, controlHistoryRevision, controlPublicationRevision, controlHistory, controlState, controlTaskId, sourceAvailable, sourceConnectionFailed, controlActive } = valid
+    quoteStatusMap.value[symbol] = { marginBaseToUsdRate: quote.marginBaseToUsdRate, marginRateExpiresAt: quote.marginRateExpiresAt, quoteToUsdRate: valid.quoteToUsdRate, conversionAvailable: valid.conversionAvailable, conversionExpiresAt: valid.conversionExpiresAt, status, fetchedAt, expiresAt, timestamp, epoch: quote.epoch, quoteVersion: quote.quoteVersion, simulated, simulationSession, marketRevision, controlSourceResumed, controlHistoryRevision, controlPublicationRevision, controlHistory, controlState, controlTaskId, sourceAvailable, sourceConnectionFailed, controlActive }
     return true
   }
   const getConversionRate = (symbol: string, currency = 'USD'): number => {

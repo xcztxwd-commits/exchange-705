@@ -120,6 +120,16 @@ export function quantityUnit(spec: any, lots = '手'): string {
 export function validQuantity(quantity: unknown, spec: any): boolean {
   try { const q=decimal(quantity), step=decimal(spec?.quantityStep ?? '0.01'), min=decimal(spec?.minOrderQuantity ?? '0.01'); return step>BigInt(0) && q>=min && q>BigInt(0) && q%step===BigInt(0) } catch { return false }
 }
+// Keep button-generated quantities on the exact decimal grid, including existing float residue.
+export function stepQuantity(quantity: unknown, delta: number, spec: any): number {
+  try {
+    const step = decimal(spec?.quantityStep ?? '0.01'), min = decimal(spec?.minOrderQuantity ?? '0.01')
+    if (step <= BigInt(0) || min <= BigInt(0) || !Number.isInteger(delta)) return NaN
+    const next = ((decimal(Number(quantity), false) + step / BigInt(2)) / step + BigInt(delta)) * step
+    const minimum = (min + step - BigInt(1)) / step * step
+    return decimalDisplay(next < minimum ? minimum : next)
+  } catch { return NaN }
+}
 export function displayFee(value: unknown): string {
   const n=Number(value)
   if(!Number.isFinite(n))return '—'

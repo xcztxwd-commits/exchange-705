@@ -7,14 +7,14 @@ const ts = require('typescript')
 
 for (const app of ['exchange-pc', 'exchange-frontend']) {
   const source = readFileSync(new URL(`../../${app}/src/components/KlineChart.vue`, import.meta.url), 'utf8')
-  const sync = source.slice(source.indexOf('async function syncLatest()'), source.indexOf('\nfunction resetMarket()'))
+  const sync = source.slice(source.indexOf('function applyLatestCandles('), source.indexOf('\nfunction resetMarket()'))
   const code = ts.transpile(sync, { target: ts.ScriptTarget.ES2022 })
   const bar = (timestamp, close = 11) => ({ timestamp, open: 10, high: 12, low: 9, close, volume: 3 })
-  async function run(initial, pages, manual = true, history = false) {
+  async function run(initial, pages, manual = true, history = false, changedDuringFetch = false) {
     const data = initial.slice(), updates = [], requests = [], scrolls = []
     let offset = 0
     const context = {
-      market: { quoteStatusMap: {} }, props: { symbol: "TEST" },
+      market: { quoteStatusMap: {TEST:{marketRevision:1}} }, props: { symbol: "TEST" },
       chart: {
         getDataList: () => data,
         getVisibleRange: () => ({ from: 0, to: data.length }),
@@ -28,8 +28,10 @@ for (const app of ['exchange-pc', 'exchange-frontend']) {
       },
       loading: { value: false }, historyLoading: { value: history }, syncing: false,
       revision: 1, controller: new AbortController(), lastSyncAttempt: 0,
+      lastKlineAt: 0,
       fetchBars: async before => {
         requests.push(before)
+        if (changedDuringFetch) context.market.quoteStatusMap.TEST.marketRevision = 2
         return { candles: pages.shift(), damaged: false, stale: false }
       },
       manuallyScrolled: manual, empty: { value: false }, dataWarning: { value: false },
@@ -75,5 +77,11 @@ for (const app of ['exchange-pc', 'exchange-frontend']) {
     const result = await run([bar(1), bar(2)], [[bar(2), bar(3)]], true, true)
     assert.deepEqual(result.data.map(item => item.timestamp), [1, 2, 3])
     assert.equal(result.offset, 0)
+  })
+  test(`${app}: an HTTP candle request from before an offset change cannot replace its new live candles`, async () => {
+    const current = bar(2, 105)
+    const result = await run([bar(1), current], [[bar(1),bar(2,100)]], true, false, true)
+    assert.deepEqual(result.updates, [])
+    assert.equal(result.data.at(-1).close,105)
   })
 }

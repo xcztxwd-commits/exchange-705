@@ -12,7 +12,7 @@ import { useLocaleStore } from '@/store/locale'
 import request from '@/utils/request'
 import { getImageUrl } from '@/utils/imageUrl'
 import { displaySymbol } from '@/utils/displaySymbol'
-import { quantityUnit, displayFee, DEFAULT_LEVERAGE, leverageLimit, leverageChoices, contractMargin } from '@/utils/contract'
+import { quantityUnit, stepQuantity, displayFee, DEFAULT_LEVERAGE, leverageLimit, leverageChoices, contractMargin } from '@/utils/contract'
 // 市场休市时间判断已移除，改用阿里云市场API返回的数据来判断市场状态
 import { formatDateTime, formatTime } from '@/utils/dateTime'
 
@@ -581,9 +581,7 @@ function getKlineLow(): number {
 
 // 调整数量
 function adjustQuantity(delta: number) {
-  const step = Number(currentSymbolInfo.value?.quantityStep ?? 0.01)
-  const newValue = buyQuantity.value + delta * step
-  buyQuantity.value = Math.max(step, Math.round(newValue / step) * step)
+  buyQuantity.value = stepQuantity(buyQuantity.value, delta, currentSymbolInfo.value)
 }
 
 // 调整止损（合约交易：按步长1调整）

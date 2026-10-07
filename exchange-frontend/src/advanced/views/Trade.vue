@@ -19,7 +19,7 @@ import { displaySymbol } from '@/utils/displaySymbol'
 import { useLocaleStore } from '@/store/locale'
 import request from '@/utils/request'
 import marketWebSocket from '@/utils/marketWebSocket'
-import { DEFAULT_LEVERAGE, contractMargin, leverageLimit, quantityUnit, validQuantity, displayFee, decimalProduct } from '@/utils/contract'
+import { DEFAULT_LEVERAGE, contractMargin, leverageLimit, quantityUnit, validQuantity, stepQuantity, displayFee, decimalProduct } from '@/utils/contract'
 import { optionalPrice, protectionError, validIncrement } from '@/utils/tradeValidation'
 
 const router = useRouter()
@@ -110,7 +110,7 @@ const protectionReason = computed(() => {
   const { takeProfit: tp, stopLoss: sl } = protection.value
   return protectionError(side.value, orderPrice.value, tp, sl) || (tp != null && !validIncrement(tp, priceStep.value)) || (sl != null && !validIncrement(sl, priceStep.value)) ? text('請檢查止盈止損方向及價格精度', 'Check protection direction and precision') : ''
 })
-function adjustQuantity(delta: number) { quantity.value = Math.max(Number(symbolInfo.value?.minOrderQuantity ?? 0.01), Number((Number(quantity.value) + delta * quantityStep.value).toFixed(16))) }
+function adjustQuantity(delta: number) { quantity.value = stepQuantity(quantity.value, delta, symbolInfo.value) }
 watch(maxLeverage, max => { leverage.value = Math.min(leverage.value, max) })
 watch(orderType, type => { if (type === 'limit' && !limitPrice.value) limitPrice.value = Number(currentPrice.value.toFixed(precision.value)) })
 interface Duration { value: number; label: string; profitRate: number; lossRate: number; minAmount?: number; maxAmount?: number }

@@ -9,7 +9,7 @@ import request from '@/utils/request'
 import { displayFee, quantityUnit, calculateContractProfit, contractEquity } from '@/utils/contract'
 import { useMarketStore } from '@/store/market'
 import { useLocaleStore } from '@/store/locale'
-import { formatDateTime } from '@/utils/dateTime'
+import { formatDateTime, getSystemTimezone, refreshOrderTimes } from '@/utils/dateTime'
 import { displaySymbol } from '@/utils/displaySymbol'
 import { orderTimestamp, profitRate, withinDays } from '@/utils/orderView'
 
@@ -78,6 +78,7 @@ async function loadDurationOptions() {
 // 订单详情弹窗相关
 const showOrderDetailModal = ref(false) // 显示订单详情弹窗
 const detailOrder = ref<any>(null) // 当前查看的订单
+watch(getSystemTimezone, () => refreshOrderTimes([...positionsData.value, ...pendingOrdersData.value, ...historyData.value, ...termTradingData.value, ...termClosedData.value, detailOrder.value], formatOrderTime))
 const editingTPSL = ref(false)
 const closePrice = ref(0) // 平仓价格
 const stopLossEnabled = ref(false) // 止损开关
@@ -120,6 +121,8 @@ function transformContractOrder(order: any) {
     orderSource: order.orderSource,
     manualCloseTime: order.manualCloseTimeUtc != null ? formatDateTime(new Date(order.manualCloseTimeUtc).toISOString()) : '',
     createdTime: formatOrderTime(order.createdAt),
+    createdTimeRaw: order.createdAt,
+    manualCloseTimeRaw: order.manualCloseTimeUtc != null ? new Date(order.manualCloseTimeUtc).toISOString() : null,
     openTime: formatOrderTime(rawOpenTime),
     closeTime: formatOrderTime(rawCloseTime),
     openTimeRaw: rawOpenTime,

@@ -25,6 +25,12 @@ public class MarketWebSocketHandler extends TextWebSocketHandler {
     @Value("${market.push.interval-ms:1000}") private long intervalMs = 1000;
     @Value("${market.push.delta:false}") private boolean delta;
     private final ObjectMapper mapper = new ObjectMapper();
+    private static final Set<String> PERIODS = new HashSet<>(Arrays.asList("1m", "5m", "15m", "30m", "1h", "1d", "1w", "1M"));
+    private static final class KlineSubscription {
+        final String symbol, interval;
+        KlineSubscription(String symbol, String interval) { this.symbol = symbol; this.interval = interval; }
+        String key() { return symbol + "\n" + interval; }
+    }
     private static class Client {
         final Long tenantId;
         final String frontendHost;
@@ -33,6 +39,7 @@ public class MarketWebSocketHandler extends TextWebSocketHandler {
         final Set<String> fastSymbols = ConcurrentHashMap.newKeySet();
         final AtomicBoolean sending = new AtomicBoolean();
         final Map<String,Object> versions = new ConcurrentHashMap<>();
+        final Map<String,KlineSubscription> klines = new ConcurrentHashMap<>();
         volatile boolean snapshot = true;
         volatile long busySince;
         volatile long lastListPush;
@@ -43,11 +50,25 @@ public class MarketWebSocketHandler extends TextWebSocketHandler {
         volatile long lastDepthPush;
     }
     private final Map<WebSocketSession, Client> clients = new ConcurrentHashMap<>();
+    private final Map<Long,Set<String>> changed = new ConcurrentHashMap<>();
+    private final AtomicBoolean pushPending = new AtomicBoolean();
     private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(r -> new Thread(r, "market-push"));
     private final ThreadPoolExecutor senders = new ThreadPoolExecutor(4, 4, 0, TimeUnit.SECONDS,
         new ArrayBlockingQueue<>(128), r -> new Thread(r, "market-send"), new ThreadPoolExecutor.AbortPolicy());
     @PostConstruct public void init() { scheduler.scheduleWithFixedDelay(this::push, 0, Math.max(250, intervalMs), TimeUnit.MILLISECONDS); }
     @PreDestroy public void destroy() { scheduler.shutdownNow(); senders.shutdownNow(); }
+    @org.springframework.context.event.EventListener
+    public void quoteCommitted(MarketQuoteCommitted event) {
+        if (clients.values().stream().noneMatch(client -> client.tenantId == event.tenantId && client.symbols.contains(event.symbol))) return;
+        synchronized (changed) {
+            changed.computeIfAbsent(event.tenantId, ignored -> new HashSet<>()).add(event.symbol);
+            if (pushPending.compareAndSet(false, true)) scheduler.schedule(() -> {
+                Map<Long,Set<String>> pending;
+                synchronized (changed) { pending = new HashMap<>(changed); changed.clear(); pushPending.set(false); }
+                push(pending);
+            }, 25, TimeUnit.MILLISECONDS);
+        }
+    }
     @Override public void afterConnectionEstablished(WebSocketSession session) {
         Object tenant = session.getAttributes().get("tenantId"), host = session.getAttributes().get("frontendHost");
         if (!(tenant instanceof Number) || ((Number)tenant).longValue() <= 0 || !(host instanceof String)) {
@@ -72,6 +93,18 @@ public class MarketWebSocketHandler extends TextWebSocketHandler {
         Map<String, Object> request = mapper.readValue(message.getPayload(), new TypeReference<Map<String, Object>>() {});
         Object action = request.get("action");
         if ("ping".equals(action)) { send(session, client, Collections.singletonMap("type", "pong")); return; }
+        if ("subscribeKline".equals(action) || "unsubscribeKline".equals(action)) {
+            Object symbol = request.get("symbol"), interval = request.get("interval");
+            if (!(symbol instanceof String) || !(interval instanceof String) || !PERIODS.contains(interval) || !marketService.knownSymbol((String)symbol)) return;
+            KlineSubscription subscription = new KlineSubscription((String)symbol, (String)interval);
+            if ("unsubscribeKline".equals(action)) client.klines.remove(subscription.key());
+            else if (client.klines.size() < 8 || client.klines.containsKey(subscription.key())) {
+                client.klines.put(subscription.key(), subscription); client.symbols.add(subscription.symbol);
+                client.versions.remove(subscription.symbol); client.snapshot = true;
+                scheduler.execute(this::push);
+            }
+            return;
+        }
         if ("subscribeDepth".equals(action) || "unsubscribeDepth".equals(action)) {
             if (depth == null) return;
             synchronized (client) {
@@ -104,7 +137,10 @@ public class MarketWebSocketHandler extends TextWebSocketHandler {
             String symbol = (String) value;
             if ("subscribe".equals(action) && client.symbols.size() < 512 && marketService.knownSymbol(symbol)) {
                 client.symbols.add(symbol); client.versions.remove(symbol); client.snapshot = true;
-            } else if ("unsubscribe".equals(action)) { client.symbols.remove(symbol); client.versions.remove(symbol); }
+            } else if ("unsubscribe".equals(action)) {
+                client.symbols.remove(symbol); client.versions.remove(symbol);
+                client.klines.entrySet().removeIf(entry -> entry.getValue().symbol.equals(symbol));
+            }
         }
         if ("subscribe".equals(action)) {
             if (request.get("fastSymbols") instanceof List) {
@@ -132,14 +168,19 @@ public class MarketWebSocketHandler extends TextWebSocketHandler {
     private static final class PushFrame {
         final WebSocketSession session; final Client client; final Map<String,Object> depthMessage;
         final boolean snapshot, listFrame; final List<String> symbols = new ArrayList<>();
+        final List<KlineSubscription> klines;
         PushFrame(WebSocketSession session, Client client, Map<String,Object> depthMessage) {
             this.session = session; this.client = client; this.depthMessage = depthMessage;
             snapshot = client.snapshot; listFrame = snapshot || System.currentTimeMillis() - client.lastListPush >= 1000;
+            klines = new ArrayList<>(client.klines.values());
             for (String symbol : new ArrayList<>(client.symbols))
-                if (listFrame || client.fastSymbols.contains(symbol)) symbols.add(symbol);
+                if (listFrame || client.fastSymbols.contains(symbol) || klines.stream().anyMatch(item -> item.symbol.equals(symbol))) symbols.add(symbol);
         }
     }
     void push() {
+        push(null);
+    }
+    private void push(Map<Long,Set<String>> dirty) {
         // Each tenant must own a fresh outer snapshot, never join another caller's cross-tenant transaction.
         if (org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive()) return;
         Map<String,Boolean> bindings = new HashMap<>();
@@ -147,11 +188,14 @@ public class MarketWebSocketHandler extends TextWebSocketHandler {
         for (Map.Entry<WebSocketSession, Client> entry : clients.entrySet()) {
             WebSocketSession session = entry.getKey(); Client client = entry.getValue();
             if (!session.isOpen()) { clients.remove(session); releaseDepth(session); continue; }
+            if (dirty != null && !dirty.containsKey(client.tenantId)) continue;
             if (!bindings.computeIfAbsent(client.tenantId + ":" + client.frontendHost, id -> validBinding(client))) { close(session); continue; }
             groups.computeIfAbsent(client.tenantId, ignored -> new ArrayList<>()).add(entry);
         }
         for (Map.Entry<Long,List<Map.Entry<WebSocketSession,Client>>> group : groups.entrySet()) {
             List<PushFrame> frames = new ArrayList<>(); Set<String> symbols = new LinkedHashSet<>(); Map<String,Object> captured;
+            Map<String,KlineSubscription> subscriptions = new LinkedHashMap<>();
+            Map<String,Map<String,Object>> capturedKlines = new HashMap<>();
             try (TenantContext.Scope scope = TenantContext.open(group.getKey())) {
                 for (Map.Entry<WebSocketSession,Client> entry : group.getValue()) {
                     WebSocketSession session = entry.getKey(); Client client = entry.getValue(); Map<String,Object> depthMessage = null;
@@ -171,12 +215,26 @@ public class MarketWebSocketHandler extends TextWebSocketHandler {
                         } catch (RuntimeException failure) { releaseDepth(session); }
                     }
                     }
-                    PushFrame frame = new PushFrame(session, client, depthMessage); frames.add(frame); symbols.addAll(frame.symbols);
+                    PushFrame frame = new PushFrame(session, client, depthMessage);
+                    if (dirty != null) frame.symbols.retainAll(dirty.get(client.tenantId));
+                    frames.add(frame); symbols.addAll(frame.symbols);
+                    for (KlineSubscription subscription : frame.klines)
+                        if (frame.symbols.contains(subscription.symbol)) subscriptions.put(subscription.key(), subscription);
                 }
                 try {
                     captured = symbols.isEmpty() ? Collections.emptyMap() : marketService.readSnapshot(() -> {
                         Map<String,Object> prices = new HashMap<>();
                         for (String symbol : symbols) prices.put(symbol, Objects.requireNonNull(marketService.snapshotPrice(symbol), "Missing price snapshot"));
+                        for (KlineSubscription subscription : subscriptions.values()) {
+                            try {
+                                Map<String,Object> result = marketService.internalKline(subscription.symbol, subscription.interval, 2);
+                                List<Map<String,Object>> bars = ControlHistoryStore.rows(result);
+                                if (bars.isEmpty()) continue;
+                                Map<String,Object> item = new HashMap<>(); item.put("symbol", subscription.symbol); item.put("interval", subscription.interval);
+                                item.put("bars", bars); item.put("pending", ((Map<?,?>)result.get("data")).get("pending"));
+                                capturedKlines.put(subscription.key(), item);
+                            } catch (RuntimeException unavailable) { /* Price delivery survives unavailable candle history. */ }
+                        }
                         return prices;
                     });
                 } catch (RuntimeException failure) { continue; }
@@ -187,11 +245,18 @@ public class MarketWebSocketHandler extends TextWebSocketHandler {
                 Client client = frame.client; Map<String,Object> prices = new HashMap<>();
                 for (String symbol : frame.symbols) {
                     Map<?,?> quote = (Map<?,?>) captured.get(symbol);
-                    if (!delta || frame.snapshot || !Objects.equals(client.versions.get(symbol), quote.get("quoteVersion"))) prices.put(symbol, quote);
+                    if (!delta || frame.snapshot || !Objects.equals(client.versions.get(symbol), quote.get("quoteVersion"))
+                            || frame.klines.stream().anyMatch(item -> item.symbol.equals(symbol))) prices.put(symbol, quote);
                 }
                 if (prices.isEmpty()) { if (frame.depthMessage != null) send(frame.session, client, frame.depthMessage); continue; }
                 Map<String,Object> message = new HashMap<>(); message.put("type", "price"); message.put("data", prices);
                 message.put("snapshot", frame.snapshot); message.put("serverTime", System.currentTimeMillis()); message.put("listFrame", frame.listFrame);
+                List<Map<String,Object>> klines = new ArrayList<>();
+                for (KlineSubscription subscription : frame.klines) {
+                    Map<String,Object> item = capturedKlines.get(subscription.key());
+                    if (item != null && prices.containsKey(subscription.symbol)) klines.add(item);
+                }
+                message.put("klines", klines);
                 // One bounded send job carries both independent protocols; neither starves the other.
                 List<Map<String,?>> messages = new ArrayList<>();
                 if (frame.depthMessage != null) messages.add(frame.depthMessage);
@@ -217,6 +282,13 @@ public class MarketWebSocketHandler extends TextWebSocketHandler {
                     if ("depth".equals(message.get("type")) && (!Objects.equals(message.get("depthRevision"), client.depthRevision)
                             || client.depthSymbol == null || !client.depthSymbol.equals(((Map<?,?>) message.get("data")).get("symbol")))) continue;
                     Map<String,Object> frame = new HashMap<>(message); frame.remove("depthRevision");
+                    if (frame.get("klines") instanceof List) {
+                        List<?> active = ((List<?>)frame.get("klines")).stream().filter(item -> {
+                            Map<?,?> candle = (Map<?,?>)item;
+                            return client.klines.containsKey(candle.get("symbol") + "\n" + candle.get("interval"));
+                        }).collect(java.util.stream.Collectors.toList());
+                        frame.put("klines", active);
+                    }
                     session.sendMessage(new TextMessage(mapper.writeValueAsString(frame)));
                     if ("depth".equals(message.get("type"))) {
                         client.lastDepthPush = System.currentTimeMillis();
@@ -240,4 +312,3 @@ public class MarketWebSocketHandler extends TextWebSocketHandler {
         } catch (RejectedExecutionException full) { client.sending.set(false); }
     }
 }
-

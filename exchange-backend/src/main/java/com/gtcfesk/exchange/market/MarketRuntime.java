@@ -221,6 +221,7 @@ final class MarketRuntime {
         Map<String,Object> status=row.get("status_json")==null ? new LinkedHashMap<>() : store.decode((String)row.get("status_json"));
         Map<String,Object> publications=store.db.queryForMap("SELECT COUNT(*) AS n,COALESCE(SUM(p.to_at),0) AS total FROM market_control_publication p JOIN market_control_task t ON t.tenant_id=p.tenant_id AND t.id=p.task_id WHERE t.tenant_id=? AND t.symbol_id=?",ControlHistoryStore.tenant(),symbol);
         quote.put("controlHistoryRevision",quote.get("controlTaskId")+":"+quote.get("configVersion")+":"+publications.get("n")+":"+publications.get("total"));
+        quote.put("controlPublicationRevision",publications.get("n")+":"+publications.get("total"));
         snapshot(symbol,quote,status,clock());
     }
     void snapshot(long symbol,Map<String,Object> quote,Map<String,Object> status,long now) {

@@ -167,7 +167,7 @@ onUnmounted(()=>{disposed=true;generation++;abort?.abort();dialog.value?.close()
 <template>
  <Teleport v-if="publicItems.length" :to="placement==='AUTH_PROFILE'?'#profile-activities':placement==='AUTH_TRADE'||placement==='ANONYMOUS_HOME'?'#trade-activities':'body'">
  <section class="public-activities" data-testid="anonymous-activities">
-  <button v-for="item in publicItems" :key="item.campaign.id" type="button" :data-campaign="item.campaign.id" @click="open(item)"><strong>{{ content(item).title }}</strong><span>{{ money(item.campaign.amount) }} U · {{ t(4) }}</span></button>
+  <button v-for="item in publicItems" :key="item.campaign.id" type="button" :data-campaign="item.campaign.id" @click="open(item)"><strong>{{ content(item).title }}</strong><span>{{ money(item.campaign.amount) }} USD · {{ t(4) }}</span></button>
   <div v-if="pages>1" class="activity-pages"><button :disabled="!page||loading" @click="turn(-1)">{{t(18)}}</button><span>{{page+1}} / {{pages}}</span><button :disabled="page+1>=pages||loading" @click="turn(1)">{{t(19)}}</button></div>
  </section>
  </Teleport>
@@ -183,7 +183,7 @@ onUnmounted(()=>{disposed=true;generation++;abort?.abort();dialog.value?.close()
     <p v-if="loading" role="status">{{ t(16) }}</p>
     <p v-else-if="!items.length" class="activity-empty">{{ t(13) }}</p>
     <button v-for="item in items" :key="item.delivery.id" class="activity-message" @click="open(item)">
-     <span class="message-gift" aria-hidden="true">✦</span><span><strong>{{ content(item).title }}</strong><small>{{ money(item.campaign.amount) }} U · {{ item.delivery.claimedAt ? t(15) : item.active ? t(1) : t(14) }}</small></span><span aria-hidden="true">›</span>
+     <span class="message-gift" aria-hidden="true">✦</span><span><strong>{{ content(item).title }}</strong><small>{{ money(item.campaign.amount) }} USD · {{ item.delivery.claimedAt ? t(15) : item.active ? t(1) : t(14) }}</small></span><span aria-hidden="true">›</span>
     </button>
     <div v-if="pages>1" class="activity-pages"><button :disabled="!page || loading" @click="turn(-1)">{{ t(18) }}</button><span>{{ page+1 }} / {{ pages }}</span><button :disabled="page+1>=pages || loading" @click="turn(1)">{{ t(19) }}</button></div>
    </template>
@@ -197,7 +197,7 @@ onUnmounted(()=>{disposed=true;generation++;abort?.abort();dialog.value?.close()
       <i v-for="n in 18" :key="n" class="confetti" :style="{ '--i': n, '--angle': `${n*137.5}deg`, '--distance': `${60+(n%5)*15}px`, '--color': ['#73b100','#dfb462','#b0d885','#2b735c'][n%4] }"></i>
       <div class="gift-halo"></div><div class="gift-box"><div class="gift-ribbon"></div><div class="gift-lid"><i></i><b></b></div><span class="gift-star">✦</span></div>
      </div>
-     <span class="activity-reward"><strong :style="money(selected.campaign.amount).length > 6 ? { fontSize: 'clamp(30px, 8vw, 46px)', letterSpacing: '-1px' } : undefined">{{ money(selected.campaign.amount) }}</strong><span>U</span></span>
+     <span class="activity-reward"><strong :style="money(selected.campaign.amount).length > 6 ? { fontSize: 'clamp(30px, 8vw, 46px)', letterSpacing: '-1px' } : undefined">{{ money(selected.campaign.amount) }}</strong><span>USD</span></span>
      <p>{{ mode==='success' ? (copy.success || t(5)) : t(22) }}</p>
     </div>
     <section class="activity-body">
@@ -212,7 +212,7 @@ onUnmounted(()=>{disposed=true;generation++;abort?.abort();dialog.value?.close()
      <button v-else-if="mode==='success'" class="activity-primary wide" @click="trade">{{ t(11) }} <span aria-hidden="true">↗</span></button>
      <button v-else class="activity-primary wide" :disabled="busy || !eligible" @click="claim()">{{ busy ? t(16) : eligible ? (copy.claim || t(4)) : t(14) }}</button>
      <button v-if="mode==='success' && selected.campaign.allowRepeatClaim === true && eligible" class="activity-secondary wide" :disabled="busy" @click="claim(true,true)">{{locale.text('再次领取（新领取）', 'Claim again (new reward)')}}</button>
-     <p class="activity-footnote">{{ t(6) }} · U</p>
+     <p class="activity-footnote">{{ t(6) }} · USD</p>
     </section>
     </template>
    </template>

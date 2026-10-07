@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { getSystemTimezone } from '@/utils/dateTime'
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { dispose, init, registerLocale, type CandleType, type Chart, type Coordinate, type DataLoaderGetBarsParams, type KLineData, type OverlayCreate } from 'klinecharts'
 import { useMarketStore } from '@/store/market'
-import marketWebSocket, { showSourceConnectionWarning } from '@/utils/marketWebSocket'
+import marketWebSocket, { showSourceConnectionWarning, type KlineUpdate } from '@/utils/marketWebSocket'
 import { useLocaleStore } from '@/store/locale'
+import { getSystemTimezone } from '@/utils/dateTime'
+import { preferredTimeLocale } from '@/utils/displayTimezone'
 import { chartLocale } from '@/utils/chartLocale'
 import request from '@/utils/request'
 import { candleFromQuote, chartPeriod, contiguousCryptoCandles, historyRepairPolicy, normalizeCandles } from '@/utils/chartData'
@@ -45,9 +46,10 @@ const saved = ref(true)
 const preferenceKey = 'exchange:chart-preferences:v1'
 let initialPreferences = normalizePreferences(null)
 try { initialPreferences = normalizePreferences(JSON.parse(localStorage.getItem(preferenceKey) || 'null')) } catch { /* Use defaults when storage is unavailable. */ }
+if (preferredTimeLocale.value) initialPreferences.timezone = ''
 const preferences = ref(initialPreferences)
-const systemTimezone = getSystemTimezone()
-const timezone = ref(initialPreferences.timezone || systemTimezone)
+const systemTimezone = computed(() => getSystemTimezone())
+const timezone = computed(() => preferences.value.timezone || systemTimezone.value)
 const count = ref(0)
 const drawingCount = ref(0)
 const activeTool = ref('')
@@ -71,7 +73,7 @@ const displayedStudies = computed(() => selectedStudies.value.filter(item => !pr
 const visibleStudies = computed(() => indicatorCatalog.filter(item => `${item.name} ${item.zh} ${item.en} ${text(item.zh, item.en)}`.toLowerCase().includes(search.value.toLowerCase())))
 const zones = (() => {
   const api = Intl as typeof Intl & { supportedValuesOf?: (key: string) => string[] }
-  return [...new Set(['UTC', 'Asia/Shanghai', 'Asia/Hong_Kong', 'Asia/Singapore', 'Asia/Tokyo', 'Europe/London', 'America/New_York', Intl.DateTimeFormat().resolvedOptions().timeZone, ...(api.supportedValuesOf?.('timeZone') || [])])]
+  return [...new Set(['UTC', 'Asia/Shanghai', 'Asia/Hong_Kong', 'Asia/Singapore', 'Asia/Tokyo', 'Europe/London', 'America/New_York', systemTimezone.value, ...(api.supportedValuesOf?.('timeZone') || [])])]
 })()
 const visibleZones = computed(() => [...new Set([timezone.value, ...zones])].filter(zone => zone.toLowerCase().includes(search.value.toLowerCase())))
 const stageHeight = computed(() => {
@@ -104,6 +106,9 @@ let syncing = false
 let lastSyncAttempt = 0
 let syncTimer: ReturnType<typeof setInterval> | undefined
 let stopConnected: (() => void) | undefined
+let stopKline: (() => void) | undefined
+let pendingKline: KlineUpdate | null = null
+let lastKlineAt = 0
 const groupId = 'trading-drawings'
 
 const tools = [
@@ -187,9 +192,9 @@ function parameterLabel(name: string, index: number) {
   }
   return labels[name]?.[index] || text('週期 ', 'Period ') + (index + 1)
 }
-function chooseTimezone(zone: string) {
-  if (!validTimezone(zone)) return
-  preferences.value.timezone = zone; timezone.value = zone
+function chooseTimezone(zone = '') {
+  if (zone && !validTimezone(zone)) return
+  preferences.value.timezone = zone
 }
 async function takeSnapshot() {
   if (!chart || !count.value) return
@@ -528,9 +533,47 @@ function continueOlderHistory() {
   resume?.()
 }
 
+function applyLatestCandles(candles: KLineData[]) {
+  if (!chart || !realtime) return
+  const current = chart.getDataList()
+  const range = chart.getVisibleRange()
+  const anchor = current[range.from]?.timestamp
+  const x = anchor ? (chart.convertToPixel({ timestamp: anchor }) as Partial<Coordinate>).x : undefined
+  // The subscription callback updates the last candle or appends a new one
+  // without clearing history, drawings, or the current viewport.
+  let last = current[current.length - 1]
+  // A delayed source minute can complete a previously partial aggregate. Update the
+  // retained objects before triggering recalculation; history and drawings stay in place.
+  if (market.quoteStatusMap[props.symbol]?.controlHistory) {
+    const incoming = new Map(candles.map(bar => [bar.timestamp, bar]))
+    let corrected = false
+    for (const previous of current) {
+      const next = incoming.get(previous.timestamp)
+      if (next && (next.open !== previous.open || next.high !== previous.high || next.low !== previous.low || next.close !== previous.close || next.volume !== previous.volume)) {
+        Object.assign(previous, next); corrected = true
+      }
+    }
+    if (corrected && last) realtime?.(last)
+  }
+  for (const bar of candles) {
+    if (last && bar.timestamp < last.timestamp) continue
+    if (!last || bar.timestamp > last.timestamp ||
+      bar.open !== last.open || bar.high !== last.high || bar.low !== last.low ||
+      bar.close !== last.close || bar.volume !== last.volume) realtime?.(bar)
+    last = bar
+  }
+  empty.value = chart.getDataList().length === 0
+  if (!empty.value && !pendingHistory) historyWaiting.value = false
+  if (manuallyScrolled && anchor && x !== undefined) {
+    const nextX = (chart.convertToPixel({ timestamp: anchor }) as Partial<Coordinate>).x
+    if (nextX !== undefined && nextX !== x) chart.scrollByDistance(x - nextX, 0)
+  }
+}
+
 async function syncLatest() {
   if (!chart || !realtime || loading.value || syncing) return
   const version = revision, signal = controller.signal
+  const streamAt = lastKlineAt, marketVersion = market.quoteStatusMap[props.symbol]?.marketRevision
   const session = market.quoteStatusMap[props.symbol]?.simulationSession
   syncing = true
   lastSyncAttempt = Date.now()
@@ -549,40 +592,9 @@ async function syncLatest() {
       candles = [...older.candles, ...candles]
     }
     if (signal.aborted || version !== revision || !chart || session !== market.quoteStatusMap[props.symbol]?.simulationSession) return
+    if (marketVersion !== market.quoteStatusMap[props.symbol]?.marketRevision || lastKlineAt > streamAt) return
     if (!candles.length) throw new Error('No latest candles')
-    const current = chart.getDataList()
-    const range = chart.getVisibleRange()
-    const anchor = current[range.from]?.timestamp
-    const x = anchor ? (chart.convertToPixel({ timestamp: anchor }) as Partial<Coordinate>).x : undefined
-    // The subscription callback updates the last candle or appends a new one
-    // without clearing history, drawings, or the current viewport.
-    let last = current[current.length - 1]
-    // A delayed source minute can complete a previously partial aggregate. Update the
-    // retained objects before triggering recalculation; history and drawings stay in place.
-    if (market.quoteStatusMap[props.symbol]?.controlHistory) {
-      const incoming = new Map(candles.map(bar => [bar.timestamp, bar]))
-      let corrected = false
-      for (const previous of current) {
-        const next = incoming.get(previous.timestamp)
-        if (next && (next.open !== previous.open || next.high !== previous.high || next.low !== previous.low || next.close !== previous.close || next.volume !== previous.volume)) {
-          Object.assign(previous, next); corrected = true
-        }
-      }
-      if (corrected && last) realtime?.(last)
-    }
-    for (const bar of candles) {
-      if (last && bar.timestamp < last.timestamp) continue
-      if (!last || bar.timestamp > last.timestamp ||
-        bar.open !== last.open || bar.high !== last.high || bar.low !== last.low ||
-        bar.close !== last.close || bar.volume !== last.volume) realtime?.(bar)
-      last = bar
-    }
-    empty.value = chart.getDataList().length === 0
-    if (!empty.value && !pendingHistory) historyWaiting.value = false
-    if (manuallyScrolled && anchor && x !== undefined) {
-      const nextX = (chart.convertToPixel({ timestamp: anchor }) as Partial<Coordinate>).x
-      if (nextX !== undefined && nextX !== x) chart.scrollByDistance(x - nextX, 0)
-    }
+    applyLatestCandles(candles)
     syncError.value = false
     cacheBars()
     replayQuote()
@@ -603,6 +615,12 @@ function resetMarket() {
   controller = new AbortController()
   const version = ++revision
   realtime = null
+  stopKline?.()
+  pendingKline = null; lastKlineAt = 0
+  stopKline = marketWebSocket.onKlineUpdate(props.symbol, interval.value, update => {
+    pendingKline = update
+    replayQuote()
+  })
   cancelDrawing()
   chart.removeOverlay({ groupId })
   drawingKey = ''
@@ -653,9 +671,31 @@ function resetMarket() {
 watch(() => [props.symbol, props.category, interval.value], resetMarket)
 watch(() => props.pricePrecision, resetMarket)
 watch(displayedStudies, applyIndicators)
+function replayKline() {
+  if (!pendingKline || !chart || !realtime || loading.value) return
+  const update = pendingKline, quote = market.quoteStatusMap[props.symbol]
+  if (update.quote.epoch !== quote?.epoch || (update.quote.quoteVersion ?? -1) < (quote?.quoteVersion ?? -1)) {
+    pendingKline = null; return
+  }
+  const candles = normalizeCandles(update.bars, Infinity, interval.value)
+  if (!candles.length) { pendingKline = null; return }
+  const bars = chart.getDataList(), last = bars[bars.length - 1]
+  if (last && candles[0]!.timestamp > last.timestamp) {
+    if (Date.now() - lastSyncAttempt >= 900) void syncLatest()
+    return
+  }
+  applyLatestCandles(candles)
+  cacheBars()
+  syncError.value = false
+  if (!update.pending) lastKlineAt = Date.now()
+  pendingKline = null
+}
+function klineStreamHealthy() { return marketWebSocket.isConnected && lastKlineAt > 0 && Date.now() - lastKlineAt < 3000 }
 function replayQuote() {
+  replayKline()
   // Persisted mixed candles are authoritative; never rebuild their OHLC from client ticks.
   if (market.quoteStatusMap[props.symbol]?.controlHistory) {
+    if (klineStreamHealthy()) return
     if (Date.now() - lastSyncAttempt >= 900) void syncLatest()
     return
   }
@@ -679,9 +719,15 @@ watch(() => market.quoteStatusMap[props.symbol]?.simulationSession, (value, prev
   if (value && count.value) { lastSyncAttempt = 0; void syncLatest() }
   else resetMarket()
 })
-watch(() => market.quoteStatusMap[props.symbol]?.controlHistoryRevision, (value, previous) => {
-  if (value === previous || !previous) return
-  // Publication/source transitions invalidate every period, including previously loaded older bars.
+watch(() => market.quoteStatusMap[props.symbol], (quote, previous) => {
+  if (quote?.controlHistoryRevision === previous?.controlHistoryRevision || !previous?.controlHistoryRevision) return
+  const manualChange = quote?.controlState === 'MANUAL' || previous.controlState === 'MANUAL'
+  if (manualChange && quote?.controlPublicationRevision != null && quote.controlPublicationRevision === previous.controlPublicationRevision) {
+    // Offset changes affect live candles only. Keep history, drawings and the viewport.
+    replayQuote()
+    return
+  }
+  // Genuine historical publication/source transitions still invalidate every period.
   for (const key of Object.keys(market.klineDataMap)) if (key.startsWith(props.symbol + '_')) delete market.klineDataMap[key]
   resetMarket()
 })
@@ -692,6 +738,7 @@ watch(preferences, () => {
   try { localStorage.setItem(preferenceKey, JSON.stringify(preferences.value)); preferenceSaved.value = true } catch { preferenceSaved.value = false }
 }, { deep: true })
 watch(() => locale.locale, applyTheme)
+watch(preferredTimeLocale, () => chooseTimezone(), { flush: 'sync' })
 watch(timezone, value => chart?.setTimezone(value))
 watch(stageHeight, async () => { await nextTick(); chart?.resize(); scheduleGapCheck() })
 watch(magnet, () => chart?.overrideOverlay({ groupId, mode: magnet.value ? 'weak_magnet' : 'normal' }))
@@ -713,7 +760,7 @@ onMounted(() => {
   chart.subscribeAction('onVisibleRangeChange', scheduleGapCheck)
   stopConnected = marketWebSocket.onConnected(() => { void syncLatest() })
   syncTimer = setInterval(() => {
-    if (document.visibilityState === 'hidden') return
+    if (document.visibilityState === 'hidden' || klineStreamHealthy()) return
     if (Date.now() - lastSyncAttempt >= (market.quoteStatusMap[props.symbol]?.controlHistory ? 900 : 14_000)) void syncLatest()
   }, 1000)
   resizeObserver = new ResizeObserver(() => { chart?.resize(); applyTheme(); scheduleGapCheck() })
@@ -731,6 +778,7 @@ onUnmounted(() => {
   clearTimeout(pendingLatestTimer)
   clearTimeout(gapCheckTimer)
   stopConnected?.()
+  stopKline?.()
   resizeObserver?.disconnect()
   themeObserver?.disconnect()
   if (container.value) dispose(container.value)
@@ -823,7 +871,7 @@ onUnmounted(() => {
         </template>
         <template v-else-if="panel === 'timezone'">
           <p class="panel-note">{{ text('僅改變圖表時間顯示，不改變行情及 K 線週期。', 'Changes displayed chart times; candle data and periods stay the same.') }}</p>
-          <button class="local-timezone" @click="chooseTimezone(Intl.DateTimeFormat().resolvedOptions().timeZone)">{{ text('使用裝置時區', 'Use device timezone') }}</button>
+          <button class="local-timezone" @click="chooseTimezone()">{{ text('跟隨語言與瀏覽器', 'Follow language and browser') }}</button>
           <input v-model="search" class="panel-search" type="search" :placeholder="text('搜尋城市 / 時區，例如 Asia/Shanghai', 'Search city / timezone, e.g. America/New_York')" :aria-label="text('搜尋時區', 'Search timezones')">
           <div class="timezone-list"><button v-for="zone in visibleZones" :key="zone" :class="{ active: timezone === zone }" :aria-pressed="timezone === zone" @click="chooseTimezone(zone)"><span>{{ zone.replace(/_/g, ' ') }}</span><span>{{ timezone === zone ? '✓' : '' }}</span></button></div>
           <p v-if="!visibleZones.length" class="panel-note">{{ text('沒有符合的時區', 'No matching timezones') }}</p>
@@ -837,7 +885,7 @@ onUnmounted(() => {
           <label class="setting-row"><span>{{ text('網格線', 'Grid lines') }}</span><input v-model="preferences.grid" type="checkbox"></label>
           <label class="setting-row"><span>{{ text('十字游標', 'Crosshair') }}</span><input v-model="preferences.crosshair" type="checkbox"></label>
           <label class="setting-row"><span>{{ text('最新價格線', 'Last price line') }}</span><input v-model="preferences.lastPrice" type="checkbox"></label>
-          <button class="reset-preferences" @click="preferences = normalizePreferences(null); timezone = systemTimezone">{{ text('恢復預設設定與指標', 'Reset settings and indicators') }}</button>
+          <button class="reset-preferences" @click="preferences = normalizePreferences(null)">{{ text('恢復預設設定與指標', 'Reset settings and indicators') }}</button>
         </template>
         <template v-else><img class="snapshot-preview" :src="snapshot" :alt="text('包含指標及繪圖的 K 線快照', 'Chart snapshot with indicators and drawings')"><a class="snapshot-download" :href="snapshot" :download="snapshotName">{{ text('下載 PNG 圖片', 'Download PNG') }}</a></template>
       </div>
