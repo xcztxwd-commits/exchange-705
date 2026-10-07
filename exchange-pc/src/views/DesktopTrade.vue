@@ -232,20 +232,6 @@
            <button @click="tradeMode = 'options'; orderSubTab = 'positions'; loadOptionOrders()" :class="['flex-1 py-1.5 rounded font-bold text-sm transition-all', tradeMode === 'options' ? 'bg-white dark:bg-[#131722] text-[#8cc63f] shadow-sm' : 'text-gray-500 dark:text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-200 dark:text-gray-200']">{{ localeStore.t('optionsTerm') }}</button>
         </div>
 
-        <div v-if="auth.token" class="mx-4 mt-3 text-sm" role="group" :aria-label="localeStore.text('资金账户', 'Funding account')">
-          <div class="flex gap-2">
-            <button v-if="wallet.state.eligible && wallet.state.available > 0" type="button" data-source="TRIAL"
-              :aria-pressed="fundingSource === 'TRIAL'" :disabled="tradeSubmitting || kycChecking"
-              :class="['flex-1 rounded border p-2', fundingSource === 'TRIAL' ? 'border-[#8cc63f] text-[#8cc63f]' : 'border-gray-300 text-gray-500']"
-              @click="chooseFunding('TRIAL')">{{ localeStore.text('体验金', 'Trial credit') }}</button>
-            <button type="button" :data-source="tradeMode === 'contract' ? 'CONTRACT' : 'OPTION'"
-              :aria-pressed="fundingSource !== 'TRIAL'" :disabled="tradeSubmitting || kycChecking"
-              :class="['flex-1 rounded border p-2', fundingSource !== 'TRIAL' ? 'border-[#8cc63f] text-[#8cc63f]' : 'border-gray-300 text-gray-500']"
-              @click="chooseFunding(tradeMode === 'contract' ? 'CONTRACT' : 'OPTION')">{{ tradeMode === 'contract' ? localeStore.t('contractAccountTitle') : localeStore.t('optionAccountTitle') }}</button>
-          </div>
-          <p v-if="fundingSource === 'TRIAL' && wallet.state.expiresAt != null" class="mt-2 text-[#8cc63f]" data-testid="trade-trial-countdown">{{ localeStore.text('剩余有效时间', 'Time remaining') }} {{ wallet.remaining }}</p>
-        </div>
-
         <!-- Contract Form -->
         <div v-if="tradeMode === 'contract'" class="p-4 flex-1 overflow-y-auto custom-scrollbar">
            <div class="flex justify-between items-center mb-6 border-b border-gray-200 dark:border-[#2b3139] pb-4">
@@ -275,7 +261,11 @@
                <div class="flex justify-between items-center"><span class="font-medium text-gray-600 dark:text-gray-300">{{ localeStore.t('fee') }}</span><span class="font-mono text-gray-800 dark:text-gray-100 font-medium">{{ displayFee(estimatedFee) }} USD</span></div>
                <p v-if="currentSymbolInfo?.quantityUnitType === 'BASE_ASSET'" class="text-xs">{{ localeStore.locale === 'ja' ? `1 ${unitLabel}あたりの往復手数料：${feeMultiplier} USD（固定）` : `每1 ${unitLabel} 固定往返佣金 ${feeMultiplier} USD` }}</p>
                <div class="flex justify-between items-center"><span class="font-medium text-gray-600 dark:text-gray-300">{{ localeStore.t('margin') }}</span><span class="font-mono text-gray-800 dark:text-gray-100 font-medium">{{ Number.isFinite(estimatedMargin) ? estimatedMargin.toFixed(2) : '--' }} USD</span></div>
-               <div class="flex justify-between items-center"><span class="font-medium text-gray-600 dark:text-gray-300">{{ localeStore.t('balance') }}</span><span class="font-mono text-gray-800 dark:text-gray-100 font-medium">{{ formatMoney(tradingAvailable, '0.00') }} USD</span></div>
+               <div v-if="auth.token" class="funding-selector" data-testid="funding-selector">
+                 <span><span>{{ localeStore.text('資金來源', 'Funding source') }}</span><time v-if="fundingSource === 'TRIAL' && wallet.state.expiresAt != null" data-testid="trade-trial-countdown">{{ wallet.remaining }}</time></span>
+                 <div><AppSelect class="funding-select" compact :model-value="fundingSource" :options="fundingOptions" :label="localeStore.text('資金來源', 'Funding source')" :disabled="tradeSubmitting || kycChecking" @update:model-value="chooseFunding($event as FundingSource)" /></div>
+               </div>
+               <div class="flex justify-between items-center"><span class="font-medium text-gray-600 dark:text-gray-300">{{ localeStore.t('availableFund') }}</span><span class="font-mono text-gray-800 dark:text-gray-100 font-medium">{{ formatMoney(tradingAvailable, '0.00') }} USD</span></div>
              </div>
 
              </PositionSizing>
@@ -327,6 +317,14 @@
            <div class="mb-6">
              <div class="text-gray-700 dark:text-gray-200 mb-2 font-bold text-sm">{{ localeStore.t('tradingAmount') }} (>=50)</div>
              <el-input v-model="optionAmount" :placeholder="localeStore.t('pleaseEnterQuantity')" type="number" class="custom-input-large" />
+           </div>
+
+           <div class="mb-3 text-xs text-gray-500 dark:text-gray-400">
+               <div v-if="auth.token" class="funding-selector" data-testid="funding-selector">
+                 <span><span>{{ localeStore.text('資金來源', 'Funding source') }}</span><time v-if="fundingSource === 'TRIAL' && wallet.state.expiresAt != null" data-testid="trade-trial-countdown">{{ wallet.remaining }}</time></span>
+                 <div><AppSelect class="funding-select" compact :model-value="fundingSource" :options="fundingOptions" :label="localeStore.text('資金來源', 'Funding source')" :disabled="tradeSubmitting || kycChecking" @update:model-value="chooseFunding($event as FundingSource)" /></div>
+               </div>
+             <div class="flex justify-between items-center mt-1"><span>{{ localeStore.t('availableFund') }} (USD)</span><strong>{{ formatMoney(optionTradingAvailable, '0.00') }}</strong></div>
            </div>
 
            <div class="flex justify-between items-center text-sm mb-8 px-1">
@@ -2608,6 +2606,10 @@ const optionChoice = ref<FundingChoice>({ source: 'OPTION', manual: false });
 const contractFunding = computed(() => contractChoice.value.source);
 const optionFunding = computed(() => optionChoice.value.source);
 const fundingSource = computed(() => tradeMode.value === 'contract' ? contractFunding.value : optionFunding.value);
+const fundingOptions = computed(() => [
+  { value: tradeMode.value === 'contract' ? 'CONTRACT' : 'OPTION', label: localeStore.t(tradeMode.value === 'contract' ? 'contractAccountTitle' : 'optionAccountTitle') },
+  ...(wallet.state.eligible && wallet.state.available > 0 ? [{ value: 'TRIAL', label: localeStore.text('體驗金', 'Trial credit') }] : []),
+]);
 function chooseFunding(source: FundingSource) {
   if (tradeSubmitting.value || kycChecking.value) return;
   const choice = tradeMode.value === 'contract' ? contractChoice : optionChoice;
@@ -3792,6 +3794,7 @@ const darkLogoUrl = `${import.meta.env.BASE_URL}img/logo-dark.svg`
 </script>
 
 <style>
+.trade-page .funding-selector{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12px}.trade-page .funding-selector>span{display:flex;align-items:center;flex-wrap:wrap;gap:4px 6px;flex:1;min-width:0;overflow-wrap:anywhere}.trade-page .funding-selector>div{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:4px 8px;max-width:65%}.trade-page .funding-selector .funding-select{width:132px;max-width:100%}.trade-page .funding-selector time{color:#639700;font-size:11px;font-variant-numeric:tabular-nums}
 .protection-input { display:block; width:100%; min-height:44px; margin-top:8px; padding:8px 12px; border:1px solid #dce0e7; border-radius:8px; background:transparent; color:inherit; }
 .protection-input:focus-visible { outline:2px solid #8cc63f; outline-offset:2px; }
 .brand-logo {

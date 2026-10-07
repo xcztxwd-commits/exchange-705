@@ -19,7 +19,7 @@ class SimpleManualOrderPricesTest {
     private static TradingSymbol symbol() {
         TradingSymbol s=new TradingSymbol();s.setSymbol("JPY=X");s.setSourceCategory("Forex");s.setMarketSource("yahoo");s.setBaseCurrency("USD");s.setQuoteCurrency("JPY");return s;
     }
-    @Test void chartExposesOnlyCompleteSevenDayCandlesAndKeepsPrecisionAsStrings() {
+    @Test void chartExposesOnlyCompleteThirtyDayCandlesAndKeepsPrecisionAsStrings() {
         ForexQuoteMarketService market=mock(ForexQuoteMarketService.class);long end=Math.floorDiv(System.currentTimeMillis(),60000)*60000;
         List<Map<String,Object>> rows=new ArrayList<>();
         for(long time:new long[]{end-120000,end-60000,end,end+60000,end-ManualOrderGenerator.RANGE-60000}) {

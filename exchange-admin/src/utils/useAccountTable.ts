@@ -9,10 +9,12 @@ export function useAccountTable() {
   const sequences = new Map<string, number>()
   watch(modes, () => { epoch++ }, { flush: 'sync', deep: true })
   function selectRow(row: any) { rowMode.value = row.accountMode || 'REAL' }
-  async function read(mode: AccountMode, path: string, params: any = {}, method = 'GET'): Promise<any> {
+  async function read(mode: AccountMode, path: string, params: any = {}, method = 'GET', signal?: AbortSignal): Promise<any> {
+    const version = epoch
     const result: any = mode === 'REAL'
-      ? method === 'POST' ? await request.post(path, params) : await request.get(path, { params })
-      : await request.post('/admin/account-query', { method, path: '/api' + path, ...(method === 'POST' ? { body: params } : { params }) })
+      ? method === 'POST' ? await request.post(path, params, { signal }) : await request.get(path, { params, signal })
+      : await request.post('/admin/account-query', { method, path: '/api' + path, ...(method === 'POST' ? { body: params } : { params }) }, { signal })
+    if (version !== epoch) throw new Error('账户筛选已变更，已丢弃旧查询')
     if (result?.success === false) throw new Error(result.message || '查询失败')
     return tagRows(result, mode)
   }
@@ -100,5 +102,5 @@ export function useAccountTable() {
     if (sequence !== detailSequence || mode !== rowMode.value) throw new Error('已丢弃过期详情')
     return result
   }
-  return { modes, rowMode, selectRow, query, summary, detail, fundDetails, statistics, fixedQuery, counters }
+  return { modes, rowMode, selectRow, read, query, summary, detail, fundDetails, statistics, fixedQuery, counters }
 }

@@ -45,6 +45,20 @@ class ManualOrderChartPageTest {
         when(market.historicalKline("JPY=X","1m",200,start+59999)).thenReturn(feed(Collections.singletonList(candle(start)),false,"available"));
         assertEquals(false,prices.chart(symbol(),"UTC",start+59999,200).get("hasMore"));
     }
+    @Test void thirtyDayBoundaryAcceptsOlderCandlesAndRejectsEarlierTimes() {
+        long end=finished(),from=end-30*86400000L,older=end-20*86400000L;
+        assertEquals(30*86400000L,ManualOrderGenerator.RANGE);
+        ForexQuoteMarketService market=mock(ForexQuoteMarketService.class);
+        when(market.historicalKline("JPY=X","1m",200,older+59999)).thenReturn(feed(Arrays.asList(candle(from-60000),candle(from),candle(older)),false,"available"));
+        ManualOrderPrices prices=new ManualOrderPrices(market);Map<String,Object> page=prices.chart(symbol(),"UTC",older+59999,200);
+        List<Map<String,Object>> candles=(List<Map<String,Object>>)page.get("candles");
+        assertEquals(from,page.get("from"));assertEquals(2,candles.size());assertEquals(from,candles.get(0).get("timestamp"));assertEquals(older,candles.get(1).get("timestamp"));assertEquals(false,page.get("hasMore"));
+        assertThrows(BusinessException.class,()->prices.chart(symbol(),"UTC",from-1,200));
+        verify(market,times(1)).historicalKline("JPY=X","1m",200,older+59999);verifyNoMoreInteractions(market);
+        SimpleManualOrderGenerator.Request request=new SimpleManualOrderGenerator.Request();request.openTime=from;request.closeTime=older;
+        assertDoesNotThrow(()->SimpleManualOrderGenerator.validateTimes(request,from,end));
+        request.openTime=from-60000;assertThrows(BusinessException.class,()->SimpleManualOrderGenerator.validateTimes(request,from,end));
+    }
     @Test void invalidRangesAndPageSizesAreRejectedBeforeAnyMarketRead() {
         ForexQuoteMarketService market=mock(ForexQuoteMarketService.class);ManualOrderPrices prices=new ManualOrderPrices(market);
         for(int limit:new int[]{0,1,201,10080})assertThrows(BusinessException.class,()->prices.chart(symbol(),"UTC",null,limit));

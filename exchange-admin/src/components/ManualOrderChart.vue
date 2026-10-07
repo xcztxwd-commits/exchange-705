@@ -56,7 +56,7 @@ async function render(view?: { start: number; end: number }) {
     resize = new ResizeObserver(() => chart?.resize()); resize.observe(host.value)
   }
   const zoom = view || (chart.getOption()?.dataZoom as any[] | undefined)?.[0]
-  // ponytail: at most 10,080 minute candles; keep a small visible window with native ECharts dataZoom.
+  // ponytail: at most 43,200 minute candles; keep a small visible window with native ECharts dataZoom.
   chart.setOption({ animation: false, grid: { left: 62, right: 16, top: 25, bottom: 70 },
     tooltip: { trigger: 'axis', renderMode: 'richText', confine: true, axisPointer: { type: 'cross' }, formatter: (items: any) => { const row = candles.value[items?.[0]?.dataIndex]; return row ? `${interval.value} · ${date(row.timestamp)} UTC${row.offset === 'Z' ? '+00:00' : row.offset}\n开 ${row.price}  收 ${row.close}\n低 ${row.low}  高 ${row.high}` : '' } },
     xAxis: { type: 'category', data: candles.value.map(r => String(r.timestamp)), boundaryGap: true, axisLabel: { formatter: (v: string) => date(Math.floor(Number(v) / orderChartIntervals[interval.value]) * orderChartIntervals[interval.value], true), hideOverlap: true } },
@@ -94,7 +94,7 @@ async function load(id: number, endTime?: number, attempt = 0, fill = false) {
     message.value = response.pending ? '缺失行情正在后台加载，已有完整分钟可直接选择；更早行情按需加载。' : response.status === 'unavailable' ? '行情接口暂不可用，可重试；不是已确认休市。' : response.status === 'stale' ? '当前为历史缓存；最终生成会重新校验。' : rows.value.length < 2 ? '这一段不足两根完整的已结束分钟K线，可加载更早行情或更换品种。' : ''
     await render(view)
     if (id !== revision) return
-    // Retry only this page, with a stable cursor; never re-read all seven days every 1.5 seconds.
+    // Retry only this page, with a stable cursor; never re-read all thirty days every 1.5 seconds.
     if (response.pending && attempt < 19) timer = setTimeout(() => load(id, response.to - 1, attempt + 1, fill), 1500)
     else if (response.pending) message.value = '历史行情仍在加载，可刷新重试或加载更早行情；缺失分钟不可选。'
     // Coarser periods need more minute pages, but keep every read bounded and render progress immediately.
@@ -183,9 +183,9 @@ onBeforeUnmount(() => { stop(); dispose() })
   <section class="order-chart" aria-label="图表选择开平仓">
     <div class="chart-toggle"><slot name="intro" /><el-button v-permission="'orders:manual_order'" :disabled="!active || disabled" :aria-expanded="expanded" @click="toggle">{{ expanded ? '收起图表' : '图表选择开平仓' }}</el-button></div>
     <div v-if="expanded" class="chart-panel">
-      <div class="chart-toolbar"><span>{{ symbol }} · {{ interval }} · 最近七天 · {{ timezone }}</span><div class="chart-toolbar-actions"><div class="chart-periods" role="group" aria-label="时间周期"><el-button v-for="(_, period) in orderChartIntervals" :key="period" v-permission="'orders:manual_order'" size="small" :type="interval === period ? 'primary' : 'default'" :aria-pressed="interval === period" :disabled="disabled" @click="changeInterval(period)">{{ period }}</el-button></div><el-button v-permission="'orders:manual_order'" text :disabled="disabled" :loading="loading" @click="reload">刷新行情</el-button></div></div>
+      <div class="chart-toolbar"><span>{{ symbol }} · {{ interval }} · 最近30天 · {{ timezone }}</span><div class="chart-toolbar-actions"><div class="chart-periods" role="group" aria-label="时间周期"><el-button v-for="(_, period) in orderChartIntervals" :key="period" v-permission="'orders:manual_order'" size="small" :type="interval === period ? 'primary' : 'default'" :aria-pressed="interval === period" :disabled="disabled" @click="changeInterval(period)">{{ period }}</el-button></div><el-button v-permission="'orders:manual_order'" text :disabled="disabled" :loading="loading" @click="reload">刷新行情</el-button></div></div>
       <p class="chart-help">在K线区域按住鼠标拖选一段：较早K线为开仓，较晚为平仓，均取该K线首个有效分钟开盘价。下方滑条浏览/缩放；滚轮缩放。<template v-if="interval !== '1m'">周期按UTC对齐，仅聚合已加载分钟，未满周期或缺失分钟不补造；切换周期保留已选时间和价格。</template></p>
-      <div class="chart-progress" aria-live="polite"><span>已显示 {{ candles.length }} 根{{ interval === '1m' ? '完整分钟K线' : `${interval} K线（${rows.length} 根完整分钟）` }} · {{ hasMore ? '向左浏览按需加载更早行情' : '最近七天范围' }}</span><el-button v-if="hasMore" v-permission="'orders:manual_order'" size="small" :disabled="disabled || loading" @click="loadMore">加载更早行情</el-button></div>
+      <div class="chart-progress" aria-live="polite"><span>已显示 {{ candles.length }} 根{{ interval === '1m' ? '完整分钟K线' : `${interval} K线（${rows.length} 根完整分钟）` }} · {{ hasMore ? '向左浏览按需加载更早行情' : '最近30天范围' }}</span><el-button v-if="hasMore" v-permission="'orders:manual_order'" size="small" :disabled="disabled || loading" @click="loadMore">加载更早行情</el-button></div>
       <div ref="host" class="candles" role="group" tabindex="0" aria-label="K线拖选区；左右键调整平仓，Shift加左右键调整开仓，自动应用" @pointerdown="start" @pointermove="move" @pointerup="finish" @pointercancel="cancel" @keydown="keyboard" />
       <p v-if="message" role="status" class="chart-message">{{ message }}</p>
       <div v-if="selected" class="selected-minutes" aria-live="polite"><span>开仓 {{ date(selected.open.timestamp) }} · {{ selected.open.price }}</span><span>平仓 {{ date(selected.close.timestamp) }} · {{ selected.close.price }}</span><el-button v-permission="'orders:manual_order'" text :disabled="disabled" @click="draft = undefined; emit('clear'); markers()">清除时间选择</el-button></div>

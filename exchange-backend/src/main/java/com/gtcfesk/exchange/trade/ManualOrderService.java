@@ -142,10 +142,10 @@ public class ManualOrderService {
         if(autoClose) {
             long recentFrom=Math.max(0,end-ManualOrderGenerator.RANGE);
             NavigableMap<Long,ManualOrderGenerator.Candle> recent=prices.generationCandles(s,recentFrom,end);
-            if(recent.isEmpty())throw new BusinessException("最近 7 天没有可用的平仓分钟行情；请更换品种或稍后重试");
+            if(recent.isEmpty())throw new BusinessException("最近 30 天没有可用的平仓分钟行情；请更换品种或稍后重试");
             close=recent.lastKey();
             if(open!=null && (open>close || open<close-ManualOrderGenerator.RANGE))
-                throw new BusinessException("填写的开仓时间不在最近有效平仓分钟之前的 7 天内");
+                throw new BusinessException("填写的开仓时间不在最近有效平仓分钟之前的 30 天内");
             from=open!=null?open:Math.max(0,close-ManualOrderGenerator.RANGE);to=close+60000;
             candles=new TreeMap<>(recent.subMap(Math.max(from,recentFrom),true,to,false));
             if(from<recentFrom)candles.putAll(prices.generationCandles(s,from,recentFrom));
@@ -163,7 +163,7 @@ public class ManualOrderService {
             throw new BusinessException((autoClose?"最近有效":"所选")+"平仓分钟 "+Instant.ofEpochMilli(close).atZone(zone)+" 的价格 "+ending.price.toPlainString()+" 不在目标平仓价 "+r.targetClosePrice.toPlainString()+" 的 ±5% 范围；不修改历史价格");
         ManualOrderGenerator.Candidate best;
         try {best=ManualOrderGenerator.solve(r,candles,open,close,available,lot,fee,UUID.randomUUID().getLeastSignificantBits(),s.getQuantityStep()==null?new BigDecimal("0.01"):s.getQuantityStep(),s.getMinOrderQuantity()==null?new BigDecimal("0.01"):s.getMinOrderQuantity(),s.getMinOrderNotional()==null?BigDecimal.ZERO:s.getMinOrderNotional(),maxLeverage(s.getMaxLeverage(),s.getCategory()));}
-        catch(BusinessException e) {if(autoClose)throw new BusinessException("最近有效平仓分钟 "+Instant.ofEpochMilli(close).atZone(zone)+" 之前 7 天没有符合条件的开仓分钟："+e.getMessage());throw e;}
+        catch(BusinessException e) {if(autoClose)throw new BusinessException("最近有效平仓分钟 "+Instant.ofEpochMilli(close).atZone(zone)+" 之前 30 天没有符合条件的开仓分钟："+e.getMessage());throw e;}
         Request generated=new Request();generated.specVersion=r.specVersion;generated.quantityUnitType=r.quantityUnitType;generated.userId=r.userId;generated.symbol=r.symbol;generated.timezone=r.timezone;generated.side=best.side;generated.leverage=best.leverage;
         ZonedDateTime a=Instant.ofEpochMilli(best.open.time).atZone(zone),b=Instant.ofEpochMilli(best.close.time).atZone(zone);
         generated.openLocal=a.toLocalDateTime().toString();generated.closeLocal=b.toLocalDateTime().toString();generated.openOffset=a.getOffset().toString();generated.closeOffset=b.getOffset().toString();

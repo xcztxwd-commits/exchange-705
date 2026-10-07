@@ -23,14 +23,18 @@ class FiatWithdrawTest {
     }
 
     @Test void freezesUsdAndRefundsOrCompletesUsingTheLockedAmount() {
-        for (boolean reject : new boolean[]{true, false}) {
+        for (String wallet : new String[]{"FUND", "CONTRACT", "OPTION"}) for (boolean reject : new boolean[]{true, false}) {
             ForexQuoteMarketService market = mock(ForexQuoteMarketService.class);
             when(market.requireConversionRate("JPY", "yahoo")).thenReturn(new BigDecimal("0.00625"));
             WithdrawRecordRepository records = mock(WithdrawRecordRepository.class);
             AssetAccountRepository accounts = mock(AssetAccountRepository.class);
             UserBankCardRepository cards = mock(UserBankCardRepository.class);
             AssetAccount fund = new AssetAccount(); fund.setCoin("FUND"); fund.setAvailable(new BigDecimal("120")); fund.setFrozen(new BigDecimal("5"));
-            when(accounts.lockByUserId(7L)).thenReturn(Collections.singletonList(fund));
+            AssetAccount contract = new AssetAccount(); contract.setCoin("CONTRACT"); contract.setAvailable(new BigDecimal("120")); contract.setFrozen(new BigDecimal("5"));
+            AssetAccount option = new AssetAccount(); option.setCoin("OPTION"); option.setAvailable(new BigDecimal("120")); option.setFrozen(new BigDecimal("5"));
+            List<AssetAccount> wallets = Arrays.asList(fund, contract, option);
+            AssetAccount source = wallets.stream().filter(a -> wallet.equals(a.getCoin())).findFirst().get();
+            when(accounts.lockByUserId(7L)).thenReturn(wallets);
             UserBankCard card = new UserBankCard(); card.setRecipientAccount("123"); card.setCurrency("USD");
             when(cards.findByTenantIdAndUserId(1L, 7L)).thenReturn(Collections.singletonList(card));
             WithdrawController controller = new WithdrawController(records, accounts, mock(UserDigitalAddressRepository.class), cards, new FiatCurrencyService(market));
@@ -38,6 +42,7 @@ class FiatWithdrawTest {
             org.springframework.test.util.ReflectionTestUtils.setField(controller,"tenantPolicy",mock(com.gtcfesk.exchange.control.TenantPolicyService.class));
             Map<String, Object> req = new HashMap<>();
             req.put("requestId","fiat-withdraw-test-key");
+            if (!"FUND".equals(wallet)) req.put("accountType", wallet); // Older clients still default to FUND.
             com.gtcfesk.exchange.repository.UserAccountRepository users=mock(com.gtcfesk.exchange.repository.UserAccountRepository.class);UserAccount customer=new UserAccount();customer.setId(7L);when(users.lockById(7L)).thenReturn(Optional.of(customer));when(users.findByTenantIdAndId(1L,7L)).thenReturn(Optional.of(customer));org.springframework.test.util.ReflectionTestUtils.setField(controller,"users",users);
             req.put("type", "bank"); req.put("network", "USD"); req.put("currency", "JPY"); req.put("amount", "16000"); req.put("address", "123");
             Map<?, ?> quote = (Map<?, ?>) controller.calculateAmount(req).getBody();
@@ -47,10 +52,19 @@ class FiatWithdrawTest {
             assertEquals(200, controller.submitWithdraw(new UsernamePasswordAuthenticationToken("7", ""), req).getStatusCodeValue());
             verify(records).save(saved.capture());
             WithdrawRecord record = saved.getValue();
+            record.setId(1L);
+            assertEquals(wallet, record.getAccountType());
             assertEquals("JPY", record.getCurrency()); assertEquals(new BigDecimal("16000"), record.getOriginalAmount());
             assertEquals(new BigDecimal("0.00625"), record.getExchangeRate());
-            assertEquals(0, new BigDecimal("20").compareTo(fund.getAvailable()));
-            assertEquals(0, new BigDecimal("105").compareTo(fund.getFrozen()));
+            assertEquals(0, new BigDecimal("20").compareTo(source.getAvailable()));
+            assertEquals(0, new BigDecimal("105").compareTo(source.getFrozen()));
+            when(records.findReplayId(1L, 7L, "fiat-withdraw-test-key")).thenReturn(Optional.of(1L));
+            when(records.findByTenantIdAndUserIdAndRequestKey(1L, 7L, "fiat-withdraw-test-key")).thenReturn(Optional.of(record));
+            assertEquals(200, controller.submitWithdraw(new UsernamePasswordAuthenticationToken("7", ""), req).getStatusCodeValue());
+            assertEquals(0, new BigDecimal("20").compareTo(source.getAvailable()));
+            Map<String, Object> changedWallet = new HashMap<>(req);
+            changedWallet.put("accountType", "FUND".equals(wallet) ? "CONTRACT" : "FUND");
+            assertEquals(400, controller.submitWithdraw(new UsernamePasswordAuthenticationToken("7", ""), changedWallet).getStatusCodeValue());
             when(records.findByTenantIdAndId(1L, 1L)).thenReturn(Optional.of(record));
             when(market.requireConversionRate("JPY", "yahoo")).thenThrow(new BusinessException("expired"));
             when(records.findOwnerIdById(1L)).thenReturn(Optional.of(7L));
@@ -61,16 +75,32 @@ class FiatWithdrawTest {
             if (reject) {
                 WithdrawReviewController.RejectRequest rejection = new WithdrawReviewController.RejectRequest(); rejection.setRemark("test");
                 assertEquals(200, review.rejectWithdraw(1L, rejection, null).getStatusCodeValue());
-                assertEquals(0, new BigDecimal("120").compareTo(fund.getAvailable()));
+                assertEquals(0, new BigDecimal("120").compareTo(source.getAvailable()));
                 assertEquals(400, review.rejectWithdraw(1L, rejection, null).getStatusCodeValue());
             } else {
                 assertEquals(200, review.approveWithdraw(1L, null, null).getStatusCodeValue());
                 assertEquals(200, review.completeWithdraw(1L, null).getStatusCodeValue());
-                assertEquals(0, new BigDecimal("20").compareTo(fund.getAvailable()));
+                assertEquals(0, new BigDecimal("20").compareTo(source.getAvailable()));
                 assertEquals(400, review.completeWithdraw(1L, null).getStatusCodeValue());
             }
-            assertEquals(0, new BigDecimal("5").compareTo(fund.getFrozen()));
+            assertEquals(0, new BigDecimal("5").compareTo(source.getFrozen()));
+            for (AssetAccount other : wallets) if (other != source) {
+                assertEquals(new BigDecimal("120"), other.getAvailable());
+                assertEquals(new BigDecimal("5"), other.getFrozen());
+            }
         }
+    }
+
+    @Test void unsupportedWalletNeverTouchesFunds() {
+        WithdrawRecordRepository records = mock(WithdrawRecordRepository.class);
+        AssetAccountRepository accounts = mock(AssetAccountRepository.class);
+        WithdrawController controller = new WithdrawController(records, accounts, mock(UserDigitalAddressRepository.class), mock(UserBankCardRepository.class), mock(FiatCurrencyService.class));
+        org.springframework.test.util.ReflectionTestUtils.setField(controller, "tenantPolicy", mock(com.gtcfesk.exchange.control.TenantPolicyService.class));
+        for (String wallet : new String[]{"", "BTC", "FUND,CONTRACT"}) {
+            Map<String, Object> req = new HashMap<>(); req.put("type", "bank"); req.put("accountType", wallet);
+            assertEquals(400, controller.submitWithdraw(new UsernamePasswordAuthenticationToken("7", ""), req).getStatusCodeValue());
+        }
+        verifyNoInteractions(records, accounts);
     }
 
     @Test void disabledWithdrawRejectsBeforeTouchingMoney(){WithdrawRecordRepository records=mock(WithdrawRecordRepository.class);AssetAccountRepository accounts=mock(AssetAccountRepository.class);WithdrawController controller=new WithdrawController(records,accounts,mock(UserDigitalAddressRepository.class),mock(UserBankCardRepository.class),mock(FiatCurrencyService.class));com.gtcfesk.exchange.control.TenantPolicyService policy=mock(com.gtcfesk.exchange.control.TenantPolicyService.class);org.springframework.test.util.ReflectionTestUtils.setField(controller,"tenantPolicy",policy);doThrow(new org.springframework.security.access.AccessDeniedException("disabled")).when(policy).requireNewBusiness("withdraw");assertThrows(RuntimeException.class,()->controller.submitWithdraw(new UsernamePasswordAuthenticationToken("7",""),Collections.emptyMap()));verifyNoInteractions(records,accounts);}

@@ -35,6 +35,9 @@ public class WithdrawRecord extends com.gtcfesk.exchange.tenant.TenantOwnedEntit
     @Column(nullable = false, length = 20)
     private String type; // digital 数字货币, bank 银行卡
 
+    @Column(name = "account_type", nullable = false, length = 20, updatable = false)
+    private String accountType = "FUND"; // 出金钱包；历史记录使用资金账户
+
     @Column(nullable = false, length = 50)
     private String network; // 网络/币种 (如 USDT-TRC20, USD)
 
@@ -93,6 +96,5 @@ public class WithdrawRecord extends com.gtcfesk.exchange.tenant.TenantOwnedEntit
         updatedAt = LocalDateTime.now();
     }
 }
-
 
 

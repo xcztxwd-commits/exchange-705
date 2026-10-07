@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useTrialWallet } from '@/utils/useTrialWallet'
 import { useRouter } from 'vue-router'
 import TrialAccountCard from '@/components/TrialAccountCard.vue'
+import WalletAccountBalances from '../../../exchange-frontend/src/components/WalletAccountBalances.vue'
+import { readAssetResponse } from '../../../exchange-frontend/src/advanced/utils/assetResponse'
 import Tabbar from '@/components/Tabbar.vue'
 import request from '@/utils/request'
 import { useAuthStore } from '@/store/auth'
@@ -9,6 +12,7 @@ import { useLocaleStore } from '@/store/locale'
 
 const router = useRouter()
 const auth = useAuthStore()
+const trialWallet = useTrialWallet()
 auth.load()
 
 const localeStore = useLocaleStore()
@@ -19,13 +23,17 @@ const totalAssets = ref(0)
 const fundBalance = ref(0)
 const contractBalance = ref(0)
 const optionBalance = ref(0)
+const fundFrozen = ref(0)
+const contractFrozen = ref(0)
+const optionFrozen = ref(0)
 const balanceVisible = ref(true)
-const loading = ref(false)
+const loading = ref(true)
+const error = ref('')
 
 // 格式化金额
 function formatMoney(v: number | string | undefined | null) {
   const n = Number(v || 0)
-  return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  return n.toLocaleString(localeStore.locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
 // 切换余额显示/隐藏
@@ -36,16 +44,25 @@ function toggleBalance() {
 // 加载资产信息
 async function loadAssets() {
   loading.value = true
+  error.value = ''
   try {
+    const owner = auth.token, started = performance.now()
     const res: any = await request.get('/user/assets')
+    if (owner !== auth.token) return
+    const assets = readAssetResponse(res, ['fundBalance', 'contractBalance', 'optionBalance', 'fundFrozen', 'contractFrozen', 'optionFrozen'], localeStore.t('loadAssetsFailed'))
+    trialWallet.accept(res, started)
     
     if (res && res.success !== false) {
-      fundBalance.value = Number(res.fundBalance || 0)
-      contractBalance.value = Number(res.contractBalance || 0)
-      optionBalance.value = Number(res.optionBalance || 0)
-      totalAssets.value = fundBalance.value + contractBalance.value + optionBalance.value
+      fundBalance.value = assets.fundBalance
+      contractBalance.value = assets.contractBalance
+      optionBalance.value = assets.optionBalance
+      fundFrozen.value = assets.fundFrozen
+      contractFrozen.value = assets.contractFrozen
+      optionFrozen.value = assets.optionFrozen
+      totalAssets.value = fundBalance.value + fundFrozen.value + contractBalance.value + contractFrozen.value + optionBalance.value + optionFrozen.value
     }
   } catch (e: any) {
+    error.value = localeStore.t('loadAssetsFailed')
     console.error('加载资产信息失败:', e)
   } finally {
     loading.value = false
@@ -78,11 +95,14 @@ onMounted(() => {
       </div>
       <div class="assets-value-row">
         <div class="assets-value">
-          <span v-if="balanceVisible">${{ formatMoney(totalAssets) }}</span>
+          <span v-if="loading || error">—</span>
+          <span v-else-if="balanceVisible"><bdi>${{ formatMoney(totalAssets) }}</bdi></span>
           <span v-else class="hidden-balance">****</span>
         </div>
-        <div 
+        <button type="button"
           class="eye-icon"
+          :aria-label="balanceVisible ? localeStore.text('隱藏餘額', 'Hide balances') : localeStore.text('顯示餘額', 'Show balances')"
+          :aria-pressed="!balanceVisible"
           @click="toggleBalance"
         >
           <!-- 睁眼图标（显示状态） -->
@@ -94,11 +114,17 @@ onMounted(() => {
             <path d="M508.8 704c-70.4 0-128-57.6-128-128 0-12.8 2.133333-25.6 5.333333-38.4l-70.4-70.4c-25.6 38.4-38.4 83.2-38.4 128 0 140.8 115.2 256 256 256 44.8 0 89.6-12.8 128-38.4l-70.4-70.4c-12.8 3.2-25.6 5.333333-38.4 5.333333z m256-128c0 12.8-2.133333 25.6-5.333333 38.4l70.4 70.4c25.6-38.4 38.4-83.2 38.4-128 0-140.8-115.2-256-256-256-44.8 0-89.6 12.8-128 38.4l70.4 70.4c12.8-3.2 25.6-5.333333 38.4-5.333333 70.4 0 128 57.6 128 128z" fill="#999999"></path>
             <path d="M764.8 576c-12.8-32-32-57.6-57.6-83.2l-70.4-70.4c25.6-19.2 44.8-44.8 57.6-76.8l128-128-57.6-57.6-128 128c-32 12.8-57.6 32-76.8 57.6l-70.4-70.4c-25.6-25.6-51.2-44.8-83.2-57.6l-128-128-57.6 57.6 128 128c-12.8 32-12.8 64 0 96l-128 128 57.6 57.6 128-128c32 12.8 64 12.8 96 0l70.4 70.4c25.6 25.6 51.2 44.8 83.2 57.6l128 128 57.6-57.6-128-128c12.8-32 12.8-64 0-96z" fill="#999999"></path>
           </svg>
-        </div>
+        </button>
       </div>
     </div>
 
-    <div style="margin:16px"><TrialAccountCard :visible="balanceVisible" /></div>
+    <WalletAccountBalances class="wallet-account-section" :accounts="[
+      { type: 'FUND', name: localeStore.t('fundAccountTitle'), available: fundBalance, frozen: fundFrozen },
+      { type: 'CONTRACT', name: localeStore.t('contractAccountTitle'), available: contractBalance, frozen: contractFrozen },
+      { type: 'OPTION', name: localeStore.t('optionAccountTitle'), available: optionBalance, frozen: optionFrozen },
+    ]" :visible="balanceVisible" :unavailable="loading || !!error" />
+    <div v-if="error" class="wallet-load-error" role="alert"><span>{{ error }}</span><button type="button" @click="loadAssets">{{ localeStore.text('重試', 'Retry') }}</button></div>
+    <div style="margin:16px"><TrialAccountCard :visible="balanceVisible && !loading && !error" /></div>
     <!-- 绑定银行卡 -->
     <div class="bind-item" @click="router.push('/wallet/bind-bank-card')">
       <div class="bind-label">{{ localeStore.t('bindBankCard') }}</div>
@@ -162,6 +188,8 @@ onMounted(() => {
 
 .assets-header {
   display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 16px;
@@ -176,15 +204,19 @@ onMounted(() => {
 .assets-subtitle {
   font-size: 13px;
   color: #999;
+  overflow-wrap: anywhere;
 }
 
 .assets-value-row {
   display: flex;
+  gap: 12px;
   align-items: center;
   justify-content: space-between;
 }
 
 .assets-value {
+  min-width: 0;
+  overflow-wrap: anywhere;
   font-size: 32px;
   font-weight: 700;
   color: #73b100;
@@ -198,6 +230,10 @@ onMounted(() => {
 }
 
 .eye-icon {
+  flex: none;
+  padding: 0;
+  border: 0;
+  background: transparent;
   width: 32px;
   height: 32px;
   cursor: pointer;
@@ -211,6 +247,11 @@ onMounted(() => {
 .eye-icon:active {
   background: #f0f0f0;
 }
+
+.eye-icon:focus-visible { outline: 2px solid #73b100; outline-offset: 3px; }
+.wallet-account-section { margin: 0 16px 20px; }
+.wallet-load-error { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 16px; padding: 12px; border-radius: 10px; background: #fff0ef; color: #a44343; font-size: 13px; }
+.wallet-load-error button { flex: none; padding: 8px 12px; border: 0; border-radius: 6px; background: #fff; color: inherit; font: inherit; cursor: pointer; }
 
 /* 绑定项 */
 .bind-item {

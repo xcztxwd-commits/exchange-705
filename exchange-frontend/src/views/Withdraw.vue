@@ -57,14 +57,16 @@
           </div>
         </div>
 
-        <!-- 数量 -->
+        <WithdrawWallet v-model="withdrawAccount" :balances="balances" :ready="balanceReady" :disabled="submitting" @transferred="loadBalance" />
+
+        <!-- 金额 -->
         <div class="form-group">
-          <div class="form-label">{{ localeStore.t('quantity') }}</div>
+          <div class="form-label">{{ localeStore.t('amountText') }}</div>
           <input 
             type="number" 
             v-model.number="amount" 
             class="input-box" 
-            :placeholder="localeStore.t('quantity')"
+            :placeholder="localeStore.t('enterAmount')"
             step="0.00000001"
             min="0"
           />
@@ -72,7 +74,7 @@
 
         <!-- 备注 -->
         <div class="form-group">
-          <div class="form-label">{{ localeStore.t('remarkCurrencyName') }}</div>
+          <div class="form-label">{{ localeStore.t('remark') }}</div>
           <input 
             type="text" 
             v-model="remark" 
@@ -93,12 +95,12 @@
           </div>
           <div class="summary-item">
             <span>{{ localeStore.t('balance') }}</span>
-            <span>{{ fundBalance }} USD</span>
+            <span>{{ balanceReady ? selectedBalance : '—' }} USD</span>
           </div>
         </div>
 
         <!-- 提币按钮 -->
-        <button class="withdraw-button" @click="submitWithdraw" :disabled="submitting">
+        <button class="withdraw-button" @click="submitWithdraw" :disabled="submitting || !balanceReady">
           {{ submitting ? localeStore.t('submitting') : localeStore.t('withdrawButton') }}
         </button>
       </div>
@@ -124,14 +126,16 @@
           </div>
         </div>
 
-        <!-- 数量 -->
+        <WithdrawWallet v-model="withdrawAccount" :balances="balances" :ready="balanceReady" :disabled="submitting" @transferred="loadBalance" />
+
+        <!-- 金额 -->
         <div class="form-group">
-          <div class="form-label">{{ localeStore.t('quantity') }}</div>
+          <div class="form-label">{{ localeStore.t('amountText') }}</div>
           <input 
             type="number" 
             v-model.number="amount" 
             class="input-box" 
-            :placeholder="localeStore.t('quantity')"
+            :placeholder="localeStore.t('enterAmount')"
             step="0.01"
             min="0"
           />
@@ -139,7 +143,7 @@
 
         <!-- 备注 -->
         <div class="form-group">
-          <div class="form-label">{{ localeStore.t('remarkCurrencyName') }}</div>
+          <div class="form-label">{{ localeStore.t('remark') }}</div>
           <input 
             type="text" 
             v-model="remark" 
@@ -160,12 +164,12 @@
           </div>
           <div class="summary-item">
             <span>{{ localeStore.t('balance') }}</span>
-            <span>{{ fundBalance }} USD</span>
+            <span>{{ balanceReady ? selectedBalance : '—' }} USD</span>
           </div>
         </div>
 
         <!-- 提币按钮 -->
-        <button class="withdraw-button" @click="submitWithdraw" :disabled="submitting || bankRate === null">
+        <button class="withdraw-button" @click="submitWithdraw" :disabled="submitting || !balanceReady || bankRate === null">
           {{ submitting ? localeStore.t('submitting') : localeStore.t('withdrawButton') }}
         </button>
       </div>
@@ -178,7 +182,7 @@
         <div v-else class="records-list">
           <div v-for="record in records" :key="record.id" class="record-item">
             <div class="record-row">
-              <div class="record-label">{{ localeStore.t('quantity') }}</div>
+              <div class="record-label">{{ localeStore.t('amountText') }}</div>
               <div class="record-value">
                 {{ record.amount }}<small v-if="record.currency">（{{ record.originalAmount }} {{ record.currency }}）</small>
                 {{ record.type === 'bank' ? 'USD' : record.network }}
@@ -308,6 +312,8 @@ import { useRouter } from 'vue-router'
 import Tabbar from '@/components/Tabbar.vue'
 import request from '@/utils/request'
 import CurrencyPicker from '@/components/CurrencyPicker.vue'
+import WithdrawWallet from '@/components/WithdrawWallet.vue'
+import { useWithdrawalWallet } from '@/utils/withdrawalWallet'
 import { useFiatCurrency } from '@/utils/fiatCurrency'
 const { currency: bankCurrency, rate: bankRate, usdPreview } = useFiatCurrency()
 import { useLocaleStore } from '@/store/locale'
@@ -351,7 +357,7 @@ const remark = ref('')
 // 计算数据
 const fee = ref('0')
 const actualAmount = ref('0')
-const fundBalance = ref('0')
+const { withdrawAccount, balances, balanceReady, selectedBalance, loadBalance } = useWithdrawalWallet(() => request.get('/user/assets'))
 
 // 状态
 const submitting = ref(false)
@@ -443,18 +449,6 @@ async function loadBankAccounts() {
     }
   } catch (e: any) {
     console.error('加载银行卡账户失败:', e)
-  }
-}
-
-// 加载余额
-async function loadBalance() {
-  try {
-    const res: any = await request.get('/user/assets')
-    if (res && res.success !== false) {
-      fundBalance.value = res.fundBalance || '0'
-    }
-  } catch (e: any) {
-    console.error('加载余额失败:', e)
   }
 }
 
@@ -568,8 +562,8 @@ watch(selectedCurrency, () => {
 
 // 提交提现申请
 async function submitWithdraw() {
-  if (submitting.value) return
-  if (withdrawType.value === 'bank' && bankRate.value === null) { showToast('汇率暂不可用，请稍后重试'); return }
+  if (submitting.value || !balanceReady.value) return
+  if (withdrawType.value === 'bank' && bankRate.value === null) { showToast(localeStore.text('匯率暫不可用，請稍後重試', 'Exchange rate unavailable; please retry later')); return }
   
   // 验证
   if (withdrawType.value === 'digital') {
@@ -584,8 +578,13 @@ async function submitWithdraw() {
     }
   }
   
-  if (!amount.value || amount.value <= 0) {
-    showToast(localeStore.t('pleaseEnterWithdrawAmount'), 'error')
+  if (!amount.value || !Number.isFinite(amount.value) || amount.value <= 0) {
+    showToast(localeStore.t('enterAmount'), 'error')
+    return
+  }
+  const requiredUsd = amount.value * (withdrawType.value === 'bank' ? bankRate.value! : 1) + Number(fee.value)
+  if (requiredUsd > selectedBalance.value) {
+    showToast(localeStore.t('insufficientBalance'), 'error')
     return
   }
   
@@ -604,6 +603,7 @@ async function submitWithdraw() {
     
     const res: any = await request.post('/withdraw/submit', {
       type: withdrawType.value,
+      accountType: withdrawAccount.value === 'FUND' ? undefined : withdrawAccount.value,
       currency: withdrawType.value === 'bank' ? bankCurrency.value : undefined,
       network: network,
       amount: amount.value,
@@ -620,10 +620,10 @@ async function submitWithdraw() {
       selectedAccount.value = ''
       fee.value = '0'
       actualAmount.value = '0'
+      void loadBalance()
       // 刷新记录
       setTimeout(() => {
         loadRecords()
-        loadBalance()
       }, 1000)
     } else {
       showToast(res.message || localeStore.t('submitFailedPleaseRetry'), 'error')

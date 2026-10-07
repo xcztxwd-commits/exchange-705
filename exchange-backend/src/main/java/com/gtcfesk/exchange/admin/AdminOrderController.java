@@ -11,6 +11,9 @@ import com.gtcfesk.exchange.repository.ContractOrderRepository;
 import com.gtcfesk.exchange.repository.OptionOrderRepository;
 import com.gtcfesk.exchange.repository.UserAccountRepository;
 import com.gtcfesk.exchange.trade.ContractOrderService;
+import com.gtcfesk.exchange.trade.ContractValuation;
+import com.gtcfesk.exchange.market.ForexQuoteMarketService;
+import com.gtcfesk.exchange.market.QuoteState;
 import io.jsonwebtoken.Claims;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -39,6 +42,7 @@ public class AdminOrderController {
     private final AssetAccountRepository assetAccountRepository;
     private final JwtUtil jwtUtil;
     @org.springframework.beans.factory.annotation.Autowired private ControlledExitService controlledExits;
+    @org.springframework.beans.factory.annotation.Autowired private ForexQuoteMarketService market;
     
     private ControlledExitService.Input exitInput(Map<String,Object> req){ControlledExitService.Input input=new ControlledExitService.Input();if(req!=null){input.requestId=java.util.Objects.toString(req.get("requestId"),null);input.reason=java.util.Objects.toString(req.get("reason"),null);}return input;}
     /**
@@ -114,6 +118,72 @@ public class AdminOrderController {
         return ResponseEntity.ok(result);
     }
 
+    /** Only the displayed IDs are read; floating valuations never update orders or balances. */
+    @PostMapping("/contract/live")
+    @com.gtcfesk.exchange.config.AdminPermission(menu = "orders", action = "")
+    @org.springframework.transaction.annotation.Transactional(readOnly = true,
+            isolation = org.springframework.transaction.annotation.Isolation.REPEATABLE_READ)
+    public ResponseEntity<?> liveContractOrders(@RequestBody Map<String, Object> params,
+            @RequestHeader(value = "Authorization", required = false) String authHeader) {
+        Object requested = params.get("ids");
+        if (!(requested instanceof List) || ((List<?>) requested).size() > 100)
+            throw new BusinessException("每次仅支持查询当前页最多100个订单");
+        Set<Long> ids = new java.util.LinkedHashSet<>();
+        for (Object value : (List<?>) requested) {
+            try {
+                long id = Long.parseLong(String.valueOf(value));
+                if (id <= 0) throw new NumberFormatException();
+                ids.add(id);
+            } catch (NumberFormatException invalid) {
+                throw new BusinessException("订单ID无效");
+            }
+        }
+        List<Map<String, Object>> list = new java.util.ArrayList<>();
+        if (!ids.isEmpty()) {
+            org.springframework.data.jpa.domain.Specification<ContractOrder> scope = orderFilter(java.util.Collections.emptyMap(), authHeader);
+            List<ContractOrder> orders = contractOrderRepository.findAllByTenantId(
+                    com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(),
+                    scope.and((root, query, cb) -> root.get("id").in(ids)));
+            Map<String, Map<String, Object>> prices = new HashMap<>(), rates = new HashMap<>();
+            for (ContractOrder order : orders) list.add(liveContractOrder(order, prices, rates));
+        }
+        return ResponseEntity.ok().cacheControl(org.springframework.http.CacheControl.noStore())
+                .body(java.util.Collections.singletonMap("list", list));
+    }
+
+    private Map<String, Object> liveContractOrder(ContractOrder order,
+            Map<String, Map<String, Object>> prices, Map<String, Map<String, Object>> rates) {
+        Map<String, Object> row = new HashMap<>();
+        row.put("id", order.getId()); row.put("status", order.getStatus()); row.put("deleted", order.isDeleted());
+        row.put("openPrice", order.getOpenPrice()); row.put("closePrice", order.getClosePrice());
+        row.put("openTime", order.getOpenTime()); row.put("closeTime", order.getCloseTime());
+        row.put("fee", order.getFee()); row.put("margin", order.getMargin());
+        row.put("currentPrice", "CLOSED".equals(order.getStatus()) ? order.getClosePrice() : order.getCurrentPrice());
+        row.put("profit", order.getProfit()); row.put("netProfit", contractNetProfit(order, order.getProfit()));
+        row.put("liveAvailable", true);
+        if (!"OPEN".equals(order.getStatus()) || order.isDeleted()) return row;
+        row.put("liveAvailable", false);
+        Map<String, Object> quote = prices.computeIfAbsent(order.getSymbol(), market::internalPrice);
+        String rateKey = order.getQuoteCurrency() + ":" + order.getQuoteSource();
+        Map<String, Object> conversion = rates.computeIfAbsent(rateKey,
+                ignored -> market.contractConversion(order.getQuoteCurrency(), order.getQuoteSource()));
+        long now = System.currentTimeMillis();
+        if (!Boolean.TRUE.equals(quote.get("available")) || !QuoteState.valid(quote) || QuoteState.time(quote.get("expiresAt")) <= now
+                || !Boolean.TRUE.equals(conversion.get("conversionAvailable")) || QuoteState.time(conversion.get("conversionExpiresAt")) <= now
+                || conversion.get("quoteToUsdRate") == null || order.getOpenPrice() == null || order.getOpenPrice().signum() <= 0
+                || order.getQuantity() == null || order.getQuantity().signum() <= 0 || !("BUY".equals(order.getSide()) || "SELL".equals(order.getSide()))
+                || order.getLotSize() != null && order.getLotSize().signum() <= 0
+                || order.getLeverage() != null && order.getLeverage().signum() <= 0) return row;
+        BigDecimal price = new BigDecimal(quote.get("price").toString());
+        BigDecimal rate = new BigDecimal(conversion.get("quoteToUsdRate").toString());
+        if (rate.signum() <= 0) return row;
+        BigDecimal profit = ContractValuation.quoteProfit(order, price).multiply(rate).setScale(16, java.math.RoundingMode.HALF_UP);
+        if (profit.precision() - profit.scale() > 16) return row;
+        row.put("currentPrice", price); row.put("profit", profit); row.put("netProfit", contractNetProfit(order, profit));
+        row.put("liveAvailable", true);
+        return row;
+    }
+
     @PostMapping("/option/query")
     @com.gtcfesk.exchange.config.AdminPermission(menu = "orders", action = "")
     public ResponseEntity<?> queryOptionOrders(@RequestBody Map<String, Object> params,
@@ -187,20 +257,24 @@ public class AdminOrderController {
         map.put("specVersion", order.getSpecVersion());
         map.put("openPrice", order.getOpenPrice());
         map.put("closePrice", order.getClosePrice());
+        map.put("currentPrice", order.getCurrentPrice());
         map.put("margin", order.getMargin());
         map.put("fee", order.getFee());
         map.put("profit", order.getProfit());
-        BigDecimal netProfit = order.getProfit();
-        // Match settlement: legacy fee reservations and unfilled/cancelled orders are refunded.
-        if (order.getLotSize() != null && ("OPEN".equals(order.getStatus()) || "CLOSED".equals(order.getStatus())))
-            netProfit = netProfit == null || order.getFee() == null ? null : netProfit.subtract(order.getFee());
-        map.put("netProfit", netProfit);
+        map.put("netProfit", contractNetProfit(order, order.getProfit()));
         map.put("status", order.getStatus());
         map.put("createdAt", order.getCreatedAt());
         map.put("closeTime", order.getCloseTime());
         map.put("openTime", order.getOpenTime());
         map.put("agentInfo", order.getAgentInfo());
         return map;
+    }
+
+    private BigDecimal contractNetProfit(ContractOrder order, BigDecimal profit) {
+        // Match settlement: legacy fee reservations and unfilled/cancelled orders are refunded.
+        if (order.getLotSize() != null && ("OPEN".equals(order.getStatus()) || "CLOSED".equals(order.getStatus())))
+            return profit == null || order.getFee() == null ? null : profit.subtract(order.getFee());
+        return profit;
     }
 
     /**

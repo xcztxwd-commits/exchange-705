@@ -35,7 +35,7 @@ function fixture(page) {
   const context = {
     console: { error() {} }, performance, readAssetResponse,
     ref: value => ({ value }), onMounted() {}, useRouter: () => ({}), useAuthStore: () => auth,
-    useLocaleStore: () => ({ loadLocale() {}, text: (_zh, en) => en, t: key => key }),
+    useLocaleStore: () => ({ locale: 'en', loadLocale() {}, text: (_zh, en) => en, t: key => key }),
     useTrialWallet: () => ({ accept: value => accepted.push(value) }),
     useFiatCurrency: () => ({ currency: { value: 'USD' }, rate: { value: 1 }, formatAsset: value => `USD ${value.toFixed(2)}` }),
     useBusinessLifecycle: () => ({ error, writing: { value: false }, request: { async get(url) { calls.push(url); if (failure) throw failure; return response } } }),
@@ -51,11 +51,11 @@ function fixture(page) {
 
 for (const page of ['Assets', 'Wallet']) {
   test(`${page}: missing/invalid HTTP-success fields show unknown, keep snapshot atomic, and retry recovers`, async () => {
-    const f = fixture(page), selected = page === 'Assets' ? fields : fields.slice(0, 3)
+    const f = fixture(page), selected = fields
     assert.equal(f.displayed(), '—', 'Initial render must not claim zero funds')
     await f.load(valid())
     assert.equal(f.error.value, '')
-    assert.equal(f.totalAssets.value, page === 'Assets' ? 13.5 : 10.5)
+    assert.equal(f.totalAssets.value, 13.5)
     assert.equal(f.accepted.length, 1)
     const previous = f.totalAssets.value
     await f.load({ ...valid(), fundBalance: 99, optionBalance: 'bad' })

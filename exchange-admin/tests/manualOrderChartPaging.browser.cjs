@@ -5,7 +5,7 @@ if(!base||!out||!['127.0.0.1','localhost'].includes(new URL(base).hostname))thro
 fs.mkdirSync(out,{recursive:true})
 ;(async()=>{
  const browser=await chromium.launch({headless:true,...(process.env.CHROME_PATH?{executablePath:process.env.CHROME_PATH}:{})}),page=await browser.newPage({viewport:{width:1300,height:800}})
- const requests=[],errors=[],checks=[],finished=Math.floor(Date.now()/60000)*60000,from=finished-7*86400000
+ const requests=[],errors=[],checks=[],finished=Math.floor(Date.now()/60000)*60000,from=finished-30*86400000
  let failOlder=false,blockOlder=false,release,blocked=false,pendingPages=0,emptyPage=false,olderDelay=650
  page.on('pageerror',e=>errors.push(e.message))
  const count=async n=>page.getByText(new RegExp('已显示 '+n+' 根')).waitFor({timeout:7500})
@@ -41,7 +41,7 @@ fs.mkdirSync(out,{recursive:true})
   })
   const firstStarted=Date.now();await page.getByRole('button',{name:'图表选择开平仓',exact:true}).click();await count(200)
   const firstBatchMs=Date.now()-firstStarted;assert.equal(requests.length,1);assert.equal(await page.locator('.candles canvas').count(),1)
-  checks.push('First 200 completed candles render from one request, without loading seven days eagerly')
+  checks.push('First 200 completed candles render from one request, without loading thirty days eagerly')
   await page.locator('.candles').focus();await page.keyboard.press('ArrowLeft')
   const selection=await page.evaluate(()=>window.__qa.selections.at(-1));assert.equal(selection.open.price,'157.5751234567890123');assert.ok(selection.open.timestamp<selection.close.timestamp)
   const originalView=await visible(),firstCursor=finished-200*60000-1
@@ -87,7 +87,7 @@ fs.mkdirSync(out,{recursive:true})
   const pinned=await page.evaluate(()=>({openTime:window.__qa.model.openTime,closeTime:window.__qa.model.closeTime,selection:window.__qa.selections.at(-1),events:window.__qa.selections.length}))
   for(const interval of ['1m','5m','15m','30m','1h','1d']){
    const button=page.getByRole('group',{name:'时间周期',exact:true}).getByRole('button',{name:interval,exact:true});await button.click();await page.waitForFunction(value=>document.querySelector('.chart-periods [aria-pressed="true"]')?.textContent.trim()===value,interval)
-   await page.waitForFunction(()=>{const c=window.__qa.chart(),count=c?.getOption().xAxis[0].data.length;return count>=2&&(count>=120||!document.querySelector('.chart-progress button'))&&!document.querySelector('.chart-toolbar-actions .is-loading')},{},{timeout:20000})
+   await page.waitForFunction(()=>{const c=window.__qa.chart(),count=c?.getOption().xAxis[0].data.length;return count>=2&&(count>=120||!document.querySelector('.chart-progress button'))&&!document.querySelector('.chart-toolbar-actions .is-loading')},{},{timeout:interval==='1d'?60000:20000})
    const state=await page.evaluate(()=>({option:window.__qa.chart().getOption(),openTime:window.__qa.model.openTime,closeTime:window.__qa.model.closeTime,selection:window.__qa.selections.at(-1),events:window.__qa.selections.length}))
    assert.equal(state.openTime,pinned.openTime);assert.equal(state.closeTime,pinned.closeTime);assert.deepEqual(state.selection,pinned.selection);assert.equal(state.events,pinned.events,'Period changes are read-only and must not reselect an order')
    const duration={'1m':60000,'5m':300000,'15m':900000,'30m':1800000,'1h':3600000,'1d':86400000}[interval],times=state.option.xAxis[0].data.map(Number)

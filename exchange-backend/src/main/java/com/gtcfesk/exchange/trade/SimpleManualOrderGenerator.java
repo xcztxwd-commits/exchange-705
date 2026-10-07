@@ -31,7 +31,7 @@ public final class SimpleManualOrderGenerator {
     }
     public static void validateTimes(Request r,long from,long end) {
         for(Long time:Arrays.asList(r.openTime,r.closeTime))if(time!=null && (time<from || time>=end || time%60000!=0))
-            throw new BusinessException("图表时间必须是最近七天内已结束的整分钟");
+            throw new BusinessException("图表时间必须是最近30天内已结束的整分钟");
         if(r.openTime!=null && r.closeTime!=null && r.openTime>=r.closeTime)throw new BusinessException("图表开仓时间必须早于平仓时间");
     }
     public static boolean matches(BigDecimal actual,BigDecimal target,boolean adjust,BigDecimal tolerance) {
@@ -123,7 +123,7 @@ public final class SimpleManualOrderGenerator {
         validate(r,s,maxLeverage);
         if(!candles.isEmpty())validateTimes(r,candles.firstKey(),candles.lastKey()+60000);
         BigDecimal leverage=r.leverage==null?HUNDRED.min(maxLeverage):r.leverage;
-        if(candles.isEmpty())throw new BusinessException(NO_SOLUTION,"最近七天没有有效的已结束分钟OHLC行情及换算率");
+        if(candles.isEmpty())throw new BusinessException(NO_SOLUTION,"最近30天没有有效的已结束分钟OHLC行情及换算率");
         BigDecimal lot=s.getLotSize()==null?number("1000"):s.getLotSize(),fee=s.getFeeMultiplier()==null?number("30"):s.getFeeMultiplier();
         BigDecimal step=s.getQuantityStep()==null?number("0.01"):s.getQuantityStep(),minimum=s.getMinOrderQuantity()==null?step:s.getMinOrderQuantity();
         Candidate nonPositive=null;
@@ -233,6 +233,6 @@ public final class SimpleManualOrderGenerator {
             }
         }
         if(nonPositive!=null)return nonPositive;
-        throw new BusinessException(NO_SOLUTION,"最近七天已就绪行情没有符合全部固定条件的开平仓组合；自动价差须为0.3%至0.8%，开仓须早于平仓，"+(r.allowNetAdjustment?"净收益须在设置容差内":"严格净收益须精确相等")+"；未创建订单或修改资金");
+        throw new BusinessException(NO_SOLUTION,"最近30天已就绪行情没有符合全部固定条件的开平仓组合；自动价差须为0.3%至0.8%，开仓须早于平仓，"+(r.allowNetAdjustment?"净收益须在设置容差内":"严格净收益须精确相等")+"；未创建订单或修改资金");
     }
 }
