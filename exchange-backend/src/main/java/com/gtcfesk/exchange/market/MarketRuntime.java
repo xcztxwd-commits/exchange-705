@@ -151,6 +151,7 @@ final class MarketRuntime {
         Map<String,Object> row=rows.isEmpty()?Collections.emptyMap():rows.get(0);
         Object body=row.get(status?"status_json":"quote_json");
         Map<String,Object> result=body==null?new LinkedHashMap<>():store.decode(String.valueOf(body));
+        result.put("historyRestoreRevision",store.historyRestoreRevision(symbol));
         boolean authorityChanged=!rows.isEmpty() && (QuoteState.time(result.get("writerGeneration"))!=QuoteState.time(row.get("writer_generation"))
             || QuoteState.time(result.get("controlRevision"))!=QuoteState.time(row.get("control_revision"))
             || QuoteState.time(result.get("quoteVersion"))!=QuoteState.time(row.get("snapshot_version")));
@@ -233,6 +234,7 @@ final class MarketRuntime {
         quote=new LinkedHashMap<>(quote);status=new LinkedHashMap<>(status);
         quote.put("tenantId",ControlHistoryStore.tenant());quote.put("symbolId",symbol);
         for(Map<String,Object> value:Arrays.asList(quote,status)) {
+            value.put("historyRestoreRevision",store.historyRestoreRevision(symbol));
             value.put("writerGeneration",row.get("writer_generation"));value.put("controlRevision",row.get("control_revision"));
             value.put("quoteVersion",((Number)row.get("snapshot_version")).longValue()+1);value.put("committedAt",now);
         }

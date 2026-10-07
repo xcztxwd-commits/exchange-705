@@ -64,7 +64,8 @@ public class ControlHistoryStore {
         // Schema-only validation; runtime must never create legacy unscoped private tables.
         db.queryForList("SELECT tenant_id FROM market_control_task WHERE 1=0");
         db.queryForList("SELECT history_pending_until,history_retry_at,history_error FROM market_control_flow WHERE 1=0");
-        db.queryForList("SELECT source_input_revision,source_dirty_from,source_dirty_to FROM market_engine_runtime WHERE 1=0");
+        db.queryForList("SELECT source_input_revision,source_dirty_from,source_dirty_to,history_restore_revision FROM market_engine_runtime WHERE 1=0");
+        db.queryForList("SELECT tenant_id,job_id,effective_version FROM market_history_restore_minute WHERE 1=0");
         if(Boolean.TRUE.equals(db.execute((java.sql.Connection c)->c.getMetaData().getDatabaseProductName().equals("MySQL"))))
             db.queryForList("SELECT input_revision FROM s4_history_projection_progress WHERE 1=0");
     }
@@ -194,6 +195,24 @@ public class ControlHistoryStore {
         return time(row) > 0 && Math.floorMod(time(row), alignment) == 0;
     }
     static BigDecimal number(Object value) { return new BigDecimal(value.toString()); }
+    long historyRestoreRevision(long symbol) {
+        List<Long> values=db.queryForList("SELECT history_restore_revision FROM market_engine_runtime WHERE tenant_id=? AND symbol_id=?",Long.class,tenant(),symbol);
+        return values.isEmpty()?0:values.get(0);
+    }
+    /** Latest versions include a null tombstone when an override is undone. */
+    TreeMap<Long,Map<String,Object>> historyOverrides(long symbol,long from,long to) {
+        TreeMap<Long,Map<String,Object>> result=new TreeMap<>();
+        for(Map<String,Object> row:db.queryForList("SELECT m.minute_at,m.source_json,j.kind FROM market_history_restore_minute m JOIN market_history_restore_job j ON j.tenant_id=m.tenant_id AND j.id=m.job_id WHERE m.tenant_id=? AND m.symbol_id=? AND m.minute_at>=? AND m.minute_at<=? AND m.effective_version>0 AND NOT EXISTS (SELECT 1 FROM market_history_restore_minute n WHERE n.tenant_id=m.tenant_id AND n.symbol_id=m.symbol_id AND n.minute_at=m.minute_at AND n.effective_version>m.effective_version)",tenant(),symbol,from,to)) {
+            Map<String,Object> body=row.get("source_json")==null?null:decode((String)row.get("source_json"));
+            if(body!=null) { body.put("historyRestoreOverride",true); body.put("historySourceRestored","RESTORE".equals(row.get("kind")) || Boolean.TRUE.equals(body.get("historySourceRestored"))); }
+            result.put(((Number)row.get("minute_at")).longValue(),body);
+        }
+        return result;
+    }
+    String historyOverrideOwner(long symbol,long minute) {
+        List<String> owners=db.queryForList("SELECT job_id FROM market_history_restore_minute WHERE tenant_id=? AND symbol_id=? AND minute_at=? AND effective_version>0 ORDER BY effective_version DESC LIMIT 1",String.class,tenant(),symbol,minute);
+        return owners.isEmpty()?null:owners.get(0);
+    }
     static final class PricePoint {
         final long generatedAt;
         final BigDecimal price;

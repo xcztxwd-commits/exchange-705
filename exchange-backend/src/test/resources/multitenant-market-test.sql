@@ -90,7 +90,7 @@ CREATE TABLE IF NOT EXISTS market_legacy_minute_snapshot (
 CREATE TABLE IF NOT EXISTS market_engine_runtime (
  tenant_id BIGINT NOT NULL,symbol_id BIGINT NOT NULL,
  writer_generation BIGINT NOT NULL DEFAULT 0,owner_id VARCHAR(36),lease_until BIGINT NOT NULL DEFAULT 0,
- control_revision BIGINT NOT NULL DEFAULT 0,snapshot_version BIGINT NOT NULL DEFAULT 0,
+ control_revision BIGINT NOT NULL DEFAULT 0,snapshot_version BIGINT NOT NULL DEFAULT 0,history_restore_revision BIGINT NOT NULL DEFAULT 0,
  source_input_revision BIGINT NOT NULL DEFAULT 0,source_dirty_from BIGINT,source_dirty_to BIGINT,
  quote_json MEDIUMTEXT,status_json MEDIUMTEXT,committed_at BIGINT NOT NULL DEFAULT 0,
  PRIMARY KEY(tenant_id,symbol_id)
@@ -108,6 +108,18 @@ CREATE TABLE IF NOT EXISTS market_control_command(
 ) ENGINE=InnoDB;
 
 -- H2 contract fixture only. Formal MySQL migration supplies fences, immutability and tenant FKs.
+CREATE TABLE market_history_restore_job (
+ tenant_id BIGINT NOT NULL,id VARCHAR(36) NOT NULL,symbol_id BIGINT NOT NULL,
+ kind VARCHAR(16) NOT NULL,state VARCHAR(16) NOT NULL,request_key VARCHAR(64),source_identity VARCHAR(192) NOT NULL,
+ from_at BIGINT NOT NULL,to_at BIGINT NOT NULL,timezone VARCHAR(64) NOT NULL,total INT NOT NULL,completed INT NOT NULL DEFAULT 0,
+ actor_id BIGINT NOT NULL,session_id VARCHAR(64),created_at BIGINT NOT NULL,expires_at BIGINT NOT NULL,updated_at BIGINT,
+ undo_of VARCHAR(36),error_message VARCHAR(255),PRIMARY KEY(tenant_id,id),UNIQUE KEY restore_request(tenant_id,symbol_id,request_key)
+);
+CREATE TABLE market_history_restore_minute (
+ tenant_id BIGINT NOT NULL,job_id VARCHAR(36) NOT NULL,symbol_id BIGINT NOT NULL,minute_at BIGINT NOT NULL,
+ before_json MEDIUMTEXT NOT NULL,source_json MEDIUMTEXT,previous_json MEDIUMTEXT,checksum CHAR(64) NOT NULL,effective_version BIGINT NOT NULL DEFAULT 0,
+ PRIMARY KEY(tenant_id,job_id,minute_at),KEY restore_visible(tenant_id,symbol_id,minute_at,effective_version)
+);
 CREATE TABLE IF NOT EXISTS market_history_ordering (
  tenant_id BIGINT NOT NULL,symbol_id BIGINT NOT NULL,ordering_version INT NOT NULL,
  from_minute BIGINT NOT NULL,source_sequence BIGINT NOT NULL,scope_sha256 CHAR(64) NOT NULL,

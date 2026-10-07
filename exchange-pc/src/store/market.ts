@@ -24,7 +24,7 @@ async function fetchMarketKline(url: string, options?: RequestInit): Promise<Res
 export const useMarketStore = defineStore('market', () => {
   // 当前选中的交易对
   const currentSymbol = ref<string>('')
-  const quoteStatusMap = ref<Record<string, { status: string, fetchedAt: number, expiresAt: number, timestamp: number, epoch?: string, quoteVersion?: number, simulated?: boolean, simulationSession?: number, marketRevision?: number, controlSourceResumed?: boolean, controlHistory?: boolean, controlHistoryRevision?: string, controlPublicationRevision?: string, controlState?: string, controlTaskId?: string, sourceAvailable?: boolean, sourceConnectionFailed?: boolean, controlActive?: boolean, quoteToUsdRate?: number | null, conversionAvailable?: boolean, conversionExpiresAt?: number, marginBaseToUsdRate?: number, marginRateExpiresAt?: number }>>({})
+  const quoteStatusMap = ref<Record<string, { status: string, fetchedAt: number, expiresAt: number, timestamp: number, epoch?: string, quoteVersion?: number, simulated?: boolean, simulationSession?: number, marketRevision?: number, controlSourceResumed?: boolean, controlHistory?: boolean, controlHistoryRevision?: string, controlPublicationRevision?: string, historyRestoreRevision?: number, controlState?: string, controlTaskId?: string, sourceAvailable?: boolean, sourceConnectionFailed?: boolean, controlActive?: boolean, quoteToUsdRate?: number | null, conversionAvailable?: boolean, conversionExpiresAt?: number, marginBaseToUsdRate?: number, marginRateExpiresAt?: number }>>({})
   let activeQuoteEpoch: string | undefined
   const retiredQuoteEpochs = new Set<string>()
   const recordQuoteStatus = (symbol: string, quote: any): boolean => {
@@ -36,22 +36,26 @@ export const useMarketStore = defineStore('market', () => {
     const previous = quoteStatusMap.value[symbol]
     if (previous?.epoch === quote.epoch && quote.quoteVersion != null && quote.quoteVersion < (previous?.quoteVersion ?? -1)) return false
     if (previous && quote.marketRevision != null && quote.marketRevision < (previous.marketRevision ?? 0)) return false
+    if (Number(quote.historyRestoreRevision || 0) > Number(previous?.historyRestoreRevision || 0)) {
+      for (const key of Object.keys(klineDataMap.value)) if (key === symbol || key.startsWith(symbol + '_')) delete klineDataMap.value[key]
+    }
     // A source switch can legitimately return no external price. Clear simulation
     // state without inventing a quote or leaving its last price executable.
     if (previous?.simulationSession && !quote.simulated && quote.status === 'unavailable'
       && Number.isFinite(quote.marketRevision) && quote.marketRevision > (previous.marketRevision ?? 0)) {
-      quoteStatusMap.value[symbol] = { status: 'unavailable', timestamp: 0, fetchedAt: 0, expiresAt: 0, marketRevision: quote.marketRevision, sourceConnectionFailed: quote.sourceConnectionFailed, controlActive: quote.controlActive }
+      quoteStatusMap.value[symbol] = { status: 'unavailable', timestamp: 0, fetchedAt: 0, expiresAt: 0, marketRevision: quote.marketRevision, sourceConnectionFailed: quote.sourceConnectionFailed, controlActive: quote.controlActive, historyRestoreRevision: Math.max(previous?.historyRestoreRevision || 0, Number(quote.historyRestoreRevision) || 0) }
       return false
     }
     const valid = normalizeQuote(quote)
     if (!valid) {
       if (quote.status === 'closed' || quote.status === 'unavailable' || quote.status === 'stale') quoteStatusMap.value[symbol] = {
         ...(previous || { timestamp: 0, fetchedAt: 0, expiresAt: 0 }), status: quote.status,
-        epoch: quote.epoch, quoteVersion: quote.quoteVersion,
+        epoch: quote.epoch, quoteVersion: quote.quoteVersion, historyRestoreRevision: Math.max(previous?.historyRestoreRevision || 0, Number(quote.historyRestoreRevision) || 0),
         sourceConnectionFailed: quote.sourceConnectionFailed, controlActive: quote.controlActive, controlState: quote.controlState, simulated: quote.simulated,
       }
       return false
     }
+    if (previous && Number(valid.historyRestoreRevision || 0) < Number(previous.historyRestoreRevision || 0)) return false
     if (previous && (valid.marketRevision ?? 0) < (previous.marketRevision ?? 0)) return false
     const sameTask = previous?.controlTaskId && previous.controlTaskId === valid.controlTaskId
       && previous.marketRevision === valid.marketRevision
@@ -60,8 +64,8 @@ export const useMarketStore = defineStore('market', () => {
     const sameSource = previous?.simulationSession === valid.simulationSession && previous?.controlState === valid.controlState && previous?.controlTaskId === valid.controlTaskId && previous?.controlSourceResumed === valid.controlSourceResumed
     if (previous && previous.epoch === quote.epoch && sameSource && (valid.timestamp < previous.timestamp ||
       (valid.timestamp === previous.timestamp && quote.fetchedAt != null && valid.fetchedAt < previous.fetchedAt))) return false
-    const { status, fetchedAt, expiresAt, timestamp, simulated, simulationSession, marketRevision, controlSourceResumed, controlHistoryRevision, controlPublicationRevision, controlHistory, controlState, controlTaskId, sourceAvailable, sourceConnectionFailed, controlActive } = valid
-    quoteStatusMap.value[symbol] = { marginBaseToUsdRate: quote.marginBaseToUsdRate, marginRateExpiresAt: quote.marginRateExpiresAt, quoteToUsdRate: valid.quoteToUsdRate, conversionAvailable: valid.conversionAvailable, conversionExpiresAt: valid.conversionExpiresAt, status, fetchedAt, expiresAt, timestamp, epoch: quote.epoch, quoteVersion: quote.quoteVersion, simulated, simulationSession, marketRevision, controlSourceResumed, controlHistoryRevision, controlPublicationRevision, controlHistory, controlState, controlTaskId, sourceAvailable, sourceConnectionFailed, controlActive }
+    const { status, fetchedAt, expiresAt, timestamp, simulated, simulationSession, marketRevision, controlSourceResumed, controlHistoryRevision, controlPublicationRevision, historyRestoreRevision, controlHistory, controlState, controlTaskId, sourceAvailable, sourceConnectionFailed, controlActive } = valid
+    quoteStatusMap.value[symbol] = { marginBaseToUsdRate: quote.marginBaseToUsdRate, marginRateExpiresAt: quote.marginRateExpiresAt, quoteToUsdRate: valid.quoteToUsdRate, conversionAvailable: valid.conversionAvailable, conversionExpiresAt: valid.conversionExpiresAt, status, fetchedAt, expiresAt, timestamp, epoch: quote.epoch, quoteVersion: quote.quoteVersion, simulated, simulationSession, marketRevision, controlSourceResumed, controlHistoryRevision, controlPublicationRevision, historyRestoreRevision, controlHistory, controlState, controlTaskId, sourceAvailable, sourceConnectionFailed, controlActive }
     return true
   }
   const getConversionRate = (symbol: string, currency = 'USD'): number => {
@@ -492,7 +496,7 @@ export const useMarketStore = defineStore('market', () => {
         : 0
       
       // 如果Redis中没有数据，或者数据量不足（少于limit的50%），从HTTP接口获取
-      if (data.ret === 404 || !data.data || !data.data.kline_list || redisKlineCount < Math.max(limit * 0.5, 10)) {
+      if (data.ret === 404 || !data.data || !data.data.kline_list || Number(data.data.historyRestoreRevision || 0) < Number(quoteStatusMap.value[symbol]?.historyRestoreRevision || 0) || redisKlineCount < Math.max(limit * 0.5, 10)) {
         if (redisKlineCount > 0) {
           console.log(`[Market Store] Redis has only ${redisKlineCount} klines (need ${limit}), fetching more from HTTP API...`)
         } else {
@@ -508,6 +512,7 @@ export const useMarketStore = defineStore('market', () => {
       
       console.log(`[Market Store] Fetch klines response for ${symbol}:`, data)
       
+      if (Number(data.data?.historyRestoreRevision || 0) < Number(quoteStatusMap.value[symbol]?.historyRestoreRevision || 0)) return
       // 处理Alltick API返回格式：{ ret: 200, msg: "ok", data: { code: "...", kline_list: [...] } }
       if (data.ret === 200 && data.data && data.data.kline_list && Array.isArray(data.data.kline_list)) {
         console.log(`[Market Store] Received ${data.data.kline_list.length} klines from API for ${symbol}`)
@@ -753,7 +758,7 @@ export const useMarketStore = defineStore('market', () => {
           // 优先使用后端映射的symbol，如果没有则使用code
           const symbol = item.symbol || item.code
           const alltickCode = item.code || item.symbol
-          if (!symbol) return
+          if (!symbol || Number(item.historyRestoreRevision || 0) < Number(quoteStatusMap.value[symbol]?.historyRestoreRevision || 0)) return
           
           // 同时使用symbol和alltickCode作为key存储，确保能找到
           const keysToStore = [symbol]

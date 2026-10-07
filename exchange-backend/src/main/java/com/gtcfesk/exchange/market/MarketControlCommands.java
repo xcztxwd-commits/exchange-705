@@ -83,7 +83,7 @@ public class MarketControlCommands {
         org.slf4j.LoggerFactory.getLogger(getClass()).info("Control command phase=accept traceId={} action={} tenant={} symbol={} requestKey={} commandId={} taskId={} state={} durationMs={}",org.slf4j.MDC.get("traceId"),accepted.get("action"),ControlHistoryStore.tenant(),symbol,key,accepted.get("commandId"),accepted.get("taskId"),accepted.get("state"),TimeUnit.NANOSECONDS.toMillis(System.nanoTime()-started));
         return accepted;
     }
-    private ControlIdentity operator(){
+    static ControlIdentity operator(){
         org.springframework.security.core.Authentication authentication=org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
         if(authentication!=null && authentication.isAuthenticated()){
             ControlIdentity access=ControlIdentity.current();

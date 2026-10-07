@@ -339,6 +339,7 @@ async function requestBars(before: number, signal: AbortSignal, limit: number): 
       response = await request.get('/market/redis/kline/' + encodeURIComponent(props.symbol), { params: query, signal })
     }
     if (signal.aborted) throw new Error('Aborted')
+    if (response?.data?.historyRestoreRevision != null && Number(response.data.historyRestoreRevision) < Number(market.quoteStatusMap[props.symbol]?.historyRestoreRevision || 0)) throw new Error('History revision changed; reload')
     const rows = response?.data?.kline_list ?? response?.data
     if (response?.ret === 200 && Array.isArray(rows)) {
       const validated = normalizeCandles(rows)
@@ -720,9 +721,10 @@ watch(() => market.quoteStatusMap[props.symbol]?.simulationSession, (value, prev
   else resetMarket()
 })
 watch(() => market.quoteStatusMap[props.symbol], (quote, previous) => {
-  if (quote?.controlHistoryRevision === previous?.controlHistoryRevision || !previous?.controlHistoryRevision) return
-  const manualChange = quote?.controlState === 'MANUAL' || previous.controlState === 'MANUAL'
-  if (manualChange && quote?.controlPublicationRevision != null && quote.controlPublicationRevision === previous.controlPublicationRevision) {
+  const restored = Number(quote?.historyRestoreRevision || 0) > Number(previous?.historyRestoreRevision || 0)
+  if (!restored && (quote?.controlHistoryRevision === previous?.controlHistoryRevision || !previous?.controlHistoryRevision)) return
+  const manualChange = quote?.controlState === 'MANUAL' || previous?.controlState === 'MANUAL'
+  if (!restored && manualChange && quote?.controlPublicationRevision != null && quote.controlPublicationRevision === previous?.controlPublicationRevision) {
     // Offset changes affect live candles only. Keep history, drawings and the viewport.
     replayQuote()
     return

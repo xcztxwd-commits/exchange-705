@@ -101,6 +101,7 @@ public class ForexQuoteMarketService {
     @Autowired private ControlledKlineMerger klineMerger;
     @Autowired private SourceHistoryProjector sourceHistory;
     @Autowired private SourceHistoryGapRepair historyGapRepair;
+    @Autowired(required=false) private HistorySourceRestore historyRestore;
     @Value("${app.market.s4-source-projection-enabled:false}") private boolean sourceProjectionEnabled;
     @Value("${market.quote.max-age-ms:60000}") private long maxAgeMs = 60000;
     @Value("${market.quote.poll-ms:3000}") private long pollMs = 3000;
@@ -958,6 +959,7 @@ public class ForexQuoteMarketService {
     }
     /** SOURCE 1m only. Other sessions/periods retain the exact pure compatibility reader. */
     private Map<String,Object> projectedSourceKline(TradingSymbol config,String symbol,String interval,Integer limit,Long cursor) {
+        if(config!=null && controlHistory!=null && controlHistory.historyRestoreRevision(config.getId())>0) return null;
         if(!sourceProjectionEnabled || sourceHistory==null || config==null || !"1m".equals(interval)
                 || !TransactionSynchronizationManager.isActualTransactionActive()
                 || !TransactionSynchronizationManager.isCurrentTransactionReadOnly()) return null;
@@ -1434,6 +1436,20 @@ public class ForexQuoteMarketService {
     }
 
     TradingSymbol commandConfig(Long id){return copySymbol(controlSymbol(id));}
+    public Map<String,Object> historyRestoreChart(Long id,long from,long to,String timezone) { TradingSymbol config=commandConfig(id); return historyRestore.chart(config,provider(sourceCategory(config)),from,to,timezone); }
+    public Map<String,Object> historyRestorePreview(Long id,long from,long to,String timezone) { TradingSymbol config=commandConfig(id); return historyRestore.preview(config,provider(sourceCategory(config)),from,to,timezone); }
+    public Map<String,Object> acceptHistoryRestore(Long id,String token,String key) { TradingSymbol config=commandConfig(id); return historyRestore.accept(id,token,key,provider(sourceCategory(config))+":"+config.getSourceCategory()+":"+marketCode(config)); }
+    public Map<String,Object> backfillHistoryRestore(Long id,long from,long to,String timezone) {
+        TradingSymbol config=commandConfig(id); historyRestore.chart(config,provider(sourceCategory(config)),from,to,timezone);
+        if(TransactionSynchronizationManager.isActualTransactionActive()) throw new IllegalStateException("Source fetch cannot join a writer transaction");
+        int inserted=0;
+        for(long first=from;first<=to;first+=500*60000L) {
+            long last=Math.min(to,first+499*60000L); http.begin();
+            Map<String,Object> fetched=source.getHistoryWindow(marketCode(config),"1m",500,sourceCategory(config),first,last+59999);
+            inserted+=historyRestore.insertSource(config,provider(sourceCategory(config)),first,last,fetched,System.currentTimeMillis());
+        }
+        Map<String,Object> result=new LinkedHashMap<>(); result.put("inserted",inserted); return result;
+    }
     PersistentPriceControl.Prepared prepareCommand(Long id,int duration,BigDecimal target,int intensity,boolean oscillation,TargetControlOptions options,long seed) {
         TradingSymbol config=commandConfig(id);requireV4();resolveFormula(id,options);
         long now=System.currentTimeMillis();Map<String,Object> raw=RandomMarketPath.enabled(config)?simulationBaseQuote(config,now):getPrice(marketCode(config),sourceCategory(config));
@@ -1625,6 +1641,7 @@ public class ForexQuoteMarketService {
                 }
             } catch (Exception failure) { log.error("Cannot read persistent control tasks", failure); }
         }
+        if(historyRestore!=null) historyRestore.runOne();
         Set<Long> visited = new HashSet<>();
         for (TradingSymbol snapshot : selected) {
             if (!PriceControlPath.running(snapshot) || now < PriceControlPath.endsAt(snapshot) || !visited.add(snapshot.getId())) continue;

@@ -20,7 +20,7 @@ export interface PriceUpdate {
     controlSourceResumed?: boolean
     controlHistory?: boolean
     controlHistoryRevision?: string
-    controlPublicationRevision?: string
+    controlPublicationRevision?: string, historyRestoreRevision?: number
     controlState?: string
     sourceTimestamp?: number
     sourceAvailable?: boolean

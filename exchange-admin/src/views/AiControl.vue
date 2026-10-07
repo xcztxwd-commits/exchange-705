@@ -7,6 +7,13 @@ import { readSession } from '@/utils/adminSession'
 import { commandScope, commandBlocksStart, readCommandReceipt, readPendingCommand, writePendingCommand, removePendingCommand, savedCommandSymbol, commandNotice, type PendingCommand } from '@/utils/aiControlCommand'
 import { createRequestKey } from '@/utils/requestKey'
 import { displaySymbol } from '@/utils/displaySymbol'
+import HistorySourceRestore from '@/components/HistorySourceRestore.vue'
+const pageTab = ref('control')
+const historyRange = ref<{ from: number; to: number }>()
+function restoreTaskSource(task: ControlTask) {
+  historyRange.value = { from: Math.floor(task.startedAt / 60000) * 60000, to: Math.floor(task.endedAt! / 60000) * 60000 }
+  pageTab.value = 'history-restore'
+}
 
 type SymbolItem = { id: number; symbol: string; name?: string; displayName?: string; category?: string; sourceCategory?: string; quoteCurrency?: string; pricePrecision: number; isEnabled: boolean }
 const symbolLabel = (item: SymbolItem) => {
@@ -298,6 +305,7 @@ async function replaceHistory(task: ControlTask) {
   finally { saving.value = false }
 }
 async function selectSymbol() {
+  historyRange.value = undefined
   restorePendingCommand()
   ++formulaLoadVersion; ++formulaVersion; formulaLoading.value = false; formulaOpen.value = false; stepFormula.value = defaultFormula; formulaError.value = ''; formulaLoadError.value = ''; restoreAutomaticBand()
   status.value = null
@@ -434,6 +442,12 @@ onUnmounted(() => { disposed = true; ++commandVersion; ++operationVersion; ++req
           <el-button v-permission="'ai_control:view'" :loading="loading" :disabled="saving" @click="loadSymbols">刷新列表</el-button>
         </div>
       </template>
+      <el-tabs v-model="pageTab"><el-tab-pane label="当前控盘" name="control" /><el-tab-pane label="历史源恢复" name="history-restore" /></el-tabs>
+      <div v-if="pageTab === 'history-restore'" class="history-source-picker">
+        <el-select v-model="selectedId" filterable placeholder="请选择币种" style="width:100%" @change="selectSymbol"><el-option v-for="item in symbols" :key="item.id" :label="symbolLabel(item)" :value="item.id" /></el-select>
+        <HistorySourceRestore v-if="selectedId != null" :key="selectedId" :symbol-id="selectedId" :label="symbols.find(item => item.id === selectedId) ? symbolLabel(symbols.find(item => item.id === selectedId)!) : ''" :precision="symbols.find(item => item.id === selectedId)?.pricePrecision ?? 3" :initial-range="historyRange" />
+      </div>
+      <div v-show="pageTab === 'control'">
       <el-form label-width="140px" class="control-form">
         <el-form-item label="选择币种">
           <el-select v-model="selectedId" filterable placeholder="请选择币种" :disabled="loading || saving" style="width: 100%" @change="selectSymbol">
@@ -584,10 +598,12 @@ onUnmounted(() => { disposed = true; ++commandVersion; ++operationVersion; ++req
         <el-table-column column-key="trajectoryEndTime" label="轨迹结束时间" min-width="180"><template #default="{ row }">{{ timeText(row.endedAt) }}</template></el-table-column>
         <el-table-column column-key="history" label="历史行情" min-width="155" fixed="right"><template #default="{ row }">
           <el-button v-permission="'ai_control:replace_history'" size="small" :disabled="saving || !row.endedAt" @click="replaceHistory(row)">{{ row.historyReplacedAt ? '更新已发布区间' : '替代历史行情' }}</el-button>
+          <el-button v-permission="'ai_control:restore_history'" size="small" :disabled="saving || !row.endedAt" @click="restoreTaskSource(row)">恢复此段源数据</el-button>
           <div v-if="row.historyReplacedAt" class="hint">{{ timeText(row.historyReplacedAt) }}</div>
         </template></el-table-column>
       </admin-table>
       <el-button v-permission="'ai_control:view'" v-if="history.length >= 100" @click="olderTasks">加载更早任务</el-button>
+      </div>
     </el-card>
   </div>
 </template>

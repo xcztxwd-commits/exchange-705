@@ -34,7 +34,7 @@ export function readSession(storage: Storage): AdminSession | null {
 export function clearAdminSession(storage: Storage) {
   storage.removeItem(ADMIN_SESSION_KEY)
   // A copied opener must not carry pending mutation commands into a new session.
-  for (const key of Object.keys(storage)) if (key.startsWith('deposit-pending:') || key.startsWith('balance-pending:') || key.startsWith('ai-control-pending:')) storage.removeItem(key)
+  for (const key of Object.keys(storage)) if (key.startsWith('deposit-pending:') || key.startsWith('balance-pending:') || key.startsWith('ai-control-pending:') || key.startsWith('history-source-restore:')) storage.removeItem(key)
 }
 
 export function exactOrigin(value: string): string {

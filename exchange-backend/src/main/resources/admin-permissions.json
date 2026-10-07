@@ -155,7 +155,9 @@
         "manual": "修改手动偏移",
         "restore": "恢复原始行情",
         "random": "随机行情开关",
-        "replace_history": "替代历史行情"
+          "replace_history": "替代历史行情",
+          "restore_history": "恢复历史源数据",
+          "undo_history_restore": "撤销历史源恢复"
       }
     },
     {

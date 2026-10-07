@@ -39,8 +39,9 @@ public class ControlledKlineMerger {
         long width = RandomMarketPath.duration(interval);
         long end = cursor == null ? System.currentTimeMillis() : cursor;
         TreeMap<Long, Map<String, Object>> bars = new TreeMap<>();
-        List<Map<String, Object>> source = store.db.query("SELECT body FROM market_source_candle WHERE tenant_id=" + tenant() + " AND symbol_id=? AND period=? AND candle_at<=? ORDER BY candle_at DESC LIMIT ?",
-            (rs, n) -> store.decode(rs.getString(1)), symbol, interval, end, limit);
+        long alignment=width<3600000?width:60000;
+        List<Map<String, Object>> source = store.db.query("SELECT body FROM market_source_candle WHERE tenant_id=" + tenant() + " AND symbol_id=? AND period=? AND candle_at<=? AND MOD(candle_at,?)=0 ORDER BY candle_at DESC LIMIT ?",
+            (rs, n) -> store.decode(rs.getString(1)), symbol, interval, end, alignment, limit);
         for (Map<String, Object> row : baseMinutes == null ? source : Collections.<Map<String,Object>>emptyList())
             if (ControlHistoryStore.periodCandle(row, interval)) bars.put(ControlHistoryStore.time(row), row);
         for (Map<String, Object> row : ControlHistoryStore.rows(external))
@@ -125,8 +126,10 @@ public class ControlledKlineMerger {
             MinuteAggregate values = aggregates.getOrDefault(start, new MinuteAggregate());
             Map<String,Object> bar = values.finish(start);
             if(baseMinutes!=null) bar=frozenPrefix(bar,frozen.get(start),session,values.lastMinute+59999);
-            bar.put("partial", true); // Observed events are not proof of complete second-by-second coverage.
-            bar.put("controlled", true); bar.put("minuteCount", values.count);
+            if(width==60000 && values.overrides==1) bar=new LinkedHashMap<>(values.last);
+            else { bar.put("partial", true); bar.put("controlled", true); }
+            if(values.restored>0) bar.put("historySourceRestored",true);
+            bar.put("minuteCount", values.count);
             if (published.contains(start)) bar.put("historyReplaced", true);
             bars.put(start, bar);
         }
@@ -135,6 +138,7 @@ public class ControlledKlineMerger {
         Map<String, Object> result = new HashMap<>(external);
         Map<String, Object> data = new HashMap<>((Map<String, Object>) external.get("data"));
         data.put("kline_list", new ArrayList<>(bars.values())); data.put("merged", true);
+        data.put("historyRestoreRevision",store.historyRestoreRevision(symbol));
         if (missingAnchor[0]) data.put("missingData", "source_period_anchor");
         List<Integer> missingSource = store.db.queryForList("SELECT 1 FROM market_control_sample s JOIN market_control_task t ON t.tenant_id=s.tenant_id AND t.id=s.task_id JOIN market_control_flow f ON f.tenant_id=t.tenant_id AND f.task_id=t.id LEFT JOIN market_control_publication p ON p.tenant_id=t.tenant_id AND p.task_id=t.id WHERE t.tenant_id=" + tenant() + " AND t.symbol_id=? AND f.state='SOURCE' AND s.generated_at>=? AND s.generated_at<=? AND (p.task_id IS NULL OR s.generated_at>p.to_at) AND NOT EXISTS (SELECT 1 FROM market_source_candle c WHERE c.tenant_id=" + tenant() + " AND c.symbol_id=t.symbol_id AND c.period='1m' AND c.candle_at=FLOOR(s.generated_at/60000)*60000) LIMIT 1", Integer.class, symbol, from, end + width - 1);
         if (!missingSource.isEmpty() && baseMinutes == null) data.put("missingData", "original_source_candles");
@@ -194,6 +198,8 @@ public class ControlledKlineMerger {
                         (rs,n) -> store.decode(rs.getString(1)),candleArgs.toArray()))
                     if (ControlHistoryStore.periodCandle(row,"1m")) minutes.put(ControlHistoryStore.time(row),row);
                 for (Map<String,Object> row : store.visibleMixedAt(symbol,keys)) minutes.put(ControlHistoryStore.time(row),row);
+                for(Map.Entry<Long,Map<String,Object>> row:store.historyOverrides(symbol,keys.get(0),keys.get(keys.size()-1)).entrySet())
+                    if(row.getValue()!=null) minutes.put(row.getKey(),new LinkedHashMap<>(row.getValue()));
                 consume.accept(new ArrayList<>(minutes.values()));
                 if (keys.size() < 500) break;
                 after = keys.get(keys.size() - 1);
@@ -232,8 +238,10 @@ public class ControlledKlineMerger {
     private static final class MinuteAggregate {
         Object open, close;
         java.math.BigDecimal high, low, volume = java.math.BigDecimal.ZERO;
-        int count; long lastMinute;
+        int count,restored,overrides; long lastMinute; Map<String,Object> last;
         void add(Map<String,Object> row) {
+            last=row; if(Boolean.TRUE.equals(row.get("historySourceRestored"))) restored++;
+            if(Boolean.TRUE.equals(row.get("historyRestoreOverride"))) overrides++;
             if (open == null) open = row.get("open_price");
             close = row.get("close_price");
             java.math.BigDecimal h = ControlHistoryStore.number(row.get("high_price")), l = ControlHistoryStore.number(row.get("low_price"));

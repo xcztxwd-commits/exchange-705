@@ -148,6 +148,19 @@ class AdminPermissionIntegrationTest {
         assertEquals(403,call("GET","/api/admin/statistics",null,token));
         assertEquals(401,mvc.perform(get("/api/admin/durations")).andReturn().getResponse().getStatus());
     }
+    @Test void historyRestoreAndUndoRequireIndependentWriteGrants() throws Exception {
+        grant("ai_control");
+        String base="/api/admin/ai-control/1/history-restore";
+        String range="{\"from\":1791364860000,\"to\":1791364860000,\"timezone\":\"Asia/Singapore\"}";
+        String confirmation="{\"previewToken\":\"11111111-1111-4111-a111-111111111111\",\"requestKey\":\"permission_restore_001\"}";
+        for(String endpoint:Arrays.asList("/preview","/source")) assertEquals(403,call("POST",base+endpoint,range,token));
+        assertEquals(403,call("POST",base+"/jobs",confirmation,token));
+        assertEquals(403,call("POST",base+"/jobs/test/undo-preview","{}",token));
+        grant("ai_control:restore_history");
+        authenticate(); assertTrue(permissions.can("ai_control","restore_history")); assertFalse(permissions.can("ai_control","undo_history_restore"));
+        assertEquals(403,call("POST",base+"/jobs/test/undo",confirmation,token));
+        assertEquals(403,call("POST",base+"/jobs/test/undo-retry","{}",token));
+    }
     @Test void orderListsAcceptBlankOptionalUserFiltersWithoutGrantingPermissions() throws Exception {
         String query = "{\"binding\":\"\",\"userId\":\"\",\"userEmail\":\"\",\"status\":\"\",\"deletion\":\"\",\"page\":0,\"size\":10}";
         for (String kind : Arrays.asList("contract", "option"))
