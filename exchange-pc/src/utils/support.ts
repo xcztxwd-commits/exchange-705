@@ -35,6 +35,7 @@ export const supportUrl = (path: string) =>
   `${String(getAccountApiBase()).replace(/\/$/, '')}${path.replace(/^\/api/, '')}`
 export const supportDate = (value: string) =>
   new Date(value).toLocaleString(undefined, {
+    year: 'numeric',
     month: '2-digit',
     day: '2-digit',
     hour: '2-digit',
