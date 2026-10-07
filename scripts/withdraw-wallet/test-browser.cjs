@@ -1,9 +1,9 @@
 // Isolated withdrawal acceptance. All API calls use fixture balances, never a real backend.
 // Run with PLAYWRIGHT_PATH pointing to the existing Playwright package when it is not on NODE_PATH.
-const fs = require('node:fs'), path = require('node:path'), assert = require('node:assert/strict')
+const fs = require('node:fs'), path = require('node:path'), os = require('node:os'), assert = require('node:assert/strict')
 const { pathToFileURL } = require('node:url')
 const { chromium } = require(process.env.PLAYWRIGHT_PATH || 'playwright')
-const repository = path.resolve(__dirname, '../..'), report = path.join(repository, 'reports/withdraw-wallet')
+const repository = path.resolve(__dirname, '../..'), report = process.env.EVIDENCE_DIR || fs.mkdtempSync(path.join(os.tmpdir(), 'withdraw-wallet-'))
 const languages = ['zh-TW', 'en', 'fr', 'de', 'ru', 'es', 'pt', 'it', 'ar', 'tr', 'id', 'my', 'hi', 'cs', 'pl', 'ja', 'ko', 'th', 'vi']
 fs.mkdirSync(report, { recursive: true })
 
@@ -60,7 +60,11 @@ async function check(browser, project, view, name) {
     await page.goto(`http://127.0.0.1:${port}/__withdraw_test`)
     const wallet = page.locator('.withdraw-wallet'), dialog = page.locator('.transfer-dialog')
     const quick = wallet.locator('.quick-transfer'), walletSelect = wallet.locator('.app-select__trigger')
-    await page.waitForFunction(() => document.querySelector('.wallet-balance')?.textContent.includes('120.5'))
+    const summarySelector = name === 'advanced' ? '.metric:last-child span' : '.summary-item:last-child span:last-child'
+    const waitBalance = value => page.waitForFunction(({ selector, value }) => document.querySelector(selector)?.textContent.trim() === value, {
+      selector: summarySelector, value: value + (name === 'advanced' ? '' : ' USD') })
+    await waitBalance('120.50')
+    assert.equal(await wallet.locator('.wallet-balance').count(), 0)
     assert.ok((await walletSelect.textContent()).includes('資金'))
     // Both withdrawal tabs keep the selected wallet and use the new amount label.
     await page.locator(name === 'advanced' ? '.tabs button' : '.tab-item').nth(1).click()
@@ -78,7 +82,7 @@ async function check(browser, project, view, name) {
     })
     await page.locator('#app input[type=number]').first().fill('1')
     await page.locator(name === 'advanced' ? '.primary' : '.withdraw-button').click()
-    await page.waitForFunction(() => document.querySelector('.wallet-balance')?.textContent.includes('119.5'))
+    await waitBalance('119.50')
     assert.equal(withdrawals[0].requestId, 'fixture-legacy-fund-request-id')
     assert.equal(withdrawals[0].accountType, undefined)
     await page.locator(name === 'advanced' ? '.tabs button' : '.tab-item').nth(0).click()
@@ -86,15 +90,16 @@ async function check(browser, project, view, name) {
     await page.waitForFunction(() => document.querySelector('#app')?.textContent.includes('585958'))
     await walletSelect.click()
     await page.locator('.app-select__option').nth(1).click()
-    assert.ok((await wallet.locator('.wallet-balance').textContent()).includes('80.25'))
+    await waitBalance('80.25')
     await page.locator(name === 'advanced' ? '.tabs button' : '.tab-item').nth(0).click()
-    assert.ok((await wallet.locator('.wallet-balance').textContent()).includes('80.25'), 'changing withdrawal type preserves the source wallet')
+    assert.ok((await walletSelect.textContent()).includes('合約'), 'changing withdrawal type preserves the source wallet')
+    await waitBalance('80.25')
     await page.locator(name === 'advanced' ? '.tabs button' : '.tab-item').nth(1).click()
     await page.waitForFunction(() => document.querySelector('#app')?.textContent.includes('585958'))
     const amountInput = page.locator('#app input[type=number]').first()
     await amountInput.fill('10')
     await page.locator(name === 'advanced' ? '.primary' : '.withdraw-button').click()
-    await page.waitForFunction(() => document.querySelector('.wallet-balance')?.textContent.includes('70.25'))
+    await waitBalance('70.25')
     assert.equal(withdrawals[1].accountType, 'CONTRACT')
     assert.equal(balances.FUND, 119.5)
     await quick.click()
@@ -118,7 +123,7 @@ async function check(browser, project, view, name) {
       await dialog.locator('.confirm-transfer').click()
       await dialog.waitFor({ state: 'hidden' })
     }
-    await page.waitForFunction(() => document.querySelector('.wallet-balance')?.textContent.includes('90.25'))
+    await waitBalance('90.25')
     assert.equal(balances.FUND, 99.5)
     await page.screenshot({ path: path.join(report, name + '-wallet.png'), fullPage: true })
     await quick.click()
@@ -150,16 +155,16 @@ async function check(browser, project, view, name) {
     await page.locator('#app input[type=number]').first().fill('5')
     await page.waitForFunction(() => document.querySelector('#app')?.textContent.includes('FIXTURE-ADDRESS'))
     await page.locator(name === 'advanced' ? '.primary' : '.withdraw-button').click()
-    await page.waitForFunction(() => document.querySelector('.wallet-balance')?.textContent.includes('85.25'))
+    await waitBalance('85.25')
     assert.equal(withdrawals[2].type, 'digital')
     assert.equal(withdrawals[2].accountType, 'CONTRACT')
     await walletSelect.click()
     await page.locator('.app-select__option').nth(2).click()
-    assert.ok((await wallet.locator('.wallet-balance').textContent()).includes('30'))
+    await waitBalance('30.00')
     // A failed refresh must never display a fabricated zero balance or permit money writes.
     failAssets = true
     await page.reload()
-    await page.waitForFunction(() => document.querySelector('.wallet-balance')?.textContent.includes('—'))
+    await waitBalance('—')
     assert.ok(await quick.isDisabled())
     assert.ok(await page.locator(name === 'advanced' ? '.primary' : '.withdraw-button').isDisabled())
     assert.deepEqual(errors, [])

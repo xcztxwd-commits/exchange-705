@@ -97,10 +97,6 @@ onBeforeUnmount(() => { disposed = true; dialog.value?.close() })
     </div>
     <div class="wallet-row">
       <AppSelect :model-value="modelValue" :options="accounts" :label="locale.t('wallet')" :disabled="disabled || transferring" @update:model-value="emit('update:modelValue', $event as WalletAccount)" />
-      <div class="wallet-balance" aria-live="polite">
-        <small>{{ locale.t('availableBalance') }}</small>
-        <strong dir="ltr">{{ ready ? formatBalance(balances[modelValue]) + ' USD' : '—' }}</strong>
-      </div>
     </div>
     <p v-if="status" class="transfer-success" role="status">{{ status }}</p>
     <Teleport to="body">
@@ -144,18 +140,15 @@ onBeforeUnmount(() => { disposed = true; dialog.value?.close() })
 </template>
 
 <style scoped>
-.withdraw-wallet { margin-bottom: 20px; color: #25313b; font-size: 14px; }
+.withdraw-wallet { margin-bottom: 12px; color: #25313b; font-size: 14px; }
 .wallet-heading, .wallet-row, .transfer-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.wallet-heading { flex-wrap: wrap; margin-bottom: 8px; color: #666; }
+.wallet-heading { flex-wrap: wrap; margin-bottom: 4px; color: #666; }
 .quick-transfer { display: inline-flex; align-items: center; gap: 5px; padding: 4px 0; border: 0; background: transparent; color: #609500; font: inherit; cursor: pointer; }
 svg { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
-.wallet-row { padding: 12px; border: 1px solid #e2ead9; border-radius: 10px; background: #fafcf6; }
+.wallet-row { padding: 0 12px; border: 1px solid #e2ead9; border-radius: 10px; background: #fafcf6; }
 .wallet-row .app-select { flex: 1; }
 .wallet-row :deep(.app-select__trigger) { padding-inline: 0; border: 0; background: transparent; box-shadow: none; text-align: start; }
 .wallet-row :deep(.app-select__value) { white-space: normal; overflow-wrap: anywhere; }
-.wallet-balance { display: flex; flex: 1; flex-direction: column; gap: 5px; min-width: 0; text-align: end; overflow-wrap: anywhere; }
-.wallet-balance small { font-size: 12px; color: #7d8575; }
-.wallet-balance strong { font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .transfer-success { margin: 8px 0 0; color: #609500; font-size: 12px; }
 .transfer-dialog { box-sizing: border-box; width: min(440px, calc(100% - 32px)); max-width: none; max-height: calc(100dvh - 32px); margin: auto; padding: 0; border: 0; border-radius: 18px; background: #fff; color: #25313b; box-shadow: 0 20px 80px #17231b33; font: inherit; }
 .transfer-dialog::backdrop { background: #17231b66; }
