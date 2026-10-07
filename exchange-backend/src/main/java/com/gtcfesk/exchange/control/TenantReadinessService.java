@@ -75,7 +75,7 @@ public class TenantReadinessService {
         if("loan.setting".equals(key))return new String[]{"TENANT_ADMIN","目标租户后台 /loan-settings：期限、免息期、费率和金额范围"};
         if("deposit.setting".equals(key))return new String[]{"TENANT_ADMIN","目标租户后台 /deposit-settings：只录入批准的测试收款渠道；不得真实转账"};
         if("support.settings".equals(key))return new String[]{"TENANT_ADMIN","目标租户后台 /support-settings：站内客服 / 站内信；清理默认保持关闭"};
-        if("customer.service.link".equals(key))return new String[]{"TENANT_ADMIN","目标租户后台 /settings / 客服配置：先核总控渠道锁定及 HTTPS 出站白名单"};
+        if("customer.service.link".equals(key))return new String[]{"TENANT_ADMIN","目标租户后台 /settings / 客服配置：核对总控渠道锁定并保存 HTTPS 公网链接，无需域名白名单"};
         if("site.name".equals(key)||"system.timezone".equals(key))return new String[]{"TENANT_ADMIN","目标租户后台 /settings / 系统设置：平台名称及 IANA 时区"};
         return new String[]{"OPERATIONS","未登记的配置项必须人工定位，不猜测设置页或默认置为就绪"};
     }

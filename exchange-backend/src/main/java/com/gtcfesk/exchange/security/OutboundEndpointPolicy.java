@@ -7,10 +7,11 @@ import java.net.*;
 import java.util.*;
 import java.util.concurrent.*;
 
-/** Operator-only exact destinations. Tenant configuration cannot grant outbound access. */
+/** Operator-only backend destinations; browser support links require public HTTPS addresses. */
 @Component
 public class OutboundEndpointPolicy {
     @Value("${platform.outbound.smtp-endpoints:}") private String smtpEndpoints = "";
+    // ponytail: retain the legacy field for JVM hot redefinition; remove on the next full deployment.
     @Value("${platform.outbound.support-origins:}") private String supportOrigins = "";
     @Value("${platform.outbound.callback-origins:}") private String callbackOrigins = "";
     @Value("${platform.outbound.local-loopback-enabled:false}") private boolean localLoopbackEnabled;
@@ -46,9 +47,9 @@ public class OutboundEndpointPolicy {
             String host=hostname(uri.getHost());int port=uri.getPort()==-1?443:uri.getPort();
             if(port<1||port>65535)throw error("外部地址端口无效");
             String origin="https://"+host+(port==443?"":":"+port);
-            String allowed="support".equals(purpose)?supportOrigins:"callback".equals(purpose)?callbackOrigins:null;
-            if(allowed==null)throw error("未知外部地址用途");
-            allow(allowed,origin,"外部地址未获平台出站授权");publicAddresses(host);return uri;
+            if("callback".equals(purpose))allow(callbackOrigins,origin,"外部地址未获平台出站授权");
+            else if(!"support".equals(purpose))throw error("未知外部地址用途");
+            publicAddresses(host);return uri;
         } catch(IllegalArgumentException e){throw error("外部地址格式无效");}
     }
     public void validateConfig(String key,String value) {
