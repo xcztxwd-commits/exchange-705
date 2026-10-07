@@ -232,20 +232,6 @@
            <button @click="tradeMode = 'options'; orderSubTab = 'positions'; loadOptionOrders()" :class="['flex-1 py-1.5 rounded font-bold text-sm transition-all', tradeMode === 'options' ? 'bg-white dark:bg-[#131722] text-[#8cc63f] shadow-sm' : 'text-gray-500 dark:text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-200 dark:text-gray-200']">{{ localeStore.t('optionsTerm') }}</button>
         </div>
 
-        <div v-if="auth.token" class="mx-4 mt-3 text-sm" role="group" :aria-label="localeStore.text('资金账户', 'Funding account')">
-          <div class="flex gap-2">
-            <button v-if="wallet.state.eligible && wallet.state.available > 0" type="button" data-source="TRIAL"
-              :aria-pressed="fundingSource === 'TRIAL'" :disabled="tradeSubmitting || kycChecking"
-              :class="['flex-1 rounded border p-2', fundingSource === 'TRIAL' ? 'border-[#8cc63f] text-[#8cc63f]' : 'border-gray-300 text-gray-500']"
-              @click="chooseFunding('TRIAL')">{{ localeStore.text('体验金', 'Trial credit') }}</button>
-            <button type="button" :data-source="tradeMode === 'contract' ? 'CONTRACT' : 'OPTION'"
-              :aria-pressed="fundingSource !== 'TRIAL'" :disabled="tradeSubmitting || kycChecking"
-              :class="['flex-1 rounded border p-2', fundingSource !== 'TRIAL' ? 'border-[#8cc63f] text-[#8cc63f]' : 'border-gray-300 text-gray-500']"
-              @click="chooseFunding(tradeMode === 'contract' ? 'CONTRACT' : 'OPTION')">{{ tradeMode === 'contract' ? localeStore.t('contractAccountTitle') : localeStore.t('optionAccountTitle') }}</button>
-          </div>
-          <p v-if="fundingSource === 'TRIAL' && wallet.state.expiresAt != null" class="mt-2 text-[#8cc63f]" data-testid="trade-trial-countdown">{{ localeStore.text('剩余有效时间', 'Time remaining') }} {{ wallet.remaining }}</p>
-        </div>
-
         <!-- Contract Form -->
         <div v-if="tradeMode === 'contract'" class="p-4 flex-1 overflow-y-auto custom-scrollbar">
            <div class="flex justify-between items-center mb-6 border-b border-gray-200 dark:border-[#2b3139] pb-4">
@@ -275,7 +261,11 @@
                <div class="flex justify-between items-center"><span class="font-medium text-gray-600 dark:text-gray-300">{{ localeStore.t('fee') }}</span><span class="font-mono text-gray-800 dark:text-gray-100 font-medium">{{ displayFee(estimatedFee) }} USD</span></div>
                <p v-if="currentSymbolInfo?.quantityUnitType === 'BASE_ASSET'" class="text-xs">{{ localeStore.locale === 'ja' ? `1 ${unitLabel}あたりの往復手数料：${feeMultiplier} USD（固定）` : `每1 ${unitLabel} 固定往返佣金 ${feeMultiplier} USD` }}</p>
                <div class="flex justify-between items-center"><span class="font-medium text-gray-600 dark:text-gray-300">{{ localeStore.t('margin') }}</span><span class="font-mono text-gray-800 dark:text-gray-100 font-medium">{{ Number.isFinite(estimatedMargin) ? estimatedMargin.toFixed(2) : '--' }} USD</span></div>
-               <div class="flex justify-between items-center"><span class="font-medium text-gray-600 dark:text-gray-300">{{ localeStore.t('balance') }}</span><span class="font-mono text-gray-800 dark:text-gray-100 font-medium">{{ formatMoney(tradingAvailable, '0.00') }} USD</span></div>
+               <div v-if="auth.token" class="funding-selector" data-testid="funding-selector">
+                 <span><span>{{ localeStore.text('資金來源', 'Funding source') }}</span><time v-if="fundingSource === 'TRIAL' && wallet.state.expiresAt != null" data-testid="trade-trial-countdown">{{ wallet.remaining }}</time></span>
+                 <div><AppSelect class="funding-select" compact :model-value="fundingSource" :options="fundingOptions" :label="localeStore.text('資金來源', 'Funding source')" :disabled="tradeSubmitting || kycChecking" @update:model-value="chooseFunding($event as FundingSource)" /></div>
+               </div>
+               <div class="flex justify-between items-center"><span class="font-medium text-gray-600 dark:text-gray-300">{{ localeStore.t('availableFund') }}</span><span class="font-mono text-gray-800 dark:text-gray-100 font-medium">{{ formatMoney(tradingAvailable, '0.00') }} USD</span></div>
              </div>
 
              </PositionSizing>
@@ -327,6 +317,14 @@
            <div class="mb-6">
              <div class="text-gray-700 dark:text-gray-200 mb-2 font-bold text-sm">{{ localeStore.t('tradingAmount') }} (>=50)</div>
              <el-input v-model="optionAmount" :placeholder="localeStore.t('pleaseEnterQuantity')" type="number" class="custom-input-large" />
+           </div>
+
+           <div class="mb-3 text-xs text-gray-500 dark:text-gray-400">
+               <div v-if="auth.token" class="funding-selector" data-testid="funding-selector">
+                 <span><span>{{ localeStore.text('資金來源', 'Funding source') }}</span><time v-if="fundingSource === 'TRIAL' && wallet.state.expiresAt != null" data-testid="trade-trial-countdown">{{ wallet.remaining }}</time></span>
+                 <div><AppSelect class="funding-select" compact :model-value="fundingSource" :options="fundingOptions" :label="localeStore.text('資金來源', 'Funding source')" :disabled="tradeSubmitting || kycChecking" @update:model-value="chooseFunding($event as FundingSource)" /></div>
+               </div>
+             <div class="flex justify-between items-center mt-1"><span>{{ localeStore.t('availableFund') }} (USD)</span><strong>{{ formatMoney(optionTradingAvailable, '0.00') }}</strong></div>
            </div>
 
            <div class="flex justify-between items-center text-sm mb-8 px-1">
@@ -822,6 +820,8 @@
               <button @click="withdrawTab = 'bank'" :class="['flex-1 py-2.5 rounded-lg font-bold text-sm transition-all', withdrawTab === 'bank' ? 'bg-white dark:bg-[#131722] text-[#8cc63f] shadow-sm' : 'text-gray-500 dark:text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-200 dark:text-gray-200']">{{ localeStore.t('bankCardLabel') }}</button>
             </div>
 
+            <WithdrawWallet v-model="withdrawAccount" :balances="withdrawBalances" :ready="withdrawBalanceReady" :disabled="withdrawSubmitting" @transferred="loadWalletBalances" />
+
             <div v-if="withdrawTab === 'digital'" class="space-y-5">
               <div class="bg-white dark:bg-[#131722] p-6 rounded-xl border border-gray-100 dark:border-[#2b3139] shadow-sm space-y-5 relative overflow-hidden">
                 <div class="absolute top-0 left-0 w-1 h-full bg-[#8cc63f]"></div>
@@ -862,11 +862,11 @@
                 </div>
                 <div class="flex justify-between text-sm pt-2 border border-gray-200 dark:border-[#2b3139]-t border border-gray-200 dark:border-[#2b3139]-gray-50">
                   <span class="text-gray-500 dark:text-gray-400 dark:text-gray-500">{{ localeStore.t('balance') }}</span>
-                  <span class="text-gray-800 dark:text-gray-100 font-bold">{{ walletBalance.toFixed(2) }} {{ withdrawForm.currency || 'USD' }}</span>
+                  <span class="text-gray-800 dark:text-gray-100 font-bold">{{ withdrawBalanceReady ? formatWalletBalance(selectedWithdrawBalance, localeStore.locale) : '—' }} USD</span>
                 </div>
               </div>
               
-              <button @click="submitWithdraw" class="w-full bg-[#8cc63f] text-white py-3.5 rounded-lg font-bold hover:bg-[#7ab036] transition-colors shadow-sm shadow-green-200 text-lg">{{ localeStore.t('withdrawCoin') }}</button>
+              <button :disabled="!withdrawBalanceReady || withdrawSubmitting" @click="submitWithdraw" class="w-full bg-[#8cc63f] text-white py-3.5 rounded-lg font-bold hover:bg-[#7ab036] transition-colors shadow-sm shadow-green-200 text-lg">{{ localeStore.t('withdrawCoin') }}</button>
             </div>
             
             <!-- 银行卡提币 -->
@@ -910,11 +910,11 @@
                 </div>
                 <div class="flex justify-between text-sm pt-2 border border-gray-200 dark:border-[#2b3139]-t border border-gray-200 dark:border-[#2b3139]-gray-50">
                   <span class="text-gray-500 dark:text-gray-400 dark:text-gray-500">{{ localeStore.t('balance') }}</span>
-                  <span class="text-gray-800 dark:text-gray-100 font-bold">{{ walletBalance.toFixed(2) }} USD</span>
+                  <span class="text-gray-800 dark:text-gray-100 font-bold">{{ withdrawBalanceReady ? formatWalletBalance(selectedWithdrawBalance, localeStore.locale) : '—' }} USD</span>
                 </div>
               </div>
               
-              <button :disabled="withdrawRate === null || withdrawSubmitting" @click="submitWithdraw" class="w-full bg-[#8cc63f] text-white py-3.5 rounded-lg font-bold hover:bg-[#7ab036] transition-colors shadow-sm shadow-green-200 text-lg">{{ localeStore.t('withdrawCoin') }}</button>
+              <button :disabled="!withdrawBalanceReady || withdrawRate === null || withdrawSubmitting" @click="submitWithdraw" class="w-full bg-[#8cc63f] text-white py-3.5 rounded-lg font-bold hover:bg-[#7ab036] transition-colors shadow-sm shadow-green-200 text-lg">{{ localeStore.t('withdrawCoin') }}</button>
             </div>
             
             <div class="mt-8 bg-white dark:bg-[#131722] p-6 rounded-xl border border-gray-100 dark:border-[#2b3139] shadow-sm">
@@ -1566,6 +1566,8 @@ const simulation = accountMode() === "DEMO";
 import TrialAccountCard from '@/components/TrialAccountCard.vue'
 import AppSelect from '@/components/AppSelect.vue'
 import CurrencyPicker from '@/components/CurrencyPicker.vue'
+import WithdrawWallet from '../../../exchange-frontend/src/components/WithdrawWallet.vue'
+import { formatWalletBalance, useWithdrawalWallet } from '@/utils/withdrawalWallet'
 import AssetPixelChart from '../../../exchange-frontend/src/components/AssetPixelChart.vue'
 import LogoGlint from '@/components/LogoGlint.vue'
 import { useFiatCurrency } from '@/utils/fiatCurrency'
@@ -2603,11 +2605,20 @@ const walletBalance = ref(0);
 const walletFrozen = ref(0);
 const contractBalance = ref(0);
 const wallet = useTrialWallet();
+const { withdrawAccount, balances: withdrawBalances, balanceReady: withdrawBalanceReady, selectedBalance: selectedWithdrawBalance, loadBalance: loadWithdrawBalance } = useWithdrawalWallet(async () => {
+  await wallet.refresh();
+  if (!wallet.ready) throw new Error(wallet.error || 'Wallet unavailable');
+  return wallet.snapshot;
+});
 const contractChoice = ref<FundingChoice>({ source: 'CONTRACT', manual: false });
 const optionChoice = ref<FundingChoice>({ source: 'OPTION', manual: false });
 const contractFunding = computed(() => contractChoice.value.source);
 const optionFunding = computed(() => optionChoice.value.source);
 const fundingSource = computed(() => tradeMode.value === 'contract' ? contractFunding.value : optionFunding.value);
+const fundingOptions = computed(() => [
+  { value: tradeMode.value === 'contract' ? 'CONTRACT' : 'OPTION', label: localeStore.t(tradeMode.value === 'contract' ? 'contractAccountTitle' : 'optionAccountTitle') },
+  ...(wallet.state.eligible && wallet.state.available > 0 ? [{ value: 'TRIAL', label: localeStore.text('體驗金', 'Trial credit') }] : []),
+]);
 function chooseFunding(source: FundingSource) {
   if (tradeSubmitting.value || kycChecking.value) return;
   const choice = tradeMode.value === 'contract' ? contractChoice : optionChoice;
@@ -2616,6 +2627,8 @@ function chooseFunding(source: FundingSource) {
 watch([() => auth.token, () => auth.user?.id, () => auth.user?.tenantId], () => {
   contractChoice.value = { source: 'CONTRACT', manual: false };
   optionChoice.value = { source: 'OPTION', manual: false };
+  withdrawAccount.value = 'FUND';
+  withdrawBalanceReady.value = false;
 });
 watch([() => wallet.state.eligible, () => wallet.state.available], () => {
   contractChoice.value = reconcileFunding(contractChoice.value, 'CONTRACT', wallet.state, accountMode());
@@ -2640,7 +2653,8 @@ const { allocationPercent, setAllocation, canAllocate, orderReady, liquidation, 
 const loadWalletBalances = async () => {
   if (!auth.token) return;
   try {
-    await wallet.refresh();
+    await loadWithdrawBalance();
+    if (!withdrawBalanceReady.value) return;
     const res = wallet.snapshot;
     if (res && res.success !== false) {
       walletBalance.value = Number(res.fundBalance || res.balance || 0);
@@ -3375,8 +3389,9 @@ const loadUserWithdrawAccounts = async () => {
 
 const withdrawSubmitting = ref(false)
 const submitWithdraw = async () => {
-  if (withdrawSubmitting.value) return
+  if (withdrawSubmitting.value || !withdrawBalanceReady.value) return
   await loadKycStatus();
+  if (withdrawSubmitting.value || !withdrawBalanceReady.value) return
   if (!simulation && !isKycVerified.value) { activeUserMenu.value = 'kyc'; showUserCenter.value = true; return }
   if (withdrawTab.value === 'bank' && withdrawRate.value === null) { ElMessage.error('汇率暂不可用，请稍后重试'); return }
   if (withdrawTab.value === 'digital' && !withdrawForm.value.currency) {
@@ -3387,12 +3402,14 @@ const submitWithdraw = async () => {
     ElMessage.warning(localeStore.t('pleaseSelectWithdrawAddress'));
     return;
   }
-  if (!withdrawForm.value.amount || Number(withdrawForm.value.amount) <= 0) {
+  const amount = Number(withdrawForm.value.amount);
+  if (!Number.isFinite(amount) || amount <= 0) {
     ElMessage.warning(localeStore.t('pleaseEnterWithdrawAmount'));
     return;
   }
   
-  if (withdrawTab.value === 'digital' && Number(withdrawForm.value.amount) > walletBalance.value) {
+  const debitAmount = amount * (withdrawTab.value === 'bank' ? withdrawRate.value! : 1);
+  if (debitAmount > selectedWithdrawBalance.value) {
     ElMessage.warning(localeStore.t('balanceInsufficient'));
     return;
   }
@@ -3410,10 +3427,12 @@ const submitWithdraw = async () => {
   try {
     const res: any = await request.post('/withdraw/submit', {
       type: withdrawTab.value,
+      // Missing accountType is FUND; preserve existing pending withdrawal retry keys.
+      ...(withdrawAccount.value === 'FUND' ? {} : { accountType: withdrawAccount.value }),
       currency: withdrawTab.value === 'bank' ? withdrawCurrency.value : undefined,
       network: network,
       address: withdrawForm.value.address,
-      amount: Number(withdrawForm.value.amount),
+      amount,
       remark: withdrawForm.value.remark
     });
     
@@ -3777,6 +3796,7 @@ watch(activeUserMenu, async (val) => {
   } else if (val === 'withdraw' || val === 'wallet') {
     loadUserWithdrawAccounts();
     if (val === 'withdraw') {
+      void loadWalletBalances();
       loadWithdrawRecords();
     }
   } else if (val === 'transfer') {
@@ -3792,6 +3812,7 @@ const darkLogoUrl = `${import.meta.env.BASE_URL}img/logo-dark.svg`
 </script>
 
 <style>
+.trade-page .funding-selector{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12px}.trade-page .funding-selector>span{display:flex;align-items:center;flex-wrap:wrap;gap:4px 6px;flex:1;min-width:0;overflow-wrap:anywhere}.trade-page .funding-selector>div{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:4px 8px;max-width:65%}.trade-page .funding-selector .funding-select{width:132px;max-width:100%}.trade-page .funding-selector time{color:#639700;font-size:11px;font-variant-numeric:tabular-nums}
 .protection-input { display:block; width:100%; min-height:44px; margin-top:8px; padding:8px 12px; border:1px solid #dce0e7; border-radius:8px; background:transparent; color:inherit; }
 .protection-input:focus-visible { outline:2px solid #8cc63f; outline-offset:2px; }
 .brand-logo {

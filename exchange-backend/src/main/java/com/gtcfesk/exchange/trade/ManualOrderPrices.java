@@ -53,7 +53,7 @@ public class ManualOrderPrices {
         ZoneId zone;try {zone=ZoneId.of(timezone);}catch(DateTimeException | NullPointerException invalid){throw new BusinessException("时区无效");}
         long now=System.currentTimeMillis(),finished=Math.floorDiv(now,60000)*60000,from=Math.max(0,finished-ManualOrderGenerator.RANGE);
         if(limit<2 || limit>200)throw new BusinessException("图表每段仅支持2～200根分钟K线");
-        if(endTime!=null && (endTime<from || endTime>now))throw new BusinessException("图表仅支持最近七天已结束的分钟行情");
+        if(endTime!=null && (endTime<from || endTime>now))throw new BusinessException("图表仅支持最近30天已结束的分钟行情");
         long to=endTime==null?finished:Math.min(finished,Math.floorDiv(endTime,60000)*60000+60000);
         // One history read, not fourteen 12-hour reads; stored OHLC is immediately visible while missing source data is fetched in the background.
         Map<String,Object> response=market.historicalKline(symbol.getSymbol(),"1m",limit,to-1);
@@ -139,7 +139,7 @@ public class ManualOrderPrices {
     /** Batch windows rather than one network request per candidate pair. Missing rates stay missing. */
     public NavigableMap<Long,ManualOrderGenerator.Candle> generationCandles(TradingSymbol symbol,long from,long to) {return generationCandles(symbol,from,to,false);}
     private NavigableMap<Long,ManualOrderGenerator.Candle> generationCandles(TradingSymbol symbol,long from,long to,boolean requireReady) {
-        if(to<=from || to-from>ManualOrderGenerator.RANGE+60000)throw new BusinessException("生成搜索范围最多七天");
+        if(to<=from || to-from>ManualOrderGenerator.RANGE+60000)throw new BusinessException("生成搜索范围最多30天");
         NavigableMap<Long,ManualOrderGenerator.Candle> result=new TreeMap<>();
         QuoteCurrencyConversion conversion=QuoteCurrencyConversion.fixed(symbol.getQuoteCurrency())?null:QuoteCurrencyConversion.route(symbol.getQuoteCurrency(),symbol.getMarketSource());
         if(!QuoteCurrencyConversion.fixed(symbol.getQuoteCurrency()) && conversion==null)throw new BusinessException("缺少历史换算率");
@@ -184,7 +184,7 @@ public class ManualOrderPrices {
         // A single history pass; never wait for unrelated missing minutes when a complete candidate is already available.
         return generationCandles(symbol,from,to,true);
     }
-    /** Selected chart times need two exact candles, not seven days. Rates still use the shared UTC-window cache. */
+    /** Selected chart times need two exact candles, not thirty days. Rates still use the shared UTC-window cache. */
     @org.springframework.transaction.annotation.Transactional(readOnly=true, isolation=org.springframework.transaction.annotation.Isolation.REPEATABLE_READ)
     public NavigableMap<Long,ManualOrderGenerator.Candle> selectedCandles(TradingSymbol symbol,long open,long close) {
         Map<Long,Map<String,Object>> primary=new LinkedHashMap<>(),rates=new HashMap<>(),baseRates=new HashMap<>();

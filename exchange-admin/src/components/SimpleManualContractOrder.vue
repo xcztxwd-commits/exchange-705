@@ -93,7 +93,7 @@ async function generate() {
   const id = ++revision, expected = signature.value; busy.value = true; result.value = null; error.value = ''
   try {
     generationRequest?.abort(); generationRequest = new AbortController()
-    // Missing data is queued server-side; do not rerun the entire seven-day search twenty times.
+    // Missing data is queued server-side; do not rerun the entire thirty-day search twenty times.
     const response: any = await request.post(`${path}/simple/generate`, payload, { timeout: 10000, signal: generationRequest.signal })
     if (id !== revision || !visible.value || expected !== signature.value) return
     const values = { openPrice: response.quotes.openPrice, closePrice: response.quotes.closePrice, leverage: response.request.leverage, quantity: response.calculation.quantity, side: response.request.side, targetNet: response.calculation.net }
@@ -172,7 +172,7 @@ defineExpose({ open, openBinding })
         <p class="funding-hint">{{ form.userId ? '历史权益开启时，钱包入账同步开启。' : '未绑定用户：不修改资金，后续可绑定。' }}</p>
       </div>
     </el-form>
-    <details class="order-rules"><summary>生成规则与资金说明</summary><p>匹配最近七天已结束分钟，开仓严格早于平仓。平仓价留空取最近已结束分钟开盘价；自动开仓价幅度0.3%～0.8%，手填价格不受此限制。图表拖选固定时间，手动改价解除时间固定。净收益支持正数、负数和零；勾选“允许调整”时按容差匹配，取消后严格计算。手数滑块上限100，输入不限。无用户不动资金；开启历史权益同时开启钱包入账。</p></details>
+    <details class="order-rules"><summary>生成规则与资金说明</summary><p>匹配最近30天已结束分钟，开仓严格早于平仓。平仓价留空取最近已结束分钟开盘价；自动开仓价幅度0.3%～0.8%，手填价格不受此限制。图表拖选固定时间，手动改价解除时间固定。净收益支持正数、负数和零；勾选“允许调整”时按容差匹配，取消后严格计算。手数滑块上限100，输入不限。无用户不动资金；开启历史权益同时开启钱包入账。</p></details>
     <el-alert v-if="error" :title="error" type="error" :closable="false" />
     <section v-if="result" class="simple-result" aria-live="polite">
       <div><strong>开仓 {{ result.quotes.openPrice }}</strong><span>{{ time(result.openUtc) }}</span></div>

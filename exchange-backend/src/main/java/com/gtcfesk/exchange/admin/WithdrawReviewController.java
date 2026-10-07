@@ -117,6 +117,7 @@ public class WithdrawReviewController {
                 recordMap.put("userId", record.getUserId());
                 AdminUserIdentity.put(recordMap, null);
                 recordMap.put("type", record.getType());
+                recordMap.put("accountType", record.getAccountType());
                 recordMap.put("network", record.getNetwork());
                 recordMap.put("amount", record.getAmount());
                 recordMap.put("currency", record.getCurrency());
@@ -307,7 +308,7 @@ public class WithdrawReviewController {
             }
             
             // 退回冻结的金额
-            AssetAccount fundAccount = locked.accounts.stream().filter(a->"FUND".equals(a.getCoin())).findFirst().orElseThrow(()->new IllegalArgumentException("资金账户不存在"));
+            AssetAccount fundAccount = locked.accounts.stream().filter(a->record.getAccountType().equals(a.getCoin())).findFirst().orElseThrow(()->new IllegalArgumentException("出金账户不存在"));
             if (fundAccount != null) {
                 BigDecimal totalAmount = record.getAmount().add(record.getFee());
                 if(fundAccount.getFrozen()==null||fundAccount.getFrozen().compareTo(totalAmount)<0)throw new IllegalArgumentException("冻结金额不足，未变更资金");
@@ -377,7 +378,7 @@ public class WithdrawReviewController {
             }
             
             // 扣除冻结金额（实际转出）
-            AssetAccount fundAccount = locked.accounts.stream().filter(a->"FUND".equals(a.getCoin())).findFirst().orElseThrow(()->new IllegalArgumentException("资金账户不存在"));
+            AssetAccount fundAccount = locked.accounts.stream().filter(a->record.getAccountType().equals(a.getCoin())).findFirst().orElseThrow(()->new IllegalArgumentException("出金账户不存在"));
             if (fundAccount != null) {
                 BigDecimal totalAmount = record.getAmount().add(record.getFee());
                 if(fundAccount.getFrozen()==null||fundAccount.getFrozen().compareTo(totalAmount)<0)throw new IllegalArgumentException("冻结金额不足，未变更资金");
@@ -504,4 +505,3 @@ public class WithdrawReviewController {
         return null;
     }
 }
-

@@ -209,7 +209,7 @@ class ManualOrderMySqlIT {
         assertTrue(n(generated.get("leverage").toString()).signum()>0);
         assertEquals(0,count("contract_order"));assertEquals(0,count("manual_order_record"));equal("1000",wallet());
     }
-    @Test void blankCloseUsesLatestRealMinuteAndSearchesOnlyPriorSevenDays() {
+    @Test void blankCloseUsesLatestRealMinuteAndSearchesOnlyPriorThirtyDays() {
         long latest=Math.floorDiv(System.currentTimeMillis(),60000)*60000-60000,opening=latest-240*60000;
         doAnswer(inv->{long end=inv.getArgument(3);int size=inv.getArgument(2);List<Map<String,Object>> rows=new ArrayList<>();
             for(long minute:new long[]{opening,latest})if(minute<=end && minute>end-size*60000L){Map<String,Object> row=new HashMap<>();row.put("timestamp",minute);row.put("open_price",minute==opening?"100":"110");rows.add(row);}
@@ -262,7 +262,7 @@ class ManualOrderMySqlIT {
             if(r.side!=null)assertEquals(r.side,request.get("side"));if(r.openLocal!=null)assertEquals(r.openLocal,request.get("openLocal"));if(r.closeLocal!=null)assertEquals(r.closeLocal,request.get("closeLocal"));
             assertEquals(0,count("contract_order"));assertEquals(0,count("manual_order_record"));equal("1000",wallet());
             for(String table:Arrays.asList("asset_history_1m","asset_history_1h","asset_history_4h","asset_history_1d"))assertEquals(0,count(table));
-            int calls=mockingDetails(market).getInvocations().size();assertTrue(calls<=18,"bounded seven-day windows plus preview");
+            int calls=mockingDetails(market).getInvocations().size();assertTrue(calls<=ManualOrderGenerator.RANGE/(720*60000L)+4,"bounded thirty-day windows plus preview");
             rows.add(mask+",PASS,"+(System.nanoTime()-started)/1000000.0+","+calls+","+info.get("searchedPairs")+","+net+","+q+","+l+","+calc.get("percent"));
         }
         java.nio.file.Path dir=java.nio.file.Paths.get("target/manual-generation-matrix");java.nio.file.Files.createDirectories(dir);java.nio.file.Files.write(dir.resolve("service-matrix-256.csv"),rows,java.nio.charset.StandardCharsets.UTF_8);
@@ -280,8 +280,8 @@ class ManualOrderMySqlIT {
         SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken("900002","unused",Collections.singletonList(new SimpleGrantedAuthority("ROLE_SUPER_ADMIN"))));
         assertThrows(BusinessException.class,()->service.create(p));assertEquals(0,count("contract_order"));equal("1000",wallet());
     }
-    @Test void exactlySevenDaysFromFixedOpenIsIncluded() {
-        long opening=Math.floorDiv(System.currentTimeMillis(),60000)*60000-8*86400000L,closing=opening+7*86400000L;
+    @Test void exactlyThirtyDaysFromFixedOpenIsIncluded() {
+        long opening=Math.floorDiv(System.currentTimeMillis(),60000)*60000-ManualOrderGenerator.RANGE-86400000L,closing=opening+ManualOrderGenerator.RANGE;
         when(market.historicalKline(anyString(),eq("1m"),anyInt(),anyLong())).thenAnswer(inv->{
             long end=inv.getArgument(3);int size=inv.getArgument(2);List<Map<String,Object>> rows=new ArrayList<>();
             for(long time:new long[]{opening,closing})if(time<=end && time>end-size*60000L){Map<String,Object> row=new HashMap<>();row.put("timestamp",time);row.put("open_price",time==opening?"100":"110");rows.add(row);}

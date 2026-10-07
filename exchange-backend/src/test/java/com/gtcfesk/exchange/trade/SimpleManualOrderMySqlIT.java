@@ -69,7 +69,7 @@ class SimpleManualOrderMySqlIT {
         symbol=new TradingSymbol();symbol.setTenantId(2L);symbol.setId(20001L);symbol.setSymbol("FIXTUREUSD");symbol.setIsEnabled(true);symbol.setCategory("US");symbol.setSourceCategory("US");symbol.setBaseCurrency("TEST");symbol.setQuoteCurrency("USD");symbol.setMarketSource("yahoo");symbol.setLotSize(n("1"));symbol.setFeeMultiplier(n("0.01"));symbol.setMaxLeverage(n("100"));symbol.setQuantityUnitType("LOT");symbol.setSpecVersion(1L);symbol.setQuantityStep(n("0.01"));symbol.setMinOrderQuantity(n("0.01"));symbol.setMinOrderNotional(BigDecimal.ZERO);symbol.setRowVersion(0);
         repository=mock(TradingSymbolRepository.class);when(repository.findByTenantIdAndSymbol(2L,"FIXTUREUSD")).thenReturn(Optional.of(symbol));
         end=Math.floorDiv(System.currentTimeMillis(),60000)*60000;close=end-60000;oldClose=close-2*86400000;
-        List<Map<String,Object>> rows=Arrays.asList(candle(close-60000,"99.5","99.2","99.7"),candle(close,"100","99.9","100.4"),candle(oldClose-60000,"119.4","119.04","119.64"),candle(oldClose,"120","119.9","120.4"),candle(end,"999","998","1000"),candle(end-7*86400000-60000,"130","129.9","130.4"));
+        List<Map<String,Object>> rows=Arrays.asList(candle(close-60000,"99.5","99.2","99.7"),candle(close,"100","99.9","100.4"),candle(oldClose-60000,"119.4","119.04","119.64"),candle(oldClose,"120","119.9","120.4"),candle(end,"999","998","1000"),candle(end-ManualOrderGenerator.RANGE-60000,"130","129.9","130.4"));
         market=mock(ForexQuoteMarketService.class);
         when(market.historicalKline(eq("FIXTUREUSD"),eq("1m"),anyInt(),anyLong())).thenAnswer(inv->{long last=inv.<Long>getArgument(3)-59999;List<Map<String,Object>> selected=new ArrayList<>();for(Map<String,Object> row:rows){long t=((Number)row.get("timestamp")).longValue();if(t<=last && t>last-720*60000L)selected.add(row);}return Collections.singletonMap("data",Collections.singletonMap("kline_list",selected));});
         db.update("insert into asset_history_quote_batch(tenant_id,batch_id,prepared_at,evidence) values(2,'fixture',?,'{}')",System.currentTimeMillis());
@@ -202,7 +202,7 @@ class SimpleManualOrderMySqlIT {
         assertThrows(com.fasterxml.jackson.databind.JsonMappingException.class,()->json.readValue("{\"symbol\":\"FIXTUREUSD\",\"tenantId\":2}",SimpleManualOrderGenerator.Request.class));
         ManualOrderController controller=new ManualOrderController(service);c.simpleMode=true;assertThrows(BusinessException.class,()->controller.preview(c));assertFalse(c.simpleMode);assertEquals(0,count("manual_order_binding"));equal("1000000",wallet(1));
     }
-    @Test void incompleteFutureAndOlderThanSevenDaysCandlesCannotMatch() {
+    @Test void incompleteFutureAndOlderThanThirtyDaysCandlesCannotMatch() {
         SimpleManualOrderGenerator.Request r=simple();r.closePrice=n("130");assertThrows(BusinessException.class,()->service.generateSimple(r));
         r.closePrice=n("999");assertThrows(BusinessException.class,()->service.generateSimple(r));
         when(market.historicalKline(anyString(),anyString(),anyInt(),anyLong())).thenReturn(Collections.singletonMap("data",Collections.singletonMap("kline_list",Arrays.asList(Collections.singletonMap("timestamp",close)))));

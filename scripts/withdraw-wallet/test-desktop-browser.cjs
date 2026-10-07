@@ -1,0 +1,139 @@
+// Exercise the real PC route and its embedded withdrawal panel. Every API/socket is local and mocked.
+const fs = require('node:fs'), path = require('node:path'), os = require('node:os'), assert = require('node:assert/strict')
+const { pathToFileURL } = require('node:url')
+const { chromium } = require(process.env.PLAYWRIGHT_PATH || 'playwright')
+const repository = path.resolve(__dirname, '../..'), root = path.join(repository, 'exchange-pc')
+const evidence = process.env.EVIDENCE_DIR || fs.mkdtempSync(path.join(os.tmpdir(), 'pc-withdraw-'))
+fs.mkdirSync(evidence, { recursive: true })
+
+;(async () => {
+  process.chdir(root)
+  const { createServer } = await import(pathToFileURL(path.join(root, 'node_modules/vite/dist/node/index.js')))
+  const server = await createServer({ root, configFile: path.join(root, 'vite.config.ts'), envDir: evidence,
+    cacheDir: path.join(evidence, 'vite-cache'), server: { host: '127.0.0.1', port: 0 } })
+  await server.listen()
+  const port = server.httpServer.address().port, base = `http://127.0.0.1:${port}`
+  const browser = await chromium.launch({ headless: true, executablePath: process.env.CHROME_PATH || 'C:/Program Files/Google/Chrome/Application/chrome.exe' })
+  const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } }), page = await context.newPage()
+  const balances = { FUND: 120.5, CONTRACT: 80.250000001, OPTION: 30 }, withdrawals = [], transfers = [], errors = []
+  let failAssets = false
+  const profile = { id: 999, tenantId: 1, email: 'withdraw-fixture@example.com', nickname: null, avatarUrl: null }
+  page.on('pageerror', error => errors.push(error.message))
+  await page.addInitScript(profile => {
+    localStorage.setItem('token', 'isolated-withdraw-fixture')
+    localStorage.setItem('user', JSON.stringify(profile)); localStorage.setItem('locale', 'en'); localStorage.setItem('theme', 'light')
+  }, profile)
+  await page.routeWebSocket(/.*/, () => {})
+  await page.route('**/*', async route => {
+    const request = route.request(), url = new URL(request.url()), json = body => route.fulfill({ json: body })
+    if (url.hostname === 'ipwho.is') return json({ success: true, country_code: 'SG', calling_code: '65', timezone: { id: 'Asia/Singapore' } })
+    if (url.origin !== base) return route.abort('blockedbyclient')
+    if (!/^\/(api|demo-api)\//.test(url.pathname)) return route.continue()
+    assert.ok(url.pathname.startsWith('/api/'), 'fixture must remain in REAL mode')
+    if (url.pathname === '/api/user/assets') return failAssets ? route.fulfill({ status: 503, json: { message: 'Fixture assets unavailable' } }) : json({
+      success: true, serverNow: new Date().toISOString(), fundBalance: balances.FUND, contractBalance: balances.CONTRACT,
+      optionBalance: balances.OPTION, fundFrozen: 0, contractFrozen: 0, optionFrozen: 0, trialEligible: false, fundingSources: ['CONTRACT', 'OPTION'] })
+    if (url.pathname === '/api/kyc/status') return json({ success: true, kycStatus: 'VERIFIED', latestRecord: { status: 'APPROVED' }, canTrade: true })
+    if (url.pathname === '/api/user/profile') return json(profile)
+    if (url.pathname === '/api/tenant/features') return json({ tenantId: 1, status: 'ACTIVE', acceptNewBusiness: true,
+      features: { simulation: true, contract: true, option: true, withdraw: true } })
+    if (url.pathname === '/api/market/currencies') return json({ rates: { EUR: { quoteToUsdRate: 2, conversionAvailable: true, conversionExpiresAt: Date.now() + 300000 } } })
+    if (url.pathname === '/api/wallet/bank-cards') return json({ success: true, list: [{ id: 1, currency: 'USD', bankName: 'Fixture Bank', recipientAccount: '585958', recipientName: 'Fixture' }] })
+    if (url.pathname === '/api/wallet/digital-addresses') return json({ success: true, list: [{ id: 1, network: 'USDT-TRC20', address: 'FIXTURE-ADDRESS' }] })
+    if (url.pathname === '/api/user/asset-history') {
+      const now = Date.now()
+      return json({ points: [], from: now - 60000, asOf: now, intervalMs: 60000, total: '230.75', income: '0', timezone: 'UTC' })
+    }
+    if (url.pathname === '/api/user/system/timezone') return json({ timezone: 'UTC' })
+    if (url.pathname === '/api/user/support/config') return json({ mode: 'disabled' })
+    if (url.pathname === '/api/withdraw/submit') {
+      const body = request.postDataJSON(); withdrawals.push(body)
+      const source = body.accountType || 'FUND', debit = body.amount * (body.currency === 'EUR' ? 2 : 1)
+      assert.ok(Object.hasOwn(balances, source)); assert.ok(debit > 0 && debit <= balances[source]); assert.ok(body.requestId)
+      balances[source] -= debit
+      return json({ success: true })
+    }
+    if (url.pathname === '/api/transfer/submit') {
+      const body = request.postDataJSON(); transfers.push(body)
+      assert.notEqual(body.fromAccount, body.toAccount); assert.ok(body.requestId)
+      assert.ok(body.amount > 0 && body.amount <= balances[body.fromAccount])
+      balances[body.fromAccount] -= body.amount; balances[body.toAccount] += body.amount
+      return json({ success: true })
+    }
+    assert.ok(request.method() === 'GET' || ['/api/auth/activity', '/api/market/price/batch', '/api/market/redis/price/batch', '/api/market/redis/kline/batch', '/api/market/kline/batch'].includes(url.pathname), 'unexpected business write: ' + url.pathname)
+    return json({ success: true, list: [], data: [], categories: [], symbols: [], total: 0 })
+  })
+  try {
+    await page.goto(base + '/')
+    assert.equal(new URL(page.url()).pathname, '/'); assert.equal(await page.title(), 'FOREX-EXCHANGE')
+    await page.locator('header').getByRole('button', { name: profile.email, exact: true }).click()
+    const center = page.locator('.el-dialog').filter({ has: page.locator('.profile-identity') })
+    const sidebar = center.locator('.w-56 > div.cursor-pointer')
+    await sidebar.filter({ hasText: /^\s*Withdraw\s*$/ }).click()
+    const wallet = center.locator('.withdraw-wallet'), walletSelect = wallet.locator('.app-select__trigger')
+    const panel = center.locator('div.max-w-2xl').filter({ has: page.locator('.withdraw-wallet') })
+    await panel.getByText('120.50 USD', { exact: true }).waitFor()
+    assert.equal(await wallet.locator('.wallet-balance').count(), 0)
+    assert.match(await walletSelect.textContent(), /Fund/)
+    await wallet.scrollIntoViewIfNeeded()
+    await page.screenshot({ path: path.join(evidence, 'pc-inline-default.png') })
+    const submit = () => panel.getByRole('button', { name: 'Withdraw', exact: true })
+    const amount = () => panel.locator('input[type=number]')
+    const selectAddress = async index => {
+      await panel.locator('.space-y-5 > div').first().locator('.app-select__trigger').nth(index).click()
+      await page.getByRole('option').first().click()
+    }
+    await panel.getByRole('button', { name: 'Bank Card', exact: true }).click()
+    await selectAddress(1)
+    await page.evaluate(() => {
+      const body = { address: '585958', amount: 1, currency: 'USD', network: 'USD', remark: '', type: 'bank' }
+      sessionStorage.setItem('pending-funds:' + JSON.stringify([location.origin, 'REAL', 1, 999, '/withdraw/submit', body]), 'fixture-legacy-fund-retry')
+    })
+    await amount().fill('1'); await submit().click()
+    await panel.getByText('119.50 USD', { exact: true }).waitFor()
+    assert.equal(withdrawals[0].accountType, undefined); assert.equal(withdrawals[0].requestId, 'fixture-legacy-fund-retry')
+    await walletSelect.click(); await page.getByRole('option').nth(1).click()
+    await panel.getByText('80.25 USD', { exact: true }).waitFor()
+    await wallet.scrollIntoViewIfNeeded(); await walletSelect.click()
+    await page.screenshot({ path: path.join(evidence, 'pc-inline-contract.png') })
+    await page.keyboard.press('Escape')
+    await selectAddress(1); await amount().fill('100'); await submit().click()
+    await page.locator('.el-message').last().getByText('Balance insufficient', { exact: true }).waitFor()
+    assert.equal(withdrawals.length, 1, 'CONTRACT must not borrow FUND balance')
+    await amount().fill('10'); await submit().click()
+    await panel.getByText('70.25 USD', { exact: true }).waitFor()
+    assert.equal(withdrawals[1].accountType, 'CONTRACT'); assert.equal(balances.FUND, 119.5)
+    await panel.getByRole('button', { name: 'Digital Currency', exact: true }).click()
+    assert.match(await walletSelect.textContent(), /Contract/, 'tab change preserves selected source')
+    await walletSelect.click(); await page.getByRole('option').nth(2).click()
+    await selectAddress(1); await amount().fill('5'); await submit().click()
+    await panel.getByText('25.00 USD', { exact: true }).waitFor()
+    assert.equal(withdrawals[2].type, 'digital'); assert.equal(withdrawals[2].accountType, 'OPTION')
+    await wallet.locator('.quick-transfer').click()
+    const dialog = page.locator('dialog.transfer-dialog')
+    await dialog.waitFor({ state: 'visible' }); assert.match(await dialog.textContent(), /Option/)
+    await dialog.locator('input').fill('999'); assert.ok(await dialog.locator('.confirm-transfer').isDisabled())
+    await dialog.locator('input').fill('20'); await dialog.locator('.confirm-transfer').click()
+    await dialog.waitFor({ state: 'hidden' })
+    await panel.getByText('45.00 USD', { exact: true }).waitFor()
+    assert.equal(transfers.length, 1); assert.equal(transfers[0].toAccount, 'OPTION'); assert.equal(balances.FUND, 99.5)
+    await panel.getByRole('button', { name: 'Bank Card', exact: true }).click()
+    await selectAddress(1)
+    await panel.locator('.currency-picker .app-select__trigger').click()
+    await page.getByRole('option').filter({ hasText: /EUR/ }).click()
+    await amount().fill('30'); await submit().click()
+    await page.locator('.el-message').last().getByText('Balance insufficient', { exact: true }).waitFor()
+    assert.equal(withdrawals.length, 3, 'fiat withdrawal must validate USD debit against selected wallet')
+    assert.ok((await panel.textContent()).includes('45.00 USD'))
+    await page.waitForFunction(() => !document.querySelector('.el-message'))
+    await wallet.scrollIntoViewIfNeeded()
+    await page.screenshot({ path: path.join(evidence, 'pc-inline-withdraw.png') })
+    failAssets = true
+    await sidebar.filter({ hasText: /^\s*Transfer\s*$/ }).click(); await sidebar.filter({ hasText: /^\s*Withdraw\s*$/ }).click()
+    await panel.getByText('— USD', { exact: true }).waitFor()
+    assert.ok(await submit().isDisabled()); assert.ok(await wallet.locator('.quick-transfer').isDisabled())
+    assert.deepEqual(errors, []); assert.equal(await page.locator('vite-error-overlay').count(), 0)
+    console.log(JSON.stringify({ passed: true, route: '/', view: 'DesktopTrade.vue', withdrawals: withdrawals.length, sources: ['FUND', 'CONTRACT', 'OPTION'], legacyFundRetry: true, fiatUsdValidation: true, quickTransfer: true, failedAssetsBlocked: true, evidence }))
+  } catch (error) { await page.screenshot({ path: path.join(evidence, 'failure.png') }); console.error((await page.locator('body').innerText()).slice(-3500)); throw error }
+  finally { await browser.close(); await server.close() }
+})().catch(error => { console.error(error); process.exitCode = 1 })

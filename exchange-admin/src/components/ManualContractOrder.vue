@@ -173,7 +173,7 @@ defineExpose({ open })
 
 <template>
   <el-dialog v-model="visible" title="生成订单" width="min(820px, calc(100vw - 24px))" top="5vh" :close-on-click-modal="false" :close-on-press-escape="!saving" :show-close="!saving">
-    <el-alert class="generation-hint" title="平仓分钟留空时取最近有行情的分钟，并在此前最多 7 天找开仓时间。杠杆默认 100×，固定不浮动；数量、仓位、净收益、目标平仓价可设置 ±5% 目标；已填时间、方向及开关保持不变；真实行情价不会被修改。" type="info" :closable="false" />
+    <el-alert class="generation-hint" title="平仓分钟留空时取最近有行情的分钟，并在此前最多 30 天找开仓时间。杠杆默认 100×，固定不浮动；数量、仓位、净收益、目标平仓价可设置 ±5% 目标；已填时间、方向及开关保持不变；真实行情价不会被修改。" type="info" :closable="false" />
     <ManualOrderChart :symbol="form.symbol" :symbols="symbols" @change-symbol="form.symbol = $event" :timezone="form.timezone" :active="visible" :disabled="saving || generating" :open-time="orderMinuteTimestamp(conditions.openLocal, conditions.openOffset)" :close-time="orderMinuteTimestamp(conditions.closeLocal, conditions.closeOffset)" @select="selectChart" @clear="clearChart" />
     <el-form class="manual-form" label-position="top" :disabled="saving || generating">
       <el-form-item label="用户 ID / 邮箱"><el-select v-model="form.userId" filterable remote :remote-method="search" placeholder="输入 ID 或邮箱" style="width:100%" @change="chooseUser"><el-option v-for="u in users" :key="u.id" :value="u.id" :label="`${u.id} · ${u.email}`" /></el-select></el-form-item>

@@ -4,6 +4,7 @@ import { ElMessage, ElMessageBox, ElTabs, ElTabPane } from 'element-plus'
 import { Search, Refresh } from '@element-plus/icons-vue'
 import { useAccountTable } from '@/utils/useAccountTable'
 import { accountTableRequest } from '@/utils/accountTableRequest'
+import { useLiveContractOrders } from '@/utils/useLiveContractOrders'
 import AccountTypeFilter from '@/components/AccountTypeFilter.vue'
 const accountTable = useAccountTable()
 const accountModes = accountTable.modes
@@ -56,6 +57,7 @@ const optionOrders = ref<any[]>([])
 const contractTotal = ref(0)
 const optionTotal = ref(0)
 const loading = ref(false)
+useLiveContractOrders(contractOrders, activeTab, accountModes, loading, accountTable.read)
 const agentList = ref<any[]>([])
 
 const contractQueryParams = ref({
@@ -405,7 +407,7 @@ onMounted(() => {
           </el-table-column>
           <el-table-column prop="currentPrice" label="当前价/平仓价" width="120">
             <template #default="{ row }">
-              {{ formatPrice(row.status === 'CLOSED' ? row.closePrice : row.currentPrice) }}
+              <span :title="row.liveAvailable === false ? '暂停更新，显示最后获取值' : ''">{{ formatPrice(row.status === 'CLOSED' ? row.closePrice : row.currentPrice) }}</span>
             </template>
           </el-table-column>
           <el-table-column prop="stopLoss" label="止损" width="100">
@@ -422,14 +424,14 @@ onMounted(() => {
           </el-table-column>
           <el-table-column prop="profit" label="盈亏" width="120">
             <template #default="{ row }">
-              <span :style="{ color: Number(row.profit || 0) >= 0 ? '#67c23a' : '#f56c6c' }">
+              <span :style="{ color: row.liveAvailable === false ? '#909399' : Number(row.profit || 0) >= 0 ? '#67c23a' : '#f56c6c' }" :title="row.liveAvailable === false ? '暂停更新，显示最后获取值' : ''">
                 {{ formatMoney(row.profit) }}
               </span>
             </template>
           </el-table-column>
           <el-table-column prop="netProfit" label="净盈亏" width="120" default-after="profit">
             <template #default="{ row }">
-              <span :style="{ color: row.netProfit == null ? '#909399' : Number(row.netProfit) >= 0 ? '#67c23a' : '#f56c6c' }" title="按原订单结算规则计算；挂单、撤单及历史退款订单不扣预留手续费">
+              <span :style="{ color: row.liveAvailable === false || row.netProfit == null ? '#909399' : Number(row.netProfit) >= 0 ? '#67c23a' : '#f56c6c' }" :title="(row.liveAvailable === false ? '暂停更新，显示最后获取值；' : '') + '按原订单结算规则计算；挂单、撤单及历史退款订单不扣预留手续费'">
                 {{ formatMoney(row.netProfit) }}
               </span>
             </template>

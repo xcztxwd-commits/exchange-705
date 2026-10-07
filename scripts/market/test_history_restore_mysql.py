@@ -17,7 +17,7 @@ container = docker('run', '-d', '--name', name, '--label', 'history.restore.owne
                    '--memory', '768m', 'mysql:5.7', '--innodb-use-native-aio=0')
 try:
     def sql(text):
-        return docker('exec', '-i', '-e', 'MYSQL_PWD=' + password, container, 'mysql', '-uroot', '--batch', '--skip-column-names', data=text.encode())
+        return docker('exec', '-i', '-e', 'MYSQL_PWD=' + password, container, 'mysql', '-h127.0.0.1', '-uroot', '--batch', '--skip-column-names', data=text.encode())
     deadline = time.monotonic() + 100
     while True:
         try: sql('SELECT 1;'); break

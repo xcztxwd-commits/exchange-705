@@ -7,7 +7,7 @@ import java.util.*;
 /** Bounded, side-effect-free search over actual historical minute opens. */
 public final class ManualOrderGenerator {
     private ManualOrderGenerator() { }
-    public static final long MINUTE=60000L, RANGE=7*24*60*MINUTE;
+    public static final long MINUTE=60000L, RANGE=30*24*60*MINUTE;
     private static final BigDecimal HUNDRED=new BigDecimal("100"), STEP=new BigDecimal("0.01"), LOWER=new BigDecimal("0.95"), UPPER=new BigDecimal("1.05");
     public static class Request {
         public Long userId;

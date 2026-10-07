@@ -55,6 +55,10 @@ public class WithdrawController {
             if (!"digital".equals(type) && !"bank".equals(type)) {
                 throw new com.gtcfesk.exchange.common.BusinessException("提现类型无效");
             }
+            String accountType = req.get("accountType") == null ? "FUND" : req.get("accountType").toString().trim().toUpperCase(java.util.Locale.ROOT);
+            if (!"FUND".equals(accountType) && !"CONTRACT".equals(accountType) && !"OPTION".equals(accountType)) {
+                throw new com.gtcfesk.exchange.common.BusinessException("账户类型无效");
+            }
             String network = (String) req.get("network"); // 如 USDT-TRC20, USD
             BigDecimal originalAmount = new BigDecimal(req.get("amount").toString());
             com.gtcfesk.exchange.common.TradeValidation.positive(originalAmount, "提现金额");
@@ -79,6 +83,8 @@ public class WithdrawController {
             
             String requestKey=com.gtcfesk.exchange.common.OrderRequest.required(req.get("requestId"));
             String requestHash=com.gtcfesk.exchange.common.OrderRequest.hash("withdraw",type,network,originalAmount,currency,address,remark);
+            // Preserve retry compatibility for FUND receipts created before wallet selection.
+            if (!"FUND".equals(accountType)) requestHash=com.gtcfesk.exchange.common.OrderRequest.hash(requestHash,accountType);
             boolean replayHint=withdrawRecordRepository.findReplayId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(),userId,requestKey).isPresent();
             BigDecimal rate = replayHint ? null : "bank".equals(type) ? fiatCurrencyService.rate(currency) : BigDecimal.ONE;
             BigDecimal amount = rate == null ? null : fiatCurrencyService.toUsd(originalAmount, rate);
@@ -98,17 +104,17 @@ public class WithdrawController {
             if(amount==null)throw new com.gtcfesk.exchange.common.BusinessException("原提现收据已变更，请使用原请求编号重试");
             tenantPolicy.requireNewBusiness("withdraw");
             requireIdentityCurrent(userId);
-            // 获取用户资金账户余额
-            AssetAccount fundAccount = lockedAccounts.stream().filter(a -> "FUND".equals(a.getCoin())).findFirst().orElse(null);
+            // 使用所选钱包的可用余额，冻结资金不能出金。
+            AssetAccount sourceAccount = lockedAccounts.stream().filter(a -> accountType.equals(a.getCoin())).findFirst().orElse(null);
             
-            if (fundAccount == null || fundAccount.getAvailable() == null) {
+            if (sourceAccount == null || sourceAccount.getAvailable() == null) {
                 Map<String, Object> resp = new HashMap<>();
                 resp.put("success", false);
-                resp.put("message", "资金账户不存在或余额不足");
+                resp.put("message", "余额不足");
                 return ResponseEntity.badRequest().body(resp);
             }
             
-            BigDecimal available = fundAccount.getAvailable();
+            BigDecimal available = sourceAccount.getAvailable();
             BigDecimal fee = calculateFee(type, network, amount); // 计算手续费
             BigDecimal totalNeeded = amount.add(fee); // 提现金额 + 手续费
             
@@ -140,15 +146,16 @@ public class WithdrawController {
             }
             
             // 冻结金额（提现金额 + 手续费）
-            fundAccount.setAvailable(available.subtract(totalNeeded));
-            fundAccount.setFrozen(fundAccount.getFrozen().add(totalNeeded));
-            assetAccountRepository.save(fundAccount);checkpoint("freeze-account");
+            sourceAccount.setAvailable(available.subtract(totalNeeded));
+            sourceAccount.setFrozen(sourceAccount.getFrozen().add(totalNeeded));
+            assetAccountRepository.save(sourceAccount);checkpoint("freeze-account");
             
             // 创建提现记录
             WithdrawRecord record = new WithdrawRecord();
             record.setRequestKey(requestKey);record.setRequestHash(requestHash);
             record.setUserId(userId);
             record.setType(type);
+            record.setAccountType(accountType);
             record.setNetwork(network);
             record.setAmount(amount);
             record.setFee(fee);
@@ -163,13 +170,13 @@ public class WithdrawController {
             record.setStatus("PENDING");
             
             if (identityService != null && identityService.simulationExempt()) {
-                fundAccount.setFrozen(fundAccount.getFrozen().subtract(totalNeeded));
-                assetAccountRepository.save(fundAccount);checkpoint("simulation-account");
+                sourceAccount.setFrozen(sourceAccount.getFrozen().subtract(totalNeeded));
+                assetAccountRepository.save(sourceAccount);checkpoint("simulation-account");
                 record.setStatus("COMPLETED"); record.setReviewRemark("SIMULATION ONLY — no external payment");
                 record.setReviewedAt(java.time.LocalDateTime.now());
             }
             withdrawRecordRepository.save(record);checkpoint("withdrawal-order");
-            auditSuccess("WITHDRAW_SUBMIT",String.valueOf(record.getId()),"userId="+userId+"; amount="+amount+"; fee="+fee+"; availableBefore="+available+"; availableAfter="+fundAccount.getAvailable()+"; frozenAfter="+fundAccount.getFrozen()+"; status="+record.getStatus(),null);checkpoint("withdrawal-audit");
+            auditSuccess("WITHDRAW_SUBMIT",String.valueOf(record.getId()),"userId="+userId+"; accountType="+accountType+"; amount="+amount+"; fee="+fee+"; availableBefore="+available+"; availableAfter="+sourceAccount.getAvailable()+"; frozenAfter="+sourceAccount.getFrozen()+"; status="+record.getStatus(),null);checkpoint("withdrawal-audit");
             
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", true);

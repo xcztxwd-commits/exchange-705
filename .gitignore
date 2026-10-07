@@ -117,3 +117,6 @@ dist-control*/
 !exchange-backend/src/main/resources/db/migration/V2026100701__control_command_retry.sql
 !exchange-backend/src/main/resources/db/migration/V2026100702__control_history_finalization.sql
 !exchange-backend/src/main/resources/db/migration/V2026100703__history_source_restore.sql
+
+# Additive withdrawal wallet metadata; preserves historical FUND withdrawals.
+!exchange-backend/src/main/resources/db/migration/V2026100703_1__withdraw_wallet.sql
