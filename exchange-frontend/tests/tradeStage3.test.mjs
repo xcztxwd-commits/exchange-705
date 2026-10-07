@@ -34,5 +34,5 @@ test('routed forms omit duplicate editing and history uses real times', () => {
   const orders = read('../src/views/Orders.vue')
   assert.doesNotMatch(orders, /<select|order\.openTime \|\| order\.createdAt/)
   assert.doesNotMatch(pc, /order\.openTime \|\| order\.createdAt/)
-  assert.match(orders, /v-if="isHistory" class="card-footer"/)
+  assert.match(orders, /isHistory\.value \? order\.closeTime \|\| '--'/)
 })

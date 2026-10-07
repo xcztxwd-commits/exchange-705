@@ -12,7 +12,12 @@ import java.util.*;
 public class TenantRequestFilter extends OncePerRequestFilter {
  private final TenantHostService hosts;
  @org.springframework.beans.factory.annotation.Autowired private TenantDomainVerification domains;
- public static boolean backendSharedPath(String path){return path.matches("/api/market/icons/(crypto|forex|stocks|metal|oil|index|symbol)/[A-Z0-9._-]{1,40}\\.svg")||path.equals("/api/market/currencies")||path.equals("/api/upload/image")||path.equals("/api/upload/audio")||path.equals("/api/user/support/config")||path.startsWith("/api/uploads/images/")||path.startsWith("/api/uploads/audio/")||path.equals("/api/user/support/tones/arrival.wav")||path.equals("/api/user/support/tones/reply.wav");}
+ private static boolean backendPreviewReadPath(String path){return path.equals("/api/user/system/timezone")||path.equals("/api/market/search")||path.matches("/api/market/kline/(?!batch$)[A-Za-z0-9._=^%-]{1,80}");}
+ public static boolean backendSharedPath(String path){
+  // Preview reads use the verified backend JWT tenant, just like the existing shared support routes.
+  return backendPreviewReadPath(path)
+   ||path.matches("/api/market/icons/(crypto|forex|stocks|metal|oil|index|symbol)/[A-Z0-9._-]{1,40}\\.svg")||path.equals("/api/market/currencies")||path.equals("/api/upload/image")||path.equals("/api/upload/audio")||path.equals("/api/user/support/config")||path.startsWith("/api/uploads/images/")||path.startsWith("/api/uploads/audio/")||path.equals("/api/user/support/tones/arrival.wav")||path.equals("/api/user/support/tones/reply.wav");
+ }
  private static final Set<String> PC_PAGES=new HashSet<>(Arrays.asList("/","/demo","/trade","/login","/register","/forgot-password","/language","/customer-service","/inbox"));
  private static final Set<String> MOBILE_PAGES=new HashSet<>(Arrays.asList("/","/home","/demo","/trade","/orders","/profile","/explore","/assets","/deposit","/deposit/records","/wallet","/wallet/bind-bank-card","/wallet/bind-digital-currency","/verification","/transfer","/change-password","/customer-service","/inbox","/complaint","/announcements","/withdraw","/credit-loan","/loan/personal-info","/loan/apply-info","/loan/contract","/loan/sign","/loan/records","/financial-management","/financial/purchase","/financial/orders","/financial/yield-list","/search","/invite","/login","/register","/forgot-password","/language"));
  private static final Set<String> QUERY=new HashSet<>(Arrays.asList("tab","symbol","category","lang","invite","invitationCode","id","orderId","activity","edition","panel","status","login","register","forgot"));
@@ -56,7 +61,7 @@ public class TenantRequestFilter extends OncePerRequestFilter {
    if(inspected!=null){if(!path.startsWith("/api/admin/"))throw new AccessDeniedException("模拟监管路径无效");try(TenantContext.Scope ignored=TenantContext.open(inspected)){chain.doFilter(request,response);}return;}
    if("/healthz".equals(path)){response.setStatus(200);response.getWriter().write("ok");return;}
    if(path.startsWith("/api/control/")){hosts.requireOrigin(request,hosts.controlOrigin());chain.doFilter(request,response);return;}
-   if(path.startsWith("/api/admin/")||(hosts.isAdminHost(request)&&backendSharedPath(path))){hosts.requireOrigin(request,hosts.adminOrigin());chain.doFilter(request,response);return;}
+   if(path.startsWith("/api/admin/")||(hosts.isAdminHost(request)&&backendSharedPath(path))){hosts.requireOrigin(request,hosts.adminOrigin());if(backendPreviewReadPath(path)&&!"GET".equals(request.getMethod()))throw new AccessDeniedException("分享预览仅支持只读GET");chain.doFilter(request,response);return;}
    Tenant tenant=hosts.resolve(request);
    if("/api/tenant-routing-check".equals(path)){noStore(response);if(!"GET".equals(request.getMethod()))throw new AccessDeniedException("只读路由检查");response.setContentType("application/json");response.getWriter().write("{\"tenantId\":"+tenant.getId()+"}");return;}
    if(!tenant.isDomainVerified()||"DISABLED".equals(tenant.getStatus()))throw new AccessDeniedException("租户未开放");

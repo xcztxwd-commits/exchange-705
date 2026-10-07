@@ -52,7 +52,7 @@ class TenantJwtBoundaryTest {
   for(String type:Arrays.asList("admin","agent","control_access")){
    DefaultClaims claims=new DefaultClaims();claims.setSubject(type+"-8");claims.setExpiration(new Date(System.currentTimeMillis()+60000));claims.put("userType",type);claims.put("tenantId",1L);when(jwt.parse("test")).thenReturn(claims);
    try(TenantContext.Scope ignored=TenantContext.open(2L)){
-    for(String path:Arrays.asList("/api/market/currencies","/api/upload/image","/api/user/support/config")){
+    for(String path:Arrays.asList("/api/market/currencies","/api/upload/image","/api/user/support/config","/api/user/system/timezone","/api/market/search","/api/market/kline/JPY%3DX")){
      MockHttpServletRequest request=new MockHttpServletRequest("GET",path);request.addHeader("Authorization","Bearer test");MockHttpServletResponse response=new MockHttpServletResponse();FilterChain chain=mock(FilterChain.class);
      filter.doFilter(request,response,chain);assertEquals(401,response.getStatus(),type+" "+path);assertEquals(2L,TenantContext.requireTenantId());verifyNoInteractions(chain,admins,control);
     }
