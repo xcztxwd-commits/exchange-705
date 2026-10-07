@@ -3,6 +3,8 @@ import { computed, ref } from 'vue'
 export type WalletAccount = 'FUND' | 'CONTRACT' | 'OPTION'
 export type WalletBalances = Record<WalletAccount, number>
 
+export const formatWalletBalance = (value: number, locale: string) => value.toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+
 export function useWithdrawalWallet(fetchAssets: () => Promise<any>) {
   const withdrawAccount = ref<WalletAccount>('FUND')
   const balances = ref<WalletBalances>({ FUND: 0, CONTRACT: 0, OPTION: 0 })

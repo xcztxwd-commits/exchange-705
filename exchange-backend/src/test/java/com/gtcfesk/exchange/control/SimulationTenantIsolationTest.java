@@ -21,9 +21,9 @@ class SimulationTenantIsolationTest {
  @AfterEach void cleanup(){TenantContext.clear();org.springframework.web.context.request.RequestContextHolder.resetRequestAttributes();}
  @Test void identityResponseMustMatchServerResolvedTenantAndForwardExactHost(){
   TenantContext.open(1L);TenantRepository tenants=mock(TenantRepository.class);Tenant t=new Tenant();t.setId(1L);t.setFrontendHost("a.example.com");t.setDomainVerified(true);when(tenants.findById(1L)).thenReturn(Optional.of(t));
-  SimulationGateway gateway=new SimulationGateway();ReflectionTestUtils.setField(gateway,"tenants",tenants);ReflectionTestUtils.setField(gateway,"identityUrl","https://identity.invalid/api/simulation");
+  SimulationGateway gateway=new SimulationGateway();ReflectionTestUtils.setField(gateway,"tenants",tenants);ReflectionTestUtils.setField(gateway,"identityUrl","https://a.example.com/api/simulation");
   MockRestServiceServer server=MockRestServiceServer.createServer((RestTemplate)ReflectionTestUtils.getField(gateway,"http"));
-  server.expect(requestTo("https://identity.invalid/api/simulation/session")).andExpect(header("X-Forwarded-Host","a.example.com")).andExpect(header("Authorization","Bearer sample")).andRespond(withSuccess("{\"tenantId\":2,\"userId\":7,\"environment\":\"REAL\"}",MediaType.APPLICATION_JSON));
+  server.expect(requestTo("https://a.example.com/api/simulation/session")).andExpect(header("X-Forwarded-Host","a.example.com")).andExpect(header("Authorization","Bearer sample")).andRespond(withSuccess("{\"tenantId\":2,\"userId\":7,\"environment\":\"REAL\"}",MediaType.APPLICATION_JSON));
   assertThrows(IllegalStateException.class,()->gateway.authenticate("Bearer sample"));server.verify();
  }
  @Test void catalogCannotDisableForeignProductsAndMismatchRollsBack(){

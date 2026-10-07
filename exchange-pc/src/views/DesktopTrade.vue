@@ -820,6 +820,8 @@
               <button @click="withdrawTab = 'bank'" :class="['flex-1 py-2.5 rounded-lg font-bold text-sm transition-all', withdrawTab === 'bank' ? 'bg-white dark:bg-[#131722] text-[#8cc63f] shadow-sm' : 'text-gray-500 dark:text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-200 dark:text-gray-200']">{{ localeStore.t('bankCardLabel') }}</button>
             </div>
 
+            <WithdrawWallet v-model="withdrawAccount" :balances="withdrawBalances" :ready="withdrawBalanceReady" :disabled="withdrawSubmitting" @transferred="loadWalletBalances" />
+
             <div v-if="withdrawTab === 'digital'" class="space-y-5">
               <div class="bg-white dark:bg-[#131722] p-6 rounded-xl border border-gray-100 dark:border-[#2b3139] shadow-sm space-y-5 relative overflow-hidden">
                 <div class="absolute top-0 left-0 w-1 h-full bg-[#8cc63f]"></div>
@@ -860,11 +862,11 @@
                 </div>
                 <div class="flex justify-between text-sm pt-2 border border-gray-200 dark:border-[#2b3139]-t border border-gray-200 dark:border-[#2b3139]-gray-50">
                   <span class="text-gray-500 dark:text-gray-400 dark:text-gray-500">{{ localeStore.t('balance') }}</span>
-                  <span class="text-gray-800 dark:text-gray-100 font-bold">{{ walletBalance.toFixed(2) }} {{ withdrawForm.currency || 'USD' }}</span>
+                  <span class="text-gray-800 dark:text-gray-100 font-bold">{{ withdrawBalanceReady ? formatWalletBalance(selectedWithdrawBalance, localeStore.locale) : '—' }} USD</span>
                 </div>
               </div>
               
-              <button @click="submitWithdraw" class="w-full bg-[#8cc63f] text-white py-3.5 rounded-lg font-bold hover:bg-[#7ab036] transition-colors shadow-sm shadow-green-200 text-lg">{{ localeStore.t('withdrawCoin') }}</button>
+              <button :disabled="!withdrawBalanceReady || withdrawSubmitting" @click="submitWithdraw" class="w-full bg-[#8cc63f] text-white py-3.5 rounded-lg font-bold hover:bg-[#7ab036] transition-colors shadow-sm shadow-green-200 text-lg">{{ localeStore.t('withdrawCoin') }}</button>
             </div>
             
             <!-- 银行卡提币 -->
@@ -908,11 +910,11 @@
                 </div>
                 <div class="flex justify-between text-sm pt-2 border border-gray-200 dark:border-[#2b3139]-t border border-gray-200 dark:border-[#2b3139]-gray-50">
                   <span class="text-gray-500 dark:text-gray-400 dark:text-gray-500">{{ localeStore.t('balance') }}</span>
-                  <span class="text-gray-800 dark:text-gray-100 font-bold">{{ walletBalance.toFixed(2) }} USD</span>
+                  <span class="text-gray-800 dark:text-gray-100 font-bold">{{ withdrawBalanceReady ? formatWalletBalance(selectedWithdrawBalance, localeStore.locale) : '—' }} USD</span>
                 </div>
               </div>
               
-              <button :disabled="withdrawRate === null || withdrawSubmitting" @click="submitWithdraw" class="w-full bg-[#8cc63f] text-white py-3.5 rounded-lg font-bold hover:bg-[#7ab036] transition-colors shadow-sm shadow-green-200 text-lg">{{ localeStore.t('withdrawCoin') }}</button>
+              <button :disabled="!withdrawBalanceReady || withdrawRate === null || withdrawSubmitting" @click="submitWithdraw" class="w-full bg-[#8cc63f] text-white py-3.5 rounded-lg font-bold hover:bg-[#7ab036] transition-colors shadow-sm shadow-green-200 text-lg">{{ localeStore.t('withdrawCoin') }}</button>
             </div>
             
             <div class="mt-8 bg-white dark:bg-[#131722] p-6 rounded-xl border border-gray-100 dark:border-[#2b3139] shadow-sm">
@@ -1564,6 +1566,8 @@ const simulation = accountMode() === "DEMO";
 import TrialAccountCard from '@/components/TrialAccountCard.vue'
 import AppSelect from '@/components/AppSelect.vue'
 import CurrencyPicker from '@/components/CurrencyPicker.vue'
+import WithdrawWallet from '../../../exchange-frontend/src/components/WithdrawWallet.vue'
+import { formatWalletBalance, useWithdrawalWallet } from '@/utils/withdrawalWallet'
 import AssetPixelChart from '../../../exchange-frontend/src/components/AssetPixelChart.vue'
 import LogoGlint from '@/components/LogoGlint.vue'
 import { useFiatCurrency } from '@/utils/fiatCurrency'
@@ -2601,6 +2605,11 @@ const walletBalance = ref(0);
 const walletFrozen = ref(0);
 const contractBalance = ref(0);
 const wallet = useTrialWallet();
+const { withdrawAccount, balances: withdrawBalances, balanceReady: withdrawBalanceReady, selectedBalance: selectedWithdrawBalance, loadBalance: loadWithdrawBalance } = useWithdrawalWallet(async () => {
+  await wallet.refresh();
+  if (!wallet.ready) throw new Error(wallet.error || 'Wallet unavailable');
+  return wallet.snapshot;
+});
 const contractChoice = ref<FundingChoice>({ source: 'CONTRACT', manual: false });
 const optionChoice = ref<FundingChoice>({ source: 'OPTION', manual: false });
 const contractFunding = computed(() => contractChoice.value.source);
@@ -2618,6 +2627,8 @@ function chooseFunding(source: FundingSource) {
 watch([() => auth.token, () => auth.user?.id, () => auth.user?.tenantId], () => {
   contractChoice.value = { source: 'CONTRACT', manual: false };
   optionChoice.value = { source: 'OPTION', manual: false };
+  withdrawAccount.value = 'FUND';
+  withdrawBalanceReady.value = false;
 });
 watch([() => wallet.state.eligible, () => wallet.state.available], () => {
   contractChoice.value = reconcileFunding(contractChoice.value, 'CONTRACT', wallet.state, accountMode());
@@ -2642,7 +2653,8 @@ const { allocationPercent, setAllocation, canAllocate, orderReady, liquidation, 
 const loadWalletBalances = async () => {
   if (!auth.token) return;
   try {
-    await wallet.refresh();
+    await loadWithdrawBalance();
+    if (!withdrawBalanceReady.value) return;
     const res = wallet.snapshot;
     if (res && res.success !== false) {
       walletBalance.value = Number(res.fundBalance || res.balance || 0);
@@ -3377,8 +3389,9 @@ const loadUserWithdrawAccounts = async () => {
 
 const withdrawSubmitting = ref(false)
 const submitWithdraw = async () => {
-  if (withdrawSubmitting.value) return
+  if (withdrawSubmitting.value || !withdrawBalanceReady.value) return
   await loadKycStatus();
+  if (withdrawSubmitting.value || !withdrawBalanceReady.value) return
   if (!simulation && !isKycVerified.value) { activeUserMenu.value = 'kyc'; showUserCenter.value = true; return }
   if (withdrawTab.value === 'bank' && withdrawRate.value === null) { ElMessage.error('汇率暂不可用，请稍后重试'); return }
   if (withdrawTab.value === 'digital' && !withdrawForm.value.currency) {
@@ -3389,12 +3402,14 @@ const submitWithdraw = async () => {
     ElMessage.warning(localeStore.t('pleaseSelectWithdrawAddress'));
     return;
   }
-  if (!withdrawForm.value.amount || Number(withdrawForm.value.amount) <= 0) {
+  const amount = Number(withdrawForm.value.amount);
+  if (!Number.isFinite(amount) || amount <= 0) {
     ElMessage.warning(localeStore.t('pleaseEnterWithdrawAmount'));
     return;
   }
   
-  if (withdrawTab.value === 'digital' && Number(withdrawForm.value.amount) > walletBalance.value) {
+  const debitAmount = amount * (withdrawTab.value === 'bank' ? withdrawRate.value! : 1);
+  if (debitAmount > selectedWithdrawBalance.value) {
     ElMessage.warning(localeStore.t('balanceInsufficient'));
     return;
   }
@@ -3412,10 +3427,12 @@ const submitWithdraw = async () => {
   try {
     const res: any = await request.post('/withdraw/submit', {
       type: withdrawTab.value,
+      // Missing accountType is FUND; preserve existing pending withdrawal retry keys.
+      ...(withdrawAccount.value === 'FUND' ? {} : { accountType: withdrawAccount.value }),
       currency: withdrawTab.value === 'bank' ? withdrawCurrency.value : undefined,
       network: network,
       address: withdrawForm.value.address,
-      amount: Number(withdrawForm.value.amount),
+      amount,
       remark: withdrawForm.value.remark
     });
     
@@ -3779,6 +3796,7 @@ watch(activeUserMenu, async (val) => {
   } else if (val === 'withdraw' || val === 'wallet') {
     loadUserWithdrawAccounts();
     if (val === 'withdraw') {
+      void loadWalletBalances();
       loadWithdrawRecords();
     }
   } else if (val === 'transfer') {

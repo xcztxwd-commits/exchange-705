@@ -95,7 +95,7 @@
           </div>
           <div class="summary-item">
             <span>{{ localeStore.t('balance') }}</span>
-            <span>{{ balanceReady ? selectedBalance : '—' }} USD</span>
+            <span>{{ balanceReady ? formatWalletBalance(selectedBalance, localeStore.locale) : '—' }} USD</span>
           </div>
         </div>
 
@@ -164,7 +164,7 @@
           </div>
           <div class="summary-item">
             <span>{{ localeStore.t('balance') }}</span>
-            <span>{{ balanceReady ? selectedBalance : '—' }} USD</span>
+            <span>{{ balanceReady ? formatWalletBalance(selectedBalance, localeStore.locale) : '—' }} USD</span>
           </div>
         </div>
 
@@ -313,7 +313,7 @@ import Tabbar from '@/components/Tabbar.vue'
 import request from '@/utils/request'
 import CurrencyPicker from '@/components/CurrencyPicker.vue'
 import WithdrawWallet from '@/components/WithdrawWallet.vue'
-import { useWithdrawalWallet } from '@/utils/withdrawalWallet'
+import { formatWalletBalance, useWithdrawalWallet } from '@/utils/withdrawalWallet'
 import { useFiatCurrency } from '@/utils/fiatCurrency'
 const { currency: bankCurrency, rate: bankRate, usdPreview } = useFiatCurrency()
 import { useLocaleStore } from '@/store/locale'

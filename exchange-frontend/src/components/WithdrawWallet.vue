@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, ref, useId, watch } from 'vue'
 import AppSelect from '@/components/AppSelect.vue'
 import request from '@/utils/request'
 import { useLocaleStore } from '@/store/locale'
+import { formatWalletBalance } from '../utils/withdrawalWallet'
 import type { WalletAccount, WalletBalances } from '../utils/withdrawalWallet'
 
 type TransferInput = { fromAccount: WalletAccount; toAccount: WalletAccount; amount: number }
@@ -28,7 +29,7 @@ const message = ref('')
 const status = ref('')
 let disposed = false
 const quickTransfer = computed(() => locale.text('快捷劃轉', 'Quick transfer'))
-const formatBalance = (value: number) => new Intl.NumberFormat(locale.locale, { maximumFractionDigits: 8 }).format(value)
+const formatBalance = (value: number) => formatWalletBalance(value, locale.locale)
 const accounts = computed(() => [
   { value: 'FUND' as const, label: locale.t('fundAccountTitle') },
   { value: 'CONTRACT' as const, label: locale.t('contractAccount').replace(/[:：]\s*$/, '') },
