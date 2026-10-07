@@ -6,6 +6,7 @@ import path from 'node:path'
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), 'LOCAL_')
   return {
+  base: mode === 'production' ? '/mobile/' : '/',
   plugins: [vue()],
   resolve: {
     alias: {
