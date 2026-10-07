@@ -110,7 +110,7 @@ public class PersistentPriceControl {
     public void emergencySource(long symbol,long now) {
         store.locked(symbol,()->{
             store.runtime.invalidate(symbol);
-            store.db.update("UPDATE market_control_command SET state='CANCELLED',prepared_json=NULL,error_code='CONTROL_CANCELLED',message='应急回源已取消准备' WHERE tenant_id=? AND symbol_id=? AND state IN ('ACCEPTED','PREPARING','READY')",tenant(),symbol);
+            store.db.update("UPDATE market_control_command SET state='CANCELLED',prepared_json=NULL,error_code='CONTROL_CANCELLED',message=? WHERE tenant_id=? AND symbol_id=? AND state IN ('ACCEPTED','PREPARING','READY')",ControlHistoryStore.encodeCommandMessage("应急回源已取消准备"),tenant(),symbol);
             Task task=latest(symbol);endCommitted(task,now);
             org.slf4j.LoggerFactory.getLogger(getClass()).info("control_source tenant={} symbol={} task={} sampledUntil={} plannedEnd={} missingSamplesDiscarded=true",tenant(),symbol,task==null?null:task.id,task==null?null:task.sampledUntil,task==null?null:task.plannedEnd);
             return null;

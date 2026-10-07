@@ -76,6 +76,9 @@ class ControlRecoveryMysqlTest {
         JdbcTemplate db=new JdbcTemplate(data);assertEquals(database,db.queryForObject("SELECT DATABASE()",String.class));
         assertEquals(fixture.get("serverUuid"),db.queryForObject("SELECT @@server_uuid",String.class));
         assertTrue(db.queryForObject("SELECT VERSION()",String.class).startsWith("5.7."));
+        assertEquals("latin1_swedish_ci", db.queryForObject("SELECT table_collation FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name='market_control_command'", String.class));
+        assertEquals(0, db.queryForObject("SELECT COUNT(*) FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='market_control_command' AND character_set_name IS NOT NULL AND character_set_name<>'latin1'", Integer.class));
+        assertEquals("varchar(255)", db.queryForObject("SELECT column_type FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='market_control_command' AND column_name='message'", String.class));
         assertTrue(db.queryForObject("SELECT COUNT(*) FROM information_schema.triggers WHERE trigger_schema=DATABASE() AND trigger_name LIKE 's2_%'",Integer.class)>=40);
     }
 
@@ -534,6 +537,64 @@ class ControlRecoveryMysqlTest {
             assertEquals(1,store.db.queryForObject("SELECT COUNT(*) FROM market_control_task WHERE tenant_id=1 AND symbol_id=? AND request_key=?",Integer.class,symbol.getId(),key));
             assertEquals(1,store.db.queryForObject("SELECT COUNT(*) FROM market_control_task WHERE tenant_id=1 AND symbol_id=? AND request_key=?",Integer.class,symbol.getId(),restore));
         }finally{httpOwner=null;}
+    }
+
+    private String rawMessage(String key) { return store.db.queryForObject("SELECT message FROM market_control_command WHERE tenant_id=1 AND symbol_id=? AND request_key=?", String.class, symbol.getId(), key); }
+    private void messageReceipt(String key, String message) {
+        assertEquals(message, commands.query(symbol.getId(), key).get("message"));
+        String raw = rawMessage(key);assertTrue(raw.startsWith("~mcc1~"));assertTrue(raw.length() <= 255);assertTrue(raw.chars().allMatch(c -> c < 128));
+    }
+    @Test void nativeLatin1RejectsOriginalChineseButUnknownCancelRoundTripsAndBlocksLateRequests() {
+        String key="latin1_unknown_cancel";commands.cancel(symbol.getId(),key);messageReceipt(key,"控制请求已取消");
+        RuntimeException error=assertThrows(RuntimeException.class,()->store.db.update("UPDATE market_control_command SET message=? WHERE tenant_id=1 AND symbol_id=? AND request_key=?","控制请求已取消",symbol.getId(),key));
+        SQLException sql=null;for(Throwable cause=error;cause!=null;cause=cause.getCause())if(cause instanceof SQLException)sql=(SQLException)cause;
+        assertNotNull(sql);assertEquals(1366,sql.getErrorCode());messageReceipt(key,"控制请求已取消");
+        MarketControlCommands reopened=newQueue(store,newMarket(store,new PersistentPriceControl(store),symbol));
+        assertEquals("控制请求已取消",reopened.query(symbol.getId(),key).get("message"));
+        assertEquals("CANCELLED",reopened.accept(symbol.getId(),20,new BigDecimal("91"),1,false,key,options()).get("state"));
+        assertEquals("CANCELLED",reopened.acceptRestore(symbol.getId(),20,1,false,key).get("state"));
+        store.db.update("UPDATE market_control_command SET message=? WHERE tenant_id=1 AND symbol_id=? AND request_key=?","Legacy cancelled: café",symbol.getId(),key);
+        assertEquals("Legacy cancelled: café",reopened.query(symbol.getId(),key).get("message"));
+    }
+    @Test void nativeLatin1NewUnicodeParametersAndPreparedJsonRetainPlanAndHash() {
+        prime();String key="latin1_unicode_plan";TargetControlOptions options=options();options.setStepFormula("0.1 − 0");
+        AtomicReference<String> ready=new AtomicReference<>();
+        JdbcTemplate observed=new JdbcTemplate(data){@Override public int update(String sql,Object... args){int changed=super.update(sql,args);if(sql.contains("SET state='READY'"))ready.set((String)args[0]);return changed;}};
+        ReflectionTestUtils.setField(store,"db",observed);
+        commands.accept(symbol.getId(),20,new BigDecimal("91"),1,false,key,options);
+        Map<String,Object> row=store.db.queryForMap("SELECT parameters_json,parameter_hash FROM market_control_command WHERE tenant_id=1 AND symbol_id=? AND request_key=?",symbol.getId(),key);
+        String parameters=(String)row.get("parameters_json");assertTrue(parameters.chars().allMatch(c->c<128));assertEquals("0.1 − 0",store.decode(parameters).get("stepFormula"));
+        commands.runOne();assertEquals("RUNNING",commands.query(symbol.getId(),key).get("state"));assertNotNull(ready.get());assertTrue(ready.get().chars().allMatch(c->c<128));
+        assertEquals("0.1 − 0",store.decode((String)store.decode(ready.get()).get("parameters_json")).get("stepFormula"));
+        assertEquals(row.get("parameter_hash"),store.db.queryForObject("SELECT parameter_hash FROM market_control_command WHERE tenant_id=1 AND symbol_id=? AND request_key=?",String.class,symbol.getId(),key));
+        controls.emergencySource(symbol.getId(),System.currentTimeMillis());
+    }
+    @Test void nativeLatin1LongestActualInvalidFormulaReachesDurableFailedReceipt() {
+        prime();String key="latin1_formula_failed";TargetControlOptions options=options();options.setStepFormula(String.join("",Collections.nCopies(256,"中")));
+        commands.accept(symbol.getId(),20,new BigDecimal("91"),1,false,key,options);commands.runOne();
+        assertEquals("FAILED",commands.query(symbol.getId(),key).get("state"));assertEquals("INVALID_FORMULA",commands.query(symbol.getId(),key).get("errorCode"));
+        messageReceipt(key,"单步幅度公式第257字符：未知变量或函数；允许start/target/gap/duration/intensity/tick/base及abs/min/max");
+    }
+    @Test void nativeLatin1LongestBoundedWorkerFailureRemainsCompleteAndNotTruncated() {
+        prime();String key="latin1_corridor_failed";String message="偏差带过窄，无法容纳当前波动；请增加执行时间、降低波动强度或手动放宽偏差带后重新预览，不会自动扩大手动范围";
+        accept(key);doThrow(new BalancedControlPlan.Failure("CORRIDOR_STEP_INFEASIBLE",message)).when(market).prepareCommand(anyLong(),anyInt(),any(BigDecimal.class),anyInt(),anyBoolean(),any(TargetControlOptions.class),anyLong());
+        commands.runOne();assertEquals("FAILED",commands.query(symbol.getId(),key).get("state"));messageReceipt(key,message);assertEquals(218,rawMessage(key).length());
+    }
+    @Test void nativeLatin1DeferredAndExhaustedReceiptsPreserveCompleteMessages() {
+        String key="latin1_deferred_retry";accept(key);
+        Map<String,Object> command=store.db.queryForMap("SELECT * FROM market_control_command WHERE tenant_id=1 AND symbol_id=? AND request_key=?",symbol.getId(),key);
+        for(int attempt=1;attempt<=5;attempt++){
+            ReflectionTestUtils.invokeMethod(commands,"defer",command,symbol.getId(),"ENGINE_BUSY",null);
+            assertEquals(attempt,commands.query(symbol.getId(),key).get("retryCount"));
+            messageReceipt(key,attempt==5?"控制命令有限重试已耗尽":"引擎暂不可用，等待有限退避");
+        }
+        assertEquals("FAILED",commands.query(symbol.getId(),key).get("state"));assertEquals("COMMAND_RETRY_EXHAUSTED",commands.query(symbol.getId(),key).get("errorCode"));
+    }
+    @Test void nativeLatin1PendingCancelAndEmergencySourceShareLosslessMessageCodec() {
+        prime();String cancelled="latin1_pending_cancel",emergency="latin1_emergency";
+        accept(cancelled);commands.cancel(symbol.getId(),cancelled);messageReceipt(cancelled,"控制准备已取消");
+        accept(emergency);controls.emergencySource(symbol.getId(),System.currentTimeMillis());messageReceipt(emergency,"应急回源已取消准备");
+        assertEquals("CANCELLED",commands.query(symbol.getId(),emergency).get("state"));assertEquals(0,store.db.queryForObject("SELECT COUNT(*) FROM market_control_task WHERE tenant_id=1 AND symbol_id=?",Integer.class,symbol.getId()));
     }
 
     @Configuration @EnableWebMvc static class HttpConfiguration {

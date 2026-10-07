@@ -3,6 +3,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 import secrets
 import shutil
@@ -77,6 +78,10 @@ def main():
             if schema.count(columns) != 1:
                 raise ValueError("Expected additive fixture column block changed; review baseline upgrade setup")
             schema = schema.replace(columns, "", 1)
+        # Native legacy command text is latin1; UTF-8-only fixtures missed durable Chinese receipts.
+        schema, count = re.subn(r"(CREATE TABLE IF NOT EXISTS market_control_command\(.*?\) ENGINE=InnoDB);", r"\1 DEFAULT CHARSET=latin1 COLLATE=latin1_swedish_ci;", schema, flags=re.S)
+        if count != 1:
+            raise ValueError("Expected one explicit native latin1 command table")
         fences = (resources / "V2026100304__market_engine_runtime.sql").read_text(encoding="utf-8").split("DELIMITER $$", 1)[1]
         constraints = (resources / "V2026100305__s2_runtime_tenant_constraints.sql").read_text(encoding="utf-8").split("INSERT INTO tenant_schema_version", 1)[0]
         # Reuse test table mirror, all unchanged formal engine fences, and formal runtime/command FKs.
@@ -107,12 +112,19 @@ def main():
             raise AssertionError("New retry fields must preserve old terminal receipt defaults")
         if sql(use + "SELECT version,minimum_application_epoch,business_activation_ready+0 FROM tenant_schema_version ORDER BY version;").strip() != "2026100603\t2026100603\t0\n2026100702\t2026100603\t0":
             raise AssertionError("Additive 0702 must retain inactive 0603-compatible receipt without changing baseline")
+        command_columns = sql(use + "SELECT column_name,character_set_name,collation_name,column_type FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='market_control_command' AND character_set_name IS NOT NULL ORDER BY ordinal_position;").strip().splitlines()
+        if not command_columns or any("\tlatin1\tlatin1_swedish_ci\t" not in column for column in command_columns):
+            raise AssertionError("Every native command textual column must remain latin1")
+        if "message\tlatin1\tlatin1_swedish_ci\tvarchar(255)" not in command_columns:
+            raise AssertionError("Native command message limit must remain VARCHAR(255)")
+        result["nativeCommandTextColumns"] = command_columns
+        result["legacyLatin1CommandFixture"] = True
         result.update({"migrationsApplied": applied, "existingTriggersUnchanged": True,
                        "triggersBeforeSha256": trigger_before, "triggersAfterSha256": trigger_after,
                        "oldCancelledReceiptPreserved": True, "inactiveEpoch0702MinimumApplication0603": True})
         fixture = {"kind": "OWNED_CONTROL_RECOVERY_MYSQL_57", "owner": owner, "run": run, "containerId": container,
                    "name": name, "port": port, "database": database, "serverUuid": sql("SELECT @@server_uuid;").strip(),
-                   "url": f"jdbc:mysql://127.0.0.1:{port}/{database}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC",
+                   "url": f"jdbc:mysql://127.0.0.1:{port}/{database}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&characterEncoding=UTF-8",
                    "username": "control_recovery", "password": account_password}
         identity = output / "fixture.private.json"
         atomic_json(identity, fixture)
