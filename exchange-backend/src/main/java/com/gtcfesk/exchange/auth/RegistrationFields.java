@@ -58,7 +58,9 @@ public final class RegistrationFields {
         })
         .filter(Objects::nonNull).filter(c -> c.getDefaultFractionDigits() >= 0)
         .map(Currency::getCurrencyCode).distinct().sorted().collect(Collectors.toList());
-    public static List<String> currencies() { return CURRENCIES; }
+    public static List<String> currencies() {
+        return Collections.unmodifiableList(Arrays.asList("USD", "EUR", "JPY", "GBP", "CNY", "CHF", "AUD", "CAD"));
+    }
     public void apply(RegisterRequest req, UserAccount user) {
         String dial = blank(req.getCountryCode());
         String number = blank(req.getPhone());
@@ -90,7 +92,7 @@ public final class RegistrationFields {
             if (income.signum() < 0 || income.scale() > 2 || income.compareTo(MAX_INCOME) > 0)
                 throw new BusinessException("年收入金额无效（最多两位小数）");
             currency = currency.toUpperCase(Locale.ROOT);
-            if (!currency.matches("[A-Z]{3}") || !currencies().contains(currency)) throw new BusinessException("年收入币种无效");
+            if (!currency.matches("[A-Z]{3}") || !CURRENCIES.contains(currency)) throw new BusinessException("年收入币种无效");
             user.setAnnualIncome(income);
             user.setAnnualIncomeCurrency(currency);
         }

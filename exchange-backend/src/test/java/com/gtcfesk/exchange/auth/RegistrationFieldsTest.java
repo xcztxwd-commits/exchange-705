@@ -11,6 +11,7 @@ import com.gtcfesk.exchange.tenant.TenantContext;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 import java.math.BigDecimal;
+import java.util.Arrays;
 import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -27,8 +28,7 @@ class RegistrationFieldsTest {
     }
     @Test void fourFieldModesAndMalformedConfig() {
         assertTrue(RegistrationFields.defaults().getPhone().isEnabled());
-        assertTrue(RegistrationFields.currencies().contains("USD"));
-        assertTrue(RegistrationFields.currencies().contains("SGD"));
+        assertEquals(Arrays.asList("USD", "EUR", "JPY", "GBP", "CNY", "CHF", "AUD", "CAD"), RegistrationFields.currencies());
         assertFalse(RegistrationFields.currencies().contains("ADP"));
         assertFalse(RegistrationFields.defaults().getPhone().isRequired());
         assertFalse(RegistrationFields.parse(BOTH_OFF).getPhone().isEnabled());
@@ -59,6 +59,9 @@ class RegistrationFieldsTest {
         assertEquals("+65", valid.getCountryCode()); assertEquals("81234567", valid.getPhone());
         assertEquals(new BigDecimal("999999999999.99"), valid.getAnnualIncome());
         assertEquals("SGD", valid.getAnnualIncomeCurrency());
+        UserAccount yen = new UserAccount();
+        RegistrationFields.defaults().apply(request(null, null, "1234.00", "jpy"), yen);
+        assertEquals("JPY", yen.getAnnualIncomeCurrency());
     }
     @Test void tenantEffectiveConfigAndSaveValidation() {
         SystemConfigRepository repo = mock(SystemConfigRepository.class);
