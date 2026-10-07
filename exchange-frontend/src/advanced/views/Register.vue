@@ -11,6 +11,7 @@ import { resumableClaim, steadyWall } from '@/utils/claimContinuation'
 import { useBusinessLifecycle } from '@/advanced/components/business/useBusinessLifecycle'
 import RegistrationCaptcha from '@/components/RegistrationCaptcha.vue'
 import RegistrationProfileFields from '@/components/RegistrationProfileFields.vue'
+import AuthModeSwitch from '@/components/AuthModeSwitch.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -116,6 +117,7 @@ const onSubmit = async () => {
       
 
       <h2>{{ localeStore.text('创建账户','Create account') }}</h2>
+      <AuthModeSwitch style="margin-bottom: 0" />
 
       <div class="form-group">
         <div class="form-label">{{ localeStore.t('emailRegister') }}</div>
@@ -209,7 +211,7 @@ const onSubmit = async () => {
 
       <div class="section-tip">
         {{ localeStore.t('gotoLogin') }}
-        <a class="link-primary" @click="router.push('/login')"> {{ localeStore.t('login') }} </a>
+        <RouterLink class="link-primary" :to="{ path: '/login', query: route.query }"> {{ localeStore.t('login') }} </RouterLink>
       </div>
     </div>
 <div v-if="toastMessage" class="toast-message advanced-register-toast" :class="toastType" role="status">{{ toastMessage }}</div>

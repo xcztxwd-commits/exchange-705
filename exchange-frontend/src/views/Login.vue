@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import { ref, computed, watch, onBeforeUnmount } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { useLocaleStore } from '@/store/locale'
 import { useAuthStore } from '@/store/auth'
 import request from '@/utils/request'
 import { loginAccountText, loginText, type LoginReason } from '@/utils/loginFeedback'
+import AuthModeSwitch from '@/components/AuthModeSwitch.vue'
 
 const router = useRouter()
+const route = useRoute()
 const localeStore = useLocaleStore()
 localeStore.loadLocale()
 const auth = useAuthStore()
@@ -69,6 +71,7 @@ const togglePwd = () => {
       </div>
 
       <div class="auth-title">{{ loginAccountText(localeStore.locale, 'title') }}</div>
+      <AuthModeSwitch />
 
       <form novalidate @submit.prevent="onSubmit">
       <div class="form-group">
@@ -110,12 +113,8 @@ const togglePwd = () => {
         </div>
       </div>
 
-      <div class="link-row">
-        <span class="muted">
-          {{ localeStore.t('newUserJoin') }}
-          <a class="link-primary" @click="router.push('/register')"> {{ localeStore.t('register') }} </a>
-        </span>
-        <a class="link-primary" @click="router.push('/forgot-password')">{{ localeStore.t('forgotPassword') }}</a>
+      <div class="recovery-row">
+        <RouterLink to="/forgot-password" class="recovery-link">{{ localeStore.t('forgotPassword') }}</RouterLink>
       </div>
 
       <div v-if="feedback" id="login-feedback" class="login-feedback" :class="{ success: feedback === 'success' }" :role="feedback === 'success' ? 'status' : 'alert'">
@@ -127,7 +126,10 @@ const togglePwd = () => {
       </button>
 
       </form>
-      <!-- <div class="section-tip">{{ localeStore.t('noAccountTip') }}</div> -->
+      <div class="auth-footer">
+        <span>{{ localeStore.t('newUserJoin') }}</span>
+        <RouterLink :to="{ path: '/register', query: route.query }" class="register-link">{{ localeStore.t('register') }}</RouterLink>
+      </div>
     </div>
   </div>
 </template>
@@ -243,30 +245,49 @@ const togglePwd = () => {
   transform: scale(0.99);
 }
 
-.link-row {
+.recovery-row {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-end;
+  margin: -10px 0 16px;
+}
+
+.recovery-link {
+  display: inline-flex;
   align-items: center;
+  min-height: 44px;
+  padding: 8px 0 8px 12px;
   font-size: 14px;
-  color: $subtext-color;
-  margin: 12px 0 18px;
+  line-height: 1.5;
+  color: #666;
+  text-align: end;
 }
 
-.link-primary {
-  color: $primary-color;
-  font-weight: 700;
-}
-
-.muted {
-  color: $subtext-color;
-}
-
-.section-tip {
-  margin-top: 20px;
+.auth-footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  column-gap: 8px;
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid #e6e8ed;
+  color: #666;
+  font-size: 13px;
+  line-height: 1.6;
   text-align: center;
-  color: $primary-color;
+}
+
+.register-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 8px 4px;
+  color: #507600;
   font-weight: 700;
 }
+
+.recovery-link:hover, .register-link:hover { text-decoration: underline; }
+.recovery-link:focus-visible, .register-link:focus-visible { outline: 2px solid #406000; outline-offset: 3px; border-radius: 4px; }
 
 .login-feedback {
   display: flex;

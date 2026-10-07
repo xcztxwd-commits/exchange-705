@@ -9,6 +9,7 @@ import { resumableClaim, steadyWall } from '@/utils/claimContinuation'
 import request from '@/utils/request'
 import RegistrationCaptcha from '@/components/RegistrationCaptcha.vue'
 import RegistrationProfileFields from '@/components/RegistrationProfileFields.vue'
+import AuthModeSwitch from '@/components/AuthModeSwitch.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -176,6 +177,7 @@ const onSubmit = async () => {
       </div>
 
       <div class="auth-title">{{ localeStore.t('emailRegister') }}</div>
+      <AuthModeSwitch />
 
       <div class="form-group">
         <div class="form-label">{{ localeStore.t('emailRegister') }}</div>
@@ -269,7 +271,7 @@ const onSubmit = async () => {
 
       <div class="section-tip">
         {{ localeStore.t('gotoLogin') }}
-        <a class="link-primary" @click="router.push('/login')"> {{ localeStore.t('login') }} </a>
+        <RouterLink class="link-primary" :to="{ path: '/login', query: route.query }"> {{ localeStore.t('login') }} </RouterLink>
       </div>
     </div>
   </div>
