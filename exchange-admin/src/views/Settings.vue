@@ -453,7 +453,7 @@ onMounted(() => {
               <template #title>
                 <div style="line-height: 1.6">
                   <p><strong>客服配置说明：</strong></p>
-                  <p>• <strong>客服链接</strong>：只允许运维已授权的 HTTPS 公共域名与端口；不接受无协议地址、相对路径、内网地址或未授权域名</p>
+                  <p>• <strong>客服链接</strong>：支持 HTTPS 公网地址，无需加入域名白名单；不接受无协议地址、相对路径、内网地址或含凭据的 URL</p>
                   <p>• <strong>投诉邮箱</strong>：接收用户投诉的邮箱地址，用户可以在投诉邮箱页面复制此邮箱</p>
                   <p>• 配置保存后，用户端页面将自动显示相应的客服信息</p>
                 </div>
