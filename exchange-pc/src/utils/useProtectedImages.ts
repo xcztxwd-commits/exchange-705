@@ -5,7 +5,7 @@ import { imageLocation, privateImagePath } from './imageLocation'
 /** Per-component object URLs; never persist a private image or fall back to its unprotected URL. */
 export function useProtectedImages(input: () => string[]) {
   const auth = useAuthStore(), sources = ref<string[]>([]), failed = ref(false)
-  watch(() => [auth.token, ...input()], async (_, __, onCleanup) => {
+  watch(() => JSON.stringify([auth.token, ...input()]), async (_, __, onCleanup) => {
     const controller = new AbortController(), owned: string[] = [], token = auth.token
     let active = true
     sources.value = []; failed.value = false
