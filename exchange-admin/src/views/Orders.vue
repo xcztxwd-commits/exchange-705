@@ -263,9 +263,15 @@ async function controlledContractExit(row: any, command: 'close' | 'cancel') {
   accountTable.selectRow(row)
   const key = `${row.id}:${command}`
   try {
-    const input = await ElMessageBox.prompt(command === 'close' ? '使用服务端新鲜行情平仓。请输入受控处理原因（5至500字）' : '请输入受控撤单原因（5至500字）', '受控退出', {inputValue: exitRetries.get(key)?.reason || '', inputValidator: value => !!value && value.trim().length >= 5 && value.length <= 500 || '请输入5至500字原因'})
+    let reason: string
+    if (command === 'close') {
+      await ElMessageBox.confirm(`确定要平仓订单 ${row.id} 吗？将使用服务端新鲜行情平仓。`, '确认平仓', {type: 'warning', confirmButtonText: '平仓', cancelButtonText: '取消'})
+      reason = '管理员手动平仓'
+    } else {
+      reason = (await ElMessageBox.prompt('请输入受控撤单原因（5至500字）', '受控退出', {inputValue: exitRetries.get(key)?.reason || '', inputValidator: value => !!value && value.trim().length >= 5 && value.length <= 500 || '请输入5至500字原因'})).value
+    }
     const prior = exitRetries.get(key)
-    const body = prior?.reason === input.value ? prior : {requestId: crypto.randomUUID(), reason: input.value}
+    const body = prior?.reason === reason ? prior : {requestId: crypto.randomUUID(), reason}
     exitRetries.set(key, body)
     const res: any = await request.post(`/admin/orders/contract/${row.id}/${command}`, body)
     if (res.success === false) throw new Error(res.message || '处理失败')
