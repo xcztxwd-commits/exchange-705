@@ -104,64 +104,47 @@ function draw(progress: number, origin = -1) {
     context.beginPath(); context.moveTo(plotInset, y); context.lineTo(plotRight, y); context.stroke()
   }
   context.setLineDash([])
-  const count = 68, step = (plotRight - plotInset) / (count - 1), size = Math.min(3.4, step * .68)
+  const count = Math.max(2, Math.floor((plotRight - plotInset) / 5.1) + 1)
+  const step = (plotRight - plotInset) / (count - 1), size = Math.min(3.4, step * .68)
+  const rows = Math.ceil((base - 27) / step), gridTop = base - rows * step
+  const cells = Array.from({ length: count }, () => new Set<number>())
+  const vertices = displayLine.value
+  let previousColumn = -1, previousRow = 0
+  // Rasterize the real step path onto one shared grid; each cell is painted once.
+  for (const point of vertices) {
+    const column = Math.max(0, Math.min(count - 1, Math.round((xAt(point.time) - plotInset) / step)))
+    const row = Math.max(0, Math.min(rows, Math.round((yAt(point.value!) - gridTop) / step)))
+    if (previousColumn >= 0) {
+      for (let x = previousColumn; x <= column; x++) cells[x]!.add(previousRow)
+      for (let y = Math.min(previousRow, row); y <= Math.max(previousRow, row); y++) cells[column]!.add(y)
+    } else cells[column]!.add(row)
+    previousColumn = column; previousRow = row
+  }
   const appearance = (column: number) => {
     const distance = origin < 0 ? column / (count - 1) : Math.abs(column - origin) / Math.max(origin, count - 1 - origin, 1)
     const phase = Math.max(0, Math.min(1, (progress - distance * .61) / .39))
     return 1 - (1 - phase) ** 3
   }
   for (let column = 0; column < count; column++) {
+    const outline = cells[column]!
+    if (!outline.size) continue
     const time = assetColumnTime(from.value, asOf.value, column, count)
-    // Display only: hold the nearest earlier value, without changing stored observations.
-    const value = assetDisplayValue(data, time, intervalMs.value + 120000)
-    if (value === null) continue // No earlier usable observation exists.
     const appear = appearance(column)
     if (!appear) continue
     context.globalAlpha = assetHighlight(time, selectedTime.value)
-    const x = plotInset + column * step, top = Math.min(base, yAt(value) + (1 - appear) * 13)
-    for (let y = top; y < base; y += 5.1) {
-      const depth = (y - top) / Math.max(base - top, 1)
-      context.fillStyle = tint((.53 * (1 - depth) ** 1.65 + .015) * appear)
-      context.fillRect(x - size / 2, y, size, size)
-    }
-    context.fillStyle = tint(.84 * appear); context.shadowColor = tint(.4); context.shadowBlur = 6 * appear
-    context.fillRect(x - size / 2, top - size / 2, size + .5, size + .5); context.shadowBlur = 0
-    if (value !== 0 && column % 8 === 0) { context.fillStyle = tint(.18 * appear); context.fillRect(x, top - 10, 2, 2) }
-  }
-  // Fixed time columns can miss a jump entirely. Cover its real vertical edge too.
-  const vertices = displayLine.value
-  for (let i = 1; i < vertices.length; i++) {
-    const previous = vertices[i - 1]!, point = vertices[i]!
-    if (point.time !== previous.time || point.value === previous.value) continue
-    const x = xAt(point.time), appear = appearance((x - plotInset) / step)
-    if (!appear) continue
-    const top = Math.min(yAt(previous.value!), yAt(point.value!)) + (1 - appear) * 13
-    const bottom = Math.max(yAt(previous.value!), yAt(point.value!)) + (1 - appear) * 13
-    const segments = Math.max(1, Math.ceil((bottom - top) / 5.1))
-    context.globalAlpha = assetHighlight(point.time, selectedTime.value)
-    context.fillStyle = tint(.84 * appear)
-    for (let row = 0; row <= segments; row++) {
-      const y = top + (bottom - top) * row / segments
-      context.fillRect(x - size / 2, y - size / 2, size, size)
+    const x = plotInset + column * step, shift = Math.round((1 - appear) * 13 / step)
+    const top = Math.min(...outline) + shift
+    for (let row = top; row <= rows; row++) {
+      const depth = (row - top) / Math.max(rows - top, 1)
+      context.fillStyle = tint((outline.has(row - shift) ? .94 : .18 * (1 - depth) ** 1.65 + .006) * appear)
+      context.fillRect(x - size / 2, gridTop + row * step - size / 2, size, size)
     }
   }
   context.globalAlpha = 1
   if (progress < 1) return
-  // Keep the zero-to-first-observation rise visible above the zero grid line.
-  context.strokeStyle = tint(1); context.lineWidth = data[0]?.quality === 'INFERRED_ZERO' ? 2.2 : 1.1
-  const line = new Path2D()
-  vertices.forEach((point, index) => {
-    const x = xAt(point.time), y = yAt(point.value!)
-    if (index === 0) line.moveTo(x, y)
-    else line.lineTo(x, y)
-  })
-  context.globalAlpha = selectedTime.value === null ? 1 : .16; context.stroke(line); context.globalAlpha = 1
-  if (selectedTime.value !== null) {
-    context.save(); context.beginPath(); context.rect(0, 0, xAt(selectedTime.value), height); context.clip(); context.stroke(line); context.restore()
-  }
-  const annotate = (p: Point, label: string, above: boolean) => {
+  const annotate = (p: Point, above: boolean) => {
     if (p.value === null) return
-    const x = xAt(p.time), y = yAt(p.value), text = label + ' $' + money(p.value)
+    const x = xAt(p.time), y = yAt(p.value), text = '$' + money(p.value)
     context.globalAlpha = assetHighlight(p.time, selectedTime.value)
     const labelWidth = context.measureText(text).width + 8
     const left = Math.max(10, Math.min(plotRight - labelWidth, x - labelWidth / 2))
@@ -171,8 +154,8 @@ function draw(progress: number, origin = -1) {
     context.globalAlpha = 1
   }
   if (extrema.value) {
-    annotate(extrema.value.high, locale.text('最高', 'High'), true)
-    annotate(extrema.value.low, locale.text('最低', 'Low'), false)
+    annotate(extrema.value.high, true)
+    annotate(extrema.value.low, false)
   }
   if (selectedTime.value !== null) {
     const selectedValue = assetDisplayValue(data, selectedTime.value, intervalMs.value + 120000)
@@ -277,7 +260,6 @@ onBeforeUnmount(() => { disposed = true; generation++; resetSelection(); canvas.
       <span v-if="visible && selectedTime !== null" class="sr-only" role="status">{{ selectedDate }} · {{ selectedAmount === null ? '—' : '$' + money(selectedAmount) }}</span>
     </div>
     <div class="periods"><button v-for="(item, i) in periods" :key="item" type="button" :aria-pressed="period === item" @click="choose(item)">{{ labels[i] }}</button></div>
-    <div v-if="asOf && selectedTime === null" class="status">{{ locale.text('更新時間（快照）：', 'Updated (snapshot): ') }}{{ new Date(asOf).toLocaleString(locale.locale, { timeZone: timezone }) }}</div>
     <div v-if="visible && valuationStale" class="status" role="status">{{ locale.text('估值不可用', 'Valuation unavailable') }}</div>
     <div v-if="failed && points.length" class="status" role="status">{{ locale.text('同步失敗 · 顯示上次資料', 'Sync failed · showing last update') }}</div>
   </section>

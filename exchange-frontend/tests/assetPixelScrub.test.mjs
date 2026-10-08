@@ -6,11 +6,11 @@ import ts from 'typescript'
 import * as helpers from '../src/utils/assetPixelWindow.ts'
 const source=fs.readFileSync(new URL('../src/components/AssetPixelChart.vue',import.meta.url),'utf8')
 const script=source.match(/<script setup lang="ts">([\s\S]*?)<\/script>/)[1].replace(/^import .*$/gm,'')
-const timers=new Map(),captured=new Set(),texts=[],alphas=[], totals=[], inspections=[], rectangles=[], colors=[], strokes=[]
+const timers=new Map(),captured=new Set(),texts=[],alphas=[], totals=[], inspections=[], rectangles=[], colors=[], strokes=[], pixels=[]
 const labels=[]
 const props={visible:true}
 let sequence=0
-const drawing=new Proxy({globalAlpha:1,measureText:t=>({width:t.length*6}),fillText:(t,x,y)=>{texts.push(t);labels.push({text:t,x,y})},fillRect:(...args)=>rectangles.push(args),beginPath(){this.path=[]},moveTo(x,y){this.path.push([x,y])},lineTo(x,y){this.path.push([x,y])},stroke(path){strokes.push({points:path?.points??this.path,width:this.lineWidth})}}, {
+const drawing=new Proxy({globalAlpha:1,measureText:t=>({width:t.length*6}),fillText:(t,x,y)=>{texts.push(t);labels.push({text:t,x,y})},fillRect(...args){rectangles.push(args);if(args[2]===args[3]&&args[2]<=3.4)pixels.push({args,color:this.fillStyle})},beginPath(){this.path=[]},moveTo(x,y){this.path.push([x,y])},lineTo(x,y){this.path.push([x,y])},stroke(path){strokes.push({points:path?.points??this.path,width:this.lineWidth})}}, {
   get:(o,k)=>k in o?o[k]:()=>{}, set:(o,k,v)=>{o[k]=v;if(k==='globalAlpha')alphas.push(v);if(['fillStyle','strokeStyle','shadowColor'].includes(k))colors.push(v);return true}
 })
 const surface={getContext:()=>drawing,getBoundingClientRect:()=>({left:20,width:360}),setPointerCapture:id=>captured.add(id),hasPointerCapture:id=>captured.has(id),releasePointerCapture:id=>captured.delete(id)}
@@ -37,7 +37,8 @@ f.movePointer(event(380));assert.equal(f.time,25000);assert.equal(f.inspection.a
 f.movePointer(event(20));assert.equal(f.time,1000);assert.equal(f.inspection.amount,0)
 f.endPointer(event(200));assert.equal(f.time,null);assert.equal(f.inspection,null);assert.equal(f.dragging,false);assert.equal(captured.size,0)
 assert.ok(alphas.includes(.16),'later curve must be dimmed')
-assert.ok(!texts.some(t=>t.startsWith('$')),'no vertical price labels')
+assert.ok(texts.includes('$200.00')&&texts.includes('$0.00'),'extrema annotations retain their amounts')
+assert.ok(!texts.some(t=>/^(最高|最低|High|Low)/.test(t)),'extrema annotations have no high/low prefix')
 f.resetSelection();f.startPointer(event(200));f.movePointer(event(200,80))
 assert.equal(timers.size,0);assert.equal(f.time,null,'vertical scrolling before hold must not select')
 f.startPointer(event(200));f.movePointer(event(207));assert.equal(f.time,null,'horizontal drag before hold must not select')
@@ -160,7 +161,7 @@ for (const range of ['1D','1W','1M','1Y']) {
 }
 console.log('PASS: long-press 5-to-3 red, 5-to-8 green, flat green, drag recoloring and release restoration')
 
-// A short spike falls between the 68 time columns; both vertical edges must survive.
+// Off-grid spikes survive rasterization, with one square per shared grid cell.
 for (const range of ['1D','1W','1M','1Y']) {
   f.color(range,0,0)
   f.points.splice(1,0,{time:13000,value:100000},{time:13100,value:0})
@@ -168,33 +169,64 @@ for (const range of ['1D','1W','1M','1Y']) {
   const prices=helpers.assetPriceTicks(f.points.map(p=>p.value))
   const yAt=value=>155-(value-prices[0])/(prices[3]-prices[0])*128
   for (const progress of [.75,1]) {
-    rectangles.length=0;f.draw(progress)
+    pixels.length=0;f.draw(progress)
+    const squares=pixels.map(p=>p.args)
+    assert.equal(new Set(squares.map(p=>p.join(','))).size,squares.length,'overlapping observations must not repaint a cell')
+    assert.ok(squares.every(([,,w,h])=>w===3.4&&h===3.4),'outline and fill share one square size')
+    const xs=[...new Set(squares.map(([left])=>left+1.7))].sort((a,b)=>a-b)
+    const step=xs[1]-xs[0]
+    assert.ok(xs.slice(1).every((x,i)=>Math.abs(x-xs[i]-step)<1e-6),'columns stay equally spaced')
+    const firstY=squares[0][1]
+    assert.ok(squares.every(([,y])=>Math.abs((y-firstY)/step-Math.round((y-firstY)/step))<1e-6),'all columns share the same row grid')
     for (const time of [13000,13100]) {
       const fraction=(time-1000)/24000, x=8+fraction*344
-      const phase=Math.max(0,Math.min(1,(progress-fraction*.61)/.39))
-      const offset=(1-phase)**3*13
-      const ys=rectangles.filter(([left,,w,h])=>Math.abs(left+1.7-x)<1e-6&&w===3.4&&h===3.4).map(([,top])=>top+1.7).sort((a,b)=>a-b)
-      assert.ok(ys.length>10,'jump must have a solid particle column, not only a line')
-      assert.ok(Math.abs(ys[0]-yAt(100000)-offset)<1e-6,'particles start at the high endpoint')
-      assert.ok(Math.abs(ys.at(-1)-yAt(0)-offset)<1e-6,'particles reach the low endpoint')
-      assert.ok(ys.slice(1).every((y,i)=>y-ys[i]<=5.1+1e-6),'no vertical gaps over one particle step')
+      const nearest=xs.find(column=>Math.abs(column-x)<=step/2+1e-6&&squares.filter(([left])=>Math.abs(left+1.7-column)<1e-6).length>10)
+      assert.notEqual(nearest,undefined,'brief jump has a full pixel column within half a grid cell')
+      const ys=squares.filter(([left])=>Math.abs(left+1.7-nearest)<1e-6).map(([,top])=>top+1.7).sort((a,b)=>a-b)
+      assert.ok(ys.length>10,'brief jumps retain their full pixel column')
+      assert.ok(Math.abs(nearest-x)<=step/2+1e-6,'jump moves by at most half a grid cell')
+      assert.ok(Math.abs(ys[0]-yAt(100000))<=step/2+13,'animation remains aligned to the grid near the high endpoint')
+      assert.ok(Math.abs(ys.at(-1)-yAt(0))<1e-6,'pixels reach the zero endpoint')
+      assert.ok(ys.slice(1).every((y,i)=>Math.abs(y-ys[i]-step)<1e-6),'vertical and horizontal grid spacing match')
     }
   }
   assert.equal(JSON.stringify(f.points),original,'rendering must not fabricate observations')
 }
-f.color('1M',0,100000);rectangles.length=0;f.draw(1)
-assert.ok(rectangles.filter(([x,,w,h])=>Math.abs(x+1.7-352)<1e-6&&w===3.4&&h===3.4).length>10,'live endpoint jump is filled')
-f.color('1M',null,100000);rectangles.length=0;f.draw(1)
-const firstTicks=helpers.assetPriceTicks([100000])
-const fillRows=Math.ceil((100000-firstTicks[0])/(firstTicks[3]-firstTicks[0])*128/5.1)
-assert.equal(rectangles.filter(([x,,w,h])=>Math.abs(x+1.7-352)<1e-6&&w===3.4&&h===3.4).length,fillRows,'first observation has only its normal area fill, not a fabricated vertical edge')
-console.log('PASS: vertical particles cover off-grid spikes, drops and live jumps during animation in all ranges without inventing history')
+f.color('1M',0,100000);pixels.length=0;f.draw(1)
+assert.ok(pixels.filter(({args:[x]})=>Math.abs(x+1.7-352)<1e-6).length>10,'live endpoint jump is filled')
+f.color('1M',null,100000);pixels.length=0;f.draw(1)
+assert.equal(new Set(pixels.map(({args:[x]})=>x)).size,1,'no pixel column is fabricated before the first observation')
+const day=86400000
+f.setWindow(1000,1000+day,[{time:1000,value:252000},{time:61000,value:258000},{time:1000+day,value:260000}]);pixels.length=0;strokes.length=0;f.draw(1)
+const flatPixels=JSON.stringify(pixels.map(p=>p.args))
+f.setWindow(1000,1000+day,Array.from({length:1441},(_,i)=>({time:1000+i*60000,value:i===0?252000:i===1440?260000:258000+i%2})));pixels.length=0;f.draw(1)
+assert.equal(JSON.stringify(pixels.map(p=>p.args)),flatPixels,'minute-level changes within a cell cannot increase pixel density')
+assert.ok(strokes.every(s=>!s.points||s.points.length<=2),'pixel outline has no continuous line overlay')
+console.log('PASS: shared square grid, unique cells, stable density, off-grid spikes, drops and live jumps without inventing history')
+
+for (const range of ['1D','1W','1M','1Y']) {
+  f.color(range,252257.18,258050.28)
+  f.points.splice(1,0,{time:7000,value:258190.32},{time:13000,value:254000})
+  const original=JSON.stringify(f.points)
+  pixels.length=0;f.draw(1)
+  const outline=pixels.filter(p=>p.color==='rgba(96,177,43,0.94)').map(p=>p.args[1])
+  assert.ok(Math.max(...outline)-Math.min(...outline)>=30,'small changes on a large balance form a visible pixel curve')
+  assert.equal(JSON.stringify(f.points),original,'auto scaling does not alter recorded amounts')
+  f.color(range,10000000,10000030)
+  f.points.splice(1,0,{time:13000,value:10000042})
+  pixels.length=0;f.draw(1)
+  const largeOutline=pixels.filter(p=>p.color==='rgba(96,177,43,0.94)').map(p=>p.args[1])
+  assert.ok(Math.max(...largeOutline)-Math.min(...largeOutline)>=30,'million-level balances retain a visible dollar fluctuation')
+  f.color(range,258000,258000);pixels.length=0;f.draw(1)
+  assert.equal(new Set(pixels.filter(p=>p.color==='rgba(96,177,43,0.94)').map(p=>p.args[1])).size,1,'a flat balance remains a horizontal pixel line')
+}
+console.log('PASS: adaptive axes in all ranges, large balance small changes, unchanged values and flat geometry')
 
 for (const range of ['1D','1W','1M','1Y']) {
   f.color(range,100,900)
   context.request.get=async()=>({...response('900'),carryIn:{time:500,value:'900'},points:[{time:7000,value:'1000'},{time:19000,value:'100'}],extrema:{high:{time:6000,value:'1100'},low:{time:18000,value:'50'}}})
   await f.load();labels.length=0;f.draw(1)
-  const high=labels.find(p=>p.text==='最高 $1,000.00'),low=labels.find(p=>p.text==='最低 $100.00')
+  const high=labels.find(p=>p.text==='$1,000.00'),low=labels.find(p=>p.text==='$100.00')
   assert.ok(high&&low,'labels use period final values instead of intraperiod extremes')
   assert.equal(labels.length,2)
   const ticks=helpers.assetPriceTicks([1000,100,900])
@@ -208,20 +240,19 @@ for (const range of ['1D','1W','1M','1Y']) {
 context.request.get=async()=>({...response('100'),carryIn:{time:500,value:'2000'},points:[{time:13000,value:'100'}]})
 await f.load();labels.length=0;f.draw(1)
 assert.equal(f.high,2000)
-assert.ok(labels.some(p=>p.text==='最高 $2,000.00'&&p.x>=0))
+assert.ok(labels.some(p=>p.text==='$2,000.00'&&p.x>=0))
 f.color('1M',100,100);labels.length=0;f.draw(1)
 assert.equal(labels.length,2);assert.ok(labels[0].y<labels[1].y,'flat curve has high above and low below')
 f.color('1M',null,null);labels.length=0;f.draw(1)
 assert.equal(labels.length,0,'unavailable history has no fabricated extrema')
 context.request.get=async()=>({...response('100'),points:[{time:13000,value:'100'}]})
 await f.load();labels.length=0;f.draw(1)
-assert.ok(labels.some(p=>p.text==='最低 $0.00'),'no predecessor shows a zero opening in the plotted range')
-strokes.length=0;f.draw(1)
-const zeroRise=strokes.find(s=>s.width===2.2&&s.points?.length>=3)
-assert.ok(zeroRise,'inferred zero is drawn as a visible continuous step')
-assert.equal(zeroRise.points[0][1],zeroRise.points[1][1])
-assert.equal(zeroRise.points[1][0],zeroRise.points[2][0])
-assert.ok(zeroRise.points[2][1]<zeroRise.points[1][1],'first real value rises vertically from zero')
+assert.ok(labels.some(p=>p.text==='$0.00'),'no predecessor shows a zero opening in the plotted range')
+pixels.length=0;f.draw(1)
+const zeroRise=pixels.filter(p=>p.color==='rgba(96,177,43,0.94)').map(p=>p.args)
+assert.ok(zeroRise.some(([x,y])=>Math.abs(x+1.7-8)<1e-6&&Math.abs(y+1.7-155)<1e-6),'inferred zero remains visible at the left edge')
+const risingColumn=zeroRise.filter(([x])=>Math.abs(x+1.7-180)<3)
+assert.ok(risingColumn.length>10,'first real observation rises from zero with grid-aligned squares')
 assert.doesNotMatch(source,/selectedInferredZero|無更早記錄，按 \$0 顯示/)
 const annotation=source.slice(source.indexOf('const annotate ='),source.indexOf('if (extrema.value)'))
 assert.doesNotMatch(annotation,/\.(?:moveTo|lineTo|stroke)\(/,'annotations must not draw connector lines')
