@@ -1221,9 +1221,9 @@
               </div>
               <div v-else class="space-y-4">
                 <div v-for="item in announcements" :key="item.id" class="border border-gray-100 dark:border-[#2b3139] rounded-xl p-5 hover:border-[#8cc63f] hover:shadow-md transition-all group bg-gray-50 dark:bg-[#181c27]/50">
-                  <div class="flex justify-between items-start mb-3">
-                    <h3 class="font-bold text-gray-800 dark:text-gray-100 text-lg group-hover:text-[#8cc63f] transition-colors">{{ item.title }}</h3>
-                    <span class="text-xs text-gray-400 dark:text-gray-500 font-mono bg-white dark:bg-[#131722] px-2 py-1 rounded shadow-sm border border-gray-100 dark:border-[#2b3139]">{{ item.createdAt?.substring(0,10) }}</span>
+                  <div class="flex flex-wrap justify-between items-start gap-2 mb-3">
+                    <h3 class="max-w-full break-words font-bold text-gray-800 dark:text-gray-100 text-lg group-hover:text-[#8cc63f] transition-colors">{{ item.title }}</h3>
+                    <span class="shrink-0 whitespace-nowrap text-xs text-gray-400 dark:text-gray-500 font-mono bg-white dark:bg-[#131722] px-2 py-1 rounded shadow-sm border border-gray-100 dark:border-[#2b3139]">{{ formatDateTimeLocalized(item.displayAt || item.createdAt, 'sv-SE') }}</span>
                   </div>
                   <div class="text-gray-600 dark:text-gray-300 text-sm leading-relaxed whitespace-pre-line">{{ item.content }}</div>
                 </div>
@@ -1598,7 +1598,7 @@ import RegistrationProfileFields from '@/components/RegistrationProfileFields.vu
 import UserProfile from '../../../exchange-frontend/src/components/UserProfile.vue';
 import { useTrialWallet } from '@/utils/useTrialWallet';
 import { reconcileFunding, selectedAvailable, type FundingSource, type FundingChoice } from '@/utils/trialLifecycle';
-import { formatDateTime, getSystemTimezone, refreshOrderTimes } from '@/utils/dateTime';
+import { formatDateTime, formatDateTimeLocalized, getSystemTimezone, refreshOrderTimes } from '@/utils/dateTime';
 import { getImageUrl } from '@/utils/imageUrl';
 import { displaySymbol, forexLotUnit } from '@/utils/displaySymbol';
 import KlineChart from '@/components/KlineChart.vue';

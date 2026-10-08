@@ -64,7 +64,7 @@
             {{ announcement.content }}
           </div>
           <div class="announcement-footer">
-            <div class="announcement-date">{{ formatDate(announcement.createdAt) }}</div>
+            <div class="announcement-date">{{ formatDateTimeLocalized(announcement.displayAt || announcement.createdAt, 'sv-SE') }}</div>
           </div>
         </div>
       </div>
@@ -85,7 +85,7 @@ import { useRouter } from 'vue-router'
 import Tabbar from '@/components/Tabbar.vue'
 import request from '@/utils/request'
 import { useLocaleStore } from '@/store/locale'
-import { formatDate } from '@/utils/dateTime'
+import { formatDateTimeLocalized } from '@/utils/dateTime'
 
 const router = useRouter()
 const localeStore = useLocaleStore()
