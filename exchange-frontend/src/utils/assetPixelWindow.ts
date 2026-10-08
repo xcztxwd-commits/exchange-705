@@ -84,18 +84,27 @@ export function assetDisplayLine(points: AssetPoint[], from: number, to: number)
   return line
 }
 
-/** Four evenly spaced money ticks. Positive balances always retain the zero origin. */
+/** Fit four money ticks to the visible range, with padding for peaks and flat balances. */
 export function assetPriceTicks(values: number[]): number[] {
-  const low = Math.min(0, ...values), high = Math.max(0, ...values)
-  if (low === high) return [0, 1, 2, 3]
+  if (!values.length) return [0, 1, 2, 3]
+  const low = Math.min(...values), high = Math.max(...values)
+  const span = high - low, opening = Math.abs(values[0]!)
+  const tolerance = Number.EPSILON * Math.max(opening, Math.abs(low), Math.abs(high)) * 4
+  // A swing of at least 30% of the range opening fills the plot without rounded margins.
+  if (span > 0 && span + tolerance >= opening * .3) {
+    return [low, low + span / 3, low + span * 2 / 3, high]
+  }
+  const padding = span === 0 ? Math.max(.01, Math.abs(low) * .0001) : span * .1
+  const minimum = low >= 0 ? Math.max(0, low - padding) : low - padding
+  const maximum = high <= 0 ? Math.min(0, high + padding) : high + padding
   const nice = (raw: number) => {
     const power = 10 ** Math.floor(Math.log10(Math.max(.01, raw)))
     const candidate = [1, 2, 2.5, 5, 10].find(n => n * power >= raw)! * power
     return candidate < 1 ? Math.ceil(candidate * 100 - 1e-9) / 100 : candidate
   }
-  let step = nice((high - low) / 3), bottom = Math.floor(low / step) * step
-  while (bottom + step * 3 < high) {
-    step = nice(step * 1.01); bottom = Math.floor(low / step) * step
+  let step = nice((maximum - minimum) / 3), bottom = Math.floor(minimum / step) * step
+  while (bottom + step * 3 < maximum) {
+    step = nice(step * 1.01); bottom = Math.floor(minimum / step) * step
   }
-  return Array.from({ length: 4 }, (_, i) => Number((bottom + i * step).toPrecision(12)))
+  return Array.from({ length: 4 }, (_, i) => Number((bottom + i * step).toFixed(2)))
 }
