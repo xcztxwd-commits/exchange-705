@@ -3,12 +3,13 @@ import { computed, ref, watch } from 'vue'
 import { ElImageViewer } from 'element-plus'
 import { useAuthStore } from '@/store/auth'
 import { useProtectedImages } from '../../../exchange-frontend/src/utils/useProtectedImages'
+import { thumbnailImageLocation } from '../../../exchange-frontend/src/utils/imageLocation'
 defineOptions({ inheritAttrs: false })
 const props = defineProps<{ src?: string; previewSrcList?: string[]; initialIndex?: number; hideOnClickModal?: boolean; previewTeleported?: boolean }>()
 const auth = useAuthStore(), previewOpen = ref(false)
-const { sources, failed } = useProtectedImages(() => [props.src || ''])
+const { sources, failed } = useProtectedImages(() => [thumbnailImageLocation(props.src, location.origin)])
 const { sources: previews, failed: previewFailed } = useProtectedImages(() => previewOpen.value
-  ? (props.previewSrcList || []).map(value => value === props.src ? sources.value[0] || value : value) : [])
+  ? props.previewSrcList || [] : [])
 const previewUrls = computed(() => (props.previewSrcList || []).map((value, index) => previews.value[index] || (value === props.src ? sources.value[0] || '' : '')))
 watch(() => JSON.stringify([auth.token, props.src, props.previewSrcList]), () => { previewOpen.value = false })
 function openPreview() { if (sources.value[0] && props.previewSrcList?.length) previewOpen.value = true }

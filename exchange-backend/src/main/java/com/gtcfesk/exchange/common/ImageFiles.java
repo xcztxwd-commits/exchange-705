@@ -9,6 +9,26 @@ import java.util.*;
 /** Shared by multipart uploads and base64 contract signatures. */
 public final class ImageFiles {
     private ImageFiles() { }
+    public static byte[] thumbnail(java.io.InputStream stream) throws IOException {
+        try (ImageInputStream input = new javax.imageio.stream.MemoryCacheImageInputStream(stream)) {
+            Iterator<ImageReader> readers = ImageIO.getImageReaders(input);
+            if (!readers.hasNext()) throw new BusinessException("文件内容不是有效图片");
+            ImageReader reader = readers.next();
+            try {
+                reader.setInput(input, true, true);
+                int width = reader.getWidth(0), height = reader.getHeight(0);
+                if (width < 1 || height < 1 || (long) width * height > 25000000L) throw new BusinessException("图片尺寸过大");
+                int sample = Math.max(1, (Math.max(width, height) + 319) / 320);
+                ImageReadParam params = reader.getDefaultReadParam();
+                params.setSourceSubsampling(sample, sample, 0, 0);
+                BufferedImage image = reader.read(0, params);
+                java.io.ByteArrayOutputStream bytes = new java.io.ByteArrayOutputStream();
+                try { if (image == null || !ImageIO.write(image, "png", bytes)) throw new IOException("Thumbnail encoding failed"); }
+                finally { if (image != null) image.flush(); }
+                return bytes.toByteArray();
+            } finally { reader.dispose(); }
+        }
+    }
     public static Map.Entry<String, byte[]> encode(MultipartFile file) throws IOException {
         if (file == null || file.isEmpty() || file.getSize() > 5 * 1024 * 1024) throw new BusinessException("图片为空或超过5MB");
         BufferedImage decoded;

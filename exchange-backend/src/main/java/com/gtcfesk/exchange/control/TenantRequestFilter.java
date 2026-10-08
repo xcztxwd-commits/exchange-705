@@ -15,7 +15,7 @@ public class TenantRequestFilter extends OncePerRequestFilter {
  private static boolean backendPreviewReadPath(String path){return path.equals("/api/user/system/timezone")||path.equals("/api/market/search")||path.matches("/api/market/kline/(?!batch$)[A-Za-z0-9._=^%-]{1,80}");}
  public static boolean backendSharedPath(String path){
   // Preview reads use the verified backend JWT tenant, just like the existing shared support routes.
-  return backendPreviewReadPath(path) || path.startsWith("/api/uploads/videos/")
+  return backendPreviewReadPath(path) || path.startsWith("/api/uploads/videos/") || path.startsWith("/api/uploads/thumbnails/")
    ||path.matches("/api/market/icons/(crypto|forex|stocks|metal|oil|index|symbol)/[A-Z0-9._-]{1,40}\\.svg")||path.equals("/api/market/currencies")||path.equals("/api/upload/image")||path.equals("/api/upload/audio")||path.equals("/api/user/support/config")||path.startsWith("/api/uploads/images/")||path.startsWith("/api/uploads/audio/")||path.equals("/api/user/support/tones/arrival.wav")||path.equals("/api/user/support/tones/reply.wav");
  }
  private static final Set<String> PC_PAGES=new HashSet<>(Arrays.asList("/","/demo","/trade","/login","/register","/forgot-password","/language","/customer-service","/inbox"));

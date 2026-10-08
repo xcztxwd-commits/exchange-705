@@ -7,6 +7,7 @@ const base = process.env.ADMIN_URL
 if (!base || !['127.0.0.1', 'localhost'].includes(new URL(base).hostname)) throw Error('ADMIN_URL must be an isolated local Vite server')
 const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAMAAAACCAYAAACddGYaAAAAEElEQVR4XmNQCu34z4ANAAAthgH/7/5LwgAAAABJRU5ErkJggg==', 'base64')
 const front = '/api/uploads/images/1/user/12/front.png', back = '/api/uploads/images/1/user/12/back.png'
+const thumb = front.replace('/images/', '/thumbnails/')
 ;(async () => {
  const browser = await chromium.launch({ headless: true, channel: 'chrome' })
  const page = await browser.newPage({ viewport: { width: 1100, height: 750 } }), requests = [], errors = []
@@ -16,10 +17,10 @@ const front = '/api/uploads/images/1/user/12/front.png', back = '/api/uploads/im
   page.on('pageerror', error => errors.push(error.message))
   await page.addInitScript(() => sessionStorage.setItem('exchange.admin.session.v2', JSON.stringify({ mode: 'admin', token: 'image-test-one', user: { id: 7, tenantId: 1, userType: 'admin' } })))
   await page.route('**/__image_qa', route => route.fulfill({ contentType: 'text/html', body: '<!doctype html><html><head><title>Private image regression</title></head><body><div id="app"></div></body></html>' }))
-  await page.route('**/api/uploads/images/**', async route => {
+  await page.route('**/api/uploads/{images,thumbnails}/**', async route => {
    const request = route.request(), pathname = new URL(request.url()).pathname
    requests.push({ pathname, token: request.headers().authorization })
-   if (pathname === front) await frontReady
+   if (pathname === front || pathname === thumb) await frontReady
    if (pathname === back) await backReady
    if (pathname.endsWith('missing.png')) return route.fulfill({ status: 404, json: { message: 'Not found' } })
    await route.fulfill({ body: png, contentType: 'image/png' }).catch(() => {})
@@ -48,7 +49,8 @@ const front = '/api/uploads/images/1/user/12/front.png', back = '/api/uploads/im
   await page.locator('.el-image img').click()
   await page.locator('.el-image-viewer__wrapper').waitFor()
   await page.waitForFunction(() => document.querySelector('.el-image-viewer__img')?.naturalWidth === 3)
-  assert.equal(requests.filter(row => row.pathname === front).length, 1, 'preview reuses current protected object URL')
+  assert.equal(requests.filter(row => row.pathname === thumb).length, 1, 'thumbnail loaded only once')
+  assert.equal(requests.filter(row => row.pathname === front).length, 1, 'original requested only when preview opens')
   await page.getByRole('button', { name: '重绘 1' }).evaluate(button => button.click())
   await page.waitForTimeout(150)
   assert.equal(requests.filter(row => row.pathname === back).length, 1, 'preview list survives equivalent parent renders')

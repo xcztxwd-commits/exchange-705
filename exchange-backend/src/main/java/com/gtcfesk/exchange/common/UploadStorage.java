@@ -50,6 +50,18 @@ public final class UploadStorage {
             objects.put(kind + "/" + filename, stream, bytes.length, contentType);
         } catch (Exception e) { throw new IOException("素材上传至 MinIO 失败", e); }
     }
+    public Resource readThumbnail(String filename) throws Exception {
+        try { return read("thumbnails", filename); }
+        catch (io.minio.errors.ErrorResponseException error) {
+            if (!"NoSuchKey".equals(error.errorResponse().code())) throw error;
+        }
+        String original = "images/" + filename;
+        long size = objects.stat(original).size();
+        byte[] thumbnail;
+        try (InputStream stream = objects.read(original, 0, size)) { thumbnail = ImageFiles.thumbnail(stream); }
+        save("thumbnails", filename, thumbnail, "image/png");
+        return read("thumbnails", filename);
+    }
     public Resource read(String kind, String filename) throws Exception {
         String object = kind + "/" + filename;
         long size = objects.stat(object).size();

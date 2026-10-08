@@ -59,7 +59,7 @@ class MediaMinioAcceptanceTest extends AdminPermissionIntegrationTest {
         if (System.getenv("VIDEO_TEST_MINIO_ROOT_ACCESS_KEY") != null) client=MinioClient.builder().endpoint(System.getenv("VIDEO_TEST_MINIO_ENDPOINT"))
                 .credentials(System.getenv("VIDEO_TEST_MINIO_ROOT_ACCESS_KEY"),System.getenv("VIDEO_TEST_MINIO_ROOT_SECRET_KEY")).build();
         for(io.minio.Result<io.minio.messages.Item> object:client.listObjects(ListObjectsArgs.builder().bucket(BUCKET).prefix(PREFIX+"/").recursive(true).build()))client.removeObject(RemoveObjectArgs.builder().bucket(BUCKET).object(object.get().objectName()).build());
-        assertFalse(Files.exists(UNUSED.resolve("images")));assertFalse(Files.exists(UNUSED.resolve("audio")));
+        assertFalse(Files.exists(UNUSED.resolve("images")));assertFalse(Files.exists(UNUSED.resolve("audio")));assertFalse(Files.exists(UNUSED.resolve("thumbnails")));
     }
     @Test void identityUploadsReadForUserAndCorrectBackendPermissions()throws Exception {
         UserAccount owner=user(),other=user();String ownerToken=userToken(owner),otherToken=userToken(other);
@@ -71,6 +71,13 @@ class MediaMinioAcceptanceTest extends AdminPermissionIntegrationTest {
         String frontUrl=record.path("idFrontImage").asText(),backUrl=record.path("idBackImage").asText();
         for(String url:Arrays.asList(avatarUrl,frontUrl,backUrl)) {
             readable(url,ownerToken,false,url.equals(avatarUrl)?avatar:url.equals(frontUrl)?front:back);
+            String thumbnail=url.replace("/images/","/thumbnails/");
+            byte[] expected=thumbnail(url.equals(avatarUrl)?avatar:url.equals(frontUrl)?front:back);
+            readable(thumbnail,ownerToken,false,expected);
+            assertEquals(404,api(BootTenantFixture.FRONT,thumbnail,"GET",null,otherToken).status);
+            assertTrue(api(BootTenantFixture.FRONT,thumbnail,"GET",null,null).status>=400);
+            assertTrue(api("b.mt705.test",thumbnail,"GET",null,ownerToken).status>=400);
+            assertEquals(404,api(BootTenantFixture.ADMIN,thumbnail,"GET",null,token).status);
             assertEquals(404,api(BootTenantFixture.FRONT,url,"GET",null,otherToken).status);
             assertTrue(api(BootTenantFixture.FRONT,url,"GET",null,null).status>=400);
             assertTrue(api("b.mt705.test",url,"GET",null,ownerToken).status>=400);
@@ -84,6 +91,10 @@ class MediaMinioAcceptanceTest extends AdminPermissionIntegrationTest {
         JsonNode review=data(api(BootTenantFixture.ADMIN,"/api/admin/kyc/list?userId="+owner.getId(),"GET",null,token));
         assertTrue(review.toString().contains(frontUrl));assertTrue(review.toString().contains(backUrl));
         readable(frontUrl,token,true,front);readable(backUrl,token,true,back);
+        readable(avatarUrl.replace("/images/","/thumbnails/"),token,true,thumbnail(avatar));
+        readable(frontUrl.replace("/images/","/thumbnails/"),token,true,thumbnail(front));
+        readable(backUrl.replace("/images/","/thumbnails/"),token,true,thumbnail(back));
         System.out.println("LOCAL_MINIO_IDENTITY_ACCEPTANCE_PASS realHttp=true avatar=true kycFrontAndBack=true persistedReferences=true userRead=true backendRead=true permissionDenial=true crossTenantDenial=true anonymousMinio=403 localFallback=false");
     }
+    byte[] thumbnail(byte[] image)throws Exception {return com.gtcfesk.exchange.common.ImageFiles.thumbnail(new ByteArrayInputStream(image));}
 }

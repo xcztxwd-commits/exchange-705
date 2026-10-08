@@ -33,17 +33,24 @@ public class ImageController {
 
     // 支持两种路径：/uploads/images/ 和 /api/uploads/images/
     // 使用 ** 通配符匹配所有路径，包括文件名中的点
-    @GetMapping({"/uploads/images/**", "/api/uploads/images/**", "/uploads/audio/**", "/api/uploads/audio/**"})
+    @GetMapping({"/uploads/images/**", "/api/uploads/images/**", "/uploads/thumbnails/**", "/api/uploads/thumbnails/**", "/uploads/audio/**", "/api/uploads/audio/**"})
     public ResponseEntity<Resource> getFile(HttpServletRequest request) {
         // 从请求路径中提取文件名
         String requestURI = request.getRequestURI();
+        boolean thumbnail = requestURI.contains("/thumbnails/");
         boolean isAudio = requestURI.contains("/audio/");
         System.out.println("[ImageController] 收到文件请求，完整URI: " + requestURI + ", 类型: " + (isAudio ? "音频" : "图片"));
         
         // 提取文件名部分
         String filename = null;
         Path baseDir;
-        if (requestURI.contains("/api/uploads/images/")) {
+        if (requestURI.contains("/api/uploads/thumbnails/")) {
+            filename = requestURI.substring(requestURI.indexOf("/api/uploads/thumbnails/") + "/api/uploads/thumbnails/".length());
+            baseDir = storage.images();
+        } else if (requestURI.contains("/uploads/thumbnails/")) {
+            filename = requestURI.substring(requestURI.indexOf("/uploads/thumbnails/") + "/uploads/thumbnails/".length());
+            baseDir = storage.images();
+        } else if (requestURI.contains("/api/uploads/images/")) {
             filename = requestURI.substring(requestURI.indexOf("/api/uploads/images/") + "/api/uploads/images/".length());
             baseDir = storage.images();
         } else if (requestURI.contains("/uploads/images/")) {
@@ -108,7 +115,8 @@ public class ImageController {
                 if (contentType == null && filename.endsWith(".ogg")) contentType = "audio/ogg";
                 if (isAudio && !java.util.Arrays.asList("audio/mpeg", "audio/mp3", "audio/wav", "audio/x-wav", "audio/ogg", "application/ogg").contains(contentType)) return ResponseEntity.notFound().build();
                 if (!isAudio && !java.util.Arrays.asList("image/jpeg", "image/png", "image/gif", "image/webp").contains(contentType)) return ResponseEntity.notFound().build();
-                Resource resource = storage.read(isAudio ? "audio" : "images", filename);
+                Resource resource = thumbnail ? storage.readThumbnail(filename) : storage.read(isAudio ? "audio" : "images", filename);
+                if (thumbnail) contentType = "image/png";
                 audit.recordCurrent("file.access.granted", filename, isAudio ? "audio" : "image", null);
                 return ResponseEntity.ok().contentType(MediaType.parseMediaType(contentType))
                         .header("Cache-Control", "private, no-store").header("X-Content-Type-Options", "nosniff")

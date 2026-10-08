@@ -5,7 +5,7 @@ export function imageLocation(value: string | null | undefined, origin: string, 
   let url: URL
   try { url = new URL(value.startsWith('/') || /^https?:/i.test(value) ? value : '/uploads/images/' + value, origin) } catch { return '' }
   if (!['https:', 'http:'].includes(url.protocol) || url.username || url.password) return ''
-  if (/\/(?:api\/)?(?:demo-)?uploads\/(?:images|audio)\//.test(url.pathname)) {
+  if (/\/(?:api\/)?(?:demo-)?uploads\/(?:images|audio|thumbnails)\//.test(url.pathname)) {
     if (url.origin !== origin || url.search || url.hash) return ''
     if (url.pathname.startsWith('/demo-uploads/')) return url.pathname
     return mode === 'DEMO' ? url.pathname.replace(/^\/api/, '').replace('/uploads/', '/demo-uploads/') : '/api' + url.pathname.replace(/^\/api/, '')
@@ -15,5 +15,8 @@ export function imageLocation(value: string | null | undefined, origin: string, 
 }
 export function privateImagePath(value: string, origin: string): string | null {
   const normalized = imageLocation(value, origin)
-  return normalized.startsWith('/api/uploads/images/') || normalized.startsWith('/api/uploads/audio/') || normalized.startsWith('/demo-uploads/images/') || normalized.startsWith('/demo-uploads/audio/') ? normalized : null
+  return normalized.startsWith('/api/uploads/images/') || normalized.startsWith('/api/uploads/audio/') || normalized.startsWith('/api/uploads/thumbnails/') || normalized.startsWith('/demo-uploads/images/') || normalized.startsWith('/demo-uploads/audio/') || normalized.startsWith('/demo-uploads/thumbnails/') ? normalized : null
+}
+export function thumbnailImageLocation(value: string | null | undefined, origin: string): string {
+  return imageLocation(value, origin).replace(/^(\/(?:api\/uploads|demo-uploads))\/images\//, '$1/thumbnails/')
 }

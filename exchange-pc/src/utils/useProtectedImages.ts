@@ -11,19 +11,18 @@ export function useProtectedImages(input: () => string[]) {
     sources.value = []; failed.value = false
     onCleanup(() => { active = false; controller.abort(); owned.forEach(url => URL.revokeObjectURL(url)); sources.value = [] })
     try {
-      const urls = await Promise.all(input().map(async value => {
+      await Promise.all(input().map(async (value, index) => {
         const normalized = imageLocation(value, location.origin)
         const path = privateImagePath(normalized, location.origin)
-        if (!path) return normalized
+        if (!path) { if (active && auth.token === token) sources.value[index] = normalized; return }
         // Anonymous reads are still server-authorized: only actual public references may succeed.
         const response = await fetch(path, { headers: token ? { Authorization: `Bearer ${token}` } : {}, credentials: 'omit', cache: 'no-store', redirect: 'error', signal: controller.signal })
         if (!response.ok) throw new Error('私有附件不可用')
         const blob = await response.blob()
         if (!/^image\/(png|jpeg|gif|webp|bmp)$/i.test(blob.type)) throw new Error('附件不是受支持图片')
         if (!active || auth.token !== token) return ''
-        const url = URL.createObjectURL(blob); owned.push(url); return url
+        const url = URL.createObjectURL(blob); owned.push(url); sources.value[index] = url
       }))
-      if (active && auth.token === token) sources.value = urls
     } catch { if (active) failed.value = true }
   }, { immediate: true })
   return { sources, failed }
