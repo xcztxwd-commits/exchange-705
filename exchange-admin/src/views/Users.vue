@@ -5,6 +5,8 @@ import { Search, Refresh, Lock, Edit, Wallet, User, Delete, Document, ArrowDown 
 import { useAccountTable } from '@/utils/useAccountTable'
 import { accountTableRequest } from '@/utils/accountTableRequest'
 import AccountTypeFilter from '@/components/AccountTypeFilter.vue'
+import UserLookup from '@/components/UserLookup.vue'
+import { useDebouncedSearch } from '@/composables/useDebouncedSearch'
 import UserAvatar from '../../../exchange-frontend/src/components/UserAvatar.vue'
 const accountTable = useAccountTable()
 const accountModes = accountTable.modes
@@ -152,25 +154,33 @@ async function loadAgents() {
   }
 }
 
+let loadUsersVersion = 0
 const loadUsers = async () => {
+  const current = ++loadUsersVersion
   loading.value = true
   try {
     const res: any = await request.post('/admin/users/query', queryParams.value)
+    if (current !== loadUsersVersion) return
     users.value = res.list || []
     total.value = res.total || 0
   } catch (e: any) {
+    if (current !== loadUsersVersion) return
     ElMessage.error(e?.message || '加载失败')
   } finally {
-    loading.value = false
+    if (current === loadUsersVersion) loading.value = false
   }
 }
 
 const handleSearch = () => {
+  cancelKeywordSearch()
   queryParams.value.page = 0
   loadUsers()
 }
 
+const { schedule: searchKeywords, cancel: cancelKeywordSearch } = useDebouncedSearch(handleSearch)
+
 const handleReset = () => {
+  cancelKeywordSearch()
   queryParams.value.userId = ''
   queryParams.value.keyword = ''
   queryParams.value.status = ''
@@ -1019,18 +1029,14 @@ onMounted(() => {
     <el-card shadow="never">
       <!-- 搜索栏 -->
       <el-form :inline="true" :model="queryParams">
-        <el-form-item label="用户ID">
-          <el-input
-            v-model="queryParams.userId"
-            placeholder="用户ID"
-            clearable
-            style="width: 150px"
-            @keyup.enter="handleSearch"
-          />
+        <el-form-item label="用户 ID / 邮箱">
+          <UserLookup v-model="queryParams.userId" scope="users" :account-modes="accountModes"
+            :agent-id="queryParams.filterAgentId" placeholder="输入部分用户 ID / 邮箱" @change="handleSearch" />
         </el-form-item>
         <el-form-item label="关键词">
           <el-input
             v-model="queryParams.keyword"
+            @input="searchKeywords"
             placeholder="搜索邮箱/手机/昵称"
             clearable
             style="width: 200px"

@@ -68,6 +68,7 @@ const marketConfig = ref<ConfigItem[]>([
 ])
 
 const advancedEntryEnabled = ref(true)
+const videoIntroUrl = ref('')
 const tradeKycRequired = ref(true)
 const conversionHours = ref(8)
 const defaultConversionCurrencies = ['USD', 'EUR', 'JPY', 'GBP', 'CNY', 'CHF', 'AUD', 'CAD', 'HKD', 'SGD']
@@ -126,6 +127,7 @@ const loadConfigs = async () => {
     if (Array.isArray(res)) {
       res.forEach((item: any) => {
         if (item.configKey === 'ui.advanced.enabled') advancedEntryEnabled.value = item.configValue !== 'false'
+        if (item.configKey === 'home.video.url') videoIntroUrl.value = item.configValue || ''
         if (item.configKey === 'trade.kyc.required') tradeKycRequired.value = item.configValue !== 'false'
         if (item.configKey === 'market.conversion.currencies') conversionCurrencies.value = [...new Set(['USD', ...String(item.configValue || '').split(',').filter(Boolean)])]
         if (item.configKey === 'market.conversion.cache-hours') conversionHours.value = Number(item.configValue) || 8
@@ -248,6 +250,7 @@ const saveConfigs = async () => {
     // 过滤掉ws_url配置（前端会自动根据分类选择WebSocket地址）
     const allConfigs = [
       { key: 'ui.advanced.enabled', value: String(advancedEntryEnabled.value), description: '高级版入口' },
+      { key: 'home.video.url', value: videoIntroUrl.value.trim(), description: '视频简介地址' },
       { key: 'trade.kyc.required', value: String(tradeKycRequired.value), description: '未实名不可交易' },
       { key: 'registration.fields', value: JSON.stringify(registrationFields.value), description: '注册业务资料字段' },
       { key: 'market.conversion.currencies', value: conversionCurrencies.value.join(','), description: '预缓存币种（兑美元）' },
@@ -327,6 +330,16 @@ onMounted(() => {
                 :disabled="loading || !editable('ui.advanced.enabled')" active-text="开启" inactive-text="关闭" />
             </el-form-item>
             <el-alert type="info" :closable="false" title="关闭后，经典版「我的」不再显示高级版入口；已进入高级版的用户仍可返回经典版。修改后请保存配置，用户重新进入「我的」时生效。" />
+          </el-form>
+        </el-tab-pane>
+        <el-tab-pane label="视频简介" name="video">
+          <el-form label-width="150px">
+            <el-form-item :label="'视频地址' + policyLabel('home.video.url')">
+              <el-input v-model="videoIntroUrl" :disabled="loading || !editable('home.video.url')"
+                :aria-label="'视频地址' + policyLabel('home.video.url')"
+                placeholder="https://example.com/intro.mp4" clearable style="max-width: 720px" />
+            </el-form-item>
+            <p>填写完整的 HTTP/HTTPS 视频地址，留空可清除。修改后点击「保存配置」。</p>
           </el-form>
         </el-tab-pane>
         <el-tab-pane label="时区设置" name="timezone">

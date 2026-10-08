@@ -32,9 +32,12 @@ public interface UserAccountRepository extends com.gtcfesk.exchange.tenant.Tenan
 
     @Query("SELECT u FROM UserAccount u WHERE u.tenantId=:tenantId AND LOWER(TRIM(u.email))=LOWER(TRIM(:email))")
     Optional<UserAccount> findByTenantIdAndEmail(@Param("tenantId") Long tenantId, @Param("email") String email);
-    @org.springframework.data.jpa.repository.Query("SELECT u FROM UserAccount u WHERE u.tenantId = :#{T(com.gtcfesk.exchange.tenant.TenantContext).requireTenantId()} AND ((:agent IS NULL OR u.parentUserId = :agent) AND (str(u.id) LIKE :idPrefix ESCAPE '!' OR lower(u.email) LIKE :emailPattern ESCAPE '!')) ORDER BY u.id")
-    Page<UserAccount> findDepositCustomers(@Param("agent") Long agent, @Param("idPrefix") String idPrefix,
-                                          @Param("emailPattern") String emailPattern, Pageable pageable);
+    default Page<UserAccount> findDepositCustomers(Long agent, String idPrefix, String emailPattern, Pageable pageable) {
+        return findLookupUsers(agent, null, idPrefix, emailPattern, pageable);
+    }
+    @Query("SELECT u FROM UserAccount u WHERE u.tenantId = :#{T(com.gtcfesk.exchange.tenant.TenantContext).requireTenantId()} AND (:agent IS NULL OR u.parentUserId = :agent) AND (:userType IS NULL OR u.userType = :userType) AND (str(u.id) LIKE :idPattern ESCAPE '!' OR lower(u.email) LIKE :emailPattern ESCAPE '!') ORDER BY u.id")
+    Page<UserAccount> findLookupUsers(@Param("agent") Long agent, @Param("userType") String userType,
+                                      @Param("idPattern") String idPattern, @Param("emailPattern") String emailPattern, Pageable pageable);
     Optional<UserAccount> findByTenantIdAndPhone(Long tenantId, String phone);
     Optional<UserAccount> findByTenantIdAndMyInviteCode(Long tenantId, String myInviteCode);
     @Query("SELECT CASE WHEN COUNT(u)>0 THEN true ELSE false END FROM UserAccount u WHERE u.tenantId=:tenantId AND LOWER(TRIM(u.email))=LOWER(TRIM(:email))")

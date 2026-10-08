@@ -268,76 +268,28 @@ public class OptionOrderService {
         return order;
     }
 
-    private OptionOrder settleLockedOrder(Long userId,OptionOrder order,BigDecimal closePrice,OptionDuration currentDuration) {
-        // 计算盈亏
-        BigDecimal profit = BigDecimal.ZERO;
-        BigDecimal openPrice = order.getOpenPrice();
+    /** Shared read-only estimate and settlement calculation, including configured presets. */
+    public static BigDecimal calculateProfit(OptionOrder order, BigDecimal closePrice, OptionDuration duration) {
         BigDecimal amount = order.getAmount();
-
-        // 如果订单有预设盈亏类型，使用预设的盈亏状态
-        if (order.getPresetProfitType() != null && !order.getPresetProfitType().isEmpty()) {
-            // 获取期限设置中的盈亏比例和亏损比例
-            BigDecimal profitRate = new BigDecimal("0.8"); // 默认80%
-            BigDecimal lossRate = new BigDecimal("1.0"); // 默认100%（全部亏损）
-            if (order.getDuration() != null) {
-                OptionDuration duration = currentDuration;
-                if (duration != null) {
-                    if (duration.getProfitRate() != null) {
-                        profitRate = duration.getProfitRate();
-                    }
-                    if (duration.getLossRate() != null) {
-                        lossRate = duration.getLossRate();
-                    }
-                }
-            }
-            
-            // 根据预设盈亏类型计算盈亏
-            if ("PROFIT".equals(order.getPresetProfitType())) {
-                // 预设为盈利：使用盈亏比例计算盈利
-                profit = amount.multiply(profitRate);
-            } else if ("LOSS".equals(order.getPresetProfitType())) {
-                // 预设为亏损：使用亏损比例计算亏损
-                profit = amount.multiply(lossRate).negate();
-            }
-        } else if (openPrice != null && closePrice != null && amount != null) {
-            // 没有预设盈亏类型，使用实际价格计算
-            BigDecimal priceDiff = closePrice.subtract(openPrice);
-            
-            // 获取期限设置中的盈亏比例和亏损比例
-            BigDecimal profitRate = new BigDecimal("0.8"); // 默认80%
-            BigDecimal lossRate = new BigDecimal("1.0"); // 默认100%（全部亏损）
-            if (order.getDuration() != null) {
-                OptionDuration duration = currentDuration;
-                if (duration != null) {
-                    if (duration.getProfitRate() != null) {
-                        profitRate = duration.getProfitRate();
-                    }
-                    if (duration.getLossRate() != null) {
-                        lossRate = duration.getLossRate();
-                    }
-                }
-            }
-            
-            // 买涨：价格上涨盈利，价格下跌亏损
-            // 买跌：价格下跌盈利，价格上涨亏损
-            if ("UP".equals(order.getDirection())) {
-                // 买涨：使用期限设置中的盈亏比例
-                if (priceDiff.compareTo(BigDecimal.ZERO) > 0) {
-                    profit = amount.multiply(profitRate);
-                } else {
-                    // 使用亏损比例计算亏损
-                    profit = amount.multiply(lossRate).negate();
-                }
-            } else if ("DOWN".equals(order.getDirection())) {
-                // 买跌：使用期限设置中的盈亏比例
-                if (priceDiff.compareTo(BigDecimal.ZERO) < 0) {
-                    profit = amount.multiply(profitRate);
-                } else {
-                    // 使用亏损比例计算亏损
-                    profit = amount.multiply(lossRate).negate();
-                }
-            }
+        if (amount == null) return BigDecimal.ZERO;
+        BigDecimal profitRate = duration != null && order.getDuration() != null && duration.getProfitRate() != null ? duration.getProfitRate() : new BigDecimal("0.8");
+        BigDecimal lossRate = duration != null && order.getDuration() != null && duration.getLossRate() != null ? duration.getLossRate() : BigDecimal.ONE;
+        String preset = order.getPresetProfitType();
+        if (preset != null && !preset.isEmpty()) {
+            if ("PROFIT".equals(preset)) return amount.multiply(profitRate);
+            if ("LOSS".equals(preset)) return amount.multiply(lossRate).negate();
+            return BigDecimal.ZERO;
         }
+        if (order.getOpenPrice() == null || closePrice == null) return BigDecimal.ZERO;
+        int change = closePrice.compareTo(order.getOpenPrice());
+        if (!("UP".equals(order.getDirection()) || "DOWN".equals(order.getDirection()))) return BigDecimal.ZERO;
+        boolean winning = "UP".equals(order.getDirection()) ? change > 0 : change < 0;
+        return winning ? amount.multiply(profitRate) : amount.multiply(lossRate).negate();
+    }
+
+    private OptionOrder settleLockedOrder(Long userId,OptionOrder order,BigDecimal closePrice,OptionDuration currentDuration) {
+        BigDecimal amount = order.getAmount();
+        BigDecimal profit = calculateProfit(order, closePrice, currentDuration);
 
         // 更新订单状态
         order.setStatus("CLOSED");

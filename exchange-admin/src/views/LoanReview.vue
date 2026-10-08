@@ -5,20 +5,8 @@
         <div class="card-header">
           <span>贷款申请审核</span>
           <div>
-            <el-input
-              v-model="filterUserId"
-              placeholder="用户ID"
-              clearable
-              style="width: 150px; margin-right: 10px"
-              @keyup.enter="handleSearch"
-            />
-            <el-input
-              v-model="filterUserEmail"
-              placeholder="用户邮箱"
-              clearable
-              style="width: 200px; margin-right: 10px"
-              @keyup.enter="handleSearch"
-            />
+            <UserLookup v-model="filterUserId" scope="loan_review" :account-modes="accountModes"
+              placeholder="输入部分用户 ID / 邮箱" style="width: 300px; margin-right: 10px" @change="handleSearch" />
             <el-select v-model="statusFilter" placeholder="筛选状态" clearable style="width: 150px; margin-right: 10px">
               <el-option label="全部" value="" />
               <el-option label="待审核" value="PENDING" />
@@ -226,6 +214,7 @@ import { Search, Refresh } from '@element-plus/icons-vue'
 import { useAccountTable } from '@/utils/useAccountTable'
 import { accountTableRequest } from '@/utils/accountTableRequest'
 import AccountTypeFilter from '@/components/AccountTypeFilter.vue'
+import UserLookup from '@/components/UserLookup.vue'
 const accountTable = useAccountTable()
 const accountModes = accountTable.modes
 const request = accountTableRequest(accountTable)
@@ -248,7 +237,6 @@ const loanList = ref<any[]>([])
 const loading = ref(false)
 const statusFilter = ref('')
 const filterUserId = ref('')
-const filterUserEmail = ref('')
 const rejectDialogVisible = ref(false)
 const rejectRemark = ref('')
 const currentRejectLoan = ref<any>(null)
@@ -328,7 +316,9 @@ function getRepaymentStatusType(row: any): string {
   return 'warning'
 }
 
+let loadLoansVersion = 0
 async function loadLoans() {
+  const current = ++loadLoansVersion
   loading.value = true
   try {
     const params: any = {}
@@ -338,17 +328,16 @@ async function loadLoans() {
     if (filterUserId.value) {
       params.userId = filterUserId.value
     }
-    if (filterUserEmail.value) {
-      params.userEmail = filterUserEmail.value
-    }
     const res: any = await request.get('/admin/loan/review/list', { params })
+    if (current !== loadLoansVersion) return
     if (res && res.success) {
       loanList.value = res.list || []
     }
   } catch (e: any) {
+    if (current !== loadLoansVersion) return
     ElMessage.error('加载失败: ' + (e.message || '未知错误'))
   } finally {
-    loading.value = false
+    if (current === loadLoansVersion) loading.value = false
   }
 }
 
@@ -360,7 +349,6 @@ const handleSearch = () => {
 // 重置
 const handleReset = () => {
   filterUserId.value = ''
-  filterUserEmail.value = ''
   statusFilter.value = ''
   loadLoans()
 }

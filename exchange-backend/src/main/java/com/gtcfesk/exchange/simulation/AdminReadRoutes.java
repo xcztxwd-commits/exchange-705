@@ -8,9 +8,14 @@ public final class AdminReadRoutes {
         if ("POST".equals(method)) {
             if ("/api/admin/users/query".equals(path)) return "users";
             if (path.matches("/api/admin/orders/(contract|option)/query")) return "orders";
-            if ("/api/admin/orders/contract/live".equals(path)) return "orders";
+            if (path.matches("/api/admin/orders/(contract|option)/live")) return "orders";
         }
         if ("GET".equals(method)) {
+            if (path.startsWith("/api/admin/user-lookup/")) {
+                String menu = path.substring("/api/admin/user-lookup/".length());
+                if (Arrays.asList("users", "agents", "orders", "financial_orders", "loan_personal_info_review",
+                        "loan_review", "deposit_review", "withdraw_review", "kyc_review").contains(menu)) return menu;
+            }
             if(path.matches("/api/admin/orders/(contract|option)/[1-9][0-9]*/share-preview"))return "orders";
             if(path.equals("/api/admin/users"))return "users";
             if(path.equals("/api/admin/statistics"))return "statistics";

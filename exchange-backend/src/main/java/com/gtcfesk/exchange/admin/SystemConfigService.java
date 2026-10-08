@@ -11,6 +11,7 @@ import java.util.Optional;
 
 @Service
 public class SystemConfigService {
+    public static final String VIDEO_INTRO_URL_KEY = "home.video.url";
     @Autowired private com.gtcfesk.exchange.control.TenantPolicyService tenantPolicy;
     @javax.persistence.PersistenceContext private javax.persistence.EntityManager entityManager;
     @Autowired private com.gtcfesk.exchange.tenant.TenantSecrets secrets;
@@ -229,6 +230,19 @@ public class SystemConfigService {
     @org.springframework.transaction.annotation.Transactional
     public void saveConfig(String key, String value, String description) {
         tenantPolicy.lockCurrentTenantForWrite();
+        if (VIDEO_INTRO_URL_KEY.equals(key)) {
+            value = value == null ? "" : value.trim();
+            if (!value.isEmpty()) {
+                try {
+                    java.net.URI url = new java.net.URI(value);
+                    if (!("http".equalsIgnoreCase(url.getScheme()) || "https".equalsIgnoreCase(url.getScheme()))
+                            || url.getHost() == null || url.getUserInfo() != null || url.getPort() == 0 || url.getPort() > 65535)
+                        throw new java.net.URISyntaxException(value, "Invalid video URL");
+                } catch (java.net.URISyntaxException invalid) {
+                    throw new com.gtcfesk.exchange.common.BusinessException("视频地址请输入有效的 HTTP/HTTPS URL，且不能包含用户名或密码");
+                }
+            }
+        }
         tenantPolicy.requireConfigChange(key,value);
         if (com.gtcfesk.exchange.market.MarketHoursConfig.KEY.equals(key)) com.gtcfesk.exchange.market.MarketHoursConfig.parse(value);
         if (com.gtcfesk.exchange.market.MarketDepthService.ENABLED_KEY.equals(key) && !"true".equals(value) && !"false".equals(value))

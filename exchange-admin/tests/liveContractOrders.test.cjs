@@ -5,15 +5,15 @@ const source = fs.readFileSync(path.join(__dirname, '../src/utils/useLiveContrac
 const exportsForTest = {}
 new Function('require', 'exports', ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText)(require, exportsForTest)
 const flush = () => new Promise(resolve => setImmediate(resolve))
-function fixture(initial) {
+function fixture(initial, kind = 'contract') {
   const timers = new Map(), listeners = new Map(), requests = [], originalWindow = global.window, originalDocument = global.document
   let sequence = 0, closed = false
   global.window = { setTimeout: (run, delay) => { timers.set(++sequence, { run, delay }); return sequence }, clearTimeout: id => timers.delete(id) }
   global.document = { hidden: false, addEventListener: (name, run) => listeners.set(name, run), removeEventListener: name => listeners.delete(name) }
-  const rows = vue.ref(initial), tab = vue.ref('contract'), modes = vue.ref(['REAL']), loading = vue.ref(false)
+  const rows = vue.ref(initial), tab = vue.ref(kind), modes = vue.ref(['REAL']), loading = vue.ref(false)
   const renderer = vue.createRenderer({ createComment: () => ({}), insert() {}, remove() {}, parentNode() {}, nextSibling() {} })
   const app = renderer.createApp({ setup() {
-    exportsForTest.useLiveContractOrders(rows, tab, modes, loading, (mode, url, body, method, signal) => new Promise((resolve, reject) => requests.push({ mode, url, body, method, signal, resolve, reject })))
+    exportsForTest.useLiveContractOrders(rows, tab, modes, loading, (mode, url, body, method, signal) => new Promise((resolve, reject) => requests.push({ mode, url, body, method, signal, resolve, reject })), kind)
     return () => null
   } })
   app.mount({})
@@ -63,5 +63,38 @@ test('same ID in REAL and DEMO is queried separately; stale quotes and errors pr
     await s.tick(); const real = s.requests[4]; s.modes.value = ['DEMO']; assert.equal(real.signal.aborted, true)
     real.resolve({ list: [{ id: 1, profit: '999' }] }); s.requests[5].resolve({ list: [] }); await flush()
     assert.equal(s.rows.value[0].profit, '10'); await s.tick(); assert.equal(s.requests.at(-1).mode, 'DEMO')
+  } finally { s.close() }
+})
+test('monitor batches across pages stay bounded and removing an order cancels late updates', async () => {
+  const s = fixture(Array.from({ length: 205 }, (_, index) => open(index + 1)))
+  try {
+    await s.tick(); assert.deepEqual(s.requests.map(r => r.body.ids.length), [100, 100, 5])
+    const removed = s.rows.value[0], pending = [...s.requests]
+    s.rows.value = s.rows.value.filter(row => row.id !== 1)
+    assert.ok(pending.every(r => r.signal.aborted))
+    pending.forEach(r => r.resolve({ list: [{ id: 1, profit: '999' }] })); await flush()
+    assert.equal(removed.profit, '1'); await s.tick()
+    assert.ok(s.requests.slice(3).every(r => !r.body.ids.includes(1) && r.body.ids.length <= 100))
+  } finally { s.close() }
+})
+test('option monitor preserves stale estimates, resumes after hiding, and freezes final settlement', async () => {
+  const s = fixture([{ id: 1, status: 'TRADING', currentPrice: '150', profit: '80' }], 'option')
+  try {
+    await s.tick(); assert.equal(s.requests[0].url, '/admin/orders/option/live')
+    s.requests[0].resolve({ list: [{ id: 1, status: 'TRADING', currentPrice: null, profit: '0', liveAvailable: false }] }); await flush()
+    assert.equal(s.rows.value[0].profit, '80'); assert.equal(s.rows.value[0].currentPrice, '150')
+    s.loading.value = true; assert.equal(s.timers.size, 0)
+    s.loading.value = false; await s.tick()
+    s.requests[1].resolve({ list: [{ id: 1, status: 'CLOSED', closePrice: '151', currentPrice: '151', profit: '63', liveAvailable: true }] }); await flush()
+    await s.tick(); assert.equal(s.requests.length, 2); assert.equal(s.timers.size, 0)
+    assert.equal(s.rows.value[0].profit, '63'); assert.equal(s.rows.value[0].closePrice, '151'); assert.ok(s.rows.value[0].liveUpdatedAt)
+  } finally { s.close() }
+})
+test('pending monitor retains its last market quote when fresh quotes become unavailable', async () => {
+  const s = fixture([{ ...open(1), status: 'PENDING' }])
+  try {
+    await s.tick()
+    s.requests[0].resolve({ list: [{ id: 1, status: 'PENDING', liveAvailable: false, currentPrice: '0', profit: '0' }] }); await flush()
+    assert.equal(s.rows.value[0].currentPrice, '150'); assert.equal(s.rows.value[0].profit, '1')
   } finally { s.close() }
 })

@@ -5,7 +5,9 @@ import { Search, Refresh } from '@element-plus/icons-vue'
 import { useAccountTable } from '@/utils/useAccountTable'
 import { accountTableRequest } from '@/utils/accountTableRequest'
 import { useLiveContractOrders } from '@/utils/useLiveContractOrders'
+import { useOrderMonitorStore } from '@/store/orderMonitor'
 import AccountTypeFilter from '@/components/AccountTypeFilter.vue'
+import UserLookup from '@/components/UserLookup.vue'
 const accountTable = useAccountTable()
 const accountModes = accountTable.modes
 const request = accountTableRequest(accountTable)
@@ -28,6 +30,7 @@ function viewShare(row: any, kind: ShareKind) {
 }
 
 const auth = useAuthStore()
+const monitor = useOrderMonitorStore()
 const { isAgent, hasPermission } = usePermissions()
 
 // 权限状态
@@ -63,7 +66,6 @@ const agentList = ref<any[]>([])
 const contractQueryParams = ref({
   binding: '',
   userId: '',
-  userEmail: '',
   status: '',
   deletion: '',
   filterAgentId: null as number | null,
@@ -73,7 +75,6 @@ const contractQueryParams = ref({
 
 const optionQueryParams = ref({
   userId: '',
-  userEmail: '',
   status: '',
   deletion: '',
   filterAgentId: null as number | null,
@@ -95,7 +96,9 @@ async function loadAgents() {
   }
 }
 
+let loadContractOrdersVersion = 0
 const loadContractOrders = async () => {
+  const current = ++loadContractOrdersVersion
   loading.value = true
   try {
     const params: any = { ...contractQueryParams.value }
@@ -106,16 +109,20 @@ const loadContractOrders = async () => {
       delete params.filterAgentId
     }
     const res: any = await request.post('/admin/orders/contract/query', params)
+    if (current !== loadContractOrdersVersion) return
     contractOrders.value = res.list || []
     contractTotal.value = res.total || 0
   } catch (e: any) {
+    if (current !== loadContractOrdersVersion) return
     ElMessage.error(e?.message || '加载合约订单失败')
   } finally {
-    loading.value = false
+    if (current === loadContractOrdersVersion) loading.value = false
   }
 }
 
+let loadOptionOrdersVersion = 0
 const loadOptionOrders = async () => {
+  const current = ++loadOptionOrdersVersion
   loading.value = true
   try {
     const params: any = { ...optionQueryParams.value }
@@ -126,12 +133,14 @@ const loadOptionOrders = async () => {
       delete params.filterAgentId
     }
     const res: any = await request.post('/admin/orders/option/query', params)
+    if (current !== loadOptionOrdersVersion) return
     optionOrders.value = res.list || []
     optionTotal.value = res.total || 0
   } catch (e: any) {
+    if (current !== loadOptionOrdersVersion) return
     ElMessage.error(e?.message || '加载期货订单失败')
   } finally {
-    loading.value = false
+    if (current === loadOptionOrdersVersion) loading.value = false
   }
 }
 
@@ -149,7 +158,6 @@ const handleReset = () => {
   if (activeTab.value === 'contract') {
     contractQueryParams.value.binding = ''
     contractQueryParams.value.userId = ''
-    contractQueryParams.value.userEmail = ''
     contractQueryParams.value.status = ''
     contractQueryParams.value.deletion = ''
     contractQueryParams.value.filterAgentId = null
@@ -157,7 +165,6 @@ const handleReset = () => {
     loadContractOrders()
   } else {
     optionQueryParams.value.userId = ''
-    optionQueryParams.value.userEmail = ''
     optionQueryParams.value.status = ''
     optionQueryParams.value.deletion = ''
     optionQueryParams.value.filterAgentId = null
@@ -331,18 +338,9 @@ onMounted(() => {
               />
             </el-select>
             <el-select v-model="contractQueryParams.binding" clearable placeholder="用户绑定状态" style="width: 150px; margin-right: 12px;"><el-option value="unbound" label="未绑定用户" /><el-option value="bound" label="已绑定用户" /></el-select>
-            <el-input
-              v-model="contractQueryParams.userId"
-              placeholder="用户ID"
-              style="width: 150px; margin-right: 12px;"
-              clearable
-            />
-            <el-input
-              v-model="contractQueryParams.userEmail"
-              placeholder="用户邮箱"
-              style="width: 200px; margin-right: 12px;"
-              clearable
-            />
+            <UserLookup v-model="contractQueryParams.userId" scope="orders" :account-modes="accountModes"
+              :agent-id="contractQueryParams.filterAgentId" placeholder="输入部分用户 ID / 邮箱"
+              style="width: 300px; margin-right: 12px" @change="handleSearch" />
             <el-select v-model="contractQueryParams.deletion" placeholder="删除状态" style="width: 150px; margin-right: 12px;" @change="handleSearch">
               <el-option label="全部记录" value="" />
               <el-option label="未删除" value="active" />
@@ -457,6 +455,7 @@ onMounted(() => {
           <el-table-column column-key="actions" label="操作" width="240" fixed="right">
             <template #default="{ row }">
               <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                <el-button v-permission="'orders:view'" v-if="!row.deleted" :type="monitor.contains(row, 'contract') ? 'success' : 'primary'" plain size="small" :aria-pressed="monitor.contains(row, 'contract')" @click="monitor.add(row, 'contract')">{{ monitor.contains(row, 'contract') ? '监控中' : '监控' }}</el-button>
                 <el-button v-permission="'orders:view'" v-if="!row.deleted && row.status === 'CLOSED'" type="primary" plain size="small" :disabled="row.userId == null" :title="row.userId == null ? '请先绑定用户' : '使用本行订单所属用户生成分享图'" @click="viewShare(row, 'contract')">查看分享图</el-button>
                 <el-button v-permission="'orders:manual_order'" v-if="!row.deleted && row.status === 'CLOSED' && row.userId == null && row.orderSource === 'MANUAL_TEST' && (auth.user?.isSuperAdmin || auth.user?.role === 'super_admin')" type="primary" size="small" :disabled="accountModes.length !== 1 || accountModes[0] !== 'REAL'" @click="simpleManualForm?.openBinding(row)">绑定用户</el-button>
                 <el-button v-permission="'orders:close_order'"
@@ -522,18 +521,9 @@ onMounted(() => {
                 :value="agent.id"
               />
             </el-select>
-            <el-input
-              v-model="optionQueryParams.userId"
-              placeholder="用户ID"
-              style="width: 150px; margin-right: 12px;"
-              clearable
-            />
-            <el-input
-              v-model="optionQueryParams.userEmail"
-              placeholder="用户邮箱"
-              style="width: 200px; margin-right: 12px;"
-              clearable
-            />
+            <UserLookup v-model="optionQueryParams.userId" scope="orders" :account-modes="accountModes"
+              :agent-id="optionQueryParams.filterAgentId" placeholder="输入部分用户 ID / 邮箱"
+              style="width: 300px; margin-right: 12px" @change="handleSearch" />
             <el-select v-model="optionQueryParams.deletion" placeholder="删除状态" style="width: 150px; margin-right: 12px;" @change="handleSearch">
               <el-option label="全部记录" value="" />
               <el-option label="未删除" value="active" />
@@ -629,6 +619,7 @@ onMounted(() => {
           <el-table-column column-key="actions" label="操作" width="300" fixed="right">
             <template #default="{ row }">
               <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                <el-button v-permission="'orders:view'" v-if="!row.deleted" :type="monitor.contains(row, 'option') ? 'success' : 'primary'" plain size="small" :aria-pressed="monitor.contains(row, 'option')" @click="monitor.add(row, 'option')">{{ monitor.contains(row, 'option') ? '监控中' : '监控' }}</el-button>
                 <el-button v-permission="'orders:view'" v-if="!row.deleted && row.status === 'CLOSED'" type="primary" plain size="small" :disabled="row.userId == null" :title="row.userId == null ? '请先绑定用户' : '使用本行订单所属用户生成分享图'" @click="viewShare(row, 'option')">查看分享图</el-button>
                 <el-button v-permission="'orders:set_profit'"
                   v-if="!row.deleted && row.status === 'TRADING'"

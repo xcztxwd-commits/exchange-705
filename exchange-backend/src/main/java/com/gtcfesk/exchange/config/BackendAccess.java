@@ -82,6 +82,7 @@ public class BackendAccess extends RequestBodyAdviceAdapter implements HandlerIn
         }
         if (c.equals("AdminTablePreferenceController")) return true; // Controller restricts preferences to the authenticated backend account.
         if (c.equals("AdminAccountQueryController")) return true; // Controller checks each allowlisted read against live module permissions.
+        if (c.equals("AdminUserLookupController")) return true; // Controller checks the allowlisted module and restricts results to the caller's agent scope.
         if (c.equals("DepositOrderController")) return true; // Every method checks explicit module action and scope.
         if (c.equals("AdminUserController") && m.equals("updateBalance")) return true; // Body selects strict set vs deposit permission.
         if (superAdmin()) return true;

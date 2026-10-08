@@ -47,7 +47,7 @@ const { createServer } = require('vite'), assert = require('node:assert/strict')
     await page.goto('http://127.0.0.1:' + server.httpServer.address().port + '/orders')
     const table = page.locator('.orders-page .admin-table-container').first(), row = table.locator('.el-table__body tbody tr').first()
     await row.waitFor(); await page.waitForFunction(() => document.querySelector('.orders-page .el-table__body tbody tr td:nth-child(14)')?.textContent.trim() !== '1.00')
-    const email = page.getByPlaceholder('用户邮箱').first(); await email.fill('draft@fixture.invalid')
+    const email = page.locator('.user-lookup').first().getByRole('combobox'); await email.fill('draft@fixture.invalid')
     await page.evaluate(() => {
       const table = document.querySelector('.orders-page .el-table'), row = table.querySelector('.el-table__body tbody tr'), scroll = table.querySelector('.el-scrollbar__wrap')
       scroll.scrollLeft = 400

@@ -13,6 +13,9 @@ import AgentSettings from './AgentSettings.vue'
 import SupportNotifications from '@/components/SupportNotifications.vue'
 import OnlineUsers from '@/components/OnlineUsers.vue'
 import BackendAccounts from '@/components/BackendAccounts.vue'
+import OrderMonitor from '@/components/OrderMonitor.vue'
+import { useOrderMonitorStore } from '@/store/orderMonitor'
+const orderMonitor = useOrderMonitorStore()
 const backendAccountsVisible=ref(false)
 const backendAccountsLoad=(userEmail?:string)=>request.get('/admin/backend-accounts', {params:{userEmail}})
 const backendAccountsCreate=(body:any)=>request.post('/admin/backend-accounts',body)
@@ -349,6 +352,7 @@ const handleSettingsUpdated = () => {
             </SupportNotifications>
           </div>
           
+          <el-button v-permission="'orders:view'" class="view-order-monitor" @click="orderMonitor.visible = true">查看监控{{ orderMonitor.orders.length ? `(${orderMonitor.orders.length})` : '' }}</el-button>
           <el-dropdown>
             <div class="user-info">
               <el-icon><User /></el-icon>
@@ -394,6 +398,7 @@ const handleSettingsUpdated = () => {
   </el-container>
 
   <el-dialog v-model="backendAccountsVisible" title="系统后台账号" width="min(800px,95vw)" destroy-on-close><BackendAccounts v-if="backendAccountsVisible" :load="backendAccountsLoad" :create="backendAccountsCreate" /></el-dialog>
+  <OrderMonitor />
   <el-dialog v-model="onlineVisible" title="在线用户明细" width="min(1300px, 95vw)" destroy-on-close>
     <OnlineUsers v-if="onlineVisible" :load="loadOnlineUsers" />
   </el-dialog>

@@ -2,6 +2,8 @@
 import { useAccountTable } from '@/utils/useAccountTable'
 import { accountTableRequest, accountTableRawRequest } from '@/utils/accountTableRequest'
 import AccountTypeFilter from '@/components/AccountTypeFilter.vue'
+import UserLookup from '@/components/UserLookup.vue'
+import { useDebouncedSearch } from '@/composables/useDebouncedSearch'
 const accountTable = useAccountTable(), accountModes = accountTable.modes
 const request = accountTableRequest(accountTable)
 const axios = accountTableRawRequest(accountTable)
@@ -38,6 +40,7 @@ const pageSize = ref(10)
 
 // 搜索条件
 const searchForm = ref({
+  userId: '',
   keyword: '',
   status: ''
 })
@@ -75,19 +78,23 @@ const defaultCheckedMenuIds = ref<number[]>([])
 const defaultCheckedActionsMap = ref<Map<number, string[]>>(new Map())
 
 // 获取代理列表
+let fetchAgentsVersion = 0
 const fetchAgents = async () => {
   agents.value=[];total.value=0
+  const current = ++fetchAgentsVersion
   loading.value = true
   try {
     const params = {
       page: currentPage.value,
       size: pageSize.value,
       userType: 'agent', // 只查询代理用户
+      userId: searchForm.value.userId || undefined,
       keyword: searchForm.value.keyword || undefined,
       status: searchForm.value.status || undefined
     }
 
     const response = await axios.get(`${API_BASE}/api/admin/users`, { params })
+    if (current !== fetchAgentsVersion) return
     if (response.data.success) {
       agents.value = response.data.list || []
       total.value = response.data.total || 0
@@ -95,22 +102,28 @@ const fetchAgents = async () => {
       ElMessage.error(response.data.message || '获取代理列表失败')
     }
   } catch (error: any) {
+    if (current !== fetchAgentsVersion) return
     console.error('获取代理列表失败:', error)
     // ElMessage.error(error.response?.data?.message || '获取代理列表失败')
   } finally {
-    loading.value = false
+    if (current === fetchAgentsVersion) loading.value = false
   }
 }
 
 // 搜索
 const handleSearch = () => {
+  cancelKeywordSearch()
   currentPage.value = 1
   fetchAgents()
 }
 
 // 重置
+const { schedule: searchKeywords, cancel: cancelKeywordSearch } = useDebouncedSearch(handleSearch)
+
 const handleReset = () => {
+  cancelKeywordSearch()
   searchForm.value = {
+    userId: '',
     keyword: '',
     status: ''
   }
@@ -119,13 +132,16 @@ const handleReset = () => {
 }
 
 // 修改状态
-const handleStatusChange = async (row: any) => {
+const handleStatusChange = async (row: any, enabled: boolean) => {
+  if (!can('agents:status')) return
   accountTable.selectRow(row)
+  const status = enabled ? 'active' : 'disabled'
   try {
     const response = await axios.put(`${API_BASE}/api/admin/users/${row.id}/status`, {
-      status: row.status
+      status
     })
     if (response.data.success) {
+      row.status = status
       ElMessage.success('状态修改成功')
       fetchAgents() // 重新加载数据
     } else {
@@ -135,8 +151,6 @@ const handleStatusChange = async (row: any) => {
   } catch (error: any) {
     console.error('状态修改失败:', error)
     ElMessage.error(error.response?.data?.message || '状态修改失败')
-    // 恢复原状态
-    row.status = row.status === 'active' ? 'disabled' : 'active'
     fetchAgents() // 重新加载以恢复原状态
   }
 }
@@ -487,9 +501,15 @@ onMounted(() => {
 
       <!-- 搜索表单 -->
       <el-form :model="searchForm" inline>
+        <el-form-item label="用户 ID / 邮箱">
+          <UserLookup v-model="searchForm.userId" scope="agents" :account-modes="accountModes"
+            placeholder="输入部分用户 ID / 邮箱" @change="handleSearch" />
+        </el-form-item>
         <el-form-item label="关键词">
           <el-input
             v-model="searchForm.keyword"
+            @input="searchKeywords"
+            @keyup.enter="handleSearch"
             placeholder="邮箱/昵称/邀请码"
             clearable
             style="width: 200px"
@@ -556,11 +576,9 @@ onMounted(() => {
         <el-table-column column-key="status" label="状态" width="100" align="center">
           <template #default="{ row }">
             <el-switch v-permission="'agents:status'"
-              v-model="row.status"
-              active-value="active"
-              inactive-value="disabled"
-              @change="handleStatusChange(row)"
-            :disabled="accountModes.includes('DEMO') || !accountModes.length" />
+              :model-value="row.status === 'active' || row.status === 'normal'"
+              @change="(enabled: boolean) => handleStatusChange(row, enabled)"
+            :disabled="!can('agents:status') || accountModes.includes('DEMO') || !accountModes.length" />
           </template>
         </el-table-column>
         <el-table-column column-key="loginInfo" label="登录信息" width="150">

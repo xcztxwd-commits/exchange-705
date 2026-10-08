@@ -4,11 +4,14 @@ import com.gtcfesk.exchange.admin.AdminOrderController;
 import com.gtcfesk.exchange.common.BusinessException;
 import com.gtcfesk.exchange.common.JwtUtil;
 import com.gtcfesk.exchange.entity.ContractOrder;
+import com.gtcfesk.exchange.entity.OptionOrder;
+import com.gtcfesk.exchange.entity.OptionDuration;
 import com.gtcfesk.exchange.entity.UserAccount;
 import com.gtcfesk.exchange.market.ForexQuoteMarketService;
 import com.gtcfesk.exchange.repository.*;
 import com.gtcfesk.exchange.tenant.TenantContext;
 import com.gtcfesk.exchange.trade.ContractOrderService;
+import com.gtcfesk.exchange.trade.OptionOrderService;
 import java.math.BigDecimal;
 import java.util.*;
 import org.junit.jupiter.api.*;
@@ -28,11 +31,14 @@ class AdminOrderLiveTest {
     ForexQuoteMarketService market;
     JwtUtil jwt;
     AdminOrderController controller;
+    OptionDurationRepository durations;
 
     @BeforeEach void setup() {
         market = mock(ForexQuoteMarketService.class); jwt = mock(JwtUtil.class);
         controller = new AdminOrderController(orders, options, mock(ContractOrderService.class), users, assets, jwt);
         ReflectionTestUtils.setField(controller, "market", market);
+        durations = mock(OptionDurationRepository.class);
+        ReflectionTestUtils.setField(controller, "optionDurations", durations);
         long now = System.currentTimeMillis();
         when(market.internalPrice("JPY=X")).thenReturn(Map.of("price", new BigDecimal("151"),
                 "timestamp", now, "expiresAt", now + 60000, "available", true));
@@ -57,6 +63,68 @@ class AdminOrderLiveTest {
         return rows.stream().filter(r -> id.equals(r.get("id"))).findFirst().orElseThrow();
     }
     void amount(String expected, Object actual) { assertEquals(0, new BigDecimal(expected).compareTo((BigDecimal) actual)); }
+
+    OptionOrder option(Long user, String direction) {
+        OptionOrder row = new OptionOrder(); row.setUserId(user); row.setSymbol("JPY=X"); row.setDirection(direction);
+        row.setAmount(new BigDecimal("100")); row.setOpenPrice(new BigDecimal("150")); row.setProfit(BigDecimal.ZERO);
+        row.setDuration(60); row.setStatus("TRADING"); return options.saveAndFlush(row);
+    }
+    @SuppressWarnings("unchecked")
+    List<Map<String, Object>> optionLive(List<Long> ids, String token) {
+        return (List<Map<String, Object>>) ((Map<?, ?>) controller.liveOptionOrders(Map.of("ids", ids), token).getBody()).get("list");
+    }
+
+    @Test void optionEstimatesUseSettlementRatesPresetsAndFreshQuotesWithoutWriting() {
+        OptionDuration duration = new OptionDuration(); duration.setProfitRate(new BigDecimal("0.63")); duration.setLossRate(new BigDecimal("0.7"));
+        when(durations.findByTenantIdAndDuration(1L, 60)).thenReturn(Optional.of(duration));
+        OptionOrder up = option(1L, "UP"), down = option(1L, "DOWN"), preset = option(1L, "DOWN");
+        preset.setPresetProfitType("PROFIT"); options.saveAndFlush(preset);
+        List<Map<String, Object>> result = optionLive(List.of(up.getId(), down.getId(), preset.getId()), null);
+        amount("151", row(result, up.getId()).get("currentPrice"));
+        amount("63", row(result, up.getId()).get("profit")); amount("-70", row(result, down.getId()).get("profit"));
+        amount("63", row(result, preset.getId()).get("profit"));
+        verify(market, times(1)).internalPrice("JPY=X"); verify(durations, times(1)).findByTenantIdAndDuration(1L, 60);
+        OptionOrder recorded = options.findByTenantIdAndId(1L, up.getId()).orElseThrow();
+        amount("0", recorded.getProfit()); assertEquals(up.getRowVersion(), recorded.getRowVersion()); assertNull(recorded.getClosePrice());
+        for (String direction : List.of("UP", "DOWN")) {
+            up.setDirection(direction);
+            for (String price : List.of("149", "150", "151")) {
+                String expected = direction.equals("UP") && price.equals("151") || direction.equals("DOWN") && price.equals("149") ? "63" : "-70";
+                amount(expected, OptionOrderService.calculateProfit(up, new BigDecimal(price), duration));
+            }
+        }
+        up.setPresetProfitType("LOSS"); amount("-70", OptionOrderService.calculateProfit(up, new BigDecimal("151"), duration));
+        up.setPresetProfitType(null); up.setDirection("UP"); amount("80", OptionOrderService.calculateProfit(up, new BigDecimal("151"), null));
+    }
+
+    @Test void optionUnavailableQuotesAndTerminalOrdersNeverBecomeNewValuations() {
+        OptionOrder order = option(1L, "UP");
+        when(market.internalPrice("JPY=X")).thenReturn(Map.of("price", new BigDecimal("151"), "available", true, "expiresAt", 1L, "timestamp", 1L));
+        assertEquals(false, row(optionLive(List.of(order.getId()), null), order.getId()).get("liveAvailable"));
+        reset(market, durations); order.setStatus("CLOSED"); order.setProfit(new BigDecimal("45")); order.setClosePrice(new BigDecimal("153")); options.saveAndFlush(order);
+        Map<String, Object> result = row(optionLive(List.of(order.getId()), null), order.getId());
+        amount("45", result.get("profit")); amount("153", result.get("currentPrice")); verifyNoInteractions(market, durations);
+    }
+
+    @Test void optionMonitorIdsKeepTenantAndAgentScopeAndReadOnlyBatchPolicy() throws Exception {
+        UserAccount own = new UserAccount(); own.setEmail(UUID.randomUUID() + "@fixture.invalid"); own.setPasswordHash("fixture"); own.setParentUserId(42L); users.saveAndFlush(own);
+        OptionOrder visible = option(own.getId(), "UP"), hidden = option(own.getId() + 100000, "DOWN"), otherTenant;
+        TenantContext.clear();
+        try (TenantContext.Scope ignored = TenantContext.open(2L)) { otherTenant = option(1L, "UP"); }
+        finally { TenantContext.open(1L); }
+        when(jwt.parse("agent")).thenReturn(io.jsonwebtoken.Jwts.claims().setSubject("agent-42"));
+        List<Long> ids = List.of(visible.getId(), visible.getId(), hidden.getId(), otherTenant.getId());
+        assertEquals(1, optionLive(ids, "Bearer agent").size()); assertEquals(2, optionLive(ids, null).size());
+        assertEquals(List.of(), optionLive(List.of(), null));
+        assertThrows(BusinessException.class, () -> controller.liveOptionOrders(Map.of(), null));
+        assertThrows(BusinessException.class, () -> controller.liveOptionOrders(Map.of("ids", Collections.nCopies(101, 1L)), null));
+        for (Object invalid : List.of(0, -1, "1.5", "bad")) assertThrows(BusinessException.class, () -> controller.liveOptionOrders(Map.of("ids", List.of(invalid)), null));
+        java.lang.reflect.Method method = AdminOrderController.class.getMethod("liveOptionOrders", Map.class, String.class);
+        assertEquals("orders", method.getAnnotation(com.gtcfesk.exchange.config.AdminPermission.class).menu());
+        assertTrue(method.getAnnotation(org.springframework.transaction.annotation.Transactional.class).readOnly());
+        assertEquals("no-store", controller.liveOptionOrders(Map.of("ids", List.of()), null).getHeaders().getCacheControl());
+        assertEquals("orders", com.gtcfesk.exchange.simulation.AdminReadRoutes.permission("POST", "/api/admin/orders/option/live"));
+    }
 
     @Test void currentPageUsesSharedQuotesExactFxAndOriginalFeesWithoutWriting() {
         ContractOrder buy = order(null, "OPEN"), sell = order(null, "OPEN"), legacy = order(null, "OPEN");

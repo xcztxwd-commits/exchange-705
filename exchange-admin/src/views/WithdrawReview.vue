@@ -21,20 +21,8 @@
                 :value="agent.id"
               />
             </el-select>
-            <el-input
-              v-model="filterUserId"
-              placeholder="用户ID"
-              clearable
-              style="width: 150px; margin-right: 10px"
-              @keyup.enter="handleSearch"
-            />
-            <el-input
-              v-model="filterUserEmail"
-              placeholder="用户邮箱"
-              clearable
-              style="width: 200px; margin-right: 10px"
-              @keyup.enter="handleSearch"
-            />
+            <UserLookup v-model="filterUserId" scope="withdraw_review" :account-modes="accountModes" :agent-id="filterAgentId"
+              placeholder="输入部分用户 ID / 邮箱" style="width: 300px; margin-right: 10px" @change="handleSearch" />
             <el-select v-model="filterType" placeholder="筛选类型" clearable style="width: 150px; margin-right: 10px">
               <el-option label="全部类型" value="" />
               <el-option label="数字货币" value="digital" />
@@ -303,6 +291,7 @@ import { Search, Refresh } from '@element-plus/icons-vue'
 import { useAccountTable } from '@/utils/useAccountTable'
 import { accountTableRequest } from '@/utils/accountTableRequest'
 import AccountTypeFilter from '@/components/AccountTypeFilter.vue'
+import UserLookup from '@/components/UserLookup.vue'
 const accountTable = useAccountTable()
 const accountModes = accountTable.modes
 const request = accountTableRequest(accountTable)
@@ -357,7 +346,6 @@ const filterStatus = ref('')
 const filterType = ref('')
 const filterAgentId = ref<number | null>(null)
 const filterUserId = ref('')
-const filterUserEmail = ref('')
 const agentList = ref<any[]>([])
 
 const rejectDialogVisible = ref(false)
@@ -387,7 +375,9 @@ async function loadAgents() {
   }
 }
 
+let loadRecordsVersion = 0
 const loadRecords = async () => {
+  const current = ++loadRecordsVersion
   loading.value = true
   try {
     const params: any = {}
@@ -400,20 +390,19 @@ const loadRecords = async () => {
     if (filterUserId.value) {
       params.userId = filterUserId.value
     }
-    if (filterUserEmail.value) {
-      params.userEmail = filterUserEmail.value
-    }
     // 如果是管理员且选择了代理筛选，传递代理ID
     if (!isAgent.value && filterAgentId.value) {
       params.filterAgentId = filterAgentId.value
     }
     
     const res: any = await request.get('/admin/withdraw/list', { params })
+    if (current !== loadRecordsVersion) return
     recordsList.value = Array.isArray(res) ? res : res?.list || []
   } catch (e: any) {
+    if (current !== loadRecordsVersion) return
     ElMessage.error(e?.message || '加载失败')
   } finally {
-    loading.value = false
+    if (current === loadRecordsVersion) loading.value = false
   }
 }
 
@@ -425,7 +414,6 @@ const handleSearch = () => {
 // 重置
 const handleReset = () => {
   filterUserId.value = ''
-  filterUserEmail.value = ''
   filterType.value = ''
   filterStatus.value = ''
   if (!isAgent.value) {

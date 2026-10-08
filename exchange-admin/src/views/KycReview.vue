@@ -7,23 +7,9 @@
     <!-- 搜索筛选 -->
     <div class="search-section">
       <el-form :inline="true" :model="queryForm" class="search-form">
-        <el-form-item label="用户ID">
-          <el-input
-            v-model="queryForm.userId"
-            placeholder="用户ID"
-            clearable
-            style="width: 150px"
-            @keyup.enter="loadList"
-          />
-        </el-form-item>
-        <el-form-item label="用户邮箱">
-          <el-input
-            v-model="queryForm.userEmail"
-            placeholder="用户邮箱"
-            clearable
-            style="width: 200px"
-            @keyup.enter="loadList"
-          />
+        <el-form-item label="用户 ID / 邮箱">
+          <UserLookup v-model="queryForm.userId" scope="kyc_review" :account-modes="accountModes"
+            placeholder="输入部分用户 ID / 邮箱" @change="page = 1; loadList()" />
         </el-form-item>
         <el-form-item label="状态">
           <el-select v-model="queryForm.status" placeholder="全部" clearable style="width: 150px">
@@ -197,6 +183,7 @@ const loadPermissions = async () => {
 import { useAccountTable } from '@/utils/useAccountTable'
 import { accountTableRequest } from '@/utils/accountTableRequest'
 import AccountTypeFilter from '@/components/AccountTypeFilter.vue'
+import UserLookup from '@/components/UserLookup.vue'
 const accountTable = useAccountTable()
 const accountModes = accountTable.modes
 const request = accountTableRequest(accountTable)
@@ -213,7 +200,6 @@ const size = ref(10)
 const queryForm = ref({
   status: '',
   userId: '',
-  userEmail: '',
 })
 
 // 拒绝对话框
@@ -224,7 +210,9 @@ const rejectForm = ref({
 const currentRejectId = ref<number | null>(null)
 
 // 加载列表
+let loadListVersion = 0
 async function loadList() {
+  const current = ++loadListVersion
   loading.value = true
   try {
     const params: any = {
@@ -237,21 +225,20 @@ async function loadList() {
     if (queryForm.value.userId) {
       params.userId = queryForm.value.userId
     }
-    if (queryForm.value.userEmail) {
-      params.userEmail = queryForm.value.userEmail
-    }
     
     const res: any = await request.get('/admin/kyc/list', { params })
+    if (current !== loadListVersion) return
     
     if (res && res.success !== false) {
       list.value = res.list || []
       total.value = res.total || 0
     }
   } catch (e: any) {
+    if (current !== loadListVersion) return
     console.error('加载列表失败:', e)
     ElMessage.error(e.response?.data?.message || '加载失败')
   } finally {
-    loading.value = false
+    if (current === loadListVersion) loading.value = false
   }
 }
 
@@ -260,7 +247,6 @@ function resetSearch() {
   queryForm.value = {
     status: '',
     userId: '',
-    userEmail: '',
   }
   page.value = 1
   loadList()
