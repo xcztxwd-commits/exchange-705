@@ -55,6 +55,29 @@ for (const app of ['exchange-frontend', 'exchange-pc']) {
     assert.equal(row.openTimeRaw, '2026-07-01T05:00:00Z')
     assert.equal(row.duration, 60)
     assert.equal(row.id, 102)
+    // Exercise the actual announcement template expressions, not an alternate formatter.
+    const views = app === 'exchange-pc' ? ['views/DesktopTrade.vue', 'views/Announcements.vue'] : ['advanced/views/Explore.vue']
+    const announcementClock = load('America/New_York', 'UTC', 'zh-TW')
+    for (const view of views) {
+      const template = readFileSync(new URL(`../../${app}/src/${view}`, import.meta.url), 'utf8')
+      const expressions = [...template.matchAll(/{{\s*(formatDateTimeLocalized\([^}]+\))\s*}}/g)].map(match => match[1])
+      assert.equal(expressions.length, view.endsWith('Explore.vue') ? 2 : 1, `${view}: announcement date formatter`)
+      const render = announcement => expressions.map(expression => runInNewContext(expression, {
+        formatDateTimeLocalized: announcementClock.formatDateTimeLocalized, item: announcement, announcement, announcements: [announcement],
+      }))
+      const creation = '2026-10-07T03:22:56'
+      const configured = { displayAt: '2022-09-18T00:00:00', createdAt: creation }
+      assert.ok(render(configured).every(time => time === '2022-09-18 08:00:00'), `${view}: configured UTC time takes precedence`)
+      assert.ok(render({ createdAt: creation }).every(time => time === '2026-10-07 11:22:56'), `${view}: legacy creation fallback`)
+      assert.ok(render({ displayAt: null, createdAt: creation }).every(time => time === '2026-10-07 11:22:56'))
+      assert.ok(render({ ...configured, displayAt: '2022-09-18T08:00:00+08:00' }).every(time => time === '2022-09-18 08:00:00'))
+      assert.ok(render({ ...configured, displayAt: '2022-09-18T00:00:00.123456789Z' }).every(time => time === '2022-09-18 08:00:00'))
+      assert.ok(render({}).every(time => time === ''))
+      announcementClock.preferredTimeLocale.value = 'en'
+      assert.ok(render(configured).every(time => time === '2022-09-17 20:00:00'), `${view}: saved language timezone`)
+      announcementClock.preferredTimeLocale.value = 'zh-TW'
+      assert.equal(configured.createdAt, creation, 'display never rewrites audit time')
+    }
     const languages = readFileSync(new URL('../src/utils/languages.ts', import.meta.url), 'utf8')
     for (const [, language] of languages.matchAll(/locale: '([^']+)'/g)) {
       const zone = load('UTC', 'UTC', language).getSystemTimezone()
