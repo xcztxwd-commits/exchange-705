@@ -1,6 +1,17 @@
 name: exchange-705
 
 services:
+  minio:
+    image: ${MINIO_IMAGE:-exchange-705-minio:private}
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?Set MINIO_ROOT_USER in private environment}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?Set MINIO_ROOT_PASSWORD in private environment}
+      MINIO_BROWSER: "off"
+    volumes:
+      - minio-data:/data
+    restart: unless-stopped
+
   mysql:
     image: mysql:5.7
     environment:
@@ -55,9 +66,17 @@ services:
       MARKET_PUSH_INTERVAL_MS: ${MARKET_PUSH_INTERVAL_MS:-1000}
       MARKET_PUSH_DELTA: ${MARKET_PUSH_DELTA:-false}
       JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env}
+      FILE_STORAGE: minio
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT:-http://minio:9000}
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-}
+      MINIO_BUCKET: ${MINIO_BUCKET:-exchange-media}
+      MINIO_PREFIX: ${MINIO_PREFIX:-real}
     volumes:
       - ./uploads:/app/uploads
     depends_on:
+      minio:
+        condition: service_started
       mysql:
         condition: service_healthy
       redis:
@@ -110,6 +129,7 @@ services:
     restart: unless-stopped
 
 volumes:
+  minio-data:
   mysql-data:
   redis-data:
 

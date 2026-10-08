@@ -70,4 +70,39 @@ class VideoIntroConfigTest {
         assertThrows(AccessDeniedException.class, () -> configs.saveConfig(VIDEO_INTRO_URL_KEY, url, null));
         verifyNoInteractions(repository);
     }
+
+    @Test void multilingualConfigurationIsAtomicAndTenantScoped() {
+        String en = "/api/uploads/videos/42/staff/7/00000000-0000-0000-0000-000000000001.mp4";
+        String fr = en.replace("000000000001.mp4", "000000000002.webm");
+        String value = "{\"defaultLocale\":\"fr\",\"videos\":{\"en\":\"" + en + "\",\"fr\":\"" + fr + "\"}}";
+        configs.saveConfig(VideoIntroSettings.KEY, value, "宣传视频");
+        ArgumentCaptor<SystemConfig> saved = ArgumentCaptor.forClass(SystemConfig.class);
+        verify(repository).save(saved.capture());
+        assertEquals(value, saved.getValue().getConfigValue());
+        verify(policy).requireConfigChange(VideoIntroSettings.KEY, value);
+        com.fasterxml.jackson.databind.JsonNode settings = VideoIntroSettings.parse(value, 42L);
+        assertEquals("en", VideoIntroSettings.language(settings, "en-US"));
+        assertEquals("fr", VideoIntroSettings.language(settings, "ja"));
+        assertEquals("fr", VideoIntroSettings.language(settings, "unknown"));
+        assertEquals("fr", VideoIntroSettings.language(settings, null));
+        assertTrue(VideoIntroSettings.published(value, en, 42L));
+        assertFalse(VideoIntroSettings.published(value, en, 43L));
+        assertThrows(BusinessException.class, () -> VideoIntroSettings.parse(value, 43L));
+        String chinese = "{\"defaultLocale\":\"zh-TW\",\"videos\":{\"zh-TW\":\"" + en + "\"}}";
+        assertEquals("zh-TW", VideoIntroSettings.language(VideoIntroSettings.parse(chinese, 42L), "zh_CN"));
+    }
+
+    @Test void invalidLanguageBindingsAndMissingFallbackNeverReachStorage() {
+        String url = "/api/uploads/videos/42/staff/7/00000000-0000-0000-0000-000000000001.mp4";
+        for (String value : new String[]{null, "", "[]", "null", "{\"defaultLocale\":\"xx\",\"videos\":{}}",
+                "{\"defaultLocale\":\"en\",\"videos\":{\"fr\":\"" + url + "\"}}",
+                "{\"defaultLocale\":\"en\",\"videos\":{\"en\":\"" + url.replace("/42/", "/43/") + "\"}}",
+                "{\"defaultLocale\":\"en\",\"videos\":{\"en\":\"https://cdn.example.com/intro.mp4\"}}",
+                "{\"defaultLocale\":\"en\",\"videos\":{\"en\":\"" + url + "\",\"xx\":\"" + url + "\"}}",
+                "{\"defaultLocale\":\"en\",\"videos\":{},\"extra\":true}",
+                "{\"defaultLocale\":\"en\",\"defaultLocale\":\"fr\",\"videos\":{}}"})
+            assertThrows(BusinessException.class, () -> configs.saveConfig(VideoIntroSettings.KEY, value, null), value);
+        verifyNoInteractions(repository);
+        assertEquals(0, VideoIntroSettings.parse("{\"defaultLocale\":\"en\",\"videos\":{}}", 42L).path("videos").size());
+    }
 }

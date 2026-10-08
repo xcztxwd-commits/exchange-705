@@ -2664,7 +2664,7 @@
       "review_reason": "DTO, pure calculation or delegated controller/service; all production Java files are fingerprinted even without a detector match."
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/common/FileUploadController.java": {
-      "sha256": "407a081e91a39f34e967d0d2e4f02d8bf377a5ebbf8ba36595c716ceb5266782",
+      "sha256": "1a3dc55bc78467c72f794cc535391fe1b77d4ffa3498b77fe30ab76413f91791",
       "surfaces": [
         {
           "kind": "file_io",
@@ -2678,17 +2678,12 @@
         },
         {
           "kind": "file_io",
-          "line": 90,
+          "line": 83,
           "statement_sha256": "44706406f355ce638efa6abd37851340495b6922e34776a06fc1eadda895d0ca"
-        },
-        {
-          "kind": "file_io",
-          "line": 138,
-          "statement_sha256": "040be2602f96bd666f20f3a2b8c265d7c172dc5099e8b2a18e53e17c7441abb4"
         }
       ],
       "classification": "private_scoped",
-      "review_reason": "Stage1 real multipart/audio root fix: both writes now consume the same configured UploadStorage images/audio root and authenticated TenantFiles.ownerPath/directory; request parameters do not supply tenant, owner or storage root. ImageFiles decoding/format/dimension/size validation and generated UUID filename stay intact; audio extension+magic and size checks preserved. Existing simulation URL prefix remains explicitly enabled only. Configured-root IO failure returns existing controlled failure, never default-directory retry. Current root backend-upload-11 actual18/0/0/0 exit0 includes physical multipart/audio upload-readback, bad image/config failures and original AudioValidationTest4; not a substitute for pending real API host/file acceptance."
+      "review_reason": "Stage1 real multipart/audio root fix: both writes now consume the same configured UploadStorage images/audio root and authenticated TenantFiles.ownerPath/directory; request parameters do not supply tenant, owner or storage root. ImageFiles decoding/format/dimension/size validation and generated UUID filename stay intact; audio extension+magic and size checks preserved. Existing simulation URL prefix remains explicitly enabled only. Configured-root IO failure returns existing controlled failure, never default-directory retry. Current root backend-upload-11 actual18/0/0/0 exit0 includes physical multipart/audio upload-readback, bad image/config failures and original AudioValidationTest4; not a substitute for pending real API host/file acceptance. 2026-10-08 media storage review: existing authentication, image/audio MIME/size and decoded-image/audio-signature guards retained. Current-tenant owner and UUID filenames use shared UploadStorage; URL format and REAL/DEMO routing remain stable. No local write in minio mode; real private PNG/GIF/audio delivery and unavailable-storage rejection exercised."
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/common/ForexDisplayName.java": {
       "sha256": "78420359e42a1c3cf42e3bdb20c5fe770330e9ad9690dc28643edd3f33e1c9f8",
@@ -2703,7 +2698,7 @@
       "review_reason": "Static currency display-name catalogue, no user or tenant record values."
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/common/ImageController.java": {
-      "sha256": "dfc9ce55b75f380b700a076b4faaa342304ad94430b72034e950b25910b1d287",
+      "sha256": "511561d66c5d874d9507df02804e4f077e776d8c3203fdf3cbcb67c6af188a37",
       "surfaces": [
         {
           "kind": "file_io",
@@ -2722,15 +2717,15 @@
         },
         {
           "kind": "file_io",
-          "line": 122,
+          "line": 135,
           "statement_sha256": "e8025d08f437da1bdb5314e9ed0e8e6cea56f12e139b9322fca5d40326fcb7a7"
         }
       ],
       "classification": "boundary",
-      "review_reason": "Required TenantContext and exact tenant/role/actor/file grammar; authenticated own-user or scoped BackendAccess menu/review/public database reference only. Normalized and real paths remain within uploader owner root (symlink escapes rejected). MIME whitelist, nosniff and private no-store; uploads/audit scoped. Integration review 2026-10-06: Avatar access still checks the current tenant, target user and users-menu permission, then requires that exact stored avatar reference; audio and other private uploads remain denied."
+      "review_reason": "Required TenantContext and exact tenant/role/actor/file grammar; authenticated own-user or scoped BackendAccess menu/review/public database reference only. Normalized and real paths remain within uploader owner root (symlink escapes rejected). MIME whitelist, nosniff and private no-store; uploads/audit scoped. Integration review 2026-10-06: Avatar access still checks the current tenant, target user and users-menu permission, then requires that exact stored avatar reference; audio and other private uploads remain denied. 2026-10-08 media storage review: all existing tenant/owner, explicit publication, user/agent scope and KYC/avatar/menu checks execute before MinIO stat/read. Streaming Resource retains private no-store/nosniff and media MIME allowlists. No public object URL, credential, filesystem fallback or expanded authorization. Exact assembled local application verified user reads, backend user-detail/avatar and KYC-review reads, missing-menu denial, foreign-user/tenant denial, and audio Range delivery."
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/common/ImageFiles.java": {
-      "sha256": "ce4b562fc793f894cdd2a55dbf12d81866419063b408c90c57bfd160e2fa7b92",
+      "sha256": "2577c2f61651072b0d930fa827a0adf78c0a3254cf5278cb68c5be188af8a6e2",
       "surfaces": [
         {
           "kind": "file_io",
@@ -2740,16 +2735,21 @@
         {
           "kind": "file_io",
           "line": 12,
+          "statement_sha256": "22dfdfea52314d79b2e4cd29fd820c377af5ef0cc2578d9809dc79b62c0e8486"
+        },
+        {
+          "kind": "file_io",
+          "line": 35,
           "statement_sha256": "ac71343398d115ee0c4c5de696c61a9c96e7042890dabaf8f3756fdc2397e2be"
         },
         {
           "kind": "file_io",
-          "line": 31,
-          "statement_sha256": "0e3b93199e0fa5dd0e5539129fd7f6478d2153b593c1265da7fd92ee842f105a"
+          "line": 38,
+          "statement_sha256": "9cb6c93899c6448aa046837450b670e88b008ebf65eb28a80024b3b4ffea43d8"
         }
       ],
       "classification": "boundary",
-      "review_reason": "Format validation/reencoding only; directory comes from authenticated TenantFiles callers, never client file names."
+      "review_reason": "Format validation/reencoding only; directory comes from authenticated TenantFiles callers, never client file names. 2026-10-08 media storage review: existing 5MB input, decoded format and 25-million-pixel validation retained. Shared encoding keeps GIF bytes/animation or outputs decoded PNG; generated filenames never trust client names. The same encoder is used by explicit local and MinIO storage paths; real PNG/GIF/signature round trips passed."
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/common/JwtUtil.java": {
       "sha256": "59e67e4cb3c8c035915c162415acaa70706682356cca639e9d91df31037737f8",
@@ -3103,8 +3103,8 @@
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/config/GlobalExceptionHandler.java": {
       "classification": "boundary",
-      "review_reason": "Stage1 real supervision POST failure root-cause review: dedicated Spring HttpRequestMethodNotSupportedException branch now returns405 with supported methods from actual MVC mapping, no-store and bounded fixed message rather than generic500. It performs no private query, business receipt mutation, identity/tenant switch, permission grant or exception-text disclosure; all other denial/conflict/KYC mappings remain unchanged. Current ControlReadOnlyMethodTest actual root backend-readonly-9 JUnit1/failure0/error0/skip0 exit0 verifies2 real ControlReadController POST routes405/Allow GET/no-store and zero business collaborators. Actual backend package build5 exit0; not production release approval. 2026-10-07 independent fresh delta review: new engine failures are classified through the pure MarketEngineFailure normalizer and return fixed 503/Retry-After rather than SQL or arbitrary exception text; pessimistic conflicts use that same classifier while optimistic 409 is retained. Broken pipe/reset/client abort does not attempt a second response on a closed socket. Existing validation400, denied403, KYC403/no-store and method405/Allow/no-store branches remain. This advice performs no private query, receipt mutation, tenant/identity switch, permission grant, cache or background job. Generic internal stack logging is legacy diagnostic behavior, not user-facing business authority; complete authenticated Spring startup remains separately unverified.",
-      "sha256": "8543cc4d20f5d901570e8f7d999f7b44d8ecb90d9fd46f943214a2ea2c0da414",
+      "review_reason": "Stage1 real supervision POST failure root-cause review: dedicated Spring HttpRequestMethodNotSupportedException branch now returns405 with supported methods from actual MVC mapping, no-store and bounded fixed message rather than generic500. It performs no private query, business receipt mutation, identity/tenant switch, permission grant or exception-text disclosure; all other denial/conflict/KYC mappings remain unchanged. Current ControlReadOnlyMethodTest actual root backend-readonly-9 JUnit1/failure0/error0/skip0 exit0 verifies2 real ControlReadController POST routes405/Allow GET/no-store and zero business collaborators. Actual backend package build5 exit0; not production release approval. 2026-10-07 independent fresh delta review: new engine failures are classified through the pure MarketEngineFailure normalizer and return fixed 503/Retry-After rather than SQL or arbitrary exception text; pessimistic conflicts use that same classifier while optimistic 409 is retained. Broken pipe/reset/client abort does not attempt a second response on a closed socket. Existing validation400, denied403, KYC403/no-store and method405/Allow/no-store branches remain. This advice performs no private query, receipt mutation, tenant/identity switch, permission grant, cache or background job. Generic internal stack logging is legacy diagnostic behavior, not user-facing business authority; complete authenticated Spring startup remains separately unverified. 2026-10-08 review: multipart error text describes existing image/audio 5MB limits and new 100MB video limit; no exception detail or tenant value exposed.",
+      "sha256": "64b90c95371f5fae1a712bb2505aba6fbcf320c3f2d48de45b4d729343c85bd4",
       "surfaces": []
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/config/JwtFilter.java": {
@@ -3253,10 +3253,10 @@
       "review_reason": "DTO, pure calculation or delegated controller/service; all production Java files are fingerprinted even without a detector match."
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/config/SecurityConfig.java": {
-      "sha256": "67236407087beaf64582d1d3b53ab7d91f41a2669bcafeab6466df452a80edbf",
+      "sha256": "4d291047d478be0a645f97de9a6dc133b820870b24fe1fb3f9e8f935a5981dcd",
       "surfaces": [],
       "classification": "boundary",
-      "review_reason": "Only GET /api/admin/auth/control-exchange-config becomes anonymous public origin metadata. Existing admin/control roles, authenticated ticket issuance, exchange/revocation boundaries and tenant Host filter remain unchanged; anonymous mutation paths remain denied. This review does not approve deployment."
+      "review_reason": "Only GET /api/admin/auth/control-exchange-config becomes anonymous public origin metadata. Existing admin/control roles, authenticated ticket issuance, exchange/revocation boundaries and tenant Host filter remain unchanged; anonymous mutation paths remain denied. This review does not approve deployment. 2026-10-08 review: only GET /api/user/video-intro becomes anonymous; hostname/JWT tenant boundary still precedes security, selected configuration is tenant scoped, and video delivery independently validates publication. Upload stays under authenticated admin and settings permission checks."
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/config/WebConfig.java": {
       "sha256": "71d719eaca08cf9265acca8ffa3952586dc168a8f2a8b12ace0f6545d0d28ba3",
@@ -4492,7 +4492,7 @@
       "prior_review_reason": "Independent control-plane identities/policies/sessions; business tenant access uses explicit verified scope and audit. Review file-specific occurrence list."
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/control/TenantRequestFilter.java": {
-      "sha256": "2fcb9eddcbfceaa466bff00fe12c57aa2bfe19a764be43d3031c731d02208352",
+      "sha256": "6b13367270cd1b2e6c12f0057bec9fe0849bfa0dd74bc79da293ea3e989d418c",
       "surfaces": [
         {
           "kind": "identity_boundary",
@@ -4546,7 +4546,7 @@
         }
       ],
       "classification": "boundary",
-      "review_reason": "Challenge is fixed GET nonce JSON with no-store before entry branch. Entry branch precedes admin/control, health, business and inspection routes, grants no TenantContext. Only GET/HEAD document/html allowlisted pages and bounded ASCII query keys; redirect target comes from explicit same-tenant verified active mapping, credentials dropped and no-referrer. Uniform no-store 403 without Location for closed/unknown/disallowed entry. Trusted internal gateway classification before static SPA fallback. Existing frontend status/Origin/context and control/admin boundaries retained. Five-chat integration review 2026-10-06: Merge retains only validated public SVG icon paths on the admin host while the verified same-tenant entry branch still executes first and denies all entry APIs/icons, with no TenantContext or cached redirects. 2026-10-07 combined review: shared admin preview allows only bounded GET timezone/search/single-symbol kline paths after verified backend JWT tenant resolution. Unknown entries, invalid tenant identities and cross-origin paths still fail closed; request scope is cleared."
+      "review_reason": "Challenge is fixed GET nonce JSON with no-store before entry branch. Entry branch precedes admin/control, health, business and inspection routes, grants no TenantContext. Only GET/HEAD document/html allowlisted pages and bounded ASCII query keys; redirect target comes from explicit same-tenant verified active mapping, credentials dropped and no-referrer. Uniform no-store 403 without Location for closed/unknown/disallowed entry. Trusted internal gateway classification before static SPA fallback. Existing frontend status/Origin/context and control/admin boundaries retained. Five-chat integration review 2026-10-06: Merge retains only validated public SVG icon paths on the admin host while the verified same-tenant entry branch still executes first and denies all entry APIs/icons, with no TenantContext or cached redirects. 2026-10-07 combined review: shared admin preview allows only bounded GET timezone/search/single-symbol kline paths after verified backend JWT tenant resolution. Unknown entries, invalid tenant identities and cross-origin paths still fail closed; request scope is cleared. 2026-10-08 review: /api/uploads/videos/ joins the existing authenticated backend shared file-read routes, requiring the verified admin origin and JWT tenant. VideoController checks exact tenant/owner path and public references. No new frontend host, entry redirect, write bypass or user-supplied tenant resolution."
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/control/TenantSafeTemplate.java": {
       "sha256": "57c6760e6a501cf28209a7ee7411ec07395cd6cc1861855e8291fd460c92cde7",
@@ -10707,7 +10707,7 @@
       "review_reason": "DTO, pure calculation or delegated controller/service; all production Java files are fingerprinted even without a detector match."
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/user/FileUploadService.java": {
-      "sha256": "1c289d6b1d86292298ddd4de398b778f24199821d60cc6ddeb51cb512ebaea00",
+      "sha256": "ae23cfe5d18de960b43dedc337c86af7b48033fb13810c8c1dffcf42c6c03f6c",
       "surfaces": [
         {
           "kind": "file_io",
@@ -10736,7 +10736,7 @@
         }
       ],
       "classification": "private_scoped",
-      "review_reason": "Stage1 real signature/multipart upload root fix: standard multipart and base64 signature use configured UploadStorage.images and the same ImageFiles+TenantFiles directory chain as generic multipart controller. Base64 content errors stay controlled; input filename/type cannot choose actual storage path, tenant or owner. Size/type/decode validations, UUID normalized image filename and simulation URL prefix preserved. IO failure remains BusinessException with no root fallback. Current backend-upload-11 exit0 new UploadStorageTest8 physically writes multipart/base64 and verifies authorized read bytes equal stored normalized PNG under temp configured owner root while default owner paths stay absent; original authorization/audio10 also pass."
+      "review_reason": "Stage1 real signature/multipart upload root fix: standard multipart and base64 signature use configured UploadStorage.images and the same ImageFiles+TenantFiles directory chain as generic multipart controller. Base64 content errors stay controlled; input filename/type cannot choose actual storage path, tenant or owner. Size/type/decode validations, UUID normalized image filename and simulation URL prefix preserved. IO failure remains BusinessException with no root fallback. Current backend-upload-11 exit0 new UploadStorageTest8 physically writes multipart/base64 and verifies authorized read bytes equal stored normalized PNG under temp configured owner root while default owner paths stay absent; original authorization/audio10 also pass. 2026-10-08 media storage review: KYC, avatars and base64 loan signatures share validated UploadStorage encoding and current-tenant owner filenames. Existing 5MB/MIME/base64 error handling retained; no client-selected object name or MinIO credentials returned. Actual persisted avatar and KYC front/back references read through authenticated user and authorized backend HTTP endpoints in the assembled local candidate."
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/user/FinancialController.java": {
       "sha256": "2f76293dfcb3ef94373d2fa027a1b0d764fb45bddff3d0635efe373de8923b85",
@@ -12808,16 +12808,31 @@
       "review_reason": "Stage1 backend agent per-file review: field policy comes from same-tenant effective configuration and only exposes public registration field requirements, never encrypted secrets."
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/common/UploadStorage.java": {
-      "sha256": "04d0f50a83ae3d91cfbd876ea95710bbc90557c8ed718086d09cc2487ba0db60",
+      "sha256": "94e5a4035fe1dbca1cca69d974d00990b74d39b03b09887d43156aa206a6a9a2",
       "surfaces": [
         {
           "kind": "file_io",
-          "line": 15,
+          "line": 11,
+          "statement_sha256": "ff8a38219e8fbd7c9ba3d1ad85712945d6c4df43c72644dff7db60cd7292184b"
+        },
+        {
+          "kind": "file_io",
+          "line": 24,
           "statement_sha256": "fe3fcb83830a2541cf303d136dffc468eb11ed6be295011181907d91f9ae622c"
+        },
+        {
+          "kind": "file_io",
+          "line": 33,
+          "statement_sha256": "40b8c766ef45082049f02d758e268c7e75b31d46b4c7cd1581c2f9392246928d"
+        },
+        {
+          "kind": "file_io",
+          "line": 46,
+          "statement_sha256": "77a55bd0d51f60c2ba1cf77e6d1586db6511585229c4c8a633122fb0b3b37b16"
         }
       ],
       "classification": "boundary",
-      "review_reason": "Stage1 actual upload-dir root-cause fix: single Spring @Value(file.upload-dir:uploads) canonical absolute filesystem root shared by multipart/signature upload and authorized delivery. Empty/invalid or existing non-directory values fail closed, runtime creation/writes do not fall back to another directory; default remains ordinary relative uploads. No class-load directory creation, identity/tenant selection, public-resource mapping, DB access or cache occurs here. TenantFiles still selects server tenant plus authenticated owner, and ImageController still authorizes every delivery. Current root backend-upload-11 exit0: real Spring property binding and temporary-filesystem failure/default checks; no release approval."
+      "review_reason": "Stage1 actual upload-dir root-cause fix: single Spring @Value(file.upload-dir:uploads) canonical absolute filesystem root shared by multipart/signature upload and authorized delivery. Empty/invalid or existing non-directory values fail closed, runtime creation/writes do not fall back to another directory; default remains ordinary relative uploads. No class-load directory creation, identity/tenant selection, public-resource mapping, DB access or cache occurs here. TenantFiles still selects server tenant plus authenticated owner, and ImageController still authorizes every delivery. Current root backend-upload-11 exit0: real Spring property binding and temporary-filesystem failure/default checks; no release approval. 2026-10-08 media storage review: explicit minio mode routes multipart images, base64 signatures and validated audio to a private bucket; storage failure never writes locally. The retained local mode requires an explicit configuration in the application and preserves its existing tenant directory guards. Authorized ImageController supplies the validated four-part tenant/owner path to streaming Resource reads; runtime namespaces separate REAL/DEMO. Exact assembled application passed real HTTP avatar and KYC upload, persisted reference, user/backend read and cross-user/tenant denial tests against loopback MinIO."
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/common/ImmutableMaps.java": {
       "sha256": "4d6999e285189fb8a74033c0573b02a8a8365a963e80933727687cae8af783ff",
@@ -14747,6 +14762,50 @@
       "surfaces": [],
       "classification": "private_scoped",
       "review_reason": "2026-10-07 combined review: immutable wake-up captures tenant ID and symbol only, never quote/customer data. Transactional callers register afterCommit so rollback emits no notification. Consumers must open their own tenant snapshot; optional publisher and observer failures cannot invalidate committed market state."
+    },
+    "exchange-backend/src/main/java/com/gtcfesk/exchange/admin/VideoIntroSettings.java": {
+      "sha256": "60e513525722c76b76f19c81b19da88513cd285849cfbfcd4644acb8ff719616",
+      "surfaces": [],
+      "classification": "stateless",
+      "review_reason": "2026-10-08 promotional video review: strict JSON parser, supported locale allowlist, mandatory uploaded fallback when configured, exact tenant/staff/UUID video path; no filesystem, database or network effects. Cross-tenant and duplicate-key rejection exercised by VideoIntroConfigTest."
+    },
+    "exchange-backend/src/main/java/com/gtcfesk/exchange/common/VideoController.java": {
+      "sha256": "3500abc028c3e85b1c243cee0fd54ac508d2eeed9bfbd94f04009b926eaae661",
+      "surfaces": [
+        {
+          "kind": "identity_boundary",
+          "line": 9,
+          "statement_sha256": "e650e907ad1ccccb0d9da291176531a8f032a5d3dd7e18c778268f6d8d3e5339"
+        },
+        {
+          "kind": "file_io",
+          "line": 24,
+          "statement_sha256": "ff8a38219e8fbd7c9ba3d1ad85712945d6c4df43c72644dff7db60cd7292184b"
+        },
+        {
+          "kind": "file_io",
+          "line": 37,
+          "statement_sha256": "3d546a4d2a2d63999cdd019ff4e501aad6372ce9e4474b608d7a711d1997024d"
+        },
+        {
+          "kind": "identity_boundary",
+          "line": 74,
+          "statement_sha256": "287e2ce759df82f5d3a12c247b5d28c7c2b6b7b1f210c6657a0acf82bdfb8c63"
+        },
+        {
+          "kind": "identity_boundary",
+          "line": 86,
+          "statement_sha256": "9d9cb375fe1e10a81846dafff939138f5f7cb2b5a886da9d67e8421cf39a52e4"
+        }
+      ],
+      "classification": "private_scoped",
+      "review_reason": "2026-10-08 promotional video review: upload requires settings:save and config policy, signature/MIME/extension/100MB validation, current tenant and authenticated staff owner. Public reads require explicit same-tenant published references; unpublished reads require settings access and exact uploader ownership. GET/HEAD/single-range reads recheck tenant before MinIO access. VideoControllerTest exercises foreign tenant, private preview, invalid ranges, rejected uploads and unavailable storage."
+    },
+    "exchange-backend/src/main/java/com/gtcfesk/exchange/common/MinioObjectStorage.java": {
+      "sha256": "0c76b3f9d98eb16dae6671785d4348568b4fb172fb35ac50c73a35e52d1f429a",
+      "surfaces": [],
+      "classification": "private_scoped",
+      "review_reason": "2026-10-08 media storage review: server-only MinIO credentials and allowlisted runtime prefix, private bucket, no implicit local fallback. UploadStorage and VideoController supply current-tenant owner paths after authentication; ImageController and VideoController retain authorization before object reads. Real loopback MinIO full/partial reads and anonymous 403 verified. Application account restricted to media read/write."
     }
   },
   "release_approved": false,

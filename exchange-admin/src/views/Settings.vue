@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { ElMessage } from 'element-plus'
-import request from '@/utils/request'
+import request, { rawRequest } from '@/utils/request'
+import { shareTemplateLanguages as videoLanguages } from '../../../exchange-frontend/src/utils/shareTemplateDesign'
 import { useTenantPolicies } from '@/composables/useTenantPolicies'
 import TenantPolicyNotice from '@/components/TenantPolicyNotice.vue'
 import MarketDepthHealth from '@/components/MarketDepthHealth.vue'
@@ -69,6 +70,54 @@ const marketConfig = ref<ConfigItem[]>([
 
 const advancedEntryEnabled = ref(true)
 const videoIntroUrl = ref('')
+const videoSettings = ref<{ defaultLocale: string; videos: Record<string, string> }>({ defaultLocale: 'en', videos: {} })
+const videoConfigured = ref(false), videoLanguage = ref('en'), uploadingVideo = ref(false), videoProgress = ref(0)
+const previewingVideo = ref(false), videoPreviewOpen = ref(false), videoPreviewUrl = ref('')
+const currentVideo = computed(() => videoSettings.value.videos[videoLanguage.value] || '')
+function clearVideoPreview() {
+  if (videoPreviewUrl.value) URL.revokeObjectURL(videoPreviewUrl.value)
+  videoPreviewUrl.value = ''
+}
+onBeforeUnmount(clearVideoPreview)
+watch(videoLanguage, () => { videoPreviewOpen.value = false; clearVideoPreview() })
+async function uploadVideo(file: File) {
+  if (loading.value || uploadingVideo.value || !editable('home.video.settings') || !can('settings:save')) return
+  if (!/\.(mp4|webm)$/i.test(file.name) || !['video/mp4', 'video/webm'].includes(file.type)) {
+    ElMessage.error('仅支持 MP4 或 WebM 视频'); return
+  }
+  if (!file.size || file.size > 100 * 1024 * 1024) { ElMessage.error('视频不能为空，且大小不能超过100MB'); return }
+  const language = videoLanguage.value
+  uploadingVideo.value = true; videoProgress.value = 0
+  try {
+    const data = new FormData(); data.append('file', file)
+    const result: any = await request.post('/admin/videos/upload', data, {
+      timeout: 300000,
+      onUploadProgress: event => { videoProgress.value = Math.min(99, Math.round(event.loaded * 100 / (event.total || file.size))) },
+    })
+    if (!result?.success || !result.url) throw new Error(result?.message || '上传失败')
+    videoSettings.value.videos[language] = result.url
+    videoConfigured.value = true; videoProgress.value = 100
+    videoPreviewOpen.value = false; clearVideoPreview()
+    ElMessage.success('视频上传成功，点击「保存配置」后生效')
+  } catch (e: any) { ElMessage.error(e.message || '视频上传失败') }
+  finally { uploadingVideo.value = false }
+}
+function removeVideo() {
+  if (!editable('home.video.settings') || uploadingVideo.value) return
+  delete videoSettings.value.videos[videoLanguage.value]
+  videoConfigured.value = true; videoPreviewOpen.value = false; clearVideoPreview()
+}
+async function previewVideo() {
+  if (!currentVideo.value || previewingVideo.value) return
+  const url = currentVideo.value
+  previewingVideo.value = true
+  try {
+    const response = await rawRequest.get(url, { responseType: 'blob', timeout: 300000 })
+    if (url !== currentVideo.value) return
+    clearVideoPreview(); videoPreviewUrl.value = URL.createObjectURL(response.data); videoPreviewOpen.value = true
+  } catch (e: any) { ElMessage.error(e.message || '视频预览失败') }
+  finally { previewingVideo.value = false }
+}
 const tradeKycRequired = ref(true)
 const conversionHours = ref(8)
 const defaultConversionCurrencies = ['USD', 'EUR', 'JPY', 'GBP', 'CNY', 'CHF', 'AUD', 'CAD', 'HKD', 'SGD']
@@ -125,9 +174,15 @@ const loadConfigs = async () => {
       registrationFields.value = value
     }
     if (Array.isArray(res)) {
+      videoConfigured.value = false
+      videoSettings.value = { defaultLocale: 'en', videos: {} }
       res.forEach((item: any) => {
         if (item.configKey === 'ui.advanced.enabled') advancedEntryEnabled.value = item.configValue !== 'false'
         if (item.configKey === 'home.video.url') videoIntroUrl.value = item.configValue || ''
+        if (item.configKey === 'home.video.settings' && item.configValue) {
+          videoSettings.value = JSON.parse(item.configValue)
+          videoConfigured.value = true
+        }
         if (item.configKey === 'trade.kyc.required') tradeKycRequired.value = item.configValue !== 'false'
         if (item.configKey === 'market.conversion.currencies') conversionCurrencies.value = [...new Set(['USD', ...String(item.configValue || '').split(',').filter(Boolean)])]
         if (item.configKey === 'market.conversion.cache-hours') conversionHours.value = Number(item.configValue) || 8
@@ -230,7 +285,11 @@ const clearSound = (configKey: string) => {
 }
 
 const saveConfigs = async () => {
-  if (!policyReady.value) return
+  if (!policyReady.value || uploadingVideo.value) return
+  if (videoConfigured.value && editable('home.video.settings') && Object.keys(videoSettings.value.videos).length
+    && !videoSettings.value.videos[videoSettings.value.defaultLocale]) {
+    ElMessage.error('请先为默认回退语言上传视频，或选择已上传的语言'); activeTab.value = 'video'; return
+  }
   conversionCurrencies.value = [...new Set(['USD', ...conversionCurrencies.value.map(code => code.trim().toUpperCase())])]
   if (conversionCurrencies.value.length > 30 || conversionCurrencies.value.some(code => !/^[A-Z]{3}$/.test(code))) {
     ElMessage.error('最多选择 30 种货币，请使用三位货币代码')
@@ -251,6 +310,7 @@ const saveConfigs = async () => {
     const allConfigs = [
       { key: 'ui.advanced.enabled', value: String(advancedEntryEnabled.value), description: '高级版入口' },
       { key: 'home.video.url', value: videoIntroUrl.value.trim(), description: '视频简介地址' },
+      ...(videoConfigured.value ? [{ key: 'home.video.settings', value: JSON.stringify(videoSettings.value), description: '宣传视频语言与默认回退配置' }] : []),
       { key: 'trade.kyc.required', value: String(tradeKycRequired.value), description: '未实名不可交易' },
       { key: 'registration.fields', value: JSON.stringify(registrationFields.value), description: '注册业务资料字段' },
       { key: 'market.conversion.currencies', value: conversionCurrencies.value.join(','), description: '预缓存币种（兑美元）' },
@@ -332,15 +392,43 @@ onMounted(() => {
             <el-alert type="info" :closable="false" title="关闭后，经典版「我的」不再显示高级版入口；已进入高级版的用户仍可返回经典版。修改后请保存配置，用户重新进入「我的」时生效。" />
           </el-form>
         </el-tab-pane>
-        <el-tab-pane label="视频简介" name="video">
+        <el-tab-pane label="宣传视频" name="video">
           <el-form label-width="150px">
-            <el-form-item :label="'视频地址' + policyLabel('home.video.url')">
-              <el-input v-model="videoIntroUrl" :disabled="loading || !editable('home.video.url')"
-                :aria-label="'视频地址' + policyLabel('home.video.url')"
-                placeholder="https://example.com/intro.mp4" clearable style="max-width: 720px" />
+            <el-form-item :label="'默认回退语言' + policyLabel('home.video.settings')">
+              <el-select v-model="videoSettings.defaultLocale" aria-label="默认回退语言"
+                :disabled="loading || uploadingVideo || !editable('home.video.settings') || !can('settings:save')" style="width: 260px" @change="videoConfigured = true">
+                <el-option v-for="[code, name] in videoLanguages" :key="code" :value="code"
+                  :label="name + (videoSettings.videos[code] ? '（已上传）' : '（未上传）')" />
+              </el-select>
             </el-form-item>
-            <p>填写完整的 HTTP/HTTPS 视频地址，留空可清除。修改后点击「保存配置」。</p>
+            <el-form-item label="上传语言">
+              <el-select v-model="videoLanguage" aria-label="上传语言" :disabled="uploadingVideo" style="width: 260px">
+                <el-option v-for="[code, name] in videoLanguages" :key="code" :value="code"
+                  :label="name + (videoSettings.videos[code] ? '（已上传）' : '（未上传）')" />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="该语言视频">
+              <div class="video-upload-controls">
+                <el-input :model-value="currentVideo ? (currentVideo.endsWith('.webm') ? 'WebM 视频已上传' : 'MP4 视频已上传') : ''" readonly aria-label="该语言视频" placeholder="未上传，将使用默认回退语言的视频" />
+                <el-upload v-permission="'settings:save'" :http-request="(options: any) => uploadVideo(options.file)"
+                  :show-file-list="false" accept="video/mp4,video/webm,.mp4,.webm"
+                  :disabled="loading || uploadingVideo || !editable('home.video.settings')">
+                  <el-button type="primary" :loading="uploadingVideo" :disabled="loading || !editable('home.video.settings')">{{ currentVideo ? '替换视频' : '上传视频' }}</el-button>
+                </el-upload>
+                <el-button :loading="previewingVideo" :disabled="!currentVideo || uploadingVideo" @click="previewVideo">预览</el-button>
+                <el-button v-permission="'settings:save'" type="danger" :disabled="!currentVideo || loading || uploadingVideo || !editable('home.video.settings')" @click="removeVideo">移除</el-button>
+              </div>
+              <el-progress v-if="uploadingVideo" :percentage="videoProgress" style="width: 100%; max-width: 720px; margin-top: 12px" />
+            </el-form-item>
+            <el-alert type="info" :closable="false" title="支持 MP4、WebM，单个视频最多100MB。按用户当前语言播放；该语言未上传时，使用默认回退语言。回退语言必须已上传视频。上传、替换和移除后点击「保存配置」生效。" />
+            <el-form-item v-if="videoIntroUrl" :label="'原有通用视频地址' + policyLabel('home.video.url')" style="margin-top: 20px">
+              <el-input v-model="videoIntroUrl" :disabled="loading || !editable('home.video.url')" aria-label="原有通用视频地址" clearable />
+              <p>未设置多语言视频时沿用此地址；设置后使用上方语言配置。</p>
+            </el-form-item>
           </el-form>
+          <el-dialog v-model="videoPreviewOpen" title="宣传视频预览" width="min(840px, 92vw)" destroy-on-close @closed="clearVideoPreview">
+            <video v-if="videoPreviewUrl" :src="videoPreviewUrl" controls playsinline preload="metadata" style="width: 100%; max-height: 70vh; background: #000" />
+          </el-dialog>
         </el-tab-pane>
         <el-tab-pane label="时区设置" name="timezone">
           <el-form label-width="450px" label-position="left">
@@ -598,7 +686,7 @@ onMounted(() => {
       </el-tabs>
 
       <div style="margin-top: 20px; text-align: center">
-        <el-button v-permission="'settings:save'" type="primary" :loading="loading" :disabled="!policyReady" @click="saveConfigs">
+        <el-button v-permission="'settings:save'" type="primary" :loading="loading" :disabled="!policyReady || uploadingVideo" @click="saveConfigs">
           保存配置
         </el-button>
       </div>
@@ -610,6 +698,9 @@ onMounted(() => {
 .settings-page {
   padding: 0;
 }
+.video-upload-controls { display: flex; flex-wrap: wrap; gap: 10px; width: 100%; max-width: 900px; }
+.video-upload-controls .el-input { flex: 1 1 320px; }
+.video-upload-controls .el-button + .el-button { margin-left: 0; }
 @media (max-width: 768px) {
   /* Keep the depth panel reachable through the existing admin main-area scrollbar. */
   .settings-page.depth-market-active { min-width: 360px; }

@@ -9,7 +9,7 @@ import java.util.*;
 /** Shared by multipart uploads and base64 contract signatures. */
 public final class ImageFiles {
     private ImageFiles() { }
-    public static Path save(MultipartFile file, Path directory) throws IOException {
+    public static Map.Entry<String, byte[]> encode(MultipartFile file) throws IOException {
         if (file == null || file.isEmpty() || file.getSize() > 5 * 1024 * 1024) throw new BusinessException("图片为空或超过5MB");
         BufferedImage decoded;
         String format;
@@ -27,9 +27,15 @@ public final class ImageFiles {
         }
         if (decoded == null) throw new BusinessException("图片内容无效");
         // Retain GIF animation; never use the client filename or extension.
-        Path path = directory.resolve(UUID.randomUUID().toString() + ("gif".equals(format) ? ".gif" : ".png"));
-        if ("gif".equals(format)) Files.write(path, file.getBytes());
-        else if (!ImageIO.write(decoded, "png", path.toFile())) throw new IOException("Image encoding failed");
+        java.io.ByteArrayOutputStream bytes = new java.io.ByteArrayOutputStream();
+        if ("gif".equals(format)) return new AbstractMap.SimpleImmutableEntry<>(".gif", file.getBytes());
+        if (!ImageIO.write(decoded, "png", bytes)) throw new IOException("Image encoding failed");
+        return new AbstractMap.SimpleImmutableEntry<>(".png", bytes.toByteArray());
+    }
+    public static Path save(MultipartFile file, Path directory) throws IOException {
+        Map.Entry<String, byte[]> image = encode(file);
+        Path path = directory.resolve(UUID.randomUUID().toString() + image.getKey());
+        Files.write(path, image.getValue());
         return path;
     }
 }

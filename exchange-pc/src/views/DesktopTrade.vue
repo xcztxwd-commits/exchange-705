@@ -1,5 +1,6 @@
 <template>
   <div class="trade-page h-screen w-full flex flex-col bg-white dark:bg-[#131722] text-gray-800 dark:text-gray-100 text-sm overflow-hidden font-sans">
+    <VideoIntro v-if="showVideoIntro" @close="showVideoIntro = false" />
     <OrderShareModal v-if="shareOrder" :order-id="shareOrder.id" :kind="shareOrder.kind" brand="GTCFX" desktop @close="shareOrder = null" />
     <el-dialog v-model="kycPromptOpen" :title="localeStore.t('verification')" width="min(440px, 94vw)">
       <p role="alert">{{ kycPromptMessage }}</p>
@@ -54,6 +55,7 @@
     <div class="trade-layout flex flex-1 overflow-hidden">
       <!-- Left Sidebar -->
       <aside class="w-[300px] border-r border-gray-200 dark:border-[#2b3139] flex flex-col shrink-0 bg-white dark:bg-[#131722] z-10 shadow-[2px_0_8px_rgba(0,0,0,0.02)]">
+        <button type="button" @click="showVideoIntro = true" class="p-3 text-[#8cc63f] border-b border-gray-200 dark:border-[#2b3139] hover:bg-gray-50 dark:hover:bg-[#2b3139] transition-colors">{{ localeStore.t('videoIntro') }}</button>
         <div class="p-3 border-b border-gray-200 dark:border-[#2b3139] flex space-x-2">
           <el-input v-model="searchQuery" placeholder="" clearable class="custom-search flex-1 w-full">
             <template #prefix>
@@ -1558,6 +1560,7 @@ import { depositRecordTypeLabel } from '../../../exchange-frontend/src/utils/dep
 import { useDepositChannels, useDepositChannelRefresh } from '@/utils/depositChannels'
 import { canStartBusiness } from '@/utils/tenantFeatures'
 import ProtectedImage from '../../../exchange-frontend/src/components/ProtectedImage.vue'
+import VideoIntro from '../../../exchange-frontend/src/components/VideoIntro.vue'
 import { reportPageView } from '@/utils/pageActivity'
 
 import AccountModeSwitch from '@/components/AccountModeSwitch.vue';
@@ -1622,6 +1625,7 @@ const router = useRouter();
 // 登录注册逻辑
 // ======================
 const showLoginModal = ref(false);
+const showVideoIntro = ref(false);
 
 const loginEmail = ref('');
 const loginPassword = ref('');

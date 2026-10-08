@@ -13,8 +13,8 @@ const instance = axios.create({
 
 instance.interceptors.request.use((config) => {
   const sharedIdentity = config.url === '/user/profile' || config.url?.startsWith('/auth/') || config.url?.startsWith('/user/changePassword') || config.url?.startsWith('/user/support/') || config.url === '/user/customer-service/link' || config.url === '/user/ui-edition'
-  const mode = sharedIdentity ? 'REAL' : accountMode()
-  config.baseURL = sharedIdentity ? realApiBase() : getAccountApiBase()
+  const mode = sharedIdentity || config.url === '/user/video-intro' ? 'REAL' : accountMode()
+  config.baseURL = sharedIdentity || config.url === '/user/video-intro' ? realApiBase() : getAccountApiBase()
   config.headers.set('X-Account-Mode', mode)
   const target = new URL(instance.getUri(config), location.origin)
   if (target.origin !== location.origin || target.username || target.password || !/^\/(api|demo-api)\//.test(target.pathname)) throw new Error('Refusing a non-tenant API destination')

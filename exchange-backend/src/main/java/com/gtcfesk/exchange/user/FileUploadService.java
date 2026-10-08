@@ -67,8 +67,7 @@ public class FileUploadService {
         }
         
         try {
-            Path filePath = com.gtcfesk.exchange.common.ImageFiles.save(file, com.gtcfesk.exchange.tenant.TenantFiles.directory(storage.images()));
-            String filename = com.gtcfesk.exchange.tenant.TenantFiles.ownerPath()+"/"+filePath.getFileName().toString();
+            String filename = storage.saveImage(file);
 
             // 返回文件URL，使用 /api/uploads/images/ 确保通过后端Controller处理
             return (simulation != null && simulation.enabled() ? "/demo-uploads/images/" : "/api/uploads/images/") + filename;

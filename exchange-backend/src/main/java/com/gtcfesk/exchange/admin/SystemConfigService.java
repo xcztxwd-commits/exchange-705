@@ -244,6 +244,7 @@ public class SystemConfigService {
             }
         }
         tenantPolicy.requireConfigChange(key,value);
+        if (VideoIntroSettings.KEY.equals(key)) VideoIntroSettings.parse(value, com.gtcfesk.exchange.tenant.TenantContext.requireTenantId());
         if (com.gtcfesk.exchange.market.MarketHoursConfig.KEY.equals(key)) com.gtcfesk.exchange.market.MarketHoursConfig.parse(value);
         if (com.gtcfesk.exchange.market.MarketDepthService.ENABLED_KEY.equals(key) && !"true".equals(value) && !"false".equals(value))
             throw new com.gtcfesk.exchange.common.BusinessException("深度开关必须为 true 或 false");

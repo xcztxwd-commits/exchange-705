@@ -55,14 +55,7 @@ public class FileUploadController {
                 return ResponseEntity.badRequest().body(resp);
             }
 
-            Path filePath = com.gtcfesk.exchange.common.ImageFiles.save(file, com.gtcfesk.exchange.tenant.TenantFiles.directory(storage.images()));
-            String filename = com.gtcfesk.exchange.tenant.TenantFiles.ownerPath()+"/"+filePath.getFileName().toString();
-
-            // 验证文件是否真的保存成功
-            boolean fileExists = Files.exists(filePath);
-            long fileSize = fileExists ? Files.size(filePath) : 0;
-            System.out.println("[FileUploadController] 文件保存: " + filePath);
-            System.out.println("[FileUploadController] 文件存在: " + fileExists + ", 大小: " + fileSize + " bytes");
+            String filename = storage.saveImage(file);
 
             // 返回文件URL，使用 /api/uploads/images/ 确保通过后端Controller处理
             // 避免被Nginx直接拦截
@@ -133,15 +126,7 @@ public class FileUploadController {
 
             // 保存文件（使用绝对路径）
             filename = com.gtcfesk.exchange.tenant.TenantFiles.ownerPath()+"/"+filename;
-            com.gtcfesk.exchange.tenant.TenantFiles.directory(storage.audio());
-            Path filePath = storage.audio().resolve(filename);
-            Files.write(filePath, audio);
-            
-            // 验证文件是否真的保存成功
-            boolean fileExists = Files.exists(filePath);
-            long fileSize = fileExists ? Files.size(filePath) : 0;
-            System.out.println("[FileUploadController] 音频文件保存: " + filePath);
-            System.out.println("[FileUploadController] 文件存在: " + fileExists + ", 大小: " + fileSize + " bytes");
+            storage.save("audio", filename, audio, ".wav".equals(extension) ? "audio/wav" : ".ogg".equals(extension) ? "audio/ogg" : "audio/mpeg");
 
             // 返回文件URL
             String fileUrl = (simulation != null && simulation.enabled() ? "/demo-uploads/audio/" : "/api/uploads/audio/") + filename;

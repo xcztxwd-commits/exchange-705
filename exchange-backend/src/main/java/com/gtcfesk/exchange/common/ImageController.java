@@ -101,6 +101,19 @@ public class ImageController {
             }else return ResponseEntity.status(401).build();
         }
         try {
+            if (storage.minioMode()) {
+                String contentType = java.net.URLConnection.guessContentTypeFromName(filename.toLowerCase(java.util.Locale.ROOT));
+                if (contentType == null && filename.endsWith(".webp")) contentType = "image/webp";
+                if (contentType == null && filename.endsWith(".mp3")) contentType = "audio/mpeg";
+                if (contentType == null && filename.endsWith(".ogg")) contentType = "audio/ogg";
+                if (isAudio && !java.util.Arrays.asList("audio/mpeg", "audio/mp3", "audio/wav", "audio/x-wav", "audio/ogg", "application/ogg").contains(contentType)) return ResponseEntity.notFound().build();
+                if (!isAudio && !java.util.Arrays.asList("image/jpeg", "image/png", "image/gif", "image/webp").contains(contentType)) return ResponseEntity.notFound().build();
+                Resource resource = storage.read(isAudio ? "audio" : "images", filename);
+                audit.recordCurrent("file.access.granted", filename, isAudio ? "audio" : "image", null);
+                return ResponseEntity.ok().contentType(MediaType.parseMediaType(contentType))
+                        .header("Cache-Control", "private, no-store").header("X-Content-Type-Options", "nosniff")
+                        .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + parts[3] + "\"").body(resource);
+            }
             Path filePath = baseDir.resolve(filename).normalize();
             System.out.println("[ImageController] 完整文件路径: " + filePath);
             

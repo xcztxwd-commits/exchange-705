@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import ProtectedImage from '@/components/ProtectedImage.vue'
+import VideoIntro from '@/components/VideoIntro.vue'
 import marketWebSocket from '@/utils/marketWebSocket'
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
@@ -26,6 +27,7 @@ auth.load()
 
 // 公告弹窗相关
 const showAnnouncementModal = ref(false)
+const showVideoIntro = ref(false)
 const countdown = ref(2)
 const countdownTimer = ref<number | null>(null)
 const hasShownAnnouncement = ref(false)
@@ -404,7 +406,7 @@ function handleQuickItemClick(id: string) {
   } else if (id === 'financial') {
     router.push('/financial-management')
   } else if (id === 'video') {
-    // router.push('/video-intro') // Implement video intro later
+    showVideoIntro.value = true
   }
 }
 
@@ -651,6 +653,7 @@ const logoUrl = '/img/logo.svg'
 
 <template>
   <div class="home">
+    <VideoIntro v-if="showVideoIntro" @close="showVideoIntro = false" />
     <div class="card">
       <div class="card-header-top">
         <LogoGlint class="logo" :src="logoUrl" />

@@ -61,10 +61,7 @@ public class GlobalExceptionHandler {
         result.put("success", false);
         result.put("error", "文件上传大小超限");
         
-        String message = "文件大小不能超过10MB";
-        if (e.getMessage() != null && e.getMessage().contains("exceeds")) {
-            message = "文件大小超出限制，请上传小于10MB的图片";
-        }
+        String message = "上传请求超过大小限制；视频最多100MB，图片和音频最多5MB";
         
         result.put("message", message);
         System.err.println("文件上传异常: " + e.getMessage());
