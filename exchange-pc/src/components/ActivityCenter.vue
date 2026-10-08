@@ -17,10 +17,12 @@ const auth=useAuthStore(),locale=useLocaleStore(),route=useRoute(),router=useRou
 const dialog=ref<HTMLDialogElement>(),items=ref<Item[]>([]),selected=ref<Item|null>(null)
 const mode=ref<'inbox'|'gift'|'detail'|'success'>('inbox'),page=ref(0),pages=ref(0),busy=ref(false),error=ref(''),loading=ref(false)
 const pending=ref<PendingClaim|null>(null),continuationError=ref('')
+// Hide confirmed rewards while their delivery refresh is still pending.
+const claimedCampaigns=ref(new Set<number>())
 const tenant=computed(()=>Number(tenantFeatures.value?.tenantId || auth.user?.tenantId || 0))
 const isDemo=computed(()=>accountMode()==='DEMO')
 const placement=computed(()=>props.position===undefined?activityPosition(route.path,!!auth.token):props.position)
-const publicItems=computed(()=>placement.value?items.value.filter(item=>item.active&&matchesPosition(item.campaign,placement.value)):[])
+const publicItems=computed(()=>placement.value?items.value.filter(item=>item.active&&!item.delivery.claimedAt&&!claimedCampaigns.value.has(item.campaign.id)&&matchesPosition(item.campaign,placement.value)):[])
 const content=(item:Item)=>activityContent({...item,campaign:{...item.campaign,translations:item.campaign.translations.split('{days}').join(item.campaign.claimValidityDays==null?locale.text('不设置到期', 'No expiry'):String(item.campaign.claimValidityDays))}},locale.locale)
 function safeDesign(item:Item|null){
  const design=parseDesign(item?.campaign.layoutJson)
@@ -91,13 +93,13 @@ async function executeClaim(record:PendingClaim,delivery?:number){
  const execute=async()=>{
   const fresh=readClaim(localStorage,record.tenant,record.campaign,steadyWall())
   if(!fresh||fresh.actionId!==record.actionId)throw Error('Claim expired or cancelled')
-  if(fresh.state==='done'){window.dispatchEvent(new Event('trial-account-changed'));return}
+  if(fresh.state==='done'){claimedCampaigns.value.add(fresh.campaign);window.dispatchEvent(new Event('trial-account-changed'));return}
   if(fresh.user!=null&&fresh.user!==user)throw Error('Claim identity changed')
   fresh.user=user;fresh.state='sending';saveClaim(localStorage,fresh)
   try{
    await postClaim(fresh,delivery)
    if(run!==sessionGeneration||disposed)return
-   fresh.state='done';saveClaim(localStorage,fresh)
+   fresh.state='done';saveClaim(localStorage,fresh);claimedCampaigns.value.add(fresh.campaign)
    if(localStorage.getItem(pendingPointer(fresh.tenant))===String(fresh.campaign))localStorage.removeItem(pendingPointer(fresh.tenant))
    pending.value=null;continuationError.value='';window.dispatchEvent(new Event('trial-account-changed'))
   }catch(e:any){
@@ -151,7 +153,7 @@ async function deepLink(){
  try{const item:any=await request.get(`/activity/messages/${encodeURIComponent(String(activity))}`);if(current())await open(item)}catch(e){if(current()){await inbox();error.value=message(e)}}
 }
 watch([()=>auth.token,tenant,isDemo],(_current,previous)=>{
- generation++;sessionGeneration++;abort?.abort();items.value=[];page.value=0;selected.value=null;dialog.value?.close();busy.value=false;loading.value=false;autoShown.clear()
+ generation++;sessionGeneration++;abort?.abort();items.value=[];page.value=0;selected.value=null;dialog.value?.close();busy.value=false;loading.value=false;autoShown.clear();claimedCampaigns.value.clear()
  if(previous?.[0]&&!auth.token){const c=Number(localStorage.getItem(pendingPointer(tenant.value)));if(c)cancelClaim(localStorage,tenant.value,c);pending.value=null}
  if(previous&&previous[1]&&previous[1]!==tenant.value){const c=Number(localStorage.getItem(pendingPointer(Number(previous[1]))));if(c)cancelClaim(localStorage,Number(previous[1]),c);pending.value=null}
  void load(true);void resume();void deepLink()
