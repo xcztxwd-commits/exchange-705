@@ -206,6 +206,34 @@ class TargetControlApiTest extends TenantMarketTestContext {
         assertEquals(1,store.db.queryForObject("SELECT COUNT(*) FROM market_control_command",Integer.class));
         commands.runOne();assertEquals(original,commands.query(1,key).get("commandId"));
     }
+    @Test void restoreAfterTargetAndManualOffsetStartsAndReturnsToSource() throws Exception {
+        String targetKey="api-target-before-manual-20261008",restoreKey="api-restore-after-manual-20261008";
+        mvc.perform(post("/api/admin/ai-control/1/start").contentType(MediaType.APPLICATION_JSON)
+                .content("{"+INPUT+",\"requestKey\":\""+targetKey+"\"}"))
+                .andExpect(status().isAccepted());
+        commands.runOne();assertEquals("RUNNING",commands.query(1,targetKey).get("state"));
+        mvc.perform(post("/api/admin/ai-control/1/stop")).andExpect(status().isOk());
+        mvc.perform(post("/api/admin/ai-control/1/manual").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"enabled\":true,\"offset\":5}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.controlState").value("MANUAL"))
+                .andExpect(jsonPath("$.currentPrice").value(100005));
+        mvc.perform(post("/api/admin/ai-control/1/restore").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"durationSeconds\":10,\"intensity\":1,\"requestKey\":\""+restoreKey+"\"}"))
+                .andExpect(status().isAccepted()).andExpect(jsonPath("$.state").value("ACCEPTED"));
+        commands.runOne();
+        assertEquals("RUNNING",commands.query(1,restoreKey).get("state"),commands.query(1,restoreKey).toString());
+        PersistentPriceControl.Task restore=controls.latest(1);
+        assertEquals("RESTORE",restore.kind);assertEquals(0,new BigDecimal("100005").compareTo(restore.startPrice));
+        Map<String,Object> flow=store.db.queryForMap("SELECT * FROM market_control_flow WHERE tenant_id=1 AND task_id=?",restore.id);
+        assertEquals("RECOVERING",flow.get("state"));
+        long start=((Number)flow.get("recovery_started_at")).longValue();
+        TradingSymbol symbol=market.commandConfig(1L);
+        Map<String,Object> raw=market.getPrice("TEST","Metal");
+        for(int second=1;second<=10;second++)controls.pump(symbol,raw,start+second*1000L,60000);
+        assertEquals("SOURCE",store.db.queryForObject("SELECT state FROM market_control_flow WHERE tenant_id=1 AND task_id=?",String.class,restore.id));
+        assertEquals(false,market.controlStatus(1L).get("enabled"));
+        assertEquals(0,new BigDecimal("100000").compareTo(market.freshPrice("TEST")));
+    }
     @Test void unknownCancellationPersistsAndBothLateActionsStayCancelled() throws Exception {
         String key="api-unknown-cancel-20261007";
         mvc.perform(post("/api/admin/ai-control/1/stop").contentType(MediaType.APPLICATION_JSON)

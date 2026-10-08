@@ -139,7 +139,7 @@ public class PersistentPriceControl {
             symbol, before == null ? Long.MAX_VALUE : before);
     }
     public List<Long> runningSymbols() {
-        return store.db.queryForList("SELECT DISTINCT t.symbol_id FROM market_control_task t LEFT JOIN market_control_hold h ON h.tenant_id=t.tenant_id AND h.task_id=t.id WHERE t.tenant_id=" + tenant() + " AND (t.status='RUNNING' OR (h.activated_at IS NOT NULL AND h.released_at IS NULL) OR EXISTS (SELECT 1 FROM market_control_flow f WHERE f.tenant_id=" + tenant() + " AND f.task_id=t.id AND f.state IN ('WAITING_SOURCE','RECOVERING')))", Long.class);
+        return store.db.queryForList("SELECT DISTINCT t.symbol_id FROM market_control_task t LEFT JOIN market_control_flow f ON f.tenant_id=t.tenant_id AND f.task_id=t.id WHERE t.tenant_id=" + tenant() + " AND (t.status='RUNNING' OR f.state IN ('WAITING_SOURCE','RECOVERING'))", Long.class);
     }
     public Task replaceHistory(long symbol, String taskId) {
         return locked(symbol, () -> {

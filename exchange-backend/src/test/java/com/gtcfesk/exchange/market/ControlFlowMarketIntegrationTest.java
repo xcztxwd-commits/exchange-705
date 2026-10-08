@@ -168,4 +168,34 @@ class ControlFlowMarketIntegrationTest extends TenantMarketTestContext {
         samePrice("91", market.freshPrice("TEST"));
         assertEquals(false, market.controlStatus(1L).get("enabled"));
     }
+    @Test void recoveryWithTwentyFiveSymbolsAdvancesEachEngineTurnAndKeepsIdleQuotesMoving() throws Exception {
+        market.startControl(1L, 1, new BigDecimal("120"), 1, false, "target-before-twenty-five-symbols", new RecoveryOptions());
+        Thread.sleep(1100); market.completeControls();
+        assertEquals("COMPLETED", database.controls.latest(1).status);
+        List<com.gtcfesk.exchange.entity.TradingSymbol> symbols = new ArrayList<>();
+        symbols.add(saved.get());
+        for (long id = 2; id <= 25; id++) {
+            com.gtcfesk.exchange.entity.TradingSymbol symbol = fixture.copy(saved.get());
+            symbol.setId(id); symbol.setSymbol("IDLE_" + id); symbols.add(symbol);
+            database.store.db.update("INSERT INTO trading_symbol(id,tenant_id) VALUES(?,1)", id);
+            org.mockito.Mockito.when(fixture.repository.findByTenantIdAndId(1L, id)).thenReturn(Optional.of(symbol));
+        }
+        org.mockito.Mockito.when(fixture.repository.findAllByTenantId(1L)).thenAnswer(call -> {
+            List<com.gtcfesk.exchange.entity.TradingSymbol> current = new ArrayList<>(symbols);
+            current.set(0, saved.get()); return current;
+        });
+        market.refreshSymbols();
+        market.manualControl(1L, true, new BigDecimal("5"));
+        market.restoreControl(1L, 6, 1, false, "restore-with-twenty-five-symbols");
+        PersistentPriceControl.Task restore = database.controls.latest(1);
+        long start = database.store.db.queryForObject("SELECT recovery_started_at FROM market_control_flow WHERE task_id=?", Long.class, restore.id);
+        for (int second = 1; second <= 6; second++) {
+            long at = start + second * 1001L; // The real one-second scheduler also has millisecond jitter.
+            market.completeControls(at);
+            assertEquals(at, database.store.db.queryForObject("SELECT last_at FROM market_control_flow WHERE task_id=?", Long.class, restore.id));
+        }
+        assertEquals("SOURCE", database.store.db.queryForObject("SELECT state FROM market_control_flow WHERE task_id=?", String.class, restore.id));
+        samePrice("90", market.freshPrice("TEST"));
+        assertEquals(25, database.store.db.queryForObject("SELECT COUNT(*) FROM market_engine_runtime WHERE tenant_id=1 AND snapshot_version>0", Integer.class));
+    }
 }

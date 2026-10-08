@@ -36,7 +36,7 @@ public class ForexQuoteMarketService {
         final java.util.concurrent.atomic.AtomicLong snapshotSequence = new java.util.concurrent.atomic.AtomicLong();
         final Map<String, Long> publishedSequence = new HashMap<>();
         boolean started;
-        int engineCursor;
+        int engineCursor, controlCursor;
         final ConcurrentMap<Long,Long> engineRetryAt=new ConcurrentHashMap<>();
         final ConcurrentMap<Long,Integer> engineFailures=new ConcurrentHashMap<>();
         TenantState() {
@@ -1591,9 +1591,23 @@ public class ForexQuoteMarketService {
         registered.sort(Comparator.comparing(TradingSymbol::getId));
         List<TradingSymbol> selected=new ArrayList<>();
         if(!registered.isEmpty()){
-            TenantState tenant=state();int start=Math.floorMod(tenant.engineCursor,registered.size());
-            for(int i=0;i<Math.min(16,registered.size());i++)selected.add(registered.get((start+i)%registered.size()));
-            tenant.engineCursor=(start+selected.size())%registered.size();
+            TenantState tenant=state();
+            Set<Long> running=controls==null?Collections.emptySet():new HashSet<>(controls.runningSymbols());
+            List<TradingSymbol> active=new ArrayList<>();
+            for(TradingSymbol symbol:registered)if(running.contains(symbol.getId()))active.add(symbol);
+            // Idle quote rotation must not look like a scheduler outage to an active recovery.
+            // ponytail: 16 symbols per turn; excess active tasks rotate until engine capacity is increased.
+            if(!active.isEmpty()){
+                int start=Math.floorMod(tenant.controlCursor,active.size()),count=Math.min(16,active.size());
+                for(int i=0;i<count;i++)selected.add(active.get((start+i)%active.size()));
+                tenant.controlCursor=(start+count)%active.size();
+            }
+            int start=Math.floorMod(tenant.engineCursor,registered.size()),scanned=0;
+            while(scanned<registered.size() && selected.size()<16){
+                TradingSymbol symbol=registered.get((start+scanned++)%registered.size());
+                if(!running.contains(symbol.getId()))selected.add(symbol);
+            }
+            tenant.engineCursor=(start+scanned)%registered.size();
         }
         if (controls != null) {
             try {

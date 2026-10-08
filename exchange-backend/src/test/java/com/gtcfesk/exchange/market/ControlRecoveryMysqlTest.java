@@ -238,6 +238,36 @@ class ControlRecoveryMysqlTest {
         assertEquals(true,controls.display(symbol,fresh,now).get("available"));assertTrue(store.db.queryForObject("SELECT snapshot_version FROM market_engine_runtime WHERE tenant_id=1 AND symbol_id=?",Long.class,symbol.getId())>((Number)committed.get("snapshot_version")).longValue());
     }
 
+    @Test void restoreAfterCompletedTargetAndManualOffsetLeavesPreparationAndReachesSource() throws Exception {
+        List<TradingSymbol> registered=new ArrayList<>();registered.add(symbol);
+        for(int i=1;i<25;i++)registered.add(newSymbol(1L));
+        market=newMarket(store,controls,registered.toArray(new TradingSymbol[0]));
+        doAnswer(call->new LinkedHashMap<>(source.get())).when(market).getPrice(nullable(String.class),nullable(String.class));
+        commands=newQueue(store,market);
+        prime();TargetControlOptions targetOptions=options();targetOptions.setStepFormula("1");targetOptions.setDeviationBandPercent(new BigDecimal("3"));
+        commands.accept(symbol.getId(),3,new BigDecimal("91"),1,false,"target_before_manual_restore",targetOptions);commands.runOne();
+        assertEquals("RUNNING",commands.query(symbol.getId(),"target_before_manual_restore").get("state"),()->commands.query(symbol.getId(),"target_before_manual_restore").toString());
+        PersistentPriceControl.Task target=controls.latest(symbol.getId());
+        Thread.sleep(Math.max(0,target.plannedEnd-System.currentTimeMillis()+1));
+        prime();assertEquals("COMPLETED",controls.latest(symbol.getId()).status);
+        assertEquals("HOLDING",flow(target.id).get("state"));
+        Map<String,Object> manual=market.manualControl(symbol.getId(),true,new BigDecimal("5"));
+        assertEquals("MANUAL",manual.get("controlState"));
+        String key="restore_after_target_manual";
+        commands.acceptRestore(symbol.getId(),2,1,false,key);commands.runOne();
+        Map<String,Object> receipt=commands.query(symbol.getId(),key);
+        assertEquals("RUNNING",receipt.get("state"),receipt.toString());
+        PersistentPriceControl.Task restore=controls.latest(symbol.getId());
+        assertEquals("RESTORE",restore.kind);assertNotEquals(target.id,restore.id);
+        assertEquals(0,new BigDecimal("95").compareTo(restore.startPrice));
+        assertEquals("RECOVERING",flow(restore.id).get("state"));
+        long start=((Number)flow(restore.id).get("recovery_started_at")).longValue();
+        source.set(priced(start+1001,"91"));market.completeControls(start+1001);
+        source.set(priced(start+2002,"92"));market.completeControls(start+2002);
+        assertEquals("SOURCE",flow(restore.id).get("state"));
+        assertEquals(0,new BigDecimal("92").compareTo(displayPrice(controls,source.get(),start+2002)));
+    }
+
     @Test void gradualRestorePausesOutageAndComponentRestartThenEndsOnActualDynamicSource(){
         prime();market.manualControl(symbol.getId(),true,new BigDecimal("5"));String key="restore_outage_restart";
         commands.acceptRestore(symbol.getId(),2,1,false,key);commands.runOne();assertEquals("RUNNING",commands.query(symbol.getId(),key).get("state"));
