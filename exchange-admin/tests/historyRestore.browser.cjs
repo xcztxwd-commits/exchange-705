@@ -10,7 +10,8 @@ fs.mkdirSync(output, { recursive: true })
   try {
     for (const width of [1280, 390]) {
       const context = await browser.newContext({ viewport: { width, height: 1050 }, reducedMotion: 'reduce' })
-      const page = await context.newPage(), errors = [], writes = []
+      const page = await context.newPage(), errors = [], writes = [], chartRequests = []
+      await page.clock.setFixedTime(new Date('2026-10-09T02:35:45Z'))
       let restored = false, jobs = [], ready, loseFirstReceipt = true
       const at = Date.parse('2026-10-07T09:21:00Z')
       page.on('pageerror', error => errors.push(error.message))
@@ -25,6 +26,7 @@ fs.mkdirSync(output, { recursive: true })
         else if (url.pathname.endsWith('/ai-control/61')) body = { id: 61, available: true, running: false, rawPrice: 158.229, currentPrice: 158.229, offset: 0 }
         else if (url.pathname.includes('/history-restore/')) {
           if (url.pathname.endsWith('/chart')) {
+            chartRequests.push({ from: Number(url.searchParams.get('from')), to: Number(url.searchParams.get('to')) })
             const source = []; for (let n = Number(url.searchParams.get('from')); n <= Number(url.searchParams.get('to')); n += 60000) source.push(candle(n))
             body = { source, before: source.map(row => row.timestamp === at && !restored ? candle(at, 157.321) : row), sourceIdentity: 'Yahoo:Forex:JPY=X', historyRestoreRevision: restored ? 1 : 0 }
           } else if (url.pathname.endsWith('/preview')) {
@@ -42,6 +44,26 @@ fs.mkdirSync(output, { recursive: true })
       })
       await page.goto('http://127.0.0.1:5197/ai-control', { waitUntil: 'networkidle' })
       await page.getByRole('tab', { name: '历史源恢复', exact: true }).first().click()
+      const endInput = page.getByLabel('恢复结束时间', { exact: true })
+      const latestButton = page.locator('.range-end-controls').getByRole('button', { name: '定位最新', exact: true })
+      const endBox = await endInput.boundingBox(), latestBox = await latestButton.boundingBox()
+      assert.ok(endBox && latestBox && Math.abs(endBox.y - latestBox.y) < 1 && latestBox.x >= endBox.x + endBox.width, 'Locate latest sits beside the end time at both viewport widths')
+      await page.getByLabel('恢复开始时间', { exact: true }).fill('2026-10-07T17:21')
+      await page.getByLabel('恢复开始时间', { exact: true }).press('Tab')
+      await page.getByLabel('恢复结束时间', { exact: true }).fill('2026-10-07T17:21')
+      await page.getByLabel('恢复结束时间', { exact: true }).press('Tab')
+      await page.getByRole('button', { name: '预览恢复', exact: true }).click()
+      await page.getByRole('button', { name: '确认恢复 1 根', exact: true }).waitFor()
+      await page.clock.setFixedTime(new Date('2026-10-09T02:40:45Z'))
+      const refreshed = page.waitForResponse(response => response.url().includes('/history-restore/chart'))
+      await page.getByRole('button', { name: '刷新图表', exact: true }).click(); await refreshed
+      assert.equal(await page.getByLabel('恢复结束时间', { exact: true }).inputValue(), '2026-10-07T17:21', 'Refresh preserves a historical selection')
+      const latestLoaded = page.waitForResponse(response => response.url().includes('/history-restore/chart'))
+      await page.getByRole('button', { name: '定位最新', exact: true }).click(); await latestLoaded
+      assert.equal(await page.getByLabel('恢复开始时间', { exact: true }).inputValue(), '2026-10-09T10:35')
+      assert.equal(await page.getByLabel('恢复结束时间', { exact: true }).inputValue(), '2026-10-09T10:39')
+      assert.deepEqual(chartRequests.at(-1), { from: Date.parse('2026-10-08T22:40:00Z'), to: Date.parse('2026-10-09T02:39:00Z') })
+      assert.equal(await page.getByRole('button', { name: '确认恢复 1 根', exact: true }).count(), 0, 'Locating latest invalidates the old preview')
       await page.getByLabel('恢复开始时间', { exact: true }).fill('2026-10-07T17:21')
       await page.getByLabel('恢复开始时间', { exact: true }).press('Tab')
       await page.getByLabel('恢复结束时间', { exact: true }).fill('2026-10-07T17:21')
@@ -77,7 +99,7 @@ fs.mkdirSync(output, { recursive: true })
       await page.getByText('撤销记录', { exact: true }).waitFor()
       assert.equal(writes.length, 2); assert.ok(writes[1].undoOf)
       assert.deepEqual(errors, [])
-      findings.push({ width, preview: true, reverseBrush: true, singleCandle: true, expanded5m: true, lostReceipt: true, undo: true, errors })
+      findings.push({ width, locateLatest: true, refreshPreservesSelection: true, preview: true, reverseBrush: true, singleCandle: true, expanded5m: true, lostReceipt: true, undo: true, errors })
       await context.close()
     }
     fs.writeFileSync(`${output}/browser-results.json`, JSON.stringify(findings, null, 2)); console.log(JSON.stringify(findings))

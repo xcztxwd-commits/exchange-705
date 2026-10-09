@@ -114,6 +114,14 @@ async function loadChart(earlier = false) {
   } catch (e: any) { if (version === generation) error.value = e.message || '历史加载失败' }
   finally { if (version === generation) loading.value = false }
 }
+async function locateLatest() {
+  if (busy.value || loading.value) return
+  to.value = closed(); from.value = to.value - 4 * 60000
+  windowTo = to.value; windowFrom = windowTo - 239 * 60000
+  ambiguous.value = undefined; drag = undefined; invalidate()
+  await loadChart()
+  chart?.dispatchAction({ type: 'dataZoom', start: 0, end: 100 })
+}
 async function loadRecords() {
   const version = generation
   try { const result = await request.get(api() + '/jobs') as any[]; if (version === generation && !disposed) records.value = result }
@@ -208,7 +216,7 @@ onUnmounted(() => { disposed = true; ++generation; clearTimeout(timer); resize?.
       <div class="title"><div><h3>{{ label }} · 历史源恢复</h3><p>{{ sourceIdentity || '读取原始源…' }}</p></div><span class="scope">历史分钟 · 结束时间包含该分钟</span></div>
       <div class="range-inputs">
         <label>开始时间<input aria-label="恢复开始时间" type="datetime-local" :value="localMinute(from, timezone)" :disabled="busy" @change="choose('from', ($event.target as HTMLInputElement).value)"></label>
-        <label>结束时间<input aria-label="恢复结束时间" type="datetime-local" :value="localMinute(to, timezone)" :disabled="busy" @change="choose('to', ($event.target as HTMLInputElement).value)"></label>
+        <div class="range-field"><span>结束时间</span><div class="range-end-controls"><input aria-label="恢复结束时间" type="datetime-local" :value="localMinute(to, timezone)" :disabled="busy" @change="choose('to', ($event.target as HTMLInputElement).value)"><el-button :disabled="busy || loading" @click="locateLatest">定位最新</el-button></div></div>
         <label>显示时区<el-select v-model="timezone" aria-label="显示时区"><el-option v-for="zone in ['Asia/Singapore', 'Asia/Shanghai', 'UTC', 'America/New_York', 'Europe/London']" :key="zone" :label="zone" :value="zone" /></el-select></label>
       </div>
       <div v-if="ambiguous" class="toolbar"><span>该时间重复，请选择 UTC 偏移</span><el-button v-for="option in ambiguous.options" :key="option.timestamp" @click="setBoundary(ambiguous.side, option.timestamp)">{{ option.offset }}</el-button></div>
@@ -231,5 +239,6 @@ onUnmounted(() => { disposed = true; ++generation; clearTimeout(timer); resize?.
   <el-dialog :model-value="!!details" title="恢复快照与校验记录" width="90%" @close="details = undefined"><p>任务 {{ details?.id }} · 已提交 {{ details?.completed }} / {{ details?.total }}；最多展示前 200 根快照。</p><el-table :data="details?.snapshots" max-height="500"><el-table-column label="分钟" min-width="170"><template #default="{ row }">{{ stamp(row.timestamp) }}</template></el-table-column><el-table-column prop="version" label="提交版本" width="110" /><el-table-column label="恢复前 / 目标低价" min-width="160"><template #default="{ row }">{{ price(row.before.low_price) }} / {{ price(row.source.low_price) }}</template></el-table-column><el-table-column prop="checksum" label="快照 SHA-256" min-width="320" /></el-table></el-dialog>
 </template>
 <style scoped>
+.range-field{display:flex;flex-direction:column;gap:8px;font-size:13px;color:#6b7280;min-width:0}.range-end-controls{display:flex;align-items:center;gap:8px}.range-end-controls input{flex:1;min-width:0}.range-end-controls .el-button{flex-shrink:0;height:38px}
 .history-restore{padding-top:12px}.title,.selection,.toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:16px 0}h3,h4,p{margin:8px 0}.title p,.hint,.scope{color:#6b7280;font-size:13px}.range-inputs{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px}.range-inputs label{display:flex;flex-direction:column;gap:8px;font-size:13px;color:#6b7280}.range-inputs input{height:38px;width:100%;box-sizing:border-box;padding:8px 12px;border:1px solid #dcdfe6;border-radius:6px;font:inherit;color:#1f1f1f;background:white}.chart{height:410px;border:1px solid #e5e7eb;border-radius:10px;touch-action:pan-y}.chart.selecting{cursor:crosshair;touch-action:none}.chart:focus-visible{outline:2px solid #85bd00}.preview{padding:16px;background:#f8fbf3;border:1px solid #dcebc7;border-radius:10px}.preview strong{color:#519400}.preview .el-button{margin-top:16px}@media(max-width:700px){.range-inputs{grid-template-columns:1fr}.chart{height:340px}.title .scope{display:none}.selection{align-items:flex-start}.toolbar{justify-content:flex-start}}
 </style>
