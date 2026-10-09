@@ -6,6 +6,7 @@ import { useBusinessLifecycle } from '@/advanced/components/business/useBusiness
 import { useAuthStore } from '@/store/auth'
 import { useLocaleStore } from '@/store/locale'
 import { formatDateTime } from '@/utils/dateTime'
+import { formatTransferAmount } from '@/utils/withdrawalWallet'
 
 const auth = useAuthStore()
 auth.load()
@@ -25,7 +26,7 @@ const fromAccount = ref('FUND')
 const toAccount = ref('CONTRACT')
 
 // 划转金额
-const transferAmount = ref<number | null>(null)
+const transferAmount = ref<number | string | null>(null)
 
 // 资产余额
 const assetsReady = ref(false)
@@ -121,7 +122,11 @@ function swapAccounts() {
 // 设置最大金额
 function setMaxAmount() {
   const available = getAvailableBalance(fromAccount.value)
-  transferAmount.value = available
+  transferAmount.value = formatTransferAmount(available)
+}
+
+function normalizeAmount() {
+  if (transferAmount.value !== null && transferAmount.value !== '') transferAmount.value = formatTransferAmount(Number(transferAmount.value))
 }
 
 // 格式化金额
@@ -129,7 +134,7 @@ function formatAmount(amount: number | string | null | undefined): string {
   const n = Number(amount || 0)
   return n.toLocaleString('en-US', { 
     minimumFractionDigits: 2, 
-    maximumFractionDigits: 8 
+    maximumFractionDigits: 2
   })
 }
 
@@ -174,14 +179,16 @@ function confirmAccount() {
 // 提交划转
 async function submitTransfer() {
   if (transferring.value || advancedWriting.value || !assetsReady.value || advancedError.value) return
+  normalizeAmount()
+  const amount = Number(transferAmount.value)
   // 验证
-  if (!transferAmount.value || transferAmount.value <= 0) {
+  if (!Number.isFinite(amount) || amount <= 0) {
     showToast(localeStore.t('pleaseEnterValidTransferAmount'), 'error')
     return
   }
   
   const available = getAvailableBalance(fromAccount.value)
-  if (transferAmount.value > available) {
+  if (amount > available) {
     showToast(localeStore.t('insufficientBalance'), 'error')
     return
   }
@@ -197,7 +204,7 @@ async function submitTransfer() {
     const res: any = await request.post('/transfer/submit', {
       fromAccount: fromAccount.value,
       toAccount: toAccount.value,
-      amount: transferAmount.value
+      amount
     })
     
     if (res && res.success !== false) {
@@ -225,7 +232,7 @@ onMounted(() => {
 <template>
 <BusinessPage :title="localeStore.t('transfer')" :error="advancedError" :busy="advancedWriting">
 
-<section class="card"><h2>{{ localeStore.text('划转账户','Transfer accounts') }}</h2><button class="row" @click="openAccountModal('from')"><span>{{ localeStore.t('from') }}</span><span>{{ getAccountName(fromAccount) }} ⌄</span></button><button class="row" @click="openAccountModal('to')"><span>{{ localeStore.t('to') }}</span><span>{{ getAccountName(toAccount) }} ⌄</span></button><button :disabled="transferring" @click="swapAccounts">{{ localeStore.t('swap') }}</button></section><section class="card"><h2>{{ localeStore.t('transferAmount') }}</h2><div class="row"><span>{{ localeStore.t('available') }} USD</span><span>{{ !assetsReady || advancedError ? '—' : formatAmount(getAvailableBalance(fromAccount)) }}</span></div><label class="field">{{ localeStore.t('amount') }} / USD<div class="input-row"><input v-model.number="transferAmount" type="number" min="0" step="0.01" :placeholder="localeStore.t('pleaseEnterTransferAmount')" /><button class="text-button" :disabled="!assetsReady || !!advancedError" @click="setMaxAmount">{{ localeStore.t('all') }}</button></div></label></section><button class="primary" :disabled="!assetsReady || transferring || advancedWriting || advancedError!==''" @click="submitTransfer">{{ transferring ? localeStore.t('transferring') : localeStore.text('确认划转','Confirm transfer') }}</button><h2>{{ localeStore.t('transferRecords') }}</h2><p v-if="loadingRecords" class="empty">{{ localeStore.t('loading') }}</p><p v-else-if="!records.length" class="empty">{{ localeStore.t('noTransferRecords') }}</p><div v-for="r in records" :key="r.id"><div class="row"><span>{{ getAccountName(r.fromAccount) }} — {{ getAccountName(r.toAccount) }}</span><span>{{ formatAmount(r.amount) }} USD</span></div><p class="muted">{{ formatDateTime(r.createdAt) }}</p></div><button v-if="advancedError" @click="advancedError='';loadAssets();loadRecords()">{{ localeStore.text('重试','Retry') }}</button>
+<section class="card"><h2>{{ localeStore.text('划转账户','Transfer accounts') }}</h2><button class="row" @click="openAccountModal('from')"><span>{{ localeStore.t('from') }}</span><span>{{ getAccountName(fromAccount) }} ⌄</span></button><button class="row" @click="openAccountModal('to')"><span>{{ localeStore.t('to') }}</span><span>{{ getAccountName(toAccount) }} ⌄</span></button><button :disabled="transferring" @click="swapAccounts">{{ localeStore.t('swap') }}</button></section><section class="card"><h2>{{ localeStore.t('transferAmount') }}</h2><div class="row"><span>{{ localeStore.t('available') }} USD</span><span>{{ !assetsReady || advancedError ? '—' : formatAmount(getAvailableBalance(fromAccount)) }}</span></div><label class="field">{{ localeStore.t('amount') }} / USD<div class="input-row"><input v-model="transferAmount" type="number" min="0" step="0.01" :placeholder="localeStore.t('pleaseEnterTransferAmount')" @blur="normalizeAmount" /><button class="text-button" :disabled="!assetsReady || !!advancedError" @click="setMaxAmount">{{ localeStore.t('all') }}</button></div></label></section><button class="primary" :disabled="!assetsReady || transferring || advancedWriting || advancedError!==''" @click="submitTransfer">{{ transferring ? localeStore.t('transferring') : localeStore.text('确认划转','Confirm transfer') }}</button><h2>{{ localeStore.t('transferRecords') }}</h2><p v-if="loadingRecords" class="empty">{{ localeStore.t('loading') }}</p><p v-else-if="!records.length" class="empty">{{ localeStore.t('noTransferRecords') }}</p><div v-for="r in records" :key="r.id"><div class="row"><span>{{ getAccountName(r.fromAccount) }} — {{ getAccountName(r.toAccount) }}</span><span>{{ formatAmount(r.amount) }} USD</span></div><p class="muted">{{ formatDateTime(r.createdAt) }}</p></div><button v-if="advancedError" @click="advancedError='';loadAssets();loadRecords()">{{ localeStore.text('重试','Retry') }}</button>
 <div v-if="showAccountModal" class="modal-overlay" @click="showAccountModal = false">
       <div class="modal-content" @click.stop>
         <div class="modal-header">

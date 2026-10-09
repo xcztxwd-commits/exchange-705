@@ -5,6 +5,13 @@ export type WalletBalances = Record<WalletAccount, number>
 
 export const formatWalletBalance = (value: number, locale: string) => value.toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
+export function formatTransferAmount(value: number): string {
+  if (!Number.isFinite(value)) return ''
+  // Truncate the decimal text so neither rounding nor binary multiplication can exceed the balance.
+  const [whole, fraction = ''] = value.toLocaleString('en-US', { useGrouping: false, maximumFractionDigits: 20 }).split('.')
+  return `${whole}.${fraction.slice(0, 2).padEnd(2, '0')}`
+}
+
 export function useWithdrawalWallet(fetchAssets: () => Promise<any>) {
   const withdrawAccount = ref<WalletAccount>('FUND')
   const balances = ref<WalletBalances>({ FUND: 0, CONTRACT: 0, OPTION: 0 })
