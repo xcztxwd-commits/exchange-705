@@ -1,7 +1,7 @@
 import { ref } from 'vue'
 
 // Explicit language choices use the representative country shown in the language menu.
-const languageTimezones: Record<string, string> = {
+export const languageTimezones: Record<string, string> = {
   en: 'America/New_York', fr: 'Europe/Paris', de: 'Europe/Berlin', ru: 'Europe/Moscow',
   es: 'Europe/Madrid', pt: 'Europe/Lisbon', it: 'Europe/Rome', ar: 'Asia/Riyadh',
   tr: 'Europe/Istanbul', id: 'Asia/Jakarta', my: 'Asia/Yangon', hi: 'Asia/Kolkata',

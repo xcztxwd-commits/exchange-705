@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { markSimulationExport } from "@/utils/accountMode"
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import QRCode from 'qrcode'
 import request from '@/utils/request'
@@ -12,12 +11,13 @@ import { displaySymbol } from '@/utils/displaySymbol'
 import { recentShareChart, drawSharePoster, settledShareOrder, shareCopy, shareLanguage, shareReturn, shareTemplates, shareNeedsChart, shareBackgrounds,
   type ShareChart, type ShareKind, type ShareOptions, type ShareOrder, type ShareTemplate } from '@/utils/orderShare'
 
-const props = defineProps<{ orderId: string | number; kind: ShareKind; brand: string; desktop?: boolean }>()
+const props = defineProps<{ orderId: string | number; kind: ShareKind; desktop?: boolean }>()
 const emit = defineEmits<{ (event: 'close'): void }>()
 const locale = useLocaleStore()
 const copy = computed(() => shareCopy(locale.locale))
 const dialog = ref<HTMLDialogElement>()
 const order = ref<ShareOrder | null>(null)
+const brand = ref('EXCHANGE')
 const busy = ref(true), error = ref(''), notice = ref(''), preview = ref(''), showQr = ref(false)
 const showAmount = ref(true), showRate = ref(true)
 const previewRatio = ref('3 / 4')
@@ -86,7 +86,8 @@ async function loadOrder() {
       request.get('/user/share-templates', { params: { locale: shareLanguage(locale.locale), details: true } }),
     ])
     if (disposed || run !== generation) return
-    const config = configured as unknown as { templates: unknown; focus?: string; definitions?: ShareTemplateRule[] }
+    const config = configured as unknown as { templates: unknown; focus?: string; definitions?: ShareTemplateRule[]; brand?: string }
+    brand.value = typeof config.brand === 'string' && config.brand.trim() || 'EXCHANGE'
     const enabled = Array.isArray(config) ? config : config.templates
     options.focus = config.focus === 'rate' ? 'rate' : 'amount'
     if (!Array.isArray(enabled)) throw new Error('Templates unavailable')
@@ -179,8 +180,7 @@ async function render() {
     if (disposed || run !== generation) return
     const display = { ...value, symbol: displaySymbol(value), openTime: formatDateTime(value.openTime), closeTime: formatDateTime(value.closeTime) }
     const canvas = document.createElement('canvas')
-    drawSharePoster(canvas, display, settings, copy.value, props.brand, timezone, showQr.value ? qrImage : undefined, chart, background, images)
-    markSimulationExport(canvas)
+    drawSharePoster(canvas, display, settings, copy.value, brand.value, timezone, showQr.value ? qrImage : undefined, chart, background, images)
     const result = await new Promise<Blob>((resolve, reject) => canvas.toBlob(data => data ? resolve(data) : reject(new Error(copy.value.error)), 'image/png'))
     if (disposed || run !== generation) return
     blob = result; previewRatio.value = `${canvas.width} / ${canvas.height}`; preview.value = URL.createObjectURL(result)

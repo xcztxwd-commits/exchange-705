@@ -74,6 +74,7 @@ public class SystemConfigController {
         Map<String, String> result = new HashMap<>();
         result.put("key", key);
         result.put("value", value);
+        if ("share.templates".equals(key)) result.put("brand", systemConfigService.getConfigValue("site.name"));
         return ResponseEntity.ok(result);
     }
 }

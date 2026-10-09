@@ -7,10 +7,10 @@ export const shareTemplateCatalog = [
   ['aurora', '青绿星环'], ['racing', '斜切竞速'], ['receipt', '纸感票据'], ['journal', '行情终端'], ['voyage', '旅程'],
 ] as const
 export const shareTemplateLanguages = [
-  ['zh-TW', '中文（繁体）'], ['en', '英语'], ['fr', '法语'], ['de', '德语'], ['ru', '俄语'],
+  ['zh-TW', '中文（繁体）'], ['en', '英语'], ['ja', '日语'], ['fr', '法语'], ['de', '德语'], ['ru', '俄语'],
   ['es', '西班牙语'], ['pt', '葡萄牙语'], ['it', '意大利语'], ['ar', '阿拉伯语'], ['tr', '土耳其语'],
   ['id', '印度尼西亚语'], ['my', '缅甸语'], ['hi', '印地语'], ['cs', '捷克语'], ['pl', '波兰语'],
-  ['ja', '日语'], ['ko', '韩语'], ['th', '泰语'], ['vi', '越南语'],
+  ['ko', '韩语'], ['th', '泰语'], ['vi', '越南语'],
 ] as const
 export const shareFields = {
   brand: '品牌', symbol: '品种', direction: '方向', leverage: '杠杆', amount: '盈亏金额', rate: '收益率',

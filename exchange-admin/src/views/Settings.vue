@@ -430,7 +430,7 @@ onMounted(() => {
             <video v-if="videoPreviewUrl" :src="videoPreviewUrl" controls playsinline preload="metadata" style="width: 100%; max-height: 70vh; background: #000" />
           </el-dialog>
         </el-tab-pane>
-        <el-tab-pane label="时区设置" name="timezone">
+        <el-tab-pane label="平台名称/时区设置" name="timezone">
           <el-form label-width="450px" label-position="left">
             <el-form-item
               v-for="cfg in systemConfig"

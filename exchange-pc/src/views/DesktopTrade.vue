@@ -1,7 +1,7 @@
 <template>
   <div class="trade-page h-screen w-full flex flex-col bg-white dark:bg-[#131722] text-gray-800 dark:text-gray-100 text-sm overflow-hidden font-sans">
     <VideoIntro v-if="showVideoIntro" @close="showVideoIntro = false" />
-    <OrderShareModal v-if="shareOrder" :order-id="shareOrder.id" :kind="shareOrder.kind" brand="GTCFX" desktop @close="shareOrder = null" />
+    <OrderShareModal v-if="shareOrder" :order-id="shareOrder.id" :kind="shareOrder.kind" desktop @close="shareOrder = null" />
     <el-dialog v-model="kycPromptOpen" :title="localeStore.t('verification')" width="min(440px, 94vw)">
       <p role="alert">{{ kycPromptMessage }}</p>
       <template #footer>

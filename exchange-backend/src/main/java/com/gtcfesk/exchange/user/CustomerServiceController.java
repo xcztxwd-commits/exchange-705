@@ -60,6 +60,7 @@ public class CustomerServiceController {
         result.put("templates", templates);
         result.put("focus", SystemConfigService.shareFocus(value));
         result.put("definitions", SystemConfigService.shareTemplateDefinitions(value, locale));
+        result.put("brand", systemConfigService.getConfigValue("site.name"));
         return ResponseEntity.ok(result);
     }
 

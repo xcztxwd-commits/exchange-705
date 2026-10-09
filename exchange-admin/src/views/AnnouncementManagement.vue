@@ -34,6 +34,7 @@ const editingAnnouncement = ref<Announcement | null>(null)
 const languageOptions = [
   { label: 'English (en)', value: 'en' },
   { label: '繁體中文 (zh-TW)', value: 'zh-TW' },
+  { label: '日本語 (ja)', value: 'ja' },
   { label: '简体中文 (zh-CN)', value: 'zh-CN' },
   { label: 'Français (fr)', value: 'fr' },
   { label: 'Deutsch (de)', value: 'de' },
@@ -48,7 +49,6 @@ const languageOptions = [
   { label: 'हिन्दी (hi)', value: 'hi' },
   { label: 'Čeština (cs)', value: 'cs' },
   { label: 'Polski (pl)', value: 'pl' },
-  { label: '日本語 (ja)', value: 'ja' },
   { label: '한국어 (ko)', value: 'ko' },
   { label: 'ไทย (th)', value: 'th' },
   { label: 'Tiếng Việt (vi)', value: 'vi' },

@@ -29,6 +29,7 @@ class AdminOrderSharePreviewTest {
     private final UserAccountRepository users = mock(UserAccountRepository.class);
     private final AssetAccountRepository assets = mock(AssetAccountRepository.class);
     private final ContractOrderService trades = mock(ContractOrderService.class);
+    private final SystemConfigService configs = mock(SystemConfigService.class);
     private final AdminOrderController controller = new AdminOrderController(contracts, options, trades, users, assets, mock(JwtUtil.class));
     private final ContractOrder contract = new ContractOrder();
     private final OptionOrder option = new OptionOrder();
@@ -36,6 +37,8 @@ class AdminOrderSharePreviewTest {
 
     @BeforeEach void setup() {
         SecurityContextHolder.clearContext();
+        ReflectionTestUtils.setField(controller, "systemConfigService", configs);
+        when(configs.getConfigValue("site.name")).thenReturn("Tenant Exchange");
         owner.setTenantId(1L); owner.setId(700L); owner.setParentUserId(42L);
         owner.setNickname("Order owner"); owner.setEmail("owner@example.com");
         owner.setPasswordHash("private-password"); owner.setRemark("private-remark"); owner.setMyInviteCode("private-invite");
@@ -63,6 +66,7 @@ class AdminOrderSharePreviewTest {
         Map<?, ?> row = (Map<?, ?>) response.getBody();
         assertEquals("no-store", response.getHeaders().getCacheControl());
         assertEquals(700L, row.get("userId")); assertEquals("Order owner", row.get("userName")); assertEquals("owner@example.com", row.get("userEmail"));
+        assertEquals("Tenant Exchange", row.get("brand"));
         assertEquals(new BigDecimal("4828.58"), row.get("profit")); assertEquals(new BigDecimal("123.45"), row.get("fee"));
         assertEquals(new BigDecimal("100"), row.get("leverage")); assertEquals(new BigDecimal("158.162"), row.get("closePrice"));
         assertFalse(row.toString().contains("private-"));
@@ -77,6 +81,9 @@ class AdminOrderSharePreviewTest {
         row = (Map<?, ?>) controller.sharePreview("option", 82L).getBody();
         assertEquals(new BigDecimal("-10.11"), row.get("profit")); assertEquals(new BigDecimal("100"), row.get("amount"));
         assertEquals("DOWN", row.get("direction")); assertEquals(700L, row.get("userId"));
+        assertEquals("Tenant Exchange", row.get("brand"));
+        when(configs.getConfigValue("site.name")).thenReturn("Renamed Exchange");
+        assertEquals("Renamed Exchange", ((Map<?, ?>) controller.sharePreview("contract", 81L).getBody()).get("brand"));
     }
 
     @Test void rejectsNonSettledDeletedUnboundAndMissingRecords() {

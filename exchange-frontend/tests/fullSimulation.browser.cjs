@@ -40,8 +40,6 @@ const out = path.join(require('node:os').tmpdir(), 'full-simulation-qa');fs.mkdi
    for(let tries=0;tries<100&&!calls.some(c=>c.demo&&c.endpoint==='/user/assets');tries++) await new Promise(resolve=>setTimeout(resolve,50));
    assert(calls.some(c=>c.demo && c.endpoint==='/user/assets' && c.mode==='DEMO'),'demo assets use separate API');
    assert(calls.filter(c=>c.endpoint==='/auth/heartbeat').every(c=>!c.demo&&c.mode==='REAL'),'login identity stays real');
-   const watermark = await page.evaluate(async()=>{const {markSimulationExport}=await import('/src/utils/accountMode.ts');const canvas=document.createElement('canvas');canvas.width=1080;canvas.height=1440;markSimulationExport(canvas);return Array.from(canvas.getContext('2d').getImageData(0,0,1,1).data);});
-   assert.deepEqual(watermark,[55,48,163,255],'demo export gets mandatory watermark');
    if(!desktop){await page.goto(base+'/withdraw');await bar.waitFor();assert.match(page.url(),/\/withdraw$/);}
    await page.locator('.forex-transition').waitFor({state:'hidden',timeout:15000});
    await page.screenshot({path:path.join(out,desktop?'pc-demo.png':'mobile-demo.png'),fullPage:false});

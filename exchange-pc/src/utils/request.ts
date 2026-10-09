@@ -11,7 +11,7 @@ const instance = axios.create({
 })
 
 instance.interceptors.request.use((config) => {
-  const sharedIdentity = config.url === '/user/profile' || config.url?.startsWith('/auth/') || config.url?.startsWith('/user/changePassword') || config.url?.startsWith('/user/support/') || config.url === '/user/customer-service/link'
+  const sharedIdentity = config.url === '/user/profile' || config.url?.startsWith('/auth/') || config.url?.startsWith('/user/changePassword') || config.url?.startsWith('/user/support/') || config.url === '/user/customer-service/link' || config.url === '/user/share-templates'
   const mode = sharedIdentity || config.url === '/user/video-intro' ? 'REAL' : accountMode()
   config.baseURL = sharedIdentity || config.url === '/user/video-intro' ? realApiBase() : getAccountApiBase()
   config.headers.set('X-Account-Mode', mode)

@@ -11,8 +11,19 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static org.mockito.Mockito.*;
+import static org.junit.jupiter.api.Assertions.*;
 
 class SystemConfigControllerTest {
+    @Test void shareMetadataReturnsTenantBrandWithoutExposingOtherSettings() {
+        SystemConfigController controller = new SystemConfigController();
+        SystemConfigService configs = mock(SystemConfigService.class);
+        ReflectionTestUtils.setField(controller, "systemConfigService", configs);
+        when(configs.getConfigValue("share.templates")).thenReturn("gold,light");
+        when(configs.getConfigValue("site.name")).thenReturn("Tenant Exchange");
+        Map<?, ?> result = (Map<?, ?>) controller.getConfig("share.templates").getBody();
+        assertEquals("gold,light", result.get("value")); assertEquals("Tenant Exchange", result.get("brand"));
+        assertFalse(((Map<?, ?>) controller.getConfig("system.timezone").getBody()).containsKey("brand"));
+    }
     @Test void currencySaveRefreshesOnlyAfterCommit() {
         SystemConfigController controller = new SystemConfigController();
         SystemConfigService configs = mock(SystemConfigService.class);

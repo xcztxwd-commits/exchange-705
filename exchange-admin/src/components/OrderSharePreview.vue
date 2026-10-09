@@ -12,12 +12,16 @@ import { drawSharePoster, orderTimestamp, recentShareChart, settledShareOrder, s
   type ShareChart, type ShareKind, type ShareMode, type ShareOrder } from '@/utils/orderShare'
 import { parseShareTemplateConfig, shareTemplateLanguages, type ShareTemplateRule } from '../../../exchange-frontend/src/utils/shareTemplateDesign'
 import { createShareAssetLoader, fetchShareImage } from '../../../exchange-frontend/src/utils/shareTemplateAssets'
+import { languageTimezones } from '../../../exchange-frontend/src/utils/displayTimezone'
 
 const props = defineProps<{ orderId: number | string; kind: ShareKind; accountMode: AccountMode }>()
 const emit = defineEmits<{ close: [] }>()
 const auth = useAuthStore(), table = useAccountTable(), reader = accountTableRequest(table)
 const language = ref('zh-TW'), templateId = ref(''), mode = ref<ShareMode>('both'), personal = ref(true), showQr = ref(false)
-const rules = ref<ShareTemplateRule[]>([]), order = ref<ShareOrder>(), userId = ref<number>(), timezone = ref('UTC')
+const rules = ref<ShareTemplateRule[]>([]), order = ref<ShareOrder>(), userId = ref<number>(), timezone = ref(languageTimezones[language.value] || 'UTC')
+const brand = ref('EXCHANGE')
+const timezoneApi = Intl as typeof Intl & { supportedValuesOf?: (key: string) => string[] }
+const timezones = [...new Set(['UTC', ...Object.values(languageTimezones), ...(timezoneApi.supportedValuesOf?.('timeZone') || [])])]
 const loading = ref(false), rendering = ref(false), error = ref(''), image = ref('')
 const available = computed(() => rules.value.filter(rule => rule.enabled && (rule.languages.includes('*') || rule.languages.includes(language.value))))
 const selected = computed(() => available.value.find(rule => rule.id === templateId.value))
@@ -37,15 +41,16 @@ async function load() {
   rendering.value = false; loading.value = true; table.selectRow({ accountMode: props.accountMode })
   try {
     if (!can('orders:view')) throw new Error('没有订单查看权限')
-    const [raw, config, zone]: any[] = await Promise.all([
+    const [raw, config]: any[] = await Promise.all([
       reader.get(`/admin/orders/${props.kind}/${props.orderId}/share-preview`),
-      request.get('/admin/config/get', { params: { key: 'share.templates' } }), request.get('/user/system/timezone'),
+      request.get('/admin/config/get', { params: { key: 'share.templates' } }),
     ])
     if (disposed || run !== revision) return
     if (String(raw.id) !== String(props.orderId) || raw.userId == null || raw.deleted) throw new Error('订单用户或状态已变更，请刷新订单列表')
     const templates = parseShareTemplateConfig(config.value).templates
     order.value = { ...settledShareOrder(raw, props.kind), userName: raw.userName || '', userEmail: raw.userEmail || '' }
-    userId.value = raw.userId; timezone.value = zone.timezone || 'UTC'
+    userId.value = raw.userId
+    brand.value = typeof config.brand === 'string' && config.brand.trim() || (typeof raw.brand === 'string' && raw.brand.trim()) || 'EXCHANGE'
     rules.value = templates
     templateId.value = available.value[0]?.id || ''
     if (!canQr.value) showQr.value = false
@@ -93,12 +98,7 @@ async function render() {
     drawSharePoster(canvas, { ...value, symbol: displaySymbol(value), openTime: date(value.openTime), closeTime: date(value.closeTime) }, {
       template: rule.base, design: rule.design, language: language.value, personal: personal.value, mode: mode.value, focus: rule.focus,
       quantity: false, capital: false, fee: false, leverage: true, orderId: false, openTime: true,
-    }, shareCopy(language.value), props.accountMode === 'DEMO' ? 'DEMO' : 'GTCFX', timezone.value, code, chart, artwork, images)
-    if (props.accountMode === 'DEMO') {
-      const context = canvas.getContext('2d')!
-      context.save(); context.font = `700 ${Math.max(18, canvas.width / 30)}px sans-serif`; context.fillStyle = '#c43d4b'; context.textAlign = 'center'
-      context.fillText('DEMO / 模拟账户', canvas.width / 2, canvas.height - 55); context.restore()
-    }
+    }, shareCopy(language.value), brand.value, timezone.value, code, chart, artwork, images)
     image.value = canvas.toDataURL('image/png')
   } catch (e: any) { if (!disposed && run === renderRevision) error.value = e.message || '分享图生成失败，请重试' }
   finally { if (!disposed && run === renderRevision) rendering.value = false }
@@ -109,8 +109,8 @@ function save() {
   link.download = `${props.accountMode}-${props.kind}-${props.orderId}-${language.value}-${templateId.value}.png`
   document.body.appendChild(link); link.click(); link.remove()
 }
-watch(language, () => { templateId.value = available.value[0]?.id || '' })
-watch([language, templateId, mode, personal, showQr], () => { if (order.value) void render() })
+watch(language, () => { timezone.value = languageTimezones[language.value] || 'UTC'; templateId.value = available.value[0]?.id || '' })
+watch([language, timezone, templateId, mode, personal, showQr], () => { if (order.value) void render() })
 watch(() => [props.orderId, props.kind, props.accountMode, auth.token, can('orders:view'), can('users:view')], () => { void load() }, { flush: 'sync' })
 onMounted(load)
 onBeforeUnmount(() => { disposed = true; revision++; renderRevision++; image.value = ''; assets.dispose() })
@@ -121,6 +121,7 @@ onBeforeUnmount(() => { disposed = true; revision++; renderRevision++; image.val
     <p class="owner-caption" v-if="order">{{ accountMode === 'DEMO' ? '模拟账户' : '真实账户' }} · 订单 {{ orderId }} · 所属用户 {{ userId }} · {{ order.userName || '未设置昵称' }} · {{ order.userEmail }}</p>
     <div class="share-preview-controls">
       <label>语言<el-select v-model="language" aria-label="分享图语言" :disabled="loading"><el-option v-for="[id, name] in shareTemplateLanguages" :key="id" :label="name" :value="id" /></el-select></label>
+      <label>时区<el-select v-model="timezone" aria-label="分享图时区" filterable :disabled="loading"><el-option v-for="zone in timezones" :key="zone" :label="zone" :value="zone" /></el-select></label>
       <label>模板<el-select v-model="templateId" aria-label="分享图模板" :disabled="loading"><el-option v-for="rule in available" :key="rule.id" :label="rule.name" :value="rule.id" /></el-select></label>
       <label>预览内容<el-select v-model="mode" aria-label="分享图预览内容" :disabled="loading"><el-option label="盈亏 + 收益率" value="both" /><el-option label="盈亏金额" value="amount" /><el-option label="收益率" value="rate" :disabled="!order || shareReturn(order) === null" /></el-select></label>
     </div>
@@ -136,11 +137,12 @@ onBeforeUnmount(() => { disposed = true; revision++; renderRevision++; image.val
 
 <style scoped>
 .owner-caption, .preview-note { color: var(--el-text-color-secondary); font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
-.share-preview-controls { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.share-preview-controls { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 .share-preview-controls label { display: grid; gap: 6px; font-size: 13px; min-width: 0; }
 .share-preview-options { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 8px; }
 .order-share-stage { display: flex; justify-content: center; align-items: center; min-height: 180px; padding: 12px; border-radius: 8px; background: #edf0f5; }
 .order-share-stage .el-image { max-width: 100%; height: min(52vh, 540px); cursor: zoom-in; }
 .order-share-stage p { color: var(--el-color-danger); }
+@media (max-width: 800px) { .share-preview-controls { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 600px) { .share-preview-controls { grid-template-columns: 1fr; gap: 8px; }.order-share-stage .el-image { height: 36vh; } }
 </style>

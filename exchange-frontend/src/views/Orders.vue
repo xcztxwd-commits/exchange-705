@@ -1028,7 +1028,7 @@ function formatPrice(v: number | string | undefined | null) {
       </div>
       <footer class="detail-actions"><template v-if="detailOrder.status === 'OPEN'"><button v-if="editingTPSL" type="button" class="subtle-action" @click="editingTPSL = false">{{ copy('返回', 'Back') }}</button><button v-else type="button" class="subtle-action" @click="editingTPSL = true">{{ copy('修改止盈止損', 'Edit TP / SL') }}</button><button type="button" class="primary-action" @click="editingTPSL ? handleUpdateTPSL() : handleCloseOrder()">{{ editingTPSL ? copy('儲存', 'Save') : copy('平倉', 'Close') }}</button></template><template v-else><button type="button" class="subtle-action" @click="closeOrderDetailModal">{{ copy('返回列表', 'Back') }}</button><button type="button" class="primary-action" @click="handleCancelOrder">{{ copy('撤單', 'Cancel order') }}</button></template></footer>
     </section></div>
-    <OrderShareModal v-if="shareOrder" :order-id="shareOrder.id" :kind="shareOrder.kind" brand="DEMO" @close="shareOrder = null" />
+    <OrderShareModal v-if="shareOrder" :order-id="shareOrder.id" :kind="shareOrder.kind" @close="shareOrder = null" />
     <Tabbar />
   </div>
 </template>

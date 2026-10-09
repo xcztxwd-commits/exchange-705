@@ -14,7 +14,7 @@ const settings = ref<any>(),
   error = ref('')
 const replyLocale = ref('')
 const languages = [
-  ['zh-CN', '简体中文'], ['zh-TW', '繁體中文'], ['en', 'English'], ['ja', '日本語'],
+  ['zh-CN', '简体中文'], ['zh-TW', '繁體中文'], ['ja', '日本語'], ['en', 'English'],
   ['ko', '한국어'], ['fr', 'Français'], ['de', 'Deutsch'], ['ru', 'Русский'],
   ['es', 'Español'], ['pt', 'Português'], ['it', 'Italiano'], ['ar', 'العربية'],
   ['tr', 'Türkçe'], ['id', 'Bahasa Indonesia'], ['my', 'မြန်မာ'], ['hi', 'हिंदी'],

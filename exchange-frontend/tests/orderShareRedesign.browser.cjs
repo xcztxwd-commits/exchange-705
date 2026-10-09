@@ -16,7 +16,7 @@ for (const port of ports) {
  const requested=[]
  await page.route('**/api/**',async r=>{
   const u=new URL(r.request().url()); let data={}
-  if(u.pathname.endsWith('/share-templates')) {const lang=u.searchParams.get('locale');requested.push(lang);assert.equal(u.searchParams.get('details'),'true');data={templates:lang==='ja'?['referenceWhite','light']:lang==='zh-TW'?['gold','light']:all,focus:'rate'}}
+  if(u.pathname.endsWith('/share-templates')) {const lang=u.searchParams.get('locale');requested.push(lang);assert.equal(u.searchParams.get('details'),'true');data={templates:lang==='ja'?['referenceWhite','light']:lang==='zh-TW'?['gold','light']:all,focus:'rate',brand:'QA Tenant Exchange'}}
   if(u.pathname.endsWith('/orders'))data={list:[raw]}
   if(u.pathname.endsWith('/timezone'))data={timezone:'UTC'}
   if(u.pathname.includes('/market/kline/'))data={ret:200,data:{symbol:'USDJPY',source:'QA',kline_list:Array.from({length:60},(_,i)=>({timestamp:1790481600+i*60,open_price:161.2,close_price:161.3,high_price:161.4,low_price:161.1}))}}
@@ -33,10 +33,12 @@ for (const port of ports) {
   const {createApp,h}=await import(dependency('vue')),{createPinia,setActivePinia}=await import(dependency('pinia'))
   const {useLocaleStore}=await import('/src/store/locale.ts'),{default:Modal}=await import('/src/components/OrderShareModal.vue')
   const pinia=createPinia();setActivePinia(pinia);window.locale=useLocaleStore();window.locale.setLocale('zh-TW')
-  createApp({render:()=>h(Modal,{orderId:3391,kind:'contract',brand:'DEMO',desktop})}).use(pinia).mount('#app')
+  createApp({render:()=>h(Modal,{orderId:3391,kind:'contract',desktop})}).use(pinia).mount('#app')
  },{desktop:port===ports[1]})
  await page.locator('.poster-preview').waitFor();await page.waitForFunction(()=>!document.querySelector('.pnl-save').disabled)
  assert.equal(await page.locator('.pnl-template').count(),2)
+ assert.ok(await page.evaluate(()=>window.draws.some(d=>d.text==='QA Tenant Exchange')),'The modal renders the configured tenant brand')
+ assert.ok(await page.evaluate(()=>!window.draws.some(d=>['DEMO','FOREX','GTCFX'].includes(d.text))),'Legacy caller brands never appear')
  assert.ok(await page.evaluate(()=>window.draws.some(d=>d.text==='-5.00%'&&d.y===254)), 'Admin focus reaches actual modal')
  assert.equal(await page.locator('.pnl-template[aria-pressed="true"]').innerText(),'黑金橫幅')
  await page.screenshot({path:path.join(out,`modal-${port}-zh.png`)})

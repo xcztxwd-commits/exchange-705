@@ -22,15 +22,3 @@ export function setAccountMode(mode: AccountMode) {
   if (!key) throw new Error('Please sign in first')
   sessionStorage.setItem(key, mode)
 }
-
-/** Exported demo reports must never look like evidence of real-money returns. */
-export function markSimulationExport(canvas: HTMLCanvasElement) {
-  if (accountMode() !== 'DEMO') return
-  const context = canvas.getContext('2d')
-  if (!context) return
-  context.save(); context.setTransform(1, 0, 0, 1, 0, 0)
-  context.fillStyle = '#3730a3'; context.fillRect(0, 0, canvas.width, 44)
-  context.fillStyle = '#ffffff'; context.font = 'bold 24px sans-serif'; context.textAlign = 'center'; context.textBaseline = 'middle'
-  context.fillText('SIMULATION · VIRTUAL FUNDS ONLY', canvas.width / 2, 22)
-  context.restore()
-}

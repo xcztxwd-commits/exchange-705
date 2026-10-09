@@ -10,7 +10,6 @@ import { orderTimestamp, protectionError, validIncrement } from '@/utils/tradeVa
 import { displaySymbol } from '@/utils/displaySymbol'
 import marketWebSocket from '@/utils/marketWebSocket'
 import OrderShareModal from '@/components/OrderShareModal.vue'
-import { accountMode } from '@/utils/accountMode'
 import type { ShareKind } from '@/utils/orderShare'
 import { withinDays } from '@/utils/orderView'
 import { contractEquity } from '@/utils/contract'
@@ -231,7 +230,7 @@ function metrics(order: any) {
     </article>
     <router-link v-if="!fullPage && visibleOrders.length>20" to="/orders">{{ text('查看其余订单','View more orders') }} ›</router-link>
     <p v-if="mode==='term'" class="notice">{{ text('结算结果由服务端确定；倒计时与报价状态持续显示。','Server-authoritative settlement; countdown and quote status remain visible.') }}</p>
-    <OrderShareModal v-if="shareOrder" :order-id="shareOrder.id" :kind="shareOrder.kind" :brand="accountMode() === 'DEMO' ? 'DEMO' : 'FOREX'" @close="shareOrder=null" />
+    <OrderShareModal v-if="shareOrder" :order-id="shareOrder.id" :kind="shareOrder.kind" @close="shareOrder=null" />
     <TradeSheet :open="!!selected" :busy="busy" :page="action==='protection'" :title="action==='protection'?text('止盈止损','TP / SL'):action==='close'?text('确认平仓','Confirm close'):action==='cancel'?text('确认撤单','Confirm cancellation'):text('订单详情','Order details')" @close="selected=null">
       <template v-if="selected">
         <section class="detail-card" :class="{'protection-card':action==='protection'}" :data-design-node="action==='protection'?'37:2090':undefined"><h2>{{ name(selected) }} · {{ sideLabel(selected) }} · {{ selected.leverage?`${selected.leverage}×`:`#${selected.id}` }}</h2><strong v-if="selected.status!=='PENDING'" class="detail-profit" :class="profit(selected)<0?'down':'up'">{{ signed(profit(selected)) }} USD</strong><dl class="metrics"><div v-for="metric in (action==='protection'?protectionMetrics(selected):metrics(selected))" :key="metric.label"><dt>{{ metric.label }}</dt><dd>{{ metric.value }}</dd></div></dl>

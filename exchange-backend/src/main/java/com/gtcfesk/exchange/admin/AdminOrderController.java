@@ -47,6 +47,7 @@ public class AdminOrderController {
     @org.springframework.beans.factory.annotation.Autowired private ControlledExitService controlledExits;
     @org.springframework.beans.factory.annotation.Autowired private ForexQuoteMarketService market;
     @org.springframework.beans.factory.annotation.Autowired private OptionDurationRepository optionDurations;
+    @org.springframework.beans.factory.annotation.Autowired private SystemConfigService systemConfigService;
     
     private ControlledExitService.Input exitInput(Map<String,Object> req){ControlledExitService.Input input=new ControlledExitService.Input();if(req!=null){input.requestId=java.util.Objects.toString(req.get("requestId"),null);input.reason=java.util.Objects.toString(req.get("reason"),null);}return input;}
     /**
@@ -288,6 +289,7 @@ public class AdminOrderController {
             throw new org.springframework.security.access.AccessDeniedException("无权查看该用户订单");
         // Only the order owner's display identity, never the signed-in administrator or internal user fields.
         row.put("userName", user.getNickname()); row.put("userEmail", user.getEmail());
+        row.put("brand", systemConfigService.getConfigValue("site.name"));
         return ResponseEntity.ok().cacheControl(org.springframework.http.CacheControl.noStore()).body(row);
     }
 

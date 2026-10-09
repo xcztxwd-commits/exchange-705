@@ -15,7 +15,12 @@ class ShareTemplateConfigTest {
         assertEquals(16, SystemConfigService.shareTemplates(null).size());
         SystemConfigService service = mock(SystemConfigService.class);
         when(service.getConfigValue("share.templates")).thenReturn("gold,light");
-        assertEquals(java.util.Arrays.asList("gold", "light"), new CustomerServiceController(service, mock(com.gtcfesk.exchange.support.SupportSettings.class)).getShareTemplates("en", false).getBody());
+        CustomerServiceController controller = new CustomerServiceController(service, mock(com.gtcfesk.exchange.support.SupportSettings.class));
+        assertEquals(java.util.Arrays.asList("gold", "light"), controller.getShareTemplates("en", false).getBody());
+        when(service.getConfigValue("site.name")).thenReturn("Tenant Exchange");
+        assertEquals("Tenant Exchange", ((java.util.Map<?, ?>) controller.getShareTemplates("en", true).getBody()).get("brand"));
+        when(service.getConfigValue("site.name")).thenReturn("Renamed Exchange");
+        assertEquals("Renamed Exchange", ((java.util.Map<?, ?>) controller.getShareTemplates("ja", true).getBody()).get("brand"));
     }
 
     @Test void rejectsEmptyDuplicateAndUnknownTemplatesBeforeSaving() {
