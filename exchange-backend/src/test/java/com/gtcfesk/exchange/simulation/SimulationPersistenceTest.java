@@ -173,11 +173,15 @@ class SimulationPersistenceTest {
         Map<String,Object> catalog=new LinkedHashMap<>();
         for(String table:SimulationCatalogController.TABLES)catalog.put(table,new ArrayList<>());
         Map<String,Object> config=new LinkedHashMap<>();config.put("tenant_id",1L);config.put("id",999L);config.put("config_key","system.timezone");config.put("config_value","UTC");config.put("description","Timezone");
-        catalog.put("system_config",Arrays.asList(config));when(gateway.get("/catalog","Bearer fixture")).thenReturn(catalog);
+        Map<String,Object> digital=new LinkedHashMap<>(config);digital.put("config_key","withdraw.digital.enabled");digital.put("config_value","false");
+        Map<String,Object> bank=new LinkedHashMap<>(config);bank.put("config_key","withdraw.bank.enabled");bank.put("config_value","true");
+        catalog.put("system_config",Arrays.asList(config,digital,bank));when(gateway.get("/catalog","Bearer fixture")).thenReturn(catalog);
         SimulationProvisioner service=new SimulationProvisioner(demoEnvironment(),gateway,jdbc,transactions,mock(ForexQuoteMarketService.class));
         service.catalog("Bearer fixture");service.catalog("Bearer fixture");
         verify(gateway,times(1)).get("/catalog","Bearer fixture");
         assertEquals("UTC",jdbc.queryForObject("SELECT config_value FROM system_config WHERE config_key='system.timezone'",String.class));
+        assertEquals("false",jdbc.queryForObject("SELECT config_value FROM system_config WHERE config_key='withdraw.digital.enabled'",String.class));
+        assertEquals("true",jdbc.queryForObject("SELECT config_value FROM system_config WHERE config_key='withdraw.bank.enabled'",String.class));
         assertTrue(jdbc.queryForList("SELECT address FROM deposit_setting WHERE type='digital'",String.class).stream().allMatch(address->address.startsWith("SIMULATION-")));
         assertEquals(0,jdbc.queryForObject("SELECT COUNT(*) FROM user_account",Integer.class));
     }

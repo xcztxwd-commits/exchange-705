@@ -120,4 +120,22 @@ class WithdrawChannelsTest {
         assertThrows(org.springframework.security.access.AccessDeniedException.class, () -> service.saveConfig("withdraw.bank.enabled", "true", null));
         verify(repository, times(1)).save(any());
     }
+
+    @Test void simulationCatalogIncludesChannelSwitchesAndExcludesSecretsAndOtherTenants() {
+        org.springframework.jdbc.core.JdbcTemplate jdbc = new org.springframework.jdbc.core.JdbcTemplate(
+                new org.springframework.jdbc.datasource.DriverManagerDataSource("jdbc:h2:mem:withdraw_catalog_" + UUID.randomUUID() + ";DB_CLOSE_DELAY=-1", "sa", ""));
+        for (String table : com.gtcfesk.exchange.simulation.SimulationCatalogController.TABLES)
+            jdbc.execute("CREATE TABLE " + table + "(id BIGINT,tenant_id BIGINT)");
+        jdbc.execute("CREATE TABLE system_config(id BIGINT,tenant_id BIGINT,config_key VARCHAR(100),config_value VARCHAR(100))");
+        jdbc.update("INSERT INTO system_config VALUES (1,42,'withdraw.digital.enabled','false'),(2,42,'withdraw.bank.enabled','true'),(3,42,'mail.password','FIXTURE-SECRET'),(4,43,'withdraw.bank.enabled','false')");
+        com.gtcfesk.exchange.simulation.SimulationCatalogController catalog = new com.gtcfesk.exchange.simulation.SimulationCatalogController(
+                jdbc, mock(com.gtcfesk.exchange.simulation.SimulationEnvironment.class));
+        Map<?, ?> body = (Map<?, ?>) ((org.springframework.http.ResponseEntity<?>) catalog.catalog()).getBody();
+        List<Map<String, Object>> rows = (List<Map<String, Object>>) body.get("system_config");
+        assertEquals(2, rows.size());
+        assertEquals("false", rows.get(0).get("CONFIG_VALUE"));
+        assertEquals("true", rows.get(1).get("CONFIG_VALUE"));
+        assertTrue(rows.stream().allMatch(row -> ((Number) row.get("TENANT_ID")).longValue() == 42L));
+        assertTrue(rows.stream().allMatch(row -> row.get("CONFIG_KEY").toString().startsWith("withdraw.")));
+    }
 }
