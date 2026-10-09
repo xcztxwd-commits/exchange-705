@@ -91,6 +91,10 @@ public class ControlHistoryStore {
         }
         return consumerReads.execute(status -> { requireConsumerSnapshot(db); return operation.get(); });
     }
+    /** Complete an order's read before its caller validates data or changes funds. */
+    <T> T readOrderSnapshot(Supplier<T> operation) {
+        return consumerReads.execute(status -> { requireConsumerSnapshot(db); return operation.get(); });
+    }
     static void requireConsumerSnapshot(JdbcTemplate db) {
         if (!org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive()
                 || !org.springframework.transaction.support.TransactionSynchronizationManager.isCurrentTransactionReadOnly()

@@ -145,11 +145,16 @@ public class ManualOrderPrices {
         if(!QuoteCurrencyConversion.fixed(symbol.getQuoteCurrency()) && conversion==null)throw new BusinessException("缺少历史换算率");
         QuoteCurrencyConversion baseConversion=FxContractRules.isForex(symbol) && !"USD".equals(symbol.getBaseCurrency()) && !"USD".equals(symbol.getQuoteCurrency())
             ? QuoteCurrencyConversion.route(symbol.getBaseCurrency(),symbol.getMarketSource()) : null;
-        boolean pending=false;
+        List<List<Map<String,Object>>> prepared=requireReady?market.readOrderSnapshot(()-> {
+            List<List<Map<String,Object>>> pages=new ArrayList<>();
+            for(long cursor=Math.floorDiv(from,WINDOW)*WINDOW;cursor<to;cursor+=WINDOW)pages.add(generationWindow(symbol,cursor,baseConversion!=null));
+            return pages;
+        }):null;
+        boolean pending=false,queueFull=false;int page=0;
         for(long cursor=Math.floorDiv(from,WINDOW)*WINDOW;cursor<to;cursor+=WINDOW) {
-            Map<String,Object> primaryResponse=window(symbol,cursor),rateResponse=currencyWindow(symbol.getQuoteCurrency(),symbol.getMarketSource(),cursor);
-            Map<String,Object> baseResponse=baseConversion==null?Collections.emptyMap():currencyWindow(symbol.getBaseCurrency(),symbol.getMarketSource(),cursor);
-            for(Map<String,Object> response:Arrays.asList(primaryResponse,rateResponse,baseResponse)){Object state=response.get("data");pending|=state instanceof Map && Boolean.TRUE.equals(((Map<?,?>)state).get("pending"));}
+            List<Map<String,Object>> responses=prepared==null?generationWindow(symbol,cursor,baseConversion!=null):prepared.get(page++);
+            Map<String,Object> primaryResponse=responses.get(0),rateResponse=responses.get(1),baseResponse=responses.get(2);
+            for(Map<String,Object> response:responses){Object state=response.get("data");pending|=state instanceof Map && Boolean.TRUE.equals(((Map<?,?>)state).get("pending"));queueFull|=state instanceof Map && "queue_full".equals(queueState((Map<?,?>)state));}
             SortedMap<Long,Map<String,Object>> primary=selectMinutes(primaryResponse,from,to,System.currentTimeMillis(),ZoneOffset.UTC);
             SortedMap<Long,Map<String,Object>> rates=conversion==null?null:selectMinutes(rateResponse,from,to,System.currentTimeMillis(),ZoneOffset.UTC);
             SortedMap<Long,Map<String,Object>> baseRates=baseConversion==null?null:selectMinutes(baseResponse,from,to,System.currentTimeMillis(),ZoneOffset.UTC);
@@ -172,30 +177,36 @@ public class ManualOrderPrices {
         }
         if(requireReady) {
             result.values().removeIf(c->c.low==null || c.high==null || c.closePrice==null || c.time+60000>System.currentTimeMillis());
+            if(queueFull && result.isEmpty())throw new BusinessException("历史行情补齐队列已满，请稍后重试；未创建订单或修改资金");
             if(pending && result.isEmpty())throw new BusinessException(HISTORY_LOADING,"所需分钟行情或换算率尚未就绪，正在后台补齐；请稍后重试，未创建订单或修改资金");
         }
         return result;
     }
+    private List<Map<String,Object>> generationWindow(TradingSymbol symbol,long minute,boolean cross) {
+        return Arrays.asList(window(symbol,minute),currencyWindow(symbol.getQuoteCurrency(),symbol.getMarketSource(),minute),
+            cross?currencyWindow(symbol.getBaseCurrency(),symbol.getMarketSource(),minute):Collections.emptyMap());
+    }
     private static BigDecimal field(Map<?,?> row,String name) {
         return ManualOrderCalculation.positive(new BigDecimal(String.valueOf(row.containsKey(name+"_price")?row.get(name+"_price"):row.get(name))),"K线"+name);
     }
-    @org.springframework.transaction.annotation.Transactional(readOnly=true, isolation=org.springframework.transaction.annotation.Isolation.REPEATABLE_READ)
     public NavigableMap<Long,ManualOrderGenerator.Candle> simpleCandles(TradingSymbol symbol,long from,long to) {
         // A single history pass; never wait for unrelated missing minutes when a complete candidate is already available.
         return generationCandles(symbol,from,to,true);
     }
     /** Selected chart times need two exact candles, not thirty days. Rates still use the shared UTC-window cache. */
-    @org.springframework.transaction.annotation.Transactional(readOnly=true, isolation=org.springframework.transaction.annotation.Isolation.REPEATABLE_READ)
     public NavigableMap<Long,ManualOrderGenerator.Candle> selectedCandles(TradingSymbol symbol,long open,long close) {
         Map<Long,Map<String,Object>> primary=new LinkedHashMap<>(),rates=new HashMap<>(),baseRates=new HashMap<>();
         Map<Long,Long> windows=new HashMap<>();
         boolean cross=FxContractRules.isForex(symbol) && !"USD".equals(symbol.getBaseCurrency()) && !"USD".equals(symbol.getQuoteCurrency());
-        for(long time:new long[]{open,close}) {
-            if(!primary.containsKey(time))primary.put(time,market.historicalKline(symbol.getSymbol(),"1m",1,time+59999));
-            long window=windowEnd(time);windows.put(time,window);
-            if(!rates.containsKey(window))rates.put(window,currencyWindow(symbol.getQuoteCurrency(),symbol.getMarketSource(),time));
-            if(cross && !baseRates.containsKey(window))baseRates.put(window,currencyWindow(symbol.getBaseCurrency(),symbol.getMarketSource(),time));
-        }
+        market.readOrderSnapshot(()-> {
+            for(long time:new long[]{open,close}) {
+                if(!primary.containsKey(time))primary.put(time,market.historicalKline(symbol.getSymbol(),"1m",1,time+59999));
+                long window=windowEnd(time);windows.put(time,window);
+                if(!rates.containsKey(window))rates.put(window,currencyWindow(symbol.getQuoteCurrency(),symbol.getMarketSource(),time));
+                if(cross && !baseRates.containsKey(window))baseRates.put(window,currencyWindow(symbol.getBaseCurrency(),symbol.getMarketSource(),time));
+            }
+            return null;
+        });
         NavigableMap<Long,ManualOrderGenerator.Candle> result=new TreeMap<>();
         for(Map.Entry<Long,Map<String,Object>> e:primary.entrySet()) {
             long time=e.getKey();Map<?,?> row=rangeCandle(e.getValue(),time);
@@ -206,7 +217,6 @@ public class ManualOrderPrices {
         }
         return result;
     }
-    @org.springframework.transaction.annotation.Transactional(readOnly=true, isolation=org.springframework.transaction.annotation.Isolation.REPEATABLE_READ)
     public Map<String,Object> rangeQuote(TradingSymbol symbol,long open,long close,BigDecimal p0,BigDecimal p1) {
         NavigableMap<Long,ManualOrderGenerator.Candle> candles=selectedCandles(symbol,open,close);
         ManualOrderGenerator.Candle a=candles.get(open),b=candles.get(close);
@@ -253,9 +263,15 @@ public class ManualOrderPrices {
             } catch(NumberFormatException | ArithmeticException ignored) { }
         }
         Map<?,?> state=data instanceof Map?(Map<?,?>)data:Collections.emptyMap();
-        String reason=Boolean.TRUE.equals(state.get("pending"))?"历史行情正在加载，请稍后重新预览":
+        boolean pending=Boolean.TRUE.equals(state.get("pending"));
+        String reason=pending?"历史行情正在加载，请稍后重新预览":"queue_full".equals(queueState(state))?"历史行情补齐队列已满，请稍后重试":
             "unavailable".equals(state.get("status"))?"行情接口暂不可用，请稍后重试":"该分钟没有有效开盘价，可能休市或数据源未覆盖";
-        throw new BusinessException(Boolean.TRUE.equals(state.get("pending"))?HISTORY_LOADING:400,reason+"（"+state.getOrDefault("code",null)+" / "+Instant.ofEpochMilli(minute)+"）；不使用邻近价格");
+        String message=reason+"（"+state.getOrDefault("code",null)+" / "+Instant.ofEpochMilli(minute)+"）；不使用邻近价格";
+        throw new BusinessException(pending?HISTORY_LOADING:400,message);
+    }
+    private static String queueState(Map<?,?> state) {
+        Object repair=state.get("historyRepair");
+        return String.valueOf(state.containsKey("queueState")?state.get("queueState"):repair instanceof Map?((Map<?,?>)repair).get("queueState"):null);
     }
     private static BigDecimal minutePrice(Map<?,?> row) {
         BigDecimal price=new BigDecimal(String.valueOf(row.containsKey("open_price")?row.get("open_price"):row.get("open")));

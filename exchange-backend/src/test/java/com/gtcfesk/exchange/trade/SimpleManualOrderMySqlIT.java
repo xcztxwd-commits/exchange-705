@@ -71,6 +71,7 @@ class SimpleManualOrderMySqlIT {
         end=Math.floorDiv(System.currentTimeMillis(),60000)*60000;close=end-60000;oldClose=close-2*86400000;
         List<Map<String,Object>> rows=Arrays.asList(candle(close-60000,"99.5","99.2","99.7"),candle(close,"100","99.9","100.4"),candle(oldClose-60000,"119.4","119.04","119.64"),candle(oldClose,"120","119.9","120.4"),candle(end,"999","998","1000"),candle(end-ManualOrderGenerator.RANGE-60000,"130","129.9","130.4"));
         market=mock(ForexQuoteMarketService.class);
+        when(market.readOrderSnapshot(any())).thenAnswer(call->((java.util.function.Supplier<?>)call.getArgument(0)).get());
         when(market.historicalKline(eq("FIXTUREUSD"),eq("1m"),anyInt(),anyLong())).thenAnswer(inv->{long last=inv.<Long>getArgument(3)-59999;List<Map<String,Object>> selected=new ArrayList<>();for(Map<String,Object> row:rows){long t=((Number)row.get("timestamp")).longValue();if(t<=last && t>last-720*60000L)selected.add(row);}return Collections.singletonMap("data",Collections.singletonMap("kline_list",selected));});
         db.update("insert into asset_history_quote_batch(tenant_id,batch_id,prepared_at,evidence) values(2,'fixture',?,'{}')",System.currentTimeMillis());
         store=new AssetEquityStore(source,json);service=newService(null);

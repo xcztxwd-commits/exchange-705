@@ -702,6 +702,9 @@ public class ForexQuoteMarketService {
     <T> T readSnapshot(java.util.function.Supplier<T> operation) {
         return controlHistory == null ? operation.get() : controlHistory.readConsumerSnapshot(operation);
     }
+    public <T> T readOrderSnapshot(java.util.function.Supplier<T> operation) {
+        return controlHistory == null ? operation.get() : controlHistory.readOrderSnapshot(operation);
+    }
     public boolean knownSymbol(String symbol) { return state().registry.containsKey(symbol); }
     /** Shared, versioned display snapshot. Trading always revalidates via freshPrice(). */
     public Map<String,Object> snapshotPrice(String symbol) {
@@ -778,6 +781,7 @@ public class ForexQuoteMarketService {
         Group group = group(category);
         KlineRequest request = new KlineRequest(code, interval, Math.min(1000, Math.max(1, limit == null ? 100 : limit)), endTime);
         Map<String, Object> saved;
+        Map<String, Object> data = new HashMap<>();
         String status;
         boolean pending, requestedAfterCommit = false;
         synchronized (group) {
@@ -816,11 +820,16 @@ public class ForexQuoteMarketService {
                         KlineRequest scheduled = work;
                         // The legacy fetch notification occurs only after the display snapshot commits; no SQL or provider I/O here.
                         afterCommit(() -> { synchronized (group) {
-                            if (!group.codes.contains(scheduled.code) || group.pending.size() >= MAX_PENDING
-                                    || scheduled.key.equals(group.activeKey)) return;
-                            if (group.activeRequest != null && group.activeRequest.covers(scheduled)) return;
-                            for (KlineRequest queued : group.pending.values()) if (queued.covers(scheduled)) return;
-                            group.pending.putIfAbsent(scheduled.key, scheduled);
+                            boolean active = scheduled.key.equals(group.activeKey)
+                                    || group.activeRequest != null && group.activeRequest.covers(scheduled);
+                            boolean queued = group.pending.values().stream().anyMatch(item -> item.covers(scheduled));
+                            if (!active && !queued && group.codes.contains(scheduled.code) && group.pending.size() < MAX_PENDING) {
+                                group.pending.putIfAbsent(scheduled.key, scheduled); queued = true;
+                            }
+                            boolean healthy = group.failures == 0 && group.klineFailures == 0;
+                            data.put("pending", healthy && (active || queued));
+                            data.put("queueState", !healthy ? "unavailable" : active ? "running" : queued ? "queued"
+                                    : !group.codes.contains(scheduled.code) ? "blocked" : group.pending.size() >= MAX_PENDING ? "queue_full" : "unavailable");
                         } });
                         requestedAfterCommit = true;
                     } else group.pending.putIfAbsent(work.key, work);
@@ -828,9 +837,10 @@ public class ForexQuoteMarketService {
             }
             pending = group.failures == 0 && group.klineFailures == 0
                     && (requestedAfterCommit || group.pending.containsKey(work.key) || work.key.equals(group.activeKey));
+            if (enqueue && !pending && (!fresh || partialCoverage) && group.failures == 0 && group.klineFailures == 0
+                    && group.codes.contains(code) && group.pending.size() >= MAX_PENDING) data.put("queueState", "queue_full");
         }
         Map<String, Object> result = new HashMap<>();
-        Map<String, Object> data = new HashMap<>();
         List<Map<String, Object>> rows = new ArrayList<>();
         if (saved != null) {
             List<Map<String, Object>> sourceRows = ControlHistoryStore.rows(saved);
