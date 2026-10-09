@@ -45,6 +45,7 @@ fs.mkdirSync(evidence, { recursive: true })
       return json({ points: [], from: now - 60000, asOf: now, intervalMs: 60000, total: '230.75', income: '0', timezone: 'UTC' })
     }
     if (url.pathname === '/api/user/system/timezone') return json({ timezone: 'UTC' })
+    if (url.pathname === '/api/withdraw/channels') return json({ success: true, digital: true, bank: true })
     if (url.pathname === '/api/user/support/config') return json({ mode: 'disabled' })
     if (url.pathname === '/api/withdraw/submit') {
       const body = request.postDataJSON(); withdrawals.push(body)

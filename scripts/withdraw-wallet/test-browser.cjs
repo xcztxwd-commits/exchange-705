@@ -35,6 +35,7 @@ async function check(browser, project, view, name) {
       case '/api/wallet/bank-cards': return json({ success: true, list: [{ id: 1, currency: 'USD', bankName: 'Fixture Bank', recipientAccount: '585958', recipientName: 'Fixture' }] })
       case '/api/wallet/digital-addresses': return json({ success: true, list: [{ id: 1, network: 'USDT-TRC20', address: 'FIXTURE-ADDRESS' }] })
       case '/api/withdraw/records': return json({ success: true, list: [] })
+      case '/api/withdraw/channels': return json({ success: true, digital: true, bank: true })
       case '/api/withdraw/calculate': return json({ success: true, fee: 0, actualAmount: route.request().postDataJSON().amount })
       case '/api/withdraw/submit': {
         const body = route.request().postDataJSON(); withdrawals.push(body)

@@ -35,7 +35,7 @@ public class SimulationCatalogController {
             }
             result.put(table, rows);
         }
-        result.put("system_config", jdbc.queryForList("SELECT * FROM system_config WHERE config_key IN ('home.categories','system.timezone','market.conversion.currencies') AND tenant_id=?", com.gtcfesk.exchange.tenant.TenantContext.requireTenantId()));
+        result.put("system_config", jdbc.queryForList("SELECT * FROM system_config WHERE config_key IN ('home.categories','system.timezone','market.conversion.currencies','withdraw.digital.enabled','withdraw.bank.enabled') AND tenant_id=?", com.gtcfesk.exchange.tenant.TenantContext.requireTenantId()));
         // Normalize SQL timestamps consistently before JSON transport.
         for (Object rows : result.values()) for (Map<String,Object> row : (List<Map<String,Object>>) rows)
             row.replaceAll((key,value) -> value instanceof java.sql.Timestamp ? value.toString() : value);

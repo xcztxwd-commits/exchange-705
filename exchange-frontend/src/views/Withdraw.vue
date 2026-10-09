@@ -11,7 +11,7 @@
     </div>
 
     <!-- 标签页：数字货币 / 银行卡 -->
-    <div class="tabs-container">
+    <div v-if="showWithdrawTypeTabs" data-testid="withdraw-type-tabs" class="tabs-container">
       <div 
         class="tab-item" 
         :class="{ active: withdrawType === 'digital' }"
@@ -29,8 +29,9 @@
     </div>
 
     <div class="withdraw-content">
+      <WithdrawChannelStatus :ready="withdrawChannelsReady" :available="hasWithdrawChannel" :error="withdrawChannelsError" @retry="loadWithdrawChannels" />
       <!-- 数字货币提现 -->
-      <div v-if="withdrawType === 'digital'" class="withdraw-form">
+      <div v-if="hasWithdrawChannel && withdrawType === 'digital'" class="withdraw-form">
         <!-- 货币选择 -->
         <div class="form-group">
           <div class="form-label">{{ localeStore.t('currency') }}</div>
@@ -106,7 +107,7 @@
       </div>
 
       <!-- 银行卡提现 -->
-      <div v-if="withdrawType === 'bank'" class="withdraw-form">
+      <div v-if="hasWithdrawChannel && withdrawType === 'bank'" class="withdraw-form">
         <!-- 货币选择 -->
         <div class="form-group">
           <div class="form-label">{{ localeStore.t('currency') }}</div>
@@ -224,7 +225,7 @@
     </div>
 
     <!-- 货币选择弹窗 -->
-    <div v-if="showCurrencyModal" class="modal-overlay" @click="showCurrencyModal = false">
+    <div v-if="hasWithdrawChannel && showCurrencyModal" class="modal-overlay" @click="showCurrencyModal = false">
       <div class="modal-content" @click.stop>
         <div class="modal-header">
           <span class="modal-cancel" @click="showCurrencyModal = false">{{ localeStore.t('cancel') }}</span>
@@ -246,7 +247,7 @@
     </div>
 
         <!-- 地址选择弹窗 -->
-    <div v-if="showAddressModal" class="modal-overlay" @click="showAddressModal = false">
+    <div v-if="hasWithdrawChannel && showAddressModal" class="modal-overlay" @click="showAddressModal = false">
       <div class="modal-content" @click.stop>
         <div class="modal-header">
           <span class="modal-cancel" @click="showAddressModal = false">{{ localeStore.t('cancel') }}</span>
@@ -272,7 +273,7 @@
     </div>
 
         <!-- 账户选择弹窗 -->
-    <div v-if="showAccountModal" class="modal-overlay" @click="showAccountModal = false">
+    <div v-if="hasWithdrawChannel && showAccountModal" class="modal-overlay" @click="showAccountModal = false">
       <div class="modal-content" @click.stop>
         <div class="modal-header">
           <span class="modal-cancel" @click="showAccountModal = false">{{ localeStore.t('cancel') }}</span>
@@ -314,6 +315,8 @@ import request from '@/utils/request'
 import CurrencyPicker from '@/components/CurrencyPicker.vue'
 import WithdrawWallet from '@/components/WithdrawWallet.vue'
 import { formatWalletBalance, useWithdrawalWallet } from '@/utils/withdrawalWallet'
+import { useWithdrawChannels } from '@/utils/withdrawChannels'
+import WithdrawChannelStatus from '@/components/WithdrawChannelStatus.vue'
 import { useFiatCurrency } from '@/utils/fiatCurrency'
 const { currency: bankCurrency, rate: bankRate, usdPreview } = useFiatCurrency()
 import { useLocaleStore } from '@/store/locale'
@@ -326,7 +329,9 @@ const localeStore = useLocaleStore()
 localeStore.loadLocale()
 
 // 提现方式：数字货币 / 银行卡
-const withdrawType = ref<'digital' | 'bank'>('digital')
+const { withdrawType, showWithdrawTypeTabs, hasWithdrawChannel, withdrawChannelsReady, withdrawChannelsError, loadWithdrawChannels } = useWithdrawChannels(
+  () => request.get('/withdraw/channels'), () => !submitting.value
+)
 
 // 货币选择
 const selectedCurrency = ref('')
@@ -380,7 +385,11 @@ function showToast(message: string, type: 'success' | 'error' = 'error') {
 
 // 切换提现方式
 function switchWithdrawType(type: 'digital' | 'bank') {
+  if (submitting.value || !hasWithdrawChannel.value) return
   withdrawType.value = type
+}
+watch(withdrawType, type => {
+  showCurrencyModal.value = showAddressModal.value = showAccountModal.value = false
   selectedCurrency.value = ''
   bankCurrency.value = 'USD'
   selectedAddress.value = ''
@@ -397,7 +406,10 @@ function switchWithdrawType(type: 'digital' | 'bank') {
   } else {
     loadBankAccounts()
   }
-}
+})
+watch(hasWithdrawChannel, available => {
+  if (!available) showCurrencyModal.value = showAddressModal.value = showAccountModal.value = false
+})
 
 // 加载货币列表
 function loadCurrencies() {
@@ -486,6 +498,7 @@ function confirmAccount() {
 
 // 计算手续费和预计到账金额
 async function calculateAmount() {
+  if (!hasWithdrawChannel.value) return
   if (withdrawType.value === 'bank') return // 银行卡预估使用与充值一致的 Redis 汇率快照
   if (!amount.value || amount.value <= 0) {
     fee.value = '0'
@@ -562,7 +575,7 @@ watch(selectedCurrency, () => {
 
 // 提交提现申请
 async function submitWithdraw() {
-  if (submitting.value || !balanceReady.value) return
+  if (submitting.value || !balanceReady.value || !hasWithdrawChannel.value) return
   if (withdrawType.value === 'bank' && bankRate.value === null) { showToast(localeStore.text('匯率暫不可用，請稍後重試', 'Exchange rate unavailable; please retry later')); return }
   
   // 验证

@@ -134,7 +134,7 @@ class MoneyWriteCheckpointRegressionTest {
     void bankCard(){UserBankCard card=new UserBankCard();card.setUserId(user);card.setCurrency("USD");card.setBankName("Owned synthetic bank");card.setRecipientName("Owned synthetic recipient");card.setRecipientAccount("OWNED-FAKE-ACCOUNT");bankCards.saveAndFlush(card);}
     WithdrawController withdrawal(String fault,boolean simulation) {
         FiatCurrencyService fiat=mock(FiatCurrencyService.class);when(fiat.currency("USD")).thenReturn("USD");when(fiat.rate("USD")).thenReturn(BigDecimal.ONE);when(fiat.toUsd(new BigDecimal("100"),BigDecimal.ONE)).thenReturn(new BigDecimal("100"));
-        WithdrawController target=new WithdrawController(withdrawals,assets,mock(UserDigitalAddressRepository.class),bankCards,fiat){@Override protected void checkpoint(String stage){if(stage.equals(fault))throw new IllegalStateException("injected "+stage);}};
+        WithdrawController target=new WithdrawController(withdrawals,assets,mock(UserDigitalAddressRepository.class),bankCards,fiat, mock(com.gtcfesk.exchange.admin.SystemConfigService.class)){@Override protected void checkpoint(String stage){if(stage.equals(fault))throw new IllegalStateException("injected "+stage);}};
         ReflectionTestUtils.setField(target,"users",users);ReflectionTestUtils.setField(target,"em",em);ReflectionTestUtils.setField(target,"tenantPolicy",mock(TenantPolicyService.class));ReflectionTestUtils.setField(target,"audit",audit());
         if(simulation){KycIdentityService identity=mock(KycIdentityService.class);when(identity.simulationExempt()).thenReturn(true);ReflectionTestUtils.setField(target,"identityService",identity);}return target;
     }

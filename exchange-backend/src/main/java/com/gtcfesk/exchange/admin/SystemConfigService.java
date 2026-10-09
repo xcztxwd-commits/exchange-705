@@ -250,6 +250,8 @@ public class SystemConfigService {
             throw new com.gtcfesk.exchange.common.BusinessException("深度开关必须为 true 或 false");
         if ("ui.advanced.enabled".equals(key) && !"true".equals(value) && !"false".equals(value))
             throw new com.gtcfesk.exchange.common.BusinessException("高级版入口开关必须为 true 或 false");
+        if (("withdraw.digital.enabled".equals(key) || "withdraw.bank.enabled".equals(key)) && !"true".equals(value) && !"false".equals(value))
+            throw new com.gtcfesk.exchange.common.BusinessException("出金渠道开关必须为 true 或 false");
         if (com.gtcfesk.exchange.user.KycIdentityService.TRADE_KYC_KEY.equals(key) && !"true".equals(value) && !"false".equals(value))
             throw new com.gtcfesk.exchange.common.BusinessException("未实名不可交易开关必须为 true 或 false");
         if(com.gtcfesk.exchange.tenant.TenantSecrets.secret(key)){

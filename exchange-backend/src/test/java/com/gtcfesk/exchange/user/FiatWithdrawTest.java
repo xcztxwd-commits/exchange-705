@@ -37,7 +37,7 @@ class FiatWithdrawTest {
             when(accounts.lockByUserId(7L)).thenReturn(wallets);
             UserBankCard card = new UserBankCard(); card.setRecipientAccount("123"); card.setCurrency("USD");
             when(cards.findByTenantIdAndUserId(1L, 7L)).thenReturn(Collections.singletonList(card));
-            WithdrawController controller = new WithdrawController(records, accounts, mock(UserDigitalAddressRepository.class), cards, new FiatCurrencyService(market));
+            WithdrawController controller = new WithdrawController(records, accounts, mock(UserDigitalAddressRepository.class), cards, new FiatCurrencyService(market), mock(com.gtcfesk.exchange.admin.SystemConfigService.class));
             org.springframework.test.util.ReflectionTestUtils.setField(controller,"audit",mock(com.gtcfesk.exchange.control.ControlAuditService.class));
             org.springframework.test.util.ReflectionTestUtils.setField(controller,"tenantPolicy",mock(com.gtcfesk.exchange.control.TenantPolicyService.class));
             Map<String, Object> req = new HashMap<>();
@@ -94,7 +94,7 @@ class FiatWithdrawTest {
     @Test void unsupportedWalletNeverTouchesFunds() {
         WithdrawRecordRepository records = mock(WithdrawRecordRepository.class);
         AssetAccountRepository accounts = mock(AssetAccountRepository.class);
-        WithdrawController controller = new WithdrawController(records, accounts, mock(UserDigitalAddressRepository.class), mock(UserBankCardRepository.class), mock(FiatCurrencyService.class));
+        WithdrawController controller = new WithdrawController(records, accounts, mock(UserDigitalAddressRepository.class), mock(UserBankCardRepository.class), mock(FiatCurrencyService.class), mock(com.gtcfesk.exchange.admin.SystemConfigService.class));
         org.springframework.test.util.ReflectionTestUtils.setField(controller, "tenantPolicy", mock(com.gtcfesk.exchange.control.TenantPolicyService.class));
         for (String wallet : new String[]{"", "BTC", "FUND,CONTRACT"}) {
             Map<String, Object> req = new HashMap<>(); req.put("type", "bank"); req.put("accountType", wallet);
@@ -103,7 +103,7 @@ class FiatWithdrawTest {
         verifyNoInteractions(records, accounts);
     }
 
-    @Test void disabledWithdrawRejectsBeforeTouchingMoney(){WithdrawRecordRepository records=mock(WithdrawRecordRepository.class);AssetAccountRepository accounts=mock(AssetAccountRepository.class);WithdrawController controller=new WithdrawController(records,accounts,mock(UserDigitalAddressRepository.class),mock(UserBankCardRepository.class),mock(FiatCurrencyService.class));com.gtcfesk.exchange.control.TenantPolicyService policy=mock(com.gtcfesk.exchange.control.TenantPolicyService.class);org.springframework.test.util.ReflectionTestUtils.setField(controller,"tenantPolicy",policy);doThrow(new org.springframework.security.access.AccessDeniedException("disabled")).when(policy).requireNewBusiness("withdraw");assertThrows(RuntimeException.class,()->controller.submitWithdraw(new UsernamePasswordAuthenticationToken("7",""),Collections.emptyMap()));verifyNoInteractions(records,accounts);}
+    @Test void disabledWithdrawRejectsBeforeTouchingMoney(){WithdrawRecordRepository records=mock(WithdrawRecordRepository.class);AssetAccountRepository accounts=mock(AssetAccountRepository.class);WithdrawController controller=new WithdrawController(records,accounts,mock(UserDigitalAddressRepository.class),mock(UserBankCardRepository.class),mock(FiatCurrencyService.class), mock(com.gtcfesk.exchange.admin.SystemConfigService.class));com.gtcfesk.exchange.control.TenantPolicyService policy=mock(com.gtcfesk.exchange.control.TenantPolicyService.class);org.springframework.test.util.ReflectionTestUtils.setField(controller,"tenantPolicy",policy);doThrow(new org.springframework.security.access.AccessDeniedException("disabled")).when(policy).requireNewBusiness("withdraw");assertThrows(RuntimeException.class,()->controller.submitWithdraw(new UsernamePasswordAuthenticationToken("7",""),Collections.emptyMap()));verifyNoInteractions(records,accounts);}
     @Test void invalidRateAmountCurrencyAndInsufficientUsdNeverFreezeFunds() {
         ForexQuoteMarketService market = mock(ForexQuoteMarketService.class);
         when(market.requireConversionRate("EUR", "yahoo")).thenReturn(new BigDecimal("1.2"));
@@ -112,7 +112,7 @@ class FiatWithdrawTest {
         AssetAccount fund = new AssetAccount(); fund.setCoin("FUND"); fund.setAvailable(new BigDecimal("100"));
         when(accounts.lockByUserId(7L)).thenReturn(Collections.singletonList(fund));
         WithdrawRecordRepository records = mock(WithdrawRecordRepository.class);
-        WithdrawController controller = new WithdrawController(records, accounts, mock(UserDigitalAddressRepository.class), mock(UserBankCardRepository.class), new FiatCurrencyService(market));
+        WithdrawController controller = new WithdrawController(records, accounts, mock(UserDigitalAddressRepository.class), mock(UserBankCardRepository.class), new FiatCurrencyService(market), mock(com.gtcfesk.exchange.admin.SystemConfigService.class));
             org.springframework.test.util.ReflectionTestUtils.setField(controller,"tenantPolicy",mock(com.gtcfesk.exchange.control.TenantPolicyService.class));
         for (String[] input : new String[][]{{"EUR","100"},{"JPY","16000"},{"BTC","1"},{"USD","0"},{"EUR","-1"}}) {
             Map<String,Object> req = new HashMap<>();

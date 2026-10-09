@@ -69,6 +69,8 @@ const marketConfig = ref<ConfigItem[]>([
 ])
 
 const advancedEntryEnabled = ref(true)
+const withdrawChannels = ref({ digital: true, bank: true })
+const withdrawConfigReady = ref(false)
 const videoIntroUrl = ref('')
 const videoSettings = ref<{ defaultLocale: string; videos: Record<string, string> }>({ defaultLocale: 'en', videos: {} })
 const videoConfigured = ref(false), videoLanguage = ref('en'), uploadingVideo = ref(false), videoProgress = ref(0)
@@ -161,6 +163,7 @@ const realtimeUpdate = ref({
 
 const loadConfigs = async () => {
   loading.value = true
+  withdrawConfigReady.value = false
   try {
     await reloadPolicies()
     const res: any = await request.get('/admin/config/list')
@@ -174,6 +177,11 @@ const loadConfigs = async () => {
       registrationFields.value = value
     }
     if (Array.isArray(res)) {
+      const [digital, bank]: any[] = await Promise.all(['digital', 'bank'].map(type =>
+        request.get('/admin/config/get', { params: { key: `withdraw.${type}.enabled` } })
+      ))
+      withdrawChannels.value = { digital: digital.value == null || digital.value === 'true', bank: bank.value == null || bank.value === 'true' }
+      withdrawConfigReady.value = true
       videoConfigured.value = false
       videoSettings.value = { defaultLocale: 'en', videos: {} }
       res.forEach((item: any) => {
@@ -285,7 +293,7 @@ const clearSound = (configKey: string) => {
 }
 
 const saveConfigs = async () => {
-  if (!policyReady.value || uploadingVideo.value) return
+  if (loading.value || !policyReady.value || !withdrawConfigReady.value || uploadingVideo.value) return
   if (videoConfigured.value && editable('home.video.settings') && Object.keys(videoSettings.value.videos).length
     && !videoSettings.value.videos[videoSettings.value.defaultLocale]) {
     ElMessage.error('请先为默认回退语言上传视频，或选择已上传的语言'); activeTab.value = 'video'; return
@@ -309,6 +317,8 @@ const saveConfigs = async () => {
     // 过滤掉ws_url配置（前端会自动根据分类选择WebSocket地址）
     const allConfigs = [
       { key: 'ui.advanced.enabled', value: String(advancedEntryEnabled.value), description: '高级版入口' },
+      { key: 'withdraw.digital.enabled', value: String(withdrawChannels.value.digital), description: '数字货币出金' },
+      { key: 'withdraw.bank.enabled', value: String(withdrawChannels.value.bank), description: '银行卡出金' },
       { key: 'home.video.url', value: videoIntroUrl.value.trim(), description: '视频简介地址' },
       ...(videoConfigured.value ? [{ key: 'home.video.settings', value: JSON.stringify(videoSettings.value), description: '宣传视频语言与默认回退配置' }] : []),
       { key: 'trade.kyc.required', value: String(tradeKycRequired.value), description: '未实名不可交易' },
@@ -472,6 +482,20 @@ onMounted(() => {
                 :disabled="loading || !field.enabled || !editable('registration.fields')">注册必填</el-checkbox>
             </el-form-item>
           </el-form>
+        </el-tab-pane>
+
+        <el-tab-pane label="出金设置" name="withdraw">
+          <el-form label-width="200px">
+            <el-form-item :label="'数字货币出金' + policyLabel('withdraw.digital.enabled')">
+              <el-switch v-permission="'settings:save'" v-model="withdrawChannels.digital" data-testid="withdraw-digital-switch"
+                :disabled="loading || !withdrawConfigReady || !editable('withdraw.digital.enabled')" active-text="开启" inactive-text="关闭" />
+            </el-form-item>
+            <el-form-item :label="'银行卡出金' + policyLabel('withdraw.bank.enabled')">
+              <el-switch v-permission="'settings:save'" v-model="withdrawChannels.bank" data-testid="withdraw-bank-switch"
+                :disabled="loading || !withdrawConfigReady || !editable('withdraw.bank.enabled')" active-text="开启" inactive-text="关闭" />
+            </el-form-item>
+          </el-form>
+          <el-alert type="info" :closable="false" title="保存后生效。仅开启一种时，用户只看到该出金方式，不显示切换；两种都开启时可切换；全部关闭时显示「出金请联系客服」及客服入口。关闭渠道不会影响已有申请的审核和记录。" />
         </el-tab-pane>
 
         <el-tab-pane label="风控配置" name="risk">
@@ -686,7 +710,7 @@ onMounted(() => {
       </el-tabs>
 
       <div style="margin-top: 20px; text-align: center">
-        <el-button v-permission="'settings:save'" type="primary" :loading="loading" :disabled="!policyReady || uploadingVideo" @click="saveConfigs">
+        <el-button v-permission="'settings:save'" type="primary" :loading="loading" :disabled="!policyReady || !withdrawConfigReady || uploadingVideo" @click="saveConfigs">
           保存配置
         </el-button>
       </div>

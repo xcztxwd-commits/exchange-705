@@ -55,7 +55,7 @@ class ActivitySecurityTest {
   @Bean AdminUserRepository admins(){return mock(AdminUserRepository.class);}
   @Bean ActivityController activity(){return new ActivityController(service,funds,mock(TrialLedgerRepository.class));}
   @Bean AdminActivityController admin(){return new AdminActivityController(service,mock(ActivityCampaignRepository.class),mock(ActivityDeliveryRepository.class),funds,mock(TrialLedgerRepository.class),mock(AdminUserIdentity.class));}
-  @Bean WithdrawController withdraw(){WithdrawController c=new WithdrawController(mock(WithdrawRecordRepository.class),assets,mock(UserDigitalAddressRepository.class),mock(UserBankCardRepository.class),mock(FiatCurrencyService.class));ReflectionTestUtils.setField(c,"identityService",identity);return c;}
+  @Bean WithdrawController withdraw(){WithdrawController c=new WithdrawController(mock(WithdrawRecordRepository.class),assets,mock(UserDigitalAddressRepository.class),mock(UserBankCardRepository.class),mock(FiatCurrencyService.class), mock(com.gtcfesk.exchange.admin.SystemConfigService.class));ReflectionTestUtils.setField(c,"identityService",identity);return c;}
  }
  @Autowired WebApplicationContext context;@Autowired @Qualifier("springSecurityFilterChain") Filter security;@Autowired JwtUtil jwt;@Autowired UserAccountRepository users;@Autowired AdminUserRepository admins;@Autowired TenantRequestFilter tenantFilter;@Autowired TenantRepository tenants;
  MockMvc mvc;

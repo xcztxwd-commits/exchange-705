@@ -32,7 +32,28 @@ public class WithdrawController {
     private final UserBankCardRepository userBankCardRepository;
 
     private final FiatCurrencyService fiatCurrencyService;
+    private final com.gtcfesk.exchange.admin.SystemConfigService systemConfigService;
     @javax.persistence.PersistenceContext private javax.persistence.EntityManager em;
+
+    @GetMapping("/channels")
+    public ResponseEntity<?> getChannels() {
+        Map<String, Object> result = new HashMap<>();
+        result.put("success", true);
+        result.put("digital", channelEnabled("digital", false));
+        result.put("bank", channelEnabled("bank", false));
+        return ResponseEntity.ok(result);
+    }
+
+    private boolean channelEnabled(String type, boolean current) {
+        String key = "withdraw." + type + ".enabled";
+        String value = current ? systemConfigService.getCurrentConfigValue(key) : systemConfigService.getConfigValue(key);
+        return value == null || "true".equals(value);
+    }
+
+    private void requireChannelEnabled(String type, boolean current) {
+        if (!channelEnabled(type, current)) throw new com.gtcfesk.exchange.common.BusinessException(
+                ("digital".equals(type) ? "数字货币" : "银行卡") + "出金已关闭，请联系客服");
+    }
 
     /**
      * 提交提现申请
@@ -86,6 +107,7 @@ public class WithdrawController {
             // Preserve retry compatibility for FUND receipts created before wallet selection.
             if (!"FUND".equals(accountType)) requestHash=com.gtcfesk.exchange.common.OrderRequest.hash(requestHash,accountType);
             boolean replayHint=withdrawRecordRepository.findReplayId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(),userId,requestKey).isPresent();
+            if (!replayHint) requireChannelEnabled(type, false);
             BigDecimal rate = replayHint ? null : "bank".equals(type) ? fiatCurrencyService.rate(currency) : BigDecimal.ONE;
             BigDecimal amount = rate == null ? null : fiatCurrencyService.toUsd(originalAmount, rate);
             if(em!=null){em.flush();com.gtcfesk.exchange.entity.UserAccount loaded=users.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(),userId).orElseThrow(()->new com.gtcfesk.exchange.common.BusinessException("用户不存在"));em.refresh(loaded,javax.persistence.LockModeType.PESSIMISTIC_WRITE);}
@@ -103,6 +125,8 @@ public class WithdrawController {
             }
             if(amount==null)throw new com.gtcfesk.exchange.common.BusinessException("原提现收据已变更，请使用原请求编号重试");
             tenantPolicy.requireNewBusiness("withdraw");
+            // Read the current switch under the tenant/config locks, after receipt replay and before freezing funds.
+            requireChannelEnabled(type, true);
             requireIdentityCurrent(userId);
             // 使用所选钱包的可用余额，冻结资金不能出金。
             AssetAccount sourceAccount = lockedAccounts.stream().filter(a -> accountType.equals(a.getCoin())).findFirst().orElse(null);
@@ -281,6 +305,7 @@ public class WithdrawController {
             if (!"digital".equals(type) && !"bank".equals(type)) {
                 throw new com.gtcfesk.exchange.common.BusinessException("提现类型无效");
             }
+            requireChannelEnabled(type, false);
             String network = (String) req.get("network");
             BigDecimal originalAmount = new BigDecimal(req.get("amount").toString());
             com.gtcfesk.exchange.common.TradeValidation.positive(originalAmount, "提现金额");
