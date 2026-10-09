@@ -1,6 +1,8 @@
 // Editorial UI translations. Source/verification status: docs/i18n.
 export const uiMessages: Record<string, Record<string, string>> = {
   "zh-TW": {
+    "Please contact customer service for withdrawals": "出金請聯繫客服",
+    "Unable to load withdrawal methods. Please retry.": "出金方式載入失敗，請重試",
     "Funding source": "資金來源",
     "Trial credit": "體驗金",
     "Retry": "重試",
@@ -54,6 +56,8 @@ export const uiMessages: Record<string, Record<string, string>> = {
     "Oil": "Oil"
   },
   "fr": {
+    "Please contact customer service for withdrawals": "Veuillez contacter le service client pour les retraits",
+    "Unable to load withdrawal methods. Please retry.": "Impossible de charger les modes de retrait. Veuillez réessayer.",
     "Funding source": "Source des fonds",
     "Trial credit": "Crédit d’essai",
     "Retry": "Réessayer",
@@ -77,6 +81,8 @@ export const uiMessages: Record<string, Record<string, string>> = {
     "Oil": "Pétrole"
   },
   "de": {
+    "Please contact customer service for withdrawals": "Bitte kontaktieren Sie den Kundenservice für Auszahlungen",
+    "Unable to load withdrawal methods. Please retry.": "Auszahlungsmethoden konnten nicht geladen werden. Bitte erneut versuchen.",
     "Funding source": "Geldquelle",
     "Trial credit": "Testguthaben",
     "Retry": "Erneut versuchen",
@@ -100,6 +106,8 @@ export const uiMessages: Record<string, Record<string, string>> = {
     "Oil": "Öl"
   },
   "ru": {
+    "Please contact customer service for withdrawals": "Для вывода средств обратитесь в службу поддержки",
+    "Unable to load withdrawal methods. Please retry.": "Не удалось загрузить способы вывода. Повторите попытку.",
     "Funding source": "Источник средств",
     "Trial credit": "Пробные средства",
     "Retry": "Повторить",
@@ -123,6 +131,8 @@ export const uiMessages: Record<string, Record<string, string>> = {
     "Oil": "Нефть"
   },
   "es": {
+    "Please contact customer service for withdrawals": "Contacte con atención al cliente para realizar retiros",
+    "Unable to load withdrawal methods. Please retry.": "No se pudieron cargar los métodos de retiro. Inténtelo de nuevo.",
     "Funding source": "Origen de fondos",
     "Trial credit": "Crédito de prueba",
     "Retry": "Reintentar",
@@ -146,6 +156,8 @@ export const uiMessages: Record<string, Record<string, string>> = {
     "Oil": "Petróleo"
   },
   "pt": {
+    "Please contact customer service for withdrawals": "Contacte o apoio ao cliente para levantamentos",
+    "Unable to load withdrawal methods. Please retry.": "Não foi possível carregar os métodos de levantamento. Tente novamente.",
     "Funding source": "Origem dos fundos",
     "Trial credit": "Crédito de teste",
     "Retry": "Tentar novamente",
@@ -169,6 +181,8 @@ export const uiMessages: Record<string, Record<string, string>> = {
     "Oil": "Petróleo"
   },
   "it": {
+    "Please contact customer service for withdrawals": "Contatti il servizio clienti per i prelievi",
+    "Unable to load withdrawal methods. Please retry.": "Impossibile caricare i metodi di prelievo. Riprovi.",
     "Funding source": "Fonte dei fondi",
     "Trial credit": "Credito di prova",
     "Retry": "Riprova",
@@ -192,6 +206,8 @@ export const uiMessages: Record<string, Record<string, string>> = {
     "Oil": "Petrolio"
   },
   "ar": {
+    "Please contact customer service for withdrawals": "يرجى التواصل مع خدمة العملاء للسحب",
+    "Unable to load withdrawal methods. Please retry.": "تعذر تحميل طرق السحب. يرجى المحاولة مرة أخرى.",
     "Funding source": "مصدر الأموال",
     "Trial credit": "رصيد تجريبي",
     "Retry": "إعادة المحاولة",
@@ -215,6 +231,8 @@ export const uiMessages: Record<string, Record<string, string>> = {
     "Oil": "النفط"
   },
   "tr": {
+    "Please contact customer service for withdrawals": "Para çekmek için müşteri hizmetleriyle iletişime geçin",
+    "Unable to load withdrawal methods. Please retry.": "Para çekme yöntemleri yüklenemedi. Lütfen tekrar deneyin.",
     "Funding source": "Fon kaynağı",
     "Trial credit": "Deneme bakiyesi",
     "Retry": "Yeniden dene",
@@ -238,6 +256,8 @@ export const uiMessages: Record<string, Record<string, string>> = {
     "Oil": "Petrol"
   },
   "id": {
+    "Please contact customer service for withdrawals": "Hubungi layanan pelanggan untuk penarikan",
+    "Unable to load withdrawal methods. Please retry.": "Metode penarikan tidak dapat dimuat. Silakan coba lagi.",
     "Funding source": "Sumber dana",
     "Trial credit": "Dana percobaan",
     "Retry": "Coba lagi",
@@ -261,6 +281,8 @@ export const uiMessages: Record<string, Record<string, string>> = {
     "Oil": "Minyak"
   },
   "my": {
+    "Please contact customer service for withdrawals": "ငွေထုတ်ယူရန် ဖောက်သည်ဝန်ဆောင်မှုကို ဆက်သွယ်ပါ",
+    "Unable to load withdrawal methods. Please retry.": "ငွေထုတ်နည်းလမ်းများကို မရယူနိုင်ပါ။ ပြန်လည်ကြိုးစားပါ။",
     "Funding source": "ငွေရင်းမြစ်",
     "Trial credit": "စမ်းသပ်ငွေ",
     "Retry": "ထပ်မံကြိုးစားရန်",
@@ -284,6 +306,8 @@ export const uiMessages: Record<string, Record<string, string>> = {
     "Oil": "ရေနံ"
   },
   "hi": {
+    "Please contact customer service for withdrawals": "निकासी के लिए ग्राहक सेवा से संपर्क करें",
+    "Unable to load withdrawal methods. Please retry.": "निकासी के तरीके लोड नहीं हो सके। कृपया फिर से प्रयास करें।",
     "Funding source": "धन का स्रोत",
     "Trial credit": "ट्रायल क्रेडिट",
     "Retry": "फिर से कोशिश करें",
@@ -307,6 +331,8 @@ export const uiMessages: Record<string, Record<string, string>> = {
     "Oil": "तेल"
   },
   "cs": {
+    "Please contact customer service for withdrawals": "Pro výběr kontaktujte zákaznickou podporu",
+    "Unable to load withdrawal methods. Please retry.": "Způsoby výběru se nepodařilo načíst. Zkuste to znovu.",
     "Funding source": "Zdroj prostředků",
     "Trial credit": "Zkušební kredit",
     "Retry": "Zkusit znovu",
@@ -330,6 +356,8 @@ export const uiMessages: Record<string, Record<string, string>> = {
     "Oil": "Ropa"
   },
   "pl": {
+    "Please contact customer service for withdrawals": "W sprawie wypłaty skontaktuj się z obsługą klienta",
+    "Unable to load withdrawal methods. Please retry.": "Nie udało się wczytać metod wypłaty. Spróbuj ponownie.",
     "Funding source": "Źródło środków",
     "Trial credit": "Środki próbne",
     "Retry": "Spróbuj ponownie",
@@ -353,6 +381,8 @@ export const uiMessages: Record<string, Record<string, string>> = {
     "Oil": "Ropa"
   },
   "ja": {
+    "Please contact customer service for withdrawals": "出金についてはカスタマーサポートにお問い合わせください",
+    "Unable to load withdrawal methods. Please retry.": "出金方法を読み込めませんでした。再試行してください。",
     "Account balances": "口座残高",
     "Frozen balance": "凍結残高",
     "Hide balances": "残高を非表示",
@@ -1161,6 +1191,8 @@ export const uiMessages: Record<string, Record<string, string>> = {
     "Incomplete valuation": "評価に必要なデータが不足しています"
   },
   "ko": {
+    "Please contact customer service for withdrawals": "출금은 고객센터로 문의해 주세요",
+    "Unable to load withdrawal methods. Please retry.": "출금 방법을 불러오지 못했습니다. 다시 시도해 주세요.",
     "Funding source": "자금 출처",
     "Trial credit": "체험 자금",
     "Retry": "다시 시도",
@@ -1184,6 +1216,8 @@ export const uiMessages: Record<string, Record<string, string>> = {
     "Oil": "원유"
   },
   "th": {
+    "Please contact customer service for withdrawals": "โปรดติดต่อฝ่ายบริการลูกค้าเพื่อถอนเงิน",
+    "Unable to load withdrawal methods. Please retry.": "ไม่สามารถโหลดวิธีการถอนเงินได้ โปรดลองอีกครั้ง",
     "Funding source": "แหล่งเงินทุน",
     "Trial credit": "เงินทดลอง",
     "Retry": "ลองอีกครั้ง",
@@ -1207,6 +1241,8 @@ export const uiMessages: Record<string, Record<string, string>> = {
     "Oil": "น้ำมัน"
   },
   "vi": {
+    "Please contact customer service for withdrawals": "Vui lòng liên hệ bộ phận chăm sóc khách hàng để rút tiền",
+    "Unable to load withdrawal methods. Please retry.": "Không thể tải phương thức rút tiền. Vui lòng thử lại.",
     "Funding source": "Nguồn tiền",
     "Trial credit": "Tiền trải nghiệm",
     "Retry": "Thử lại",

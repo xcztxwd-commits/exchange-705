@@ -147,7 +147,7 @@ class SimulationPersistenceTest {
     @Test void virtualWithdrawalCompletesWithNoFrozenRemainderOrRealPayout() {
         provisioner.user(7014L);
         ForexQuoteMarketService quotes=mock(ForexQuoteMarketService.class);
-        WithdrawController service=new WithdrawController(repo(WithdrawRecordRepository.class),repo(AssetAccountRepository.class),repo(UserDigitalAddressRepository.class),repo(UserBankCardRepository.class),new FiatCurrencyService(quotes));
+        WithdrawController service=new WithdrawController(repo(WithdrawRecordRepository.class),repo(AssetAccountRepository.class),repo(UserDigitalAddressRepository.class),repo(UserBankCardRepository.class),new FiatCurrencyService(quotes), mock(com.gtcfesk.exchange.admin.SystemConfigService.class));
         ReflectionTestUtils.setField(service,"identityService",identity());policy(service);audit(service,"audit");
         ReflectionTestUtils.setField(service,"users",repo(UserAccountRepository.class));
         new TransactionTemplate(transactions).execute(status->{

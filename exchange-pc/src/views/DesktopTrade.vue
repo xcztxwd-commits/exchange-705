@@ -817,14 +817,15 @@
           </div>
           
           <div v-else-if="activeUserMenu === 'withdraw'" class="max-w-2xl mx-auto pb-6">
-            <div class="bg-gray-100 dark:bg-[#2b3139]/80 p-1.5 rounded-xl flex space-x-2 mb-8">
-              <button @click="withdrawTab = 'digital'" :class="['flex-1 py-2.5 rounded-lg font-bold text-sm transition-all', withdrawTab === 'digital' ? 'bg-white dark:bg-[#131722] text-[#8cc63f] shadow-sm' : 'text-gray-500 dark:text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-200 dark:text-gray-200']">{{ localeStore.t('digitalCurrencyLabel') }}</button>
-              <button @click="withdrawTab = 'bank'" :class="['flex-1 py-2.5 rounded-lg font-bold text-sm transition-all', withdrawTab === 'bank' ? 'bg-white dark:bg-[#131722] text-[#8cc63f] shadow-sm' : 'text-gray-500 dark:text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-200 dark:text-gray-200']">{{ localeStore.t('bankCardLabel') }}</button>
+            <WithdrawChannelStatus :ready="withdrawChannelsReady" :available="hasWithdrawChannel" :error="withdrawChannelsError" @retry="loadWithdrawChannels" />
+            <div v-if="showWithdrawTypeTabs" data-testid="withdraw-type-tabs" class="bg-gray-100 dark:bg-[#2b3139]/80 p-1.5 rounded-xl flex space-x-2 mb-8">
+              <button :disabled="withdrawSubmitting" @click="withdrawTab = 'digital'" :class="['flex-1 py-2.5 rounded-lg font-bold text-sm transition-all', withdrawTab === 'digital' ? 'bg-white dark:bg-[#131722] text-[#8cc63f] shadow-sm' : 'text-gray-500 dark:text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-200 dark:text-gray-200']">{{ localeStore.t('digitalCurrencyLabel') }}</button>
+              <button :disabled="withdrawSubmitting" @click="withdrawTab = 'bank'" :class="['flex-1 py-2.5 rounded-lg font-bold text-sm transition-all', withdrawTab === 'bank' ? 'bg-white dark:bg-[#131722] text-[#8cc63f] shadow-sm' : 'text-gray-500 dark:text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-200 dark:text-gray-200']">{{ localeStore.t('bankCardLabel') }}</button>
             </div>
 
-            <WithdrawWallet v-model="withdrawAccount" :balances="withdrawBalances" :ready="withdrawBalanceReady" :disabled="withdrawSubmitting" @transferred="loadWalletBalances" />
+            <WithdrawWallet v-if="hasWithdrawChannel" v-model="withdrawAccount" :balances="withdrawBalances" :ready="withdrawBalanceReady" :disabled="withdrawSubmitting" @transferred="loadWalletBalances" />
 
-            <div v-if="withdrawTab === 'digital'" class="space-y-5">
+            <div v-if="hasWithdrawChannel && withdrawTab === 'digital'" class="space-y-5">
               <div class="bg-white dark:bg-[#131722] p-6 rounded-xl border border-gray-100 dark:border-[#2b3139] shadow-sm space-y-5 relative overflow-hidden">
                 <div class="absolute top-0 left-0 w-1 h-full bg-[#8cc63f]"></div>
                 <div>
@@ -872,7 +873,7 @@
             </div>
             
             <!-- 银行卡提币 -->
-            <div v-if="withdrawTab === 'bank'" class="space-y-5">
+            <div v-if="hasWithdrawChannel && withdrawTab === 'bank'" class="space-y-5">
               <div class="bg-white dark:bg-[#131722] p-6 rounded-xl border border-gray-100 dark:border-[#2b3139] shadow-sm space-y-5 relative overflow-hidden">
                 <div class="absolute top-0 left-0 w-1 h-full bg-[#8cc63f]"></div>
                 <div>
@@ -1570,6 +1571,8 @@ import TrialAccountCard from '@/components/TrialAccountCard.vue'
 import AppSelect from '@/components/AppSelect.vue'
 import CurrencyPicker from '@/components/CurrencyPicker.vue'
 import WithdrawWallet from '../../../exchange-frontend/src/components/WithdrawWallet.vue'
+import WithdrawChannelStatus from '../../../exchange-frontend/src/components/WithdrawChannelStatus.vue'
+import { useWithdrawChannels } from '@/utils/withdrawChannels'
 import { formatWalletBalance, useWithdrawalWallet } from '@/utils/withdrawalWallet'
 import AssetPixelChart from '../../../exchange-frontend/src/components/AssetPixelChart.vue'
 import LogoGlint from '@/components/LogoGlint.vue'
@@ -3347,13 +3350,20 @@ const submitDeposit = async () => {
 // ======================
 // 提币 (Withdraw) 逻辑
 // ======================
-const withdrawTab = ref('digital'); // 'digital' or 'bank'
+const { withdrawType: withdrawTab, showWithdrawTypeTabs, hasWithdrawChannel, withdrawChannelsReady, withdrawChannelsError, loadWithdrawChannels } = useWithdrawChannels(
+  () => request.get('/withdraw/channels'), () => showUserCenter.value && activeUserMenu.value === 'withdraw' && !withdrawSubmitting.value
+)
 const withdrawForm = ref({
   currency: 'USD',
   address: '',
   amount: '',
   remark: ''
 });
+watch(withdrawTab, () => {
+  withdrawForm.value.address = ''
+  withdrawForm.value.amount = ''
+  withdrawForm.value.remark = ''
+})
 const availableCurrencies = ref(['USD', 'USDT', 'BTC', 'ETH']);
 const userDigitalAddresses = ref<any[]>([]);
 const userBankCards = ref<any[]>([]);
@@ -3393,9 +3403,9 @@ const loadUserWithdrawAccounts = async () => {
 
 const withdrawSubmitting = ref(false)
 const submitWithdraw = async () => {
-  if (withdrawSubmitting.value || !withdrawBalanceReady.value) return
+  if (withdrawSubmitting.value || !withdrawBalanceReady.value || !hasWithdrawChannel.value) return
   await loadKycStatus();
-  if (withdrawSubmitting.value || !withdrawBalanceReady.value) return
+  if (withdrawSubmitting.value || !withdrawBalanceReady.value || !hasWithdrawChannel.value) return
   if (!simulation && !isKycVerified.value) { activeUserMenu.value = 'kyc'; showUserCenter.value = true; return }
   if (withdrawTab.value === 'bank' && withdrawRate.value === null) { ElMessage.error('汇率暂不可用，请稍后重试'); return }
   if (withdrawTab.value === 'digital' && !withdrawForm.value.currency) {
@@ -3783,6 +3793,7 @@ const submitPasswordChange = async () => {
 useDepositChannelRefresh(loadDepositSettings, () => showUserCenter.value && activeUserMenu.value === 'deposit' && !depositSubmitting.value)
 watch(showUserCenter, visible => {
   if (visible && activeUserMenu.value === 'deposit') void loadDepositSettings()
+  if (visible && activeUserMenu.value === 'withdraw') void loadWithdrawChannels()
 })
 
 // watch for user menu actions
@@ -3800,6 +3811,7 @@ watch(activeUserMenu, async (val) => {
   } else if (val === 'withdraw' || val === 'wallet') {
     loadUserWithdrawAccounts();
     if (val === 'withdraw') {
+      void loadWithdrawChannels();
       void loadWalletBalances();
       loadWithdrawRecords();
     }

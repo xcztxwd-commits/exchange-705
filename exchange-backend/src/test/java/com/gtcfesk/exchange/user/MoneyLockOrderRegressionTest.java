@@ -84,7 +84,7 @@ class MoneyLockOrderRegressionTest {
         receipt.setRequestHash(OrderRequest.hash("withdraw","bank","BANK",new BigDecimal("16000"),"JPY","OWNED-FAKE-ACCOUNT",null));
         when(records.findReplayId(1L,7L,"money-lock-withdraw-replay")).thenReturn(Optional.of(9L));
         when(records.findByTenantIdAndUserIdAndRequestKey(1L,7L,"money-lock-withdraw-replay")).thenReturn(Optional.of(receipt));
-        WithdrawController controller=new WithdrawController(records,assets,mock(UserDigitalAddressRepository.class),mock(UserBankCardRepository.class),fiat);
+        WithdrawController controller=new WithdrawController(records,assets,mock(UserDigitalAddressRepository.class),mock(UserBankCardRepository.class),fiat, mock(com.gtcfesk.exchange.admin.SystemConfigService.class));
         ReflectionTestUtils.setField(controller,"users",users);ReflectionTestUtils.setField(controller,"tenantPolicy",mock(TenantPolicyService.class));
         assertEquals(200,controller.submitWithdraw(new UsernamePasswordAuthenticationToken("7",null),request).getStatusCodeValue());
         InOrder ordered=inOrder(users,assets,records);ordered.verify(users).lockById(7L);ordered.verify(assets).lockByUserId(7L);ordered.verify(records).findByTenantIdAndUserIdAndRequestKey(1L,7L,"money-lock-withdraw-replay");

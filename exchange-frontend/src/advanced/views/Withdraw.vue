@@ -7,6 +7,8 @@ import { useBusinessLifecycle } from '@/advanced/components/business/useBusiness
 import CurrencyPicker from '@/advanced/components/business/CurrencyPicker.vue'
 import WithdrawWallet from '@/components/WithdrawWallet.vue'
 import { formatWalletBalance, useWithdrawalWallet } from '@/utils/withdrawalWallet'
+import { useWithdrawChannels } from '@/utils/withdrawChannels'
+import WithdrawChannelStatus from '@/components/WithdrawChannelStatus.vue'
 import { useFiatCurrency } from '@/utils/fiatCurrency'
 const { currency: bankCurrency, rate: bankRate, usdPreview } = useFiatCurrency()
 import { useLocaleStore } from '@/store/locale'
@@ -19,7 +21,9 @@ const localeStore = useLocaleStore()
 localeStore.loadLocale()
 
 // 提现方式：数字货币 / 银行卡
-const withdrawType = ref<'digital' | 'bank'>('digital')
+const { withdrawType, showWithdrawTypeTabs, hasWithdrawChannel, withdrawChannelsReady, withdrawChannelsError, loadWithdrawChannels } = useWithdrawChannels(
+  () => request.get('/withdraw/channels'), () => !submitting.value && !advancedWriting.value
+)
 
 // 货币选择
 const selectedCurrency = ref('')
@@ -75,7 +79,11 @@ function showToast(message: string, type: 'success' | 'error' = 'error') {
 
 // 切换提现方式
 function switchWithdrawType(type: 'digital' | 'bank') {
+  if (submitting.value || advancedWriting.value || !hasWithdrawChannel.value) return
   withdrawType.value = type
+}
+watch(withdrawType, type => {
+  showCurrencyModal.value = showAddressModal.value = showAccountModal.value = false
   selectedCurrency.value = ''
   bankCurrency.value = 'USD'
   selectedAddress.value = ''
@@ -92,7 +100,10 @@ function switchWithdrawType(type: 'digital' | 'bank') {
   } else {
     loadBankAccounts()
   }
-}
+})
+watch(hasWithdrawChannel, available => {
+  if (!available) showCurrencyModal.value = showAddressModal.value = showAccountModal.value = false
+})
 
 // 加载货币列表
 function loadCurrencies() {
@@ -183,6 +194,7 @@ function confirmAccount() {
 async function calculateAmount() {
   const run = ++calculationGeneration
   calculationReady.value = false
+  if (!hasWithdrawChannel.value) return
   if (withdrawType.value === 'bank') return // 银行卡预估使用与充值一致的 Redis 汇率快照
   if (!amount.value || amount.value <= 0) {
     fee.value = '0'
@@ -261,7 +273,7 @@ watch(selectedCurrency, () => {
 
 // 提交提现申请
 async function submitWithdraw() {
-  if (submitting.value || advancedWriting.value || !balanceReady.value || advancedError.value) return
+  if (submitting.value || advancedWriting.value || !balanceReady.value || advancedError.value || !hasWithdrawChannel.value) return
   if (withdrawType.value === 'bank' && bankRate.value === null) { showToast(localeStore.text('匯率暫不可用，請稍後重試', 'Exchange rate unavailable; please retry later')); return }
   
   // 验证
@@ -385,14 +397,17 @@ onMounted(() => {
 <template>
 <BusinessPage :title="localeStore.t('withdraw')" :error="advancedError" :busy="advancedWriting">
 
-<div class="tabs"><button :class="{active:withdrawType==='digital'}" :disabled="submitting" @click="switchWithdrawType('digital')">{{ localeStore.t('depositTypeDigital') }}</button><button :class="{active:withdrawType==='bank'}" :disabled="submitting" @click="switchWithdrawType('bank')">{{ localeStore.t('depositTypeBank') }}</button></div>
+<WithdrawChannelStatus :ready="withdrawChannelsReady" :available="hasWithdrawChannel" :error="withdrawChannelsError" @retry="loadWithdrawChannels" />
+<template v-if="hasWithdrawChannel">
+<div v-if="showWithdrawTypeTabs" data-testid="withdraw-type-tabs" class="tabs"><button :class="{active:withdrawType==='digital'}" :disabled="submitting" @click="switchWithdrawType('digital')">{{ localeStore.t('depositTypeDigital') }}</button><button :class="{active:withdrawType==='bank'}" :disabled="submitting" @click="switchWithdrawType('bank')">{{ localeStore.t('depositTypeBank') }}</button></div>
 <section class="card"><h2>{{ localeStore.text('收款账户','Receiving account') }}</h2><template v-if="withdrawType==='digital'"><label class="field">{{ localeStore.text('币种 / 网络','Currency / Network') }}<button class="row" @click="tempCurrency=selectedCurrency;showCurrencyModal=true">{{ selectedCurrency || localeStore.t('pleaseSelectCurrency') }} ⌄</button></label><label class="field">{{ localeStore.t('withdrawAddress') }}<button class="row" @click="tempAddress=selectedAddress;tempAddressNetwork=selectedAddressNetwork;showAddressModal=true">{{ selectedAddress || localeStore.t('pleaseSelectWithdrawAddress') }} ⌄</button></label><button v-if="!digitalAddresses.length" @click="router.push('/wallet/bind-digital-currency')">{{ localeStore.t('bindDigitalCurrencyAddress') }}</button></template><template v-else><label class="field">{{ localeStore.t('currency') }}<CurrencyPicker v-model="bankCurrency" /></label><label class="field">{{ localeStore.t('recipientAccount') }}<button class="row" @click="tempAccount=selectedAccount;tempAccountCurrency=selectedAccountCurrency;showAccountModal=true">{{ selectedAccount || localeStore.t('pleaseSelectRecipientAccount') }} ⌄</button></label><button v-if="!bankAccounts.length" @click="router.push('/wallet/bind-bank-card')">{{ localeStore.t('bindBankCard') }}</button></template></section>
 <section class="card"><h2>{{ localeStore.text('出金金额','Withdrawal amount') }}</h2>
   <WithdrawWallet v-model="withdrawAccount" :balances="balances" :ready="balanceReady" :disabled="submitting || advancedWriting || !!advancedError" :send-transfer="body => request.post('/transfer/submit', body)" @transferred="loadBalance" />
   <label class="field">{{ localeStore.t('amountText') }}<input v-model.number="amount" type="number" min="0" :step="withdrawType==='bank' ? '0.01' : '0.00000001'" :placeholder="localeStore.t('enterAmount')" /></label><label class="field">{{ localeStore.t('remark') }}<input v-model="remark" :placeholder="localeStore.t('remarkPlaceholder')" /></label><div class="metrics"><div class="metric"><small>{{ localeStore.t('fee') }}</small><span>{{ advancedError ? '—' : withdrawType==='bank' ? '0.00 USD' : calculationReady ? fee+' '+selectedCurrency : '—' }}</span></div><div class="metric"><small>{{ localeStore.t('expectedArrivalAmount') }}</small><span>{{ advancedError || !amount ? '—' : withdrawType==='bank' ? usdPreview(amount) : calculationReady ? actualAmount+' '+selectedCurrency : '—' }}</span></div><div class="metric"><small>{{ localeStore.t('balance') }} USD</small><span>{{ !balanceReady || advancedError ? '—' : formatWalletBalance(selectedBalance, localeStore.locale) }}</span></div></div></section>
 <p class="notice">{{ localeStore.text('仅允许通过实名认证的账户提交，费用以服务端结果为准','Identity verification is required; fees follow the service result') }}</p><button class="primary" :disabled="!balanceReady || submitting || advancedWriting || advancedError!=='' || (withdrawType==='bank' && bankRate===null)" @click="submitWithdraw">{{ submitting ? localeStore.t('submitting') : localeStore.text('提交出金','Submit withdrawal') }}</button>
+</template>
 <h2>{{ localeStore.t('withdrawRecords') }}</h2><p v-if="loadingRecords" class="empty">{{ localeStore.t('loading') }}</p><p v-else-if="!records.length" class="empty">{{ localeStore.t('noWithdrawRecords') }}</p><section v-for="r in records" :key="r.id" class="card"><div class="row"><span>{{ r.amount }} USD</span><span :class="getStatusClass(r.status)">{{ getStatusText(r.status) }}</span></div><div class="row"><span>{{ localeStore.t('fee') }}</span><span>{{ r.fee || 0 }}</span></div><div class="row"><span>{{ localeStore.t('arrivalAmount') }}</span><span>{{ r.actualAmount ?? r.amount }}</span></div><p class="muted">{{ formatDate(r.createdAt) }} · {{ r.network }}</p><p class="muted" style="overflow-wrap:anywhere">{{ r.address }} {{ r.remark }}</p></section><button v-if="advancedError" @click="advancedError='';loadBalance();loadRecords();loadDigitalAddresses();loadBankAccounts()">{{ localeStore.text('重试','Retry') }}</button>
-<div v-if="showCurrencyModal" class="modal-overlay" @click="showCurrencyModal = false">
+<div v-if="hasWithdrawChannel && showCurrencyModal" class="modal-overlay" @click="showCurrencyModal = false">
       <div class="modal-content" @click.stop>
         <div class="modal-header">
           <span class="modal-cancel" @click="showCurrencyModal = false">{{ localeStore.t('cancel') }}</span>
@@ -412,7 +427,7 @@ onMounted(() => {
         </div>
       </div>
     </div>
-<div v-if="showAddressModal" class="modal-overlay" @click="showAddressModal = false">
+    <div v-if="hasWithdrawChannel && showAddressModal" class="modal-overlay" @click="showAddressModal = false">
       <div class="modal-content" @click.stop>
         <div class="modal-header">
           <span class="modal-cancel" @click="showAddressModal = false">{{ localeStore.t('cancel') }}</span>
@@ -436,7 +451,7 @@ onMounted(() => {
         </div>
       </div>
     </div>
-<div v-if="showAccountModal" class="modal-overlay" @click="showAccountModal = false">
+    <div v-if="hasWithdrawChannel && showAccountModal" class="modal-overlay" @click="showAccountModal = false">
       <div class="modal-content" @click.stop>
         <div class="modal-header">
           <span class="modal-cancel" @click="showAccountModal = false">{{ localeStore.t('cancel') }}</span>
