@@ -8,6 +8,7 @@ import { getSystemTimezone } from '@/utils/dateTime'
 import { preferredTimeLocale } from '@/utils/displayTimezone'
 import { chartLocale } from '@/utils/chartLocale'
 import request from '@/utils/request'
+import { accountMode } from '@/utils/accountMode'
 import { candleFromQuote, chartPeriod, contiguousCryptoCandles, historyRepairPolicy, normalizeCandles } from '@/utils/chartData'
 import { registerTradingDrawingOverlays } from '@/utils/chartOverlays'
 import { indicatorCatalog, normalizePreferences, validParameters, validTimezone } from '@/utils/chartPreferences'
@@ -92,6 +93,9 @@ let pendingLatestAttempts = 0
 let gapCheckTimer: ReturnType<typeof setTimeout> | undefined
 let pageRequests = new Map<string, Promise<PageResult>>()
 let chart: Chart | null = null
+let reloadBars: KLineData[] | null = null
+let reloadingBars = false
+let historyForward = false
 let controller = new AbortController()
 let revision = 0
 let drawingKey = ''
@@ -109,6 +113,7 @@ let stopConnected: (() => void) | undefined
 let stopKline: (() => void) | undefined
 let pendingKline: KlineUpdate | null = null
 let lastKlineAt = 0
+let lastKlineSequence = 0
 const groupId = 'trading-drawings'
 
 const tools = [
@@ -301,6 +306,7 @@ function keydown(event: KeyboardEvent) {
 
 const sourceMissing = ref(false)
 const historyGap = ref('')
+let historyGapFromHistory = false
 const historyPaused = ref(false)
 let historyCursor: number | null = null
 let historySkips = 0
@@ -324,6 +330,7 @@ function requestedBarCount(history: boolean): number {
 }
 
 async function requestBars(before: number, signal: AbortSignal, limit: number): Promise<PageResult> {
+  const identity = responseIdentity()
   const history = Number.isFinite(before)
   const instruments = 'symbols' in market && Array.isArray(market.symbols) ? market.symbols : []
   const instrument = instruments.find(item => item.symbol === props.symbol)
@@ -339,6 +346,7 @@ async function requestBars(before: number, signal: AbortSignal, limit: number): 
       response = await request.get('/market/redis/kline/' + encodeURIComponent(props.symbol), { params: query, signal })
     }
     if (signal.aborted) throw new Error('Aborted')
+    if (identity !== responseIdentity()) throw new Error('Chart authority changed; reload')
     if (response?.data?.historyRestoreRevision != null && Number(response.data.historyRestoreRevision) < Number(market.quoteStatusMap[props.symbol]?.historyRestoreRevision || 0)) throw new Error('History revision changed; reload')
     const rows = response?.data?.kline_list ?? response?.data
     if (response?.ret === 200 && Array.isArray(rows)) {
@@ -348,7 +356,7 @@ async function requestBars(before: number, signal: AbortSignal, limit: number): 
       if (validated.length && !aligned.length) throw new Error('No aligned candles')
       const candidates = aligned.filter(bar => bar.timestamp < before)
       if (history && aligned.length && !candidates.length) throw new Error('History cursor was not honored')
-      const repair = history ? historyRepairPolicy(response.data) : null
+      const repair = historyRepairPolicy(response.data)
       // Sealed legacy bodies cannot gain repair metadata. Preserve marked controlled bars without rewriting the response.
       const protectedDisplay = history && !repair && response.data?.pending === false
         && rows.some((row: any) => row?.controlled === true || row?.historyReplaced === true)
@@ -356,8 +364,10 @@ async function requestBars(before: number, signal: AbortSignal, limit: number): 
       // Confirmed protected/no-data gaps must not hide real older bars forever.
       const candles = terminal ? candidates : contiguousCryptoCandles(candidates, before, interval.value, category)
       const pending = !terminal && (!!response.data?.pending || candles.length < candidates.length)
-      if (history && repair) historyGap.value = repair.reason
-      else if (protectedDisplay) historyGap.value = 'protected_control_history'
+      if (history && (repair || protectedDisplay)) {
+        historyGap.value = repair?.reason || (protectedDisplay ? 'protected_control_history' : '')
+        historyGapFromHistory = !!historyGap.value
+      } else if (repair && !historyGapFromHistory) historyGap.value = repair.reason
       sourceMissing.value = !!response.data?.missingData
       if (candles.length || !pending || attempt === 7)
         return { candles, pending, exhausted: !pending && response.data?.exhausted === true, retryAt: Number(response.data?.retryAt) || 0, terminal, nextCursor: repair?.nextCursor }
@@ -429,6 +439,11 @@ function cacheBars() {
 
 async function loadBars(params: DataLoaderGetBarsParams, version: number, signal: AbortSignal) {
   if (!chart || version !== revision || signal.aborted) return
+  if (params.type === 'init' && reloadBars) {
+    const bars = reloadBars; reloadBars = null
+    params.callback(bars, { forward: historyForward, backward: false }); cacheBars(); return
+  }
+  if (reloadingBars) { params.callback([], { forward: historyForward, backward: false }); return }
   if (params.type === 'backward') { params.callback([], { backward: false }); return }
   const history = params.type === 'forward'
   if (history && !['1m', '5m', '15m', '30m', '1h', '1d', '1w', '1M'].includes(interval.value)) {
@@ -445,8 +460,6 @@ async function loadBars(params: DataLoaderGetBarsParams, version: number, signal
     if (version !== revision || signal.aborted) return
     let candles = result.candles
     if (unfinished) {
-      if (!result.terminal && candles.some(bar => bar.timestamp >= unfinished.oldest && bar.timestamp < before && !unfinished.seen.has(bar.timestamp)))
-        throw new Error('Partial history has a middle gap')
       candles = candles.filter(bar => bar.timestamp < unfinished.oldest)
     }
     if (!result.candles.length && !result.pending && !result.exhausted && !result.limited && !result.terminal)
@@ -466,7 +479,9 @@ async function loadBars(params: DataLoaderGetBarsParams, version: number, signal
       historyWaiting.value = true
     } else if (history) { pendingHistory = null; historyWaiting.value = false; historyPaused.value = false }
     loading.value = false // A valid page is visible before the next page starts.
-    params.callback(candles, { forward: !!(result.candles.length && !partial && !result.limited && !result.exhausted), backward: false })
+    historyForward = !!(result.candles.length && !partial && !result.limited && !result.exhausted)
+    params.callback(candles, { forward: historyForward, backward: false })
+    if (unfinished) applyLatestCandles(result.candles, false, true)
     cacheBars()
     if (!history) {
       empty.value = !candles.length && !result.pending
@@ -534,28 +549,54 @@ function continueOlderHistory() {
   resume?.()
 }
 
-function applyLatestCandles(candles: KLineData[]) {
+function responseIdentity() {
+  const quote = market.quoteStatusMap[props.symbol]
+  return JSON.stringify([props.symbol, interval.value, accountMode(), quote?.epoch, quote?.simulationSession,
+    quote?.marketRevision, quote?.historyRestoreRevision, quote?.controlPublicationRevision, quote?.controlHistoryRevision])
+}
+
+function reloadOrderedBars(bars: KLineData[]) {
+  if (!chart) return
+  const current = chart.getDataList(), range = chart.getVisibleRange()
+  const anchor = current[Math.max(0, Math.min(current.length - 1, range.from))]?.timestamp
+  const x = anchor ? (chart.convertToPixel({ timestamp: anchor }) as Partial<Coordinate>).x : undefined
+  const drawings = chart.getOverlays({ groupId }).map(overlay => ({ id: overlay.id,
+    points: overlay.points.map(point => ({ timestamp: point.timestamp, value: point.value })) }))
+  reloadBars = bars; reloadingBars = true
+  try {
+    // Public DataLoader init consumes this snapshot synchronously; it never fetches or clears older history.
+    chart.resetData()
+    for (const drawing of drawings) chart.overrideOverlay(drawing)
+    if (anchor && x !== undefined) {
+      const nextX = (chart.convertToPixel({ timestamp: anchor }) as Partial<Coordinate>).x
+      if (nextX !== undefined) chart.scrollByDistance(x - nextX, 0)
+    }
+  } finally { reloadingBars = false }
+}
+
+function applyLatestCandles(candles: KLineData[], authoritative = false, fillOnly = false) {
   if (!chart || !realtime) return
   const current = chart.getDataList()
   const range = chart.getVisibleRange()
   const anchor = current[range.from]?.timestamp
   const x = anchor ? (chart.convertToPixel({ timestamp: anchor }) as Partial<Coordinate>).x : undefined
-  // The subscription callback updates the last candle or appends a new one
-  // without clearing history, drawings, or the current viewport.
-  let last = current[current.length - 1]
-  // A delayed source minute can complete a previously partial aggregate. Update the
-  // retained objects before triggering recalculation; history and drawings stay in place.
-  if (market.quoteStatusMap[props.symbol]?.controlHistory) {
-    const incoming = new Map(candles.map(bar => [bar.timestamp, bar]))
-    let corrected = false
-    for (const previous of current) {
-      const next = incoming.get(previous.timestamp)
-      if (next && (next.open !== previous.open || next.high !== previous.high || next.low !== previous.low || next.close !== previous.close || next.volume !== previous.volume)) {
-        Object.assign(previous, next); corrected = true
-      }
+  const tail = current[current.length - 1]?.timestamp ?? -Infinity
+  const merged = new Map(current.map(bar => [bar.timestamp, bar]))
+  let middle = false
+  for (const bar of candles) {
+    const old = merged.get(bar.timestamp)
+    if (fillOnly && bar.timestamp >= tail) continue
+    if (!old || !fillOnly && (bar.timestamp >= tail || authoritative && market.quoteStatusMap[props.symbol]?.controlHistory)) {
+      merged.set(bar.timestamp, { ...bar })
+      middle ||= bar.timestamp < tail && (!old || old.open !== bar.open || old.high !== bar.high || old.low !== bar.low || old.close !== bar.close || old.volume !== bar.volume)
     }
-    if (corrected && last) realtime?.(last)
   }
+  if (middle) {
+    reloadOrderedBars([...merged.values()].sort((a, b) => a.timestamp - b.timestamp))
+    empty.value = false; return
+  }
+  if (fillOnly) return
+  let last = current[current.length - 1]
   for (const bar of candles) {
     if (last && bar.timestamp < last.timestamp) continue
     if (!last || bar.timestamp > last.timestamp ||
@@ -574,7 +615,7 @@ function applyLatestCandles(candles: KLineData[]) {
 async function syncLatest() {
   if (!chart || !realtime || loading.value || syncing) return
   const version = revision, signal = controller.signal
-  const streamAt = lastKlineAt, marketVersion = market.quoteStatusMap[props.symbol]?.marketRevision
+  const streamSequence = lastKlineSequence, marketVersion = market.quoteStatusMap[props.symbol]?.marketRevision
   const session = market.quoteStatusMap[props.symbol]?.simulationSession
   syncing = true
   lastSyncAttempt = Date.now()
@@ -593,7 +634,8 @@ async function syncLatest() {
       candles = [...older.candles, ...candles]
     }
     if (signal.aborted || version !== revision || !chart || session !== market.quoteStatusMap[props.symbol]?.simulationSession) return
-    if (marketVersion !== market.quoteStatusMap[props.symbol]?.marketRevision || lastKlineAt > streamAt) return
+    if (marketVersion !== market.quoteStatusMap[props.symbol]?.marketRevision) return
+    if (lastKlineSequence !== streamSequence) { applyLatestCandles(candles, false, true); cacheBars(); return }
     if (!candles.length) throw new Error('No latest candles')
     applyLatestCandles(candles)
     syncError.value = false
@@ -616,8 +658,9 @@ function resetMarket() {
   controller = new AbortController()
   const version = ++revision
   realtime = null
+  reloadBars = null; reloadingBars = false; historyForward = false
   stopKline?.()
-  pendingKline = null; lastKlineAt = 0
+  pendingKline = null; lastKlineAt = 0; lastKlineSequence = 0
   stopKline = marketWebSocket.onKlineUpdate(props.symbol, interval.value, update => {
     pendingKline = update
     replayQuote()
@@ -639,6 +682,7 @@ function resetMarket() {
   historyCursor = null
   historySkips = 0
   historyGap.value = ''
+  historyGapFromHistory = false
   historyPaused.value = false
   pendingLatestAttempts = 0
   pageRequests = new Map()
@@ -685,7 +729,8 @@ function replayKline() {
     if (Date.now() - lastSyncAttempt >= 900) void syncLatest()
     return
   }
-  applyLatestCandles(candles)
+  applyLatestCandles(candles, true)
+  lastKlineSequence++
   cacheBars()
   syncError.value = false
   if (!update.pending) lastKlineAt = Date.now()
@@ -722,9 +767,10 @@ watch(() => market.quoteStatusMap[props.symbol]?.simulationSession, (value, prev
 })
 watch(() => market.quoteStatusMap[props.symbol], (quote, previous) => {
   const restored = Number(quote?.historyRestoreRevision || 0) > Number(previous?.historyRestoreRevision || 0)
-  if (!restored && (quote?.controlHistoryRevision === previous?.controlHistoryRevision || !previous?.controlHistoryRevision)) return
+  const sourceChanged = quote?.epoch !== previous?.epoch || previous && quote?.marketRevision !== previous.marketRevision
+  if (!restored && !sourceChanged && (quote?.controlHistoryRevision === previous?.controlHistoryRevision || !previous?.controlHistoryRevision)) return
   const manualChange = quote?.controlState === 'MANUAL' || previous?.controlState === 'MANUAL'
-  if (!restored && manualChange && quote?.controlPublicationRevision != null && quote.controlPublicationRevision === previous?.controlPublicationRevision) {
+  if (!restored && quote?.epoch === previous?.epoch && manualChange && quote?.controlPublicationRevision != null && quote.controlPublicationRevision === previous?.controlPublicationRevision) {
     // Offset changes affect live candles only. Keep history, drawings and the viewport.
     replayQuote()
     return

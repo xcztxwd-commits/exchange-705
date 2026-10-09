@@ -28,7 +28,7 @@ for (const app of ['exchange-pc', 'exchange-frontend']) {
       },
       loading: { value: false }, historyLoading: { value: history }, syncing: false,
       revision: 1, controller: new AbortController(), lastSyncAttempt: 0,
-      lastKlineAt: 0,
+      lastKlineAt: 0, lastKlineSequence: 0,
       fetchBars: async before => {
         requests.push(before)
         if (changedDuringFetch) context.market.quoteStatusMap.TEST.marketRevision = 2

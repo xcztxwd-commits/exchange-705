@@ -232,6 +232,7 @@ public class MarketWebSocketHandler extends TextWebSocketHandler {
                                 if (bars.isEmpty()) continue;
                                 Map<String,Object> item = new HashMap<>(); item.put("symbol", subscription.symbol); item.put("interval", subscription.interval);
                                 item.put("bars", bars); item.put("pending", ((Map<?,?>)result.get("data")).get("pending"));
+                                ForexQuoteMarketService.afterCommit(() -> item.put("pending", ((Map<?,?>)result.get("data")).get("pending")));
                                 capturedKlines.put(subscription.key(), item);
                             } catch (RuntimeException unavailable) { /* Price delivery survives unavailable candle history. */ }
                         }

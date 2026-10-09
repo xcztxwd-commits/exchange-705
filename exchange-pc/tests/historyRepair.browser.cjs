@@ -42,7 +42,8 @@ const state = page => page.locator('.chart-workspace').evaluate(el => {
           body = { ret: 200, data: { pending: false, kline_list: history ? empty ? [] : archived
             ? sparse.map(bar => ({ ...bar, controlled: true, historyReplaced: true })) : sparse : bars(301, 500),
             ...(history && !archived ? { missingData: reason, historyRepair: { pending: false, state: 'unrepairable',
-              gaps: [{ reason, recoverable: false }], nextCursor: Number(url.searchParams.get('endTime')) - 200 * step } } : {}) } }
+              gaps: [{ reason, recoverable: false }], nextCursor: Number(url.searchParams.get('endTime')) - 200 * step } } : {}),
+            ...(!history ? { historyRepair: { pending: false, state: 'complete', gaps: [] } } : {}) } }
         }
         if (pending && url.pathname.includes('/history/')) {
           const older = Number(url.searchParams.get('endTime')) === origin + 101 * step - 1
@@ -51,7 +52,7 @@ const state = page => page.locator('.chart-workspace').evaluate(el => {
         }
         await route.fulfill({ json: body })
       })
-      const url = app === 'pc' ? 'http://127.0.0.1:5187/' : 'http://127.0.0.1:5188/#/trade?symbol=BTCUSDT&category=Crypto'
+      const url = app === 'pc' ? process.env.PC_QA_URL || 'http://127.0.0.1:5187/' : process.env.MOBILE_QA_URL || 'http://127.0.0.1:5188/#/trade?symbol=BTCUSDT&category=Crypto'
       for (reason of ['missing_control_samples', 'upstream_no_data', 'source_calendar_unverified', 'source_fetch_or_write_failed', 'existing_partial_or_invalid']) {
         historyCalls = 0; await page.goto(url); await page.reload()
         await page.waitForFunction(() => document.querySelector('.chart-workspace')?.__vueParentComponent?.setupState?.count === 200)
@@ -62,6 +63,8 @@ const state = page => page.locator('.chart-workspace').evaluate(el => {
         assert.equal(await page.locator('.chart-footer').isVisible(), true, 'gap notice must survive compact trade layout CSS')
         assert.deepEqual(s.times, [...bars(101, 150), ...bars(201, 500)].map(bar => bar.timestamp))
         assert.ok(s.closes.every(close => close === 101)); assert.equal(historyCalls, 1)
+        await page.locator('.chart-workspace').evaluate(el => el.__vueParentComponent.setupState.syncLatest())
+        assert.equal((await state(page)).gap, reason, 'complete latest coverage cannot erase an older protected/no-data notice')
         console.log(`${app}: ${reason} real sparse bars remain visible without waiting`)
       }
       pending = true; historyCalls = 0; await page.reload()

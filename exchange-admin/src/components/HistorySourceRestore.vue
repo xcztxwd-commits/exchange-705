@@ -15,6 +15,11 @@ const closed = () => Math.floor(Date.now() / 60000) * 60000 - 60000
 const from = ref(closed() - 4 * 60000), to = ref(closed())
 const host = ref<HTMLDivElement>(), error = ref(''), busy = ref(false), loading = ref(false), sourceIdentity = ref('')
 const before = ref<HistoryCandle[]>([]), originals = ref<HistoryCandle[]>([]), records = ref<any[]>([]), preview = ref<any>()
+const gapPeriod = ref('1m'), gapReport = ref<any>(), gapBusy = ref(false)
+let gapTimer: ReturnType<typeof setTimeout> | undefined, gapPolls = 0
+const gapScope = () => JSON.stringify([generation, props.symbolId, from.value, to.value, gapPeriod.value, timezone.value, commandScope(readSession(sessionStorage))])
+const gapState = (s: string) => ({ queued: '待补', running: '执行中', recoverable: '可安全补齐', complete: '已完整', blocked: '已停止', queue_full: '队列已满，请重试' }[s] || s)
+const gapReason = (s: string) => ({ missing_source: '缺少源记录', protected_control_history: '控盘历史保护', missing_control_samples: '控盘采样缺失', control_samples_unverified: '控盘采样未验证', protected_control_hold: 'hold 保护', protected_publication: '发布保护', protected_mixed_minute: '混合分钟保护', frozen_snapshot: '封存快照', sealed_history: '已封存历史', protected_history_restore: '恢复或撤销快照保护', simulation_history: '模拟会话及冻结前缀', projection_before_initial: '不满足 SOURCE 投影资格', existing_partial_or_invalid: '已有源记录不完整或无效', source_conflict: '来源冲突', source_route_conflict: '源路由冲突', upstream_no_data: '上游无数据', source_fetch_or_write_failed: '补采或写入失败，重试已耗尽' }[s] || s)
 const ambiguous = ref<{ side: 'from' | 'to'; options: { timestamp: number; offset: string }[] }>()
 const active = computed(() => records.value.some(row => ['ACCEPTED', 'RUNNING'].includes(row.state)))
 const count = computed(() => Math.floor((to.value - from.value) / 60000) + 1)
@@ -132,6 +137,25 @@ function validRange() {
   if (from.value > to.value || count.value < 1 || count.value > 1440 || to.value > closed()) throw new Error('请选择已结束的分钟，单次 1～1440 分钟；结束时间包含该分钟')
   return { from: from.value, to: to.value, timezone: timezone.value }
 }
+async function checkGaps(repair = false, polling = false) {
+  if (gapBusy.value) return
+  const scope = gapScope(), endpoint = api(); gapBusy.value = true; error.value = ''
+  if (!polling) gapPolls = 0
+  clearTimeout(gapTimer)
+  try {
+    const range = { ...validRange(), period: gapPeriod.value }
+    const result = await (repair ? request.post(endpoint + '/gaps/repair', range) : request.get(endpoint + '/gaps', { params: range })) as any
+    if (scope !== gapScope() || disposed) return
+    gapReport.value = result
+    if (result.pending && ++gapPolls <= 12) {
+      const retryAt = Math.max(0, ...result.windows.map((row: any) => Number(row.retryAt) || 0))
+      gapTimer = setTimeout(() => { if (scope === gapScope()) void checkGaps(false, true) }, Math.max(1500, retryAt - Date.now()))
+    }
+    if (repair && !result.pending) await loadChart()
+    if (polling && !result.pending && result.inserted > 0) await loadChart()
+  } catch (e: any) { if (scope === gapScope()) error.value = e.message || '缺口检查失败' }
+  finally { gapBusy.value = false }
+}
 async function check(backfill = false) {
   const version = generation, endpoint = api(); busy.value = true; error.value = ''
   try {
@@ -187,6 +211,7 @@ async function retry(row: any) {
   catch (e: any) { error.value = e.message || '重试失败' }
 }
 function reset() {
+  gapReport.value = undefined; clearTimeout(gapTimer); gapPolls = 0
   ++generation; preview.value = undefined; pending.value = undefined; details.value = undefined; records.value = []; before.value = []; originals.value = []; error.value = ''; busy.value = false; loading.value = false; ambiguous.value = undefined; drag = undefined
   from.value = props.initialRange?.from ?? closed() - 4 * 60000; to.value = props.initialRange?.to ?? closed()
   windowFrom = from.value - Math.max(0, 240 - count.value) * 60000; windowTo = to.value
@@ -197,13 +222,14 @@ watch(() => props.symbolId, reset)
 watch(() => props.initialRange, reset)
 watch([period, interaction, after], draw)
 watch(timezone, invalidate)
+watch([from, to, gapPeriod, timezone], () => { gapReport.value = undefined; clearTimeout(gapTimer) })
 async function poll() {
   if (disposed) return
   try { if (pending.value) await queryPending(); else if (active.value) { await loadRecords(); if (!active.value) await loadChart() } } catch (e: any) { error.value = e.message || '任务查询失败' }
   if (!disposed) timer = setTimeout(poll, 1500)
 }
 onMounted(() => { chart = echarts.init(host.value!); chart.on('datazoom', selectionGraphic); resize = new ResizeObserver(() => { chart?.resize(); selectionGraphic() }); resize.observe(host.value!); reset(); void poll() })
-onUnmounted(() => { disposed = true; ++generation; clearTimeout(timer); resize?.disconnect(); chart?.dispose() })
+onUnmounted(() => { disposed = true; ++generation; clearTimeout(timer); clearTimeout(gapTimer); resize?.disconnect(); chart?.dispose() })
 </script>
 
 <template>
@@ -224,6 +250,16 @@ onUnmounted(() => { disposed = true; ++generation; clearTimeout(timer); resize?.
       <div ref="host" class="chart" :class="{ selecting: interaction === 'select' }" tabindex="0" aria-label="历史 K 线选区，方向键移动一分钟，Shift 加方向键调整结束时间" @pointerdown="start" @pointermove="move" @pointerup="finish" @pointercancel="drag = undefined" @keydown="keyboard" />
       <div class="selection"><span>{{ stamp(from) }} ～ {{ stamp(to) }} · {{ count }} 分钟</span><el-button v-permission="'ai_control:restore_history'" type="primary" :loading="busy" :disabled="!symbolId || active || !!pending || !!ambiguous" @click="check()">预览恢复</el-button></div>
       <p class="hint">点选单根，拖动选择多根；拖动绿色边界调整范围。大周期选择会展开为完整分钟。单次最多 1440 分钟。</p>
+      <div class="gap-check">
+        <div class="toolbar"><strong>历史缺口</strong><el-select v-model="gapPeriod" aria-label="缺口检查周期" style="width:100px"><el-option v-for="p in ['1m','5m','15m','30m','1h']" :key="p" :value="p" :label="p" /></el-select><el-button :loading="gapBusy" :disabled="busy || loading || !!ambiguous" @click="checkGaps()">缺口检查</el-button><el-button v-permission="'ai_control:restore_history'" :loading="gapBusy" :disabled="busy || !gapReport?.retryable" @click="checkGaps(true)">安全补齐</el-button></div>
+        <p class="hint">按所选区间独立检查原生周期。安全补齐只新增允许补采的源槽位；受保护缺口停止，不执行恢复或撤销。</p>
+        <template v-if="gapReport">
+          <p>{{ gapReport.sourceIdentity }} · {{ gapReport.period }} · {{ stamp(gapReport.from) }} ～ {{ stamp(gapReport.to) }}</p>
+          <p class="gap-summary">源缺失 {{ gapReport.sourceMissing }} · 展示缺失 {{ gapReport.displayMissing }} · 可补 {{ gapReport.recoverable }} · 受保护 {{ gapReport.protected }} · 最近新增 {{ gapReport.inserted }} · 源修订 {{ gapReport.sourceInputRevision }}</p>
+          <el-alert v-if="gapReport.protected" title="受保护缺口保留，自动和手动均不能绕过保护" type="warning" :closable="false" />
+          <el-table :data="gapReport.windows" max-height="300"><el-table-column label="检查窗口" min-width="185"><template #default="{ row }">{{ stamp(row.from) }}<br>{{ stamp(row.to) }}</template></el-table-column><el-table-column label="状态" min-width="130"><template #default="{ row }">{{ gapState(row.queueState) }}<br>最近新增 {{ row.inserted }}</template></el-table-column><el-table-column label="源 / 展示缺失" min-width="120"><template #default="{ row }">{{ row.sourceMissing }} / {{ row.displayMissing }}</template></el-table-column><el-table-column label="原因" min-width="210"><template #default="{ row }">{{ [...new Set(row.gaps.map((gap: any) => gapReason(gap.reason)))].join('、') || '完整' }}</template></el-table-column></el-table>
+        </template>
+      </div>
       <el-alert v-if="preview?.state === 'NO_CHANGE'" title="所选区间已经是原始源，无需恢复" type="success" :closable="false" />
       <el-alert v-if="preview?.state === 'MISSING_SOURCE'" :title="`缺少 ${preview.missing.length} 根完整原始源，暂不可恢复`" type="warning" :closable="false" />
       <div v-if="preview?.state === 'MISSING_SOURCE'" class="toolbar"><span>{{ preview.missing.slice(0, 8).map(stamp).join('、') }}{{ preview.missing.length > 8 ? '…' : '' }}</span><el-button v-permission="'ai_control:restore_history'" :loading="busy" @click="check(true)">补采原始源并重新预览</el-button></div>

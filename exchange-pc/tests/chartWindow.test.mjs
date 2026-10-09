@@ -28,6 +28,7 @@ for (const app of ['exchange-pc', 'exchange-frontend']) {
       convertToPixel: () => ({ x: (visible - data.length) * 7 }),
       getVisibleRange: () => ({ from: Math.max(0, data.length - visible) }),
       scrollByDistance: () => { if (data.length <= visible) queueMicrotask(() => loader('forward')) },
+      getOverlays: () => [], overrideOverlay: () => {}, resetData: () => { void loader('init') },
     }
     const request = { get: async (url, options) => {
       calls.push({ url, ...options.params })
@@ -44,6 +45,12 @@ for (const app of ['exchange-pc', 'exchange-frontend']) {
       empty: { value: false }, exhausted: { value: false }, count: { value: 0 },
       retry: null, pendingLatestTimer: undefined, pendingLatestAttempts: 0,
       gapCheckTimer: undefined, controller: new AbortController(), revision: 1,
+      reloadBars: null, reloadingBars: false, historyForward: false, historyGapFromHistory: false,
+      accountMode: () => 'REAL', groupId: 'trading-drawings', manuallyScrolled: false,
+      realtime: candle => {
+        if (data.at(-1)?.timestamp === candle.timestamp) data[data.length - 1] = candle
+        else data.push(candle)
+      },
       market: { klineDataMap: {}, quoteStatusMap: {}, symbols: options.symbols || [] }, replayQuote: () => {}, restoreDrawings: () => {}, emit: () => {},
       syncLatest: () => {},
     }

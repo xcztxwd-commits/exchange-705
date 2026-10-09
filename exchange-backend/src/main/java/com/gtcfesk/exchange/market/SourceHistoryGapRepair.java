@@ -38,6 +38,7 @@ public class SourceHistoryGapRepair {
         Receipt(List<Map<String,Object>> gaps, int inserted) { this.gaps = gaps; this.inserted = inserted; }
     }
     static boolean continuous(String category) { return "Crypto".equalsIgnoreCase(category) || "CryptoPerpetual".equalsIgnoreCase(category); }
+    static boolean automaticPeriod(String period) { return Arrays.asList("1m", "5m", "15m", "30m", "1h").contains(period); }
     static long start(String period, long at) {
         if ("1M".equals(period)) return RandomMarketPath.monthStart(at);
         long width = RandomMarketPath.duration(period), offset = "1w".equals(period) ? 4 * 86400000L : 0;
@@ -56,6 +57,7 @@ public class SourceHistoryGapRepair {
     Window inspect(TradingSymbol config, String period, int limit, long cursor, String provider,
             List<Map<String,Object>> cached, boolean projection) {
         TenantContext.require(config.getTenantId());
+        limit = Math.min(200, Math.max(1, limit));
         long now = System.currentTimeMillis(), to = Math.min(cursor, now - 1), from;
         if (continuous(config.getSourceCategory())) {
             to = start(period, to);
@@ -67,6 +69,7 @@ public class SourceHistoryGapRepair {
         }
         Window window = new Window(config, period, limit, cursor, provider, Math.max(946684800000L, from), to, projection);
         Protection protection = protection(window);
+        if (RandomMarketPath.enabled(config)) protection.add(window.from, Long.MAX_VALUE, "simulation_history");
         String configured = MarketInstrumentCatalog.inferredSource(config.getSourceCategory());
         if (configured == null || !configured.equalsIgnoreCase(config.getMarketSource()))
             protection.add(window.from, Long.MAX_VALUE, "source_route_conflict");
@@ -76,8 +79,10 @@ public class SourceHistoryGapRepair {
                 Map<String,Object> old = stored.get(at);
                 String reason = old == null ? protection.reason(at, end(period, at)) : existingProblem(window, old);
                 if (reason == null) reason = protection.report(at, end(period, at));
-                if (old == null || reason != null) window.gaps.add(gap(at, end(period, at) - 1,
-                        reason == null ? "missing_source" : reason, old == null && reason == null));
+                if (old == null || reason != null) {
+                    Map<String,Object> missing = gap(at, end(period, at) - 1, reason == null ? "missing_source" : reason, old == null && reason == null);
+                    missing.put("sourceMissing", old == null || existingProblem(window, old) != null); window.gaps.add(missing);
+                }
             }
         } else {
             Set<Long> observed = new TreeSet<>(stored.keySet());
@@ -87,8 +92,10 @@ public class SourceHistoryGapRepair {
                 Map<String,Object> old = stored.get(at);
                 String reason = old == null ? protection.reason(at, end(period, at)) : existingProblem(window, old);
                 if (reason == null) reason = protection.report(at, end(period, at));
-                if (old == null || reason != null) window.gaps.add(gap(at, end(period, at) - 1,
-                        reason == null ? "missing_source" : reason, old == null && reason == null));
+                if (old == null || reason != null) {
+                    Map<String,Object> missing = gap(at, end(period, at) - 1, reason == null ? "missing_source" : reason, old == null && reason == null);
+                    missing.put("sourceMissing", old == null || existingProblem(window, old) != null); window.gaps.add(missing);
+                }
             }
             String refusal = protection.reason(window.from, window.to + 1);
             window.discovery = refusal == null;
@@ -199,6 +206,9 @@ public class SourceHistoryGapRepair {
         List<Long> simulations = store.db.queryForList("SELECT candle_at FROM market_simulation_source_candle WHERE tenant_id=? AND symbol_id=? AND candle_at>=? AND candle_at<=? ORDER BY candle_at LIMIT 501" + currentRead(), Long.class, window.tenant, window.symbol, from, to);
         if (simulations.size() > 500) result.add(window.from, Long.MAX_VALUE, "protection_window_limit");
         for (Long at : simulations) protect(result, window, at, at + 59999, "simulation_history");
+        List<Long> restored = store.db.queryForList("SELECT minute_at FROM market_history_restore_minute WHERE tenant_id=? AND symbol_id=? AND minute_at>=? AND minute_at<=? ORDER BY minute_at LIMIT 501" + currentRead(), Long.class, window.tenant, window.symbol, from, to);
+        if (restored.size() > 500) result.add(window.from, Long.MAX_VALUE, "protection_window_limit");
+        for (Long at : restored) protect(result, window, at, at + 59999, "protected_history_restore");
         if (window.projection && minutes) for (Long initial : store.db.queryForList("SELECT initial_watermark FROM s4_history_projection_progress WHERE tenant_id=? AND symbol_id=? ORDER BY generation DESC LIMIT 1" + currentRead(), Long.class, window.tenant, window.symbol))
             result.add(0, initial, "projection_before_initial");
         // A new native session anchor (or Monday-week anchor) can re-bucket controls outside this page.
@@ -229,6 +239,8 @@ public class SourceHistoryGapRepair {
                 || !(((Map<?,?>)response.get("data")).get("kline_list") instanceof List)) throw new MarketHttp.Failure("invalid_history_response", 0);
         List<Map<String,Object>> supplied = ControlHistoryStore.rows(response);
         if (supplied.size() > window.limit) throw new MarketHttp.Failure("history_window_too_large", 0);
+        Map<?,?> data = (Map<?,?>)response.get("data");
+        if (data.get("code") != null && !window.code.equals(data.get("code"))) throw new MarketHttp.Failure("history_source_conflict", 0);
         TreeMap<Long,Map<String,Object>> candidates = new TreeMap<>();
         List<Map<String,Object>> invalid = new ArrayList<>();
         Set<Long> conflicts = new HashSet<>();
@@ -237,11 +249,11 @@ public class SourceHistoryGapRepair {
             if (at < window.from || at > window.to || end(window.period, at) > received) continue;
             if (row.containsKey("historySource") && !window.identity.equals(row.get("historySource"))
                     || row.containsKey("source") && !Arrays.asList(window.provider, window.configuredSource, "External").contains(row.get("source"))) {
-                invalid.add(gap(at, end(window.period, at) - 1, "source_conflict", false)); continue;
+                conflicts.add(at); invalid.add(gap(at, end(window.period, at) - 1, "source_conflict", false)); continue;
             }
             boolean aligned = Arrays.asList("Binance", "OKX").contains(window.provider) ? start(window.period, at) == at : at % 60000 == 0;
             if (!aligned || !valid(row) || Boolean.TRUE.equals(row.get("partial"))) {
-                invalid.add(gap(at, end(window.period, at) - 1, "invalid_upstream_candle", false)); continue;
+                conflicts.add(at); invalid.add(gap(at, end(window.period, at) - 1, "invalid_upstream_candle", false)); continue;
             }
             Map<String,Object> copy = new LinkedHashMap<>(row); copy.put("timestamp", at); copy.put("historySource", window.identity); copy.put("historyOnly", true);
             Map<String,Object> prior = candidates.putIfAbsent(at, copy);
@@ -258,8 +270,7 @@ public class SourceHistoryGapRepair {
                 throw new IllegalStateException("History source route/version changed");
             Protection protection = protection(window);
             if (Boolean.TRUE.equals(route.get("random_market_enabled")) || route.get("random_market_enabled") instanceof Number && ((Number)route.get("random_market_enabled")).intValue() != 0) {
-                long session = route.get("random_market_started_at") == null ? 0 : ((Number)route.get("random_market_started_at")).longValue();
-                protection.add(session, Long.MAX_VALUE, "simulation_history");
+                protection.add(window.from, Long.MAX_VALUE, "simulation_history");
             }
             Map<Long,Map<String,Object>> old = existing(window);
             if (!encoded.isEmpty()) {
@@ -279,7 +290,7 @@ public class SourceHistoryGapRepair {
                 }
                 store.db.update("INSERT INTO market_source_candle(tenant_id,symbol_id,period,candle_at,body,received_at) VALUES(?,?,?,?,?,?)", window.tenant, window.symbol, window.period, at, row.getValue(), received);
                 inserted++; old.put(at, Collections.singletonMap("body", row.getValue()));
-                if ("1m".equals(window.period)) { dirtyFrom = Math.min(dirtyFrom, at); dirtyTo = Math.max(dirtyTo, at); }
+                dirtyFrom = Math.min(dirtyFrom, at); dirtyTo = Math.max(dirtyTo, end(window.period, at) - 60000);
             }
             if (dirtyFrom != Long.MAX_VALUE) store.runtime.sourceChanged(window.symbol, dirtyFrom, dirtyTo);
             if (window.continuous) for (long at = window.from; at <= window.to; at = end(window.period, at)) {

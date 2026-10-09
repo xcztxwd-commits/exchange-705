@@ -47,6 +47,7 @@ class FundingQuoteAuthorityJointTest {
         config.setPricePrecision(4); config.setRowVersion(7L); config.setRandomMarketEnabled(false);
         database.update("INSERT INTO trading_symbol VALUES(1,1,?,7,true,4,'binance','Crypto','USD',false,NULL)", config.getSymbol());
         database.update("INSERT INTO market_engine_runtime VALUES(1,1,3,4,5,NULL,'existing-engine',?,0,'{}')", System.currentTimeMillis() + 15000);
+        database.execute("ALTER TABLE market_engine_runtime ADD history_restore_revision BIGINT NOT NULL DEFAULT 0");
         publish(System.currentTimeMillis() + 60000);
         sql.clear();
     }

@@ -48,10 +48,12 @@ class MarketKlinePushTest {
         when(market.knownSymbol("TEST")).thenReturn(true);
         AtomicInteger price = new AtomicInteger(102), reads = new AtomicInteger();
         ThreadLocal<Boolean> snapshot = new ThreadLocal<>();
+        TransactionTemplate read = new TransactionTemplate(new DataSourceTransactionManager(new DriverManagerDataSource("jdbc:h2:mem:kline-admission-commit", "sa", "")));
+        read.setReadOnly(true); read.setIsolationLevel(java.sql.Connection.TRANSACTION_REPEATABLE_READ);
         when(market.readSnapshot(any())).thenAnswer(call -> {
             assertEquals(Long.valueOf(7), TenantContext.requireTenantId());
             reads.incrementAndGet(); snapshot.set(true);
-            try { return ((Supplier<?>)call.getArgument(0)).get(); } finally { snapshot.remove(); }
+            try { return read.execute(status -> ((Supplier<?>)call.getArgument(0)).get()); } finally { snapshot.remove(); }
         });
         when(market.snapshotPrice("TEST")).thenAnswer(call -> {
             assertEquals(Boolean.TRUE, snapshot.get());
@@ -60,7 +62,9 @@ class MarketKlinePushTest {
         when(market.internalKline("TEST", "1m", 2)).thenAnswer(call -> {
             assertEquals(Boolean.TRUE, snapshot.get());
             Map<String,Object> bar = new HashMap<>(); bar.put("timestamp", 1700000000000L); bar.put("close_price", price.get());
-            return Collections.singletonMap("data", Collections.singletonMap("kline_list", Collections.singletonList(bar)));
+            Map<String,Object> data = new HashMap<>(); data.put("kline_list", Collections.singletonList(bar)); data.put("pending", true);
+            ForexQuoteMarketService.afterCommit(() -> data.put("pending", false)); // Queue filled before admission.
+            return Collections.singletonMap("data", data);
         });
         MarketWebSocketHandler handler = new MarketWebSocketHandler();
         ReflectionTestUtils.setField(handler, "marketService", market);
@@ -78,6 +82,7 @@ class MarketKlinePushTest {
             assertNotNull(first);
             assertEquals(102, first.path("data").path("TEST").path("price").asInt());
             assertEquals(102, first.path("klines").get(0).path("bars").get(0).path("close_price").asInt());
+            assertFalse(first.path("klines").get(0).path("pending").asBoolean(), "wire pending reflects actual queue admission after commit");
             Thread.sleep(30); frames.clear();
             int initialReads = reads.get();
             handler.quoteCommitted(new MarketQuoteCommitted(8, "TEST"));

@@ -149,15 +149,21 @@ class AdminPermissionIntegrationTest {
         assertEquals(401,mvc.perform(get("/api/admin/durations")).andReturn().getResponse().getStatus());
     }
     @Test void historyRestoreAndUndoRequireIndependentWriteGrants() throws Exception {
-        grant("ai_control");
         String base="/api/admin/ai-control/1/history-restore";
+        assertEquals(403,call("GET",base+"/gaps?from=1791364860000&to=1791364860000&period=1m&timezone=UTC",null,token));
+        grant("ai_control");
         String range="{\"from\":1791364860000,\"to\":1791364860000,\"timezone\":\"Asia/Singapore\"}";
         String confirmation="{\"previewToken\":\"11111111-1111-4111-a111-111111111111\",\"requestKey\":\"permission_restore_001\"}";
         for(String endpoint:Arrays.asList("/preview","/source")) assertEquals(403,call("POST",base+endpoint,range,token));
+        String gapRange=range.substring(0,range.length()-1)+",\"period\":\"1m\"}";
+        assertEquals(403,call("POST",base+"/gaps/repair",gapRange,token));
+        assertEquals(401,mvc.perform(get(base+"/gaps").param("from","1791364860000").param("to","1791364860000").param("period","1m").param("timezone","UTC")).andReturn().getResponse().getStatus());
+        assertEquals(200,call("GET",base+"/gaps?from=1791364860000&to=1791364860000&period=1m&timezone=UTC",null,token));
         assertEquals(403,call("POST",base+"/jobs",confirmation,token));
         assertEquals(403,call("POST",base+"/jobs/test/undo-preview","{}",token));
         grant("ai_control:restore_history");
         authenticate(); assertTrue(permissions.can("ai_control","restore_history")); assertFalse(permissions.can("ai_control","undo_history_restore"));
+        assertEquals(200,call("POST",base+"/gaps/repair",gapRange,token));
         assertEquals(403,call("POST",base+"/jobs/test/undo",confirmation,token));
         assertEquals(403,call("POST",base+"/jobs/test/undo-retry","{}",token));
     }

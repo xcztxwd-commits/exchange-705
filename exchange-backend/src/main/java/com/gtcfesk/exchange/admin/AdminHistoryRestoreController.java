@@ -26,6 +26,16 @@ public class AdminHistoryRestoreController {
         @NotBlank @Pattern(regexp="[A-Za-z0-9_-]{36}") private String previewToken;
         @NotBlank @Pattern(regexp="[A-Za-z0-9_-]{16,64}") private String requestKey;
     }
+    @Getter @Setter public static class GapRange extends Range {
+        @NotBlank @Pattern(regexp="1m|5m|15m|30m|1h") private String period;
+    }
+    @GetMapping("/gaps") @AdminPermission(menu="ai_control",action="")
+    public Map<String,Object> gaps(@PathVariable Long symbol, @RequestParam long from, @RequestParam long to,
+            @RequestParam String period, @RequestParam String timezone) { return market.checkSourceGaps(symbol, from, to, period, timezone); }
+    @PostMapping("/gaps/repair") @AdminPermission(menu="ai_control",action="restore_history")
+    public Map<String,Object> repairGaps(@PathVariable Long symbol, @Valid @RequestBody GapRange range) {
+        return market.queueSourceGaps(symbol, range.getFrom(), range.getTo(), range.getPeriod(), range.getTimezone());
+    }
     @GetMapping("/chart") @AdminPermission(menu="ai_control",action="")
     public Map<String,Object> chart(@PathVariable Long symbol,@RequestParam long from,@RequestParam long to,@RequestParam String timezone) { return market.historyRestoreChart(symbol,from,to,timezone); }
     @PostMapping("/preview") @AdminPermission(menu="ai_control",action="restore_history")

@@ -102,6 +102,7 @@ public class ForexQuoteMarketService {
     @Autowired private SourceHistoryProjector sourceHistory;
     @Autowired private SourceHistoryGapRepair historyGapRepair;
     @Autowired(required=false) private HistorySourceRestore historyRestore;
+    @Autowired(required=false) private com.gtcfesk.exchange.control.ControlAuditService historyGapAudit;
     @Value("${app.market.s4-source-projection-enabled:false}") private boolean sourceProjectionEnabled;
     @Value("${market.quote.max-age-ms:60000}") private long maxAgeMs = 60000;
     @Value("${market.quote.poll-ms:3000}") private long pollMs = 3000;
@@ -120,6 +121,7 @@ public class ForexQuoteMarketService {
         final Long endTime;
         final boolean sourceFeed;
         final SourceHistoryGapRepair.Window repair;
+        final com.gtcfesk.exchange.control.ControlIdentity repairActor;
         int attempts;
         KlineRequest(String code, String interval, int limit) {
             this(code, interval, limit, null);
@@ -129,11 +131,15 @@ public class ForexQuoteMarketService {
         }
         KlineRequest(String code, String interval, int limit, Long endTime, boolean sourceFeed) {
             this.code = code; this.interval = interval; this.limit = limit;
-            this.endTime = endTime; this.sourceFeed = sourceFeed; this.repair = null;
+            this.endTime = endTime; this.sourceFeed = sourceFeed; this.repair = null; this.repairActor = null;
             this.key = code + ":" + interval + ":" + limit + (endTime == null ? "" : ":" + endTime);
         }
         KlineRequest(SourceHistoryGapRepair.Window repair) {
+            this(repair, null);
+        }
+        KlineRequest(SourceHistoryGapRepair.Window repair, com.gtcfesk.exchange.control.ControlIdentity actor) {
             this.repair = repair; code = repair.code; interval = repair.period; limit = repair.limit;
+            repairActor = actor;
             endTime = repair.continuous ? SourceHistoryGapRepair.end(repair.period, repair.to) - 1 : repair.to;
             sourceFeed = false; key = repair.key;
         }
@@ -483,7 +489,7 @@ public class ForexQuoteMarketService {
             log.warn("Committed quote notification pending: {}", group.category);
         }
     }
-    private static void afterCommit(Runnable action) {
+    static void afterCommit(Runnable action) {
         if (TransactionSynchronizationManager.isSynchronizationActive()) {
             TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
                 @Override public void afterCommit() { action.run(); }
@@ -847,14 +853,17 @@ public class ForexQuoteMarketService {
     }
     @SuppressWarnings("unchecked")
     public Map<String, Object> internalKline(String symbol, String interval, Integer limit) {
+        return readSnapshot(() -> internalKlineSnapshot(symbol, interval, limit));
+    }
+    private Map<String,Object> internalKlineSnapshot(String symbol, String interval, Integer limit) {
         TradingSymbol config = state().registry.get(symbol);
         Map<String,Object> projected=projectedSourceKline(config,symbol,interval,limit,null);
-        if(projected!=null) return projected;
+        if(projected!=null) return inspectLatestGaps(config, interval, limit, projected);
         if (virtualTrading && RandomMarketPath.enabled(config))
             return durableSimulationKline(config, interval, limit, null);
         Map<String, Object> result = cachedKline(config == null ? symbol : marketCode(config), interval, limit,
             config == null ? "Crypto" : sourceCategory(config),null,true);
-        return mergeControlKline(config, symbol, interval, limit, null, result);
+        return inspectLatestGaps(config, interval, limit, mergeControlKline(config, symbol, interval, limit, null, result));
     }
     /** Historical source candles are not rewritten using today's configured price offset. */
     @SuppressWarnings("unchecked")
@@ -885,8 +894,38 @@ public class ForexQuoteMarketService {
         if (archived != null) return archived; // Full sealed response remains byte/field authoritative, including its envelope.
         SourceHistoryGapRepair.Window window = historyGapRepair.inspect(config, interval, limit, cursor,
             provider(sourceCategory(config)), ControlHistoryStore.rows(raw), sourceProjectionEnabled);
+        Map<String,Object> repair = inspectRepairWindow(window, true, false);
+        List<Map<String,Object>> gaps = (List<Map<String,Object>>)repair.get("gaps");
+        // Raw provider/cache rows cannot replace durable complete/partial/conflicting facts or controlled display rows.
+        rawData.put("kline_list", Collections.emptyList()); rawData.put("pending", false);
+        Map<String,Object> result = projectedSourceKline(config, symbol, interval, limit, cursor);
+        if (result == null) result = mergeControlKline(config, symbol, interval, limit, cursor, raw);
+        Map<String,Object> data = (Map<String,Object>)result.get("data");
+        boolean displayPending = Boolean.TRUE.equals(data.get("pending"));
+        if (window.from == 946684800000L) data.put("exhausted", true);
+        data.put("historyRepair", repair); data.put("retryAt", Math.max(group.nextAllowed, group.nextKlines));
+        Runnable finish = () -> {
+            boolean pending = Boolean.TRUE.equals(repair.get("pending")), terminal = !pending && !gaps.isEmpty();
+            if (!terminal) pending |= displayPending;
+            repair.put("pending", pending); repair.put("state", pending ? "pending" : gaps.isEmpty() ? "complete" : "unrepairable");
+            data.put("pending", pending);
+            if (terminal) data.put("missingData", gaps.get(0).get("reason"));
+        };
+        finish.run(); afterCommit(finish);
+        result.put("ret", 200); return result;
+    }
+    /** Same bounded queue and receipts for automatic requests and administrator checks. */
+    private Map<String,Object> inspectRepairWindow(SourceHistoryGapRepair.Window window, boolean enqueue, boolean retry) {
+        return inspectRepairWindow(window, enqueue, retry, null);
+    }
+    private Map<String,Object> inspectRepairWindow(SourceHistoryGapRepair.Window window, boolean enqueue, boolean retry,
+            com.gtcfesk.exchange.control.ControlIdentity actor) {
+        Group group = group(window.category);
         SourceHistoryGapRepair.Receipt receipt;
-        synchronized (group) { receipt = group.repairs.get(window.key); }
+        synchronized (group) {
+            if (retry && window.needsSource()) group.repairs.remove(window.key);
+            receipt = group.repairs.get(window.key);
+        }
         if (receipt != null && System.currentTimeMillis() - receipt.at >= 300000) receipt = null;
         List<Map<String,Object>> gaps = new ArrayList<>();
         boolean sourceNeeded = window.discovery && receipt == null;
@@ -895,34 +934,84 @@ public class ForexQuoteMarketService {
             if (receipt != null && Boolean.TRUE.equals(gap.get("recoverable"))) for (Map<String,Object> checked : receipt.gaps)
                 if (((Number)checked.get("from")).longValue() <= ((Number)gap.get("from")).longValue()
                         && ((Number)checked.get("to")).longValue() >= ((Number)gap.get("to")).longValue()) { known = checked; break; }
-            gaps.add(known == null ? gap : known);
+            Map<String,Object> reported = new LinkedHashMap<>(known == null ? gap : known);
+            reported.put("sourceMissing", gap.get("sourceMissing")); gaps.add(reported);
             sourceNeeded |= known == null && Boolean.TRUE.equals(gap.get("recoverable"));
         }
         if (!window.continuous && receipt != null) gaps.addAll(receipt.gaps);
-        boolean pending = sourceNeeded;
-        if (sourceNeeded) {
-            KlineRequest work = new KlineRequest(window);
+        boolean pending, running, queued;
+        synchronized (group) {
+            running = window.key.equals(group.activeKey); queued = group.pending.containsKey(window.key);
+            pending = running || queued || enqueue && sourceNeeded && group.codes.contains(window.code) && group.pending.size() < MAX_PENDING;
+        }
+        Map<String,Object> repair = new LinkedHashMap<>(); repair.put("from", window.from); repair.put("to", window.to);
+        repair.put("source", window.identity); repair.put("period", window.period); repair.put("gaps", gaps); repair.put("pending", pending);
+        repair.put("state", pending ? "pending" : gaps.isEmpty() ? "complete" : "unrepairable");
+        repair.put("queueState", running ? "running" : queued || pending ? "queued" : sourceNeeded ? enqueue ? "queue_full" : "recoverable" : gaps.isEmpty() ? "complete" : "blocked");
+        repair.put("sourceMissing", gaps.stream().filter(g -> Boolean.TRUE.equals(g.get("sourceMissing"))).count());
+        repair.put("recoverable", gaps.stream().filter(g -> Boolean.TRUE.equals(g.get("recoverable"))).count());
+        repair.put("retryable", window.gaps.stream().filter(g -> Boolean.TRUE.equals(g.get("recoverable"))).count());
+        repair.put("protected", gaps.stream().filter(g -> String.valueOf(g.get("reason")).matches(".*(protected|sealed|frozen|simulation|projection|control_samples|calendar_unverified|protection_window_limit).*" )).count());
+        repair.put("inserted", receipt == null ? 0 : receipt.inserted);
+        repair.put("nextCursor", window.from);
+        repair.put("retryAt", Math.max(group.nextAllowed, group.nextKlines));
+        repair.put("requestKey", window.key);
+        if (enqueue && sourceNeeded && pending) {
+            KlineRequest work = new KlineRequest(window, actor);
             afterCommit(() -> { synchronized (group) {
                 if (group.codes.contains(work.code) && group.pending.size() < MAX_PENDING && !work.key.equals(group.activeKey))
                     group.pending.putIfAbsent(work.key, work);
+                boolean active = work.key.equals(group.activeKey), accepted = active || group.pending.containsKey(work.key);
+                repair.put("pending", accepted); repair.put("state", accepted ? "pending" : "unrepairable");
+                repair.put("queueState", active ? "running" : accepted ? "queued" : group.codes.contains(work.code) ? "queue_full" : "blocked");
             } });
         }
-        // Raw provider/cache rows cannot replace durable complete/partial/conflicting facts or controlled display rows.
-        rawData.put("kline_list", Collections.emptyList()); rawData.put("pending", false);
-        Map<String,Object> result = projectedSourceKline(config, symbol, interval, limit, cursor);
-        if (result == null) result = mergeControlKline(config, symbol, interval, limit, cursor, raw);
+        return repair;
+    }
+    private static void summarizeRepairWindows(Map<String,Object> result, List<Map<String,Object>> windows) {
+        result.put("pending", windows.stream().anyMatch(w -> Boolean.TRUE.equals(w.get("pending"))));
+        for (String field : Arrays.asList("sourceMissing", "displayMissing", "recoverable", "retryable", "protected", "inserted"))
+            result.put(field, windows.stream().mapToLong(w -> ((Number)w.getOrDefault(field, 0)).longValue()).sum());
+    }
+    private static long displayMissing(SourceHistoryGapRepair.Window window, Map<String,Object> display) {
+        Set<Long> present = new HashSet<>();
+        for (Map<String,Object> row : ControlHistoryStore.rows(display)) {
+            long at = ControlHistoryStore.time(row); if (at >= window.from && at <= window.to) present.add(at);
+        }
+        long missing = 0;
+        for (long at = window.from; at <= window.to; at = SourceHistoryGapRepair.end(window.period, at)) if (!present.contains(at)) missing++;
+        return missing;
+    }
+    @SuppressWarnings("unchecked")
+    private Map<String,Object> inspectLatestGaps(TradingSymbol config, String period, Integer limit, Map<String,Object> result) {
+        if (config == null || historyGapRepair == null || controlHistory == null || RandomMarketPath.enabled(config)
+                || !Boolean.TRUE.equals(config.getIsEnabled()) || !SourceHistoryGapRepair.continuous(config.getSourceCategory())
+                || !SourceHistoryGapRepair.automaticPeriod(period)) return result;
+        int remaining = Math.min(1000, Math.max(1, limit == null ? 100 : limit));
+        long cursor = System.currentTimeMillis() - 1;
+        List<Map<String,Object>> windows = new ArrayList<>(), gaps = new ArrayList<>();
+        while (remaining > 0) {
+            SourceHistoryGapRepair.Window window = historyGapRepair.inspect(config, period, Math.min(200, remaining), cursor,
+                provider(sourceCategory(config)), Collections.emptyList(), sourceProjectionEnabled);
+            Map<String,Object> repair = inspectRepairWindow(window, true, false);
+            repair.put("displayMissing", displayMissing(window, result));
+            windows.add(repair); gaps.addAll((List<Map<String,Object>>)repair.get("gaps"));
+            remaining -= window.limit; cursor = window.from - 1;
+        }
+        Map<String,Object> repair = new LinkedHashMap<>(windows.get(0));
+        repair.put("from", windows.get(windows.size() - 1).get("from")); repair.put("nextCursor", repair.get("from"));
+        repair.put("windows", windows); repair.put("gaps", gaps);
         Map<String,Object> data = (Map<String,Object>)result.get("data");
-        boolean terminal = !pending && !gaps.isEmpty();
-        if (!terminal) pending |= Boolean.TRUE.equals(data.get("pending"));
-        Map<String,Object> repair = new LinkedHashMap<>(); repair.put("from", window.from); repair.put("to", window.to);
-        repair.put("source", window.identity); repair.put("period", interval); repair.put("gaps", gaps); repair.put("pending", pending);
-        repair.put("state", pending ? "pending" : gaps.isEmpty() ? "complete" : "unrepairable");
-        repair.put("inserted", receipt == null ? 0 : receipt.inserted);
-        repair.put("nextCursor", window.from);
-        if (window.from == 946684800000L) data.put("exhausted", true); // Exclusive cursor lets empty terminal windows expose earlier history.
-        data.put("historyRepair", repair); data.put("pending", pending); data.put("retryAt", Math.max(group.nextAllowed, group.nextKlines));
-        if (terminal && !gaps.isEmpty()) data.put("missingData", gaps.get(0).get("reason"));
-        result.put("ret", 200); return result;
+        boolean displayPending = Boolean.TRUE.equals(data.get("pending"));
+        data.put("historyRepair", repair);
+        // Window notifications run first; report whether the bounded queue actually accepted them.
+        Runnable finish = () -> {
+            summarizeRepairWindows(repair, windows);
+            repair.put("state", Boolean.TRUE.equals(repair.get("pending")) ? "pending" : gaps.isEmpty() ? "complete" : "unrepairable");
+            data.put("pending", displayPending || Boolean.TRUE.equals(repair.get("pending")));
+        };
+        finish.run(); afterCommit(finish);
+        return result;
     }
     private void repairSourceWindow(Group group, KlineRequest request) {
         if (TransactionSynchronizationManager.isActualTransactionActive()) throw new IllegalStateException("History source fetch must be outside transactions");
@@ -932,7 +1021,16 @@ public class ForexQuoteMarketService {
         long sourceEnd = window.continuous ? SourceHistoryGapRepair.end(window.period, window.to) - 1 : window.to;
         Map<String,Object> fetched = source.getHistoryWindow(window.code, window.period, window.limit, window.category, window.from, sourceEnd);
         SourceHistoryGapRepair.Receipt receipt = historyGapRepair.insert(window, fetched, System.currentTimeMillis());
-        // insert returned only after a successful commit. Invalidation failure retries the same insert-only work.
+        // Audit committed inserts before cache work, so cache failure cannot erase the insertion count.
+        if (request.repairActor != null && historyGapAudit != null) {
+            Map<String,Object> detail = new LinkedHashMap<>(); detail.put("from", window.from); detail.put("to", window.to);
+            detail.put("period", window.period); detail.put("source", window.identity); detail.put("inserted", receipt.inserted);
+            detail.put("gaps", receipt.gaps);
+            detail.put("sourceInputRevision", controlHistory.db.queryForObject("SELECT source_input_revision FROM market_engine_runtime WHERE tenant_id=? AND symbol_id=?", Long.class, window.tenant, window.symbol));
+            historyGapAudit.record(request.repairActor.getActorId(), window.tenant, request.repairActor.getAccessSessionId(),
+                "history-gap.commit", String.valueOf(window.symbol), receipt.gaps.isEmpty() ? "COMPLETED" : "PARTIAL", controlHistory.encode(detail), null);
+        }
+        // Invalidation failure keeps this request pending and retries the same insert-only work.
         synchronized (group) {
             invalidateHistorySourceCache(group.klines, window);
             group.repairs.put(request.key, receipt);
@@ -1436,6 +1534,58 @@ public class ForexQuoteMarketService {
     }
 
     TradingSymbol commandConfig(Long id){return copySymbol(controlSymbol(id));}
+    public Map<String,Object> checkSourceGaps(Long id, long from, long to, String period, String timezone) {
+        return sourceGapReport(commandConfig(id), from, to, period, timezone, false, null);
+    }
+    public Map<String,Object> queueSourceGaps(Long id, long from, long to, String period, String timezone) {
+        com.gtcfesk.exchange.control.ControlIdentity actor = MarketControlCommands.operator();
+        Map<String,Object> result = sourceGapReport(commandConfig(id), from, to, period, timezone, true, actor);
+        if (historyGapAudit != null) historyGapAudit.record(actor.getActorId(), actor.getTenantId(), actor.getAccessSessionId(),
+            "history-gap.request", String.valueOf(id), Boolean.TRUE.equals(result.get("pending")) ? "QUEUED" : "CHECKED", controlHistory.encode(result), null);
+        return result;
+    }
+    /** Read-only check; explicit submissions only notify the existing provider lane after this snapshot commits. */
+    @SuppressWarnings("unchecked")
+    private Map<String,Object> sourceGapReport(TradingSymbol config, long from, long to, String period, String timezone,
+            boolean enqueue, com.gtcfesk.exchange.control.ControlIdentity actor) {
+        try { java.time.ZoneId.of(timezone); } catch (RuntimeException invalid) { throw new BusinessException("请选择有效时区"); }
+        if (from < 946684800000L || from % 60000 != 0 || to % 60000 != 0 || to < from || (to - from) / 60000 >= 1440
+                || to + 60000 > System.currentTimeMillis()) throw new BusinessException("请选择已结束的完整分钟，单次最多 1440 分钟");
+        if (!Boolean.TRUE.equals(config.getIsEnabled()) || !SourceHistoryGapRepair.continuous(config.getSourceCategory())
+                || !SourceHistoryGapRepair.automaticPeriod(period)) throw new BusinessException("缺口连续性检查仅支持已配置 Crypto/CryptoPerpetual 的 1m/5m/15m/30m/1h");
+        long first = SourceHistoryGapRepair.start(period, from);
+        if (first < from) first = SourceHistoryGapRepair.end(period, first);
+        long last = SourceHistoryGapRepair.start(period, to);
+        if (SourceHistoryGapRepair.end(period, last) > to + 60000) last = SourceHistoryGapRepair.previous(period, last);
+        if (first > last) throw new BusinessException("所选区间没有该周期的完整时间槽位");
+        final long checkedFrom = first, checkedTo = last;
+        return readSnapshot(() -> {
+            List<Map<String,Object>> windows = new ArrayList<>();
+            int slots = (int)((checkedTo - checkedFrom) / RandomMarketPath.duration(period)) + 1;
+            for (int offset = 0; offset < slots; offset += 200) {
+                int count = Math.min(200, slots - offset);
+                long start = checkedFrom + offset * RandomMarketPath.duration(period);
+                long cursor = start + count * RandomMarketPath.duration(period) - 1;
+                SourceHistoryGapRepair.Window window = historyGapRepair.inspect(config, period, count, cursor,
+                    provider(sourceCategory(config)), Collections.emptyList(), sourceProjectionEnabled);
+                Map<String,Object> repair = inspectRepairWindow(window, enqueue, enqueue, actor);
+                Map<String,Object> raw = cachedKline(marketCode(config), period, count, sourceCategory(config), cursor, false);
+                ((Map<String,Object>)raw.get("data")).put("kline_list", Collections.emptyList());
+                Map<String,Object> display = RandomMarketPath.enabled(config) ? durableSimulationKline(config, period, count, cursor)
+                    : projectedSourceKline(config, config.getSymbol(), period, count, cursor);
+                if (display == null) display = mergeControlKline(config, config.getSymbol(), period, count, cursor, raw);
+                repair.put("displayMissing", displayMissing(window, display)); windows.add(repair);
+            }
+            Map<String,Object> result = new LinkedHashMap<>(); result.put("from", checkedFrom); result.put("to", checkedTo);
+            result.put("period", period); result.put("timezone", timezone); result.put("sourceIdentity", provider(sourceCategory(config)) + ":" + config.getSourceCategory() + ":" + marketCode(config));
+            result.put("windows", windows);
+            summarizeRepairWindows(result, windows);
+            afterCommit(() -> summarizeRepairWindows(result, windows));
+            List<Long> revision = controlHistory.db.queryForList("SELECT source_input_revision FROM market_engine_runtime WHERE tenant_id=? AND symbol_id=?", Long.class, TenantContext.requireTenantId(), config.getId());
+            result.put("sourceInputRevision", revision.isEmpty() ? 0 : revision.get(0));
+            return result;
+        });
+    }
     public Map<String,Object> historyRestoreChart(Long id,long from,long to,String timezone) { TradingSymbol config=commandConfig(id); return historyRestore.chart(config,provider(sourceCategory(config)),from,to,timezone); }
     public Map<String,Object> historyRestorePreview(Long id,long from,long to,String timezone) { TradingSymbol config=commandConfig(id); return historyRestore.preview(config,provider(sourceCategory(config)),from,to,timezone); }
     public Map<String,Object> acceptHistoryRestore(Long id,String token,String key) { TradingSymbol config=commandConfig(id); return historyRestore.accept(id,token,key,provider(sourceCategory(config))+":"+config.getSourceCategory()+":"+marketCode(config)); }

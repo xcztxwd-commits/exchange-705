@@ -22,10 +22,12 @@ class SourceHistoryGapRepairTest extends TenantMarketTestContext {
         return new LinkedHashMap<>(Map.of("ret", 200, "data", new LinkedHashMap<>(Map.of("kline_list", rows))));
     }
     static final class ObservedJdbc extends JdbcTemplate {
-        boolean failInsert, failRevision;
+        boolean failInsert, failRevision, expireLeaseBeforeInsert;
         final List<String> writes = Collections.synchronizedList(new ArrayList<>());
         ObservedJdbc(DriverManagerDataSource data) { super(data); }
         @Override public int update(String sql, Object... args) {
+            if (expireLeaseBeforeInsert && sql.startsWith("INSERT INTO market_source_candle"))
+                super.update("UPDATE market_engine_runtime SET lease_until=0 WHERE tenant_id=1 AND symbol_id=1");
             writes.add(sql); int changed = super.update(sql, args);
             if (failInsert && sql.startsWith("INSERT INTO market_source_candle")) throw new IllegalStateException("injected source insert failure");
             if (failRevision && sql.startsWith("UPDATE market_engine_runtime SET source_input_revision=")) throw new IllegalStateException("injected source revision failure");
@@ -33,19 +35,26 @@ class SourceHistoryGapRepairTest extends TenantMarketTestContext {
         }
     }
     static final class Fixture implements AutoCloseable {
-        final DriverManagerDataSource data = new DriverManagerDataSource("jdbc:h2:mem:gap_" + UUID.randomUUID() + ";MODE=MySQL;DB_CLOSE_DELAY=-1", "sa", "");
-        final ObservedJdbc db = new ObservedJdbc(data);
-        final DataSourceTransactionManager manager = new DataSourceTransactionManager(data);
-        final ControlHistoryStore store = new ControlHistoryStore(db, manager);
-        final SourceHistoryGapRepair repair = new SourceHistoryGapRepair(store);
+        final DriverManagerDataSource data;
+        final ObservedJdbc db;
+        final DataSourceTransactionManager manager;
+        final ControlHistoryStore store;
+        final SourceHistoryGapRepair repair;
         final ForexQuoteMarketService market = new ForexQuoteMarketService();
         final MarketQuoteSource source = mock(MarketQuoteSource.class);
         final TradingSymbol config = new TradingSymbol();
         final Object group;
         Fixture() {
+            this(new DriverManagerDataSource("jdbc:h2:mem:gap_" + UUID.randomUUID() + ";MODE=MySQL;DB_CLOSE_DELAY=-1", "sa", ""), true);
+        }
+        Fixture(DriverManagerDataSource data, boolean initialize) {
+            this.data = data; db = new ObservedJdbc(data); manager = new DataSourceTransactionManager(data);
+            store = new ControlHistoryStore(db, manager); repair = new SourceHistoryGapRepair(store);
+            if (initialize) {
             MarketSqlFixture.schema(db);
             for (String column : new String[]{"symbol VARCHAR(32) DEFAULT 'BTCUSDT'", "alltick_symbol VARCHAR(64)", "market_source VARCHAR(16) DEFAULT 'binance'", "source_category VARCHAR(32) DEFAULT 'Crypto'", "row_version BIGINT DEFAULT 0", "random_market_enabled BOOLEAN DEFAULT FALSE", "random_market_started_at BIGINT", "control_enabled BOOLEAN DEFAULT FALSE"}) db.execute("ALTER TABLE trading_symbol ADD COLUMN " + column);
             db.update("INSERT INTO trading_symbol(id,tenant_id) VALUES(1,1)");
+            }
             config.setTenantId(1L); config.setId(1L); config.setSymbol("BTCUSDT"); config.setSourceCategory("Crypto");
             config.setCategory("Crypto"); config.setMarketSource("binance"); config.setIsEnabled(true);
             ReflectionTestUtils.setField(marketState(market), "registry", Map.of(config.getSymbol(), config));
