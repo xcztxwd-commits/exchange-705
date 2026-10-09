@@ -35,11 +35,12 @@
         <div class="amount-input-wrapper">
           <input 
             type="number" 
-            v-model.number="transferAmount" 
+            v-model="transferAmount"
             class="amount-input" 
             :placeholder="localeStore.t('pleaseEnterTransferAmount')"
             step="0.01"
             min="0"
+            @blur="normalizeAmount"
           />
           <span class="currency-text">USD</span>
           <span class="all-button" @click="setMaxAmount">{{ localeStore.t('all') }}</span>
@@ -111,6 +112,7 @@ import request from '@/utils/request'
 import { useAuthStore } from '@/store/auth'
 import { useLocaleStore } from '@/store/locale'
 import { formatDateTime } from '@/utils/dateTime'
+import { formatTransferAmount } from '@/utils/withdrawalWallet'
 
 const router = useRouter()
 const auth = useAuthStore()
@@ -131,7 +133,7 @@ const fromAccount = ref('FUND')
 const toAccount = ref('OPTION')
 
 // 划转金额
-const transferAmount = ref<number | null>(null)
+const transferAmount = ref<number | string | null>(null)
 
 // 资产余额
 const fundBalance = ref(0)
@@ -224,7 +226,11 @@ function swapAccounts() {
 // 设置最大金额
 function setMaxAmount() {
   const available = getAvailableBalance(fromAccount.value)
-  transferAmount.value = available
+  transferAmount.value = formatTransferAmount(available)
+}
+
+function normalizeAmount() {
+  if (transferAmount.value !== null && transferAmount.value !== '') transferAmount.value = formatTransferAmount(Number(transferAmount.value))
 }
 
 // 格式化金额
@@ -232,7 +238,7 @@ function formatAmount(amount: number | string | null | undefined): string {
   const n = Number(amount || 0)
   return n.toLocaleString('en-US', { 
     minimumFractionDigits: 2, 
-    maximumFractionDigits: 8 
+    maximumFractionDigits: 2
   })
 }
 
@@ -276,14 +282,16 @@ function confirmAccount() {
 
 // 提交划转
 async function submitTransfer() {
+  normalizeAmount()
+  const amount = Number(transferAmount.value)
   // 验证
-  if (!transferAmount.value || transferAmount.value <= 0) {
+  if (!Number.isFinite(amount) || amount <= 0) {
     showToast(localeStore.t('pleaseEnterValidTransferAmount'), 'error')
     return
   }
   
   const available = getAvailableBalance(fromAccount.value)
-  if (transferAmount.value > available) {
+  if (amount > available) {
     showToast(localeStore.t('insufficientBalance'), 'error')
     return
   }
@@ -299,7 +307,7 @@ async function submitTransfer() {
     const res: any = await request.post('/transfer/submit', {
       fromAccount: fromAccount.value,
       toAccount: toAccount.value,
-      amount: transferAmount.value
+      amount
     })
     
     if (res && res.success !== false) {

@@ -1,5 +1,5 @@
 import { computed, ref } from 'vue'
-export { formatWalletBalance } from '../../../exchange-frontend/src/utils/withdrawalWallet'
+export { formatWalletBalance, formatTransferAmount } from '../../../exchange-frontend/src/utils/withdrawalWallet'
 
 export type WalletAccount = 'FUND' | 'CONTRACT' | 'OPTION'
 export type WalletBalances = Record<WalletAccount, number>

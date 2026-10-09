@@ -985,10 +985,10 @@
                   <div class="text-sm text-gray-500 dark:text-gray-400 dark:text-gray-500">{{ localeStore.t('availableText') }}: <span class="font-mono text-gray-800 dark:text-gray-100 font-bold ml-1">{{ getAvailableTransferBalance().toFixed(2) }} USD</span></div>
                 </div>
                 <div class="relative">
-                  <input v-model="transferForm.amount" type="number" class="w-full bg-gray-50 dark:bg-[#181c27] border border-gray-200 dark:border-[#2b3139]-none rounded-lg pl-4 pr-24 py-4 outline-none focus:ring-1 focus:ring-[#8cc63f]/30 transition-all text-gray-800 dark:text-gray-100 text-lg font-mono" placeholder="0.00" />
+                  <input v-model="transferForm.amount" type="number" inputmode="decimal" step="0.01" min="0" @blur="normalizeTransferAmount" class="w-full bg-gray-50 dark:bg-[#181c27] border border-gray-200 dark:border-[#2b3139]-none rounded-lg pl-4 pr-24 py-4 outline-none focus:ring-1 focus:ring-[#8cc63f]/30 transition-all text-gray-800 dark:text-gray-100 text-lg font-mono" placeholder="0.00" />
                   <div class="absolute right-2 top-1/2 -translate-y-1/2 flex items-center space-x-2">
                     <span class="text-gray-400 dark:text-gray-500 font-bold pr-2 border-r border-gray-200 dark:border-[#2b3139]">USD</span>
-                    <button @click="transferForm.amount = getAvailableTransferBalance().toString()" class="text-[#8cc63f] font-bold px-2 py-1 hover:bg-green-50 rounded transition-colors text-sm">{{ localeStore.t('all') }}</button>
+                    <button @click="transferForm.amount = formatTransferAmount(getAvailableTransferBalance())" class="text-[#8cc63f] font-bold px-2 py-1 hover:bg-green-50 rounded transition-colors text-sm">{{ localeStore.t('all') }}</button>
                   </div>
                 </div>
               </div>
@@ -1570,7 +1570,7 @@ import TrialAccountCard from '@/components/TrialAccountCard.vue'
 import AppSelect from '@/components/AppSelect.vue'
 import CurrencyPicker from '@/components/CurrencyPicker.vue'
 import WithdrawWallet from '../../../exchange-frontend/src/components/WithdrawWallet.vue'
-import { formatWalletBalance, useWithdrawalWallet } from '@/utils/withdrawalWallet'
+import { formatWalletBalance, formatTransferAmount, useWithdrawalWallet } from '@/utils/withdrawalWallet'
 import AssetPixelChart from '../../../exchange-frontend/src/components/AssetPixelChart.vue'
 import LogoGlint from '@/components/LogoGlint.vue'
 import { useFiatCurrency } from '@/utils/fiatCurrency'
@@ -3521,14 +3521,19 @@ const swapTransferAccounts = () => {
   transferForm.value.amount = '';
 };
 
+const normalizeTransferAmount = () => {
+  if (transferForm.value.amount !== '') transferForm.value.amount = formatTransferAmount(Number(transferForm.value.amount));
+};
+
 const submitTransfer = async () => {
   if (transferForm.value.fromAccount === transferForm.value.toAccount) {
     ElMessage.warning(localeStore.t('transferAccountsCannotBeSame'));
     return;
   }
   
+  normalizeTransferAmount();
   const amount = Number(transferForm.value.amount);
-  if (!amount || amount <= 0) {
+  if (!Number.isFinite(amount) || amount <= 0) {
     ElMessage.warning(localeStore.t('pleaseEnterValidTransferAmount'));
     return;
   }
