@@ -57,12 +57,13 @@ class MarketKlinePushTest {
         });
         when(market.snapshotPrice("TEST")).thenAnswer(call -> {
             assertEquals(Boolean.TRUE, snapshot.get());
-            Map<String,Object> q = new HashMap<>(); q.put("price", price.get()); q.put("quoteVersion", price.get()); return q;
+            Map<String,Object> q = new HashMap<>(); q.put("price", price.get()); q.put("quoteVersion", price.get()); q.put("epoch","fixture"); return q;
         });
         when(market.internalKline("TEST", "1m", 2)).thenAnswer(call -> {
             assertEquals(Boolean.TRUE, snapshot.get());
             Map<String,Object> bar = new HashMap<>(); bar.put("timestamp", 1700000000000L); bar.put("close_price", price.get());
             Map<String,Object> data = new HashMap<>(); data.put("kline_list", Collections.singletonList(bar)); data.put("pending", true);
+            data.put("live",true); data.put("epoch","fixture"); data.put("quoteVersion",price.get()); data.put("updatedAt",1700000000000L);
             ForexQuoteMarketService.afterCommit(() -> data.put("pending", false)); // Queue filled before admission.
             return Collections.singletonMap("data", data);
         });

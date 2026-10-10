@@ -112,7 +112,12 @@ final class FundingConversions {
             // Old engine status is no more authoritative than its old price.
             status.clear();status.put("status","engine_pending");
         }
-        store.runtime.snapshot(config.getId(),quote,status,now);
+        // This publication also advances the instrument's version. Re-capture its final
+        // still-valid price under the same fence, without renewing execution/source expiry.
+        long publishedAt=Math.max(now,QuoteState.time(quote.get("committedAt")));
+        if(Boolean.TRUE.equals(quote.get("available")) && QuoteState.time(quote.get("executionExpiresAt"))>publishedAt)
+            LiveKline.capture(store,config,quote,new LinkedHashMap<>(quote),publishedAt);
+        store.runtime.snapshot(config.getId(),quote,status,publishedAt);
         return accepted;
     }
 

@@ -232,6 +232,8 @@ final class MarketRuntime {
         if(captured==null) throw new BusinessException("ENGINE_FENCED: 快照缺少当前事务写者代次");
         Map<String,Object> row=store.db.queryForMap("SELECT writer_generation,control_revision,snapshot_version FROM market_engine_runtime WHERE tenant_id=? AND symbol_id=?",ControlHistoryStore.tenant(),symbol);
         quote=new LinkedHashMap<>(quote);status=new LinkedHashMap<>(status);
+        if (QuoteState.time(quote.get("liveCapturedAt")) == now && Boolean.TRUE.equals(quote.get("available")))
+            quote.put("liveQuoteVersion",((Number)row.get("snapshot_version")).longValue()+1);
         quote.put("tenantId",ControlHistoryStore.tenant());quote.put("symbolId",symbol);
         for(Map<String,Object> value:Arrays.asList(quote,status)) {
             value.put("historyRestoreRevision",store.historyRestoreRevision(symbol));
