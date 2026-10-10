@@ -25,7 +25,7 @@ class KlineGapBackfillMysqlTest extends TenantMarketTestContext {
     }
     static Map<String,Object> protectedBars(Fixture f, long at) {
         Map<String,Object> result = new TreeMap<>(); ControlledKlineMerger merger = new ControlledKlineMerger(f.store);
-        for (String period : List.of("1m", "5m", "15m", "30m", "1h", "1w", "1M")) {
+        for (String period : List.of("1m", "5m", "15m", "30m", "1h", "1w")) {
             long bucket = SourceHistoryGapRepair.start(period, at);
             Map<String,Object> page = merger.merge(1, period, 100, at, response(List.of()), null);
             result.put(period, ControlHistoryStore.rows(page).stream().filter(row -> ControlHistoryStore.time(row) == bucket).collect(java.util.stream.Collectors.toList()));

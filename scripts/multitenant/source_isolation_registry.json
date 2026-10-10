@@ -817,142 +817,172 @@
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/admin/AdminOrderController.java": {
       "classification": "private_scoped",
-      "review_reason": "Stage1 current controller query review: existing AdminPermission enforcement remains; new email enrichment/search uses scoped AdminUserIdentity helpers, list/detail/specification calls keep verified tenant. Delegated write identity unaffected. Complete funds validation is phase2; no new unscoped EntityManager/JDBC fallback added. 2026-10-07 independent fresh delta review against registered Git source: new share-preview is read-only and AdminPermission orders read remains mandatory. Contract/option and owning user are both fetched by server TenantContext plus id, with ownership recheck; deleted/non-CLOSED/unbound orders are rejected. ROLE_AGENT must match the owner parentUserId from authenticated BackendAccess, not the request. Only the existing order DTO plus owner display name/email is returned, with no-store. Added leverage/netProfit are display calculation only, not ledger writes. Existing scoped list/specification subqueries, tenant-scoped owner/agent enrichment and controlled-exit delegates are retained. No new cache, background job or raw private SQL; complete funds/ORM acceptance remains separate.",
-      "sha256": "36c1ed4210a9d5160ac10a57f03008598a710b935581030395a75a9b31e2a058",
+      "review_reason": "列表主查询 findAllByTenantId，用户子查询、代理子属与补充身份均服务器 tenant；body/filter 的代理限制由 BackendAccess 守护。分享只读绑定同 tenant 订单与用户并重核 parentUserId/no-store；行情计算 Map 仅本请求；删/恢复委派原事务服务。 独立当前边界复审 20261010；详见 docs/kline-known-fixes-review-20261010.md。",
+      "sha256": "389333b4e2d1600110882b7bef4a17e697da6b6c06b6c3583f21ae0796518393",
       "surfaces": [
         {
           "kind": "identity_boundary",
-          "line": 69,
+          "line": 78,
           "statement_sha256": "d6e40e5344c6fa353a1a7244b56a416d787565693933184b17b9f1382da55abc"
         },
         {
           "kind": "native_sql",
-          "line": 84,
+          "line": 93,
           "statement_sha256": "4e94b66dfc5ae2fad9f06c07b5d90f33becad7dec094f0fb0d2e6c5ca866a6c9"
         },
         {
           "kind": "identity_boundary",
-          "line": 84,
+          "line": 93,
           "statement_sha256": "4e94b66dfc5ae2fad9f06c07b5d90f33becad7dec094f0fb0d2e6c5ca866a6c9"
         },
         {
           "kind": "identity_boundary",
-          "line": 103,
+          "line": 112,
           "statement_sha256": "b8313d9b63f921e9785bbfcc28d97d41e3f1fea9892d154dc00302852cc2d8c9"
         },
         {
           "kind": "identity_boundary",
-          "line": 108,
+          "line": 117,
           "statement_sha256": "c20823807df2b1cd213cb5d4aa2a8fe509b357f783e3b9183ab20b14dbc30200"
         },
         {
+          "kind": "native_sql",
+          "line": 126,
+          "statement_sha256": "976b776db7e245a289b0bc5e20cb0bf854282d9b123f147772d86e3fd29d45cd"
+        },
+        {
           "kind": "identity_boundary",
-          "line": 123,
+          "line": 138,
+          "statement_sha256": "f01425b08b727dc32c5a7274572000d3bc7ffe51d01b516cb1a427e0997e87b0"
+        },
+        {
+          "kind": "cache_lock",
+          "line": 147,
+          "statement_sha256": "c901c6deade1586d634abd494a073782f1f5adb135760297e8b8dfdf9a6f2008"
+        },
+        {
+          "kind": "cache_lock",
+          "line": 164,
+          "statement_sha256": "dba6b8e034b894014c3e420462e87624f3836a19f992de64cd345edf165a8d32"
+        },
+        {
+          "kind": "identity_boundary",
+          "line": 212,
+          "statement_sha256": "f0cf30c42d5fa634719ba33fe9b5ca0d4033c2e3514a4b7a6b049f018dff4e88"
+        },
+        {
+          "kind": "identity_boundary",
+          "line": 228,
+          "statement_sha256": "447683c7f258bea9fa414a569f439ad27320c30fb04a2d4b1c6befc5571ad110"
+        },
+        {
+          "kind": "identity_boundary",
+          "line": 249,
           "statement_sha256": "e0751ea57a1da21190a998326d5e19cf9cdc81e6c1adfd9a5c7c70ff8759ac59"
         },
         {
           "kind": "identity_boundary",
-          "line": 128,
+          "line": 254,
           "statement_sha256": "c20823807df2b1cd213cb5d4aa2a8fe509b357f783e3b9183ab20b14dbc30200"
         },
         {
           "kind": "identity_boundary",
-          "line": 142,
+          "line": 268,
           "statement_sha256": "63dbaed2d8c439d711722bf63913183a29ba5fb805f8929f91098b579de9d75e"
         },
         {
           "kind": "identity_boundary",
-          "line": 147,
+          "line": 273,
           "statement_sha256": "bb02bf4e55aa4ab7fd0996539321190cd334d79de1d9682e1d41ac7f96097806"
         },
         {
           "kind": "identity_boundary",
-          "line": 152,
+          "line": 278,
           "statement_sha256": "bb02bf4e55aa4ab7fd0996539321190cd334d79de1d9682e1d41ac7f96097806"
         },
         {
           "kind": "identity_boundary",
-          "line": 160,
+          "line": 286,
           "statement_sha256": "a53699decf3bce88b3576799fb7ed206bced9695e6fb06085259917ac0ffda44"
         },
         {
           "kind": "cache_lock",
-          "line": 170,
+          "line": 297,
           "statement_sha256": "2b668204b9db4ab0d09101e4c376100a49bc9b6c74708769866c19f1cb71662d"
         },
         {
           "kind": "cache_lock",
-          "line": 209,
+          "line": 340,
           "statement_sha256": "adb67433f384bf9131395ed63adea724145edb7815512700ba51fa44fc3e58b7"
         },
         {
           "kind": "identity_boundary",
-          "line": 241,
+          "line": 372,
           "statement_sha256": "d62c39a61bd3bada09ee07ed251075950a8c6f147466f77d63971d0ae5645bd3"
         },
         {
           "kind": "identity_boundary",
-          "line": 247,
+          "line": 378,
           "statement_sha256": "f0eb9736572b2a33b35e872577bcc000efb6a447865a9eccac90389a8a66016a"
         },
         {
           "kind": "identity_boundary",
-          "line": 266,
+          "line": 397,
           "statement_sha256": "d62c39a61bd3bada09ee07ed251075950a8c6f147466f77d63971d0ae5645bd3"
         },
         {
           "kind": "identity_boundary",
-          "line": 272,
+          "line": 403,
           "statement_sha256": "f0eb9736572b2a33b35e872577bcc000efb6a447865a9eccac90389a8a66016a"
         },
         {
           "kind": "identity_boundary",
-          "line": 367,
+          "line": 498,
           "statement_sha256": "6b98e88e42a8d76ab443d387210b6e07003ba42b93e8bf2d84b7c3f0d5785ad1"
         },
         {
           "kind": "identity_boundary",
-          "line": 410,
+          "line": 541,
           "statement_sha256": "6b98e88e42a8d76ab443d387210b6e07003ba42b93e8bf2d84b7c3f0d5785ad1"
         },
         {
           "kind": "identity_boundary",
-          "line": 443,
+          "line": 574,
           "statement_sha256": "dc632d07205a49eb682251bd38844c2fda44bc64f014623dd4d49235bf18ab2a"
         },
         {
           "kind": "native_sql",
-          "line": 447,
+          "line": 578,
           "statement_sha256": "5b7e0b7bab63bab3a7c514dd12f0e8236d91c74920346a692ffc5b8164748ef1"
         },
         {
           "kind": "identity_boundary",
-          "line": 458,
+          "line": 589,
           "statement_sha256": "dc632d07205a49eb682251bd38844c2fda44bc64f014623dd4d49235bf18ab2a"
         },
         {
           "kind": "native_sql",
-          "line": 460,
+          "line": 591,
           "statement_sha256": "5b7e0b7bab63bab3a7c514dd12f0e8236d91c74920346a692ffc5b8164748ef1"
         },
         {
           "kind": "identity_boundary",
-          "line": 471,
+          "line": 602,
           "statement_sha256": "ac3de6eff63e81aa8a463d34ed1ba12cdb19038b2db8c890a712a1a14afcd0e1"
         },
         {
           "kind": "native_sql",
-          "line": 475,
+          "line": 606,
           "statement_sha256": "5b7e0b7bab63bab3a7c514dd12f0e8236d91c74920346a692ffc5b8164748ef1"
         },
         {
           "kind": "identity_boundary",
-          "line": 486,
+          "line": 617,
           "statement_sha256": "ac3de6eff63e81aa8a463d34ed1ba12cdb19038b2db8c890a712a1a14afcd0e1"
         },
         {
           "kind": "native_sql",
-          "line": 488,
+          "line": 619,
           "statement_sha256": "5b7e0b7bab63bab3a7c514dd12f0e8236d91c74920346a692ffc5b8164748ef1"
         }
       ]
@@ -2350,7 +2380,7 @@
       "review_reason": "DTO, pure calculation or delegated controller/service; all production Java files are fingerprinted even without a detector match."
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/admin/SystemConfigController.java": {
-      "sha256": "dee4ed749745e6202c0ed27f7b835aa895e947acea388d24ba36e7de0bdda9ea",
+      "sha256": "10afa4316220a8903eb93122417e6be7c87b56d5ebe2920f491b4b7fc371b7d8",
       "surfaces": [
         {
           "kind": "identity_boundary",
@@ -2359,59 +2389,64 @@
         }
       ],
       "classification": "private_scoped",
-      "review_reason": "Explicit server tenant/identity boundary or delegated tenant service. Source fingerprint and all detected SQL/cache/async/file occurrences require review on change."
+      "review_reason": "写权限由 BackendAccess:187-195 按每个 body key 在事务前检查；服务锁定当前 tenant、政策校验及秘密加密。批量写/审计同事务；刷新回调调用捕获 tenant 的 market.requestSymbolRefresh；读取secret始终MASK。 独立当前边界复审 20261010；详见 docs/kline-known-fixes-review-20261010.md。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/admin/SystemConfigService.java": {
-      "sha256": "d0c7750db619b39e5fbbac338442de9ee9d2bed45d5812a50ca64912da6396cd",
+      "sha256": "8aeb33a9e275e9190c315ff10fed4c172b295b7e970a18860471a68594fdc840",
       "surfaces": [
         {
           "kind": "entity_manager_jpql",
-          "line": 15,
+          "line": 16,
           "statement_sha256": "520f21674d0a509e12dbf4ed5d37c115686c43b31b119609d1d6c3dd6677e7b1"
         },
         {
           "kind": "identity_boundary",
-          "line": 22,
+          "line": 23,
           "statement_sha256": "3df1e254200e404c03b7b6abcf78297b11a03f6b03433c78c515785e3b91d023"
         },
         {
           "kind": "identity_boundary",
-          "line": 33,
+          "line": 34,
           "statement_sha256": "249f02db8816895e2be6adb897efa69dd3b009d68765fd24eea3dc5958631161"
         },
         {
           "kind": "identity_boundary",
-          "line": 40,
+          "line": 41,
           "statement_sha256": "73b71320ca40801c905adde8f15d326ab8eac295f335147306e1d988b25e6f42"
         },
         {
           "kind": "native_sql",
-          "line": 41,
+          "line": 42,
           "statement_sha256": "372d0f652f37bcdb204cc1e6af05860a14ee2cc097c8ed3b172f77e9b7492b40"
         },
         {
           "kind": "native_sql",
-          "line": 43,
+          "line": 44,
           "statement_sha256": "930c169e502833a5d034a17390ee545b01a35a46d9abae31e871c24e2b302f0f"
         },
         {
           "kind": "identity_boundary",
-          "line": 196,
+          "line": 197,
           "statement_sha256": "97a283ca6c76c7bfd42f8a964e0200bd7e01485b806fbe3dbd95a70a303f7d33"
         },
         {
           "kind": "identity_boundary",
-          "line": 215,
+          "line": 216,
           "statement_sha256": "66f99daab2c96395892c315b27616e7f987dea9c30976cbd15cb46f35ec8c224"
         },
         {
           "kind": "identity_boundary",
-          "line": 261,
+          "line": 247,
+          "statement_sha256": "25327bffd37de83ebdea4011aaf42073ce0332b9906a9b9074c8b6b79992835f"
+        },
+        {
+          "kind": "identity_boundary",
+          "line": 280,
           "statement_sha256": "5761acead3bd9fa850f07bc5fc3dba7fdc2deb3b801417d7859f87b4180c6155"
         }
       ],
       "classification": "private_scoped",
-      "review_reason": "getCurrentConfigValue shares tenant anchor then current locks policy/config, honors locked policy and secret decryption. saveConfig acquires tenant X before write; inspected config callers do not acquire funding locks afterward. Independent static review only; actual tests and release approval remain separate."
+      "review_reason": "所有配置仓库与当前读 SQL 含服务器 tenant+key，tenant/policy/config 锁与资金消费者同事务；列表secret掩码，读取解密/写入加密。分享素材限定本tenant/staff、本人或已入库；新增缓存开关解析不引入共享私有状态。 独立当前边界复审 20261010；详见 docs/kline-known-fixes-review-20261010.md。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/admin/WebsiteSecurityController.java": {
       "sha256": "1c330ad53e128653657406e54a74587c4ed18e447036ac0fb3e82290dfc99384",
@@ -2420,7 +2455,7 @@
       "review_reason": "DTO, pure calculation or delegated controller/service; all production Java files are fingerprinted even without a detector match."
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/admin/WithdrawReviewController.java": {
-      "sha256": "21ec4a7c1bacf18f4e577ec91989eabd07349a159f750dbbcfb3a240cdf3fefb",
+      "sha256": "5af586ba04e7dbf66d53ddbe17e03407d49ee54342a6e3e48c8f0e68b222b63f",
       "surfaces": [
         {
           "kind": "identity_boundary",
@@ -2464,42 +2499,42 @@
         },
         {
           "kind": "identity_boundary",
-          "line": 140,
+          "line": 141,
           "statement_sha256": "a4b7ba03f0e6d244d8458a0a906e595d50b7735d0789dd5d4c2a73ec6bc92280"
         },
         {
           "kind": "identity_boundary",
-          "line": 148,
+          "line": 149,
           "statement_sha256": "c6c64e728d702a4b090ec0d75adebac8fd7cb727fa0bdfdde9bcd5a6a188fd89"
         },
         {
           "kind": "identity_boundary",
-          "line": 186,
+          "line": 187,
           "statement_sha256": "a4b7ba03f0e6d244d8458a0a906e595d50b7735d0789dd5d4c2a73ec6bc92280"
         },
         {
           "kind": "identity_boundary",
-          "line": 193,
+          "line": 194,
           "statement_sha256": "f0eb9736572b2a33b35e872577bcc000efb6a447865a9eccac90389a8a66016a"
         },
         {
           "kind": "identity_boundary",
-          "line": 414,
+          "line": 415,
           "statement_sha256": "4514aab17a8514878cded239899df6333c59e65c4d1d475021adf849cc03ea4d"
         },
         {
           "kind": "identity_boundary",
-          "line": 418,
+          "line": 419,
           "statement_sha256": "a82234a3c59058cb84ee4e7bd364fa0c4019229e31f525d8f208a2aca3e653ea"
         },
         {
           "kind": "identity_boundary",
-          "line": 421,
+          "line": 422,
           "statement_sha256": "42a6c73d4c739c465eb82a8d620d655ca507ed8acf0c3ad59ffc366365c83038"
         }
       ],
       "classification": "boundary",
-      "review_reason": "S3 review: scoped owner hint/funds/current withdrawal and frozen state/audit commit. Legacy mock-header authorization dependence is not endorsed and remains separately unverified."
+      "review_reason": "各审批动作保留 AdminPermission/代理 action、serverTenant scoped owner查询及子属验证。锁序 user/assets/withdraw，当前读刷新并再核 owner，按record.accountType选择钱包；状态幂等、审核/账本/审计同事务，失败rollbackOnly。无新外部出款或全局私有缓存。 独立当前边界复审 20261010；详见 docs/kline-known-fixes-review-20261010.md。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/admin/dto/ResetPasswordRequest.java": {
       "sha256": "39e56428dc6afa8de6f6fd13a3815ffd37959bce4fec91f3785a4cf05e6bd47b",
@@ -2978,7 +3013,7 @@
       "review_reason": "Connection configuration only. AssetHistoryCache owns explicit namespace+tenant+revision data keys."
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/config/BackendAccess.java": {
-      "sha256": "c28aaca20b6070b5146ca6ba300ec2a2adb7927a483095dd92e6fc0ce74f3ec8",
+      "sha256": "84f26bcb5dde3fab6e4b2012570c62f2f53ebe73a9689cb74095316459b22b5f",
       "surfaces": [
         {
           "kind": "identity_boundary",
@@ -3017,57 +3052,57 @@
         },
         {
           "kind": "identity_boundary",
-          "line": 129,
+          "line": 130,
           "statement_sha256": "ab5bb038d08d26dcaa9e7c3e520e3f734efb4f573060e3b6e83b66f04956772e"
         },
         {
           "kind": "identity_boundary",
-          "line": 149,
+          "line": 150,
           "statement_sha256": "ad74dbab734c6ef55be88753b8b98b00ec926bc58f7b414d428212374689cfe9"
         },
         {
           "kind": "identity_boundary",
-          "line": 150,
+          "line": 151,
           "statement_sha256": "da933567b7120ef80d6cf3b218698cfee26ca966a9fad7dacfa125c92ce54181"
         },
         {
           "kind": "identity_boundary",
-          "line": 151,
+          "line": 152,
           "statement_sha256": "dde68b5329b6bdee1c6e2ad35252d0ad2d62f587c46e4718a65162a7db6b4e7f"
         },
         {
           "kind": "identity_boundary",
-          "line": 152,
+          "line": 153,
           "statement_sha256": "43c1283af95218236ab131b1017b551311b1bf43cb7e169caa34c0f3515062a9"
         },
         {
           "kind": "identity_boundary",
-          "line": 153,
+          "line": 154,
           "statement_sha256": "f6d00e57069ffb64166394c42f18f033adb84a1bb2ab126bf79f1c96b687174f"
         },
         {
           "kind": "identity_boundary",
-          "line": 155,
+          "line": 156,
           "statement_sha256": "3d6c72f78c630435fae57dba2641c3f1a826bbe52c464a93e288e336efd9caec"
         },
         {
           "kind": "identity_boundary",
-          "line": 156,
+          "line": 157,
           "statement_sha256": "9388bf3af969e1e5445223a30144f96ea41cb32d28eccdbc980e442ddb8d803a"
         },
         {
           "kind": "identity_boundary",
-          "line": 213,
+          "line": 214,
           "statement_sha256": "d5ced84288a6b11fbd19961bb7fa05c70b072f5faffa285121cdb659cb061867"
         },
         {
           "kind": "identity_boundary",
-          "line": 220,
+          "line": 221,
           "statement_sha256": "d65bedea2b39409d1c171b9d1328d2eac216ca5c95221c043fabf6d4d5cddda7"
         }
       ],
       "classification": "boundary",
-      "review_reason": "Frozen input review: explicit controller/action allowlist and tenant-bound owner lookups, numeric identity parsing, agent permission/domain checks; generic market-hours writes denied. Registry is not end-to-end authorization evidence. Integration review 2026-10-06: Only blank userId filters on the two existing order-list methods bypass target validation. Mutation targets and every other scoped permission check remain mandatory."
+      "review_reason": "身份来自已认证 SecurityContext，代理目标必须在当前tenant并属本人；缺注解默认拒绝。lookup/account-query 特例依赖各Controller原权限检查；config逐key/save动作和order body保护仍在，无客户端tenant/role替代路径。 独立当前边界复审 20261010；详见 docs/kline-known-fixes-review-20261010.md。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/config/ContentCachingRequestFilter.java": {
       "sha256": "089647262e3aca4fab4b3d70ef2c86de20044ad77c01a5c0079b133ded0bd808",
@@ -4494,7 +4529,7 @@
       "prior_review_reason": "Independent control-plane identities/policies/sessions; business tenant access uses explicit verified scope and audit. Review file-specific occurrence list."
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/control/TenantRequestFilter.java": {
-      "sha256": "ce570904501e727308f05392a72407a8014424773cb413df4de84ac6a4f6deaa",
+      "sha256": "bb85454b4666f551f7061c30acd0b3ffabc2ac9225a6f06707d7a2e014e09f16",
       "surfaces": [
         {
           "kind": "identity_boundary",
@@ -4533,7 +4568,7 @@
         },
         {
           "kind": "identity_boundary",
-          "line": 61,
+          "line": 46,
           "statement_sha256": "8da350f4bfddcff4f6089bb325b4619f14a25902ca5533802352395a93c291d0"
         },
         {
@@ -4548,7 +4583,7 @@
         }
       ],
       "classification": "boundary",
-      "review_reason": "Private thumbnail reads join the existing shared backend media routes on the exact approved admin Host/Origin. JWT tenant/session and ImageController original-owner/reference checks remain mandatory. No new anonymous route, default tenant, Host fallback or tenant predicate is introduced.",
+      "review_reason": "真正私有 VerifiedRead 分支在Host之前且只允许/api/admin/，Scope取proof tenant并finally清理；普通Host/XFH/SNI/Origin严格契约不改。原Tomcat AdminReadDispatch4/4及独立直接filter7组正负对照已核。 独立当前边界复审 20261010；详见 docs/kline-known-fixes-review-20261010.md。",
       "prior_thumbnail_review_reason": "Challenge is fixed GET nonce JSON with no-store before entry branch. Entry branch precedes admin/control, health, business and inspection routes, grants no TenantContext. Only GET/HEAD document/html allowlisted pages and bounded ASCII query keys; redirect target comes from explicit same-tenant verified active mapping, credentials dropped and no-referrer. Uniform no-store 403 without Location for closed/unknown/disallowed entry. Trusted internal gateway classification before static SPA fallback. Existing frontend status/Origin/context and control/admin boundaries retained. Five-chat integration review 2026-10-06: Merge retains only validated public SVG icon paths on the admin host while the verified same-tenant entry branch still executes first and denies all entry APIs/icons, with no TenantContext or cached redirects. 2026-10-07 combined review: shared admin preview allows only bounded GET timezone/search/single-symbol kline paths after verified backend JWT tenant resolution. Unknown entries, invalid tenant identities and cross-origin paths still fail closed; request scope is cleared. 2026-10-08 review: /api/uploads/videos/ joins the existing authenticated backend shared file-read routes, requiring the verified admin origin and JWT tenant. VideoController checks exact tenant/owner path and public references. No new frontend host, entry redirect, write bypass or user-supplied tenant resolution."
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/control/TenantSafeTemplate.java": {
@@ -5109,7 +5144,7 @@
       "review_reason": "验证码/目标邮箱/场景/有效期仅为单表字段；未重声明租户或自定义回调，发送/验证与不对外泄露仍须由服务层保障。 已完整审查当前文件，确认显式 TenantEntityPersister + TenantOwnedEntity、无租户字段/访问器覆盖；此结论仅用于当前映射源码登记，不批准发布。 复核证据：reports/multitenant/handoff-20260929/entity-review.json。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/entity/WithdrawRecord.java": {
-      "sha256": "2898684556208aaba143218786173c7d2b55b248b2ce2d7935cca50ecd1d37de",
+      "sha256": "88f3c1f1440283f436eff9550284bff5be343baf1a1cc621206c075e0f66de0e",
       "surfaces": [
         {
           "kind": "tenant_entity",
@@ -5118,7 +5153,7 @@
         }
       ],
       "classification": "private_scoped",
-      "review_reason": "Adds JsonIgnore immutable nullable request_key/request_hash columns (64 characters) and unique tenant_id/user_id/request_key constraint. Existing historical/manual missing keys remain nullable; TenantOwnedEntity and explicit TenantEntityPersister, version/funding/saved business facts are preserved. Versioned schema migration uses VARCHAR, not an indexed LONGTEXT/JPA LOB.",
+      "review_reason": "继承TenantOwnedEntity+显式TenantEntityPersister；tenant/user/requestKey唯一，版本锁，requestHash/requestKey不可更新且JSON隐藏。account_type不可更新且旧数据FUND默认依原additive withdraw_wallet迁移，不引入不带tenant的实体/CRUD。 独立当前边界复审 20261010；详见 docs/kline-known-fixes-review-20261010.md。",
       "prior_review_reason": "用户 ID、金额、渠道和审核状态为标量，rowVersion 保留；本地回调只赋时间，不覆盖父类租户检查。 已完整审查当前文件，确认显式 TenantEntityPersister + TenantOwnedEntity、无租户字段/访问器覆盖；此结论仅用于当前映射源码登记，不批准发布。 复核证据：reports/multitenant/handoff-20260929/entity-review.json。",
       "phase2_review_tests": [
         "OrdinaryCreationMySqlIT"
@@ -5148,8 +5183,8 @@
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/market/ControlHistoryStore.java": {
       "classification": "private_scoped",
-      "review_reason": "LOCAL 0404/Option delta review: explicit tenant and symbol predicates; existing runtime writer fence and read-only RR consumers; exact immutable archived response/package binding, future-only cutoff, old ambiguous fail-closed; Option same-physical funds authority with user/assets/grants before runtime, RC only new units and unchanged legacy REQUIRED. Not production release approval. Five-chat integration review 2026-10-06: History-only source facts are excluded by a parameterized body predicate before LIMIT in tenant/symbol-scoped lastClose; cannot displace a real control-start basis. Existing writer/read-only and archived response boundaries preserved. 2026-10-07 independent delta review with exact-SHA prior directed evidence: all added history/flow SQL binds the current validated tenant and symbol/task; latest source uses independently bounded event/tick candidates with the same cutoff/tie ordering, while full-history NOT EXISTS exact dedup remains. STOPPED/SOURCE tasks do not load old plans. Writer transactions share 5s timeout, runtime fence, bounded sample quota and checked 500-row batches; progress is persisted atomically and actual transaction completion is logged. Prepared plan keys retain tenant:task; startup validates required scoped schema only, never removes triggers or creates unscoped tables. Existing private/funds/read-only-RR/archive boundaries retained; no production release proof. 2026-10-07 independent a42fbb3 command-codec delta review: exact previous source matches the registered normalized SHA. UTF-8/Base64 ~mcc1~ command messages are informational only, null-safe, invalid UTF-16 and stored length >255 reject; malformed legacy prefix remains plain. New ASCII JSON preserves decoded Unicode values and semantic plan checksums; exact archived request serialization explicitly disables non-ASCII escaping on an immutable per-call ObjectWriter. No tenant source, tenant:task cache key, SQL predicate, transaction/fence/deadline, response scope, history ordering or schema/trigger authority changes. All SQL literals remain exact; source/occurrence fingerprints only reflect the reviewed codec/import and shifted line numbers. This source review is not formal production release approval.",
-      "sha256": "1289fbda475d2126ad474ec54223c29b2d240184bcb3b69ca03ccf43049433dd",
+      "review_reason": "私有事实读写用requireTenantId；跨页捕获owner再require，所有join/反连接匹配tenant；sourceEvents/visibleSourceBranch内部tenant谓词已展开核。runtime→source当前锁、RR消费快照与fence保留；plan ThreadLocal键tenant:task并finally清除；source/sim周期PK冲突逐row拒绝。 独立当前边界复审 20261010；详见 docs/kline-known-fixes-review-20261010.md。",
+      "sha256": "2dd9fbb5aa72946c56c3e5b95ca15277d0f02b568643ce7039fae6f86aa886dd",
       "surfaces": [
         {
           "kind": "identity_boundary",
@@ -5199,217 +5234,247 @@
         {
           "kind": "native_sql",
           "line": 67,
-          "statement_sha256": "306e9221037e75165fd586c4fca3eb93b1541c797ecf0f9c07f0fe02bc87540f"
+          "statement_sha256": "ab24cd4ef7e1029b6d71c76a18986678239127cceceec888e94359e8c821b4ff"
         },
         {
           "kind": "native_sql",
-          "line": 69,
+          "line": 68,
+          "statement_sha256": "38b9d25106c13e0baaa5b9f667465757840706cc3cad1d4c0a926febfd2787f2"
+        },
+        {
+          "kind": "native_sql",
+          "line": 70,
           "statement_sha256": "e63a5da954754d9609f0150a39f2b8527935ce69bae5f78fc811345a64c16ff5"
         },
         {
           "kind": "native_sql",
-          "line": 93,
+          "line": 98,
           "statement_sha256": "73e7d1a05f88718977383b075428dcf6467eeeb3953d199cf161a54ac43a9a89"
         },
         {
           "kind": "native_sql",
-          "line": 116,
+          "line": 121,
           "statement_sha256": "7c6bfd11411e836d586c8a1673a9afed768bdb237ec12bc224f395783738b8c6"
         },
         {
           "kind": "native_sql",
-          "line": 124,
+          "line": 129,
           "statement_sha256": "6cf10900b9ddeecf6085fbe1390c84a7d91bf3949003718d8716027d3a1dbc0b"
         },
         {
           "kind": "native_sql",
-          "line": 208,
+          "line": 205,
+          "statement_sha256": "97d70f5284a17626d5ee7334621df5872f9c2944ef83fd37c268210f188bed04"
+        },
+        {
+          "kind": "native_sql",
+          "line": 211,
+          "statement_sha256": "92a9d6abf154f8f5339d17fc55b2d45deae4affe67616251c158c13edb2154fd"
+        },
+        {
+          "kind": "native_sql",
+          "line": 219,
+          "statement_sha256": "18b571fcbc04166d1b5a306334393cea903676909a6eac32510ffcee9674d726"
+        },
+        {
+          "kind": "native_sql",
+          "line": 233,
           "statement_sha256": "862a9a29490c49770073e32db2f072a56ce2def8dd9687ff2cc7dd20b69ea933"
         },
         {
           "kind": "native_sql",
-          "line": 215,
+          "line": 240,
           "statement_sha256": "5e1603de92c6d7674f8f845cb5547984453ac648019eb1398088588f52ff879a"
         },
         {
           "kind": "native_sql",
-          "line": 226,
+          "line": 251,
           "statement_sha256": "5bb3198e110c77dd0606761a0d4559f1f915a8531696bae89d75ae5589f80066"
         },
         {
           "kind": "identity_boundary",
-          "line": 262,
+          "line": 288,
           "statement_sha256": "c8166e385ddd58f30a4354080b4b87970e7e17589491a4e0c9d411864bee64cc"
         },
         {
           "kind": "native_sql",
-          "line": 272,
-          "statement_sha256": "69b407df94e47c54de7ae104fa955b45a82bd876a5375d9cfe840827e1c3e41f"
+          "line": 298,
+          "statement_sha256": "55a26a1c41858a76c1bd98cdd6fea675e5262b25b827be6247013164426da88f"
         },
         {
           "kind": "native_sql",
-          "line": 286,
+          "line": 314,
           "statement_sha256": "4566c5d5d6d7dbd37b1b1652d63c18e7015c0539393ad24cac58bd1e809de6cc"
         },
         {
           "kind": "native_sql",
-          "line": 288,
+          "line": 316,
           "statement_sha256": "fa65c84fe3dc1899f6c1b1528c1011ae66b4042c8017b84434d43e593ed29bb8"
         },
         {
+          "kind": "native_sql",
+          "line": 332,
+          "statement_sha256": "f7c999f67a0a562b083707f3dc95ef1cd554d3d487a94a947ac7fa38672dd78d"
+        },
+        {
+          "kind": "native_sql",
+          "line": 333,
+          "statement_sha256": "38dd7d34c60b3ca3bade9672659ecd44b44e24e3c4b339cfab797645192e3075"
+        },
+        {
           "kind": "identity_boundary",
-          "line": 306,
+          "line": 347,
           "statement_sha256": "c8166e385ddd58f30a4354080b4b87970e7e17589491a4e0c9d411864bee64cc"
         },
         {
           "kind": "native_sql",
-          "line": 307,
-          "statement_sha256": "7c1eb1daf456c0df5413afe9308b297dfe9fe3a5b1ffb56712a431b973e0f38e"
+          "line": 348,
+          "statement_sha256": "60f95d528557e110632bf16637b43250321c044827b3f4466057afbe9cadd723"
         },
         {
           "kind": "identity_boundary",
-          "line": 329,
+          "line": 370,
           "statement_sha256": "c8166e385ddd58f30a4354080b4b87970e7e17589491a4e0c9d411864bee64cc"
         },
         {
           "kind": "native_sql",
-          "line": 330,
+          "line": 371,
           "statement_sha256": "955eed0619ad09e71131b35b98e75801180d116440498fc266a752389f80f9ec"
         },
         {
           "kind": "identity_boundary",
-          "line": 359,
+          "line": 400,
           "statement_sha256": "c8166e385ddd58f30a4354080b4b87970e7e17589491a4e0c9d411864bee64cc"
         },
         {
           "kind": "native_sql",
-          "line": 363,
+          "line": 404,
           "statement_sha256": "ed33071e17c03b118a2d0a0857a30a733062f5bcde51715b28d9ab497a910633"
         },
         {
           "kind": "native_sql",
-          "line": 379,
+          "line": 420,
           "statement_sha256": "4808bce7a34d8c179b5dddd80dcd390f3181bc4892ae1c17c51ce0561b0168d5"
         },
         {
           "kind": "native_sql",
-          "line": 380,
+          "line": 421,
           "statement_sha256": "a726bbca1408215dbfd4c99ff29aa592857e7fad4df641a99e8a9f8a83f7ff88"
         },
         {
           "kind": "native_sql",
-          "line": 397,
+          "line": 438,
           "statement_sha256": "72266a31be50f1ffbea9fbde89c7130c5b3d5022b0bc91183a3cc0a6b83fb388"
         },
         {
           "kind": "native_sql",
-          "line": 428,
+          "line": 469,
           "statement_sha256": "95b747de619fea8e32cd7f03813b8b2efd23458f97070c47e9133e286dd3bc78"
         },
         {
           "kind": "native_sql",
-          "line": 432,
+          "line": 473,
           "statement_sha256": "83cc05d2d7f2b7b32a7f1b3122e4afb2ac680db058308951393ffe17a41b74ad"
         },
         {
           "kind": "native_sql",
-          "line": 447,
+          "line": 488,
           "statement_sha256": "37f99b6e2b0be96a3567f8b86131fbf7ca4c86c618bceab2ec01fa1ea7adaef6"
         },
         {
           "kind": "native_sql",
-          "line": 473,
+          "line": 514,
           "statement_sha256": "ff1c557a22ac4103389b5d4885ad88a09c2628c70228485437c9a3849b7a18aa"
         },
         {
           "kind": "native_sql",
-          "line": 506,
+          "line": 547,
           "statement_sha256": "b01909a49d6377366e86e934d343bfdc063f30e2dac2b93729d00a1eecea32aa"
         },
         {
           "kind": "native_sql",
-          "line": 511,
+          "line": 552,
           "statement_sha256": "a634c52f070bfa088e9d50aba908b49c82a546aa821b9469e340d5eac81cdf3b"
         },
         {
           "kind": "native_sql",
-          "line": 512,
+          "line": 553,
           "statement_sha256": "b167a59c033b93677d6ff8dc6368ad0327655da7e2555fc7c598dcac954e2ed9"
         },
         {
           "kind": "native_sql",
-          "line": 557,
+          "line": 598,
           "statement_sha256": "457c743b5cf0121b2ba6409e5343c118f6545d25bccebaa83ac1387900eaf1bb"
         },
         {
           "kind": "native_sql",
-          "line": 562,
-          "statement_sha256": "f6fa36e3f02305ae2b892ed673ad1626af5fd2328d8209368f72631550368136"
+          "line": 603,
+          "statement_sha256": "1c5d6f6298c493ebcb294b6bbc0363465a3b0eabadb780a5f29c212f8d0dbe37"
         },
         {
           "kind": "native_sql",
-          "line": 582,
+          "line": 623,
           "statement_sha256": "7035f9b244f80f839ffd146f4f97f10a9cc08ea567549968aa07d0be2a7fc434"
         },
         {
           "kind": "native_sql",
-          "line": 595,
+          "line": 636,
           "statement_sha256": "aa2d9ece6e075db56066af28f330a36b3f665ce5f2837773f4263f75930aba49"
         },
         {
           "kind": "native_sql",
-          "line": 596,
+          "line": 637,
           "statement_sha256": "6988670c713897f44c4d05acf51cc12cb60b6d109e85c58d69ed39aad9595250"
         },
         {
           "kind": "native_sql",
-          "line": 603,
+          "line": 644,
           "statement_sha256": "00e163402a29d1ba567e233b4540685cde0b597437298866f2abe039a685a705"
         },
         {
           "kind": "native_sql",
-          "line": 607,
+          "line": 648,
           "statement_sha256": "674c608adf01756fab09a1cabb009eb0b183286fe89a4664a02d607420162885"
         },
         {
           "kind": "native_sql",
-          "line": 608,
+          "line": 649,
           "statement_sha256": "5b3846a3c512a40600dc729f22bee58283f83fa5d523091b08ad715caca36fa9"
         },
         {
           "kind": "native_sql",
-          "line": 614,
+          "line": 655,
           "statement_sha256": "a43449a297b3a55d793916c4b0db168e4a8a9d43ab948e859c26eaa4dbccc054"
         },
         {
           "kind": "native_sql",
-          "line": 615,
+          "line": 656,
           "statement_sha256": "eb071b63f283c51e27590116e7996df37655e89307ccb76be14e36c44ba7ce4a"
         },
         {
           "kind": "native_sql",
-          "line": 617,
+          "line": 658,
           "statement_sha256": "5304c1fe2fe971e1978f746a883b0ebee88fa6b09f412fe5c81dae360e608caf"
         },
         {
           "kind": "native_sql",
-          "line": 618,
+          "line": 659,
           "statement_sha256": "c7b98533414e7d51e22f943021a897962b8f04de09f23dcb57458403d24404e5"
         },
         {
           "kind": "native_sql",
-          "line": 620,
+          "line": 661,
           "statement_sha256": "a2488dd8fad462fe38f0f76e67bf12fc308c08e2586471f852a36c8b42b4d25b"
         },
         {
           "kind": "native_sql",
-          "line": 625,
+          "line": 666,
           "statement_sha256": "b35096d7693c01007f788dba97464d19a9ec3eca5b8f6524c7902c4651e83bdd"
         },
         {
           "kind": "native_sql",
-          "line": 632,
-          "statement_sha256": "b9ed92f18fd33e97117eeadb1b7c2cd9e94b77e938f560324b9827d264d8ed25"
+          "line": 673,
+          "statement_sha256": "e30cc51b0be75e630ffe06664170d08f36b0e5e460946c7ddc9aecc90b67e4cd"
         }
       ]
     },
@@ -5543,49 +5608,49 @@
       ]
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/market/ControlledKlineMerger.java": {
-      "sha256": "faa63de34903f2dc8862d106c14482e0ec203514774867f3cdd73b0c0933dd9e",
+      "sha256": "5378290dc8d3f6b695a0d42a1734e42fa59bda778515789def460446e0898cc9",
       "surfaces": [
         {
           "kind": "cache_lock",
-          "line": 32,
+          "line": 33,
           "statement_sha256": "def1b128364cd1cda129105c599178a4f96764f9e1139ae402497ed360c366ba"
         },
         {
           "kind": "native_sql",
-          "line": 42,
-          "statement_sha256": "f26cf46be30e4056e9616361c97ae4a5102159562d6aabd3ca3f4adab8b85c1a"
+          "line": 43,
+          "statement_sha256": "b672e2864c1554ba2cb16d495df606f2a43c3764a9b6def576a021c67902138c"
         },
         {
           "kind": "native_sql",
-          "line": 139,
-          "statement_sha256": "3232cc054aaa009431ca79b5e0e0acf4f210ea531f7346a768676eac1b7a781e"
+          "line": 141,
+          "statement_sha256": "a8ab1127906bef56bbf7c8f0eb616a503007ee4203395f885cbc22b0a99ee798"
         },
         {
           "kind": "native_sql",
-          "line": 149,
+          "line": 151,
           "statement_sha256": "bc0528713a334726f8abebd42246c05ba3bd182a549ce95d2837f5b44ac48ef7"
         },
         {
           "kind": "native_sql",
-          "line": 187,
-          "statement_sha256": "4a90b7a9c7a33bbac090eebde0a219d80be4ecfae332d19b5856946d50ab967a"
+          "line": 189,
+          "statement_sha256": "2689c05d8af89b9c87bae5ba280360b56675fe1570efdf50a0c194dcacba263f"
         },
         {
           "kind": "native_sql",
-          "line": 193,
-          "statement_sha256": "a90a99d5ace49b663b2cb86b24e754c96753a22564ccd6f98b81cfc509d8bc73"
+          "line": 195,
+          "statement_sha256": "5d37cb066eedfdab6eeaf146bf0c745b6722229efca74dd86427ad4ff7f14683"
         },
         {
           "kind": "cache_lock",
-          "line": 251,
+          "line": 257,
           "statement_sha256": "323b50dc6bae005700b34a25ed6e3db99b57690a2e5d2591dc321eb8ff7353b2"
         }
       ],
       "classification": "private_scoped",
-      "review_reason": "LOCAL 0404/Option delta review: explicit tenant and symbol predicates; existing runtime writer fence and read-only RR consumers; exact immutable archived response/package binding, future-only cutoff, old ambiguous fail-closed; Option same-physical funds authority with user/assets/grants before runtime, RC only new units and unchanged legacy REQUIRED. Not production release approval."
+      "review_reason": "受store.readSnapshot保护，原生源SQL含server tenant+symbol+period且分钟精确排月；归档读取另含tenant/request hash；模拟baseMinutes由当前session delegate提供。聚合Map仅本次调用，不创造跨租户缓存；只读不回写旧事实。 独立当前边界复审 20261010；详见 docs/kline-known-fixes-review-20261010.md。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/market/ExchangeQuoteSource.java": {
-      "sha256": "565a5412e58c0595ab838323d61b9cd09c6b2c0d7d8cedebc06ddd9222720986",
+      "sha256": "663c9e6ee11d12d90f09f44e0bbc24d0d1ad02b869667ba425b693c272787cce",
       "surfaces": [
         {
           "kind": "startup",
@@ -5604,7 +5669,7 @@
         }
       ],
       "classification": "shared_public",
-      "review_reason": "Public upstream exchange instrument data only; no tenant controls or user credentials. Five-chat integration review 2026-10-06: Native OHLC source timestamps retain partial markers; legitimate empty upstream histories are returned as empty without manufacturing candles. Public upstream transport only."
+      "review_reason": "固定operator配置供应商端点+MarketHttp发起public行情，code/category规范化和period allowlist/退役月拒绝；不访问tenant私有表/控制显示/资金或保存私有状态。shared_public只指provider事实，不改变消费侧tenant隔离。 独立当前边界复审 20261010；详见 docs/kline-known-fixes-review-20261010.md。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/market/ExchangeQuoteStream.java": {
       "sha256": "5f37cc233c5689c44346f99692171163252c2eb32c805619ae399d78cd6d8302",
@@ -5651,8 +5716,8 @@
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/market/ForexQuoteMarketService.java": {
       "classification": "private_scoped",
-      "review_reason": "Conversion companions derive from subscribed raw provider input, not controlled/display prices. Target registry tenant-scoped; conversionTargets match actual configured routes. Publication/outage SQL is outside quoteLock monitor; original source ingestion still executes. No funds/order locks acquired by producer. Independent static review only; actual tests and release approval remain separate. Integration review 2026-10-06: Read-only full preview adds price-tick and screened tier diagnostics. Existing tenant scope and independent full-plan validation remain mandatory before a command can start. Five-chat integration review 2026-10-06: Historical GET reads a committed snapshot and queues tenant/source/version/period/window repair only after commit. Existing source lane deduplicates and caps work, rate limits and retries; provider HTTP precedes own writer transaction. Only overlapping raw historical caches are invalidated after commit, never latest quotes/control display. Sealed responses unchanged; existing history protection, writer fence and source projection authority retained. 2026-10-07 independent delta review with exact-SHA prior directed evidence: emergency manual disable/RESTORE use direct short history/runtime locking, and SOURCE pump bypasses old history finalization. Outage remains unavailable, valid observed source alone may produce a return point. TenantState is keyed by required server tenant; new retryAt/failures maps are symbol-keyed only inside that tenant state, bounded delay/counter, and AUTHORITY_LOST suppresses old writer for that symbol without starving others. Existing tenant job contexts, raw-provider conversion, source-repair cache keys and after-commit updates remain; no producer funds/order locks or new global data cache. GET controlStatus is a committed read without sampling/lease renewal. Runtime/authenticated application acceptance remains separate.",
-      "sha256": "5a8389908d756374067ebc6e44c509ead5c676b91258d5f25b544c87ca0933f3",
+      "review_reason": "已完整阅读当前1868行边界。TenantState由服务器TenantContext索引；Group、registry、published、修复队列和simulation session缓存从该state派生；provider共享只含公开原始symbol，worker/fanout经TenantJobRunner重建tenant，持久source/simulation SQL含tenant+symbol+session，Redis键由既有tenantPrefix补入tenant。controlSymbol按tenant+id重新查询；模拟写入经controls.locked先获取runtime owner/generation/fence再按tenant+symbol+session检查period身份，随后source更新。acceptQuote的持久工作不持Java发布锁，afterCommit捕获所属state/group且拒绝旧sequence。主线applyMarketHours在durable committed分支已保留；读取复制quote后设置休市信息，不改已提交价格/版本。月线构造、缓存、batch、internal/historical入口拒绝；internalKline仍在只读RR内使用LiveKline并保留epoch和quoteVersion。 独立主线合并边界复审 20261010；详见 docs/kline-sync-minimal-rollout-20261010.md。",
+      "sha256": "b833c15f7a754789164c82c776823af92c7a9078d41048ac965296e2db84781d",
       "surfaces": [
         {
           "kind": "identity_boundary",
@@ -5666,282 +5731,347 @@
         },
         {
           "kind": "cache_lock",
-          "line": 40,
+          "line": 41,
           "statement_sha256": "b95b698da5d4fc20f90ab36a5e741addbab473f483dcdb955b0796ebff1c2503"
         },
         {
           "kind": "cache_lock",
-          "line": 41,
+          "line": 42,
           "statement_sha256": "85a44611371f27be30f3d59b46b048eec62ad0ced676125385c4ec1f73a0bcf9"
         },
         {
           "kind": "identity_boundary",
-          "line": 46,
+          "line": 47,
           "statement_sha256": "f1eeec18a36fa46d1bae22ae3758c6a53b4eb71ea09f451cfe40f123eaa55980"
         },
         {
           "kind": "identity_boundary",
-          "line": 57,
+          "line": 58,
           "statement_sha256": "f63fd125d65b4d3debf648779cc503bbef7c794e793938b6901c229f05be685c"
         },
         {
           "kind": "cache_lock",
-          "line": 84,
+          "line": 85,
           "statement_sha256": "0d3403e381ea1413f9a16e48ac330a17e222357586dba7fd98daa02e9a1f5a7e"
         },
         {
           "kind": "cache_lock",
-          "line": 107,
+          "line": 110,
           "statement_sha256": "22ac4a9789b166251501c0c22c1f53ee13bcdb937560ec458142e99a5b9c371e"
         },
         {
           "kind": "async_job",
-          "line": 108,
+          "line": 111,
           "statement_sha256": "1e754f54568d839c5fb6f190796c5d3c6f4840f88047b4cfab9a1802da172bef"
         },
         {
           "kind": "async_job",
-          "line": 111,
+          "line": 114,
           "statement_sha256": "cfa4eccadc27b1f0d681e13cf0d8e493a4416e390609ea9c452ab866ef547189"
         },
         {
-          "kind": "cache_lock",
-          "line": 166,
-          "statement_sha256": "be2e8a2622b5f8eef1456d2c1bb77f546498714e239cd060c9b476dbfdfebde6"
+          "kind": "identity_boundary",
+          "line": 125,
+          "statement_sha256": "d7257f64e79ad42d87fcf24ce481148294036f0edcddd2b037de71e25933db95"
+        },
+        {
+          "kind": "identity_boundary",
+          "line": 142,
+          "statement_sha256": "a3f048d3047812f6f52a23a6f229239f47953bbd3db4dbb5c1d0db9b5d790819"
         },
         {
           "kind": "cache_lock",
           "line": 175,
+          "statement_sha256": "be2e8a2622b5f8eef1456d2c1bb77f546498714e239cd060c9b476dbfdfebde6"
+        },
+        {
+          "kind": "cache_lock",
+          "line": 184,
           "statement_sha256": "964f8bf59a00a60d8c37c343dd099e03c1f614fe898b56c11582fad4dfbdf23d"
         },
         {
           "kind": "cache_lock",
-          "line": 176,
+          "line": 185,
           "statement_sha256": "6f9cccc3f758b949fa4441c7c9346069a32a89bbb3fe2eb9d3178fd562708c97"
         },
         {
           "kind": "async_job",
-          "line": 188,
+          "line": 197,
           "statement_sha256": "0f878fe4289ca94b8a29b3f52869100ab981354aa9ee47af40a7426af08be6bd"
         },
         {
           "kind": "identity_boundary",
-          "line": 193,
+          "line": 202,
           "statement_sha256": "1adcafb2e798bdf666fd06883060a6b7cbf47aee5786d29bf3caeb011b3b12dc"
         },
         {
           "kind": "startup",
-          "line": 207,
+          "line": 216,
           "statement_sha256": "90de0f4efe330ace505bbaecb1fc1166ae4c33c7d7049eda668e2a29bab7f421"
         },
         {
           "kind": "identity_boundary",
-          "line": 215,
+          "line": 224,
           "statement_sha256": "67c1778c6eebeb8dd83554894b99fa5396f3cac06bce3f6f0c09e65b5c34c1a3"
         },
         {
           "kind": "identity_boundary",
-          "line": 226,
+          "line": 235,
           "statement_sha256": "7b830a9c505d0610b1f61c7ad9b061f9aea79a2629de9406c644978cad1ff246"
         },
         {
           "kind": "identity_boundary",
-          "line": 231,
+          "line": 241,
           "statement_sha256": "f596215243b94bcd2d3f21a96a18c65e94215164fb0fdfa34e506246e48bcdc9"
         },
         {
           "kind": "identity_boundary",
-          "line": 574,
+          "line": 587,
           "statement_sha256": "7b830a9c505d0610b1f61c7ad9b061f9aea79a2629de9406c644978cad1ff246"
         },
         {
           "kind": "cache_lock",
-          "line": 628,
+          "line": 642,
           "statement_sha256": "6934e8d04502eb34587fde740fb75d6b12384cb97e1b9c597809d35786dfa094"
         },
         {
           "kind": "identity_boundary",
-          "line": 637,
+          "line": 651,
           "statement_sha256": "7b830a9c505d0610b1f61c7ad9b061f9aea79a2629de9406c644978cad1ff246"
         },
         {
           "kind": "identity_boundary",
-          "line": 660,
+          "line": 674,
           "statement_sha256": "7b830a9c505d0610b1f61c7ad9b061f9aea79a2629de9406c644978cad1ff246"
         },
         {
           "kind": "identity_boundary",
-          "line": 690,
+          "line": 704,
           "statement_sha256": "7b830a9c505d0610b1f61c7ad9b061f9aea79a2629de9406c644978cad1ff246"
         },
         {
           "kind": "cache_lock",
-          "line": 770,
+          "line": 787,
           "statement_sha256": "eaefa414060c55c4f36739209db856b8303af45a74e4a1747cc7e91062845a27"
         },
         {
           "kind": "cache_lock",
-          "line": 877,
+          "line": 884,
+          "statement_sha256": "bf4f8ff4da58b1b024c48c9f9176901f015aee1c23d362c3efda0206d617cbd5"
+        },
+        {
+          "kind": "cache_lock",
+          "line": 914,
           "statement_sha256": "e22b2dd3dd1390fb0e2f9e5611d65ed527a75854fe7ca796af662898f706b630"
         },
         {
           "kind": "cache_lock",
-          "line": 960,
+          "line": 945,
+          "statement_sha256": "837885c9504a5d694e95e79240f6315ae56bfa9ebe86b5f67d3e8d12e107529c"
+        },
+        {
+          "kind": "cache_lock",
+          "line": 948,
+          "statement_sha256": "58f2bbb5c55b8bae62575ce50fdc55c7bc209da8f783f69b58ad27bbdbdb28f4"
+        },
+        {
+          "kind": "identity_boundary",
+          "line": 949,
+          "statement_sha256": "9ad73af1929da5bbddeddb0cb076cebda5fe02e551137d0a7622d332b1c46456"
+        },
+        {
+          "kind": "cache_lock",
+          "line": 1013,
+          "statement_sha256": "f4eb104f853d8ccaf4916ed0d6112a12785461304931ca766d1645871516446b"
+        },
+        {
+          "kind": "native_sql",
+          "line": 1056,
+          "statement_sha256": "5f41a51197454c304c4a3ddde3a9a7c793c9e8035d6a17784d96f2c1dbd84698"
+        },
+        {
+          "kind": "cache_lock",
+          "line": 1086,
           "statement_sha256": "2e33049cb8c5b63972030ea00bfdcade8e39bb5205ea514e254f363ea974f91c"
         },
         {
           "kind": "cache_lock",
-          "line": 999,
+          "line": 1126,
           "statement_sha256": "929f48aa9c768c4ea38107501de83cfaecceb4773bd415a1f3a4915967d2e956"
         },
         {
           "kind": "cache_lock",
-          "line": 1007,
+          "line": 1134,
           "statement_sha256": "3af9143cc9b9639e485211d430eea2d274e8456e0e33a39a2eb0a0eadb158310"
         },
         {
           "kind": "native_sql",
-          "line": 1011,
+          "line": 1138,
           "statement_sha256": "653ae552b3e9927d1fb3eb806b8b71fbe5f940bda6c2c30960d730b4d88ae10a"
         },
         {
           "kind": "identity_boundary",
-          "line": 1012,
-          "statement_sha256": "ee905c3287e7f61c389fd376cecdd6d6c49a9b20c1d3d025a4627a61be076c75"
+          "line": 1139,
+          "statement_sha256": "5a686c6c809c258319b352bc78ea8bbaf66c3dd9ed7b076bf7ddee638ef09b01"
         },
         {
           "kind": "native_sql",
-          "line": 1019,
-          "statement_sha256": "6fea600377ffb309cc2c9886e22ea4443775007851811ad23662edcd2671d766"
+          "line": 1146,
+          "statement_sha256": "1a60b0a374371381e90ca8e4e03c612298dfecb42a05d8b761a1667b502503d0"
         },
         {
           "kind": "identity_boundary",
-          "line": 1019,
-          "statement_sha256": "6fea600377ffb309cc2c9886e22ea4443775007851811ad23662edcd2671d766"
+          "line": 1146,
+          "statement_sha256": "1a60b0a374371381e90ca8e4e03c612298dfecb42a05d8b761a1667b502503d0"
         },
         {
           "kind": "native_sql",
-          "line": 1032,
+          "line": 1159,
           "statement_sha256": "c5d1a91c1f0a4e4667c4cb0300adff8e98126ef1741b5b739b861fa30361dd55"
         },
         {
           "kind": "identity_boundary",
-          "line": 1032,
+          "line": 1159,
           "statement_sha256": "c5d1a91c1f0a4e4667c4cb0300adff8e98126ef1741b5b739b861fa30361dd55"
         },
         {
           "kind": "cache_lock",
-          "line": 1055,
+          "line": 1182,
           "statement_sha256": "91e77e95ed8b70c5dcbfca71ee0e80e80325df03863864465bbb82a36430b8eb"
         },
         {
           "kind": "identity_boundary",
-          "line": 1120,
+          "line": 1249,
           "statement_sha256": "eaf4aa08a8249b33d00bc15ee90ffc4e9ffb5f67cb4f5612ed0c126a6e500c9a"
         },
         {
           "kind": "cache_lock",
-          "line": 1123,
+          "line": 1252,
           "statement_sha256": "6a4d7b5a921d2668c23391d41303b8ce15707ea9158cf5d13d456c37479dadf6"
         },
         {
           "kind": "cache_lock",
-          "line": 1136,
+          "line": 1265,
           "statement_sha256": "c056371516c89604c3b2abe3251ab9464265899445e033ef7219a25f688c4dff"
         },
         {
           "kind": "identity_boundary",
-          "line": 1153,
+          "line": 1282,
           "statement_sha256": "26fd761ba9e5d086fb93c643003c5cd438eef3a3e006b0c2084ceb15adfdaa26"
         },
         {
           "kind": "cache_lock",
-          "line": 1170,
+          "line": 1299,
           "statement_sha256": "3bad0e19fa114163726b96146a4232ad243315a5b5f8e4f19532736309bdc621"
         },
         {
           "kind": "cache_lock",
-          "line": 1324,
+          "line": 1453,
           "statement_sha256": "33403a71e1e7b110d43c708cebde4ad0f311c50ae17561a45609f795ef0d1645"
         },
         {
           "kind": "native_sql",
-          "line": 1354,
+          "line": 1484,
           "statement_sha256": "4c7d00727f52b785fa4e883a5794d6e6789a7cb0aeaa16055a45f8b7eea8c578"
         },
         {
           "kind": "native_sql",
-          "line": 1355,
+          "line": 1485,
           "statement_sha256": "1b0ecde2ba677af4e2173cd9d542a4835fda23d8c56613375aa64a38a7562838"
         },
         {
           "kind": "identity_boundary",
-          "line": 1355,
+          "line": 1485,
           "statement_sha256": "1b0ecde2ba677af4e2173cd9d542a4835fda23d8c56613375aa64a38a7562838"
         },
         {
+          "kind": "identity_boundary",
+          "line": 1571,
+          "statement_sha256": "a4ace85b5c18901eb36d42bd696064d96a61d1daf1464d366c790dae9f042cc4"
+        },
+        {
           "kind": "cache_lock",
-          "line": 1459,
+          "line": 1579,
+          "statement_sha256": "0d69c2340e64bf6dbf03699cc893e868196489206aaec7ec2e03f02ce2f67746"
+        },
+        {
+          "kind": "identity_boundary",
+          "line": 1580,
+          "statement_sha256": "ea9ddc232f2a861b5346699f15805ec345bd540be0dface57f34d50129ae99cb"
+        },
+        {
+          "kind": "native_sql",
+          "line": 1614,
+          "statement_sha256": "2c598a90006d912d1285f5726877ff34a4c05f8599e30736b116b1434ec4227d"
+        },
+        {
+          "kind": "identity_boundary",
+          "line": 1614,
+          "statement_sha256": "2c598a90006d912d1285f5726877ff34a4c05f8599e30736b116b1434ec4227d"
+        },
+        {
+          "kind": "cache_lock",
+          "line": 1655,
           "statement_sha256": "73c8335cabf3a04cdb9ca92a9657a8e8e794a756e8564a74bdee3b81a774da73"
         },
         {
           "kind": "cache_lock",
-          "line": 1486,
+          "line": 1682,
           "statement_sha256": "d2548b977a8d01907f0ecad8f291645ec8145fb1008ba1e2c7045b66f90b1d1a"
         },
         {
           "kind": "cache_lock",
-          "line": 1513,
+          "line": 1709,
           "statement_sha256": "2f7a3ea447c355e4469634618b902fbe2f4bc173e2cb2eb1e4df03974e3aeb01"
         },
         {
           "kind": "cache_lock",
-          "line": 1541,
+          "line": 1737,
           "statement_sha256": "7031cf219eac62728f1404cf0d269e01e9ad63f85747b26999616a4a6b3b4702"
         },
         {
           "kind": "cache_lock",
-          "line": 1542,
+          "line": 1738,
           "statement_sha256": "b9148386a415d83b9995bef214c49f88b4cbcba5c8b5d27371fe3f4db0eafe7d"
         },
         {
           "kind": "cache_lock",
-          "line": 1559,
+          "line": 1755,
           "statement_sha256": "db1a3e016bb5206fd769b4f68f3a5ce8e7c8b30b529805f2a8665912122d1937"
         },
         {
           "kind": "cache_lock",
-          "line": 1560,
+          "line": 1756,
           "statement_sha256": "607022532fd189a85e9c9c8637fd792a340df5665a5ae6b17b92a0edfff14c2f"
         },
         {
           "kind": "native_sql",
-          "line": 1593,
-          "statement_sha256": "0d076ea58643aed562490001b35e9829f193ec7e5d15ef6b334639081e773c88"
+          "line": 1803,
+          "statement_sha256": "0dfdbc6a462e8e20ebdf57630bc5d5a231a401ec8d1a49b2cd3b263077c90337"
         },
         {
           "kind": "identity_boundary",
-          "line": 1594,
+          "line": 1804,
           "statement_sha256": "1a818f43f4a277e1a21741bd600d7b5ad22d2afd74e865042cf4c5f1045ab018"
         },
         {
           "kind": "native_sql",
-          "line": 1609,
+          "line": 1820,
           "statement_sha256": "181c271c54c48eff7174f65241ca27cd6c9a6ddceddfc715d6014f53deef1ec6"
         },
         {
           "kind": "native_sql",
-          "line": 1610,
+          "line": 1821,
           "statement_sha256": "71341ae5e688b149c17f452eb198039ffa1560792a4413bfff5a413b7d845f7e"
         },
         {
           "kind": "identity_boundary",
-          "line": 1610,
+          "line": 1821,
           "statement_sha256": "71341ae5e688b149c17f452eb198039ffa1560792a4413bfff5a413b7d845f7e"
         },
         {
           "kind": "identity_boundary",
-          "line": 1623,
+          "line": 1834,
           "statement_sha256": "1efb718f6ef2ed796c1973b8cf0964e630f3684876c591d8810a7a51c25caf6d"
         }
       ]
@@ -6057,10 +6187,10 @@
       "review_reason": "Explicit server tenant/identity boundary or delegated tenant service. Source fingerprint and all detected SQL/cache/async/file occurrences require review on change."
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/market/MarketKlineController.java": {
-      "sha256": "3a2b0b58f9771b5802afd24baca5ddbab53ac1dce68efa5c0779db067d488f5f",
+      "sha256": "ddc254e47752e1006a8634aa7a4d5720bd13a77d7c0d54ee0149246109c84720",
       "surfaces": [],
       "classification": "stateless",
-      "review_reason": "ROOT request/caller review: history validation and invalid400 remain, valid single and batch responses run one physical outer read-only RR across all symbols/pages. No pump, generation claim, source SQL write or SOURCE work from reads. Legacy queue notification follows successful COMMIT only, unchanged authorization/tenant filters and limits."
+      "review_reason": "Controller无本地缓存或SQL，校验历史窗口/月退役/bounded batch并委派readSnapshot内的tenant-aware服务；tenant来自上游Host/JWT boundary，category参数不能提供另一个tenant。stateless指组件不存状态，不表示响应是跨tenant共享事实。 独立当前边界复审 20261010；详见 docs/kline-known-fixes-review-20261010.md。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/market/MarketOrderProcessor.java": {
       "sha256": "bb2621466a9880245a21c1c27d9ee4a891ba5c6c63a3c1cdf2500265657cbf09",
@@ -6086,36 +6216,36 @@
       "review_reason": "ROOT response/caller review: single or max512-symbol batch enters explicit consumer RR, shared physical committed view; existing invalid400 and response mapping unchanged. Quote authoritative tuple is decoded against the same selected runtime row. No writer claim/cache backfill/TTL refresh in display or bypass of tenant authentication."
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/market/MarketQuoteSource.java": {
-      "sha256": "9bb4fba433c57af6b417806a0e99ec4b5b6f8c564d4b149a16ece86a8099c633",
+      "sha256": "2a22d8beea5a2ba8a280b7f2628dad78742948bcd81ad25772724c563061ba3e",
       "surfaces": [
         {
           "kind": "cache_lock",
-          "line": 325,
+          "line": 324,
           "statement_sha256": "d26952ca4f4cfc24991c0849f11e8d15182114fd5ae70e110e9d16505d227028"
         },
         {
           "kind": "cache_lock",
-          "line": 385,
+          "line": 384,
           "statement_sha256": "48798870b8d43b190a88b1a2f0906af97b461f37caefad8cafcaa4291cd37948"
         },
         {
           "kind": "cache_lock",
-          "line": 467,
+          "line": 466,
           "statement_sha256": "bd98152670fc8af8c25acd2632dc10515e25c6e92ed536d43d4afa7bbb6e8660"
         },
         {
           "kind": "cache_lock",
-          "line": 500,
+          "line": 499,
           "statement_sha256": "b68bfbe7045f5206f4160db9aa0e189b2d7828bdf513b4ddd1836846e1949b90"
         },
         {
           "kind": "cache_lock",
-          "line": 512,
+          "line": 511,
           "statement_sha256": "00ca58b379ba8017431c4bc091ff5f20b60e73efa28397ab402b620474e59b4d"
         }
       ],
       "classification": "shared_public",
-      "review_reason": "Public upstream market response normalization. Private overrides are applied in tenant-scoped market service. Five-chat integration review 2026-10-06: Yahoo quote symbols drain FIFO batches of at most twenty sequential requests with deduplication and partial valid results, existing HTTP deadline/rate gate retained; missing comparison price is not synthetic zero. History reads exact native windows outside DB transactions, reject relabeled unsupported periods and invalid response/null OHLCV; no tenant business persistence."
+      "review_reason": "只产生raw public provider事实，operator URL经MarketHttp，退休周期在供应商前拒绝。Alltick token从当前tenant的SystemConfigService读取且无全局token缓存；shared_public仅分类返回的源事实，不授予跨tenant配置/token访问，消费侧仍必须隔离。 独立当前边界复审 20261010；详见 docs/kline-known-fixes-review-20261010.md。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/market/MarketRedisController.java": {
       "sha256": "93f3f5756b43b8730a8a6a7a4210739b2fcf0383ac9aa63b31ddfb82fae354ea",
@@ -6124,7 +6254,7 @@
       "review_reason": "DTO, pure calculation or delegated controller/service; all production Java files are fingerprinted even without a detector match."
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/market/MarketWebSocketHandler.java": {
-      "sha256": "ce4179bea023f2df33a4491d320d1201385a07d351fb8ca66946a9cab971a88d",
+      "sha256": "d9ec0b2a954e95831d13ea3c8b441dee4e4fd86bc4c5970134414cb29bed5482",
       "surfaces": [
         {
           "kind": "identity_boundary",
@@ -6134,7 +6264,7 @@
         {
           "kind": "cache_lock",
           "line": 28,
-          "statement_sha256": "a3eaa73dbdcd0c73b759fa005c8677ff493594533cca95c2eb0e7feefd9995a8"
+          "statement_sha256": "151c8d080681dbabb6a69b067462882434ce66ed5ce0f912bcbe2f76fa730057"
         },
         {
           "kind": "cache_lock",
@@ -6193,15 +6323,15 @@
         },
         {
           "kind": "identity_boundary",
-          "line": 199,
+          "line": 203,
           "statement_sha256": "ea09b8467ad28408ac84079930941f048523a78df649396e52424ceffcea3d23"
         }
       ],
       "classification": "private_scoped",
-      "review_reason": "ROOT complete push/send/binding review: freeze clients per already verified tenant, union each symbol once in one outer RO RR, captured complete price batch sent only after COMMIT/context close. Ambient transaction fail-closed; no tenant switching within shared caller TX. Original times1 sharing restored, original perclient sending CAS/4workers/128 queue, depth revision, slowclient and host revalidation preserved. No global cap added; union/pool/auth deployment capacity remain open. 2026-10-07 combined review: quote/candle subscriptions validate tenant-bound known symbols and bounded periods/counts. Committed wake-ups are filtered by tenant, host bindings are revalidated, and each tenant batch reads quote and candles in its own fresh repeatable-read snapshot. Network sends begin after that scope closes; queued candle subscriptions are rechecked at send time and existing bounded transport queues remain."
+      "review_reason": "已完整阅读当前329行边界。Client仅接受握手服务器tenant/frontendHost，建立连接、message、push和异步send重新核domain/status；订阅、版本、sending状态按session保存，dirty按tenant；push按tenant分组并打开Scope，在同一只读RR捕获price及Kline且只在提交后发送。Kline必须live=true、epoch相等、quoteVersion相等且最后close与price精确比较相等；月线字符串/数字alias明确拒绝。deliveryVersion同时用于delta比较和成功发送记账，包含quoteVersion及休市status/marketClosed/revision/reason/nextChangeAt；不会丢失价格版本不变的日历转换。异步发送仅携带本Client帧，Kline发送前再核活跃subscription，无客户端tenant输入。 独立主线合并边界复审 20261010；详见 docs/kline-sync-minimal-rollout-20261010.md。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/market/PersistentPriceControl.java": {
-      "sha256": "642e37e3a414b3f2598c5ced00da3d8d49884b3ba3598a6f6ebf4a69c1b40591",
+      "sha256": "113888ff66d17f50cedfc6671d33dd6d88f57c6cc662db14ef0ac154c71749d8",
       "surfaces": [
         {
           "kind": "identity_boundary",
@@ -6410,57 +6540,57 @@
         },
         {
           "kind": "cache_lock",
-          "line": 587,
+          "line": 592,
           "statement_sha256": "064c458f52fef1f916cca41909fa92ff3e71dfd2bb3ba77a44d8a3526db9599b"
         },
         {
           "kind": "native_sql",
-          "line": 601,
+          "line": 606,
           "statement_sha256": "59e1be29861f00d39971e3c6f8788404d9e32b96612a8580ee9450afa9650262"
         },
         {
           "kind": "native_sql",
-          "line": 606,
+          "line": 611,
           "statement_sha256": "8cbe2209e9afcdccc284f5e202d82dbb92cd297dcab11e6cb6ad6dc5b8af8d79"
         },
         {
           "kind": "native_sql",
-          "line": 652,
+          "line": 657,
           "statement_sha256": "7200bf709c96b5e7b57bca42689bd72b4650a36ceb70347db66dbe5aba993382"
         },
         {
           "kind": "native_sql",
-          "line": 658,
+          "line": 663,
           "statement_sha256": "b8985791cf6215964bd3cd183199149b2ef901bc6816fb8c2e7191e197528fad"
         },
         {
           "kind": "native_sql",
-          "line": 660,
+          "line": 665,
           "statement_sha256": "6ec50773c7abc0344ded8a4ee2a11120f3ed18a92bbdb15ae2ebfdb4b2eb3846"
         },
         {
           "kind": "native_sql",
-          "line": 666,
+          "line": 671,
           "statement_sha256": "cfb77073540c288a7a0993ce535b29c191916b21108fb52b9b8d0d2a83c3461e"
         },
         {
           "kind": "identity_boundary",
-          "line": 690,
+          "line": 695,
           "statement_sha256": "a5c196c901343960f1a0f7ed4c62ae51ea4835d2002d7fb4b58b2d03224feaa8"
         },
         {
           "kind": "identity_boundary",
-          "line": 693,
+          "line": 698,
           "statement_sha256": "65347da3738b331fb190fd26c5851eb3d820f7dfefdcf726cd1f6b37cde50478"
         },
         {
           "kind": "native_sql",
-          "line": 717,
+          "line": 722,
           "statement_sha256": "736fb0defe0f9fc1ffba68840389d0e3d92358f15e7d8bca3f92c5359a445925"
         }
       ],
       "classification": "private_scoped",
-      "review_reason": "conversionQuotes validates both original/reloaded tenant identity, visits symbol IDs ascending under runtime writer transaction, never touches user/assets/order locks. pump retains only still-configured companions under current runtime lock. No old OHLC/history facts rewritten by new helper. Independent static review only; actual tests and release approval remain separate. First-task source-equivalent identity review: before any control task, null/zero offset with display price numerically equal to the source uses the existing tenant-scoped controlled OHLC point without introducing an auxiliary manualPoints fact. Explicit manual commands, nonzero offsets, post-task auxiliary points and all historical facts remain unchanged; no comparator, tenant predicate, SQL, cache, lease or callback boundary is relaxed. 2026-10-07 independent delta review with exact-SHA prior directed evidence: emergency SOURCE uses direct existing scoped writer transaction, ends at last committed sample, invalidates pending commands/revision/releases hold, and defers history publication; it never waits for an old plan/endpoint or activates a hold. RESTORE requires valid source plus trusted committed price and creates the current flow without forcing the old target to complete. Advance uses bounded64-point chunks/shared512 allowance, reserve deadline and committed watermarks; later turns complete endpoint. All task/flow/runtime SQL preserves server tenant and symbol/task checks; captured task tenant is verified. SOURCE uses only valid observed raw price and outage remains unavailable. Existing manual/cache/conversion and private/funds/history boundaries retained, no new scheduler/global authority. 2026-10-07 independent a42fbb3 command-codec delta review: only emergency cancellation message persistence changes from a SQL literal to encoded bind 1; trusted tenant and symbol move consistently to binds 2 and 3, with the exact tenant/symbol/pending-state WHERE predicate unchanged. Writer lock, runtime invalidation, last-committed endpoint, scoped task/flow/hold updates and SOURCE outage behavior are untouched. All other SQL literals, captured task/config ownership, tenant-scoped keys, history and funds boundaries exactly match the registered prior source. No production schema/JAR/epoch changes or formal release approval are included. 2026-10-07 combined review: committed snapshot notification captures only the required tenant identity and symbol. Notification is delivered after commit and failures cannot roll back durable state. Publication revision retains tenant/symbol predicates; existing write fences and tenant runtime ownership remain. 2026-10-08 recovery cadence review: runningSymbols selects only timed RUNNING targets and WAITING_SOURCE/RECOVERING flows for engine priority. The task tenant predicate remains mandatory and the flow join matches both tenant_id and task_id; stable holds retain the idle quote rotation. No write SQL, reader behavior, cache keys, schema or release approval changed."
+      "review_reason": "task/config/Prepared tenant identity明确校验；所有task/flow/sample/publication/runtimes SQL含tenant，join复合tenant匹配，runtime fence贯穿SOURCE/RESTORE/target与companion。bulk配置升序同事务锁；committed事件捕获tenant+symbol且只afterCommit唤醒，不把旧display当新执行authority。 独立当前边界复审 20261010；详见 docs/kline-known-fixes-review-20261010.md。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/market/PriceControlPath.java": {
       "sha256": "be35e554fc9390754d826f3f254382056945b714a9f4c9dfa6e6bab2805a54fd",
@@ -6481,10 +6611,10 @@
       "review_reason": "DTO, pure calculation or delegated controller/service; all production Java files are fingerprinted even without a detector match."
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/market/RandomMarketPath.java": {
-      "sha256": "c564bf1e2619a82f9993886cbd573acd610c0b51ff4b0a456575eaeb6efe7150",
+      "sha256": "22f39cee905f779f2aa2d5bb710075e9b259d35c9e7e1b680aeb96eead14ac26",
       "surfaces": [],
       "classification": "stateless",
-      "review_reason": "DTO, pure calculation or delegated controller/service; all production Java files are fingerprinted even without a detector match."
+      "review_reason": "由传入已授权symbol种子/session和时间纯计算，局部容器，不保存跨调用私有状态、不建线程/SQL；simulationSession显式携带，周期仅合法七项，调用者负责tenant配置隔离；不据此认证金融算法或日历生产完整性。 独立当前边界复审 20261010；详见 docs/kline-known-fixes-review-20261010.md。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/market/RateLimitService.java": {
       "sha256": "3e8bb38328855ab8bb8fb0424a0ef08f28e76f869fefbb0e4d31a5f71fec58af",
@@ -6499,7 +6629,7 @@
       "review_reason": "DTO, pure calculation or delegated controller/service; all production Java files are fingerprinted even without a detector match."
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/market/RedisMarketService.java": {
-      "sha256": "8035fcc654fd1a35990e7cd601fe940ce810502581d77a5dc51ea7288eaa1485",
+      "sha256": "1b24201708b4fb6c59823bb26bde9fad1990a19d74cb76989077ce8c73ed9dc3",
       "surfaces": [
         {
           "kind": "cache_lock",
@@ -6538,52 +6668,52 @@
         },
         {
           "kind": "identity_boundary",
-          "line": 84,
+          "line": 85,
           "statement_sha256": "7ba591ad24f537ef7af672157b0574a14cf2c9392d392a0f449d6ca15afb548a"
         },
         {
           "kind": "identity_boundary",
-          "line": 97,
+          "line": 99,
           "statement_sha256": "7ba591ad24f537ef7af672157b0574a14cf2c9392d392a0f449d6ca15afb548a"
         },
         {
           "kind": "identity_boundary",
-          "line": 112,
+          "line": 115,
           "statement_sha256": "7ba591ad24f537ef7af672157b0574a14cf2c9392d392a0f449d6ca15afb548a"
         },
         {
           "kind": "identity_boundary",
-          "line": 133,
+          "line": 137,
           "statement_sha256": "7ba591ad24f537ef7af672157b0574a14cf2c9392d392a0f449d6ca15afb548a"
         },
         {
           "kind": "identity_boundary",
-          "line": 152,
+          "line": 156,
           "statement_sha256": "7ba591ad24f537ef7af672157b0574a14cf2c9392d392a0f449d6ca15afb548a"
         },
         {
           "kind": "identity_boundary",
-          "line": 163,
+          "line": 167,
           "statement_sha256": "7ba591ad24f537ef7af672157b0574a14cf2c9392d392a0f449d6ca15afb548a"
         },
         {
           "kind": "identity_boundary",
-          "line": 227,
+          "line": 231,
           "statement_sha256": "7ba591ad24f537ef7af672157b0574a14cf2c9392d392a0f449d6ca15afb548a"
         },
         {
           "kind": "identity_boundary",
-          "line": 244,
+          "line": 248,
           "statement_sha256": "7ba591ad24f537ef7af672157b0574a14cf2c9392d392a0f449d6ca15afb548a"
         },
         {
           "kind": "identity_boundary",
-          "line": 259,
+          "line": 263,
           "statement_sha256": "7ba591ad24f537ef7af672157b0574a14cf2c9392d392a0f449d6ca15afb548a"
         }
       ],
       "classification": "private_scoped",
-      "review_reason": "Tenant prefix captured before deferred worker execution. Pending coalescing and Lua Redis CAS lexicographically compare committed writerGeneration/version (source seq fallback), failed publish merges newer; no older callback overwrite. Own real Redis loss/restart tested; no change conversion/funds configuration boundaries. Current byte hash exactly matches the previously manually reviewed S2 source snapshot; final tests reported independently, not release approval."
+      "review_reason": "所有私有Redis key前缀serverTenant，模拟history另含session；pendingPrices存完整tenant前缀key，异步writer不从线程默认tenant推断。版本CAS/expiry策略保留，汇率key含source/category/code；无legacy无前缀fallback，月缓存读写均拒绝。 独立当前边界复审 20261010；详见 docs/kline-known-fixes-review-20261010.md。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/market/SimulationControlPath.java": {
       "sha256": "c8e4705f41aefcc8efd5e23c40ef47d911fbc1c2e379cbeedd981684eed26766",
@@ -6618,36 +6748,36 @@
       "review_reason": "Stage1 quote/context review: tenant-owned symbols/configs resolved before controlled paths, private source/history cache keys retain tenant identity; immutable provider facts may be shared but controlled histories remain scoped. Asynchronous private work captures explicit server tenant and restores context, not default tenant."
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/market/YahooQuoteStream.java": {
-      "sha256": "cbdc1a64eb328dca03f04bef88109f58a557f43142ed648cd18cfdc944c12f96",
+      "sha256": "ada3ae13bc9db176e679fbe563451f5936e630d4f6a12df096f1db77358e85af",
       "surfaces": [
         {
           "kind": "async_job",
-          "line": 27,
+          "line": 28,
           "statement_sha256": "2772c1f0a7b09a249c00298bf6c5b5b4baaef64a73fd64bf4d0f72e963973d14"
         },
         {
           "kind": "async_job",
-          "line": 29,
+          "line": 30,
           "statement_sha256": "83c047d66e840d3a745512dd7bf48c1ceb0579d692044542346c384f553a2c91"
         },
         {
           "kind": "cache_lock",
-          "line": 30,
+          "line": 31,
           "statement_sha256": "56e46630aea933e2f80a2827fc05179dcbc068d68b4769929e52e726bb127e46"
         },
         {
           "kind": "cache_lock",
-          "line": 34,
+          "line": 35,
           "statement_sha256": "e0084152b6740130c83c666eca8ad3eeaf161db1ce40342b418c95a1a00e1c91"
         },
         {
           "kind": "startup",
-          "line": 43,
+          "line": 44,
           "statement_sha256": "90de0f4efe330ace505bbaecb1fc1166ae4c33c7d7049eda668e2a29bab7f421"
         }
       ],
       "classification": "shared_public",
-      "review_reason": "Public source feed sockets and raw prices. Tenant consumers capture their own scope before private persistence."
+      "review_reason": "observations/subscriptions仅raw公共symbol行情，bounded receiver+lifecycle有generation/desired/stopped过滤，shadow不进authority；callback消费端Forex service负责逐tenant Scope/复制。WS URL来自operator属性，无tenant私有资料/state/资金; 此审查不声称真实上游TLS/长时网络认证。 独立当前边界复审 20261010；详见 docs/kline-known-fixes-review-20261010.md。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/repository/AdminMenuRepository.java": {
       "sha256": "46d1d2ea61c44b33c180489c6669d6666719e2998931623bdb13a6bf953eff0f",
@@ -7561,7 +7691,7 @@
       ]
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/repository/UserAccountRepository.java": {
-      "sha256": "46bd8829e01318cdaa20e681b29704eb39aea16407188ffe53cd0ce11f61e44e",
+      "sha256": "101a037d86b2971290a7db4e64fc9d4596dc4f3b853243b12fb1ddea24e1cba1",
       "surfaces": [
         {
           "kind": "repository",
@@ -7640,47 +7770,47 @@
         },
         {
           "kind": "native_sql",
-          "line": 35,
-          "statement_sha256": "1b2c2d1af9196837d7b03c213f2a20aad19769aa9fa20db18ccae18b2f049b45"
+          "line": 38,
+          "statement_sha256": "9836df2ff04e95cd3c77eb15ba618f9f9b76809529c5ec79bba5c829796b8ffa"
         },
         {
           "kind": "entity_manager_jpql",
-          "line": 35,
-          "statement_sha256": "1b2c2d1af9196837d7b03c213f2a20aad19769aa9fa20db18ccae18b2f049b45"
+          "line": 38,
+          "statement_sha256": "9836df2ff04e95cd3c77eb15ba618f9f9b76809529c5ec79bba5c829796b8ffa"
         },
         {
           "kind": "identity_boundary",
-          "line": 35,
-          "statement_sha256": "1b2c2d1af9196837d7b03c213f2a20aad19769aa9fa20db18ccae18b2f049b45"
+          "line": 38,
+          "statement_sha256": "9836df2ff04e95cd3c77eb15ba618f9f9b76809529c5ec79bba5c829796b8ffa"
         },
         {
           "kind": "native_sql",
-          "line": 40,
+          "line": 43,
           "statement_sha256": "685f4fc547aad2adf27186536d1e720167449469a584ab1618dcc18a310fbdef"
         },
         {
           "kind": "entity_manager_jpql",
-          "line": 40,
+          "line": 43,
           "statement_sha256": "685f4fc547aad2adf27186536d1e720167449469a584ab1618dcc18a310fbdef"
         },
         {
           "kind": "native_sql",
-          "line": 44,
+          "line": 47,
           "statement_sha256": "589381bc343e32ad0ba2822fbbfe843d4ccb61bba32d23946341e971885c7e55"
         },
         {
           "kind": "entity_manager_jpql",
-          "line": 44,
+          "line": 47,
           "statement_sha256": "589381bc343e32ad0ba2822fbbfe843d4ccb61bba32d23946341e971885c7e55"
         },
         {
           "kind": "identity_boundary",
-          "line": 44,
+          "line": 47,
           "statement_sha256": "589381bc343e32ad0ba2822fbbfe843d4ccb61bba32d23946341e971885c7e55"
         }
       ],
       "classification": "private_scoped",
-      "review_reason": "Stage1 repository predicates review: changed sorting/display date/counts/email/online mutations retain explicit tenant condition; tenant argument methods factory-validated. Current announcement display_at and user annual_income columns migrated in V2026100102, not Hibernate auto-update."
+      "review_reason": "继承统一TenantRepository；JPQL读/写均server tenant或显式trusted tenant参数，lookup/search/agent条件带tenant且LIKE转义，写入current-page/activity约束不删tenant谓词；未暴露裸JpaRepository CRUD或无tenant Query。 独立当前边界复审 20261010；详见 docs/kline-known-fixes-review-20261010.md。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/repository/UserActionRepository.java": {
       "sha256": "e5f1f298fcb512ba8e11b9331f4496cb9ff93a0e011fd81e05f47e0da1d4f3a6",
@@ -8012,12 +8142,12 @@
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/simulation/AdminReadRoutes.java": {
       "classification": "stateless",
-      "review_reason": "DTO, pure calculation or delegated controller/service; all production Java files are fingerprinted even without a detector match. 2026-10-07 independent fresh delta review: new allowlist entry is only GET /api/admin/orders/(contract|option)/[1-9][0-9]*/share-preview and maps to existing orders permission. The pure method/path function adds no mutable state, tenant selection, query, cache, background job or write access. Existing simulation proxy identity/tenant boundary and the actual AdminOrderController scoped read/agent-owner checks remain required; allowlist is not a permission grant. No broad wildcard POST/mutation or general URL forwarding was added.",
-      "sha256": "698018264713325f54fe9fd69960caf5f02bf45c014906ece6cf5f133ec2f789",
+      "review_reason": "严格method/path固定allowlist与原模块/action映射，只允许特定POST查询/GET读，mutation/path traversal拒绝；无通配admin权限、缓存或SQL。静态映射供真实端先核human live权限，demo端只作为被授权只读转发门禁。 独立当前边界复审 20261010；详见 docs/kline-known-fixes-review-20261010.md。",
+      "sha256": "cbc6bb24f571feb776e4c834aab884757b12bba1da924d9d88eface210ccc97a",
       "surfaces": []
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/simulation/SimulationAdminQueryBoundary.java": {
-      "sha256": "8c22aad570f86514a73d771a141e2f7a6c62e60dc8dfa9ac1000c7c8eb258e75",
+      "sha256": "69704ff5690f33597abfcee001c9c12ea39c7386c815a36c47ddda0cf478903b",
       "surfaces": [
         {
           "kind": "identity_boundary",
@@ -8031,35 +8161,35 @@
         },
         {
           "kind": "identity_boundary",
-          "line": 59,
+          "line": 60,
           "statement_sha256": "e7d99b45d95327c2daf0eea3744405c0d5717670e51104974a10e906641cbd7d"
         },
         {
           "kind": "identity_boundary",
-          "line": 60,
+          "line": 61,
           "statement_sha256": "55f8c7baeff88ab66c5cef3c10dd6b243095cee85a07f54d4e56580ca048c7d5"
         },
         {
           "kind": "identity_boundary",
-          "line": 62,
+          "line": 63,
           "statement_sha256": "eb4cd34bab24ca1c6dbec4641c9fe26963f588e14f41927c56efca4869d114b8"
         },
         {
           "kind": "identity_boundary",
-          "line": 63,
+          "line": 64,
           "statement_sha256": "eb3e4e7ad7d64ac4b12a1778693e2dac60d564710625bf2d9a04df9e4e24b379"
         },
         {
           "kind": "identity_boundary",
-          "line": 65,
+          "line": 66,
           "statement_sha256": "663e9c82eb7ff27c67f0ca5da3f9652360a29834b1eedfd6e583aa05da96110b"
         }
       ],
       "classification": "boundary",
-      "review_reason": "Actual full-HTTP regression exposed cleared Host/context during internal read forward. Reviewed end to end: simulation-only constant-time >=32 inspection key, explicit positive existing tenant, fixed read allowlist. Private VerifiedRead request attribute (not caller headers) binds target through servlet forward; no business write routes, no copied administrator session, context/security restored in finally. Existing internal query-role remains read-only; runtime acceptance pending."
+      "review_reason": "仅独立simulation+constantTime key+存在tenant+allowlisted read方可创建私有VerifiedRead；header/headerNames/getHeaders一起剥离，服务器scope及SecurityContext临时替换只在forward内，finally清proof并恢复原SecurityContext；普通客户端headers/字符串attribute不能伪造。 独立当前边界复审 20261010；详见 docs/kline-known-fixes-review-20261010.md。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/simulation/SimulationCatalogController.java": {
-      "sha256": "ca670b4269ab4adc3968c104dcc9859c458d604697b46d81c4ab4c794e61df23",
+      "sha256": "9d812800d0ac1b91fe0dedb950598c176e34155db44ea8bb5429eaf98f621ebd",
       "surfaces": [
         {
           "kind": "native_sql",
@@ -8089,12 +8219,12 @@
         {
           "kind": "native_sql",
           "line": 38,
-          "statement_sha256": "0dfcffa9efae7f7a23555b2d58d256ef98d89386d9f84cccc3a7aba8e9ff6d86"
+          "statement_sha256": "f182f0b64bf1fe17bb94a878f532268215f851341f6ab601c93ed971df1e79eb"
         },
         {
           "kind": "identity_boundary",
           "line": 38,
-          "statement_sha256": "0dfcffa9efae7f7a23555b2d58d256ef98d89386d9f84cccc3a7aba8e9ff6d86"
+          "statement_sha256": "f182f0b64bf1fe17bb94a878f532268215f851341f6ab601c93ed971df1e79eb"
         },
         {
           "kind": "identity_boundary",
@@ -8103,7 +8233,7 @@
         }
       ],
       "classification": "private_scoped",
-      "review_reason": "Authenticated tenant-scoped allowlisted catalogue; strips private controls, returns explicit tenantId."
+      "review_reason": "catalog动态表名固定TABLES，私有读全部server tenant，system_config固定key白名单，control/random字段在跨环境前去除；结果携带tenant/no-store，session来自认证账户，不发送tenant secret或执行真实资金写。 独立当前边界复审 20261010；详见 docs/kline-known-fixes-review-20261010.md。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/simulation/SimulationEnvironment.java": {
       "sha256": "484e8ae4d1f3661b531c8a6ffd925ff39cb8102ac142904f14bf46e69a6aca2b",
@@ -8118,16 +8248,21 @@
       "review_reason": "Startup-only environment safety validation; independent demo backend requires verified tenant identity."
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/simulation/SimulationGateway.java": {
-      "sha256": "ed0ee99f3d8adc4defa032ad1fd66256af4989869fa2a090a49b838985e0468e",
+      "sha256": "6d7ee7df7764ad41970b87a935eca19eba2222a58278967bca49fb2b5ac23459",
       "surfaces": [
         {
           "kind": "identity_boundary",
-          "line": 22,
+          "line": 24,
           "statement_sha256": "63dbaed2d8c439d711722bf63913183a29ba5fb805f8929f91098b579de9d75e"
+        },
+        {
+          "kind": "identity_boundary",
+          "line": 28,
+          "statement_sha256": "993d3cf11ee60c0e31ad649f36b0fb5efaf6dbc82baf33247b6135f62db09275"
         }
       ],
       "classification": "private_scoped",
-      "review_reason": "Explicit server tenant/identity boundary or delegated tenant service. Source fingerprint and all detected SQL/cache/async/file occurrences require review on change."
+      "review_reason": "身份HTTP目标来自operator属性且tenant domain由server repository验证，不接受任意用户URL；HTTP proxy只连接配置服务并在wire送正确tenant Host/XFH，HTTPS要求精确tenant域名。响应tenantId和REAL环境双核，超时bounded，无真实资金数据库凭据或私有数据共享缓存。 独立当前边界复审 20261010；详见 docs/kline-known-fixes-review-20261010.md。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/simulation/SimulationIdentityBoundary.java": {
       "sha256": "70a568e3e31fb4aa5cc0cc13e75f87730ac65bcde3e1f70b38a3fa0f5de79a48",
@@ -9188,13 +9323,13 @@
       "review_reason": "DTO, pure calculation or delegated controller/service; all production Java files are fingerprinted even without a detector match."
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/trade/ManualOrderGenerator.java": {
-      "sha256": "efb6e9bff9f10b1ebd80ea8678ebc95a362f0463b1f89c86d765842744a3be94",
+      "sha256": "f6826be065c96771ab10b70a6768a8eb4e21988293780daa81434a1d9bb8c04b",
       "surfaces": [],
       "classification": "stateless",
-      "review_reason": "Stage1 pure calculation review: bounded arithmetic/plan/candle inputs and deterministic snapshots only. No DB/credentials, no global mutable user state or process identity assignment. Caller resolves tenant-owned symbol before invoking."
+      "review_reason": "仅传入请求/本次candles/available的受限候选计算、局部Map/Set/Random；无数据库、线程、身份来源或跨调用缓存。服务预先控制tenant/auth，算法数值与搜索预算的完整业务认证仍需各原测试。 独立当前边界复审 20261010；详见 docs/kline-known-fixes-review-20261010.md。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/trade/ManualOrderPrices.java": {
-      "sha256": "d48579703131303f00275ae97805fc06c364e184cc7f1b105dd8965ad8b4881e",
+      "sha256": "b9548ceb0fa1af5b26214a2a1dd33deb027bc52267efe114989b566fdd30497d",
       "surfaces": [
         {
           "kind": "cache_lock",
@@ -9208,15 +9343,15 @@
         },
         {
           "kind": "cache_lock",
-          "line": 219,
+          "line": 229,
           "statement_sha256": "3654d89735b8f80e41a25d05ab8ad1c3277cfddc9795070b48145860cf70cbbd"
         }
       ],
       "classification": "private_scoped",
-      "review_reason": "Stage1 pricing reader review: receives scoped TradingSymbol from authorizing service; historical/current minute reads reuse tenant-aware market service, no new process cache or native lookup by global ID. Integration review 2026-10-06: Bounded chart paging and sparse stored-minute reads retain tenant-scoped canonical completed history and validated time/rate data; no history, order or wallet mutation."
+      "review_reason": "历史行情/汇率在当前tenant市场服务内读取，调用者先从scoped repository授权symbol；UTC窗口/cache由既有tenant service负责。snapshot分页/ready约束、局部candles/maps，不执行SQL/资金写或建立跨tenant新cache。 独立当前边界复审 20261010；详见 docs/kline-known-fixes-review-20261010.md。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/trade/ManualOrderService.java": {
-      "sha256": "423d8ed9356112bd5cc6418f76e6a5996a30d2caa7f5f478111b1cc21d7f66d1",
+      "sha256": "0a1537dfe8ab4d012344db40ec6c4f95e95093b85ecee4f2bd5c9cbe97af5fb2",
       "surfaces": [
         {
           "kind": "native_sql",
@@ -9630,7 +9765,7 @@
         }
       ],
       "classification": "private_scoped",
-      "review_reason": "Stage1 manual write isolation review: authorize validates current operator/control session tenant; preview/binding snapshots bind tenant+operator+hash and expiry. Native reads/writes and locks constrain tenant, receipts bind tenant idempotency. New manual_order_binding DDL/FKs added in V2026100102. Funds correctness not promoted to phase1 acceptance. Integration review 2026-10-06: Chart paging delegates to scoped validated prices. Fixed generated times bound read-only preview work; authoritative permission, tenant and financial creation validation is retained."
+      "review_reason": "super-admin/test开关及ControlIdentity tenant/session一致性；所有原生业务SQL带server tenant。UUID preview值绑定tenant/operator/hash/version/expiry，durable receipt按tenant恢复；命名GET_LOCK有tenant前缀，同物理connection资金/历史/审核事务rollback并finally释放，binding再核owner/version。 独立当前边界复审 20261010；详见 docs/kline-known-fixes-review-20261010.md。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/trade/OptionDurationController.java": {
       "sha256": "ec20b8433bd2c229941061537baf42854ac7e6a0e9f1d68509cd3c5366db6661",
@@ -9688,7 +9823,7 @@
       "review_reason": "New create uses authority facade. Existing HTTP close remains closeOrderWithAuthority; no direct legacy public create/close call remains. Independent static review only; actual tests and release approval remain separate."
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/trade/OptionOrderService.java": {
-      "sha256": "36d26315e7f0c6211f58b6b151eff414d9d38a3cf53eb4d3225f4e6ab7888373",
+      "sha256": "0334f324fd762682a84f8137a041699259383d7a591c747d9979782292998daf",
       "surfaces": [
         {
           "kind": "entity_manager_jpql",
@@ -9762,57 +9897,57 @@
         },
         {
           "kind": "identity_boundary",
-          "line": 349,
+          "line": 301,
           "statement_sha256": "dc0572467c13be0296ff2119a787dc844f34dbcdd6698543f05c8e3a79e52e32"
         },
         {
           "kind": "identity_boundary",
-          "line": 402,
+          "line": 354,
           "statement_sha256": "5392347b387d3154296aa0e2d68534fdf486ba114446eca0f622669e53196465"
         },
         {
           "kind": "identity_boundary",
-          "line": 411,
+          "line": 363,
           "statement_sha256": "39807c911dd6cd26122fde7678015c051558cb0ae8c1fd14531fff1689a35327"
         },
         {
           "kind": "identity_boundary",
-          "line": 491,
+          "line": 443,
           "statement_sha256": "39807c911dd6cd26122fde7678015c051558cb0ae8c1fd14531fff1689a35327"
         },
         {
           "kind": "native_sql",
-          "line": 508,
+          "line": 460,
           "statement_sha256": "25e1a3f6823399e7a2884996608e83afecb873ac06e08a04aa7fabaf94db8cd0"
         },
         {
           "kind": "native_sql",
-          "line": 509,
+          "line": 461,
           "statement_sha256": "6c3e448dc6dd372088e87afee908ccf66001e93132030197ed7e7fa96c537aee"
         },
         {
           "kind": "identity_boundary",
-          "line": 512,
+          "line": 464,
           "statement_sha256": "ef5e7900ba616b2e9bafedabd800dde97e2df94940105f05730af8d85ec132c6"
         },
         {
           "kind": "identity_boundary",
-          "line": 518,
+          "line": 470,
           "statement_sha256": "665c923ffe3cd1298a2928b5124f3caf19cc040854d1726aeb717031f94af415"
         },
         {
           "kind": "identity_boundary",
-          "line": 550,
+          "line": 502,
           "statement_sha256": "9493f86562c08c1d5e8c74a607fae952c1cdd7aec8a59bad78e1210b279b8c98"
         },
         {
           "kind": "identity_boundary",
-          "line": 552,
+          "line": 504,
           "statement_sha256": "c0fae996c6381eaec1e42e06e61a03fad4745d11f38acc03f169a4c0e17a7013"
         }
       ],
       "classification": "private_scoped",
-      "review_reason": "Enabled create receipt-first/outside preparation/RC uses pre-pending locks before current quote/config/duration/window/policy/KYC. Duration absence protected by tenant S. closePrepared retains caller physical TX, locks actual current order/preset/duration, validates quote/current market before callback and settle. Normal expired units remain independent; disabled required template remains DEFAULT. Independent static review only; actual tests and release approval remain separate."
+      "review_reason": "repo/native current reads都server tenant，订单/用户归属再核；S3 guard未放宽，quote准备在资金TX外、runtime authority validate在钱款DML前，trial/wallet/order锁及receipt replay/expiry/rollback保留。历史duration/current policy锁守护，换算/审计委派真实组件。 独立当前边界复审 20261010；详见 docs/kline-known-fixes-review-20261010.md。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/trade/QuantityRules.java": {
       "sha256": "13337ab499c8cdfba80551b3b69b756b550b31818cdf72d89d079d2c45cd29e7",
@@ -10472,10 +10607,10 @@
       "review_reason": "Explicit server tenant/identity boundary or delegated tenant service. Source fingerprint and all detected SQL/cache/async/file occurrences require review on change."
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/user/CustomerServiceController.java": {
-      "sha256": "420fdc0f43d55f6edec20e6158b53118460a3ccaff2059fe74b776ce90b70fa1",
+      "sha256": "c36d62c5ade87ce2050f60f673e8c2e8928bcee23770d067cc67e9215395712d",
       "surfaces": [],
       "classification": "private_scoped",
-      "review_reason": "Reviewed 2026-10-03: ui-edition reads a fixed non-secret key through tenant-scoped SystemConfigService; other endpoints delegate to tenant-scoped settings; no direct database access, dynamic tenant input, global cache or outbound request added."
+      "review_reason": "公开浏览端点只取当前tenant SupportSettings/SystemConfig，返回白名单客服/模板/品牌/时区/界面开关，不返回secret或用户身份；无独立cache/SQL/外部HTTP执行，Host边界与上游配置授权保留。 独立当前边界复审 20261010；详见 docs/kline-known-fixes-review-20261010.md。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/user/DepositController.java": {
       "sha256": "b428cf5932f42074e10b37b9df4e637181233ababf66bdeae236b62d31959dda",
@@ -11478,96 +11613,96 @@
       "review_reason": "Explicit server tenant/identity boundary or delegated tenant service. Source fingerprint and all detected SQL/cache/async/file occurrences require review on change."
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/user/WithdrawController.java": {
-      "sha256": "57369db7a71103d20357aa54385f24d57392be71a5720943f9d0824b3429068a",
+      "sha256": "fcaf09d50bb679aaff688ba579581b0c4fffe25bd2326332c07f127a5ac6aed5",
       "surfaces": [
         {
           "kind": "entity_manager_jpql",
-          "line": 35,
+          "line": 36,
           "statement_sha256": "ad19b1aa2066f1fa083646929d684ac0f3d63fdbabe8a8eb0d6a846fe0e5f71e"
         },
         {
           "kind": "identity_boundary",
-          "line": 82,
+          "line": 109,
           "statement_sha256": "fc1091ea7c1a97c1eedad363e736894c10cbdf09be2ccb3f3668eaea32889dfb"
         },
         {
           "kind": "identity_boundary",
-          "line": 85,
+          "line": 113,
           "statement_sha256": "9c14d065ba85890264d7e7ead655f16d052355c6ce1e398dd1ff9033db489d62"
         },
         {
           "kind": "identity_boundary",
-          "line": 88,
+          "line": 116,
           "statement_sha256": "070e9e0cebb6415dacf183bd509c5f99f5a498bf93c33f94c676082554e0231b"
         },
         {
           "kind": "identity_boundary",
-          "line": 91,
+          "line": 119,
           "statement_sha256": "398f029c0c13d2b96a391f2b0ada555b5d2bc59f7de80794a629461db81a30ea"
         },
         {
           "kind": "identity_boundary",
-          "line": 92,
+          "line": 120,
           "statement_sha256": "5f24b9ca7ef289c051845e3ddf602ddf437454cca6b05066ecd747a9bbf6551b"
         },
         {
           "kind": "identity_boundary",
-          "line": 194,
+          "line": 225,
           "statement_sha256": "112a39ffbe01ab5d324e8d503db2aee1261493b73dc09c7ab6ad3315d35990f9"
         },
         {
           "kind": "identity_boundary",
-          "line": 195,
+          "line": 226,
           "statement_sha256": "dfd0d617ecec8532eb06b6e0effbfe0eb28183ac7f224ec5c766789669ee6d44"
         },
         {
           "kind": "native_sql",
-          "line": 200,
+          "line": 231,
           "statement_sha256": "a80145af9aa67fa63be68734c46a164eb563e7a3501e9b825533c229cf4a5784"
         },
         {
           "kind": "entity_manager_jpql",
-          "line": 200,
+          "line": 231,
           "statement_sha256": "a80145af9aa67fa63be68734c46a164eb563e7a3501e9b825533c229cf4a5784"
         },
         {
           "kind": "identity_boundary",
-          "line": 201,
+          "line": 232,
           "statement_sha256": "4c0c2cfdb37280f8c81c2fde93cf32571b8bfc7e5e2b246a07c2acd6a96a5490"
         },
         {
           "kind": "identity_boundary",
-          "line": 208,
+          "line": 239,
           "statement_sha256": "393f31adca7b13060c21d934ae1ecd5753323e87756961d877736e9f33b4db36"
         },
         {
           "kind": "native_sql",
-          "line": 211,
+          "line": 242,
           "statement_sha256": "be725f45ace9f71ee5f98c956a78888c6c6e7bf5ed0b3c499b7731a5f89dd8de"
         },
         {
           "kind": "entity_manager_jpql",
-          "line": 211,
+          "line": 242,
           "statement_sha256": "be725f45ace9f71ee5f98c956a78888c6c6e7bf5ed0b3c499b7731a5f89dd8de"
         },
         {
           "kind": "native_sql",
-          "line": 217,
+          "line": 248,
           "statement_sha256": "adb0e9c78304500449ea008f9bc281fa1132a2a6d60e6d4c5c4f640923f5ef52"
         },
         {
           "kind": "entity_manager_jpql",
-          "line": 217,
+          "line": 248,
           "statement_sha256": "adb0e9c78304500449ea008f9bc281fa1132a2a6d60e6d4c5c4f640923f5ef52"
         },
         {
           "kind": "identity_boundary",
-          "line": 239,
+          "line": 270,
           "statement_sha256": "6fb0cb98d2f5572310f423f24973f86d892db48bd17aef913cab80387761d4b2"
         }
       ],
       "classification": "boundary",
-      "review_reason": "S3 review: authenticated fixed user and tenant receipt hash, current KYC/address; freeze/order/audit same transaction and rollback on error, no outbound real payment in simulation."
+      "review_reason": "用户id来自认证principal，serverTenant scoped user/assets/receipt/address/KYC，current-refresh锁后再核归属。钱包选择受固定enum/hash约束，政策/channel当前读在冻结前，receipt replay先恢复；账本/订单/audit同事务并catch rollbackOnly，simulation只虚拟DML、无外部出款。 独立当前边界复审 20261010；详见 docs/kline-known-fixes-review-20261010.md。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/utils/DomainUtils.java": {
       "sha256": "2ef639628d8716258fab289e7c20a277bd1d5ce3288895aba7d71dfe71863148",
@@ -12713,10 +12848,10 @@
       "review_reason": "Stage1 pure calculation review: bounded arithmetic/plan/candle inputs and deterministic snapshots only. No DB/credentials, no global mutable user state or process identity assignment. Caller resolves tenant-owned symbol before invoking. Integration review 2026-10-06: Pure adaptive default-amplitude calculation retains explicit custom and legacy formulas, exact precision and validated bounded parameters; no data access or writes."
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/trade/SimpleManualOrderGenerator.java": {
-      "sha256": "0490dff6ea085084023855c5c206aa89c6fd8bb883be8f8d982d6d9db36c7d40",
+      "sha256": "b77e244c9fafbe57883d2e386a2ce4ff62caddcf9ce1733a69c270bf53050ff8",
       "surfaces": [],
       "classification": "stateless",
-      "review_reason": "Stage1 pure calculation review: bounded arithmetic/plan/candle inputs and deterministic snapshots only. No DB/credentials, no global mutable user state or process identity assignment. Caller resolves tenant-owned symbol before invoking. Integration review 2026-10-06: Pure solver uses bounded CPU search and an OHLC opening index. Exact ledger arithmetic, fixed inputs, signed net tolerance and legal quantities remain validated; solver cannot write orders or balances."
+      "review_reason": "OpeningIndex与rows/tree数组每次solve新建，候选/数量/price集合本次调用局部，无静态用户缓存、DB或异步副作用；tenant授权/账户版本由ManualOrderService负责，不把本登记当作金额公式认证。 独立当前边界复审 20261010；详见 docs/kline-known-fixes-review-20261010.md。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/market/HomeSparklineCache.java": {
       "sha256": "8d522af23cd1b8321dea30f1c178b0c11742badf943e39bfad7a87280784b2da",
@@ -12799,10 +12934,10 @@
       "review_reason": "Stage1 new homepage cache review: current-tenant enabled-symbol catalogue, Redis/process fallback/attempt key includes tenant+mode+catalog. Reads never fetch provider or write business; only TenantJobRunner per-tenant background transaction refreshes snapshots. No identity propagation through global map key."
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/auth/RegistrationFields.java": {
-      "sha256": "8bad72b3ac40e4536988ac54c81a28ebfd08eeb3c568b59d8b9e2b68753dee94",
+      "sha256": "4409e470282acce3a74305336364428cf226e3333f07e68ef47a960940e3dff6",
       "surfaces": [],
       "classification": "stateless",
-      "review_reason": "Stage1 backend agent per-file review: bounded phone/income input allowlist and normalization only; no tenant/role/permission authority fields, private persistence or unscoped cache."
+      "review_reason": "静态规则解析和传入用户字段赋值，phone/income 可选字段严格互依及格式范围；Currency白名单是公共元数据。无数据库、线程、共享用户状态或身份来源变更；调用者仍负责注册tenant/credentials/captcha。 独立当前边界复审 20261010；详见 docs/kline-known-fixes-review-20261010.md。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/auth/RegistrationPolicyController.java": {
       "sha256": "559d2b6f62eab33a0da756636bf50e20baf785f026f2f2facfc29e77b2667dbb",
@@ -13496,8 +13631,8 @@
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/market/MarketControlCommands.java": {
       "classification": "private_scoped",
-      "review_reason": "Durable tenant-symbol-key hash dedup, locked tenant queue32 and two workers/64 scheduled queue; trusted server Authentication principal or ControlIdentity only, positive actor and tenant. Plan outside publish tx, captured revision/generation/config/expiry revalidated. Atomic STOP and RUNNING+task+audit; late old generation refused; transient and postcommit unknown acknowledgements recover same receipt. Current byte hash exactly matches the previously manually reviewed S2 source snapshot; final tests reported independently, not release approval. Integration review 2026-10-06: Only allowlisted validation messages become visible. Writer-generation fencing, command scope, state transitions and opaque unexpected failures remain unchanged. 2026-10-07 independent delta review with exact-SHA prior directed evidence: durable accept/cancel use tenant queue lock and tenant/symbol/request key rows; START parameter hash compatibility and RESTORE action are retained. Unknown-key cancel inserts a durable CANCELLED tombstone; late accept returns it and old workers recheck terminal command row, owner/generation/config/revision/expiry before activation. Runtime-before-command lock order is retained. Prepared generation is published only after acknowledged transaction; unknown commit is reconciled by current reads rather than blindly taking a new generation. Retry count/backoff is finite and persists on same scoped receipt. Two workers/64 queue execute captured tenant through TenantJobRunner.oneContext; active set is tenant-keyed, fenced UUID set suppresses only already-selected tenant command, no authority is read from that set. Authentication/ControlIdentity is server-trusted with positive actor and tenant. After-commit logs/audit do not replace receipt authorization; formal release not approved. 2026-10-07 independent a42fbb3 command-codec delta review: receipt decodes only the informational message; actor/ControlIdentity and tenant-symbol-request-key locking remain server-scoped. Unknown CANCEL insert keeps tenant as bind 1 and encoded message as final bind 14. Scoped cancellation now binds message/tenant/symbol[/requestKey] at 1/2/3[/4], preserving the exact pending-state and optional request-key predicates. FAILED remains error/message/tenant/id at 1/2/3/4; retry remains message bind 5, tenant 7 and id 8. The only SQL text change is parameterizing the former fixed cancellation message. Native JSON Unicode escaping is decoded before action/options validation; pre-storage request parameter hashes are unchanged. No key, queue bound, generation/owner/config/revision/expiry check, worker tenant context, cancellation tombstone or state predicate is weakened. This is source registry maintenance, not formal production release approval.",
-      "sha256": "903d045cb9e50a19a38cfa75fa82efd49b7b2e11789467e8b04a67899bba2eda",
+      "review_reason": "所有业务 SQL、writer fence/锁序仍为服务器 tenant；全局 fencedCommands 的 contains/add 均改用 serverTenant+\":\"+commandId，禁止跨 tenant 同 id 饥饿。AUTHORITY_LOST 对本 tenant 仍阻止重试，数据库谓词/状态机未放宽；独立原 probe tenant1=0/tenant2=1，父代理真实 H2 SQL/Runtime 负对照与修后原断言已核。 独立当前边界复审 20261010；详见 docs/kline-known-fixes-review-20261010.md。",
+      "sha256": "e0d7560410db46bf33889c2f1a13d247e0571d8538069eeb549f386ec2790e81",
       "surfaces": [
         {
           "kind": "identity_boundary",
@@ -13572,7 +13707,7 @@
         {
           "kind": "identity_boundary",
           "line": 86,
-          "statement_sha256": "ee4bc2ae7b026aaf4b7fecdb8fa3b82425ed9ee3c27c945c6f202d47282765e7"
+          "statement_sha256": "b2d842e1f85f9a85ca8f9cfce2b54c0f5232b5311919e9697c4b1cb2264da795"
         },
         {
           "kind": "identity_boundary",
@@ -13636,57 +13771,57 @@
         },
         {
           "kind": "native_sql",
-          "line": 147,
+          "line": 148,
           "statement_sha256": "6ced05fd797bc90ef4622b7b165abbdfe3800c9e5a0197e90a9343b0392a02ba"
         },
         {
           "kind": "native_sql",
-          "line": 150,
+          "line": 151,
           "statement_sha256": "1d6f18d5c395960d177a0bb95c276c5cac27a66e51c550f37d75a3cf2f3f7b5d"
         },
         {
           "kind": "native_sql",
-          "line": 169,
+          "line": 170,
           "statement_sha256": "15155ea06f3b64f0d880acf83da009018645b72d5b7ea01b74b4dc16f76359fa"
         },
         {
           "kind": "native_sql",
-          "line": 188,
+          "line": 189,
           "statement_sha256": "12dd1296e5431334dba33e19f59de7ab7912228690debb2e13f5f16b5d0dabf9"
         },
         {
           "kind": "native_sql",
-          "line": 193,
+          "line": 194,
           "statement_sha256": "7909a231aaa7bbedbcc31db7e2d3903944732c71d536ac0ea0c66f217e95c191"
         },
         {
           "kind": "native_sql",
-          "line": 200,
+          "line": 201,
           "statement_sha256": "049c8e970b4cd0f3c9359f3b82f79705e3ea4f52e690382628f903a8faa7df0a"
         },
         {
           "kind": "native_sql",
-          "line": 211,
+          "line": 212,
           "statement_sha256": "959b95753ccf7ef698130ec922aae1c62e619ede193283e23332c3d4f17c54aa"
         },
         {
           "kind": "native_sql",
-          "line": 220,
+          "line": 221,
           "statement_sha256": "fe7c206b8c2cc4b29c303c981a734a7fb2f43a3d2b39b793a6522829d081eb21"
         },
         {
           "kind": "native_sql",
-          "line": 225,
+          "line": 226,
           "statement_sha256": "04bec535ea9e6719196ec81fa9e62e4ffa83950101b2bb9111c3d86b42d8f0ac"
         },
         {
           "kind": "native_sql",
-          "line": 228,
+          "line": 229,
           "statement_sha256": "1453c0ff36b43e9535ff92534a9face995a81009620097086f05770c82787a41"
         },
         {
           "kind": "native_sql",
-          "line": 237,
+          "line": 238,
           "statement_sha256": "2b6525961726b0b8f278e9be5047f990371317dcd74ba9a401217605064c4112"
         }
       ]
@@ -13771,7 +13906,7 @@
       "review_reason": "Instrument visibility/enabled queries and per-tenant config require current tenant. Leases capture tenant and REST owner prefix; background config reads open captured TenantContext, shared public provider book cache bounded32/worker queue32/leases512/REST16. Late REST callbacks require same Entry identity; disable after transaction commit. Shared source metrics are public process aggregates, not private account/order data."
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/market/MarketRuntime.java": {
-      "sha256": "cbb9b456607d38b51e8b131a9420a9cb59784bf16c9573539b26397a9ad9728a",
+      "sha256": "47502df2cd7015b15edc49a7b6aac003b37ae566b0b2ba595f8ca9f3522ee3d3",
       "surfaces": [
         {
           "kind": "cache_lock",
@@ -13855,27 +13990,27 @@
         },
         {
           "kind": "native_sql",
-          "line": 214,
+          "line": 215,
           "statement_sha256": "0f9a416634cb12418bb41888eec4345326f0bcd832f9b401ce7478a718d1164b"
         },
         {
           "kind": "native_sql",
-          "line": 222,
+          "line": 223,
           "statement_sha256": "90b36f04e26ecab67eb346535648b47ad3f2d5c08be72646dc05a35d3265e2fb"
         },
         {
           "kind": "native_sql",
-          "line": 232,
+          "line": 233,
           "statement_sha256": "e8488fd41154b8e7caccc6dfb325f3929f0e2b469f344c989eb3f74d0922743a"
         },
         {
           "kind": "native_sql",
-          "line": 242,
+          "line": 246,
           "statement_sha256": "98c7b5d6b73a011c75f8dcc9a9da9434d249f40ad56acfc02bd633667834d5aa"
         }
       ],
       "classification": "private_scoped",
-      "review_reason": "ROOT actual SELECT/body authority review: quote/status and current generation/control revision/snapshot version are read from one tenant+symbol selected row in the display RR. Tuple mismatch renders quote unavailable without changing expiry or persistence. Existing captured writer identity, lease/STOP lock/funding final authorization, source revision receipts and cleanup untouched; affected real funding tests still required. 2026-10-07 independent delta review with exact-SHA prior directed evidence: native runtime queries/updates always bind server tenant and symbol; captured/uncertain generations are tenant:symbol keys. 4.5s monotonic budget, 5s transaction timeout and 2s lock wait do not extend original15s lease or allow old owner/generation re-acquisition. ThreadLocal context/quota/deadline is cleaned on completion; native connection restores session lock timeout and clears fence variables, cleanup failure evicts unsafe connection rather than returning it to pool. Read-only fenceReason never claims ownership. TARGET/sample/completion-stall and recovery progress are distinguished; inconsistent tuple/stale source is unavailable without synthetic quotes or read-side lease write. No new independent jobs or cross-tenant cache; existing funds final fences retained. 2026-10-07 combined review: publication revision is derived inside the existing tenant/symbol transaction from a tenant-matched task/publication join. No global cache, scheduling or writer-fence change."
+      "review_reason": "generation/uncertainGeneration键tenant:symbol；ThreadLocal fence/sample状态在物理TX结束清除。SQL当前锁lease/owner/generation全部tenant+symbol；connection session变量携带tenant:symbol fences，快照write guardedWHERE/rowcount1；时钟/session metadata两查询无业务行，不要求tenant谓词。 独立当前边界复审 20261010；详见 docs/kline-known-fixes-review-20261010.md。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/activity/OrderPromotionEvents.java": {
       "sha256": "20f7ab32b01e4cb168b22ebafc1e2fd7ba6ed5315e09049f41b4dee465040385",
@@ -14235,7 +14370,7 @@
       "review_reason": "ROOT full storage/read/window review: only SOURCE reader joins explicit physical consumer RR; generic REQUIRES_NEW reader unchanged. Actual same-snapshot symbol LEFT JOIN runtime qualifies cold SOURCE, current generation/raw dirty/task/mixed flags reject stale content. Existing SELECT maps full and contiguous prefix cutoff separately; no extra queries or reader DML. Writer CAS/hash/body/progress transaction and old generic version0 oracle unchanged. Consolidation review 2026-10-05: accepted 71a1bebc narrows dirty overlap to the committed upper watermark rather than the requested tail; tenant predicates, physical RR/generation fencing, immutable legacy rows, writer CAS and zero reader DML remain unchanged. SourceHistoryDirtyRevisionJointTest covers both clean unpublished-tail prefix and dirty committed-prefix rejection."
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/market/SourceHistoryProjector.java": {
-      "sha256": "308303b88b619dc619ce875a85c347e395781d38f7e3f5f7d918ea8d5b9c57c6",
+      "sha256": "6d53163cad153051d18abab2392653176895498dbf7e7551c1f9f3f7022846e1",
       "surfaces": [
         {
           "kind": "identity_boundary",
@@ -14285,17 +14420,17 @@
         {
           "kind": "native_sql",
           "line": 50,
-          "statement_sha256": "75601b2499486961de573d55513192dae451a3d8075e657d05c6d89d575b5297"
+          "statement_sha256": "2cd90bd5863c1d18719611176416c9d183ae97bab6d2c8bc504c92e074943004"
         },
         {
           "kind": "native_sql",
           "line": 52,
-          "statement_sha256": "23581d6867b2d73a1b04e0fb237d2ea590f4015d9a56a03f4a74eee42e3c54ff"
+          "statement_sha256": "4be9c3fe8c20362e0c3578ba360f7b015fd4153f0f9096c7282b37420c76f9e3"
         },
         {
           "kind": "native_sql",
           "line": 71,
-          "statement_sha256": "5b0dfd0c657d6f513c0d33041224bf155bfe82984da03803582e5e6a0460d6f4"
+          "statement_sha256": "e73589a45de5f716c360a5fd0888e6d9707da832729276779d298ad2bbcf572b"
         },
         {
           "kind": "native_sql",
@@ -14314,7 +14449,7 @@
         }
       ],
       "classification": "private_scoped",
-      "review_reason": "ROOT whole delegate/writer review: adds readWindow delegate only; no project/pump/generation/ingestion in display. Existing authority runtime owner/generation/revision locks, 500 completed minute budget, dirty replay and publication CAS remain exact. New consumer wiring does not authorize v2 old historical rewrites or close existing long-window/capacity exits."
+      "review_reason": "scanAfter按tenant，SOURCE委派projection store已tenant-aware。runtime当前锁后核generation/owner/controlRevision及symbol启用配置，拒绝控制/模拟/历史保护，source读精确分钟；dirty/update/progress SQL继续tenant+symbol，回调捕获该范围。 独立当前边界复审 20261010；详见 docs/kline-known-fixes-review-20261010.md。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/user/FinancialCurrentLocks.java": {
       "sha256": "620836389a418d64a6937903c6398fdc9e3a3ac562784e593de626de0bd97d5c",
@@ -14455,7 +14590,7 @@
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/market/HistoryOrdering.java": {
       "classification": "private_scoped",
-      "sha256": "728517711d1866e91f2414731a3359e14084ed32aeef5386024fab74f75732b3",
+      "sha256": "5d90d4801c3ab463cea006ce44f7e7545bd48c89c69ca2665d22715077a7038d",
       "surfaces": [
         {
           "kind": "native_sql",
@@ -14464,54 +14599,54 @@
         },
         {
           "kind": "native_sql",
-          "line": 75,
+          "line": 76,
           "statement_sha256": "a88e5ee2f2dd4a9907d80b1bff532936fb17fd5a57156c7c5c8c717a040b109a"
         },
         {
           "kind": "native_sql",
-          "line": 76,
+          "line": 77,
           "statement_sha256": "8504918599e23fc1bf87ba9d6d8ce189d991b2076588ec79a0817c309db5ec52"
         },
         {
           "kind": "native_sql",
-          "line": 77,
+          "line": 78,
           "statement_sha256": "6645667ddf0c7b5def3157b318239bf469837a0bea16beee6b38fa5f5ad20688"
         },
         {
           "kind": "native_sql",
-          "line": 79,
+          "line": 80,
           "statement_sha256": "f220a604c3be93aacba812bfdf6a8b8c6790fe6d959e85ef08ddfb3d2d3060af"
         },
         {
           "kind": "native_sql",
-          "line": 80,
+          "line": 81,
           "statement_sha256": "ddc3b0d41b4c30f1a373963ba9eae832b25b910e986f2cb2ca2805fc114c64d7"
         },
         {
           "kind": "native_sql",
-          "line": 81,
+          "line": 82,
           "statement_sha256": "13412b3fcc212a400a1bd31d6f3ee6aa913ae319fde7841c0143820bb271371e"
         },
         {
           "kind": "native_sql",
-          "line": 94,
+          "line": 95,
           "statement_sha256": "ed388d92009f82541d778f7aeecced020ea84e27d6fe2e20610a238c294f82ad"
         },
         {
           "kind": "native_sql",
-          "line": 120,
+          "line": 123,
           "statement_sha256": "f2a428d80fe5dc4dfd68ca5aa5e06cf6d300442a2497d31b453914f033fd5425"
         },
         {
           "kind": "native_sql",
-          "line": 139,
+          "line": 142,
           "statement_sha256": "15cf94daabc2b91e55f1739d6af3489810a4b8e99626c05baba4bd9a3bc54bed"
         }
       ],
-      "review_reason": "LOCAL 0404/Option delta review: explicit tenant and symbol predicates; existing runtime writer fence and read-only RR consumers; exact immutable archived response/package binding, future-only cutoff, old ambiguous fail-closed; Option same-physical funds authority with user/assets/grants before runtime, RC only new units and unchanged legacy REQUIRED. Not production release approval. 2026-10-07 independent a42fbb3 command-codec delta review: both seal canonical-request verification and request construction use encodeHistoryRequest, preserving the previous unescaped UTF-8 exact request bytes/hash despite the shared ASCII storage writer. TreeMap fields, explicit current tenant and symbol, cutoff/cursor/limit/source checks, duplicate rejection, request/body/artifact/scope hashes, read-only snapshot and scoped JOIN/INSERT/publication SQL are unchanged byte-for-byte. No archived response authority, callback boundary, tenant predicate or historical dedup is relaxed; no formal production release approval."
+      "review_reason": "policy/archive SQL与join均tenant+symbol；完整归档请求包含tenant/source/code/cursor/period并核body/hash/evidence/scope。seal在writer当前锁中，既有保护cutover保持；临时Map仅本次请求，模拟session不得套用exact archive，退役月明确拒绝。 独立当前边界复审 20261010；详见 docs/kline-known-fixes-review-20261010.md。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/market/FundingConversions.java": {
-      "sha256": "ead9642c3e87cba1e117446de72f2d120deacf26bafa8b72affbbbf080597071",
+      "sha256": "92cd2ca032387291feb4062f3fe5d06f9fb58272ad0315af79fbdf51565bff39",
       "surfaces": [
         {
           "kind": "cache_lock",
@@ -14525,7 +14660,7 @@
         }
       ],
       "classification": "private_scoped",
-      "review_reason": "Book limited to configured quote routes plus cross-base routes (at most four). Existing conversion route/inverse/scale semantics retained. Raw provider receipts carry timestamp/event/generation/version; same-point reconnect cannot renew deadline; outage cannot invalidate a different newer point. Primary generation/revision/version mismatch remains unavailable after companion write. validate recomputes route/rate/receipt and deadline from current runtime JSON; tenant envelope is supplied and checked by runtime/FQA. Independent static review only; actual tests and release approval remain separate."
+      "review_reason": "辅助汇率book仅写当前tenant/symbol runtime quote_json，FOR UPDATE与当前runtime fence保留；route限定当前配置，raw provider时间/版本/expiry不可续期。无独立全局book缓存、不触user/order/wallet锁；同writer版本LiveKline再捕获。 独立当前边界复审 20261010；详见 docs/kline-known-fixes-review-20261010.md。"
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/control/ControlPolicyDefinition.java": {
       "sha256": "d228cee9e1fa9ef92109263d2f903d8cc7fbb64547b444b4f239e643ba6eec87",
@@ -14630,8 +14765,8 @@
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/market/SourceHistoryGapRepair.java": {
       "classification": "private_scoped",
-      "review_reason": "All private SQL has explicit tenant and symbol/task ownership predicates. Route/version and existing facts rechecked under existing ControlHistoryStore/MarketRuntime writer fence; only INSERT genuinely missing ended valid native source candles marked historyOnly. No overwrite of body/received_at, quote/order/funds/control writes, or sealed/frozen/sample reconstruction. Protected spans, session/calendar conflicts and bounded-query overflow fail closed; sourceChanged uses existing revision/after-commit projection notification only. Network/encoding outside DB locks and duplicate writers serialized.",
-      "sha256": "c94fb69408c8d9bbbd1b20f2ff6e43b90b793c4b976bbb66df3de3a2458c0413",
+      "review_reason": "Window捕获tenant/symbol/configVersion/sourceIdentity并tenant化repair key；插入前要求同tenant、新writer事务，网络结束后重核route、全部保护区间及旧行当前读，SQL都含tenant/symbol；只插缺源，不改控制/归档/restore/sim旧行。动态table名仅内部固定两项。 独立当前边界复审 20261010；详见 docs/kline-known-fixes-review-20261010.md。",
+      "sha256": "3386633da6500d3bf5176f1c7ddd9cb1a46e4de6253a48adf215416241b4f059",
       "surfaces": [
         {
           "kind": "identity_boundary",
@@ -14640,7 +14775,7 @@
         },
         {
           "kind": "identity_boundary",
-          "line": 24,
+          "line": 25,
           "statement_sha256": "7693c8ae0335e646939de2782e5113327e76f3f229cf89a8970a474730137f74"
         },
         {
@@ -14650,107 +14785,112 @@
         },
         {
           "kind": "native_sql",
-          "line": 101,
+          "line": 107,
           "statement_sha256": "b6e94c28465da6d4087d01408e90c690d714f10ffe1babd52742d081ddc910fc"
         },
         {
           "kind": "cache_lock",
-          "line": 103,
+          "line": 109,
           "statement_sha256": "89daca141df5eb4b4443e7c40563d125ce4b22991c476f96d1de6735421f80ab"
         },
         {
           "kind": "native_sql",
-          "line": 105,
-          "statement_sha256": "9bcdc10b82b20b8b930f2e2c3637e834bf772a3ed0770da7d45e466610ee6791"
+          "line": 111,
+          "statement_sha256": "bf5591d5ae18bf925c36ec1817860d7470229a1f6124cbadc4b610521dd5f3b9"
         },
         {
           "kind": "native_sql",
-          "line": 163,
+          "line": 169,
           "statement_sha256": "0d2900a4dcc3ba8d8acdfcc08dad5a819b67d66a1dbba86450b3109f0aa95c1f"
         },
         {
           "kind": "native_sql",
-          "line": 165,
+          "line": 171,
           "statement_sha256": "0e343b5569317a32d84e435f186286f4bc859e288c502a5bc5a4754110193d8e"
         },
         {
           "kind": "native_sql",
-          "line": 177,
+          "line": 183,
           "statement_sha256": "319bb050976a50fe25d4c76f09cd04cd9c1bd56609ca4027b78f74e11a72648b"
         },
         {
           "kind": "native_sql",
-          "line": 186,
+          "line": 192,
           "statement_sha256": "9f354b102997b029b4ebd878c44addf19a30e77ae25b3aee73a6e2e5c0f90940"
         },
         {
           "kind": "native_sql",
-          "line": 190,
+          "line": 196,
           "statement_sha256": "57a716e5ac579b116cbd3d4cd1d6fe98db04b0e49c87c9f18a68fbb6dee0ca1d"
         },
         {
           "kind": "native_sql",
-          "line": 195,
+          "line": 201,
           "statement_sha256": "f6e39ca8757676a67bed54aa8c7a99dd2c24dde2f49294b51c70a777d9b3370c"
         },
         {
           "kind": "native_sql",
-          "line": 199,
+          "line": 205,
           "statement_sha256": "153672d4fe05cf2159624abc53d69376f0b981b722807d1e963654b4bb82dade"
         },
         {
           "kind": "native_sql",
-          "line": 202,
-          "statement_sha256": "a0a62cf80356ba9187b15834376f7f2328954cf50db40fce0581be8961d2b527"
-        },
-        {
-          "kind": "native_sql",
-          "line": 207,
-          "statement_sha256": "0442189dabb7b87d3d4bacd1a3078bdd30a598cf5202ed3052ae4a04e087b635"
-        },
-        {
-          "kind": "native_sql",
           "line": 208,
-          "statement_sha256": "4772ecd9e62ba2e177a6fbcf6b93d4e9d7be872dc77b8c38fd2113f7a8b53229"
-        },
-        {
-          "kind": "native_sql",
-          "line": 209,
-          "statement_sha256": "cecd8d29730a301747eb0a04338ab137b62013ca9e83f83178793d523b3067b3"
-        },
-        {
-          "kind": "native_sql",
-          "line": 210,
-          "statement_sha256": "d94c85fa24ae93f95448b5ce87e04892d3a8499fb8745c1bda13209a8f82e8ca"
+          "statement_sha256": "e79e52c64fc819c2a012e91cdcbc9353952674bef6db2c233ef57983155e7ea2"
         },
         {
           "kind": "native_sql",
           "line": 211,
+          "statement_sha256": "a0a62cf80356ba9187b15834376f7f2328954cf50db40fce0581be8961d2b527"
+        },
+        {
+          "kind": "native_sql",
+          "line": 216,
+          "statement_sha256": "0442189dabb7b87d3d4bacd1a3078bdd30a598cf5202ed3052ae4a04e087b635"
+        },
+        {
+          "kind": "native_sql",
+          "line": 217,
+          "statement_sha256": "4772ecd9e62ba2e177a6fbcf6b93d4e9d7be872dc77b8c38fd2113f7a8b53229"
+        },
+        {
+          "kind": "native_sql",
+          "line": 218,
+          "statement_sha256": "cecd8d29730a301747eb0a04338ab137b62013ca9e83f83178793d523b3067b3"
+        },
+        {
+          "kind": "native_sql",
+          "line": 219,
+          "statement_sha256": "d94c85fa24ae93f95448b5ce87e04892d3a8499fb8745c1bda13209a8f82e8ca"
+        },
+        {
+          "kind": "native_sql",
+          "line": 220,
           "statement_sha256": "b7cf32c76aafb4425b4167c60107fc4deb3b64fb80ada9e2175ee22bf3f4dc2c"
         },
         {
           "kind": "native_sql",
-          "line": 212,
+          "line": 221,
           "statement_sha256": "6eb13949a451080280bab57b9005f28b9f0639502908914501806c7fd0ece716"
         },
         {
           "kind": "identity_boundary",
-          "line": 226,
+          "line": 235,
           "statement_sha256": "6a80a1afad1b317c72e6daf968312ce1694790085a4893733b83970ef34bb5b8"
         },
         {
           "kind": "native_sql",
-          "line": 254,
+          "line": 265,
           "statement_sha256": "a94fb2570d1dcefc0d338efd91acfbfa50148e91e2c2fd6272190ac212d64f86"
         },
         {
           "kind": "native_sql",
-          "line": 267,
-          "statement_sha256": "f8759eda46c1581d01f5512d30b18c11f3cc29e74fca9a57eecf658a08b041c3"
+          "line": 277,
+          "statement_sha256": "118c4c72f539d25095471cc75864deac09108699958a48046fd8b53ce6ca47c7"
         },
         {
           "kind": "native_sql",
-          "line": 280,
+          "line": 290,
           "statement_sha256": "2bec7154de19e7097f9632b27878aeafcb36479a35122c7e63aa40922ea7bf7b"
         }
       ]
@@ -14810,6 +14950,218 @@
       "surfaces": [],
       "classification": "private_scoped",
       "review_reason": "2026-10-08 media storage review: server-only MinIO credentials and allowlisted runtime prefix, private bucket, no implicit local fallback. UploadStorage and VideoController supply current-tenant owner paths after authentication; ImageController and VideoController retain authorization before object reads. Real loopback MinIO full/partial reads and anonymous 403 verified. Application account restricted to media read/write."
+    },
+    "exchange-backend/src/main/java/com/gtcfesk/exchange/admin/AdminHistoryRestoreController.java": {
+      "sha256": "62c90a8cd47ae2605e356d83e85b7fb5bbbd216c9b3e5e8814c73312641c4441",
+      "surfaces": [],
+      "classification": "private_scoped",
+      "review_reason": "恢复/撤销入口分别强制 ai_control restore_history/undo_history_restore；symbol/status 服务在服务器 tenant 中读取，token kind/undoOf 再核；DTO 约束范围与请求键。仅委派受保护恢复服务，无本地跨租户缓存。 独立当前边界复审 20261010；详见 docs/kline-known-fixes-review-20261010.md。"
+    },
+    "exchange-backend/src/main/java/com/gtcfesk/exchange/admin/AdminUserLookupController.java": {
+      "sha256": "6a8b470bbeee0c7d58e875cf2dc6f6118ef5c2b50c26f92decf6432b27dcee96",
+      "surfaces": [],
+      "classification": "private_scoped",
+      "review_reason": "只读 allowlist scope 对应真实模块权限；ROLE_AGENT 来源于认证上下文且覆盖请求 filterAgentId；Repository:38 JPQL 使用 server TenantContext、agent/userType 谓词、转义 LIKE、最多20行，仅返回id/email。 独立当前边界复审 20261010；详见 docs/kline-known-fixes-review-20261010.md。"
+    },
+    "exchange-backend/src/main/java/com/gtcfesk/exchange/market/HistorySourceRestore.java": {
+      "sha256": "ec7baf6e4dee1a8d4f174df347e7cc72512b97e8127d290cc8a7c2a8bf8ce357",
+      "surfaces": [
+        {
+          "kind": "identity_boundary",
+          "line": 6,
+          "statement_sha256": "6989d281f3b174d1323b7551613a91aaa4643567605b6ea185396390b8dfe007"
+        },
+        {
+          "kind": "native_sql",
+          "line": 36,
+          "statement_sha256": "3ccbdc41a6494e1c62799fb9c8d6e796525b61e801162047529766db1dc29a3b"
+        },
+        {
+          "kind": "native_sql",
+          "line": 50,
+          "statement_sha256": "87597501af32234a236d47658dfdc9060a95c4f549e9d10e4e6904fbb9171150"
+        },
+        {
+          "kind": "identity_boundary",
+          "line": 82,
+          "statement_sha256": "d3ba07600600add2f18dd7419979b094fd4c79204595154deba9a544634d17a2"
+        },
+        {
+          "kind": "native_sql",
+          "line": 96,
+          "statement_sha256": "cd225b46ebab16a4e21f255b3496c4b48cf8822d05a208712f45534ef4eb2370"
+        },
+        {
+          "kind": "native_sql",
+          "line": 102,
+          "statement_sha256": "246ecf5cb8187822c939407d95e289934887a06ed28334952f2b72f838d06460"
+        },
+        {
+          "kind": "identity_boundary",
+          "line": 109,
+          "statement_sha256": "b8c838dde0afef633c7b1f15514f48cf8b07d49edbc649144f1056009597d6a1"
+        },
+        {
+          "kind": "native_sql",
+          "line": 111,
+          "statement_sha256": "5396ba1b0e08d483cc6d61e87046e70df78aa9b4333e34534ce5aa37adbf0305"
+        },
+        {
+          "kind": "native_sql",
+          "line": 112,
+          "statement_sha256": "59531863a0c94c1303b2f2356de0498bbafe63a447fbd1a6b805b7215df4bcda"
+        },
+        {
+          "kind": "native_sql",
+          "line": 113,
+          "statement_sha256": "f29242dd3ab1d8233f2f6dbaea1dc4fe80ddf6d40337cd7849e51acd6506d25f"
+        },
+        {
+          "kind": "native_sql",
+          "line": 118,
+          "statement_sha256": "ab5e35ac2248691aed448b8a676df0baccb5998b72141cc5920e7129268c2b45"
+        },
+        {
+          "kind": "native_sql",
+          "line": 125,
+          "statement_sha256": "5fa4e332e4b4a8004112ca4ae0f4f2e7287e1a665b77a7f0cadbb0d8255c1e42"
+        },
+        {
+          "kind": "native_sql",
+          "line": 128,
+          "statement_sha256": "1b5a15bda0ee66582e810527645a610633ba62cb4455f1e4865deb89999f609d"
+        },
+        {
+          "kind": "native_sql",
+          "line": 134,
+          "statement_sha256": "d30546d7809c05a74905a3f5cb8ef2b4df72744173f94fb48d04557a178ddabd"
+        },
+        {
+          "kind": "native_sql",
+          "line": 139,
+          "statement_sha256": "41f9c75d727ddc98e20426cd9176d8bdd91b68cbda3d1f458c8492195d316c5f"
+        },
+        {
+          "kind": "native_sql",
+          "line": 146,
+          "statement_sha256": "e04cbac6f0800ace0022a442e78b417e3e9b6545c11875e7c732be918053b31f"
+        },
+        {
+          "kind": "native_sql",
+          "line": 160,
+          "statement_sha256": "d0237832f6a2ce113953591310b4f22c061f5d0bbba0e5a9366e63c33dd7a027"
+        },
+        {
+          "kind": "native_sql",
+          "line": 169,
+          "statement_sha256": "f8327be0f66eddaa2d798c430f9345c25edc7b532b06410f8878240a3b8ccb55"
+        },
+        {
+          "kind": "native_sql",
+          "line": 171,
+          "statement_sha256": "9ad18f1c1ceb975336481f737047098c8089bf7c26db03a3c83726105ec6c19a"
+        },
+        {
+          "kind": "native_sql",
+          "line": 173,
+          "statement_sha256": "32b91d0e30d3f1c7ae1bd95509d8a4b8c94f39fd9abe05a3fac5d2ba894cb059"
+        },
+        {
+          "kind": "native_sql",
+          "line": 182,
+          "statement_sha256": "58a683ceec3be954791ebf780ea0d85828dfb3a34f8c3a14ca094fed6c5b9bd0"
+        },
+        {
+          "kind": "cache_lock",
+          "line": 186,
+          "statement_sha256": "a2934247051c8c5b1c1ff336a7f886c519a196305b75bcb2da5c54656e0f57be"
+        },
+        {
+          "kind": "native_sql",
+          "line": 187,
+          "statement_sha256": "b7eda9a56dbd592f50679d239e8e4777c1f6a8b31f4a547b16a0b8a9d5f2ed25"
+        },
+        {
+          "kind": "native_sql",
+          "line": 192,
+          "statement_sha256": "059910d077f60216776d4f308c49551c017f7ceb0b1b5f0239c91a2bb4a13b74"
+        },
+        {
+          "kind": "native_sql",
+          "line": 197,
+          "statement_sha256": "7518b1c17fd6126fec2a3899e3b6130dc31fab5d6160984298ae00c2391038b7"
+        },
+        {
+          "kind": "native_sql",
+          "line": 201,
+          "statement_sha256": "dd120d3c8bdc29d5843f213b5bf6823bb86c9d6a9a3ea189951bf8d4f8a50cfb"
+        },
+        {
+          "kind": "cache_lock",
+          "line": 206,
+          "statement_sha256": "54ab6b6197a5f4260188947aa0164386062a40c60ebc8b119a5278e67567451e"
+        },
+        {
+          "kind": "identity_boundary",
+          "line": 212,
+          "statement_sha256": "1cad815104733e633353e553b7d7a8f5851a9d465dbdf4e42f6e29bf7d680b3d"
+        },
+        {
+          "kind": "native_sql",
+          "line": 216,
+          "statement_sha256": "6024af7e924be1beb8995ee015b60668bed12ed0fe961f6b3e73d8f86c7c27b1"
+        },
+        {
+          "kind": "native_sql",
+          "line": 219,
+          "statement_sha256": "2dfa90c79e6c65114e2adf1b6eabc2ae2cdad87dfddec7aee47414e307edd7ef"
+        },
+        {
+          "kind": "native_sql",
+          "line": 220,
+          "statement_sha256": "dc4e1bbc02eba46067e5bd86e687e49039ff099a41bcbabef5930e712b433ce1"
+        },
+        {
+          "kind": "native_sql",
+          "line": 226,
+          "statement_sha256": "089f2dabdcc3f50e5d01784b25283589082854358659863652943ad1011fde17"
+        },
+        {
+          "kind": "native_sql",
+          "line": 237,
+          "statement_sha256": "d06e776944df3e4d512caa23f82bb438695b7f565b2b0431b7e8c99fd6e09d4d"
+        },
+        {
+          "kind": "native_sql",
+          "line": 240,
+          "statement_sha256": "4ceff64af9ea659a8b633ed66fa0a1d292d46730830a2dc3827d73b726d14dd2"
+        }
+      ],
+      "classification": "private_scoped",
+      "review_reason": "预览/提交/重试/撤销及minutes/job SQL含server tenant，job查询还匹配symbol。source identity、当前visible checksum、有效时间、sealed/control区间重核；每轮由现有perTenant lane锁runtime/job，版本发布与audit同事务；只新增display ledger，不覆盖source/control证据。需manifest补两private restore表及复合FK。 独立当前边界复审 20261010；详见 docs/kline-known-fixes-review-20261010.md。"
+    },
+    "exchange-backend/src/main/java/com/gtcfesk/exchange/market/KlineIntervals.java": {
+      "sha256": "f5abeb99bb956cd7a672e59a54ea165edc4b97db92e858fa6263835d199e0d83",
+      "surfaces": [],
+      "classification": "stateless",
+      "review_reason": "仅不可变public周期列表与大小写敏感月别名判定，保留1m分钟；无tenant实体/SQL/cache/线程。外部层退役周期拒绝不能把它扩展到UI分钟1M或财务月。 独立当前边界复审 20261010；详见 docs/kline-known-fixes-review-20261010.md。"
+    },
+    "exchange-backend/src/main/java/com/gtcfesk/exchange/market/LiveKline.java": {
+      "sha256": "166d08a5a5489192409aaa2e053f318b5cfa93bafcbe4ad67afe6e3ee2d2bcfb",
+      "surfaces": [
+        {
+          "kind": "native_sql",
+          "line": 57,
+          "statement_sha256": "6c28b0e31e44ef8174f962383e3cc567d43420dc974aed171a2aaf151d23336d"
+        },
+        {
+          "kind": "native_sql",
+          "line": 59,
+          "statement_sha256": "95beea43e71f8a38ecab3051cab46ea0a05cff127651bf4f25d4ce6f738ea182"
+        }
+      ],
+      "classification": "private_scoped",
+      "review_reason": "源锚点SQL含server tenant+symbol及模拟session，在LIMIT前过滤正/合法minute alignment并FOR UPDATE；仅在现有runtime writer fence下捕获。quote自带liveKlines，无新全局cache；session/restore revision隔离，merge版本/价格/桶校验，历史闭合body不覆盖，已真实MySQL独立复验。 独立当前边界复审 20261010；详见 docs/kline-known-fixes-review-20261010.md。"
     }
   },
   "release_approved": false,

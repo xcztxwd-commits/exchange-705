@@ -16,8 +16,9 @@ class UserAvatarMigrationContractTest(unittest.TestCase):
             'V2026100601__control_policy_definitions.sql',
             'V2026100602__user_avatar.sql',
             'V2026100603__tenant_entry_frontend_roles.sql',
-        ], manifest['migration_files'][-5:-2])
-        self.assertEqual(2026100702, manifest['schema_epoch'])
+        ], manifest['migration_files'][manifest['migration_files'].index('V2026100601__control_policy_definitions.sql'):][:3])
+        self.assertEqual(2026100703, manifest['schema_epoch'])
+        self.assertEqual(['V2026100703__history_source_restore.sql', 'V2026100703_1__withdraw_wallet.sql'], manifest['migration_files'][-2:])
 
     def test_avatar_column_is_additive_and_activation_requires_fresh_proof(self):
         sql = (ROOT / 'exchange-backend/src/main/resources/db/migration/V2026100602__user_avatar.sql').read_text(encoding='utf-8')

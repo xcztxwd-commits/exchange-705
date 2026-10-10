@@ -53,6 +53,7 @@ test('login navigates before auth remount and ignores invalid or unmounted repli
       ref: value => ({ value }), computed: get => ({ get value() { return get() } }), watch: () => {},
       onBeforeUnmount: callback => { unmount = callback },
       useRouter: () => ({ replace: async path => { events.push(['navigate', path]) } }),
+      useRoute: () => ({ query: {} }),
       useLocaleStore: () => ({ loadLocale() {}, locale: 'en', t: key => key }),
       // App.vue changes the route component key on setAuth; Vue unmounts it at the next microtask.
       useAuthStore: () => ({ setAuth: (token, user) => { events.push(['auth', token, user.id]); queueMicrotask(() => { events.push(['unmount']); unmount() }) } }),

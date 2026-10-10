@@ -8,13 +8,13 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 class ExchangeQuoteTest {
-    @Test void weeklyAndMonthlyHistoryIntervalsAreAccepted() {
+    @Test void weeklyHistoryIsAcceptedAndMonthlyIsRetired() {
         MarketKlineController controller = new MarketKlineController();
         ForexQuoteMarketService market = mock(ForexQuoteMarketService.class);
         when(market.readSnapshot(any())).thenAnswer(call -> ((java.util.function.Supplier<?>) call.getArgument(0)).get());
         org.springframework.test.util.ReflectionTestUtils.setField(controller, "marketService", market);
         long cursor = System.currentTimeMillis() - 1000;
-        for (String interval : Arrays.asList("1w", "1M")) {
+        for (String interval : Arrays.asList("1w")) {
             when(market.historicalKline("BTCUSDT", interval, 100, cursor)).thenReturn(Collections.singletonMap("ret", 200));
             assertEquals(200, controller.history("BTCUSDT", interval, cursor, 100).getStatusCodeValue());
             verify(market).historicalKline("BTCUSDT", interval, 100, cursor);
@@ -26,9 +26,11 @@ class ExchangeQuoteTest {
         assertEquals("BTC-USDT",ExchangeQuoteSource.symbol("BTCUSDT","Crypto",true));
         assertThrows(MarketHttp.Failure.class,()->ExchangeQuoteSource.symbol("XPTUSD","Metal",false));
         assertThrows(MarketHttp.Failure.class,()->ExchangeQuoteSource.symbol("B/TCUSD","Crypto",false));
-        assertEquals("1M",ExchangeQuoteSource.interval("1mo",false));
-        assertArrayEquals(new String[]{"1mo","10y"}, org.springframework.test.util.ReflectionTestUtils.invokeMethod(new MarketQuoteSource(), "convertIntervalToYahoo", "1M"));
-        assertEquals(10, (Integer) org.springframework.test.util.ReflectionTestUtils.invokeMethod(new MarketQuoteSource(), "convertIntervalToKlineType", "1M"));
+        // Requirement changed: monthly provider mappings are retired, original mapping assertions remain in before.
+        assertThrows(MarketHttp.Failure.class, () -> ExchangeQuoteSource.interval("1mo",false));
+        assertThrows(MarketHttp.Failure.class, () -> org.springframework.test.util.ReflectionTestUtils.invokeMethod(new MarketQuoteSource(), "convertIntervalToYahoo", "1M"));
+        assertThrows(MarketHttp.Failure.class, () -> org.springframework.test.util.ReflectionTestUtils.invokeMethod(new MarketQuoteSource(), "convertIntervalToKlineType", "1M"));
+        assertArrayEquals(new String[]{"60m","1mo"}, org.springframework.test.util.ReflectionTestUtils.invokeMethod(new MarketQuoteSource(), "convertIntervalToYahoo", "1h"));
         assertEquals("1Dutc",ExchangeQuoteSource.interval("1d",true));
         assertEquals("4H",ExchangeQuoteSource.interval("4h",true));
         assertEquals("6Hutc",ExchangeQuoteSource.interval("6h",true));

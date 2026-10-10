@@ -194,9 +194,11 @@ public class ControlHistoryStore {
     static long time(Map<String, Object> row) { return RandomMarketPath.timestamp(row); }
     /** Providers may append a quote-time snapshot to OHLC pages. It is not a completed period. */
     static boolean periodCandle(Map<String,Object> row, String period) {
+        return time(row) > 0 && Math.floorMod(time(row), periodAlignment(period)) == 0;
+    }
+    static long periodAlignment(String period) {
         long width = RandomMarketPath.duration(period);
-        long alignment = width < 3600000 ? width : 60000;
-        return time(row) > 0 && Math.floorMod(time(row), alignment) == 0;
+        return width < 3600000 ? width : 60000;
     }
     static BigDecimal number(Object value) { return new BigDecimal(value.toString()); }
     long historyRestoreRevision(long symbol) {
@@ -273,6 +275,7 @@ public class ControlHistoryStore {
     }
     /** Encode once before acquiring any alias lock; every alias/chunk still commits together. */
     public void sourceCandles(List<Long> symbols, String period, List<Map<String, Object>> rows, long now) {
+        KlineIntervals.rejectRetired(period);
         long owner = tenant();
         List<Object[]> encoded = new ArrayList<>();
         for (Map<String,Object> row : rows) {
@@ -289,11 +292,13 @@ public class ControlHistoryStore {
                     int count = Math.min(500, encoded.size() - offset);
                     Object[] arguments = new Object[count * 5];
                     Map<Long,Map<String,Object>> prior=new HashMap<>();
-                    if("1m".equals(period)) {
+                    {
                         List<Object> lookup=new ArrayList<>(Arrays.asList(tenant(),symbol,period));
                         for(int i=0;i<count;i++) lookup.add(encoded.get(offset+i)[0]);
-                        for(Map<String,Object> row:db.queryForList("SELECT candle_at,body,received_at FROM market_source_candle WHERE tenant_id=? AND symbol_id=? AND period=? AND candle_at IN ("+String.join(",",Collections.nCopies(count,"?"))+") FOR UPDATE",lookup.toArray()))
+                        for(Map<String,Object> row:db.queryForList("SELECT candle_at,period,body,received_at FROM market_source_candle WHERE tenant_id=? AND symbol_id=? AND period=? AND candle_at IN ("+String.join(",",Collections.nCopies(count,"?"))+") FOR UPDATE",lookup.toArray())) {
+                            if (!period.equals(row.get("period"))) throw new com.gtcfesk.exchange.common.BusinessException("KLINE_PERIOD_CONFLICT: 请先审核清理旧月线记录");
                             prior.put(((Number)row.get("candle_at")).longValue(),row);
+                        }
                     }
                     for (int i = 0; i < count; i++) {
                         Object[] row = encoded.get(offset + i);
@@ -317,17 +322,30 @@ public class ControlHistoryStore {
         });
     }
     static final int HISTORY_PAGE_SIZE = 500;
+    /** The legacy case-insensitive PK must never let a minute upsert overwrite a retained month. */
+    void requireSimulationPeriodIdentity(long symbol, long session, String period, List<Map<String,Object>> rows) {
+        KlineIntervals.rejectRetired(period);
+        for (int offset = 0; offset < rows.size(); offset += HISTORY_PAGE_SIZE) {
+            int count = Math.min(HISTORY_PAGE_SIZE, rows.size() - offset);
+            List<Object> arguments = new ArrayList<>(Arrays.asList(tenant(), symbol, session, period));
+            for (int i = 0; i < count; i++) arguments.add(time(rows.get(offset + i)));
+            for (String saved : db.queryForList("SELECT period FROM market_simulation_source_candle WHERE tenant_id=? AND symbol_id=? AND session_at=? AND period=? AND candle_at IN ("
+                    + String.join(",", Collections.nCopies(count, "?")) + ") FOR UPDATE", String.class, arguments.toArray()))
+                if (!period.equals(saved)) throw new com.gtcfesk.exchange.common.BusinessException("KLINE_PERIOD_CONFLICT: 请先审核清理旧月线记录");
+        }
+    }
     List<Map<String, Object>> candles(long symbol, String period, long from, long to) {
         List<Map<String,Object>> result = new ArrayList<>();
         candlePages(symbol, period, from, to, result::addAll); return result;
     }
     /** Keyset pages retain complete requested history without materializing an unbounded JDBC result. */
     void candlePages(long symbol, String period, long from, long to, java.util.function.Consumer<List<Map<String,Object>>> consumer) {
+        KlineIntervals.rejectRetired(period);
         if (from > to) return;
         long owner = tenant(), next = from;
         while (true) {
             TenantContext.require(owner);
-            List<Map<String,Object>> page = db.queryForList("SELECT candle_at,body FROM market_source_candle WHERE tenant_id=? AND symbol_id=? AND period=? AND candle_at>=? AND candle_at<=? ORDER BY candle_at LIMIT ?",
+            List<Map<String,Object>> page = db.queryForList("SELECT candle_at,body FROM market_source_candle WHERE tenant_id=? AND symbol_id=? AND period=? AND /*! BINARY */ TRIM(period)<> '1M' AND candle_at>=? AND candle_at<=? ORDER BY candle_at LIMIT ?",
                 owner, symbol, period, next, to, HISTORY_PAGE_SIZE);
             List<Map<String,Object>> rows = new ArrayList<>(page.size());
             for (Map<String,Object> row : page) {
@@ -582,7 +600,7 @@ public class ControlHistoryStore {
         for (Map<String, Object> tick : ticks) point(symbol, ((Number) tick.get("received_at")).longValue(), number(tick.get("price")), true);
     }
     private long storeSnapshotTime(long symbol, long minute) {
-        return db.queryForObject("SELECT received_at FROM market_source_candle WHERE tenant_id=" + tenant() + " AND symbol_id=? AND period='1m' AND candle_at=?", Long.class, symbol, minute);
+        return db.queryForObject("SELECT received_at FROM market_source_candle WHERE tenant_id=" + tenant() + " AND symbol_id=? AND period='1m' AND /*! BINARY */ TRIM(period)<>'1M' AND candle_at=?", Long.class, symbol, minute);
     }
     void point(long symbol, long time, BigDecimal price, boolean controlled) {
         point(symbol, time, price, controlled, false);
@@ -652,11 +670,12 @@ public class ControlHistoryStore {
     }
     // Repair facts are chart-only. Filter before LIMIT so they cannot displace a real control start basis.
     Map<String, Object> lastClose(long symbol, long now) {
-        List<Map<String, Object>> rows = db.query("SELECT body,period,received_at FROM market_source_candle WHERE tenant_id=" + tenant() + " AND symbol_id=? AND candle_at<? AND body NOT LIKE ? ORDER BY candle_at DESC LIMIT 100",
+        List<Map<String, Object>> rows = db.query("SELECT body,period,received_at FROM market_source_candle WHERE tenant_id=" + tenant() + " AND symbol_id=? AND /*! BINARY */ TRIM(period)<> '1M' AND candle_at<? AND body NOT LIKE ? ORDER BY candle_at DESC LIMIT 100",
             (rs, n) -> { Map<String, Object> row = decode(rs.getString(1)); row.put("period", rs.getString(2)); row.put("receivedAt", rs.getLong(3)); return row; }, symbol, now, "%\"historyOnly\":true%");
         Map<String, Object> latest = Collections.emptyMap();
         long latestClose = 0;
         for (Map<String, Object> row : rows) {
+            if (KlineIntervals.retired(String.valueOf(row.get("period")))) continue;
             if (!periodCandle(row, String.valueOf(row.get("period")))) continue;
             long close = RandomMarketPath.periodEnd(String.valueOf(row.get("period")), time(row));
             // A snapshot fetched while the candle was open does not become a confirmed close merely because time passed.

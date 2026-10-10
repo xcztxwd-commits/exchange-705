@@ -40,12 +40,12 @@ class S2CanonicalKlineMergerTest extends TenantMarketTestContext {
         assertEquals(at+60000,calls.get(0)[0]);assertEquals(at+179999,calls.get(0)[1]);
         assertEquals(0,store.db.queryForObject("SELECT COUNT(*) FROM market_mixed_minute",Integer.class));
     }
-    @Test void sourceOnlyAggregatesExistingPeriodBucketsIncludingUtcEpochZeroWeekAndCalendarMonth() {
+    @Test void sourceOnlyAggregatesActivePeriodsIncludingUtcEpochZeroWeek() {
         long at=Instant.parse("2026-04-01T00:00:00Z").toEpochMilli();
-        for(String interval:List.of("5m","1h","1d","1w","1M")) {
+        for(String interval:List.of("5m","1h","1d","1w")) {
             long width=RandomMarketPath.duration(interval);
-            long boundary="1M".equals(interval)?RandomMarketPath.monthStart(at):Math.floorDiv(at,width)*width;
-            long previous="1M".equals(interval)?RandomMarketPath.monthStart(boundary-1):boundary-width;
+            long boundary=Math.floorDiv(at,width)*width;
+            long previous=boundary-width;
             List<Map<String,Object>> source=List.of(candle(boundary-60000,90,95,88,91),candle(boundary,91,98,89,96),candle(boundary+60000,96,99,90,97));
             Map<String,Object> result=merger.merge(1,interval,3,boundary+60000,external(List.of(),0),null,true,(from,to)->source);
             List<Map<String,Object>> bars=ControlHistoryStore.rows(result);assertEquals(2,bars.size(),interval);

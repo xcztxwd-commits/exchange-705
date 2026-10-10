@@ -1,3 +1,12 @@
+// Exact case matters: 1m is a minute; legacy 1M and provider month aliases are retired.
+export function isRetiredKlineInterval(interval: string): boolean {
+  const value = interval.trim()
+  return value === '1M' || ['m', 'mo', '1mo', 'month', '1month', 'monthly', '月', '月线', '1月', '10', 'type10', 'type=10'].includes(value.toLowerCase())
+}
+export function requireKlineInterval(interval: string): void {
+  if (isRetiredKlineInterval(interval)) throw new Error('MONTHLY_KLINE_RETIRED')
+}
+
 /**
  * K线工具函数
  * 用于转换前端使用的 interval 字符串到后端需要的 kline_type 整数
@@ -16,14 +25,13 @@
  * 7 = 4小时K（股票不支持）
  * 8 = 日K
  * 9 = 周K
- * 10 = 月K
  * 
- * @param interval K线周期字符串（如：'1m', '5m', '15m', '30m', '1h', '2h', '4h', '1d', '1w', '1M'）
+ * @param interval K线周期字符串（如：'1m', '5m', '15m', '30m', '1h', '2h', '4h', '1d', '1w'）
  * @param isStock 是否为股票（美股、港股、A股），如果是股票，2h和4h会降级为1h
  * @returns kline_type 整数（1-10）
  */
 export function convertIntervalToKlineType(interval: string, isStock: boolean = false): number {
-  if (interval.trim() === '1M') return 10
+  requireKlineInterval(interval)
   const normalizedInterval = interval.toLowerCase().trim()
   
   switch (normalizedInterval) {
@@ -58,10 +66,6 @@ export function convertIntervalToKlineType(interval: string, isStock: boolean = 
     case '1w':
     case '1week':
       return 9
-    case '1month':
-    case '1mo':
-      // 月K（注意：'1m' 是1分钟，不是月K）
-      return 10
     default:
       // 默认返回1分钟K
       console.warn(`[Kline Utils] Unknown interval: ${interval}, defaulting to 1m (kline_type=1)`)
@@ -96,7 +100,7 @@ export function convertKlineTypeToInterval(klineType: number): string {
     case 9:
       return '1w'
     case 10:
-      return '1M'
+      throw new Error('MONTHLY_KLINE_RETIRED')
     default:
       console.warn(`[Kline Utils] Unknown kline_type: ${klineType}, defaulting to 1m`)
       return '1m'
@@ -110,6 +114,7 @@ export function convertKlineTypeToInterval(klineType: number): string {
  * @returns 如果为股票不支持的周期，返回降级后的 interval
  */
 export function getStockCompatibleInterval(interval: string): string {
+  requireKlineInterval(interval)
   const normalizedInterval = interval.toLowerCase().trim()
   
   // 股票不支持2小时K和4小时K，降级为1小时K

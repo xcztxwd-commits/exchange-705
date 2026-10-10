@@ -21,6 +21,7 @@ public class SourceHistoryGapRepair {
         final List<Map<String,Object>> gaps = new ArrayList<>();
         boolean discovery;
         Window(TradingSymbol config, String period, int limit, long cursor, String provider, long from, long to, boolean projection) {
+            KlineIntervals.rejectRetired(period);
             tenant = TenantContext.requireTenantId(); symbol = config.getId(); version = config.getRowVersion();
             code = ForexQuoteMarketService.marketCode(config); category = config.getSourceCategory();
             configuredSource = config.getMarketSource(); this.provider = provider; this.period = period;
@@ -40,13 +41,11 @@ public class SourceHistoryGapRepair {
     static boolean continuous(String category) { return "Crypto".equalsIgnoreCase(category) || "CryptoPerpetual".equalsIgnoreCase(category); }
     static boolean automaticPeriod(String period) { return Arrays.asList("1m", "5m", "15m", "30m", "1h").contains(period); }
     static long start(String period, long at) {
-        if ("1M".equals(period)) return RandomMarketPath.monthStart(at);
         long width = RandomMarketPath.duration(period), offset = "1w".equals(period) ? 4 * 86400000L : 0;
         return Math.floorDiv(at - offset, width) * width + offset;
     }
     static long previous(String period, long at) {
-        return "1M".equals(period) ? Instant.ofEpochMilli(at).atZone(ZoneOffset.UTC).minusMonths(1).toInstant().toEpochMilli()
-                : at - RandomMarketPath.duration(period);
+        return at - RandomMarketPath.duration(period);
     }
     static long end(String period, long at) { return RandomMarketPath.periodEnd(period, at); }
     static Map<String,Object> gap(long from, long to, String reason, boolean recoverable) {
@@ -109,7 +108,7 @@ public class SourceHistoryGapRepair {
     }
     private Map<Long,Map<String,Object>> existing(Window window) {
         Map<Long,Map<String,Object>> result = new TreeMap<>();
-        for (Map<String,Object> row : store.db.queryForList("SELECT candle_at,body,received_at FROM market_source_candle WHERE tenant_id=? AND symbol_id=? AND period=? AND candle_at>=? AND candle_at<=? ORDER BY candle_at DESC LIMIT 200" + currentRead(),
+        for (Map<String,Object> row : store.db.queryForList("SELECT candle_at,body,received_at FROM market_source_candle WHERE tenant_id=? AND symbol_id=? AND period=? AND /*! BINARY */ TRIM(period)<>'1M' AND candle_at>=? AND candle_at<=? ORDER BY candle_at DESC LIMIT 200" + currentRead(),
                 window.tenant, window.symbol, window.period, window.from, window.to)) result.put(((Number)row.get("candle_at")).longValue(), row);
         return result;
     }
@@ -158,15 +157,15 @@ public class SourceHistoryGapRepair {
         if ("1m".equals(window.period)) {
             if (!window.continuous) { result.add(window.from, Long.MAX_VALUE, reason); return; }
             // Source minutes feed all coarse controlled aggregates. Protect their entire enclosing buckets,
-            // including Monday weeks crossing a month, not just the second occupied by a control sample.
-            for (String period : Arrays.asList("1w", "1M")) result.add(start(period, from), end(period, start(period, to)) - 1, reason);
+            // including the complete Monday week, not just the second occupied by a control sample.
+            result.add(start("1w", from), end("1w", start("1w", to)) - 1, reason);
         } else result.add(from, to, reason);
     }
     private Protection protection(Window window) {
         Protection result = new Protection();
         boolean minutes = "1m".equals(window.period);
-        long from = minutes ? Math.min(start("1M", window.from), start("1w", window.from)) : window.from;
-        long to = minutes ? Math.max(end("1M", start("1M", window.to)), end("1w", start("1w", window.to))) - 1 : end(window.period, window.to) - 1;
+        long from = minutes ? start("1w", window.from) : window.from;
+        long to = minutes ? end("1w", start("1w", window.to)) - 1 : end(window.period, window.to) - 1;
         List<Long> cutovers = store.db.queryForList("SELECT from_minute FROM market_history_ordering WHERE tenant_id=? AND symbol_id=?" + currentRead(), Long.class, window.tenant, window.symbol);
         for (Long cutover : cutovers) result.add(0, cutover - 1, "sealed_history");
         List<Map<String,Object>> tasks = store.db.queryForList("SELECT t.id,t.started_at,t.planned_end,t.ended_at,t.sampled_until,COALESCE(f.finished_at,CASE WHEN f.task_id IS NOT NULL THEN 9223372036854775807 ELSE COALESCE(t.ended_at,9223372036854775807) END) AS protected_to FROM market_control_task t LEFT JOIN market_control_flow f ON f.tenant_id=t.tenant_id AND f.task_id=t.id WHERE t.tenant_id=? AND t.symbol_id=? AND t.started_at<=? AND COALESCE(f.finished_at,CASE WHEN f.task_id IS NOT NULL THEN 9223372036854775807 ELSE COALESCE(t.ended_at,9223372036854775807) END)>=? ORDER BY t.started_at LIMIT 201" + currentRead(), window.tenant, window.symbol, to, from);
@@ -275,7 +274,7 @@ public class SourceHistoryGapRepair {
             Map<Long,Map<String,Object>> old = existing(window);
             if (!encoded.isEmpty()) {
                 List<Object> arguments = new ArrayList<>(Arrays.asList(window.tenant, window.symbol, window.period)); arguments.addAll(encoded.keySet());
-                for (Map<String,Object> row : store.db.queryForList("SELECT candle_at,body,received_at FROM market_source_candle WHERE tenant_id=? AND symbol_id=? AND period=? AND candle_at IN ("
+                for (Map<String,Object> row : store.db.queryForList("SELECT candle_at,body,received_at FROM market_source_candle WHERE tenant_id=? AND symbol_id=? AND period=? AND /*! BINARY */ TRIM(period)<>'1M' AND candle_at IN ("
                         + String.join(",", Collections.nCopies(encoded.size(), "?")) + ")" + currentRead(), arguments.toArray()))
                     old.put(((Number)row.get("candle_at")).longValue(), row);
             }

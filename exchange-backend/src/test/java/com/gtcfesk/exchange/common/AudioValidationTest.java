@@ -16,7 +16,8 @@ class AudioValidationTest {
   assertTrue(location.find());
   assertTrue(location.group(1).contains("rewrite ^/demo-uploads/(.*)$ /uploads/$1 break;"));
   assertTrue(location.group(1).contains("proxy_pass http://$demo_backend;"));
-  assertTrue(location.group(1).contains("proxy_set_header Host $host;"));
+  assertTrue(location.group(1).contains("proxy_set_header Host $http_host;"));
+  assertTrue(location.group(1).contains("proxy_set_header X-Forwarded-Host $http_host;"));
  }
  private void assertAudioUpload(boolean demo,String prefix) throws Exception {
   FileUploadController controller=new FileUploadController();

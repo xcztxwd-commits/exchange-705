@@ -48,6 +48,7 @@ public class SimulationAdminQueryBoundary extends OncePerRequestFilter {
             @Override public int getContentLength(){return bytes.length;}
             @Override public long getContentLengthLong(){return bytes.length;}
             @Override public String getHeader(String name){return null;}
+            @Override public Enumeration<String> getHeaders(String name){return Collections.enumeration(Collections.<String>emptyList());}
             @Override public Enumeration<String> getHeaderNames(){return Collections.enumeration(Collections.<String>emptyList());}
             @Override public String getParameter(String name){return params.containsKey(name)?params.get(name)[0]:null;}
             @Override public String[] getParameterValues(String name){return params.get(name);}

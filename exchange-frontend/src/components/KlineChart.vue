@@ -2,7 +2,7 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { dispose, init, registerLocale, type CandleType, type Chart, type Coordinate, type DataLoaderGetBarsParams, type KLineData, type OverlayCreate } from 'klinecharts'
 import { useMarketStore } from '@/store/market'
-import marketWebSocket, { showSourceConnectionWarning, type KlineUpdate } from '@/utils/marketWebSocket'
+import marketWebSocket, { matchingLiveKline, showSourceConnectionWarning, type KlineUpdate } from '@/utils/marketWebSocket'
 import { useLocaleStore } from '@/store/locale'
 import { getSystemTimezone } from '@/utils/dateTime'
 import { preferredTimeLocale } from '@/utils/displayTimezone'
@@ -12,6 +12,7 @@ import { accountMode } from '@/utils/accountMode'
 import { candleFromQuote, chartPeriod, contiguousCryptoCandles, historyRepairPolicy, normalizeCandles } from '@/utils/chartData'
 import { registerTradingDrawingOverlays } from '@/utils/chartOverlays'
 import { indicatorCatalog, normalizePreferences, validParameters, validTimezone } from '@/utils/chartPreferences'
+import { isRetiredKlineInterval } from '@/utils/kline'
 import { displaySymbol } from '@/utils/displaySymbol'
 import AppSelect from '@/components/AppSelect.vue'
 
@@ -32,7 +33,7 @@ const scaleOptions = computed(() => [
   { value: 'logarithm', label: text('對數', 'Logarithmic') },
   { value: 'percentage', label: text('百分比', 'Percentage') },
 ])
-const interval = computed(() => props.interval || '1m')
+const interval = computed(() => isRetiredKlineInterval(props.interval || '') ? '1m' : props.interval || '1m')
 const dark = ref(false)
 const fullscreen = ref(false)
 const loading = ref(false)
@@ -87,7 +88,7 @@ let historyRetryAt = 0
 let historyRetryTimer: ReturnType<typeof setTimeout> | undefined
 let historyFailures = 0
 let activeHistoryLoads = 0
-let pendingHistory: { before: number; oldest: number; seen: Set<number>; attempts: number; limit: number; nextCursor?: number } | null = null
+let pendingHistory: { before: number; oldest: number; seen: Set<number>; attempts: number; limit: number; nextCursor?: number; epoch?: string; quoteVersion?: number; updatedAt?: number } | null = null
 let pendingLatestTimer: ReturnType<typeof setTimeout> | undefined
 let pendingLatestAttempts = 0
 let gapCheckTimer: ReturnType<typeof setTimeout> | undefined
@@ -114,6 +115,7 @@ let stopKline: (() => void) | undefined
 let pendingKline: KlineUpdate | null = null
 let lastKlineAt = 0
 let lastKlineSequence = 0
+let appliedKline: KlineUpdate | null = null
 const groupId = 'trading-drawings'
 
 const tools = [
@@ -311,7 +313,7 @@ const historyPaused = ref(false)
 let historyCursor: number | null = null
 let historySkips = 0
 
-type PageResult = { candles: KLineData[]; pending: boolean; exhausted: boolean; retryAt: number; limited?: boolean; terminal?: boolean; nextCursor?: number }
+type PageResult = { candles: KLineData[]; pending: boolean; exhausted: boolean; retryAt: number; limited?: boolean; terminal?: boolean; nextCursor?: number; epoch?: string; quoteVersion?: number; updatedAt?: number }
 
 function roundedRequestSize(missing: number): number {
   return Math.ceil((Math.max(0, Math.ceil(missing)) + 100) / 100) * 100
@@ -370,7 +372,8 @@ async function requestBars(before: number, signal: AbortSignal, limit: number): 
       } else if (repair && !historyGapFromHistory) historyGap.value = repair.reason
       sourceMissing.value = !!response.data?.missingData
       if (candles.length || !pending || attempt === 7)
-        return { candles, pending, exhausted: !pending && response.data?.exhausted === true, retryAt: Number(response.data?.retryAt) || 0, terminal, nextCursor: repair?.nextCursor }
+        return { candles, pending, exhausted: !pending && response.data?.exhausted === true, retryAt: Number(response.data?.retryAt) || 0, terminal, nextCursor: repair?.nextCursor,
+          epoch: response.data?.epoch, quoteVersion: response.data?.quoteVersion, updatedAt: response.data?.updatedAt }
     } else if (!response?.data?.pending) {
       throw new Error('Chart data unavailable')
     } else if (attempt === 7) {
@@ -446,7 +449,7 @@ async function loadBars(params: DataLoaderGetBarsParams, version: number, signal
   if (reloadingBars) { params.callback([], { forward: historyForward, backward: false }); return }
   if (params.type === 'backward') { params.callback([], { backward: false }); return }
   const history = params.type === 'forward'
-  if (history && !['1m', '5m', '15m', '30m', '1h', '1d', '1w', '1M'].includes(interval.value)) {
+  if (history && !['1m', '5m', '15m', '30m', '1h', '1d', '1w'].includes(interval.value)) {
     params.callback([], { forward: false, backward: false }); historyUnsupported.value = true; return
   }
   if (history) historyLoading.value = ++activeHistoryLoads > 0
@@ -581,14 +584,15 @@ function applyLatestCandles(candles: KLineData[], authoritative = false, fillOnl
   const anchor = current[range.from]?.timestamp
   const x = anchor ? (chart.convertToPixel({ timestamp: anchor }) as Partial<Coordinate>).x : undefined
   const tail = current[current.length - 1]?.timestamp ?? -Infinity
+  const closedBefore = candles[candles.length - 1]?.timestamp ?? -Infinity
   const merged = new Map(current.map(bar => [bar.timestamp, bar]))
   let middle = false
   for (const bar of candles) {
     const old = merged.get(bar.timestamp)
-    if (fillOnly && bar.timestamp >= tail) continue
+    if (fillOnly && (old || bar.timestamp >= closedBefore)) continue
     if (!old || !fillOnly && (bar.timestamp >= tail || authoritative && market.quoteStatusMap[props.symbol]?.controlHistory)) {
       merged.set(bar.timestamp, { ...bar })
-      middle ||= bar.timestamp < tail && (!old || old.open !== bar.open || old.high !== bar.high || old.low !== bar.low || old.close !== bar.close || old.volume !== bar.volume)
+      middle ||= fillOnly || bar.timestamp < tail && (!old || old.open !== bar.open || old.high !== bar.high || old.low !== bar.low || old.close !== bar.close || old.volume !== bar.volume)
     }
   }
   if (middle) {
@@ -615,6 +619,7 @@ function applyLatestCandles(candles: KLineData[], authoritative = false, fillOnl
 async function syncLatest() {
   if (!chart || !realtime || loading.value || syncing) return
   const version = revision, signal = controller.signal
+  const connectionGeneration = marketWebSocket.connectionGeneration
   const streamSequence = lastKlineSequence, marketVersion = market.quoteStatusMap[props.symbol]?.marketRevision
   const session = market.quoteStatusMap[props.symbol]?.simulationSession
   syncing = true
@@ -635,7 +640,11 @@ async function syncLatest() {
     }
     if (signal.aborted || version !== revision || !chart || session !== market.quoteStatusMap[props.symbol]?.simulationSession) return
     if (marketVersion !== market.quoteStatusMap[props.symbol]?.marketRevision) return
-    if (lastKlineSequence !== streamSequence) { applyLatestCandles(candles, false, true); cacheBars(); return }
+    const quote = market.quoteStatusMap[props.symbol]
+    if (connectionGeneration !== marketWebSocket.connectionGeneration || lastKlineSequence !== streamSequence || quote?.epoch && !matchingLiveKline({ ...result, bars: result.candles, interval: interval.value },
+      { ...quote, price: market.getPrice(props.symbol), change24h: 0, changePct24h: 0 })) {
+      applyLatestCandles(candles, false, true); cacheBars(); replayKline(); return
+    }
     if (!candles.length) throw new Error('No latest candles')
     applyLatestCandles(candles)
     syncError.value = false
@@ -660,7 +669,7 @@ function resetMarket() {
   realtime = null
   reloadBars = null; reloadingBars = false; historyForward = false
   stopKline?.()
-  pendingKline = null; lastKlineAt = 0; lastKlineSequence = 0
+  pendingKline = null; appliedKline = null; lastKlineAt = 0; lastKlineSequence = 0
   stopKline = marketWebSocket.onKlineUpdate(props.symbol, interval.value, update => {
     pendingKline = update
     replayQuote()
@@ -719,13 +728,14 @@ watch(displayedStudies, applyIndicators)
 function replayKline() {
   if (!pendingKline || !chart || !realtime || loading.value) return
   const update = pendingKline, quote = market.quoteStatusMap[props.symbol]
-  if (update.quote.epoch !== quote?.epoch || (update.quote.quoteVersion ?? -1) < (quote?.quoteVersion ?? -1)) {
+  if (update.generation !== marketWebSocket.connectionGeneration || !quote || !matchingLiveKline(update,
+      { ...quote, price: market.getPrice(props.symbol), change24h: 0, changePct24h: 0 })) {
     pendingKline = null; return
   }
   const candles = normalizeCandles(update.bars, Infinity, interval.value)
   if (!candles.length) { pendingKline = null; return }
   const bars = chart.getDataList(), last = bars[bars.length - 1]
-  if (last && candles[0]!.timestamp > last.timestamp) {
+  if (last && candles[0]!.timestamp > last.timestamp && !candleFromQuote(last,last.close,candles[0]!.timestamp-1,interval.value)) {
     if (Date.now() - lastSyncAttempt >= 900) void syncLatest()
     return
   }
@@ -733,10 +743,18 @@ function replayKline() {
   lastKlineSequence++
   cacheBars()
   syncError.value = false
-  if (!update.pending) lastKlineAt = Date.now()
+  const displayed = chart.getDataList(), tail = displayed[displayed.length - 1]
+  if (tail?.timestamp === candles[candles.length - 1]?.timestamp && tail?.close === update.quote.price) {
+    appliedKline = update; lastKlineAt = update.receivedAt
+  }
   pendingKline = null
 }
-function klineStreamHealthy() { return marketWebSocket.isConnected && lastKlineAt > 0 && Date.now() - lastKlineAt < 3000 }
+function klineStreamHealthy() {
+  const quote = market.quoteStatusMap[props.symbol]
+  return marketWebSocket.isConnected && appliedKline?.generation === marketWebSocket.connectionGeneration && quote
+    && Date.now() - lastKlineAt < 3000 && matchingLiveKline(appliedKline,
+      { ...quote, price: market.getPrice(props.symbol), change24h: 0, changePct24h: 0 })
+}
 function replayQuote() {
   replayKline()
   // Persisted mixed candles are authoritative; never rebuild their OHLC from client ticks.
@@ -806,7 +824,7 @@ onMounted(() => {
   chart.subscribeAction('onScroll', () => { manuallyScrolled = true; scheduleGapCheck() })
   chart.subscribeAction('onZoom', scheduleGapCheck)
   chart.subscribeAction('onVisibleRangeChange', scheduleGapCheck)
-  stopConnected = marketWebSocket.onConnected(() => { void syncLatest() })
+  stopConnected = marketWebSocket.onConnected(() => { appliedKline = null; lastKlineAt = 0; void syncLatest() })
   syncTimer = setInterval(() => {
     if (document.visibilityState === 'hidden' || klineStreamHealthy()) return
     if (Date.now() - lastSyncAttempt >= (market.quoteStatusMap[props.symbol]?.controlHistory ? 900 : 14_000)) void syncLatest()

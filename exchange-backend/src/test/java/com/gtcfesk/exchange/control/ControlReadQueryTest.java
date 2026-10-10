@@ -61,7 +61,7 @@ class ControlReadQueryTest {
  }
  @Test void allConversationsAreGloballyPagedFilteredLabelledAndReadOnly(){
   String email="chat-all-"+UUID.randomUUID()+"@test.invalid";long other=tenant+10000;
-  for(long owner:new long[]{tenant,other})jdbc.update("INSERT INTO tenant(id,code,name,status,template_version,policy_version,session_version,config_ready,domain_verified,row_version) VALUES (?,?,?,'ACTIVE','safe-v1',0,0,TRUE,TRUE,0)",owner,"chat-all-"+owner,"Tenant "+owner);
+  for(long owner:new long[]{tenant,other})jdbc.update("INSERT INTO tenant(id,code,name,status,template_version,policy_version,session_version,config_ready,domain_verified,row_version,entry_enabled,entry_verified,domain_version) VALUES (?,?,?,'ACTIVE','safe-v1',0,0,TRUE,TRUE,0,FALSE,FALSE,0)",owner,"chat-all-"+owner,"Tenant "+owner);
   jdbc.update("UPDATE user_account SET email=? WHERE tenant_id=? AND id=?",email,tenant,user);
   Long[] users={user,null},admins={null,null};List<Long> expected=new ArrayList<>();
   switchTenant(other);tx(()->{UserAccount u=new UserAccount();u.setEmail(email);u.setRemark("Other tenant remark");u.setPasswordHash("never-return-password");em.persist(u);users[1]=u.getId();});

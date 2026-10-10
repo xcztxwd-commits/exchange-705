@@ -47,9 +47,9 @@ public class SourceHistoryProjector {
             String currentRead=Boolean.TRUE.equals(facts.db.execute((java.sql.Connection c)->c.getMetaData().getDatabaseProductName().equals("MySQL"))) ? " LOCK IN SHARE MODE" : "";
             long now=facts.runtime.clock();
             // Two indexed edge seeks avoid a full MIN/MAX aggregate over every SOURCE row per turn.
-            List<Long> firstRows=facts.db.queryForList("SELECT candle_at FROM market_source_candle WHERE tenant_id=? AND symbol_id=? AND period='1m' AND candle_at>0 AND MOD(candle_at,60000)=0 AND candle_at<? ORDER BY candle_at LIMIT 1"+currentRead,Long.class,tenant,symbol,MinuteHistoryProjection.minute(now));
+            List<Long> firstRows=facts.db.queryForList("SELECT candle_at FROM market_source_candle WHERE tenant_id=? AND symbol_id=? AND period='1m' AND /*! BINARY */ TRIM(period)<>'1M' AND candle_at>0 AND MOD(candle_at,60000)=0 AND candle_at<? ORDER BY candle_at LIMIT 1"+currentRead,Long.class,tenant,symbol,MinuteHistoryProjection.minute(now));
             if(firstRows.isEmpty()) return false;
-            long first=firstRows.get(0),horizon=facts.db.queryForObject("SELECT candle_at FROM market_source_candle WHERE tenant_id=? AND symbol_id=? AND period='1m' AND candle_at>0 AND MOD(candle_at,60000)=0 AND candle_at<? ORDER BY candle_at DESC LIMIT 1"+currentRead,Long.class,tenant,symbol,MinuteHistoryProjection.minute(now))+59999;
+            long first=firstRows.get(0),horizon=facts.db.queryForObject("SELECT candle_at FROM market_source_candle WHERE tenant_id=? AND symbol_id=? AND period='1m' AND /*! BINARY */ TRIM(period)<>'1M' AND candle_at>0 AND MOD(candle_at,60000)=0 AND candle_at<? ORDER BY candle_at DESC LIMIT 1"+currentRead,Long.class,tenant,symbol,MinuteHistoryProjection.minute(now))+59999;
             MinuteHistoryProjectionStore.Progress progress=projection.progressCurrent(symbol);
             if(progress!=null && progress.generation>generation) throw new IllegalStateException("Projection generation regressed");
             long initial=progress!=null && progress.generation==generation ? progress.initialWatermark : first-1;
@@ -68,7 +68,7 @@ public class SourceHistoryProjector {
             long to=Math.min(end,from+499*60000L);
             long next=from;
             List<MinuteHistoryProjection.SourceMinute> source=new ArrayList<>();
-            for(Map<String,Object> row:facts.db.queryForList("SELECT candle_at,body,received_at FROM market_source_candle WHERE tenant_id=? AND symbol_id=? AND period='1m' AND candle_at>0 AND MOD(candle_at,60000)=0 AND candle_at>=? AND candle_at<=? ORDER BY candle_at LIMIT 500"+currentRead,tenant,symbol,from,to)) {
+            for(Map<String,Object> row:facts.db.queryForList("SELECT candle_at,body,received_at FROM market_source_candle WHERE tenant_id=? AND symbol_id=? AND period='1m' AND /*! BINARY */ TRIM(period)<>'1M' AND candle_at>0 AND MOD(candle_at,60000)=0 AND candle_at>=? AND candle_at<=? ORDER BY candle_at LIMIT 500"+currentRead,tenant,symbol,from,to)) {
                 // An in-flight candle is not a completed minute, even when the wall clock has moved on.
                 long minute=((Number)row.get("candle_at")).longValue(),received=((Number)row.get("received_at")).longValue();
                 if(received>now) throw new IllegalArgumentException("source candle is outside receive cutoff");
