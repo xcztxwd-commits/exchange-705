@@ -7,6 +7,7 @@ may change after a fresh full independent restore and actual read-only startup.
 import datetime as dt
 import argparse
 import hashlib
+import ipaddress
 import json
 from pathlib import Path, PurePosixPath
 import re
@@ -296,6 +297,21 @@ def observe(db, restore, authorization, output):
     c.publish(output,value);return value
 
 
+def application_networks(actual, stopped=False):
+    """Bind real startup IPs to retained static configuration; Docker clears stopped IPAddress."""
+    result = {}
+    for name, network in actual['NetworkSettings']['Networks'].items():
+        configured = (network.get('IPAMConfig') or {}).get('IPv4Address')
+        address = network.get('IPAddress') or (configured if stopped else None)
+        network_id = network.get('NetworkID', '')
+        if not address or address != configured or not re.fullmatch('[0-9a-f]{64}', network_id):
+            raise ValueError('Canary requires an explicit static IP equal to its actual startup address and network identity')
+        ipaddress.IPv4Address(address)
+        result[name] = {'network_id':network_id,'address':address}
+    if not result:raise ValueError('Canary actual network identity is absent')
+    return result
+
+
 def record_startup(db, artifact, application, artifact_path, output, observation):
     """Observe the real current full JAR; no self-declared healthy/startup receipt."""
     artifact = Path(artifact);output = new_output(output,('.startup.log',))
@@ -312,8 +328,8 @@ def record_startup(db, artifact, application, artifact_path, output, observation
     artifact_hash = c.core.file_hash(artifact)
     if owner.container_artifact_hash(actual['Id'],artifact_path) != artifact_hash:
         raise ValueError('Running full JAR differs from the tested artifact')
-    addresses = [value['IPAddress'] for value in actual['NetworkSettings']['Networks'].values() if value.get('IPAddress')]
-    if not addresses:raise ValueError('Canary needs its actual network identity')
+    networks = application_networks(actual)
+    addresses = [value['address'] for value in networks.values()]
     rows = db.query('SELECT USER,SUBSTRING_INDEX(HOST,\':\',1),DB FROM information_schema.PROCESSLIST WHERE ID<>CONNECTION_ID() '
                     'AND DB=DATABASE() AND SUBSTRING_INDEX(HOST,\':\',1) IN ('+','.join(c.core.literal(x) for x in addresses)+') ORDER BY USER,HOST')
     connections = [row.split('\t') for row in rows]
@@ -329,7 +345,8 @@ def record_startup(db, artifact, application, artifact_path, output, observation
     value = {'kind':'CURRENT_0703_ACTUAL_READ_ONLY_STARTUP','target':c.target(db),'source_sha256':c.sources(),
              'artifact_sha256':artifact_hash,'observed_at':observed,'read_only':True,'actual_non_super_users':users,
              'actual_target_connections':connections,'observation_sha256':c.digest(observation),
-             'application':{'container_id':actual['Id'],'image_id':actual['Image'],'started_at':status['StartedAt'],'artifact_path':artifact_path},
+             'application':{'container_id':actual['Id'],'image_id':actual['Image'],'started_at':status['StartedAt'],
+                            'artifact_path':artifact_path,'networks':networks},
              'logs':{'path':str(log_path),'sha256':c.core.file_hash(log_path)}}
     c.publish(output,value);return value
 
@@ -344,13 +361,14 @@ def verify_startup(db,artifact,value):
             or not observed<=c.now()<observed+dt.timedelta(hours=2)):
         raise ValueError('Current target/source/artifact/fresh startup binding differs')
     actual = owner.inspect_application(application['container_id'])
-    addresses = [network['IPAddress'] for network in actual['NetworkSettings']['Networks'].values() if network.get('IPAddress')]
-    if any(row[1] not in addresses or row[2]!=db.database for row in value['actual_target_connections']):
-        raise ValueError('Observed connections are not this actual canary/target database')
     if (actual['Id']!=application['container_id'] or actual['Image']!=application['image_id']
             or actual['State']['StartedAt']!=application['started_at'] or actual['State']['Running']
             or owner.container_artifact_hash(actual['Id'],application['artifact_path'])!=value['artifact_sha256']):
         raise ValueError('Canary must be the same verified full JAR and stopped before activation')
+    networks = application_networks(actual, stopped=True)
+    addresses = [network['address'] for network in networks.values()]
+    if networks != application.get('networks') or any(row[1] not in addresses or row[2]!=db.database for row in value['actual_target_connections']):
+        raise ValueError('Actual stopped canary network or original target connections changed')
     logs = c.core.run(['docker','logs','--since',application['started_at'],'--until',value['observed_at'],actual['Id']])
     if (hashlib.sha256(logs.stdout+logs.stderr).hexdigest()!=value['logs']['sha256']
             or c.core.file_hash(Path(value['logs']['path']))!=value['logs']['sha256']):
