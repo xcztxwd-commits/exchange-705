@@ -58,6 +58,11 @@ class YahooConnectionTest {
             for (Session session : new ArrayList<>(Upstream.sessions)) session.getBasicRemote().sendText(
                 "{\"type\":\"pricing\",\"message\":\"" + Base64.getEncoder().encodeToString(data) + "\"}");
             until(() -> published.get() > 0);
+            stream.subscriptions(Collections.emptySet(), (symbol, quote) -> published.incrementAndGet());
+            until(() -> !stream.connected());
+            int beforeResume = Upstream.connections.get();
+            stream.subscriptions(Collections.singleton("EURUSD=X"), Collections.singleton("EURUSD=X"), (symbol, quote) -> published.incrementAndGet());
+            until(() -> stream.connected() && Upstream.connections.get() > beforeResume);
         } finally { stream.stop(); server.stop(); server.destroy(); }
     }
 }

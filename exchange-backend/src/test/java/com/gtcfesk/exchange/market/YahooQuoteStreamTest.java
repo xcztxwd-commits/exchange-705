@@ -88,11 +88,45 @@ class YahooQuoteStreamTest extends TenantMarketTestContext {
         assertFalse(stream.healthy("USDJPY=X"));
     }
     @Test void allYahooCategoriesArePreferredAutomatically() {
-        ReflectionTestUtils.setField(stream, "mode", "ws_preferred");
+        assertEquals("ws_preferred", stream.status().get("mode"));
         Set<?> preferred = (Set<?>) stream.status().get("preferredSymbols");
         for (String symbol : Arrays.asList("EURUSD=X", "AAPL", "^GSPC", "CL=F")) {
             assertTrue(preferred.contains(symbol), symbol);
             assertTrue(stream.enabled(symbol), symbol);
         }
+    }
+    @Test void tenantSwitchRejectsInflightWsAndAllowsHttpWithoutStoppingOtherTenants() throws Exception {
+        com.gtcfesk.exchange.admin.SystemConfigService configs = mock(com.gtcfesk.exchange.admin.SystemConfigService.class);
+        ReflectionTestUtils.setField(market, "systemConfigs", configs);
+        when(configs.getConfigValue(YahooQuoteStream.ENABLED_KEY)).thenReturn("false");
+        long now = System.currentTimeMillis();
+        WebSocketSession socket = mock(WebSocketSession.class); when(socket.isOpen()).thenReturn(true);
+        ReflectionTestUtils.setField(stream, "session", socket);
+        assertTrue(market.acceptQuote("EURUSD", "Forex", quote(now, 1.2), "ws", now));
+        market.refreshSymbols();
+        assertTrue(((Set<?>)stream.status().get("subscriptions")).isEmpty());
+        assertFalse(market.acceptQuote("EURUSD", "Forex", quote(now + 1, 1.3), "ws", now + 1));
+        assertFalse((boolean)market.getPrice("EURUSD", "Forex").get("available"));
+        assertTrue(market.acceptQuote("EURUSD", "Forex", quote(now, 1.1), "http", now + 2));
+        assertTrue((boolean)market.getPrice("EURUSD", "Forex").get("available"));
+        Map<?,?> status = market.sourceStatus().stream().filter(s -> "Forex".equals(s.get("category"))).findFirst().get();
+        assertEquals(false, ((Map<?,?>)status.get("stream")).get("enabled"));
+        assertEquals(false, ((Map<?,?>)status.get("stream")).get("connected"));
+
+        TradingSymbolRepository repository = (TradingSymbolRepository)ReflectionTestUtils.getField(market, "symbols");
+        List<TradingSymbol> tenantSymbols = repository.findAllByTenantId(1L);
+        when(repository.findAllByTenantId(2L)).thenReturn(tenantSymbols);
+        com.gtcfesk.exchange.tenant.TenantContext.clear();
+        try (com.gtcfesk.exchange.tenant.TenantContext.Scope ignored = com.gtcfesk.exchange.tenant.TenantContext.open(2L)) {
+            when(configs.getConfigValue(YahooQuoteStream.ENABLED_KEY)).thenReturn(null);
+            market.refreshSymbols();
+            assertTrue(((Set<?>)stream.status().get("subscriptions")).contains("EURUSD=X"));
+            assertTrue(market.acceptQuote("EURUSD", "Forex", quote(now, 1.4), "ws", now));
+        } finally { com.gtcfesk.exchange.tenant.TenantContext.open(1L); }
+        assertFalse(market.acceptQuote("EURUSD", "Forex", quote(now + 3, 1.5), "ws", now + 3));
+        when(configs.getConfigValue(YahooQuoteStream.ENABLED_KEY)).thenReturn("true");
+        market.refreshSymbols();
+        assertTrue(market.acceptQuote("EURUSD", "Forex", quote(now + 3, 1.5), "ws", now + 3));
+        verify(socket, never()).close();
     }
 }

@@ -134,8 +134,9 @@ public class MarketControlCommands {
     void runOne(){
         List<Map<String,Object>> pending=store.db.queryForList("SELECT * FROM market_control_command WHERE tenant_id=? AND state IN ('ACCEPTED','PREPARING','READY') AND retry_at<=? ORDER BY accepted_at,id LIMIT 32",ControlHistoryStore.tenant(),store.runtime.clock());
         // A busy/fenced symbol must not starve the rest of this tenant's bounded queue.
-        for(Map<String,Object> command:pending)if(!fencedCommands.contains(command.get("id")) && runCommand(command))return;
+        for(Map<String,Object> command:pending)if(!fencedCommands.contains(fencedKey(command.get("id"))) && runCommand(command))return;
     }
+    private String fencedKey(Object id){return ControlHistoryStore.tenant()+":"+id;}
     private boolean runCommand(Map<String,Object> command){
         long symbol=((Number)command.get("symbol_id")).longValue();String id=(String)command.get("id");boolean preparationStarted=false;
         final Long[] claimedGeneration={null};
@@ -177,7 +178,7 @@ public class MarketControlCommands {
             String normalized=MarketEngineFailure.normalize(failure);
             if(Arrays.asList("ENGINE_BUSY","ENGINE_FENCED","ENGINE_BUDGET","ENGINE_TRANSIENT").contains(normalized)){
                 if("ENGINE_FENCED".equals(normalized) && "AUTHORITY_LOST".equals(store.runtime.fenceReason(symbol))){
-                    fencedCommands.add(id);
+                    fencedCommands.add(fencedKey(id));
                     org.slf4j.LoggerFactory.getLogger(getClass()).warn("Control command phase=fence traceId={} action={} tenant={} symbol={} requestKey={} commandId={} reason=AUTHORITY_LOST generation={}",org.slf4j.MDC.get("traceId"),action(command),ControlHistoryStore.tenant(),symbol,command.get("request_key"),id,command.get("writer_generation"));return false;
                 }
                 defer(command,symbol,normalized,claimedGeneration[0]);return false;

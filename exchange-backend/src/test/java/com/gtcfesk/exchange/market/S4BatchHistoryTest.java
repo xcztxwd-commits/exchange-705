@@ -49,7 +49,8 @@ class S4BatchHistoryTest extends TenantMarketTestContext {
         assertEquals(0,new BigDecimal("10.1234567890123456").compareTo(ControlHistoryStore.number(output.get(0).get("open_price"))));
         db.clear(); output.clear(); sizes.clear();
         store.visibleMixedPages(1,minute,minute+1500*60000L,page->{sizes.add(page.size());output.addAll(page);});
-        assertEquals(Arrays.asList(500,500,500,1),sizes); assertEquals(1501,output.size()); assertEquals(8,db.calls.size());
+        assertEquals(Arrays.asList(500,500,500,1),sizes); assertEquals(1501,output.size()); assertEquals(12,db.calls.size());
+        assertEquals(4,db.calls.stream().filter(call->call.sql.equals(RecordingJdbc.POLICY_QUERY)).count());
         assertEquals(minute+1500*60000L,ControlHistoryStore.time(output.get(1500)));
         db.assertReadOnlyAndBounded();
         db.clear(); store.candlePages(1,"1m",minute+1,minute,page->fail()); store.visibleMixedPages(1,minute+1,minute,page->fail());
@@ -82,7 +83,8 @@ class S4BatchHistoryTest extends TenantMarketTestContext {
         assertEquals(0,new BigDecimal("50.1234567890123456").compareTo(ControlHistoryStore.number(row.get("low_price"))));
         assertEquals(0,new BigDecimal("50.1240557890123456").compareTo(ControlHistoryStore.number(row.get("close_price"))));
         assertEquals(7,((Number)row.get("volume")).intValue()); assertEquals(true,row.get("partial"));
-        assertEquals(11,db.calls.size()); db.assertReadOnlyAndBounded();
+        assertEquals(12,db.calls.size()); db.assertReadOnlyAndBounded();
+        assertEquals(1,db.calls.stream().filter(call->call.sql.equals(RecordingJdbc.POLICY_QUERY)).count());
         long unionCount = db.calls.stream().filter(call->call.sql.contains("UNION ALL")).count(); assertEquals(4,unionCount);
         for (Call call:db.calls) if(call.sql.contains("UNION ALL")) {
             assertEquals(2,count(call.sql,"e.tenant_id=? AND e.symbol_id=? AND e.received_at>=? AND e.received_at<?"));
@@ -150,10 +152,19 @@ class S4BatchHistoryTest extends TenantMarketTestContext {
         Call(String sql,Object[] arguments,int rows){this.sql=sql;this.arguments=arguments.clone();this.rows=rows;}
     }
     static final class RecordingJdbc extends JdbcTemplate {
+        static final String POLICY_QUERY="SELECT ordering_version,from_minute,source_sequence,scope_sha256,evidence_sha256,responses_json FROM market_history_ordering WHERE tenant_id=? AND symbol_id=?";
         final List<Call> calls = new ArrayList<>();
         RecordingJdbc(DriverManagerDataSource source){super(source);}
         @Override public List<Map<String,Object>> queryForList(String sql,Object... arguments){List<Map<String,Object>> rows=super.queryForList(sql,arguments);calls.add(new Call(sql,arguments,rows.size()));return rows;}
         void clear(){calls.clear();}
-        void assertReadOnlyAndBounded(){for(Call call:calls){assertTrue(call.sql.startsWith("SELECT "));assertFalse(call.sql.contains("FOR UPDATE"));assertFalse(call.sql.contains(" OFFSET "));assertTrue(call.sql.endsWith("LIMIT ?"));assertTrue(Arrays.asList(1,500).contains(call.arguments[call.arguments.length-1]));assertTrue(call.rows<=500);}}
+        void assertReadOnlyAndBounded(){for(Call call:calls){
+            assertTrue(call.sql.startsWith("SELECT "));assertFalse(call.sql.contains("FOR UPDATE"));assertFalse(call.sql.contains(" OFFSET "));
+            if(call.sql.equals(POLICY_QUERY)) {
+                assertArrayEquals(new Object[]{TenantContext.requireTenantId(),1L},call.arguments);
+                assertTrue(call.rows<=1,"The complete tenant/symbol primary key bounds policy metadata to one row");
+            } else {
+                assertTrue(call.sql.endsWith("LIMIT ?"));assertTrue(Arrays.asList(1,500).contains(call.arguments[call.arguments.length-1]));assertTrue(call.rows<=500);
+            }
+        }}
     }
 }

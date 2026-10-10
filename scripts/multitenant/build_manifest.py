@@ -22,17 +22,18 @@ def validate(root=ROOT):
     creations = {}
     for name in manifest['migration_files']:
         path = root / MIGRATION_ROOT.relative_to(ROOT) / name
-        version = re.fullmatch(r'V(20[0-9]{8})__[A-Za-z0-9_]+\.sql', name)
+        version = re.fullmatch(r'V(20[0-9]{8})(?:_([1-9][0-9]*))?__[A-Za-z0-9_]+\.sql', name)
         if not version or not path.is_file():
             errors.append('Missing/invalid migration: ' + name)
             continue
-        versions.append(int(version[1]))
+        versions.append((int(version[1]), int(version[2] or 0)))
         for table in re.findall(r'(?i)CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?`?([a-z0-9_]+)', path.read_text(encoding='utf-8')):
             if table not in known: errors.append('Unclassified DDL table: ' + table)
             creations.setdefault(table, []).append(name)
     if versions != sorted(set(versions)):
         errors.append('Migration versions are duplicated or out of order')
-    if not versions or manifest['schema_epoch'] != max(versions):
+    # The packaged/database epoch is the existing integer major version; minor DDL still has a unique ordered identity.
+    if not versions or manifest['schema_epoch'] != max(versions)[0]:
         errors.append('Schema epoch does not match final migration')
     for table, migration in manifest.get('introduced_tables', {}).items():
         if migration not in creations.get(table, []):

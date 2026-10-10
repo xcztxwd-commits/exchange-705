@@ -1,9 +1,11 @@
+import { requireKlineInterval } from './kline.ts'
 import type { KLineData, Period } from 'klinecharts'
 
 export function chartPeriod(interval: string): Period {
-  const match = /^(\d+)(m|h|d|w|M)$/.exec(interval)
+  requireKlineInterval(interval)
+  const match = /^(\d+)(m|h|d|w)$/.exec(interval)
   if (!match) return { span: 1, type: 'minute' }
-  const types = { m: 'minute', h: 'hour', d: 'day', w: 'week', M: 'month' } as const
+  const types = { m: 'minute', h: 'hour', d: 'day', w: 'week' } as const
   return { span: Number(match[1]), type: types[match[2] as keyof typeof types] }
 }
 
@@ -55,12 +57,7 @@ export function contiguousCryptoCandles(candles: KLineData[], before: number, in
   if (!/^Crypto(?:Perpetual)?$/i.test(category) || !candles.length) return candles
   const period = chartPeriod(interval)
   const durations = { second: 1000, minute: 60_000, hour: 3_600_000, day: 86_400_000, week: 604_800_000, month: 0, year: 0 }
-  const previous = (timestamp: number): number => {
-    if (period.type !== 'month') return timestamp - durations[period.type] * period.span
-    const date = new Date(timestamp)
-    date.setUTCMonth(date.getUTCMonth() - period.span)
-    return date.getTime()
-  }
+  const previous = (timestamp: number): number => timestamp - durations[period.type] * period.span
   if (Number.isFinite(before) && candles[candles.length - 1]!.timestamp !== previous(before)) return []
   let first = candles.length - 1
   while (first > 0 && candles[first - 1]!.timestamp === previous(candles[first]!.timestamp)) first--
@@ -88,12 +85,7 @@ export function historyRepairPolicy(data: unknown): HistoryRepairPolicy | null {
 export function candleFromQuote(last: KLineData | undefined, price: number, time: number, interval: string): KLineData | null {
   if (!last || !Number.isFinite(price) || price <= 0 || !Number.isFinite(time) || time < last.timestamp) return null
   const period = chartPeriod(interval)
-  if (period.type === 'month') {
-    const start = new Date(last.timestamp), current = new Date(time)
-    return start.getUTCFullYear() === current.getUTCFullYear() && start.getUTCMonth() === current.getUTCMonth()
-      ? { ...last, high: Math.max(last.high, price), low: Math.min(last.low, price), close: price }
-      : null
-  }
+
   const durations = { second: 1000, minute: 60_000, hour: 3_600_000, day: 86_400_000, week: 604_800_000, month: 0, year: 0 }
   const duration = durations[period.type] * period.span
   if (!duration) return null

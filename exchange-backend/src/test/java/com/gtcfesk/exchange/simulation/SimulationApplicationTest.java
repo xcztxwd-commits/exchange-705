@@ -23,12 +23,13 @@ class SimulationApplicationTest {
  @MockBean ForexQuoteMarketService quotes;
  @MockBean RedisMarketService redis;
  @BeforeEach void setup() {
+  client.getRestTemplate().setRequestFactory(new org.springframework.http.client.OkHttp3ClientHttpRequestFactory());
   when(gateway.authenticate("Bearer simulation-fixture")).thenReturn(8001L);
   Map<String,Object> snapshot=new LinkedHashMap<>();for(String table:SimulationCatalogController.TABLES)snapshot.put(table,Collections.emptyList());snapshot.put("system_config",Collections.emptyList());
   when(gateway.get("/catalog","Bearer simulation-fixture")).thenReturn(snapshot);
  }
  ResponseEntity<Map> get(String path,String mode,boolean signed) {
-  HttpHeaders headers=new HttpHeaders();headers.set("X-Account-Mode",mode);headers.set("X-Forwarded-Host",com.gtcfesk.exchange.tenant.BootTenantFixture.FRONT);if(signed)headers.setBearerAuth("simulation-fixture");
+  HttpHeaders headers=new HttpHeaders();headers.set("X-Account-Mode",mode);headers.set("Host",com.gtcfesk.exchange.tenant.BootTenantFixture.FRONT);headers.set("X-Forwarded-Host",com.gtcfesk.exchange.tenant.BootTenantFixture.FRONT);if(signed)headers.setBearerAuth("simulation-fixture");
   return client.exchange(path,HttpMethod.GET,new HttpEntity<>(headers),Map.class);
  }
  @Test void loginSessionCreatesIndependentAccountAndKycRemainsUnverified() {
@@ -42,8 +43,12 @@ class SimulationApplicationTest {
   assertEquals(409,get("/api/user/assets","REAL",true).getStatusCodeValue());
  }
  @Test void unauthenticatedLocalRegistrationIsDisabled() {
-  HttpHeaders headers=new HttpHeaders();headers.set("X-Account-Mode","DEMO");headers.set("X-Forwarded-Host",com.gtcfesk.exchange.tenant.BootTenantFixture.FRONT);
+  HttpHeaders headers=new HttpHeaders();headers.set("X-Account-Mode","DEMO");headers.set("Host",com.gtcfesk.exchange.tenant.BootTenantFixture.FRONT);headers.set("X-Forwarded-Host",com.gtcfesk.exchange.tenant.BootTenantFixture.FRONT);
   ResponseEntity<Map> response=client.exchange("/api/auth/register",HttpMethod.POST,new HttpEntity<>(Collections.emptyMap(),headers),Map.class);
   assertEquals(409,response.getStatusCodeValue());
+ }
+ @Test void forwardedHostCannotReplaceMismatchedSocketHost() {
+  HttpHeaders headers=new HttpHeaders();headers.set("Host","b.mt705.test");headers.set("X-Forwarded-Host",com.gtcfesk.exchange.tenant.BootTenantFixture.FRONT);headers.set("X-Account-Mode","DEMO");headers.setBearerAuth("simulation-fixture");
+  assertEquals(403,client.exchange("/api/simulation/session",HttpMethod.GET,new HttpEntity<>(headers),Map.class).getStatusCodeValue());
  }
 }

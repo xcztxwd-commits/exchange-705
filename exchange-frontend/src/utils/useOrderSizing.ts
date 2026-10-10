@@ -44,9 +44,9 @@ export function useOrderSizing(input: {
   const allocationPercent = computed(() => requestedPercent.value ?? Math.round(actualPercent.value * 10) / 10)
 
   function applyAllocation() {
-    if (requestedPercent.value == null || !canAllocate.value) return
+    if (requestedPercent.value == null || requestedPercent.value !== 0 && !canAllocate.value) return
     writingQuantity = true
-    input.quantity.value = quantityFromAllocation(input.available.value, requestedPercent.value, marginPerLot.value, input.feePerLot.value, Number(specification.value?.quantityStep ?? 0.01), Number(specification.value?.minOrderQuantity ?? 0.01), notionalPerUnit.value, Number(specification.value?.minOrderNotional ?? 0))
+    input.quantity.value = requestedPercent.value === 0 ? 0 : quantityFromAllocation(input.available.value, requestedPercent.value, marginPerLot.value, input.feePerLot.value, Number(specification.value?.quantityStep ?? 0.01), Number(specification.value?.minOrderQuantity ?? 0.01), notionalPerUnit.value, Number(specification.value?.minOrderNotional ?? 0))
     writingQuantity = false
   }
   function setAllocation(value: number) {
@@ -54,7 +54,7 @@ export function useOrderSizing(input: {
     requestedPercent.value = Math.max(0, Math.min(100, value))
     applyAllocation()
   }
-  watch(input.quantity, () => { if (!writingQuantity) requestedPercent.value = null }, { flush: 'sync' })
+  watch(input.quantity, () => { if (!writingQuantity) requestedPercent.value = input.quantity.value === 0 ? 0 : null }, { flush: 'sync' })
   watch([costPerLot, input.available, canAllocate], applyAllocation)
   watch(input.symbol, () => { requestedPercent.value = null }, { flush: 'sync' })
 

@@ -32,12 +32,12 @@ public class ExchangeQuoteSource {
         return okx ? value.substring(0, value.length()-4) + "-USDT" + (perpetual(category) ? "-SWAP" : "") : value;
     }
     static String interval(String interval, boolean okx) {
+        if (KlineIntervals.retired(interval)) throw new MarketHttp.Failure("unsupported_interval", 0);
         String value = interval == null ? "1m" : interval;
-        if (Arrays.asList("m", "mo", "1mo").contains(value)) value = "1M";
         if ("d".equals(value)) value = "1d";
         if ("w".equals(value)) value = "1w";
         if ("60m".equals(value)) value = "1h";
-        if (!Arrays.asList("1m","3m","5m","15m","30m","1h","2h","4h","6h","12h","1d","1w","1M").contains(value))
+        if (!Arrays.asList("1m","3m","5m","15m","30m","1h","2h","4h","6h","12h","1d","1w").contains(value))
             throw new MarketHttp.Failure("unsupported_interval", 0);
         return !okx ? value : Arrays.asList("6h","12h").contains(value) ? value.toUpperCase(Locale.ROOT) + "utc" : value.endsWith("h") ? value.toUpperCase(Locale.ROOT)
             : value.endsWith("d") || value.endsWith("w") || value.endsWith("M") ? value.toUpperCase(Locale.ROOT) + "utc" : value;

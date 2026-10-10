@@ -82,6 +82,12 @@ class S4KlineDifferentialTest extends TenantMarketTestContext {
         Map<String,Object> data = new LinkedHashMap<>(); data.put("kline_list", rows); data.put("code", "TEST"); data.put("source", "fixture");
         Map<String,Object> result = new LinkedHashMap<>(); result.put("ret",503); result.put("data",data); return result;
     }
+    private Map<String,Object> expectedWithFixtureRevision(Map<String,Object> legacy) {
+        // No restore is effective in this fixture. Extend the envelope contract without changing the frozen reader or bars.
+        Map<String,Object> data=new LinkedHashMap<>((Map<String,Object>)legacy.get("data"));
+        assertFalse(data.containsKey("historyRestoreRevision"));data.put("historyRestoreRevision",0L);
+        Map<String,Object> expected=new LinkedHashMap<>(legacy);expected.put("data",data);return expected;
+    }
     private Map<String,Object> compare(String period, int limit, long cursor, boolean utc, List<Map<String,Object>> rows) {
         Map<String,Object> input = external(rows);
         source.calls.clear(); source.record = true;
@@ -89,6 +95,7 @@ class S4KlineDifferentialTest extends TenantMarketTestContext {
         Map<String,Object> expected;
         try { expected = source.snapshot(()->legacyStore.snapshot(()->before.merge(1,period,limit,cursor,input,ignored->{},utc))); }
         finally { source.record=false; }
+        Map<String,Object> rawLegacyExpected=expected;expected=expectedWithFixtureRevision(expected);
         int oldQueries = source.calls.size();
         double oldMillis=(System.nanoTime()-oldStart)/1e6;
         List<Map<String,Object>> oldSql = new ArrayList<>(source.calls);
@@ -106,6 +113,7 @@ class S4KlineDifferentialTest extends TenantMarketTestContext {
         difference.put("expected_rows",ControlHistoryStore.rows(expected).size());difference.put("actual_rows",ControlHistoryStore.rows(actual).size());
         difference.put("measurement_qualification","Synthetic fixture inserts warm data. Legacy is read first; new result is a subsequent shadow read, never a cold first call. No snapshot restore, disk-cold restart or OS-cache clearing. full_method_ms excludes connection identity/pin setup and initial counter read, includes final counter-observation overhead; outer_method_ms includes connection and observer overhead. Not real GET/WS end-to-end latency.");
         difference.put("old_sql",oldSql);difference.put("new_sql",new ArrayList<>(source.calls));
+        difference.put("raw_legacy_expected",rawLegacyExpected);difference.put("fixture_contract_extension",Collections.singletonMap("data.historyRestoreRevision",0L));
         difference.put("expected",expected);difference.put("actual",actual);difference.put("field_equal",expected.equals(actual));evidence.add(difference);
         if(!expected.equals(actual))try {writeEvidence((source.mysql?"mysql":"h2")+"-failed-difference",difference);}catch(java.io.IOException failure){throw new IllegalStateException("Cannot durably preserve failed S4 difference",failure);}
         assertEquals(expected, actual, period+" limit="+limit+" cursor="+cursor+" utc="+utc);
@@ -182,7 +190,7 @@ class S4KlineDifferentialTest extends TenantMarketTestContext {
         System.out.println("S4_DIFFERENTIAL cases="+comparisons+" full_response_map_equality=true precision=16 history_years=9");
     }
 
-    @Test void providerAnchorsClosuresDstWeekMonthAndCursorBoundariesStayStable() {
+    @Test void providerAnchorsClosuresDstWeekAndCursorBoundariesStayStable() {
         long day=Instant.parse("2024-03-09T14:30:00Z").toEpochMilli();
         long nextDay=day+23*3600000L; // Explicit provider DST anchor; never guessed from UTC.
         candle("1d",bar(day,new BigDecimal("80.125"),10));
@@ -195,11 +203,8 @@ class S4KlineDifferentialTest extends TenantMarketTestContext {
         long hour=day+1800000L;
         candle("1h",bar(hour,new BigDecimal("100.123456"),1)); mixed(bar(hour+60000,new BigDecimal("110.123456"),1));
         compare("1h",5,hour-1,false,Collections.emptyList()); compare("1h",5,hour+3600000,false,Collections.emptyList());
-        long month=Instant.parse("2024-02-01T00:00:00Z").toEpochMilli();
-        long nextMonth=Instant.parse("2024-03-01T00:00:00Z").toEpochMilli();
-        candle("1M",bar(month,new BigDecimal("40.00000001"),3)); candle("1M",bar(nextMonth,new BigDecimal("45.00000001"),4));
-        mixed(bar(nextMonth-60000,new BigDecimal("50.00000001"),1));
-        for(long cursor:new long[]{month-1,month,nextMonth-1,nextMonth,nextMonth+31*86400000L}) compare("1M",3,cursor,false,Collections.emptyList());
+        // Requirement changed: monthly differential is replaced by explicit rejection; original case is preserved in before.
+        assertThrows(IllegalArgumentException.class, () -> current.merge(1,"1M",3,System.currentTimeMillis(),external(Collections.emptyList()),null,false));
         long week=Instant.parse("2024-03-04T00:00:00Z").toEpochMilli();
         candle("1w",bar(week,new BigDecimal("70.0001"),1)); mixed(bar(week+60000,new BigDecimal("75.0001"),1));
         for(long cursor:new long[]{week-1,week,week+7*86400000L}) compare("1w",3,cursor,true,Collections.emptyList());
@@ -218,7 +223,30 @@ class S4KlineDifferentialTest extends TenantMarketTestContext {
         if(tick) store.db.update("INSERT INTO market_source_tick(tenant_id,symbol_id,source_time,received_at,price) VALUES(1,1,?,?,?) ON DUPLICATE KEY UPDATE received_at=VALUES(received_at),price=VALUES(price)",sourceAt,receivedAt,new BigDecimal(price));
     }
 
-    @Test void frozenPrefixMultiTaskLateEventsDedupAndPublicationAreFieldEqual() {
+    @Test void ambiguousLegacyTicksAreRejectedAndOriginalFactsRemainUnchanged() {
+        com.gtcfesk.exchange.common.BusinessException failure=assertThrows(com.gtcfesk.exchange.common.BusinessException.class,
+            this::frozenPrefixMultiTaskLateEventsDedupAndPublicationAreFieldEqual);
+        assertTrue(failure.getMessage().contains("HISTORY_LEGACY_ORDER_PENDING"));
+        assertReadOnly(source.calls);
+        Map<String,Object> facts=diagnosticFacts();
+        for(int i=0;i<3;i++) {
+            source.calls.clear();source.record=true;
+            try {
+                assertTrue(assertThrows(com.gtcfesk.exchange.common.BusinessException.class,
+                    ()->store.readSnapshot(()->store.visibleMixed(1,START,START))).getMessage().contains("HISTORY_LEGACY_ORDER_PENDING"));
+            } finally {source.record=false;}
+            assertReadOnly(source.calls);assertEquals(facts,diagnosticFacts());
+        }
+        assertEquals(2,store.db.queryForObject("SELECT COUNT(*) FROM market_source_tick WHERE tenant_id=1 AND symbol_id=1 AND received_at=?",Integer.class,START+57000));
+    }
+    @Test void unambiguousFrozenPrefixMultiTaskLateEventsDedupAndPublicationAreFieldEqual() {
+        frozenPrefixMultiTaskLateEventsDedupAndPublicationAreFieldEqual(false);
+    }
+    // Existing protection/archived-return tests call the original ambiguous fixture and still receive its rejection.
+    void frozenPrefixMultiTaskLateEventsDedupAndPublicationAreFieldEqual() {
+        frozenPrefixMultiTaskLateEventsDedupAndPublicationAreFieldEqual(true);
+    }
+    private void frozenPrefixMultiTaskLateEventsDedupAndPublicationAreFieldEqual(boolean ambiguous) {
         long minute=START;
         Map<String,Object> prefix=bar(minute,new BigDecimal("80.1234567890123456"),7);
         prefix.put("snapshotAt",minute+10000); prefix.put("controlled",true); prefix.put("partial",true);
@@ -236,7 +264,7 @@ class S4KlineDifferentialTest extends TenantMarketTestContext {
         event("same-time-second",minute+53000,minute+55000,"87.1234567890123456",false);
         store.db.update("INSERT INTO market_source_tick(tenant_id,symbol_id,source_time,received_at,price) VALUES(1,1,?,?,?)",minute+56000,minute+56000,new BigDecimal("85.1234567890123456"));
         store.db.update("INSERT INTO market_source_tick(tenant_id,symbol_id,source_time,received_at,price) VALUES(1,1,?,?,?),(1,1,?,?,?)",
-            minute+57000,minute+57000,new BigDecimal("84.1234567890123456"),minute+58000,minute+57000,new BigDecimal("83.1234567890123456"));
+            minute+57000,minute+(ambiguous?57000:59000),new BigDecimal("84.1234567890123456"),minute+58000,minute+57000,new BigDecimal("83.1234567890123456"));
         // Later OHLC is still retained as source but cannot erase frozen prefix or published control extrema.
         candle("1m",bar(minute,new BigDecimal("999.1234567890123456"),100));
         source.calls.clear();source.record=true;
@@ -284,6 +312,7 @@ class S4KlineDifferentialTest extends TenantMarketTestContext {
         for(String period:Arrays.asList("1m","5m","1h")) {
             List<Long> oldRequests=new ArrayList<>(),newRequests=new ArrayList<>();
             Map<String,Object> expected=source.snapshot(()->legacyStore.snapshot(()->before.merge(1,period,20,session+15*60000,external(Collections.emptyList()),oldRequests::add,true,minutes)));
+            expected=expectedWithFixtureRevision(expected);
             source.calls.clear();source.record=true;
             Map<String,Object> actual;
             try{actual=source.snapshot(()->current.merge(1,period,20,session+15*60000,external(Collections.emptyList()),newRequests::add,true,minutes));}finally{source.record=false;}
@@ -304,19 +333,24 @@ class S4KlineDifferentialTest extends TenantMarketTestContext {
             minute+57000,minute+57000,new BigDecimal("84.1234567890123456"),minute+58000,minute+57000,new BigDecimal("83.1234567890123456"));
         candle("1m",bar(minute,new BigDecimal("999.1234567890123456"),100));
         Map<String,Object> facts=diagnosticFacts();
-        List<Map<String,Object>> replays=new ArrayList<>();Set<String> legacyCloses=new TreeSet<>(),newCloses=new TreeSet<>();
+        List<Map<String,Object>> replays=new ArrayList<>();Set<String> legacyCloses=new TreeSet<>(),newCloses=new TreeSet<>();int rejected=0;
         List<Map<String,Object>> plans=new ArrayList<>();Set<String> seenPlans=new HashSet<>();
         for(int i=0;i<6;i++)for(String route:Arrays.asList("old-direct-autocommit","old-direct-snapshot","old-merger-snapshot","new-merger-snapshot")) {
-            source.calls.clear();source.record=true;List<Map<String,Object>> rows;
+            source.calls.clear();source.record=true;List<Map<String,Object>> rows;String rejection=null;
             try {
                 if(route.equals("old-direct-autocommit"))rows=legacyStore.visibleMixed(1,minute,minute);
                 else if(route.equals("old-direct-snapshot"))rows=source.snapshot(()->legacyStore.snapshot(()->legacyStore.visibleMixed(1,minute,minute)));
                 else if(route.equals("old-merger-snapshot"))rows=ControlHistoryStore.rows(source.snapshot(()->legacyStore.snapshot(()->before.merge(1,"1m",5,minute+60000,external(Collections.emptyList()),ignored->{},true))));
-                else rows=ControlHistoryStore.rows(source.snapshot(()->current.merge(1,"1m",5,minute+60000,external(Collections.emptyList()),ignored->{},true)));
+                else {
+                    com.gtcfesk.exchange.common.BusinessException failure=assertThrows(com.gtcfesk.exchange.common.BusinessException.class,
+                        ()->source.snapshot(()->current.merge(1,"1m",5,minute+60000,external(Collections.emptyList()),ignored->{},true)));
+                    rejection=failure.getMessage();assertTrue(rejection.contains("HISTORY_LEGACY_ORDER_PENDING"));rows=Collections.emptyList();rejected++;
+                }
             } finally {source.record=false;}
-            assertEquals(1,rows.size());String close=rows.get(0).get("close_price").toString();
-            if(route.startsWith("old"))legacyCloses.add(close);else newCloses.add(close);
+            if(route.startsWith("old")) {assertEquals(1,rows.size());legacyCloses.add(rows.get(0).get("close_price").toString());}
+            else {assertTrue(rows.isEmpty());assertReadOnly(source.calls);}
             Map<String,Object> replay=new LinkedHashMap<>();replay.put("iteration",i);replay.put("route",route);replay.put("rows",rows);replay.put("executed_sql",new ArrayList<>(source.calls));
+            if(rejection!=null)replay.put("rejection",rejection);
             replay.put("single_connection",!route.equals("old-direct-autocommit"));replays.add(replay);
         }
         // EXPLAIN is deliberately after every business replay. These diagnostics cannot prewarm a claimed first call.
@@ -331,9 +365,10 @@ class S4KlineDifferentialTest extends TenantMarketTestContext {
         Map<String,Object> diagnostic=new LinkedHashMap<>();diagnostic.put("qualification","Diagnostic only; never approval for a changed close or replacement for strict differential assertion. Synthetic warm facts; not cold or GET latency.");
         diagnostic.put("fixed_facts_before",facts);diagnostic.put("fixed_facts_after",diagnosticFacts());diagnostic.put("replays",replays);diagnostic.put("explain_after_all_business_replays",plans);
         diagnostic.put("legacy_close_values",legacyCloses);diagnostic.put("new_close_values",newCloses);diagnostic.put("legacy_nondeterministic_tie_observed",legacyCloses.size()>1);
+        diagnostic.put("new_rejection_count",rejected);diagnostic.put("legacy_equivalence_approved",false);
         writeEvidence("mysql-legacy-tie-diagnostic",diagnostic);
         assertEquals(facts,diagnosticFacts(),"Diagnostic reads must not modify any source/sample/prefix/candle fact");
-        assertEquals(1,newCloses.size(),"New tie rule must be stable even while legacy equivalence remains blocked");
+        assertTrue(newCloses.isEmpty(),"Ambiguous legacy facts must never produce an invented close");assertEquals(6,rejected);
     }
     private Map<String,Object> diagnosticFacts() {
         Map<String,Object> facts=new LinkedHashMap<>();

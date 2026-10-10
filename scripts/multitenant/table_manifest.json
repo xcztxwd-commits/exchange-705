@@ -1,5 +1,5 @@
 {
-  "schema_epoch": 2026100702,
+  "schema_epoch": 2026100703,
   "default_tenant_id": 1,
   "private": [
     "activity_campaign",
@@ -57,6 +57,8 @@
     "market_engine_tenant",
     "market_history_ordering",
     "market_history_response",
+    "market_history_restore_job",
+    "market_history_restore_minute",
     "market_legacy_minute_snapshot",
     "market_mixed_minute",
     "market_simulation_source_candle",
@@ -625,6 +627,24 @@
       "symbol_id",
       "trading_symbol",
       "id"
+    ],
+    [
+      "market_history_restore_job",
+      "symbol_id",
+      "trading_symbol",
+      "id"
+    ],
+    [
+      "market_history_restore_job",
+      "undo_of",
+      "market_history_restore_job",
+      "id"
+    ],
+    [
+      "market_history_restore_minute",
+      "job_id",
+      "market_history_restore_job",
+      "id"
     ]
   ],
   "notes": {
@@ -722,7 +742,9 @@
     "s4_history_projection_minute": "V2026100402__joint_s4_history_projection.sql",
     "market_history_ordering": "V2026100404__history_ordering_and_response_receipts.sql",
     "market_history_response": "V2026100404__history_ordering_and_response_receipts.sql",
-    "control_policy_definition": "V2026100601__control_policy_definitions.sql"
+    "control_policy_definition": "V2026100601__control_policy_definitions.sql",
+    "market_history_restore_job": "V2026100703__history_source_restore.sql",
+    "market_history_restore_minute": "V2026100703__history_source_restore.sql"
   },
   "migration_files": [
     "V2026092900__legacy_feature_prerequisites.sql",
@@ -754,7 +776,9 @@
     "V2026100602__user_avatar.sql",
     "V2026100603__tenant_entry_frontend_roles.sql",
     "V2026100701__control_command_retry.sql",
-    "V2026100702__control_history_finalization.sql"
+    "V2026100702__control_history_finalization.sql",
+    "V2026100703__history_source_restore.sql",
+    "V2026100703_1__withdraw_wallet.sql"
   ],
   "superseded_authoring_inputs": {
     "V2026093001__simple_manual_orders.sql": "V2026100102__stage1_current_business_schema.sql",

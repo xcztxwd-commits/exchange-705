@@ -81,6 +81,7 @@ public class RedisMarketService {
      * @param klineList K线数据列表
      */
     public void saveKlines(String symbol, String interval, List<Map<String, Object>> klineList) {
+        KlineIntervals.rejectRetired(interval);
         com.gtcfesk.exchange.tenant.TenantContext.requireTenantId();
         try {
             String key = tenantPrefix() + KLINE_PREFIX + symbol + ":" + interval;
@@ -94,6 +95,7 @@ public class RedisMarketService {
     }
     
     public void saveSimulationHistory(String session, String interval, List<Map<String, Object>> rows) {
+        KlineIntervals.rejectRetired(interval);
         com.gtcfesk.exchange.tenant.TenantContext.requireTenantId();
         try {
             redisTemplate.opsForValue().set(tenantPrefix() + KLINE_PREFIX + session + ":" + interval, objectMapper.writeValueAsString(rows));
@@ -109,6 +111,7 @@ public class RedisMarketService {
      * @return K线数据列表，如果不存在则返回null
      */
     public List<Map<String, Object>> getKlines(String symbol, String interval) {
+        KlineIntervals.rejectRetired(interval);
         com.gtcfesk.exchange.tenant.TenantContext.requireTenantId();
         try {
             String key = tenantPrefix() + KLINE_PREFIX + symbol + ":" + interval;
@@ -130,6 +133,7 @@ public class RedisMarketService {
      * @return 交易对符号到K线数据的映射
      */
     public Map<String, List<Map<String, Object>>> getBatchKlines(List<String> symbols, String interval) {
+        KlineIntervals.rejectRetired(interval);
         com.gtcfesk.exchange.tenant.TenantContext.requireTenantId();
         Map<String, List<Map<String, Object>>> result = new HashMap<>();
         for (String symbol : symbols) {

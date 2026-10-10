@@ -19,7 +19,7 @@ public class SystemConfigController {
     @Autowired
     private com.gtcfesk.exchange.market.ForexQuoteMarketService market;
 
-    private void refreshCurrenciesAfterCommit() {
+    private void refreshMarketAfterCommit() {
         if (org.springframework.transaction.support.TransactionSynchronizationManager.isSynchronizationActive()) {
             org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
                 new org.springframework.transaction.support.TransactionSynchronization() {
@@ -43,7 +43,7 @@ public class SystemConfigController {
         String description = req.get("description");
         systemConfigService.saveConfig(key, value, description);
         auditControl("CONFIG_UPDATE",key,"value changed (redacted)",req.get("reason"));
-        if ("market.conversion.currencies".equals(key)) refreshCurrenciesAfterCommit();
+        if ("market.conversion.currencies".equals(key) || com.gtcfesk.exchange.market.YahooQuoteStream.ENABLED_KEY.equals(key)) refreshMarketAfterCommit();
         Map<String, String> result = new HashMap<>();
         result.put("message", "配置保存成功");
         return ResponseEntity.ok(result);
@@ -52,7 +52,7 @@ public class SystemConfigController {
     @org.springframework.transaction.annotation.Transactional
     @PostMapping("/saveBatch")
     public ResponseEntity<?> saveBatchConfig(@RequestBody List<Map<String, String>> configs) {
-        boolean currenciesChanged = false;
+        boolean marketChanged = false;
         for (Map<String, String> cfg : configs) {
             systemConfigService.saveConfig(
                 cfg.get("key"), 
@@ -60,9 +60,9 @@ public class SystemConfigController {
                 cfg.get("description")
             );
             auditControl("CONFIG_UPDATE",cfg.get("key"),"value changed (redacted)",cfg.get("reason"));
-            currenciesChanged |= "market.conversion.currencies".equals(cfg.get("key"));
+            marketChanged |= "market.conversion.currencies".equals(cfg.get("key")) || com.gtcfesk.exchange.market.YahooQuoteStream.ENABLED_KEY.equals(cfg.get("key"));
         }
-        if (currenciesChanged) refreshCurrenciesAfterCommit();
+        if (marketChanged) refreshMarketAfterCommit();
         Map<String, String> result = new HashMap<>();
         result.put("message", "批量保存成功");
         return ResponseEntity.ok(result);

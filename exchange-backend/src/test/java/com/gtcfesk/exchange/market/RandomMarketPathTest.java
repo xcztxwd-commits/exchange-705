@@ -95,22 +95,14 @@ class RandomMarketPathTest extends TenantMarketTestContext {
         assertEquals(150d, merged.get(0).get("open_price"));
     }
 
-    @Test @SuppressWarnings("unchecked") void monthlyCandlesUseCalendarBoundariesAndKeepSourceAnchor() {
-        TradingSymbol s = symbol();
-        long february = java.time.Instant.parse("2026-02-01T00:00:00Z").toEpochMilli();
-        long march = java.time.Instant.parse("2026-03-01T00:00:00Z").toEpochMilli();
-        s.setRandomMarketStartedAt(march - 5000);
-        long now = march + 5000;
-        assertEquals(march, RandomMarketPath.periodEnd("1M", february));
-        List<Map<String, Object>> candles = rows(s, "1M", 200, null, now);
-        assertEquals(2, candles.size());
-        assertEquals(february, candles.get(0).get("timestamp"));
-        assertEquals(march, candles.get(1).get("timestamp"));
-        assertEquals(RandomMarketPath.price(s, now), candles.get(1).get("close_price"));
-        assertEquals(march, rows(s, "1M", 1, null, now).get(0).get("timestamp"));
-        assertTrue(rows(s, "1M", 200, s.getRandomMarketStartedAt() - 1, now).isEmpty());
-        Map<String, Object> anchored = RandomMarketPath.klines(s, "1M", 200, null, now, february + 86400000L);
-        List<Map<String, Object>> anchoredRows = (List<Map<String, Object>>) ((Map<?, ?>) anchored.get("data")).get("kline_list");
-        assertEquals(february + 86400000L, anchoredRows.get(0).get("timestamp"));
+    // Requirement changed on 2026-10-10: monthly candles are retired; original acceptance remains in the before snapshot.
+    @Test void monthlySimulationIsRejectedIncludingSharedDurationAndEnd() {
+        TradingSymbol s = symbol(); long now = System.currentTimeMillis();
+        for (String interval : Arrays.asList("1M", "m", "mo", "1mo", "1month", "月", "type10")) {
+            assertThrows(IllegalArgumentException.class, () -> RandomMarketPath.duration(interval));
+            assertThrows(IllegalArgumentException.class, () -> RandomMarketPath.periodEnd(interval, now));
+            assertThrows(IllegalArgumentException.class, () -> RandomMarketPath.klines(s, interval, 2, null, now));
+        }
+        assertEquals(60000, RandomMarketPath.duration("1m"));
     }
 }

@@ -25,7 +25,7 @@ public class MarketWebSocketHandler extends TextWebSocketHandler {
     @Value("${market.push.interval-ms:1000}") private long intervalMs = 1000;
     @Value("${market.push.delta:false}") private boolean delta;
     private final ObjectMapper mapper = new ObjectMapper();
-    private static final Set<String> PERIODS = new HashSet<>(Arrays.asList("1m", "5m", "15m", "30m", "1h", "1d", "1w", "1M"));
+    private static final Set<String> PERIODS = new HashSet<>(KlineIntervals.PUBLIC);
     private static final class KlineSubscription {
         final String symbol, interval;
         KlineSubscription(String symbol, String interval) { this.symbol = symbol; this.interval = interval; }
@@ -95,6 +95,10 @@ public class MarketWebSocketHandler extends TextWebSocketHandler {
         if ("ping".equals(action)) { send(session, client, Collections.singletonMap("type", "pong")); return; }
         if ("subscribeKline".equals(action) || "unsubscribeKline".equals(action)) {
             Object symbol = request.get("symbol"), interval = request.get("interval");
+            if ((interval instanceof String || interval instanceof Number) && KlineIntervals.retired(String.valueOf(interval))) {
+                Map<String,Object> reply = new HashMap<>(); reply.put("type", "klineError"); reply.put("reason", "invalid_parameters");
+                reply.put("error", "行情月线已退役"); send(session, client, reply); return;
+            }
             if (!(symbol instanceof String) || !(interval instanceof String) || !PERIODS.contains(interval) || !marketService.knownSymbol((String)symbol)) return;
             KlineSubscription subscription = new KlineSubscription((String)symbol, (String)interval);
             if ("unsubscribeKline".equals(action)) client.klines.remove(subscription.key());

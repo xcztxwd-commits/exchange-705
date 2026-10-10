@@ -47,7 +47,7 @@ public class HistorySourceRestore {
     }
     private TreeMap<Long,Map<String,Object>> source(long symbol,long from,long to,String identity,String provider,String configured) {
         TreeMap<Long,Map<String,Object>> rows=new TreeMap<>();
-        for(Map<String,Object> saved:store.db.queryForList("SELECT candle_at,body,received_at FROM market_source_candle WHERE tenant_id=? AND symbol_id=? AND period='1m' AND candle_at>=? AND candle_at<=? AND MOD(candle_at,60000)=0 ORDER BY candle_at LIMIT 1440",ControlHistoryStore.tenant(),symbol,from,to))
+        for(Map<String,Object> saved:store.db.queryForList("SELECT candle_at,body,received_at FROM market_source_candle WHERE tenant_id=? AND symbol_id=? AND period='1m' AND /*! BINARY */ TRIM(period)<>'1M' AND candle_at>=? AND candle_at<=? AND MOD(candle_at,60000)=0 ORDER BY candle_at LIMIT 1440",ControlHistoryStore.tenant(),symbol,from,to))
             if(canonical(saved,identity,provider,configured)) rows.put(value(saved,"candle_at"),store.decode((String)saved.get("body")));
         return rows;
     }
@@ -143,7 +143,7 @@ public class HistorySourceRestore {
                 || Boolean.TRUE.equals(route.get("random_market_enabled")) || route.get("random_market_enabled") instanceof Number && ((Number)route.get("random_market_enabled")).intValue()!=0)
             throw new BusinessException("原始源路由已改变，请重新预览");
         TreeMap<Long,Map<String,Object>> source=new TreeMap<>();
-        for(Map<String,Object> saved:store.db.queryForList("SELECT candle_at,body,received_at FROM market_source_candle WHERE tenant_id=? AND symbol_id=? AND period='1m' AND candle_at>=? AND candle_at<=? AND MOD(candle_at,60000)=0",ControlHistoryStore.tenant(),symbol,from,to)) {
+        for(Map<String,Object> saved:store.db.queryForList("SELECT candle_at,body,received_at FROM market_source_candle WHERE tenant_id=? AND symbol_id=? AND period='1m' AND /*! BINARY */ TRIM(period)<>'1M' AND candle_at>=? AND candle_at<=? AND MOD(candle_at,60000)=0",ControlHistoryStore.tenant(),symbol,from,to)) {
             if("RESTORE".equals(job.get("kind")) && !canonical(saved,identity,identity.substring(0,identity.indexOf(':')),(String)route.get("market_source"))) throw new BusinessException("原始源完整性已改变，请重新预览");
             Map<String,Object> body=store.decode((String)saved.get("body")); source.put(ControlHistoryStore.time(body),body);
         }
@@ -237,7 +237,7 @@ public class HistorySourceRestore {
             Map<String,Object> route=store.db.queryForMap("SELECT market_source,source_category,COALESCE(NULLIF(alltick_symbol,''),symbol) AS code,random_market_enabled FROM trading_symbol WHERE tenant_id=? AND id=? FOR UPDATE",ControlHistoryStore.tenant(),config.getId());
             if(!Objects.equals(config.getMarketSource(),route.get("market_source")) || !Objects.equals(config.getSourceCategory(),route.get("source_category")) || !Objects.equals(ForexQuoteMarketService.marketCode(config),route.get("code")) || Boolean.TRUE.equals(route.get("random_market_enabled"))) throw new BusinessException("源路由已改变，请重新预览");
             int inserted=0;
-            for(Map.Entry<Long,String> row:candidates.entrySet()) { store.runtime.requireBudget(); inserted+=store.db.update("INSERT INTO market_source_candle(tenant_id,symbol_id,period,candle_at,body,received_at) SELECT ?,?,'1m',?,?,? WHERE NOT EXISTS (SELECT 1 FROM market_source_candle WHERE tenant_id=? AND symbol_id=? AND period='1m' AND candle_at=?)",ControlHistoryStore.tenant(),config.getId(),row.getKey(),row.getValue(),received,ControlHistoryStore.tenant(),config.getId(),row.getKey()); }
+            for(Map.Entry<Long,String> row:candidates.entrySet()) { store.runtime.requireBudget(); inserted+=store.db.update("INSERT INTO market_source_candle(tenant_id,symbol_id,period,candle_at,body,received_at) SELECT ?,?,'1m',?,?,? WHERE NOT EXISTS (SELECT 1 FROM market_source_candle WHERE tenant_id=? AND symbol_id=? AND period='1m' AND /*! BINARY */ TRIM(period)<>'1M' AND candle_at=?)",ControlHistoryStore.tenant(),config.getId(),row.getKey(),row.getValue(),received,ControlHistoryStore.tenant(),config.getId(),row.getKey()); }
             if(inserted>0) store.runtime.sourceChanged(config.getId(),candidates.firstKey(),candidates.lastKey()); return inserted;
         });
     }
