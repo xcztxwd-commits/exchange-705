@@ -20,15 +20,19 @@ for (const app of ['exchange-pc', 'exchange-frontend']) {
     assert.equal(candleFromQuote(undefined, 12, last.timestamp, '1m'), null)
     const sessionBar = { ...last, timestamp: last.timestamp + 21 * 3_600_000 }
     assert.equal(candleFromQuote(sessionBar, 12, sessionBar.timestamp + 3_600_000, '1d').timestamp, sessionBar.timestamp)
-    assert.deepEqual(chartPeriod('1M'), { span: 1, type: 'month' })
+    // Requirement changed: market monthly candles are retired; original evidence remains archived.
+    for (const alias of ['1M', '1mo', 'mo', 'm', 'month', '1month']) {
+      assert.throws(() => chartPeriod(alias), /MONTHLY_KLINE_RETIRED/)
+      assert.throws(() => convertIntervalToKlineType(alias), /MONTHLY_KLINE_RETIRED/)
+    }
     assert.deepEqual(chartPeriod('1w'), { span: 1, type: 'week' })
     assert.deepEqual(chartPeriod('15m'), { span: 15, type: 'minute' })
     assert.equal(convertIntervalToKlineType('1m'), 1)
     assert.equal(convertIntervalToKlineType('1w'), 9)
-    assert.equal(convertIntervalToKlineType('1M'), 10)
+    assert.throws(() => convertIntervalToKlineType('1M'), /MONTHLY_KLINE_RETIRED/)
     const february = { ...last, timestamp: Date.parse('2026-02-01T00:00:00Z') }
-    assert.deepEqual(candleFromQuote(february, 13, Date.parse('2026-02-28T23:59:59Z'), '1M'), { ...february, high: 13, close: 13 })
-    assert.equal(candleFromQuote(february, 13, Date.parse('2026-03-01T00:00:00Z'), '1M'), null)
+    assert.throws(() => candleFromQuote(february, 13, Date.parse('2026-02-28T23:59:59Z'), '1M'), /MONTHLY_KLINE_RETIRED/)
+    assert.throws(() => candleFromQuote(february, 13, Date.parse('2026-03-01T00:00:00Z'), '1M'), /MONTHLY_KLINE_RETIRED/)
   })
   test(app + ': intraday snapshots cannot change the period grid; sessions remain intact', () => {
     const bar = { timestamp: 1_800_000_000_000, open: 10, high: 12, low: 9, close: 11, volume: 3 }
@@ -54,7 +58,7 @@ for (const app of ['exchange-pc', 'exchange-frontend']) {
     assert.equal(contiguousCryptoCandles(rows, before, '5m', 'US'), rows)
     assert.deepEqual(rows, original)
     const months = ['2026-01-01', '2026-02-01'].map(day => ({ ...bar, timestamp: Date.parse(day + 'T00:00:00Z') }))
-    assert.deepEqual(contiguousCryptoCandles(months, Date.parse('2026-03-01T00:00:00Z'), '1M', 'Crypto'), months)
+    assert.throws(() => contiguousCryptoCandles(months, Date.parse('2026-03-01T00:00:00Z'), '1M', 'Crypto'), /MONTHLY_KLINE_RETIRED/)
     const weekly = [0, 1, 3, 4].map(i => ({ ...bar, timestamp: bar.timestamp + i * 604800000 }))
     assert.deepEqual(contiguousCryptoCandles(weekly, bar.timestamp + 5 * 604800000, '1w', 'Crypto'), weekly.slice(-2))
   })

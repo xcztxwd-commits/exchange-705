@@ -3,6 +3,7 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import * as echarts from 'echarts'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import request from '@/utils/request'
+import { can } from '@/utils/access'
 import { createRequestKey } from '@/utils/requestKey'
 import { commandScope } from '@/utils/aiControlCommand'
 import { readSession } from '@/utils/adminSession'
@@ -32,6 +33,7 @@ type Pending = { requestKey: string; previewToken: string; undoOf?: string }
 const pending = ref<Pending>()
 const details = ref<any>()
 async function showDetails(id: string) {
+  if (!can('ai_control:view') || disposed) return
   const version = generation
   try { const result = await request.get(api() + `/jobs/${id}`); if (version === generation) details.value = result }
   catch (e: any) { if (version === generation) error.value = e.message || '详情加载失败' }
@@ -108,6 +110,7 @@ function keyboard(event: KeyboardEvent) {
   if (event.shiftKey) to.value += shift; else { from.value += shift; to.value += shift } invalidate()
 }
 async function loadChart(earlier = false) {
+  if (!can('ai_control:view') || disposed) return
   const version = generation, endpoint = api(); loading.value = true
   try {
     if (earlier) { windowTo = windowFrom - 60000; windowFrom = windowTo - 239 * 60000 }
@@ -128,6 +131,7 @@ async function locateLatest() {
   chart?.dispatchAction({ type: 'dataZoom', start: 0, end: 100 })
 }
 async function loadRecords() {
+  if (!can('ai_control:view') || disposed) return
   const version = generation
   try { const result = await request.get(api() + '/jobs') as any[]; if (version === generation && !disposed) records.value = result }
   catch (e: any) { if (version === generation) error.value = e.message || '记录加载失败' }
@@ -138,7 +142,7 @@ function validRange() {
   return { from: from.value, to: to.value, timezone: timezone.value }
 }
 async function checkGaps(repair = false, polling = false) {
-  if (gapBusy.value) return
+  if (gapBusy.value || disposed || !can(repair ? 'ai_control:restore_history' : 'ai_control:view')) return
   const scope = gapScope(), endpoint = api(); gapBusy.value = true; error.value = ''
   if (!polling) gapPolls = 0
   clearTimeout(gapTimer)
@@ -157,10 +161,12 @@ async function checkGaps(repair = false, polling = false) {
   finally { gapBusy.value = false }
 }
 async function check(backfill = false) {
+  if (busy.value || disposed || !can('ai_control:restore_history')) return
   const version = generation, endpoint = api(); busy.value = true; error.value = ''
   try {
     const range = validRange()
     if (backfill) await request.post(endpoint + '/source', range, { timeout: 60000 })
+    if (version !== generation || disposed || !can('ai_control:restore_history')) return
     const result = await request.post(endpoint + '/preview', range) as any
     if (version !== generation || disposed) return
     preview.value = result
@@ -172,6 +178,7 @@ async function check(backfill = false) {
   finally { if (version === generation) busy.value = false }
 }
 async function queryPending() {
+  if (!can('ai_control:view') || disposed) return
   const item = pending.value, version = generation
   if (!item) return
   const result = await request.get(api() + '/jobs', { params: { requestKey: item.requestKey } }) as any
@@ -186,7 +193,7 @@ async function queryPending() {
 }
 async function sendOriginal() {
   const item = pending.value, version = generation
-  if (!item) return
+  if (!item || disposed || !can(item.undoOf ? 'ai_control:undo_history_restore' : 'ai_control:restore_history')) return
   busy.value = true
   try { await request.post(api() + (item.undoOf ? `/jobs/${item.undoOf}/undo` : '/jobs'), item); if (version === generation) await queryPending() }
   catch (e: any) { if (version === generation) error.value = `${e.message || '提交未确认'}；原请求已保留，请查询原请求` }
@@ -194,19 +201,21 @@ async function sendOriginal() {
 }
 async function confirm(undoOf?: string) {
   const version = generation
-  if (pending.value || active.value) return
+  const permission = undoOf ? 'ai_control:undo_history_restore' : 'ai_control:restore_history'
+  if (pending.value || active.value || disposed || !can(permission)) return
   try {
     let token: string, total: number, start = from.value, end = to.value
     if (undoOf) { const result = await request.post(api() + `/jobs/${undoOf}/undo-preview`) as any; token = result.previewToken; total = result.total; start = result.from; end = result.to }
     else { if (preview.value?.state !== 'READY') return; token = preview.value.previewToken; total = preview.value.changed }
-    if (version !== generation) return
+    if (version !== generation || disposed || !can(permission)) return
     await ElMessageBox.confirm(`${props.label} · ${stamp(start)} ～ ${stamp(end)}（${timezone.value}）。${undoOf ? '撤销' : '恢复'} ${total} 根历史分钟？`, undoOf ? '确认撤销历史源恢复' : '确认恢复历史源数据', { confirmButtonText: `确认${undoOf ? '撤销' : '恢复'} ${total} 根`, cancelButtonText: '返回检查', type: 'warning' })
-    if (version !== generation) return
+    if (version !== generation || disposed || !can(permission)) return
     const item = { requestKey: createRequestKey(), previewToken: token, undoOf }
     sessionStorage.setItem(storageKey(), JSON.stringify(item)); pending.value = item; await sendOriginal()
   } catch (e: any) { if (version === generation && e !== 'cancel' && e !== 'close') error.value = e.message || '确认失败' }
 }
 async function retry(row: any) {
+  if (disposed || !can(row.kind === 'UNDO' ? 'ai_control:undo_history_restore' : 'ai_control:restore_history')) return
   try { await request.post(api() + `/jobs/${row.id}/${row.kind === 'UNDO' ? 'undo-retry' : 'retry'}`); await loadRecords() }
   catch (e: any) { error.value = e.message || '重试失败' }
 }
@@ -237,27 +246,27 @@ onUnmounted(() => { disposed = true; ++generation; clearTimeout(timer); clearTim
     <el-tabs v-model="tab"><el-tab-pane label="历史源恢复" name="restore" /><el-tab-pane label="恢复记录" name="records" /></el-tabs>
     <el-alert v-if="error" :title="error" type="error" :closable="false" show-icon />
     <el-alert v-if="pending" title="原请求已保留。刷新或超时后查询同一请求。" type="info" :closable="false" />
-    <div v-if="pending" class="toolbar"><el-button :disabled="busy" @click="queryPending">查询原请求</el-button><el-button :disabled="busy" @click="sendOriginal">重试原请求</el-button><span>{{ pending.requestKey }}</span></div>
+    <div v-if="pending" class="toolbar"><el-button v-permission="'ai_control:view'" :disabled="busy" @click="queryPending">查询原请求</el-button><el-button v-permission="pending?.undoOf ? 'ai_control:undo_history_restore' : 'ai_control:restore_history'" :disabled="busy" @click="sendOriginal">重试原请求</el-button><span>{{ pending.requestKey }}</span></div>
     <div v-show="tab === 'restore'">
       <div class="title"><div><h3>{{ label }} · 历史源恢复</h3><p>{{ sourceIdentity || '读取原始源…' }}</p></div><span class="scope">历史分钟 · 结束时间包含该分钟</span></div>
       <div class="range-inputs">
         <label>开始时间<input aria-label="恢复开始时间" type="datetime-local" :value="localMinute(from, timezone)" :disabled="busy" @change="choose('from', ($event.target as HTMLInputElement).value)"></label>
-        <div class="range-field"><span>结束时间</span><div class="range-end-controls"><input aria-label="恢复结束时间" type="datetime-local" :value="localMinute(to, timezone)" :disabled="busy" @change="choose('to', ($event.target as HTMLInputElement).value)"><el-button :disabled="busy || loading" @click="locateLatest">定位最新</el-button></div></div>
+        <div class="range-field"><span>结束时间</span><div class="range-end-controls"><input aria-label="恢复结束时间" type="datetime-local" :value="localMinute(to, timezone)" :disabled="busy" @change="choose('to', ($event.target as HTMLInputElement).value)"><el-button v-permission="'ai_control:view'" :disabled="busy || loading" @click="locateLatest">定位最新</el-button></div></div>
         <label>显示时区<el-select v-model="timezone" aria-label="显示时区"><el-option v-for="zone in ['Asia/Singapore', 'Asia/Shanghai', 'UTC', 'America/New_York', 'Europe/London']" :key="zone" :label="zone" :value="zone" /></el-select></label>
       </div>
-      <div v-if="ambiguous" class="toolbar"><span>该时间重复，请选择 UTC 偏移</span><el-button v-for="option in ambiguous.options" :key="option.timestamp" @click="setBoundary(ambiguous.side, option.timestamp)">{{ option.offset }}</el-button></div>
-      <div class="toolbar"><el-radio-group v-model="period" size="small"><el-radio-button v-for="p in ['1m','5m','15m','1h']" :key="p" :value="p">{{ p }}</el-radio-button></el-radio-group><el-radio-group v-model="interaction" size="small"><el-radio-button value="select">框选</el-radio-button><el-radio-button value="pan">平移</el-radio-button></el-radio-group><el-button :loading="loading" @click="loadChart(true)">加载更早</el-button><el-button :loading="loading" @click="loadChart()">刷新图表</el-button><el-switch v-model="after" :disabled="preview?.state !== 'READY'" active-text="恢复后预览" /></div>
+      <div v-if="ambiguous" class="toolbar"><span>该时间重复，请选择 UTC 偏移</span><el-button v-permission="'ai_control:view'" v-for="option in ambiguous.options" :key="option.timestamp" @click="setBoundary(ambiguous.side, option.timestamp)">{{ option.offset }}</el-button></div>
+      <div class="toolbar"><el-radio-group v-model="period" size="small"><el-radio-button v-for="p in ['1m','5m','15m','1h']" :key="p" :value="p">{{ p }}</el-radio-button></el-radio-group><el-radio-group v-model="interaction" size="small"><el-radio-button value="select">框选</el-radio-button><el-radio-button value="pan">平移</el-radio-button></el-radio-group><el-button v-permission="'ai_control:view'" :loading="loading" @click="loadChart(true)">加载更早</el-button><el-button v-permission="'ai_control:view'" :loading="loading" @click="loadChart()">刷新图表</el-button><el-switch v-permission="'ai_control:view'" v-model="after" :disabled="preview?.state !== 'READY'" active-text="恢复后预览" /></div>
       <div ref="host" class="chart" :class="{ selecting: interaction === 'select' }" tabindex="0" aria-label="历史 K 线选区，方向键移动一分钟，Shift 加方向键调整结束时间" @pointerdown="start" @pointermove="move" @pointerup="finish" @pointercancel="drag = undefined" @keydown="keyboard" />
       <div class="selection"><span>{{ stamp(from) }} ～ {{ stamp(to) }} · {{ count }} 分钟</span><el-button v-permission="'ai_control:restore_history'" type="primary" :loading="busy" :disabled="!symbolId || active || !!pending || !!ambiguous" @click="check()">预览恢复</el-button></div>
       <p class="hint">点选单根，拖动选择多根；拖动绿色边界调整范围。大周期选择会展开为完整分钟。单次最多 1440 分钟。</p>
       <div class="gap-check">
-        <div class="toolbar"><strong>历史缺口</strong><el-select v-model="gapPeriod" aria-label="缺口检查周期" style="width:100px"><el-option v-for="p in ['1m','5m','15m','30m','1h']" :key="p" :value="p" :label="p" /></el-select><el-button :loading="gapBusy" :disabled="busy || loading || !!ambiguous" @click="checkGaps()">缺口检查</el-button><el-button v-permission="'ai_control:restore_history'" :loading="gapBusy" :disabled="busy || !gapReport?.retryable" @click="checkGaps(true)">安全补齐</el-button></div>
+        <div class="toolbar"><strong>历史缺口</strong><el-select v-model="gapPeriod" aria-label="缺口检查周期" style="width:100px"><el-option v-for="p in ['1m','5m','15m','30m','1h']" :key="p" :value="p" :label="p" /></el-select><el-button v-permission="'ai_control:view'" :loading="gapBusy" :disabled="busy || loading || !!ambiguous" @click="checkGaps()">缺口检查</el-button><el-button v-permission="'ai_control:restore_history'" :loading="gapBusy" :disabled="busy || !gapReport?.retryable" @click="checkGaps(true)">安全补齐</el-button></div>
         <p class="hint">按所选区间独立检查原生周期。安全补齐只新增允许补采的源槽位；受保护缺口停止，不执行恢复或撤销。</p>
         <template v-if="gapReport">
           <p>{{ gapReport.sourceIdentity }} · {{ gapReport.period }} · {{ stamp(gapReport.from) }} ～ {{ stamp(gapReport.to) }}</p>
           <p class="gap-summary">源缺失 {{ gapReport.sourceMissing }} · 展示缺失 {{ gapReport.displayMissing }} · 可补 {{ gapReport.recoverable }} · 受保护 {{ gapReport.protected }} · 最近新增 {{ gapReport.inserted }} · 源修订 {{ gapReport.sourceInputRevision }}</p>
           <el-alert v-if="gapReport.protected" title="受保护缺口保留，自动和手动均不能绕过保护" type="warning" :closable="false" />
-          <el-table :data="gapReport.windows" max-height="300"><el-table-column label="检查窗口" min-width="185"><template #default="{ row }">{{ stamp(row.from) }}<br>{{ stamp(row.to) }}</template></el-table-column><el-table-column label="状态" min-width="130"><template #default="{ row }">{{ gapState(row.queueState) }}<br>最近新增 {{ row.inserted }}</template></el-table-column><el-table-column label="源 / 展示缺失" min-width="120"><template #default="{ row }">{{ row.sourceMissing }} / {{ row.displayMissing }}</template></el-table-column><el-table-column label="原因" min-width="210"><template #default="{ row }">{{ [...new Set(row.gaps.map((gap: any) => gapReason(gap.reason)))].join('、') || '完整' }}</template></el-table-column></el-table>
+          <admin-table table-key="HistorySourceRestore.gaps" :data="gapReport.windows" max-height="300"><el-table-column column-key="window" label="检查窗口" min-width="185"><template #default="{ row }">{{ stamp(row.from) }}<br>{{ stamp(row.to) }}</template></el-table-column><el-table-column column-key="state" label="状态" min-width="130"><template #default="{ row }">{{ gapState(row.queueState) }}<br>最近新增 {{ row.inserted }}</template></el-table-column><el-table-column column-key="missing" label="源 / 展示缺失" min-width="120"><template #default="{ row }">{{ row.sourceMissing }} / {{ row.displayMissing }}</template></el-table-column><el-table-column column-key="reason" label="原因" min-width="210"><template #default="{ row }">{{ [...new Set(row.gaps.map((gap: any) => gapReason(gap.reason)))].join('、') || '完整' }}</template></el-table-column></admin-table>
         </template>
       </div>
       <el-alert v-if="preview?.state === 'NO_CHANGE'" title="所选区间已经是原始源，无需恢复" type="success" :closable="false" />
@@ -265,14 +274,14 @@ onUnmounted(() => { disposed = true; ++generation; clearTimeout(timer); clearTim
       <div v-if="preview?.state === 'MISSING_SOURCE'" class="toolbar"><span>{{ preview.missing.slice(0, 8).map(stamp).join('、') }}{{ preview.missing.length > 8 ? '…' : '' }}</span><el-button v-permission="'ai_control:restore_history'" :loading="busy" @click="check(true)">补采原始源并重新预览</el-button></div>
       <div v-if="preview?.state === 'READY'" class="preview">
         <h4>原始源齐全 · {{ preview.changed }} 根需要恢复</h4><p>{{ preview.sourceIdentity }} · 预览有效 5 分钟</p>
-        <el-table :data="preview.differences" max-height="280"><el-table-column label="分钟" min-width="180"><template #default="{ row }">{{ stamp(row.timestamp) }}</template></el-table-column><el-table-column v-for="[key, title] in [['open_price','开'],['high_price','高'],['low_price','低'],['close_price','收']]" :key="key" :label="`${title}：当前 / 原始源`" min-width="150"><template #default="{ row }">{{ price(row.before[key]) }} / <strong>{{ price(row.source[key]) }}</strong></template></el-table-column></el-table>
+        <admin-table table-key="HistorySourceRestore.differences" :data="preview.differences" max-height="280"><el-table-column column-key="timestamp" label="分钟" min-width="180"><template #default="{ row }">{{ stamp(row.timestamp) }}</template></el-table-column><el-table-column v-for="[key, title] in [['open_price','开'],['high_price','高'],['low_price','低'],['close_price','收']]" :key="key" :column-key="key" :label="`${title}：当前 / 原始源`" min-width="150"><template #default="{ row }">{{ price(row.before[key]) }} / <strong>{{ price(row.source[key]) }}</strong></template></el-table-column></admin-table>
         <p v-if="preview.changed > 200" class="hint">显示前 200 根对比，执行涵盖全部 {{ preview.changed }} 根。</p>
         <el-button v-permission="'ai_control:restore_history'" type="primary" :loading="busy" :disabled="active || !!pending" @click="confirm()">确认恢复 {{ preview.changed }} 根</el-button>
       </div>
     </div>
-    <div v-if="tab === 'records'"><div class="toolbar"><h3>恢复记录</h3><el-button @click="loadRecords">刷新</el-button></div><el-table :data="records" empty-text="暂无历史源恢复记录"><el-table-column label="区间" min-width="230"><template #default="{ row }">{{ localMinute(row.from, row.timezone).replace('T', ' ') }}<br>{{ localMinute(row.to, row.timezone).replace('T', ' ') }}<br>{{ row.timezone }}</template></el-table-column><el-table-column label="进度" min-width="120"><template #default="{ row }">{{ row.completed }} / {{ row.total }}<br>{{ stateLabel(row.state) }}<p v-if="row.error">{{ row.error }}</p></template></el-table-column><el-table-column prop="actorId" label="操作人" width="90" /><el-table-column label="操作时间" min-width="170"><template #default="{ row }">{{ stamp(row.createdAt) }}</template></el-table-column><el-table-column label="操作" min-width="160"><template #default="{ row }"><el-button @click="showDetails(row.id)">详情</el-button><el-button v-permission="'ai_control:undo_history_restore'" v-if="row.kind === 'RESTORE' && row.completed > 0 && !['ACCEPTED','RUNNING'].includes(row.state)" :disabled="busy || active || !!pending" @click="confirm(row.id)">撤销</el-button><el-button v-permission="row.kind === 'UNDO' ? 'ai_control:undo_history_restore' : 'ai_control:restore_history'" v-if="row.state === 'FAILED'" @click="retry(row)">继续原任务</el-button><span v-if="row.kind === 'UNDO'">撤销记录</span></template></el-table-column><el-table-column label="源与快照编号" min-width="250"><template #default="{ row }">{{ row.sourceIdentity }}<br>{{ row.id }}</template></el-table-column></el-table></div>
+    <div v-if="tab === 'records'"><div class="toolbar"><h3>恢复记录</h3><el-button v-permission="'ai_control:view'" @click="loadRecords">刷新</el-button></div><admin-table table-key="HistorySourceRestore.records" :data="records" empty-text="暂无历史源恢复记录"><el-table-column column-key="range" label="区间" min-width="230"><template #default="{ row }">{{ localMinute(row.from, row.timezone).replace('T', ' ') }}<br>{{ localMinute(row.to, row.timezone).replace('T', ' ') }}<br>{{ row.timezone }}</template></el-table-column><el-table-column column-key="progress" label="进度" min-width="120"><template #default="{ row }">{{ row.completed }} / {{ row.total }}<br>{{ stateLabel(row.state) }}<p v-if="row.error">{{ row.error }}</p></template></el-table-column><el-table-column prop="actorId" label="操作人" width="90" /><el-table-column column-key="createdAt" label="操作时间" min-width="170"><template #default="{ row }">{{ stamp(row.createdAt) }}</template></el-table-column><el-table-column column-key="actions" label="操作" min-width="160"><template #default="{ row }"><el-button v-permission="'ai_control:view'" @click="showDetails(row.id)">详情</el-button><el-button v-permission="'ai_control:undo_history_restore'" v-if="row.kind === 'RESTORE' && row.completed > 0 && !['ACCEPTED','RUNNING'].includes(row.state)" :disabled="busy || active || !!pending" @click="confirm(row.id)">撤销</el-button><el-button v-permission="row.kind === 'UNDO' ? 'ai_control:undo_history_restore' : 'ai_control:restore_history'" v-if="row.state === 'FAILED'" @click="retry(row)">继续原任务</el-button><span v-if="row.kind === 'UNDO'">撤销记录</span></template></el-table-column><el-table-column column-key="sourceIdentity" label="源与快照编号" min-width="250"><template #default="{ row }">{{ row.sourceIdentity }}<br>{{ row.id }}</template></el-table-column></admin-table></div>
   </section>
-  <el-dialog :model-value="!!details" title="恢复快照与校验记录" width="90%" @close="details = undefined"><p>任务 {{ details?.id }} · 已提交 {{ details?.completed }} / {{ details?.total }}；最多展示前 200 根快照。</p><el-table :data="details?.snapshots" max-height="500"><el-table-column label="分钟" min-width="170"><template #default="{ row }">{{ stamp(row.timestamp) }}</template></el-table-column><el-table-column prop="version" label="提交版本" width="110" /><el-table-column label="恢复前 / 目标低价" min-width="160"><template #default="{ row }">{{ price(row.before.low_price) }} / {{ price(row.source.low_price) }}</template></el-table-column><el-table-column prop="checksum" label="快照 SHA-256" min-width="320" /></el-table></el-dialog>
+  <el-dialog :model-value="!!details" title="恢复快照与校验记录" width="90%" @close="details = undefined"><p>任务 {{ details?.id }} · 已提交 {{ details?.completed }} / {{ details?.total }}；最多展示前 200 根快照。</p><admin-table table-key="HistorySourceRestore.snapshots" :data="details?.snapshots" max-height="500"><el-table-column column-key="timestamp" label="分钟" min-width="170"><template #default="{ row }">{{ stamp(row.timestamp) }}</template></el-table-column><el-table-column prop="version" label="提交版本" width="110" /><el-table-column column-key="lowPrice" label="恢复前 / 目标低价" min-width="160"><template #default="{ row }">{{ price(row.before.low_price) }} / {{ price(row.source.low_price) }}</template></el-table-column><el-table-column prop="checksum" label="快照 SHA-256" min-width="320" /></admin-table></el-dialog>
 </template>
 <style scoped>
 .range-field{display:flex;flex-direction:column;gap:8px;font-size:13px;color:#6b7280;min-width:0}.range-end-controls{display:flex;align-items:center;gap:8px}.range-end-controls input{flex:1;min-width:0}.range-end-controls .el-button{flex-shrink:0;height:38px}

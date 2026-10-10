@@ -12,6 +12,7 @@ export function leverageChoices(max: number): number[] {
 }
 
 export function contractMargin(quantity: number, lotSize: number, price: number, leverage: number, conversionRate = 1, marginBaseToUsdRate?: number): number {
+  if (quantity === 0) return 0
   if (marginBaseToUsdRate !== undefined) {
     if (!Number.isFinite(marginBaseToUsdRate) || marginBaseToUsdRate <= 0) return NaN
     if (![quantity, lotSize, leverage].every(value => Number.isFinite(value) && value > 0)) return 0

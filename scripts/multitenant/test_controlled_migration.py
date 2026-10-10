@@ -229,11 +229,14 @@ class PlanPreflightTests(unittest.TestCase):
             preflight.assert_not_called();state.assert_not_called()
 
     def test_entry_roles_append_is_exact_single_tail_after_completed_0602(self):
-        files=tool.migrations()[:-2];start=len(files)-1
+        reviewed=tool.migrations()
+        end=next(i+1 for i,item in enumerate(reviewed) if item['name']=='V2026100603__tenant_entry_frontend_roles.sql')
+        files=reviewed[:end];start=len(files)-1
         self.assertEqual(tool.ENTRY0603_METADATA,tool.metadata_append_contract(start,files))
-        for offset,reviewed in [(0,files),(start-1,files),(1,[files[-2],{'name':'V2026100604__unknown.sql'}]),(1,[{'name':'V2026100404__history_ordering_and_response_receipts.sql'},files[-1]])]:
-            self.assertIsNone(tool.metadata_append_contract(offset,reviewed))
+        for offset,candidate in [(0,files),(start-1,files),(1,[files[-2],{'name':'V2026100604__unknown.sql'}]),(1,[{'name':'V2026100404__history_ordering_and_response_receipts.sql'},files[-1]])]:
+            self.assertIsNone(tool.metadata_append_contract(offset,candidate))
         self.assertIsNone(tool.metadata_append_contract(start,files+[{'name':'V2026100604__unknown.sql'}]))
+        self.assertIsNone(tool.metadata_append_contract(start,reviewed))
 
     def test_entry_roles_metadata_replay_or_business_activation_fails_closed(self):
         db=SimpleNamespace(query=lambda sql:['0'])

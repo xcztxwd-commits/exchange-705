@@ -19,10 +19,10 @@
       </div>
       
       <div class="flex items-center space-x-1 absolute left-[300px] h-full px-4 border-l border-gray-200 dark:border-[#2b3139]">
-        <button v-for="i in ['1m', '5m', '15m', '30m', '1h', '1d', '1w', '1M']" :key="i"
+        <button v-for="i in ['1m', '5m', '15m', '30m', '1h', '1d', '1w']" :key="i"
                 @click="currentInterval = i"
                 :class="['px-2 py-1.5 rounded text-sm font-medium transition-colors uppercase', currentInterval === i ? 'bg-[#8cc63f] text-white shadow-sm' : 'hover:bg-gray-100 dark:hover:bg-[#2b3139] dark:bg-[#2b3139] text-gray-600 dark:text-gray-300']">
-          {{ i === '1w' ? localeStore.text('1週', '1W') : i === '1M' ? localeStore.text('1月', '1MO') : localeStore.text(i, i) }}
+          {{ i === '1w' ? localeStore.text('1週', '1W') : localeStore.text(i, i) }}
         </button>
       </div>
       
@@ -254,7 +254,7 @@
            <div class="space-y-5">
              <div class="pt-2">
                <div class="text-gray-600 dark:text-gray-300 mb-2 font-medium text-sm">{{ `${localeStore.text('数量', 'Quantity')}（${unitLabel}）` }} · {{ localeStore.text('最小變動', 'Step') }}: {{ quantityStep }}</div>
-               <el-input-number v-model="quantity" :min="Number(currentSymbolInfo?.minOrderQuantity ?? 0.01)" :step="quantityStep" class="w-full custom-input-number" />
+               <el-input-number v-model="quantity" :min="0" :step="quantityStep" class="w-full custom-input-number" />
              </div>
 
              <PositionSizing :percent="allocationPercent" :disabled="!canAllocate" :buy="liquidation.buy" :sell="liquidation.sell" :precision="currentSymbolInfo?.pricePrecision ?? 2" @change="setAllocation">
@@ -287,8 +287,8 @@
              <p v-if="currentSymbolInfo && !Number.isFinite(estimatedMargin)" role="status" class="text-xs text-amber-600 mt-2">{{ localeStore.text('結算匯率暫不可用', 'Settlement rate unavailable') }}</p>
              <p v-if="auth.token && tradingAvailable <= 0" role="status" class="text-xs text-amber-600 mt-2">{{ localeStore.t('contractBalanceInsufficient') }}</p>
              <div class="flex space-x-3 pt-4">
-               <button v-if="canStartBusiness('contract')" :disabled="tradeSubmitting || kycChecking || (!isMarketClosed && tradeVerified && (!currentSymbolInfo || !orderReady))" @click="submitContractOrder('BUY')" class="disabled:opacity-50 disabled:cursor-not-allowed flex-1 bg-[#8cc63f] text-white py-3.5 rounded-lg font-bold text-base hover:bg-[#7ab036] transition-colors shadow-sm shadow-green-200">{{ localeStore.t('buy') }}</button>
-               <button v-if="canStartBusiness('contract')" :disabled="tradeSubmitting || kycChecking || (!isMarketClosed && tradeVerified && (!currentSymbolInfo || !orderReady))" @click="submitContractOrder('SELL')" class="disabled:opacity-50 disabled:cursor-not-allowed flex-1 bg-[#ff4d4f] text-white py-3.5 rounded-lg font-bold text-base hover:bg-[#e64042] transition-colors shadow-sm shadow-red-200">{{ localeStore.t('sell') }}</button>
+               <button v-if="canStartBusiness('contract')" :disabled="tradeSubmitting || kycChecking || !validQuantity(quantity, currentSymbolInfo) || (!isMarketClosed && tradeVerified && (!currentSymbolInfo || !orderReady))" @click="submitContractOrder('BUY')" class="disabled:opacity-50 disabled:cursor-not-allowed flex-1 bg-[#8cc63f] text-white py-3.5 rounded-lg font-bold text-base hover:bg-[#7ab036] transition-colors shadow-sm shadow-green-200">{{ localeStore.t('buy') }}</button>
+               <button v-if="canStartBusiness('contract')" :disabled="tradeSubmitting || kycChecking || !validQuantity(quantity, currentSymbolInfo) || (!isMarketClosed && tradeVerified && (!currentSymbolInfo || !orderReady))" @click="submitContractOrder('SELL')" class="disabled:opacity-50 disabled:cursor-not-allowed flex-1 bg-[#ff4d4f] text-white py-3.5 rounded-lg font-bold text-base hover:bg-[#e64042] transition-colors shadow-sm shadow-red-200">{{ localeStore.t('sell') }}</button>
              </div>
            </div>
         </div>

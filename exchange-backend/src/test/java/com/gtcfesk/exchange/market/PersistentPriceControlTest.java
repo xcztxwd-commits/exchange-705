@@ -357,19 +357,13 @@ class PersistentPriceControlTest extends TenantMarketTestContext {
         List<Map<String,Object>> daily=ControlHistoryStore.rows(merger.merge(1,"1d",200,null,response,null,false));
         assertEquals(1,daily.size());assertEquals(previousDay,daily.get(0).get("timestamp"),"Unknown closed-market or DST session must not acquire a guessed daily anchor");
     }
-    @Test void monthlyHistoryKeepsCalendarAnchorAndControlledMinutes() {
-        long month = java.time.Instant.parse("2026-02-01T00:00:00Z").toEpochMilli();
-        long start = java.time.Instant.parse("2026-02-20T12:00:00Z").toEpochMilli();
-        Map<String,Object> source = bar(month, 80, 99, 79, 90);
-        store.sourceCandles(1, "1M", Collections.singletonList(source), start);
-        legacy(start, 10); controls.advance(1, start + 10000);
-        Map<String,Object> response = new HashMap<>(); response.put("ret", 200);
-        response.put("data", Collections.singletonMap("kline_list", Collections.singletonList(source)));
-        List<Map<String,Object>> rows = ControlHistoryStore.rows(merger.merge(1, "1M", 200, null, response, null, false));
-        assertEquals(1, rows.size());
-        assertEquals(month, rows.get(0).get("timestamp"));
-        assertEquals(true, rows.get(0).get("controlled"));
-        assertTrue(ControlHistoryStore.rows(merger.merge(1, "1M", 200, month - 1, response, null, false)).isEmpty());
+    // Requirement changed: retirement supersedes the old monthly aggregation acceptance, preserved in before.
+    @Test void monthlyHistoryCannotWriteOrAggregate() {
+        Map<String,Object> source = bar(1700000040000L, 80, 99, 79, 90);
+        assertThrows(IllegalArgumentException.class, () -> store.sourceCandles(1, "1M", Collections.singletonList(source), System.currentTimeMillis()));
+        Map<String,Object> response = new HashMap<>(); response.put("data", Collections.singletonMap("kline_list", Collections.singletonList(source)));
+        assertThrows(IllegalArgumentException.class, () -> merger.merge(1, "1M", 200, null, response, null, false));
+        assertEquals(0, store.db.queryForObject("SELECT COUNT(*) FROM market_source_candle", Integer.class));
     }
     @Test void restoreIsNewFixedTargetSegmentAndSourceLossCannotChangeItsPath() {
         long now=System.currentTimeMillis();

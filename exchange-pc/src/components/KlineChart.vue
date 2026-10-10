@@ -12,6 +12,7 @@ import { accountMode } from '@/utils/accountMode'
 import { candleFromQuote, chartPeriod, contiguousCryptoCandles, historyRepairPolicy, normalizeCandles } from '@/utils/chartData'
 import { registerTradingDrawingOverlays } from '@/utils/chartOverlays'
 import { indicatorCatalog, normalizePreferences, validParameters, validTimezone } from '@/utils/chartPreferences'
+import { isRetiredKlineInterval } from '@/utils/kline'
 import { displaySymbol } from '@/utils/displaySymbol'
 import AppSelect from '@/components/AppSelect.vue'
 
@@ -32,7 +33,7 @@ const scaleOptions = computed(() => [
   { value: 'logarithm', label: text('對數', 'Logarithmic') },
   { value: 'percentage', label: text('百分比', 'Percentage') },
 ])
-const interval = computed(() => props.interval || '1m')
+const interval = computed(() => isRetiredKlineInterval(props.interval || '') ? '1m' : props.interval || '1m')
 const dark = ref(false)
 const fullscreen = ref(false)
 const loading = ref(false)
@@ -445,7 +446,7 @@ async function loadBars(params: DataLoaderGetBarsParams, version: number, signal
   if (reloadingBars) { params.callback([], { forward: historyForward, backward: false }); return }
   if (params.type === 'backward') { params.callback([], { backward: false }); return }
   const history = params.type === 'forward'
-  if (history && !['1m', '5m', '15m', '30m', '1h', '1d', '1w', '1M'].includes(interval.value)) {
+  if (history && !['1m', '5m', '15m', '30m', '1h', '1d', '1w'].includes(interval.value)) {
     params.callback([], { forward: false, backward: false }); historyUnsupported.value = true; return
   }
   if (history) historyLoading.value = ++activeHistoryLoads > 0
@@ -615,6 +616,7 @@ function applyLatestCandles(candles: KLineData[], authoritative = false, fillOnl
 async function syncLatest() {
   if (!chart || !realtime || loading.value || syncing) return
   const version = revision, signal = controller.signal
+  const connectionGeneration = marketWebSocket.connectionGeneration
   const streamSequence = lastKlineSequence, marketVersion = market.quoteStatusMap[props.symbol]?.marketRevision
   const session = market.quoteStatusMap[props.symbol]?.simulationSession
   syncing = true
@@ -636,7 +638,7 @@ async function syncLatest() {
     if (signal.aborted || version !== revision || !chart || session !== market.quoteStatusMap[props.symbol]?.simulationSession) return
     if (marketVersion !== market.quoteStatusMap[props.symbol]?.marketRevision) return
     const quote = market.quoteStatusMap[props.symbol]
-    if (lastKlineSequence !== streamSequence || quote?.epoch && !matchingLiveKline({ ...result, bars: result.candles, interval: interval.value },
+    if (connectionGeneration !== marketWebSocket.connectionGeneration || lastKlineSequence !== streamSequence || quote?.epoch && !matchingLiveKline({ ...result, bars: result.candles, interval: interval.value },
       { ...quote, price: market.getPrice(props.symbol), change24h: 0, changePct24h: 0 })) {
       applyLatestCandles(candles, false, true); cacheBars(); replayKline(); return
     }

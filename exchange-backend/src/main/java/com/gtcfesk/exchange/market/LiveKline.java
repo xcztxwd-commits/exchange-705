@@ -7,13 +7,18 @@ import java.util.*;
 /** Bounded open candles in the existing committed runtime, separate from protected closed history. */
 final class LiveKline {
     static final String KEY = "liveKlines";
-    private static final List<String> PERIODS = Arrays.asList("1m", "5m", "15m", "30m", "1h", "1d", "1w", "1M");
+    private static final List<String> PERIODS = Arrays.asList("1m", "5m", "15m", "30m", "1h", "1d", "1w");
 
     @SuppressWarnings("unchecked")
     static void capture(ControlHistoryStore store, TradingSymbol config, Map<String,Object> quote,
             Map<String,Object> previous, long at) {
         if (!Boolean.TRUE.equals(quote.get("available")) || !QuoteState.valid(quote)) {
-            if (previous.containsKey(KEY)) quote.put(KEY,previous.get(KEY));
+            if (previous.get(KEY) instanceof Map) {
+                Map<String,Object> retained = new LinkedHashMap<>();
+                for (String period : PERIODS) if (((Map<?,?>)previous.get(KEY)).containsKey(period))
+                    retained.put(period, ((Map<?,?>)previous.get(KEY)).get(period));
+                quote.put(KEY,retained);
+            }
             return;
         }
         Map<String,Object> old = previous.get(KEY) instanceof Map ? (Map<String,Object>)previous.get(KEY) : Collections.emptyMap();
@@ -49,23 +54,24 @@ final class LiveKline {
         // Capture is a writer operation under the runtime fence. Use current reads:
         // a companion transaction may already have an older repeatable-read view.
         List<Map<String,Object>> source = simulated
-            ? store.db.query("SELECT body FROM market_simulation_source_candle WHERE tenant_id=? AND symbol_id=? AND session_at=? AND period=? AND candle_at<=? ORDER BY candle_at DESC LIMIT 1 FOR UPDATE",
-                (rs,n) -> store.decode(rs.getString(1)), ControlHistoryStore.tenant(), config.getId(), config.getRandomMarketStartedAt(), period, at)
-            : store.db.query("SELECT body FROM market_source_candle WHERE tenant_id=? AND symbol_id=? AND period=? AND candle_at<=? ORDER BY candle_at DESC LIMIT 1 FOR UPDATE",
-                (rs,n) -> store.decode(rs.getString(1)), ControlHistoryStore.tenant(), config.getId(), period, at);
+            ? store.db.query("SELECT body FROM market_simulation_source_candle WHERE tenant_id=? AND symbol_id=? AND session_at=? AND period=? AND /*! BINARY */ TRIM(period)<>'1M' AND candle_at>0 AND MOD(candle_at,?)=0 AND candle_at<=? ORDER BY candle_at DESC LIMIT 1 FOR UPDATE",
+                (rs,n) -> store.decode(rs.getString(1)), ControlHistoryStore.tenant(), config.getId(), config.getRandomMarketStartedAt(), period, ControlHistoryStore.periodAlignment(period), at)
+            : store.db.query("SELECT body FROM market_source_candle WHERE tenant_id=? AND symbol_id=? AND period=? AND /*! BINARY */ TRIM(period)<>'1M' AND candle_at>0 AND MOD(candle_at,?)=0 AND candle_at<=? ORDER BY candle_at DESC LIMIT 1 FOR UPDATE",
+                (rs,n) -> store.decode(rs.getString(1)), ControlHistoryStore.tenant(), config.getId(), period, ControlHistoryStore.periodAlignment(period), at);
         NavigableMap<Long,Object> anchors=new TreeMap<>();
         if (!source.isEmpty() && ControlHistoryStore.periodCandle(source.get(0),period)) {
             long start=ControlHistoryStore.time(source.get(0)); anchors.put(start,source.get(0));
             if(at<RandomMarketPath.periodEnd(period,start)) return start;
         }
         if (simulated || ExchangeQuoteSource.supports(ForexQuoteMarketService.sourceCategory(config)) || "1h".equals(period) && !anchors.isEmpty())
-            return "1M".equals(period) ? RandomMarketPath.monthStart(at) : simulated && anchors.isEmpty()
+            return simulated && anchors.isEmpty()
                 ? Math.floorDiv(at,width)*width : ControlledKlineMerger.fallbackBucket(at,width,anchors);
         return -1; // Unknown daily/session boundaries remain unavailable.
     }
 
     @SuppressWarnings("unchecked")
     static Map<String,Object> merge(Map<String,Object> result, Map<String,Object> quote, String epoch, String period, int limit) {
+        KlineIntervals.rejectRetired(period);
         Map<String,Object> data = new LinkedHashMap<>((Map<String,Object>)result.get("data"));
         Map<String,Object> merged = new LinkedHashMap<>(result); merged.put("data",data);
         if (!Boolean.TRUE.equals(quote.get("available")) || !(quote.get(KEY) instanceof Map)

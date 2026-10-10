@@ -13,6 +13,25 @@ import static com.gtcfesk.exchange.market.SourceHistoryGapRepairTest.*;
 /** Real MySQL 5.7 writer fences and paired repeatable-read snapshots in an owned fixture. */
 @EnabledIfEnvironmentVariable(named="KLINE_GAP_MYSQL_URL", matches="jdbc:mysql://127\\.0\\.0\\.1:[0-9]+/kline_gap_.*")
 class LiveKlineMysqlTest extends TenantMarketTestContext {
+    @Test void actualMinuteHistoryRejectsLegacyMonthWhitespaceAndKeepsMinuteWhitespace() throws Exception {
+        DriverManagerDataSource ds=new DriverManagerDataSource(System.getenv("KLINE_GAP_MYSQL_URL"),"root",System.getenv("KLINE_GAP_MYSQL_PASSWORD"));
+        try(Fixture f=new Fixture(ds,false)) {
+            f.store.migrate();f.config.setId(974L);f.db.update("INSERT INTO trading_symbol(id,tenant_id) VALUES(974,1)");
+            long now=System.currentTimeMillis(),minute=now/60000*60000-120000;
+            Map<String,Object> month=bar(minute),shortBar=bar(minute+60000);
+            month.put("monthEvidence","retired month with trailing space");
+            shortBar.put("minuteEvidence","keep original minute with trailing space");
+            f.store.locked(974,()->{f.db.update("INSERT INTO market_source_candle(tenant_id,symbol_id,period,candle_at,body,received_at) VALUES(1,974,'1M ',?,?,?),(1,974,'1m ',?,?,?)",minute,f.store.encode(month),now,minute+60000,f.store.encode(shortBar),now);return null;});
+            List<Map<String,Object>> raw=f.db.queryForList("SELECT HEX(period) AS rawPeriod,candle_at,body FROM market_source_candle WHERE tenant_id=1 AND symbol_id=974 ORDER BY candle_at");
+            List<Map<String,Object>> actual=f.store.candles(974,"1m",minute,minute+60000);
+            Map<String,Object> proof=new LinkedHashMap<>();proof.put("mysql",f.db.queryForObject("SELECT VERSION()",String.class));proof.put("uuid",f.db.queryForObject("SELECT @@server_uuid",String.class));proof.put("raw",raw);proof.put("actualMinuteHistory",actual);proof.put("retiredWhitespace",KlineIntervals.retired("1M "));
+            if(System.getenv("KLINE_GAP_QA")!=null) java.nio.file.Files.write(java.nio.file.Paths.get(System.getenv("KLINE_GAP_QA"),"month-whitespace-read-proof.json"),f.store.encode(proof).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            assertTrue(KlineIntervals.retired("1M "));
+            assertEquals(1,actual.size(),"Actual minute reader must exclude legacy month suffix whitespace under ci collation");
+            assertEquals(f.store.decode(f.store.encode(shortBar)),actual.get(0),"Original minute data remains intact");
+            assertEquals(raw,f.db.queryForList("SELECT HEX(period) AS rawPeriod,candle_at,body FROM market_source_candle WHERE tenant_id=1 AND symbol_id=974 ORDER BY candle_at"));
+        }
+    }
     @Test void companionCaptureUsesCurrentAnchorsAfterAnotherWriterCommitsBeyondTheRepeatableReadView() {
         DriverManagerDataSource ds=new DriverManagerDataSource(System.getenv("KLINE_GAP_MYSQL_URL"),"root",System.getenv("KLINE_GAP_MYSQL_PASSWORD"));
         try(Fixture f=new Fixture(ds,false)) {

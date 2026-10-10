@@ -12,7 +12,7 @@ public class MarketKlineController {
     @GetMapping("/history/{symbol}")
     public ResponseEntity<?> history(@PathVariable String symbol, @RequestParam String interval,
             @RequestParam long endTime, @RequestParam(defaultValue = "160") int limit) {
-        if (!Arrays.asList("1m", "5m", "15m", "30m", "1h", "1d", "1w", "1M").contains(interval)
+        if (!KlineIntervals.PUBLIC.contains(interval)
                 || limit < 2 || limit > 200 || endTime < 946684800000L
                 || endTime > System.currentTimeMillis() + 86400000L)
             return ResponseEntity.badRequest().body(Collections.singletonMap("error", "Invalid history window"));
@@ -27,6 +27,7 @@ public class MarketKlineController {
             @RequestParam(defaultValue = "1m") String interval,
             @RequestParam(defaultValue = "100") Integer limit,
             @RequestParam(required = false) String category) {
+        if (KlineIntervals.retired(interval)) return ResponseEntity.badRequest().body(Collections.singletonMap("error", "行情月线已退役"));
         return marketService.readSnapshot(() -> ResponseEntity.ok(marketService.internalKline(symbol, interval, limit)));
     }
     @PostMapping("/batch")
@@ -34,6 +35,7 @@ public class MarketKlineController {
         List<String> symbols = MarketPriceController.requestedSymbols(request);
         if (symbols == null) return ResponseEntity.badRequest().body(Collections.singletonMap("error", "symbols must contain 1-512 strings"));
         String interval = String.valueOf(request.getOrDefault("interval", "1m"));
+        if (KlineIntervals.retired(interval)) return ResponseEntity.badRequest().body(Collections.singletonMap("error", "行情月线已退役"));
         int limit = request.get("limit") instanceof Number ? ((Number) request.get("limit")).intValue() : 20;
         return marketService.readSnapshot(() -> {
             List<Object> data = new ArrayList<>();

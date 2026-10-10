@@ -272,15 +272,13 @@ class SourceHistoryGapRepairTest extends TenantMarketTestContext {
             assertThrows(com.gtcfesk.exchange.common.BusinessException.class, () -> f.repair.insert(w, response(List.of(bar(M))), System.currentTimeMillis()));
         }
     }
-    @Test void calendarPeriodsUseMondayAndNaturalMonthsNotFixedDurations() {
+    // Requirement changed: retain Monday weeks, reject retired months; old assertions remain in before.
+    @Test void calendarWeeksRemainAndMonthlyRepairIsRejected() {
         long monday = java.time.Instant.parse("2026-02-02T00:00:00Z").toEpochMilli();
         assertEquals(monday, SourceHistoryGapRepair.start("1w", monday + 6 * 86400000L));
-        long march = java.time.Instant.parse("2026-03-01T00:00:00Z").toEpochMilli();
-        assertEquals(java.time.Instant.parse("2026-02-01T00:00:00Z").toEpochMilli(), SourceHistoryGapRepair.previous("1M", march));
+        assertThrows(IllegalArgumentException.class, () -> SourceHistoryGapRepair.previous("1M", monday));
         try (Fixture f = new Fixture()) {
-            SourceHistoryGapRepair.Window window = f.inspect("1M", 2, march - 1);
-            assertEquals(java.time.Instant.parse("2026-01-01T00:00:00Z").toEpochMilli(), window.from);
-            assertEquals(java.time.Instant.parse("2026-02-01T00:00:00Z").toEpochMilli(), window.to);
+            assertThrows(IllegalArgumentException.class, () -> f.inspect("1M", 2, monday));
         }
     }
 

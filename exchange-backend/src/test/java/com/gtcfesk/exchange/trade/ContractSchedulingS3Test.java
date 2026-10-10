@@ -126,6 +126,7 @@ class ContractSchedulingS3Test {
         MarketCategoryService categories = mock(MarketCategoryService.class);
         when(categories.leverageEnabled(anyString())).thenReturn(true);
         service = new ContractOrderService(identity, orders, assets, symbols, quotes, manager, categories);
+        ReflectionTestUtils.setField(service, "configs", mock(com.gtcfesk.exchange.admin.SystemConfigService.class));
         ReflectionTestUtils.setField(service, "entityManager", entityManager);
         ReflectionTestUtils.setField(service, "users", users);
         ReflectionTestUtils.setField(service, "audit", audit);

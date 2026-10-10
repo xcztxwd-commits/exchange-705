@@ -44,6 +44,7 @@ final class HistoryOrdering {
         List<ArchivedResponse> batch=Collections.unmodifiableList(new ArrayList<>(responses)); Set<String> keys=new HashSet<>();
         for(ArchivedResponse response:batch) {
             Map<String,Object> request=store.decode(response.request);
+            KlineIntervals.rejectRetired(String.valueOf(request.get("interval")));
             if(!keys.add(sha(response.request)) || number(request,"tenant")!=ControlHistoryStore.tenant())
                 throw new IllegalArgumentException("Duplicate or foreign archived request");
             if(number(request,"symbol")!=symbol || number(request,"cursor")>=fromMinute || number(request,"cursor")<=0
@@ -103,6 +104,7 @@ final class HistoryOrdering {
         return true;
     }
     String request(long symbol,String interval,int limit,long cursor,boolean utcAnchors,Map<String,Object> external) {
+        KlineIntervals.rejectRetired(interval);
         Map<?,?> data=(Map<?,?>)external.get("data");
         if(data==null || data.containsKey("simulationSession")) throw new IllegalArgumentException("Random/session history has no archived exact-request adapter");
         Map<String,Object> request=new TreeMap<>();
@@ -114,6 +116,7 @@ final class HistoryOrdering {
     }
     /** Called only within caller's read-only RR; never stores a response on a read miss. */
     Map<String,Object> readExact(long symbol,String interval,int limit,Long cursor,boolean utcAnchors,Map<String,Object> external,boolean hasCallback) {
+        KlineIntervals.rejectRetired(interval);
         if(cursor==null || hasCallback || external==null || !(external.get("data") instanceof Map)
                 || ((Map<?,?>)external.get("data")).containsKey("simulationSession")) return null;
         String request=request(symbol,interval,limit,cursor,utcAnchors,external);
