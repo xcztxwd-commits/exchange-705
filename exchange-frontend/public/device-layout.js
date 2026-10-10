@@ -4,11 +4,14 @@
   // Keep the dedicated mobile port usable at any window size.
   if (layout === 'mobile' && !location.pathname.startsWith('/mobile/')) return;
   const narrow = matchMedia('(max-width: 768px)');
+  // Phone fullscreen and rotation change viewport width, not the device layout.
+  const phone = matchMedia('(pointer: coarse)').matches && Math.min(screen.width, screen.height) <= 768;
   function switchLayout() {
-    if (narrow.matches === (layout === 'mobile')) return;
+    const mobile = phone || narrow.matches;
+    if (mobile === (layout === 'mobile')) return;
     const target = new URL(location.href);
     const route = layout === 'mobile' ? location.pathname.slice('/mobile'.length) || '/' : location.pathname;
-    if (narrow.matches) {
+    if (mobile) {
       const form = ['login', 'register', 'forgot'].find(key => target.searchParams.get(key) === '1');
       target.pathname = form ? `/mobile/${form === 'forgot' ? 'forgot-password' : form}`
         : route === '/language' ? '/mobile/language' : '/mobile/home';
