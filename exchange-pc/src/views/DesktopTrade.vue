@@ -67,16 +67,16 @@
           <div v-for="symbol in filteredSymbols" :key="symbol.symbol"
                @click="selectSymbol(symbol)"
                :class="['flex justify-between items-center p-3 cursor-pointer border-b border-gray-200 dark:border-[#2b3139] transition-colors', currentSymbol === symbol.symbol ? 'bg-gray-50 dark:bg-[#181c27] border-l border-gray-200 dark:border-[#363c4e]-4 border-l border-gray-200 dark:border-[#363c4e]-[#8cc63f]' : 'bg-white dark:bg-[#131722] hover:bg-gray-50 dark:hover:bg-[#181c27] dark:bg-[#181c27] border-l border-gray-200 dark:border-[#363c4e]-4 border-l border-gray-200 dark:border-[#363c4e]-transparent']">
-            <div class="flex items-center space-x-3 w-[45%]">
+            <div class="flex items-center space-x-3 flex-1 min-w-0">
               <ProtectedImage v-if="symbol.iconUrl" :src="getImageUrl(symbol.iconUrl)" class="w-8 h-8 rounded-full object-contain shrink-0" />
               <div class="w-8 h-8 rounded-full bg-gray-100 dark:bg-[#2b3139] flex items-center justify-center text-sm text-gray-500 dark:text-gray-400 dark:text-gray-500 font-bold border border-gray-200 dark:border-[#2b3139] shadow-inner shrink-0" v-else>{{ displaySymbol(symbol).substring(0,1) }}</div>
               <span class="font-bold text-gray-700 dark:text-gray-200 truncate">{{ displaySymbol(symbol) }}</span>
             </div>
-            <div class="flex-1 text-center">
+            <div class="shrink-0 px-1 text-center">
               <span :class="['font-bold font-mono', !Number.isFinite(marketStore.getChange24h(symbol.symbol).changePct) ? 'text-gray-500' : marketStore.getChange24h(symbol.symbol).changePct >= 0 ? 'text-[#8cc63f]' : 'text-[#ff4d4f]']">{{ getSymbolPrice(symbol.symbol) }}</span>
             </div>
-            <div class="flex flex-col items-end w-[25%]">
-              <span v-if="marketStore.getQuoteStatus(symbol.symbol) === 'closed'" role="status" class="px-2 py-1 rounded bg-gray-500 text-white text-[12px] font-bold w-full text-center">{{ localeStore.t('marketClosed') }}</span>
+            <div class="flex flex-col items-end shrink-0 min-w-[25%]">
+              <span v-if="marketStore.getQuoteStatus(symbol.symbol) === 'closed'" role="status" class="px-2 py-1 rounded bg-gray-500 text-white text-[12px] font-bold w-full text-center whitespace-nowrap">{{ localeStore.t('marketClosed') }}</span>
               <span v-else :title="Number.isFinite(marketStore.getChange24h(symbol.symbol).changePct) ? undefined : localeStore.text('暂无有效涨跌幅数据', 'Change data is unavailable')" :class="['px-2 py-1 rounded text-white text-[12px] font-bold w-full text-center', !Number.isFinite(marketStore.getChange24h(symbol.symbol).changePct) ? 'bg-gray-400' : marketStore.getChange24h(symbol.symbol).changePct >= 0 ? 'bg-[#8cc63f]' : 'bg-[#ff4d4f]']">
                 {{ getSymbolChange(symbol.symbol) }}
               </span>
