@@ -1,4 +1,5 @@
 import { getAccountApiBase } from './accountMode.ts'
+import { candleFromQuote, normalizeCandles } from './chartData.ts'
 /**
  * 市场数据 WebSocket 客户端
  * 连接到后端 WebSocket 服务器，接收实时价格推送
@@ -12,6 +13,7 @@ export interface PriceUpdate {
     conversionExpiresAt?: number
     epoch?: string
     quoteVersion?: number
+    committedAt?: number
     changeBasis?: string
     tradeAvailable?: boolean
     price: number
@@ -49,6 +51,19 @@ export interface KlineUpdate {
   bars: unknown[]
   quote: PriceUpdate[string]
   pending: boolean
+  epoch: string
+  quoteVersion: number
+  updatedAt: number
+  receivedAt: number
+  generation: number
+}
+
+// A complete history fetch is not proof that its open candle belongs to this quote.
+export function matchingLiveKline(row: { epoch?: string; quoteVersion?: number; updatedAt?: number; interval: string; bars: unknown[] }, quote: PriceUpdate[string]) {
+  if (!quote.epoch || row.epoch !== quote.epoch || row.quoteVersion == null || row.quoteVersion !== quote.quoteVersion
+    || !Number.isFinite(row.updatedAt) || !Number.isFinite(quote.committedAt) || row.updatedAt !== quote.committedAt) return false
+  const bars = normalizeCandles(row.bars, Infinity, row.interval), last = bars[bars.length - 1]
+  return !!last && last.close === quote.price && !!candleFromQuote(last, quote.price, row.updatedAt!, row.interval)
 }
 
 export function showSourceConnectionWarning(quote?: { sourceConnectionFailed?: boolean; controlActive?: boolean; controlState?: string; simulated?: boolean }) {
@@ -100,6 +115,7 @@ class MarketWebSocket {
 
   private symbols(): string[] { return [...new Set([...this.owners.values()].flatMap(set => [...set]))] }
   get isConnected(): boolean { return this.ws?.readyState === WebSocket.OPEN }
+  get connectionGeneration(): number { return this.generation }
   get isHealthy(): boolean {
     return this.isConnected && Date.now() - this.lastMessage < 45000 && this.symbols().every(symbol => this.received.has(symbol) && this.acknowledged.has(symbol))
   }
@@ -216,8 +232,9 @@ class MarketWebSocket {
     for (const row of rows) {
       if (!row || typeof row.symbol !== 'string' || typeof row.interval !== 'string' || !Array.isArray(row.bars) || !row.bars.length) continue
       const quote = prices[row.symbol]
-      if (!quote || normalizeQuote(quote)?.status !== 'available') continue
-      const update: KlineUpdate = { symbol: row.symbol, interval: row.interval, bars: row.bars, quote, pending: row.pending === true }
+      if (!quote || normalizeQuote(quote)?.status !== 'available' || !matchingLiveKline(row,quote)) continue
+      const update: KlineUpdate = { symbol: row.symbol, interval: row.interval, bars: row.bars, quote, pending: row.pending === true,
+        epoch: row.epoch, quoteVersion: row.quoteVersion, updatedAt: row.updatedAt, receivedAt: Date.now(), generation: this.generation }
       this.klineCallbacks.forEach(item => {
         if (item.symbol === update.symbol && item.interval === update.interval) {
           try { item.callback(update) } catch (error) { console.error(error) }

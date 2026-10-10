@@ -79,6 +79,27 @@ class FundingConversionsJointTest extends TenantMarketTestContext {
     Object forexGroup() {Object state=ReflectionTestUtils.invokeMethod(market,"state");return ((Map<?,?>)ReflectionTestUtils.getField(state,"groups")).get("Forex");}
     @SuppressWarnings("unchecked") Map<String,Object> receipt(Map<String,Object> prepared) {return (Map<String,Object>)prepared.get("conversionReceipt");}
 
+    @Test void companionPublicationRecapturesSameFinalPriceAndVersionWithoutRenewingExecutionExpiry() {
+        long now=System.currentTimeMillis(); primary(cross,now);
+        Map<String,Object> before=store.runtime.read(cross.getId(),false,now);
+        ingress("EURUSD=X","Forex",now,"1.10");
+        Map<String,Object> quote=store.runtime.read(cross.getId(),false,System.currentTimeMillis());
+        assertTrue(QuoteState.time(quote.get("quoteVersion"))>QuoteState.time(before.get("quoteVersion")));
+        assertEquals(before.get("price"),quote.get("price"));assertEquals(before.get("executionExpiresAt"),quote.get("executionExpiresAt"));
+        Map<String,Object> merged=LiveKline.merge(SourceHistoryGapRepairTest.response(Collections.emptyList()),quote,"fixture","1m",10);
+        assertEquals(true,((Map<?,?>)merged.get("data")).get("live"));
+        assertEquals(quote.get("quoteVersion"),((Map<?,?>)merged.get("data")).get("quoteVersion"));
+        assertEquals(quote.get("committedAt"),((Map<?,?>)merged.get("data")).get("updatedAt"));
+        Map<String,Object> bar=ControlHistoryStore.rows(merged).get(0);
+        assertEquals(0,ControlHistoryStore.number(quote.get("price")).compareTo(ControlHistoryStore.number(bar.get("close_price"))));
+        db.update("UPDATE market_engine_runtime SET quote_json=REPLACE(quote_json,?,?) WHERE tenant_id=1 AND symbol_id=?",
+            "\"executionExpiresAt\":"+quote.get("executionExpiresAt"),"\"executionExpiresAt\":1",cross.getId());
+        ingress("EURUSD=X","Forex",now+1,"1.11");
+        Map<String,Object> expired=store.runtime.read(cross.getId(),false,System.currentTimeMillis());
+        assertNotEquals(expired.get("quoteVersion"),expired.get("liveQuoteVersion"));
+        assertEquals(1,QuoteState.time(expired.get("executionExpiresAt")));assertEquals(false,expired.get("available"));
+    }
+
     @Test void realProducerPersistsInverseDirectMinorUnitAndCryptoCompanionsWithoutChangingSourcePrices() {
         long now=System.currentTimeMillis();
         // FX arrives before the instrument. It must not manufacture an instrument execution quote.

@@ -576,10 +576,15 @@ public class PersistentPriceControl {
             status.put("executionExpiresAt",quote.get("executionExpiresAt"));status.put("tradeAvailable",quote.get("tradeAvailable"));
             // Current read under the same runtime lock; raw instrument refresh must retain committed FX companions.
             Map<String,Object> prior=store.db.queryForMap("SELECT quote_json FROM market_engine_runtime WHERE tenant_id=? AND symbol_id=? FOR UPDATE",tenant(),config.getId());
-            if(prior.get("quote_json")!=null) quote.put(FundingConversions.BOOK,FundingConversions.retain(store.decode((String)prior.get("quote_json")),config));
+            Map<String,Object> previous = prior.get("quote_json")==null ? Collections.emptyMap() : store.decode((String)prior.get("quote_json"));
+            if(prior.get("quote_json")!=null) quote.put(FundingConversions.BOOK,FundingConversions.retain(previous,config));
             FundingQuoteAuthority.stamp(quote,config);
+            // Queue receipt time can precede another committed engine turn. Candle and version
+            // follow publication order under this lock, without changing source/control event time.
+            long publishedAt=Math.max(now,QuoteState.time(previous.get("committedAt")));
+            LiveKline.capture(store,config,quote,previous,publishedAt);
             final Map<String,Object> snapshotQuote=quote;
-            store.runtime.phase(config.getId(),"snapshot",()->{store.runtime.snapshot(config.getId(),snapshotQuote,status,now);return null;});
+            store.runtime.phase(config.getId(),"snapshot",()->{store.runtime.snapshot(config.getId(),snapshotQuote,status,publishedAt);return null;});
             MarketQuoteCommitted.publish(events, tenant(), config.getSymbol());
             return null;
         });
