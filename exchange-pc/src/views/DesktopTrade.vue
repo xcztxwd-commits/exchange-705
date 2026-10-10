@@ -611,7 +611,7 @@
       </div>
     </el-dialog>
 
-    <el-dialog v-model="showUserCenter" :close-on-press-escape="!showVideoIntro" :title="localeStore.t('tabbarPersonalCenter')" width="900px" class="custom-dialog rounded-xl p-0 overflow-hidden">
+    <el-dialog v-model="showUserCenter" :close-on-press-escape="!auth.token || !showVideoIntro" :title="localeStore.t('tabbarPersonalCenter')" width="900px" class="custom-dialog rounded-xl p-0 overflow-hidden">
       <div class="flex h-[550px] -mx-4 -mb-4 -mt-2">
         <div class="w-56 border-r border-gray-200 dark:border-[#2b3139] overflow-y-auto bg-gray-50 dark:bg-[#181c27]/50 py-4 custom-scrollbar">
           <AccountModeSwitch v-if="auth.token" placement="menu" real-path="/" class="user-demo-entry" />
@@ -3074,7 +3074,7 @@ const userMenus = computed(() => [
   { id: 'wallet', name: localeStore.t('wallet') },
   { id: 'kyc', name: localeStore.t('kyc') },
   { id: 'announcement', name: localeStore.t('announcementNotification') },
-  { id: 'video', name: localeStore.t('videoIntro') },
+  ...(auth.token ? [{ id: 'video', name: localeStore.t('videoIntro') }] : []),
   { id: 'invite', name: localeStore.t('inviteFriends') },
   { id: 'password', name: localeStore.t('changePassword') },
   { id: 'support', name: localeStore.t('contactSupport') },
