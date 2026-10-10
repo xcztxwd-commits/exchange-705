@@ -1,6 +1,6 @@
 <template>
   <div class="trade-page h-screen w-full flex flex-col bg-white dark:bg-[#131722] text-gray-800 dark:text-gray-100 text-sm overflow-hidden font-sans">
-    <VideoIntro v-if="showVideoIntro" @close="showVideoIntro = false" />
+    <VideoIntro v-if="auth.token && showVideoIntro" @close="closeVideoIntro" />
     <OrderShareModal v-if="shareOrder" :order-id="shareOrder.id" :kind="shareOrder.kind" desktop @close="shareOrder = null" />
     <el-dialog v-model="kycPromptOpen" :title="localeStore.t('verification')" width="min(440px, 94vw)">
       <p role="alert">{{ kycPromptMessage }}</p>
@@ -55,7 +55,6 @@
     <div class="trade-layout flex flex-1 overflow-hidden">
       <!-- Left Sidebar -->
       <aside class="w-[300px] border-r border-gray-200 dark:border-[#2b3139] flex flex-col shrink-0 bg-white dark:bg-[#131722] z-10 shadow-[2px_0_8px_rgba(0,0,0,0.02)]">
-        <button type="button" @click="showVideoIntro = true" class="p-3 text-[#8cc63f] border-b border-gray-200 dark:border-[#2b3139] hover:bg-gray-50 dark:hover:bg-[#2b3139] transition-colors">{{ localeStore.t('videoIntro') }}</button>
         <div class="p-3 border-b border-gray-200 dark:border-[#2b3139] flex space-x-2">
           <el-input v-model="searchQuery" placeholder="" clearable class="custom-search flex-1 w-full">
             <template #prefix>
@@ -612,16 +611,17 @@
       </div>
     </el-dialog>
 
-    <el-dialog v-model="showUserCenter" :title="localeStore.t('tabbarPersonalCenter')" width="900px" class="custom-dialog rounded-xl p-0 overflow-hidden">
+    <el-dialog v-model="showUserCenter" :close-on-press-escape="!auth.token || !showVideoIntro" :title="localeStore.t('tabbarPersonalCenter')" width="900px" class="custom-dialog rounded-xl p-0 overflow-hidden">
       <div class="flex h-[550px] -mx-4 -mb-4 -mt-2">
         <div class="w-56 border-r border-gray-200 dark:border-[#2b3139] overflow-y-auto bg-gray-50 dark:bg-[#181c27]/50 py-4 custom-scrollbar">
           <AccountModeSwitch v-if="auth.token" placement="menu" real-path="/" class="user-demo-entry" />
-          <div v-for="item in userMenus" :key="item.id" 
-               @click="activeUserMenu = item.id"
-               :class="['px-6 py-3.5 cursor-pointer text-sm font-medium transition-colors relative', activeUserMenu === item.id ? 'bg-white dark:bg-[#131722] text-[#8cc63f] shadow-[0_2px_8px_rgba(0,0,0,0.04)] z-10' : 'hover:bg-gray-100 dark:hover:bg-[#2b3139] dark:bg-[#2b3139] text-gray-600 dark:text-gray-300']">
-            <div class="absolute left-0 top-0 bottom-0 w-1 bg-[#8cc63f] transition-opacity" :class="activeUserMenu === item.id ? 'opacity-100' : 'opacity-0'"></div>
+          <button v-for="item in userMenus" :key="item.id" type="button"
+               @click="item.id === 'video' ? showVideoIntro = true : activeUserMenu = item.id"
+               :aria-haspopup="item.id === 'video' ? 'dialog' : undefined"
+               :class="['w-full text-left px-6 py-3.5 cursor-pointer text-sm font-medium transition-colors relative', activeUserMenu === item.id ? 'bg-white dark:bg-[#131722] text-[#8cc63f] shadow-[0_2px_8px_rgba(0,0,0,0.04)] z-10' : 'hover:bg-gray-100 dark:hover:bg-[#2b3139] dark:bg-[#2b3139] text-gray-600 dark:text-gray-300']">
+            <span class="absolute left-0 top-0 bottom-0 w-1 bg-[#8cc63f] transition-opacity" :class="activeUserMenu === item.id ? 'opacity-100' : 'opacity-0'"></span>
             {{ item.name }}
-          </div>
+          </button>
         </div>
         <div class="flex-1 p-8 overflow-y-auto bg-white dark:bg-[#131722] custom-scrollbar relative">
           <UserProfile v-if="showUserCenter && auth.token" class="mb-6" />
@@ -1629,6 +1629,11 @@ const router = useRouter();
 // ======================
 const showLoginModal = ref(false);
 const showVideoIntro = ref(false);
+const closeVideoIntro = () => {
+  // Restore focus before removing the native dialog.
+  document.querySelector<HTMLDialogElement>('dialog.video-intro')?.close();
+  showVideoIntro.value = false;
+};
 
 const loginEmail = ref('');
 const loginPassword = ref('');
@@ -3074,6 +3079,7 @@ const userMenus = computed(() => [
   { id: 'wallet', name: localeStore.t('wallet') },
   { id: 'kyc', name: localeStore.t('kyc') },
   { id: 'announcement', name: localeStore.t('announcementNotification') },
+  ...(auth.token ? [{ id: 'video', name: localeStore.t('videoIntro') }] : []),
   { id: 'invite', name: localeStore.t('inviteFriends') },
   { id: 'password', name: localeStore.t('changePassword') },
   { id: 'support', name: localeStore.t('contactSupport') },
