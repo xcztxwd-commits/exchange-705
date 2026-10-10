@@ -737,7 +737,7 @@ const logoUrl = '/img/logo.svg'
             />
           </div>
           <div class="market-bottom">
-            <div class="market-price" v-if="!isMarketClosed(s)">{{ formatQuotePrice(s) }}<small v-if="marketStore.getQuoteStatus(s.symbol) !== 'available' && getRealTimePrice(s) > 0" class="historical-quote">{{ localeStore.text('歷史快照', 'Historical snapshot') }}</small></div>
+            <div class="market-price" v-if="!isMarketClosed(s)">{{ formatQuotePrice(s) }}</div>
             <div class="market-price market-closed" v-else>{{ localeStore.t('marketClosed') }}</div>
             <div class="market-change" v-if="!isMarketClosed(s)" :style="{ color: getChangeColor(getRealTimeChange(s).changePct) }">
               <span v-if="Number.isFinite(getRealTimeChange(s).changePct)" class="change-icon ui-inline-arrow">{{ getRealTimeChange(s).changePct >= 0 ? '▲' : '▼' }}</span>
@@ -800,7 +800,7 @@ const logoUrl = '/img/logo.svg'
             />
           </div>
           <div class="symbol-price-group">
-            <div class="symbol-price" v-if="!isMarketClosed(s)">{{ formatQuotePrice(s) }}<small v-if="marketStore.getQuoteStatus(s.symbol) !== 'available' && getRealTimePrice(s) > 0" class="historical-quote">{{ localeStore.text('歷史快照', 'Historical snapshot') }}</small></div>
+            <div class="symbol-price" v-if="!isMarketClosed(s)">{{ formatQuotePrice(s) }}</div>
             <div class="symbol-price market-closed" v-else>{{ localeStore.t('marketClosed') }}</div>
             <div class="symbol-change" v-if="!isMarketClosed(s)" :style="{ color: getChangeColor(getRealTimeChange(s).changePct) }">
               <span v-if="Number.isFinite(getRealTimeChange(s).changePct)" class="change-icon ui-inline-arrow">{{ getRealTimeChange(s).changePct >= 0 ? '▲' : '▼' }}</span>
@@ -1080,13 +1080,6 @@ const logoUrl = '/img/logo.svg'
   font-size: 18px;
   font-weight: 800;
   color: #333;
-}
-.historical-quote {
-  display: block;
-  margin-top: 3px;
-  color: #999;
-  font-size: 10px;
-  font-weight: 400;
 }
 .market-change {
   font-size: 13px;
