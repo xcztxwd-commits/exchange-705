@@ -3,6 +3,7 @@ import datetime as dt
 import json
 from pathlib import Path
 import tempfile
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 import current_0703_activation as a
@@ -134,6 +135,50 @@ class CurrentContracts(unittest.TestCase):
                       target('two','restore','/data/restore','/owned/source'),target('two','restore','/data/restore','/owned/source/rehearsal')):
             with self.assertRaises(ValueError):a.independent(source,other)
         a.independent(source,target('two','restore','/data/restore','/owned/restore'))
+
+    def stopped_startup(self, change=None):
+        raw=b'actual log bytes in an offline refusal fixture'
+        log_hash=a.hashlib.sha256(raw).hexdigest()
+        network={'NetworkID':'e'*64,'IPAddress':'','IPAMConfig':{'IPv4Address':'10.235.70.231'}}
+        actual={'Id':'c'*64,'Image':'sha256:'+'d'*64,'State':{'Running':False,'StartedAt':'2026-10-10T01:02:03Z'},
+                'NetworkSettings':{'Networks':{'fixture-network':network}}}
+        if change:change(actual)
+        value={'kind':'CURRENT_0703_ACTUAL_READ_ONLY_STARTUP','target':{'database':'1090'},'source_sha256':'b'*64,
+               'artifact_sha256':'a'*64,'read_only':True,'observed_at':(a.c.now()-dt.timedelta(minutes=1)).isoformat(),
+               'actual_non_super_users':['fixture_readonly'],'actual_target_connections':[['fixture_readonly','10.235.70.231','1090']],
+               'application':{'container_id':'c'*64,'image_id':'sha256:'+'d'*64,'started_at':'2026-10-10T01:02:03Z',
+                              'artifact_path':'/app/app.jar','networks':{'fixture-network':{'network_id':'e'*64,'address':'10.235.70.231'}}},
+               'logs':{'path':str(self.directory/'startup.log'),'sha256':log_hash}}
+        class DB:
+            database='1090'
+            def query(self,sql):return ['0']
+        with patch.object(a.c,'target',return_value={'database':'1090'}),patch.object(a.c,'sources',return_value='b'*64), \
+                patch.object(a.c,'package_epoch',return_value=a.EPOCH), \
+                patch.object(a.c.core,'file_hash',side_effect=lambda path:log_hash if Path(path).suffix=='.log' else 'a'*64), \
+                patch.object(a.c.core,'run',return_value=SimpleNamespace(stdout=raw,stderr=b'')), \
+                patch.object(a.owner,'inspect_application',return_value=actual), \
+                patch.object(a.owner,'container_artifact_hash',return_value='a'*64):
+            a.verify_startup(DB(),self.directory/'artifact.jar',value)
+
+    def test_stopped_canary_uses_its_retained_static_ip_and_original_network(self):
+        # Actual Docker clears IPAddress on stop; its configured IPAM address remains.
+        self.stopped_startup()
+
+    def test_stopped_canary_network_reconfiguration_is_refused(self):
+        def changed_id(actual):actual['NetworkSettings']['Networks']['fixture-network']['NetworkID']='f'*64
+        def changed_address(actual):actual['NetworkSettings']['Networks']['fixture-network']['IPAMConfig']['IPv4Address']='10.235.70.230'
+        def removed_static(actual):actual['NetworkSettings']['Networks']['fixture-network']['IPAMConfig']=None
+        def running(actual):actual['State']['Running']=True
+        for change in (changed_id,changed_address,removed_static,running):
+            with self.subTest(change=change.__name__),self.assertRaises(ValueError):self.stopped_startup(change)
+
+    def test_running_canary_requires_explicit_static_address_equal_to_actual(self):
+        actual={'NetworkSettings':{'Networks':{'fixture':{'NetworkID':'e'*64,'IPAddress':'10.235.70.231',
+                                                          'IPAMConfig':{'IPv4Address':'10.235.70.231'}}}}}
+        self.assertEqual(a.application_networks(actual),{'fixture':{'network_id':'e'*64,'address':'10.235.70.231'}})
+        for configured in (None,{}, {'IPv4Address':'10.235.70.230'}):
+            actual['NetworkSettings']['Networks']['fixture']['IPAMConfig']=configured
+            with self.assertRaises(ValueError):a.application_networks(actual)
 
     def test_all_fields_keep_tokens_nulls_versions_and_decimal_digits(self):
         class DB:
