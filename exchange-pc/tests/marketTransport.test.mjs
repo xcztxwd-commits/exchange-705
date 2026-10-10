@@ -44,13 +44,18 @@ for (const app of ['exchange-pc', 'exchange-frontend']) {
       sockets[0].price({ AAPL: { ...quote, epoch: 'two', quoteVersion: 1 } })
       sockets[0].price({ AAPL: { ...quote, epoch: 'one', quoteVersion: 999 } })
       assert.equal(seen.at(-1).AAPL.epoch, 'two')
-      const candles = [], bars = [{timestamp:now,open:100,high:102,low:99,close:102,volume:1}]
+      const candles = [], bars = [{timestamp:Math.floor(now/60000)*60000,open:100,high:102,low:99,close:100,volume:1}]
       const stopKline = market.onKlineUpdate('AAPL','1m', update => candles.push(update))
       assert(sockets[0].sent.some(message => message.action === 'subscribeKline' && message.interval === '1m'))
-      const incoming = { symbol:'AAPL',interval:'1m',bars }
-      sockets[0].price({AAPL:{...quote,epoch:'two',quoteVersion:2}},[incoming])
+      const incoming = { symbol:'AAPL',interval:'1m',bars,epoch:'two',quoteVersion:2,updatedAt:now }
+      sockets[0].price({AAPL:{...quote,epoch:'two',quoteVersion:2,committedAt:now}},[incoming])
       assert.equal(candles.length,1)
       assert.equal(candles[0].quote.quoteVersion,2)
+      if (app === 'exchange-pc') {
+        sockets[0].price({AAPL:{...quote,epoch:'two',quoteVersion:2,committedAt:now}},[{...incoming,quoteVersion:1,pending:false}])
+        sockets[0].price({AAPL:{...quote,epoch:'two',quoteVersion:2,committedAt:now}},[{...incoming,bars:[{...bars[0],close:101}],pending:false}])
+        assert.equal(candles.length,1,'pending=false cannot authorize stale or mismatched candles')
+      }
       sockets[0].price({AAPL:{...quote,epoch:'two',quoteVersion:1}},[incoming])
       sockets[0].price({AAPL:{...quote,epoch:'one',quoteVersion:999}},[incoming])
       sockets[0].price({AAPL:{...quote,epoch:'two',quoteVersion:3}},[{...incoming,interval:'5m'}])

@@ -229,8 +229,13 @@ public class MarketWebSocketHandler extends TextWebSocketHandler {
                             try {
                                 Map<String,Object> result = marketService.internalKline(subscription.symbol, subscription.interval, 2);
                                 List<Map<String,Object>> bars = ControlHistoryStore.rows(result);
-                                if (bars.isEmpty()) continue;
+                                Map<?,?> data = (Map<?,?>)result.get("data"), quote = (Map<?,?>)prices.get(subscription.symbol);
+                                if (bars.isEmpty() || !Boolean.TRUE.equals(data.get("live"))
+                                        || !Objects.equals(data.get("epoch"),quote.get("epoch"))
+                                        || !Objects.equals(data.get("quoteVersion"),quote.get("quoteVersion"))
+                                        || ControlHistoryStore.number(bars.get(bars.size()-1).get("close_price")).compareTo(ControlHistoryStore.number(quote.get("price"))) != 0) continue;
                                 Map<String,Object> item = new HashMap<>(); item.put("symbol", subscription.symbol); item.put("interval", subscription.interval);
+                                item.put("epoch",data.get("epoch")); item.put("quoteVersion",data.get("quoteVersion")); item.put("updatedAt",data.get("updatedAt"));
                                 item.put("bars", bars); item.put("pending", ((Map<?,?>)result.get("data")).get("pending"));
                                 ForexQuoteMarketService.afterCommit(() -> item.put("pending", ((Map<?,?>)result.get("data")).get("pending")));
                                 capturedKlines.put(subscription.key(), item);
