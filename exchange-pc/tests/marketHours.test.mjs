@@ -8,7 +8,8 @@ import { renderToString } from '@vue/server-renderer'
 
 test('desktop product list renders closure instead of the percentage, and restores it after reopening', async () => {
   const source = await readFile(new URL('../src/views/DesktopTrade.vue', import.meta.url), 'utf8')
-  const badge = source.match(/<div class="flex flex-col items-end w-\[25%\]">[\s\S]*?<\/div>/)[0]
+  const badge = source.match(/<div class="flex flex-col items-end[^\"]*">[\s\S]*?<\/div>/)?.[0]
+  assert.ok(badge, 'Product status badge container is present')
   const render = new Function('Vue', compile(badge, { mode: 'function', prefixIdentifiers: true }).code)(Vue)
   for (const status of ['closed', 'available', 'stale', 'unavailable', 'closed', 'available']) {
     const html = await renderToString(Vue.createSSRApp({
