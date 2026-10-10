@@ -18,7 +18,8 @@ import java.util.function.BiConsumer;
 /** One upstream connection. Shadow observations never enter the authoritative quote/history path. */
 @Component
 public class YahooQuoteStream {
-    @Value("${market.yahoo.mode:http_only}") private String mode = "http_only";
+    public static final String ENABLED_KEY = "market.yahoo.ws.enabled";
+    @Value("${market.yahoo.mode:ws_preferred}") private String mode = "ws_preferred";
     @Value("${market.yahoo.url:wss://streamer.finance.yahoo.com/?version=2}") private String url;
     @Value("${market.yahoo.enabled-symbols:}") private String enabledSymbols = "";
     @Value("${market.yahoo.stable-ms:30000}") private long stableMs = 30000;

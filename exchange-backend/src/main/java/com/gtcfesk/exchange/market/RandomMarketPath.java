@@ -98,6 +98,7 @@ public final class RandomMarketPath {
     }
 
     public static long duration(String interval) {
+        KlineIntervals.rejectRetired(interval);
         switch (interval) {
             case "1m": return 60000;
             case "5m": return 300000;
@@ -107,7 +108,6 @@ public final class RandomMarketPath {
             case "4h": return 14400000;
             case "1d": return DAY;
             case "1w": return DAY * 7;
-            case "1M": return DAY * 31; // Maximum calendar-month width for lookahead; buckets use monthEnd.
             default: throw new IllegalArgumentException("Unsupported simulation interval");
         }
     }
@@ -123,7 +123,7 @@ public final class RandomMarketPath {
     }
 
     static long periodEnd(String interval, long start) {
-        return "1M".equals(interval) ? monthEnd(start) : start + duration(interval);
+        return start + duration(interval);
     }
 
     public static Map<String, Object> klines(TradingSymbol symbol, String interval, Integer limit, Long endTime, long now) {
@@ -131,22 +131,18 @@ public final class RandomMarketPath {
     }
 
     public static Map<String, Object> klines(TradingSymbol symbol, String interval, Integer limit, Long endTime, long now, long anchor) {
-        boolean monthly = "1M".equals(interval);
         long duration = duration(interval), session = symbol.getRandomMarketStartedAt();
         long last = now / 1000 * 1000;
         long latest = endTime == null ? last : Math.min(last, endTime);
-        long latestBucket = monthly ? monthStart(latest) : Math.floorDiv(latest - anchor, duration) * duration + anchor;
+        long latestBucket = Math.floorDiv(latest - anchor, duration) * duration + anchor;
         int count = Math.min(1000, Math.max(1, limit == null ? 100 : limit));
         // ponytail: reconstruct at most seven days; durable candle storage is needed for longer simulations.
-        long first = monthly ? Math.max(Math.max(monthStart(session), monthStart(last - 7 * DAY)),
-                java.time.Instant.ofEpochMilli(latestBucket).atZone(java.time.ZoneOffset.UTC)
-                    .minusMonths(count - 1L).toInstant().toEpochMilli())
-            : Math.max(Math.floorDiv(session - anchor, duration) * duration + anchor, Math.max(Math.floorDiv(last - 7 * DAY - anchor, duration) * duration + anchor,
+        long first = Math.max(Math.floorDiv(session - anchor, duration) * duration + anchor, Math.max(Math.floorDiv(last - 7 * DAY - anchor, duration) * duration + anchor,
                 latestBucket - (count - 1L) * duration));
         List<Map<String, Object>> rows = new ArrayList<>();
-        for (long period = first; period <= latestBucket && rows.size() < count; period = monthly ? monthEnd(period) : period + duration) {
-            long bucket = monthly && monthStart(anchor) == period && anchor <= latest ? anchor : period;
-            long start = Math.max(bucket, session), end = Math.min((monthly ? monthEnd(period) : period + duration) - 1000, latest);
+        for (long period = first; period <= latestBucket && rows.size() < count; period += duration) {
+            long bucket = period;
+            long start = Math.max(bucket, session), end = Math.min((period + duration) - 1000, latest);
             if (start > end) continue;
             BigDecimal open = price(symbol, start), close = price(symbol, end), high = open.max(close), low = open.min(close);
             // The path is piecewise linear. Extrema occur at endpoints or a channel's knots.

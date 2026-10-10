@@ -1,3 +1,4 @@
+import { isRetiredKlineInterval, requireKlineInterval } from './kline.ts'
 import { getAccountApiBase } from './accountMode.ts'
 import { candleFromQuote, normalizeCandles } from './chartData.ts'
 /**
@@ -60,6 +61,7 @@ export interface KlineUpdate {
 
 // A complete history fetch is not proof that its open candle belongs to this quote.
 export function matchingLiveKline(row: { epoch?: string; quoteVersion?: number; updatedAt?: number; interval: string; bars: unknown[] }, quote: PriceUpdate[string]) {
+  if (isRetiredKlineInterval(row.interval)) return false
   if (!quote.epoch || row.epoch !== quote.epoch || row.quoteVersion == null || row.quoteVersion !== quote.quoteVersion
     || !Number.isFinite(row.updatedAt) || !Number.isFinite(quote.committedAt) || row.updatedAt !== quote.committedAt) return false
   const bars = normalizeCandles(row.bars, Infinity, row.interval), last = bars[bars.length - 1]
@@ -216,6 +218,7 @@ class MarketWebSocket {
   onPriceUpdate(callback: (prices: PriceUpdate) => void): () => void { this.priceUpdateCallbacks.add(callback); return () => { this.priceUpdateCallbacks.delete(callback) } }
   onConnected(callback: () => void): () => void { this.connectedCallbacks.add(callback); return () => { this.connectedCallbacks.delete(callback) } }
   onKlineUpdate(symbol: string, interval: string, callback: (update: KlineUpdate) => void): () => void {
+    requireKlineInterval(interval)
     const owner = 'kline:' + ++this.nextKlineOwner
     this.klineCallbacks.set(owner, { symbol, interval, callback })
     this.setSubscriptions(owner, [symbol])
@@ -230,7 +233,7 @@ class MarketWebSocket {
   private deliverKlines(rows: unknown, prices: PriceUpdate) {
     if (!Array.isArray(rows)) return
     for (const row of rows) {
-      if (!row || typeof row.symbol !== 'string' || typeof row.interval !== 'string' || !Array.isArray(row.bars) || !row.bars.length) continue
+      if (!row || typeof row.symbol !== 'string' || typeof row.interval !== 'string' || !Array.isArray(row.bars) || !row.bars.length || isRetiredKlineInterval(row.interval)) continue
       const quote = prices[row.symbol]
       if (!quote || normalizeQuote(quote)?.status !== 'available' || !matchingLiveKline(row,quote)) continue
       const update: KlineUpdate = { symbol: row.symbol, interval: row.interval, bars: row.bars, quote, pending: row.pending === true,

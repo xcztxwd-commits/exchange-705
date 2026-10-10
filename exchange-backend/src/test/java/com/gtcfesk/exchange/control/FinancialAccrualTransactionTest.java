@@ -541,7 +541,7 @@ class FinancialAccrualTransactionTest {
     @Test void scheduleAndRecoveryUseContextOnlyAndTransactionsAreNotDependentOnSelfInvocation() {
         FinancialOrder order=order(user,LocalDate.now(),7); source.commits.set(0);
         // Enumerate a real owned fixture tenant and run the actual JobRunner context-only callback.
-        database.update("INSERT INTO tenant (id,code,name,status,template_version,policy_version,session_version,config_ready,domain_verified,row_version,created_at) VALUES (?,?,?,'DISABLED','safe-v1',0,0,false,false,0,?)",
+        database.update("INSERT INTO tenant (id,code,name,status,template_version,policy_version,session_version,config_ready,domain_verified,row_version,entry_enabled,entry_verified,domain_version,created_at) VALUES (?,?,?,'DISABLED','safe-v1',0,0,false,false,0,false,false,0,?)",
                 tenant,"s3-financial-"+tenant,"S3 scheduled financial fixture",java.sql.Timestamp.valueOf(LocalDateTime.now()));
         assertFalse(TransactionSynchronizationManager.isActualTransactionActive());
         TenantContext.clear();

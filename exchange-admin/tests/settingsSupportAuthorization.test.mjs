@@ -6,6 +6,7 @@ import { parse, compileTemplate } from '@vue/compiler-sfc'
 import * as Vue from 'vue'
 import { renderToString } from '@vue/server-renderer'
 import { configEditable } from '../src/utils/tenantPolicies.ts'
+import { shareTemplateLanguages as videoLanguages } from '../../exchange-frontend/src/utils/shareTemplateDesign.ts'
 
 // Execute actual Settings.vue setup, Vue reactivity, template and save handler; no real tenant requests.
 const source = fs.readFileSync(new URL('../src/views/Settings.vue', import.meta.url), 'utf8')
@@ -16,13 +17,14 @@ const compiled = (await transform(script, { loader: 'ts', target: 'es2022' })).c
 const bindingNames = name => ts.isIdentifier(name) ? [name.text] : name.elements.flatMap(element => element.name ? bindingNames(element.name) : [])
 const exposed = ast.statements.flatMap(node => ts.isVariableStatement(node) ? node.declarationList.declarations.flatMap(declaration => bindingNames(declaration.name)) : ts.isFunctionDeclaration(node) ? [node.name.text] : [])
 const supportAllowed = Vue.ref(false)
+const can = code => code === 'support_settings:view' && supportAllowed.value
 const snapshot = Vue.ref(null), policyReady = Vue.computed(() => !!snapshot.value), writes = [], messages = []
 let reloadFailure = false
 const policies = { snapshot, policyReady, policyError: Vue.ref(''), reloadPolicies: async () => { if (reloadFailure) { snapshot.value = null;throw new Error('策略加载失败') } }, editable: key => configEditable(snapshot.value, key), policyLabel: key => configEditable(snapshot.value, key) ? '' : '（总控锁定或未授权）' }
-const request = { get: async () => [], post: async (path, payload) => { writes.push({ path, payload });return {} } }
+const request = { get: async path => { assert(['/admin/config/list', '/admin/config/get'].includes(path));return path === '/admin/config/list' ? [] : {} }, post: async (path, payload) => { writes.push({ path, payload });return {} } }
 const scope = Vue.effectScope()
-const editor = scope.run(() => new Function('ref', 'computed', 'watch', 'onMounted', 'useTenantPolicies', 'request', 'ElMessage', 'playProtectedAudio', 'can', compiled + `;return {${exposed.join(',')}};`)(
- Vue.ref, Vue.computed, Vue.watch, () => {}, area => { assert.equal(area, 'settings');return policies }, request, { success: text => messages.push(text), error: text => messages.push(text) }, async () => {}, code => code === 'support_settings:view' && supportAllowed.value
+const editor = scope.run(() => new Function('ref', 'computed', 'watch', 'onMounted', 'onBeforeUnmount', 'useTenantPolicies', 'request', 'ElMessage', 'playProtectedAudio', 'can', 'videoLanguages', compiled + `;return {${exposed.join(',')}};`)(
+ Vue.ref, Vue.computed, Vue.watch, () => {}, Vue.onScopeDispose, area => { assert.equal(area, 'settings');return policies }, request, { success: text => messages.push(text), error: text => messages.push(text) }, async () => {}, can, videoLanguages
 ))
 const authorized = { tenantId: 2, tenantName: 'A', status: 'ACTIVE', policyVersion: 7, features: { external_support: true, support: true }, supportChannel: null, configs: [] }
 const template = compileTemplate({ source: descriptor.template.content, filename: 'Settings.vue', id: 'settings-support-test', compilerOptions: { expressionPlugins: ['typescript'] } })
@@ -32,7 +34,7 @@ const rendered = (await transform(template.code, { loader: 'ts', format: 'cjs', 
 const module = { exports: {} }
 new Function('require', 'module', 'exports', rendered)(() => Vue, module, module.exports)
 async function html() {
- const app = Vue.createSSRApp({ setup: () => ({ ...editor, ...policies }), render: module.exports.render })
+ const app = Vue.createSSRApp({ setup: () => ({ ...editor, ...policies, can, videoLanguages }), render: module.exports.render })
  const plain = { name: 'SettingsTestElement', setup: (_, { slots }) => () => Vue.h('div', slots.default?.()) }
  for (const tag of new Set([...descriptor.template.content.matchAll(/<(el-[a-z-]+|TenantPolicyNotice|MarketDepthHealth|SupportChannelSettings)\b/g)].map(match => match[1]))) if (tag !== 'el-tab-pane') app.component(tag, plain)
  app.component('el-tab-pane', { props: ['label', 'name'], setup: (props, { slots }) => () => Vue.h('section', { 'data-pane': props.name }, [Vue.h('span', props.label), slots.default?.()]) })
@@ -48,6 +50,7 @@ try {
   assert.equal(editor.serviceConfigVisible.value, false);assert.equal(editor.activeTab.value, 'mail');assert.doesNotMatch(await html(), /data-pane="service"/)
  }
  snapshot.value = authorized;assert.equal(editor.serviceConfigVisible.value, true);assert.match(await html(), /data-pane="service"/);assert.equal(editor.activeTab.value, 'mail', 'granting permission does not force a tab switch')
+ await editor.loadConfigs()
  editor.serviceConfig.value[0].value = 'https://support.example.test'
  editor.serviceConfig.value[1].value = 'complaints@example.test'
  await editor.saveConfigs();assert.equal(writes.at(-1).path, '/admin/config/saveBatch');assert(writes.at(-1).payload.some(row => row.key === 'customer.service.link'));assert(writes.at(-1).payload.some(row => row.key === 'complaint.email'))
@@ -61,6 +64,8 @@ try {
  assert.doesNotMatch(await html(), /data-pane="service"/)
  supportAllowed.value = true
  snapshot.value = { ...authorized, features: { external_support: false, support: true }, supportChannel: 'internal' }
+ const beforeReload = writes.length;await editor.saveConfigs();assert.equal(writes.length, beforeReload, 'restoring a policy alone cannot bypass failed config loading')
+ reloadFailure = false;await editor.loadConfigs()
  editor.activeTab.value = 'service'
  assert.equal(editor.serviceConfigVisible.value, true, 'internal-only tenants can still configure service channels')
  assert.equal(editor.supportChannelsVisible.value, true);assert.equal(editor.externalServiceConfigVisible.value, false)

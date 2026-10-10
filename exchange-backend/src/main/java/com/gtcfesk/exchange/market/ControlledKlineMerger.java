@@ -26,6 +26,7 @@ public class ControlledKlineMerger {
     public Map<String, Object> merge(long symbol, String interval, int limit, Long cursor,
             Map<String, Object> external, LongConsumer requestMinutes, boolean utcAnchors,
             java.util.function.BiFunction<Long,Long,List<Map<String,Object>>> baseMinutes) {
+        KlineIntervals.rejectRetired(interval);
         return store.readSnapshot(() -> mergeSnapshot(symbol, interval, limit, cursor, external, utcAnchors, baseMinutes));
     }
     @SuppressWarnings("unchecked")
@@ -35,12 +36,11 @@ public class ControlledKlineMerger {
         Map<String,Object> archived = store.historyOrdering.readExact(symbol, interval, limit, cursor, utcAnchors, external, baseMinutes != null);
         if (archived != null) return archived;
         limit = Math.min(1000, Math.max(1, limit));
-        boolean monthly = "1M".equals(interval);
         long width = RandomMarketPath.duration(interval);
         long end = cursor == null ? System.currentTimeMillis() : cursor;
         TreeMap<Long, Map<String, Object>> bars = new TreeMap<>();
         long alignment=width<3600000?width:60000;
-        List<Map<String, Object>> source = store.db.query("SELECT body FROM market_source_candle WHERE tenant_id=" + tenant() + " AND symbol_id=? AND period=? AND candle_at<=? AND MOD(candle_at,?)=0 ORDER BY candle_at DESC LIMIT ?",
+        List<Map<String, Object>> source = store.db.query("SELECT body FROM market_source_candle WHERE tenant_id=" + tenant() + " AND symbol_id=? AND period=? AND /*! BINARY */ TRIM(period)<>'1M' AND candle_at<=? AND MOD(candle_at,?)=0 ORDER BY candle_at DESC LIMIT ?",
             (rs, n) -> store.decode(rs.getString(1)), symbol, interval, end, alignment, limit);
         for (Map<String, Object> row : baseMinutes == null ? source : Collections.<Map<String,Object>>emptyList())
             if (ControlHistoryStore.periodCandle(row, interval)) bars.put(ControlHistoryStore.time(row), row);
@@ -51,16 +51,15 @@ public class ControlledKlineMerger {
         long session = baseMinutes == null ? 0 : QuoteState.time(((Map<String,Object>)external.get("data")).get("simulationSession"));
         if (baseMinutes != null && ((Map<String,Object>)external.get("data")).containsKey("simulationSession")) {
             long offset = frozen.isEmpty() ? 0 : Math.floorMod(frozen.firstKey(), width);
-            long latest = monthly ? RandomMarketPath.monthStart(end) : Math.floorDiv(end-offset,width)*width+offset;
-            long first = monthly ? java.time.Instant.ofEpochMilli(latest).atZone(java.time.ZoneOffset.UTC)
-                    .minusMonths(limit-1L).toInstant().toEpochMilli() : latest-(limit-1L)*width;
+            long latest = Math.floorDiv(end-offset,width)*width+offset;
+            long first = latest-(limit-1L)*width;
             long stop = Math.min(RandomMarketPath.periodEnd(interval,latest)-1,System.currentTimeMillis());
             TreeMap<Long,MinuteAggregate> grouped = new TreeMap<>();
             sourceMinutePages(first,stop,baseMinutes,page -> {
                 for (Map<String,Object> row : page) {
                     long time=ControlHistoryStore.time(row); Long anchor=frozen.floorKey(time);
                     long bucket=anchor!=null && time<RandomMarketPath.periodEnd(interval,anchor) ? anchor
-                            : monthly ? RandomMarketPath.monthStart(time) : Math.floorDiv(time-offset,width)*width+offset;
+                            : Math.floorDiv(time-offset,width)*width+offset;
                     if(bucket>end) continue;
                     if(width==60000) bars.put(bucket,frozenPrefix(new LinkedHashMap<>(row),frozen.get(bucket),session,time+59999));
                     else grouped.computeIfAbsent(bucket,ignored->new MinuteAggregate()).add(row);
@@ -74,9 +73,9 @@ public class ControlledKlineMerger {
         for (Map<String, Object> row : store.candles(symbol, interval, end + 1, end + width - 1))
             anchors.put(ControlHistoryStore.time(row), row);
         // Bound rows by the requested number of occupied periods, never by a seven-day window.
-        List<Long> recentBuckets = monthly ? Collections.emptyList() : recentMixedBuckets(symbol, end + width - 1, width, limit + 2);
+        List<Long> recentBuckets = recentMixedBuckets(symbol, end + width - 1, width, limit + 2);
         // A short provider page must not hide older controls that still fit in the requested page.
-        long from = monthly ? RandomMarketPath.monthStart(end - (limit + 2L) * 32 * 86400000L) : recentBuckets.isEmpty() ? end + width
+        long from = recentBuckets.isEmpty() ? end + width
             : Math.floorDiv(recentBuckets.get(recentBuckets.size() - 1), width) * width - width;
 
         boolean noAnchors = width >= 3600000 && !utcAnchors && anchors.isEmpty();
@@ -89,21 +88,20 @@ public class ControlledKlineMerger {
             Long anchor = anchors.floorKey(time);
             // Prefer the actual provider boundary (including exchange sessions and DST).
             Long nextAnchor = anchor == null ? null : anchors.higherKey(anchor);
-            long boundary = anchor == null ? 0 : monthly ? nextAnchor == null ? RandomMarketPath.monthEnd(anchor) : nextAnchor : anchor + width;
-            if (!monthly && width >= 86400000 && nextAnchor != null && Math.abs(nextAnchor - boundary) <= 3600000) boundary = nextAnchor;
+            long boundary = anchor == null ? 0 : anchor + width;
+            if (width >= 86400000 && nextAnchor != null && Math.abs(nextAnchor - boundary) <= 3600000) boundary = nextAnchor;
             if (width >= 86400000 && !utcAnchors && (anchor == null || time >= boundary)) {
                 missingAnchor[0] = true; continue; // Do not extrapolate daily sessions across closures or unknown DST boundaries.
             }
-            long bucket = anchor != null && time < boundary ? anchor : monthly ? RandomMarketPath.monthStart(time) : fallbackBucket(time, width, anchors);
+            long bucket = anchor != null && time < boundary ? anchor : fallbackBucket(time, width, anchors);
             if (bucket > end) continue;
             affected.putIfAbsent(bucket, 0L);
         }
         });
         for (Long start : new ArrayList<>(affected.keySet())) {
-            long bucketEnd = monthly ? RandomMarketPath.monthEnd(start) : start + width;
+            long bucketEnd = start + width;
             Long next = anchors.higherKey(start);
-            if (monthly && next != null) bucketEnd = next;
-            else if (width >= 86400000 && next != null && Math.abs(next - bucketEnd) <= 3600000) bucketEnd = next;
+            if (width >= 86400000 && next != null && Math.abs(next - bucketEnd) <= 3600000) bucketEnd = next;
             affected.put(start, bucketEnd);
         }
         Set<Long> published = store.publishedBuckets(symbol, affected);
@@ -140,7 +138,7 @@ public class ControlledKlineMerger {
         data.put("kline_list", new ArrayList<>(bars.values())); data.put("merged", true);
         data.put("historyRestoreRevision",store.historyRestoreRevision(symbol));
         if (missingAnchor[0]) data.put("missingData", "source_period_anchor");
-        List<Integer> missingSource = store.db.queryForList("SELECT 1 FROM market_control_sample s JOIN market_control_task t ON t.tenant_id=s.tenant_id AND t.id=s.task_id JOIN market_control_flow f ON f.tenant_id=t.tenant_id AND f.task_id=t.id LEFT JOIN market_control_publication p ON p.tenant_id=t.tenant_id AND p.task_id=t.id WHERE t.tenant_id=" + tenant() + " AND t.symbol_id=? AND f.state='SOURCE' AND s.generated_at>=? AND s.generated_at<=? AND (p.task_id IS NULL OR s.generated_at>p.to_at) AND NOT EXISTS (SELECT 1 FROM market_source_candle c WHERE c.tenant_id=" + tenant() + " AND c.symbol_id=t.symbol_id AND c.period='1m' AND c.candle_at=FLOOR(s.generated_at/60000)*60000) LIMIT 1", Integer.class, symbol, from, end + width - 1);
+        List<Integer> missingSource = store.db.queryForList("SELECT 1 FROM market_control_sample s JOIN market_control_task t ON t.tenant_id=s.tenant_id AND t.id=s.task_id JOIN market_control_flow f ON f.tenant_id=t.tenant_id AND f.task_id=t.id LEFT JOIN market_control_publication p ON p.tenant_id=t.tenant_id AND p.task_id=t.id WHERE t.tenant_id=" + tenant() + " AND t.symbol_id=? AND f.state='SOURCE' AND s.generated_at>=? AND s.generated_at<=? AND (p.task_id IS NULL OR s.generated_at>p.to_at) AND NOT EXISTS (SELECT 1 FROM market_source_candle c WHERE c.tenant_id=" + tenant() + " AND c.symbol_id=t.symbol_id AND c.period='1m' AND /*! BINARY */ TRIM(c.period)<>'1M' AND c.candle_at=FLOOR(s.generated_at/60000)*60000) LIMIT 1", Integer.class, symbol, from, end + width - 1);
         if (!missingSource.isEmpty() && baseMinutes == null) data.put("missingData", "original_source_candles");
         if (!bars.isEmpty()) { result.put("ret", 200); data.put("status", "available"); }
         result.put("data", data); return result;
@@ -188,13 +186,13 @@ public class ControlledKlineMerger {
             while (true) {
                 List<Object> arguments = new ArrayList<>(Arrays.asList(tenant(),symbol,after)); arguments.addAll(rangeArgs);
                 Collections.addAll(arguments,tenant(),symbol,after); arguments.addAll(rangeArgs);
-                List<Long> keys = store.db.queryForList("SELECT minute_at FROM ((SELECT candle_at AS minute_at FROM market_source_candle WHERE tenant_id=? AND symbol_id=? AND period='1m' AND candle_at>? AND " + candleBounds + " ORDER BY candle_at LIMIT 500) UNION (SELECT minute_at FROM market_mixed_minute WHERE tenant_id=? AND symbol_id=? AND minute_at>? AND " + mixedBounds + " ORDER BY minute_at LIMIT 500)) minute_keys ORDER BY minute_at LIMIT 500",
+                List<Long> keys = store.db.queryForList("SELECT minute_at FROM ((SELECT candle_at AS minute_at FROM market_source_candle WHERE tenant_id=? AND symbol_id=? AND period='1m' AND /*! BINARY */ TRIM(period)<>'1M' AND candle_at>? AND " + candleBounds + " ORDER BY candle_at LIMIT 500) UNION (SELECT minute_at FROM market_mixed_minute WHERE tenant_id=? AND symbol_id=? AND minute_at>? AND " + mixedBounds + " ORDER BY minute_at LIMIT 500)) minute_keys ORDER BY minute_at LIMIT 500",
                     Long.class,arguments.toArray());
                 if (keys.isEmpty()) break;
                 String placeholders = String.join(",",Collections.nCopies(keys.size(),"?"));
                 List<Object> candleArgs = new ArrayList<>(Arrays.asList(tenant(),symbol)); candleArgs.addAll(keys);
                 TreeMap<Long,Map<String,Object>> minutes = new TreeMap<>();
-                for (Map<String,Object> row : store.db.query("SELECT body FROM market_source_candle WHERE tenant_id=? AND symbol_id=? AND period='1m' AND candle_at IN (" + placeholders + ") ORDER BY candle_at LIMIT 500",
+                for (Map<String,Object> row : store.db.query("SELECT body FROM market_source_candle WHERE tenant_id=? AND symbol_id=? AND period='1m' AND /*! BINARY */ TRIM(period)<>'1M' AND candle_at IN (" + placeholders + ") ORDER BY candle_at LIMIT 500",
                         (rs,n) -> store.decode(rs.getString(1)),candleArgs.toArray()))
                     if (ControlHistoryStore.periodCandle(row,"1m")) minutes.put(ControlHistoryStore.time(row),row);
                 for (Map<String,Object> row : store.visibleMixedAt(symbol,keys)) minutes.put(ControlHistoryStore.time(row),row);

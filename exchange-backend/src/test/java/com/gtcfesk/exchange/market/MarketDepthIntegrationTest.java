@@ -17,9 +17,6 @@ import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.boot.web.server.LocalServerPort;
 import org.springframework.test.context.*;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.web.socket.*;
-import org.springframework.web.socket.client.standard.StandardWebSocketClient;
-import org.springframework.web.socket.handler.TextWebSocketHandler;
 import java.net.*;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
@@ -100,17 +97,25 @@ class MarketDepthIntegrationTest {
         assertEquals(200,save(writer,"{\"enabled\":true}"));assertEquals("true",configs.getConfigValue(MarketDepthService.ENABLED_KEY));
     }
     @Test void realDownstreamSocketSwitchDisableUnsubscribeAndDisconnect()throws Exception{
-        BlockingQueue<JsonNode> messages=new LinkedBlockingQueue<>();WebSocketHttpHeaders headers=new WebSocketHttpHeaders();headers.add("X-Forwarded-Host",BootTenantFixture.FRONT);headers.setOrigin("https://"+BootTenantFixture.FRONT);
-        WebSocketSession session=new StandardWebSocketClient().doHandshake(new TextWebSocketHandler(){@Override protected void handleTextMessage(WebSocketSession s,TextMessage m)throws Exception{messages.add(json.readTree(m.getPayload()));}},headers,URI.create("ws://127.0.0.1:"+port+"/api/ws/market")).get(8,TimeUnit.SECONDS);
+        BlockingQueue<JsonNode> messages=new LinkedBlockingQueue<>();CompletableFuture<okhttp3.WebSocket> opened=new CompletableFuture<>();
+        okhttp3.OkHttpClient socketClient=new okhttp3.OkHttpClient();
+        // The standard Tomcat client replaces Host from the loopback URI. Use the existing client that preserves the tenant virtual host.
+        okhttp3.WebSocket session=socketClient.newWebSocket(new okhttp3.Request.Builder().url("ws://127.0.0.1:"+port+"/api/ws/market")
+            .header("Host",BootTenantFixture.FRONT).header("X-Forwarded-Host",BootTenantFixture.FRONT).header("Origin","https://"+BootTenantFixture.FRONT).build(),new okhttp3.WebSocketListener(){
+                @Override public void onOpen(okhttp3.WebSocket socket,okhttp3.Response response){opened.complete(socket);}
+                @Override public void onFailure(okhttp3.WebSocket socket,Throwable failure,okhttp3.Response response){opened.completeExceptionally(failure);}
+                @Override public void onMessage(okhttp3.WebSocket socket,String text){try{messages.add(json.readTree(text));}catch(Exception failure){throw new IllegalStateException(failure);}}
+            });
         try{
-            session.sendMessage(new TextMessage("{\"action\":\"subscribeDepth\",\"symbol\":\"BTCUSDT\"}"));assertEquals("BTCUSDT",nextDepth(messages).path("data").path("symbol").asText());
-            session.sendMessage(new TextMessage("{\"action\":\"subscribeDepth\",\"symbol\":\"ETHUSDT\",\"levels\":1}"));messages.clear();JsonNode switched=nextDepth(messages);if(!"ETHUSDT".equals(switched.path("data").path("symbol").asText()))switched=nextDepth(messages);assertEquals("ETHUSDT",switched.path("data").path("symbol").asText());assertEquals(1,switched.path("data").path("requestedLevels").asInt());
+            opened.get(8,TimeUnit.SECONDS);
+            assertTrue(session.send("{\"action\":\"subscribeDepth\",\"symbol\":\"BTCUSDT\"}"));assertEquals("BTCUSDT",nextDepth(messages).path("data").path("symbol").asText());
+            assertTrue(session.send("{\"action\":\"subscribeDepth\",\"symbol\":\"ETHUSDT\",\"levels\":1}"));messages.clear();JsonNode switched=nextDepth(messages);if(!"ETHUSDT".equals(switched.path("data").path("symbol").asText()))switched=nextDepth(messages);assertEquals("ETHUSDT",switched.path("data").path("symbol").asText());assertEquals(1,switched.path("data").path("requestedLevels").asInt());
             assertEquals(200,save(writer,"{\"enabled\":false}"));JsonNode disabled=nextDepth(messages);if(!"DISABLED".equals(disabled.path("data").path("status").asText()))disabled=nextDepth(messages);assertEquals("DISABLED",disabled.path("data").path("status").asText());assertEquals(0,disabled.path("data").path("bids").size());
             messages.clear();Thread.sleep(1300);assertTrue(messages.isEmpty(),"disabled data frames must stop after one state notification");
             save(writer,"{\"enabled\":true}");assertEquals("ETHUSDT",nextDepth(messages).path("data").path("symbol").asText());
-            session.sendMessage(new TextMessage("{\"action\":\"unsubscribeDepth\"}"));Thread.sleep(100);messages.clear();Thread.sleep(1200);assertTrue(messages.isEmpty());
-            session.sendMessage(new TextMessage("{\"action\":\"subscribeDepth\",\"symbol\":\"BTCUSDT\"}"));nextDepth(messages);
-        }finally{session.close();}MarketDepthTest.until(()->((Number)depth.status().get("activeReferences")).intValue()==0);
+            assertTrue(session.send("{\"action\":\"unsubscribeDepth\"}"));Thread.sleep(100);messages.clear();Thread.sleep(1200);assertTrue(messages.isEmpty());
+            assertTrue(session.send("{\"action\":\"subscribeDepth\",\"symbol\":\"BTCUSDT\"}"));nextDepth(messages);
+        }finally{session.close(1000,"fixture finished");socketClient.dispatcher().executorService().shutdown();socketClient.connectionPool().evictAll();}MarketDepthTest.until(()->((Number)depth.status().get("activeReferences")).intValue()==0);
     }
     JsonNode nextDepth(BlockingQueue<JsonNode> messages)throws Exception{long end=System.currentTimeMillis()+7000;while(System.currentTimeMillis()<end){JsonNode n=messages.poll(1,TimeUnit.SECONDS);if(n!=null&&"depth".equals(n.path("type").asText()))return n;}throw new AssertionError("No downstream depth frame");}
     @Test @org.junit.jupiter.api.condition.EnabledIfSystemProperty(named="depth.browserHold",matches="true")

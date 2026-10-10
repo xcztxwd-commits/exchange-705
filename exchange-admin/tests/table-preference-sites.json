@@ -25,6 +25,26 @@
     "key": "backend-accounts"
   },
   {
+    "file": "src/components/HistorySourceRestore.vue",
+    "binding": "table-key",
+    "key": "HistorySourceRestore.gaps"
+  },
+  {
+    "file": "src/components/HistorySourceRestore.vue",
+    "binding": "table-key",
+    "key": "HistorySourceRestore.differences"
+  },
+  {
+    "file": "src/components/HistorySourceRestore.vue",
+    "binding": "table-key",
+    "key": "HistorySourceRestore.records"
+  },
+  {
+    "file": "src/components/HistorySourceRestore.vue",
+    "binding": "table-key",
+    "key": "HistorySourceRestore.snapshots"
+  },
+  {
     "file": "src/components/MarketDepthHealth.vue",
     "binding": "table-key",
     "key": "MarketDepthHealth.1"

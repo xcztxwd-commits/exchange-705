@@ -41,6 +41,9 @@ public class TenantRequestFilter extends OncePerRequestFilter {
  @Override protected void doFilterInternal(HttpServletRequest request,HttpServletResponse response,FilterChain chain)throws IOException,ServletException{
   TenantContext.clear();String path=request.getRequestURI();
   try{
+   // Server-local inspection proof cannot be created by client headers; its wrapper intentionally strips Host.
+   Long inspected=com.gtcfesk.exchange.simulation.SimulationAdminQueryBoundary.internalTenant(request);
+   if(inspected!=null){if(!path.startsWith("/api/admin/"))throw new AccessDeniedException("模拟监管路径无效");try(TenantContext.Scope ignored=TenantContext.open(inspected)){chain.doFilter(request,response);}return;}
    String host=hosts.host(request);
    if("/api/tenant-routing-check".equals(path)&&request.getParameter("challenge")!=null){
     noStore(response);if(!"GET".equals(request.getMethod())||request.getParameterValues("challenge").length!=1)throw new AccessDeniedException("挑战仅支持单nonce GET");
@@ -56,9 +59,6 @@ public class TenantRequestFilter extends OncePerRequestFilter {
    if(hosts.isEntryHost(host)){
     noStore(response);try{String suffix=navigation(request),target=domains.entryTarget(host);response.setStatus(302);response.setHeader("Location",hosts.frontendOrigin(target)+suffix);}catch(RuntimeException e){unavailable(response);}return;
    }
-   // Server-local inspection proof cannot be created by client headers.
-   Long inspected=com.gtcfesk.exchange.simulation.SimulationAdminQueryBoundary.internalTenant(request);
-   if(inspected!=null){if(!path.startsWith("/api/admin/"))throw new AccessDeniedException("模拟监管路径无效");try(TenantContext.Scope ignored=TenantContext.open(inspected)){chain.doFilter(request,response);}return;}
    if("/healthz".equals(path)){response.setStatus(200);response.getWriter().write("ok");return;}
    if(path.startsWith("/api/control/")){hosts.requireOrigin(request,hosts.controlOrigin());chain.doFilter(request,response);return;}
    if(path.startsWith("/api/admin/")||(hosts.isAdminHost(request)&&backendSharedPath(path))){hosts.requireOrigin(request,hosts.adminOrigin());if(backendPreviewReadPath(path)&&!"GET".equals(request.getMethod()))throw new AccessDeniedException("分享预览仅支持只读GET");chain.doFilter(request,response);return;}

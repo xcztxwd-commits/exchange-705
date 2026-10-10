@@ -121,6 +121,7 @@ async function previewVideo() {
   finally { previewingVideo.value = false }
 }
 const tradeKycRequired = ref(true)
+const yahooWsEnabled = ref(true)
 const conversionHours = ref(8)
 const defaultConversionCurrencies = ['USD', 'EUR', 'JPY', 'GBP', 'CNY', 'CHF', 'AUD', 'CAD', 'HKD', 'SGD']
 const conversionCurrencies = ref([...defaultConversionCurrencies])
@@ -167,6 +168,9 @@ const loadConfigs = async () => {
   try {
     await reloadPolicies()
     const res: any = await request.get('/admin/config/list')
+    const yahooConfig: any = await request.get('/admin/config/get', { params: { key: 'market.yahoo.ws.enabled' } })
+    if (yahooConfig.value != null && !['true', 'false'].includes(yahooConfig.value)) throw new Error('Yahoo WebSocket 配置无效')
+    yahooWsEnabled.value = yahooConfig.value == null || yahooConfig.value === 'true'
     const registrationConfig: any = await request.get('/admin/config/get', { params: { key: 'registration.fields' } })
     if (registrationConfig?.value) {
       const value = JSON.parse(registrationConfig.value)
@@ -325,6 +329,7 @@ const saveConfigs = async () => {
       { key: 'registration.fields', value: JSON.stringify(registrationFields.value), description: '注册业务资料字段' },
       { key: 'market.conversion.currencies', value: conversionCurrencies.value.join(','), description: '预缓存币种（兑美元）' },
       { key: 'market.conversion.cache-hours', value: String(conversionHours.value), description: '结算汇率更新间隔（小时）' },
+      { key: 'market.yahoo.ws.enabled', value: String(yahooWsEnabled.value), description: 'Yahoo WebSocket 行情开关' },
       ...mailConfig.value,
       ...smsConfig.value,
       ...riskConfig.value,
@@ -423,9 +428,9 @@ onMounted(() => {
                 <el-upload v-permission="'settings:save'" :http-request="(options: any) => uploadVideo(options.file)"
                   :show-file-list="false" accept="video/mp4,video/webm,.mp4,.webm"
                   :disabled="loading || uploadingVideo || !editable('home.video.settings')">
-                  <el-button type="primary" :loading="uploadingVideo" :disabled="loading || !editable('home.video.settings')">{{ currentVideo ? '替换视频' : '上传视频' }}</el-button>
+                  <el-button v-permission="'settings:save'" type="primary" :loading="uploadingVideo" :disabled="loading || !editable('home.video.settings')">{{ currentVideo ? '替换视频' : '上传视频' }}</el-button>
                 </el-upload>
-                <el-button :loading="previewingVideo" :disabled="!currentVideo || uploadingVideo" @click="previewVideo">预览</el-button>
+                <el-button v-permission="'settings:view'" :loading="previewingVideo" :disabled="!currentVideo || uploadingVideo" @click="previewVideo">预览</el-button>
                 <el-button v-permission="'settings:save'" type="danger" :disabled="!currentVideo || loading || uploadingVideo || !editable('home.video.settings')" @click="removeVideo">移除</el-button>
               </div>
               <el-progress v-if="uploadingVideo" :percentage="videoProgress" style="width: 100%; max-width: 720px; margin-top: 12px" />
@@ -523,6 +528,10 @@ onMounted(() => {
         <el-tab-pane label="行情配置" name="market">
           <MarketDepthHealth v-if="activeTab === 'market'" :can-edit="editable('market.depth.enabled')" />
           <el-form label-width="150px">
+            <el-form-item :label="'Yahoo WebSocket' + policyLabel('market.yahoo.ws.enabled')">
+              <el-switch v-permission="'settings:save'" v-model="yahooWsEnabled" aria-label="Yahoo WebSocket 行情" :disabled="loading || !editable('market.yahoo.ws.enabled') || !can('settings:save')" active-text="开启" inactive-text="关闭" />
+            </el-form-item>
+            <el-alert title="默认开启，保存配置后生效。开启时优先使用 Yahoo WebSocket；关闭或连接不可用时使用 HTTP。仅影响当前租户。" type="info" :closable="false" style="margin-bottom: 16px" />
             <el-form-item
               v-for="cfg in marketConfig"
               :key="cfg.key"

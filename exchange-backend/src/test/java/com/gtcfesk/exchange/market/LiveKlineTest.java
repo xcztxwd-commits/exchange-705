@@ -96,13 +96,13 @@ class LiveKlineTest extends TenantMarketTestContext {
         long session=minute-120000;
         fixture.symbol.setSourceCategory("Forex"); fixture.symbol.setRandomMarketEnabled(true);
         fixture.symbol.setRandomMarketStartedAt(session); fixture.symbol.setRandomMarketBasePrice(BigDecimal.valueOf(100));
-        for(String period:Arrays.asList("1h","1d","1w","1M")) {
-            long start="1M".equals(period)?RandomMarketPath.monthStart(minute):Math.floorDiv(minute-1800000,RandomMarketPath.duration(period))*RandomMarketPath.duration(period)+1800000;
+        for(String period:Arrays.asList("1h","1d","1w")) {
+            long start=Math.floorDiv(minute-1800000,RandomMarketPath.duration(period))*RandomMarketPath.duration(period)+1800000;
             fixture.store.db.update("INSERT INTO market_simulation_source_candle(tenant_id,symbol_id,session_at,period,candle_at,body) VALUES(1,1,?,?,?,?)",session,period,start,fixture.store.encode(source(start,91)));
         }
         Map<String,Object> simulated=fixture.raw(System.currentTimeMillis(),true); simulated.put("price",107);
         simulated.put("simulationSession",session); LiveKline.capture(fixture.store,fixture.symbol,simulated,q,minute+2000);
-        for(String period:Arrays.asList("1m","5m","15m","30m","1h","1d","1w","1M")) {
+        for(String period:Arrays.asList("1m","5m","15m","30m","1h","1d","1w")) {
             List<Map<String,Object>> rows=(List<Map<String,Object>>)((Map<?,?>)simulated.get(LiveKline.KEY)).get(period);
             assertNotNull(rows,period); price(rows.get(rows.size()-1),"close_price",107);
             if("1h".equals(period)) assertEquals(1800000,Math.floorMod(ControlHistoryStore.time(rows.get(0)),3600000));

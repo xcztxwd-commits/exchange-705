@@ -33,6 +33,7 @@ class DemoSecurityTest {
     @Configuration @EnableWebMvc
     @Import({SecurityConfig.class, JwtFilter.class, DemoTradingController.class, DemoModeBoundary.class})
     static class Config {
+        @Bean javax.persistence.EntityManagerFactory entityManagerFactory(){return mock(javax.persistence.EntityManagerFactory.class);}
         @Bean com.gtcfesk.exchange.security.OutboundEndpointPolicy outbound(){return mock(com.gtcfesk.exchange.security.OutboundEndpointPolicy.class);}
         @Bean TenantReadinessService readiness(){return mock(TenantReadinessService.class);}
         @Bean TenantRepository tenants(){return mock(TenantRepository.class);}

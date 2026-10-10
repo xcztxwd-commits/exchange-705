@@ -80,8 +80,8 @@ public class MarketQuoteSource {
     }
 
     private String[] convertIntervalToYahoo(String interval) {
+        if (KlineIntervals.retired(interval)) throw new MarketHttp.Failure("unsupported_interval", 0);
         if (interval == null) return new String[]{"1m", "5d"};
-        if ("1M".equals(interval.trim())) return new String[]{"1mo", "10y"};
         String v = interval.trim().toLowerCase(Locale.ROOT);
         switch (v) {
             case "1m": return new String[]{"1m", "5d"};
@@ -98,9 +98,6 @@ public class MarketQuoteSource {
             case "d": return new String[]{"1d", "1y"};
             case "1w":
             case "w": return new String[]{"1wk", "5y"};
-            case "1mo":
-            case "m":
-            case "mo": return new String[]{"1mo", "10y"};
             default: return new String[]{"1m", "5d"};
         }
     }
@@ -109,6 +106,7 @@ public class MarketQuoteSource {
         return getKline(code, interval, limit, category, null);
     }
     Map<String, Object> getKline(String code, String interval, Integer limit, String category, Long endTime) {
+        if (KlineIntervals.retired(interval)) throw new MarketHttp.Failure("unsupported_interval", 0);
         int requiredLimit = (limit != null && limit > 0) ? limit : 100;
 
         try {
@@ -126,7 +124,7 @@ public class MarketQuoteSource {
                 // URL: https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?range={range}&interval={interval}
                 String urlStr = yahooUrl + "/chart/" + urlEncode(yahooSymbol) + "?range=" + yahooRange + "&interval=" + yahooInterval;
                 if (endTime != null) {
-                    long seconds = "1M".equals(interval) ? 31 * 86400L : "1w".equals(interval) ? 7 * 86400L
+                    long seconds = "1w".equals(interval) ? 7 * 86400L
                             : "1d".equals(interval) ? 86400 : "1h".equals(interval) ? 3600
                             : Long.parseLong(interval.substring(0, interval.length() - 1)) * 60;
                     long end = endTime / 1000;
@@ -194,9 +192,10 @@ public class MarketQuoteSource {
 
     /** Exact history-only source read. No snapshot/cache reuse and no Yahoo retention-start clamping. */
     static boolean nativeYahooHistoryPeriod(String period) {
-        return Arrays.asList("1m", "5m", "15m", "30m", "1h", "1d", "1w", "1M").contains(period);
+        return KlineIntervals.PUBLIC.contains(period);
     }
     Map<String,Object> getHistoryWindow(String code, String interval, int limit, String category, long from, long to) {
+        if (KlineIntervals.retired(interval)) throw new MarketHttp.Failure("unsupported_interval", 0);
         if (org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive())
             throw new IllegalStateException("Historical network read inside transaction");
         if (ExchangeQuoteSource.supports(category)) return exchange.kline(code, interval, limit, category, to);
@@ -539,8 +538,8 @@ public class MarketQuoteSource {
     }
 
     private int convertIntervalToKlineType(String interval) {
+        if (KlineIntervals.retired(interval)) throw new MarketHttp.Failure("unsupported_interval", 0);
         if (interval == null) return 1;
-        if ("1M".equals(interval.trim())) return 10;
         String v = interval.trim().toLowerCase(Locale.ROOT);
         switch (v) {
             case "1m":
@@ -564,10 +563,6 @@ public class MarketQuoteSource {
             case "1w":
             case "w":
                 return 9;
-            case "1mo":
-            case "m":
-            case "mo":
-                return 10;
             default:
                 return 1;
         }
