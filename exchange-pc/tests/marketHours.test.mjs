@@ -2,6 +2,28 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { readFile } from 'node:fs/promises'
 import ts from '../node_modules/typescript/lib/typescript.js'
+import * as Vue from 'vue'
+import { compile } from '@vue/compiler-dom'
+import { renderToString } from '@vue/server-renderer'
+
+test('desktop product list renders closure instead of the percentage, and restores it after reopening', async () => {
+  const source = await readFile(new URL('../src/views/DesktopTrade.vue', import.meta.url), 'utf8')
+  const badge = source.match(/<div class="flex flex-col items-end w-\[25%\]">[\s\S]*?<\/div>/)[0]
+  const render = new Function('Vue', compile(badge, { mode: 'function', prefixIdentifiers: true }).code)(Vue)
+  for (const status of ['closed', 'available', 'stale', 'unavailable', 'closed', 'available']) {
+    const html = await renderToString(Vue.createSSRApp({
+      render,
+      setup: () => ({
+        symbol: { symbol: 'JPY=X' },
+        marketStore: { getQuoteStatus: () => status, getChange24h: () => ({ changePct: 0.29 }) },
+        localeStore: { t: () => '休市', text: value => value },
+        getSymbolChange: () => '+0.29%',
+      }),
+    }))
+    assert.equal(html.includes('休市'), status === 'closed')
+    assert.equal(html.includes('+0.29%'), status !== 'closed')
+  }
+})
 
 for (const app of ['exchange-pc', 'exchange-frontend']) {
   test(`${app}: closure is distinct from stale/unavailable, including no-price snapshots`, async () => {
@@ -27,5 +49,9 @@ for (const app of ['exchange-pc', 'exchange-frontend']) {
     assert.equal(methods.getQuoteStatus('EURUSD=X', now), 'stale')
     methods.recordQuoteStatus('EURUSD=X', { ...expired, timestamp: now, fetchedAt: now, expiresAt: now + 60000, status: 'available', available: true, quoteVersion: 3, epoch: 'test' })
     assert.equal(methods.getQuoteStatus('EURUSD=X', now), 'available')
+    for (const status of ['closed', 'available']) {
+      methods.recordQuoteStatus('EURUSD=X', { ...expired, timestamp: now, fetchedAt: now, expiresAt: now + 60000, status, available: status === 'available', quoteVersion: 3, epoch: 'test' })
+      assert.equal(methods.getQuoteStatus('EURUSD=X', now), status, 'Calendar updates do not require a new price version')
+    }
   })
 }

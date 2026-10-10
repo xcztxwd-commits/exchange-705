@@ -589,7 +589,7 @@ public class ForexQuoteMarketService {
             Map<String,Object> committed=controls.display(config,Collections.emptyMap(),System.currentTimeMillis());
             committed.put("symbol",code);committed.put("marketRevision",config.getRowVersion());
             if(RandomMarketPath.enabled(config) && !virtualTrading){committed.put("available",false);committed.put("tradeAvailable",false);}
-            return committed;
+            return applyMarketHours(config, committed);
         }
         if (RandomMarketPath.enabled(config)) {
             Map<String, Object> simulated = RandomMarketPath.quote(config, System.currentTimeMillis());

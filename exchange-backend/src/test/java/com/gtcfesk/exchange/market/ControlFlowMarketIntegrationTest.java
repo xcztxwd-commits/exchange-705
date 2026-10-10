@@ -37,6 +37,43 @@ class ControlFlowMarketIntegrationTest extends TenantMarketTestContext {
         ReflectionTestUtils.setField(market, "v3Enabled", false); // Existing one-second V2 recovery fixture.
         market.refreshSymbols();
     }
+    @Test void calendarClosureBlocksCommittedSourceControlledAndSimulatedQuotes() {
+        MarketHoursService hours = org.mockito.Mockito.mock(MarketHoursService.class);
+        MarketHoursConfig.Status status = new MarketHoursConfig.Status();
+        status.reason = "计划休市"; status.revision = 8;
+        status.nextChangeAt = System.currentTimeMillis() + 60000;
+        org.mockito.Mockito.when(hours.status(org.mockito.Mockito.any())).thenReturn(status);
+        ReflectionTestUtils.setField(market, "marketHours", hours);
+        fixture.raw(90);
+        for (int mode = 0; mode < 3; mode++) {
+            status.closed = false;
+            if (mode == 1) market.manualControl(1L, true, new BigDecimal("5"));
+            if (mode == 2) market.randomMarket(1L, true, null);
+            Map<String,Object> open = market.internalPrice("TEST");
+            assertEquals(true, open.get("available"));
+            assertNotNull(market.freshPrice("TEST"));
+
+            status.closed = true;
+            Map<String,Object> closed = market.internalPrice("TEST");
+            assertEquals("closed", closed.get("status"));
+            assertEquals(true, closed.get("marketClosed"));
+            assertEquals(status.reason, closed.get("marketReason"));
+            assertEquals(status.revision, closed.get("marketHoursRevision"));
+            assertEquals(status.nextChangeAt, closed.get("marketNextChangeAt"));
+            assertEquals(false, closed.get("available"));
+            assertEquals(false, closed.get("tradeAvailable"));
+            assertEquals(open.get("price"), closed.get("price"));
+            assertEquals(open.get("timestamp"), closed.get("timestamp"));
+            assertEquals(true, database.controls.display(saved.get(), Collections.emptyMap(), System.currentTimeMillis()).get("available"),
+                    "Calendar reads must not rewrite the committed quote");
+            assertNull(market.freshPrice("TEST"));
+            assertFalse(market.freshPrices().containsKey("TEST"));
+            assertEquals("closed", market.snapshotPrice("TEST").get("status"));
+        }
+        status.closed = false;
+        assertNotNull(market.freshPrice("TEST"));
+        assertEquals(false, market.internalPrice("TEST").get("marketClosed"));
+    }
     @Test void backendTimerRestoresRandomBaseWithoutChangingSwitch() throws Exception {
         market.randomMarket(1L, true, null);
         Long session = saved.get().getRandomMarketStartedAt();

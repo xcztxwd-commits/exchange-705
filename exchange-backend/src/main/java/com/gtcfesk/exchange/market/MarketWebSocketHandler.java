@@ -246,7 +246,7 @@ public class MarketWebSocketHandler extends TextWebSocketHandler {
                 Client client = frame.client; Map<String,Object> prices = new HashMap<>();
                 for (String symbol : frame.symbols) {
                     Map<?,?> quote = (Map<?,?>) captured.get(symbol);
-                    if (!delta || frame.snapshot || !Objects.equals(client.versions.get(symbol), quote.get("quoteVersion"))
+                    if (!delta || frame.snapshot || !Objects.equals(client.versions.get(symbol), deliveryVersion(quote))
                             || frame.klines.stream().anyMatch(item -> item.symbol.equals(symbol))) prices.put(symbol, quote);
                 }
                 if (prices.isEmpty()) { if (frame.depthMessage != null) send(frame.session, client, frame.depthMessage); continue; }
@@ -264,6 +264,11 @@ public class MarketWebSocketHandler extends TextWebSocketHandler {
                 messages.add(message); send(frame.session, client, messages);
             }
         }
+    }
+    private static List<Object> deliveryVersion(Map<?,?> quote) {
+        // Calendar transitions do not change the committed price version.
+        return Arrays.asList(quote.get("quoteVersion"), quote.get("status"), quote.get("marketClosed"),
+                quote.get("marketHoursRevision"), quote.get("marketReason"), quote.get("marketNextChangeAt"));
     }
     private void send(WebSocketSession session, Client client, Map<String, ?> message) {
         send(session, client, Collections.singletonList(message));
@@ -299,7 +304,7 @@ public class MarketWebSocketHandler extends TextWebSocketHandler {
                         Map<?,?> prices = (Map<?,?>) message.get("data");
                         prices.forEach((symbol, quote) -> {
                             Object version = ((Map<?,?>) quote).get("quoteVersion");
-                            if (version != null && client.symbols.contains(symbol)) client.versions.put((String) symbol, version);
+                            if (version != null && client.symbols.contains(symbol)) client.versions.put((String) symbol, deliveryVersion((Map<?,?>) quote));
                         });
                         // A subscription added while sending must still receive its own snapshot.
                         client.snapshot = !client.versions.keySet().containsAll(client.symbols);
