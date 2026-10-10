@@ -1,6 +1,6 @@
 <template>
   <div class="trade-page h-screen w-full flex flex-col bg-white dark:bg-[#131722] text-gray-800 dark:text-gray-100 text-sm overflow-hidden font-sans">
-    <VideoIntro v-if="auth.token && showVideoIntro" @close="showVideoIntro = false" />
+    <VideoIntro v-if="auth.token && showVideoIntro" @close="closeVideoIntro" />
     <OrderShareModal v-if="shareOrder" :order-id="shareOrder.id" :kind="shareOrder.kind" desktop @close="shareOrder = null" />
     <el-dialog v-model="kycPromptOpen" :title="localeStore.t('verification')" width="min(440px, 94vw)">
       <p role="alert">{{ kycPromptMessage }}</p>
@@ -1629,6 +1629,11 @@ const router = useRouter();
 // ======================
 const showLoginModal = ref(false);
 const showVideoIntro = ref(false);
+const closeVideoIntro = () => {
+  // Restore focus before removing the native dialog.
+  document.querySelector<HTMLDialogElement>('dialog.video-intro')?.close();
+  showVideoIntro.value = false;
+};
 
 const loginEmail = ref('');
 const loginPassword = ref('');
