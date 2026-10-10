@@ -15,6 +15,7 @@ import re
 import socket
 import subprocess
 import sys
+import tempfile
 
 TABLES = ('market_source_candle', 'market_simulation_source_candle', 'market_history_response',
           'market_history_ordering', 'market_engine_runtime', 'market_history_restore_job', 'market_history_restore_minute')
@@ -94,6 +95,26 @@ class Mysql:
             raise RuntimeError('MySQL failed: ' + result.stderr.decode(errors='replace')[-1500:])
         return result.stdout.decode('utf-8').rstrip('\r\n')
 
+    def scan_rows(self, statement):
+        """Stream large unclassified history scans; never accept partial CLI output."""
+        with tempfile.TemporaryFile() as errors:
+            process = subprocess.Popen(self.command + ['--quick'], stdin=subprocess.PIPE,
+                                       stdout=subprocess.PIPE, stderr=errors, env=self.env)
+            try:
+                process.stdin.write((statement+'\n').encode('utf-8')); process.stdin.close()
+                for line in process.stdout:
+                    if not line.endswith(b'\n'):raise ValueError('Truncated storage scan line')
+                    values = line.decode('utf-8').rstrip('\r\n').split('\t')
+                    if any(value!='N' and (not value.startswith('H') or len(value[1:])%2 or not re.fullmatch('[0-9A-F]*',value[1:])) for value in values):
+                        raise ValueError('Malformed storage scan field')
+                    yield [None if value == 'N' else value[1:] for value in values]
+                if process.wait():
+                    raise RuntimeError('MySQL storage scan failed; partial rows are not a completed inventory')
+            finally:
+                process.stdout.close()
+                if not process.stdin.closed:process.stdin.close()
+                if process.poll() is None:process.kill();process.wait()
+
     def snapshot(self, maximum):
         identity = self.sql('SELECT @@server_uuid,@@version,DATABASE(),@@hostname,@@port;').split('\t')
         if not identity[1].startswith('5.7.'):
@@ -149,33 +170,41 @@ class Mysql:
             selected = identity + [column for column in selected if column not in identity]
             fields = ["IF(" + identifier(n) + " IS NULL,'N',CONCAT('H',HEX(CAST(" + identifier(n) + ' AS BINARY))))' for n in selected]
             if name in managed:
-                raw_rows = [[row[managed[name]['columns'].index(column)] for column in selected] for row in managed[name]['rows']]
+                raw_rows = ([row[managed[name]['columns'].index(column)] for column in selected] for row in managed[name]['rows'])
             else:
-                body = self.sql('SELECT ' + ','.join(fields) + ' FROM ' + identifier(name))
-                raw_rows = [[None if value == 'N' else value[1:] for value in line.split('\t')] for line in body.splitlines()] if body else []
-            for ordinal, raw in enumerate(raw_rows):
-                row = dict(zip(selected, map(decoded, raw)))
-                for field, value in row.items():
-                    if value is None:
-                        continue
-                    if name in ('market_source_candle', 'market_simulation_source_candle') and field in ('period', 'body'):
-                        continue  # Exact periods handled by plan; ambiguous non-month bodies are report-only.
-                    if name == 'market_history_restore_minute' and field in ('before_json', 'source_json', 'previous_json'):
-                        continue  # Minute-only receipts are never inferred to be monthly data.
-                    if name == 'market_history_response':
-                        if field == 'request_json' or field == 'response_json' and retired(json.loads(row['request_json']).get('interval')):
-                            continue  # Classified by exact archived request identity, not response shape.
-                    if name == 'market_engine_runtime' and field in ('quote_json', 'status_json'):
-                        value, _ = strip_live(value)  # Scan everything outside the precisely classified live children.
-                    marker = field in ('period', 'interval') and retired(value) or field in ('kline_type', 'klineType') and value == '10'
-                    if value.lstrip().startswith(('{', '[')):
-                        try:
-                            marker |= monthly_marker(json.loads(value))
-                        except ValueError:
-                            if name.startswith('market_'):
-                                unknown.append(dict(table=name, column=field, tenant=row.get('tenant_id'), rowOrdinal=ordinal, reason='unparseable_market_json', sha256=sha(value.encode())))
-                    if marker:
-                        unknown.append(dict(table=name, column=field, tenant=row.get('tenant_id'), rowOrdinal=ordinal, reason='unclassified_monthly_kline_marker', sha256=sha(value.encode())))
+                raw_rows = self.scan_rows('SELECT ' + ','.join(fields) + ' FROM ' + identifier(name))
+            scanned = 0
+            try:
+                for ordinal, raw in enumerate(raw_rows):
+                    scanned += 1
+                    if len(raw)!=len(selected):raise ValueError('Storage scan column count differs: '+name)
+                    row = dict(zip(selected, map(decoded, raw)))
+                    for field, value in row.items():
+                        if value is None:
+                            continue
+                        if name in ('market_source_candle', 'market_simulation_source_candle') and field in ('period', 'body'):
+                            continue  # Exact periods handled by plan; ambiguous non-month bodies are report-only.
+                        if name == 'market_history_restore_minute' and field in ('before_json', 'source_json', 'previous_json'):
+                            continue  # Minute-only receipts are never inferred to be monthly data.
+                        if name == 'market_history_response':
+                            if field == 'request_json' or field == 'response_json' and retired(json.loads(row['request_json']).get('interval')):
+                                continue  # Classified by exact archived request identity, not response shape.
+                        if name == 'market_engine_runtime' and field in ('quote_json', 'status_json'):
+                            value, _ = strip_live(value)  # Scan everything outside the precisely classified live children.
+                        marker = field in ('period', 'interval') and retired(value) or field in ('kline_type', 'klineType') and value == '10'
+                        if value.lstrip().startswith(('{', '[')):
+                            try:
+                                marker |= monthly_marker(json.loads(value))
+                            except ValueError:
+                                if name.startswith('market_'):
+                                    unknown.append(dict(table=name, column=field, tenant=row.get('tenant_id'), rowOrdinal=ordinal, reason='unparseable_market_json', sha256=sha(value.encode())))
+                        if marker:
+                            unknown.append(dict(table=name, column=field, tenant=row.get('tenant_id'), rowOrdinal=ordinal, reason='unclassified_monthly_kline_marker', sha256=sha(value.encode())))
+            finally:
+                raw_rows.close()
+            if scanned != total:
+                raise ValueError('Storage scan row count changed; stop all writers and preview again: ' + name)
+            inventory[name]['scannedRows'] = scanned
         return dict(tableInventory=inventory, unclassified=unknown)
 
 
