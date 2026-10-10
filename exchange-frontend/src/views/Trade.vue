@@ -75,7 +75,7 @@ const symbolCategories = computed(() => {
 watch(symbolCategories, categories => { if (!categories.includes(symbolCategory.value)) symbolCategory.value = '' })
 const filteredSymbols = computed(() => catalog.value.filter(s => s.isEnabled !== false && (!symbolCategory.value || pickerCategory(s) === symbolCategory.value) && `${s.symbol} ${displaySymbol(s)} ${s.baseCurrency} ${s.quoteCurrency} ${s.nameCn} ${s.nameEn}`.toLowerCase().includes(symbolSearch.value.trim().toLowerCase())))
 const chartVisible = computed(() => activeTab.value === 'term' || contractTab.value === 'entry' || showChart.value)
-const showRules = ref(false), showRisk = ref(false), showEstimates = ref(false), showConfirm = ref(false)
+const showRules = ref(false), showRisk = ref(false), showEstimates = ref(false), showConfirm = ref(false), showMarketClosed = ref(false)
 const side = ref<'BUY' | 'SELL'>('BUY'), busy = ref(false), message = ref(''), now = ref(Date.now())
 const { verified: tradeVerified, checking: kycChecking, promptOpen: kycPromptOpen, promptMessage: kycPromptMessage, ensure: ensureKyc, handleError: handleKycError } = useTradeKyc(
   () => { void router.push('/login') }, value => { message.value = value })
@@ -151,14 +151,28 @@ const openCount = ref(0), pendingCount = ref(0), revision = ref(0)
 function counts(open: number, pending: number) { openCount.value = open; pendingCount.value = pending }
 function afterOrderChange() { void refreshAccount(); void refreshOption() }
 let confirmationGeneration = 0
+function warnIfMarketClosed() {
+  if (quoteStatus.value !== 'closed') return false
+  message.value = locale.t('marketClosed'); showMarketClosed.value = true; return true
+}
 watch([fundingSource, () => wallet.state.eligible, () => auth.token], () => {
   confirmationGeneration++; showConfirm.value = false
   if (fundingSource.value !== 'TRIAL' && !wallet.state.eligible) message.value = text('体验金资格不可用，已使用现金账户；存量订单仍可退出。', 'Trial credit unavailable. Cash account selected; existing orders can still close.')
 }, { flush: 'sync' })
-async function openContract(next: 'BUY' | 'SELL') { const run=confirmationGeneration; if (!await ensureKyc() || run!==confirmationGeneration) return; side.value = next; message.value = ''; showConfirm.value = true }
-async function openTerm(next: 'UP' | 'DOWN') { const run=confirmationGeneration; if (!await ensureKyc() || run!==confirmationGeneration) return; direction.value = next; message.value = ''; showConfirm.value = true; void refreshOption() }
+async function openContract(next: 'BUY' | 'SELL') {
+  if (warnIfMarketClosed()) return
+  const run = confirmationGeneration
+  if (!await ensureKyc() || run !== confirmationGeneration || warnIfMarketClosed()) return
+  side.value = next; message.value = ''; showConfirm.value = true
+}
+async function openTerm(next: 'UP' | 'DOWN') {
+  if (warnIfMarketClosed()) return
+  const run = confirmationGeneration
+  if (!await ensureKyc() || run !== confirmationGeneration || warnIfMarketClosed()) return
+  direction.value = next; message.value = ''; showConfirm.value = true; void refreshOption()
+}
 async function submit() {
-  if (busy.value || kycChecking.value) return
+  if (busy.value || kycChecking.value || warnIfMarketClosed()) return
   const run = confirmationGeneration, funding = fundingSource.value, mode = accountMode()
   if (!await ensureKyc()) { if (kycPromptOpen.value) showConfirm.value = false; return }
   if (run !== confirmationGeneration || funding !== fundingSource.value || mode !== accountMode() || !showConfirm.value) return
@@ -220,6 +234,10 @@ onUnmounted(() => {
 })
 </script>
 <template>
+  <TradeSheet :open="showMarketClosed" :title="locale.t('marketClosed')" @close="showMarketClosed = false">
+    <p role="alert">{{ locale.t('marketClosed') }}</p>
+    <template #footer><button class="sheet-primary buy" @click="showMarketClosed = false">{{ text('確認', 'Confirm') }}</button></template>
+  </TradeSheet>
   <TradeSheet :open="kycPromptOpen" :title="locale.t('verification')" @close="kycPromptOpen = false">
     <p role="alert">{{ kycPromptMessage }}</p>
     <template #footer><div class="primary-actions">
@@ -231,6 +249,7 @@ onUnmounted(() => {
     <header class="product-header"><div class="segments"><button :class="{ active: activeTab === 'contract' }" @click="activeTab = 'contract'">{{ locale.t('contract') }}</button><button :class="{ active: activeTab === 'term' }" @click="activeTab = 'term'">{{ locale.t('term') }}</button></div><button class="help" :aria-label="text('交易規則', 'Trading rules')" @click="showRules = true">?</button></header>
     <section class="market-card">
       <div class="quote-header"><div><button class="symbol-select" @click="showSymbols = true">{{ displayName }}<span class="ui-chevron ui-chevron--down" aria-hidden="true"></span></button><p class="symbol-caption">{{ currentCategory === 'Forex' ? displayName : (locale.locale.startsWith('zh') ? symbolInfo?.nameCn : symbolInfo?.nameEn) }} <span>{{ locale.categoryLabel(currentCategory) }}</span></p></div><div class="quote-price" :class="change == null ? '' : change < 0 ? 'down' : 'up'"><strong>{{ price(currentPrice) }}</strong><div class="quote-details"><time class="quote-time">{{ quoteTime }}</time><span>{{ change == null ? '—' : `${change >= 0 ? '+' : ''}${change.toFixed(2)}%` }} <small>24h</small></span></div></div></div>
+      <p v-if="quoteReason" class="quote-state page-message" role="status">{{ quoteReason }}</p>
       <button v-if="!chartVisible" class="chart-collapse" @click="showChart = true">{{ text('展開行情圖表', 'Expand chart') }}<span class="ui-chevron ui-chevron--down" aria-hidden="true"></span></button>
       <template v-if="chartVisible"><div class="intervals"><button v-for="interval in intervals" :key="interval" :class="{ active: currentInterval === interval }" :aria-pressed="currentInterval === interval" @click="currentInterval = interval">{{ interval === '1w' ? text('1週', '1W') : interval === '1M' ? text('1月', '1MO') : text(interval, interval) }}</button></div><div class="mobile-chart"><KlineChart :symbol="currentSymbol" :category="currentCategory" :interval="currentInterval" :height="activeTab === 'contract' ? 240 : 300" compact :price-precision="precision" /></div></template>
     </section>
@@ -266,8 +285,8 @@ onUnmounted(() => {
     </section>
     <p v-if="message && !showConfirm" class="page-message" role="status">{{ message }}</p>
     <section class="action-dock">
-      <template v-if="activeTab === 'term'"><div class="dock-meta"><button @click="openTerm(direction)">{{ text('期限', 'Duration') }} <strong>{{ config?.label || '—' }}<span class="ui-chevron ui-chevron--down" aria-hidden="true"></span></strong></button><button @click="showRules = true">{{ text('交易規則', 'Rules') }}<span class="ui-chevron" aria-hidden="true"></span></button></div><div class="primary-actions"><button class="buy" :disabled="!canStartBusiness('option') || kycChecking || (tradeVerified && (!!quoteReason || !config))" @click="openTerm('UP')">{{ directionLabel('買漲 ↑', 'Buy up ↑') }}<span class="ui-inline-arrow" aria-hidden="true">↑</span></button><button class="sell" :disabled="!canStartBusiness('option') || kycChecking || (tradeVerified && (!!quoteReason || !config))" @click="openTerm('DOWN')">{{ directionLabel('買跌 ↓', 'Buy down ↓') }}<span class="ui-inline-arrow" aria-hidden="true">↓</span></button></div><p v-if="!quoteReason">{{ durationError || text('選擇方向後，確認金額與到期時間', 'Choose a direction, then confirm amount and expiry') }}</p></template>
-      <template v-else-if="contractTab === 'entry'"><div class="primary-actions"><button class="buy" :disabled="!canStartBusiness('contract') || kycChecking || (tradeVerified && !!contractReason)" @click="openContract('BUY')">{{ text('買入 / 做多', 'Buy / Long') }}</button><button class="sell" :disabled="!canStartBusiness('contract') || kycChecking || (tradeVerified && !!contractReason)" @click="openContract('SELL')">{{ text('賣出 / 做空', 'Sell / Short') }}</button></div><p v-if="!quoteReason && contractReason" role="status">{{ contractReason }}</p></template>
+      <template v-if="activeTab === 'term'"><div class="dock-meta"><button @click="openTerm(direction)">{{ text('期限', 'Duration') }} <strong>{{ config?.label || '—' }}<span class="ui-chevron ui-chevron--down" aria-hidden="true"></span></strong></button><button @click="showRules = true">{{ text('交易規則', 'Rules') }}<span class="ui-chevron" aria-hidden="true"></span></button></div><div class="primary-actions"><button class="buy" :disabled="!canStartBusiness('option') || kycChecking || (tradeVerified && quoteStatus !== 'closed' && (!!quoteReason || !config))" @click="openTerm('UP')">{{ directionLabel('買漲 ↑', 'Buy up ↑') }}<span class="ui-inline-arrow" aria-hidden="true">↑</span></button><button class="sell" :disabled="!canStartBusiness('option') || kycChecking || (tradeVerified && quoteStatus !== 'closed' && (!!quoteReason || !config))" @click="openTerm('DOWN')">{{ directionLabel('買跌 ↓', 'Buy down ↓') }}<span class="ui-inline-arrow" aria-hidden="true">↓</span></button></div><p v-if="!quoteReason">{{ durationError || text('選擇方向後，確認金額與到期時間', 'Choose a direction, then confirm amount and expiry') }}</p></template>
+      <template v-else-if="contractTab === 'entry'"><div class="primary-actions"><button class="buy" :disabled="!canStartBusiness('contract') || kycChecking || (tradeVerified && quoteStatus !== 'closed' && !!contractReason)" @click="openContract('BUY')">{{ text('買入 / 做多', 'Buy / Long') }}</button><button class="sell" :disabled="!canStartBusiness('contract') || kycChecking || (tradeVerified && quoteStatus !== 'closed' && !!contractReason)" @click="openContract('SELL')">{{ text('賣出 / 做空', 'Sell / Short') }}</button></div><p v-if="!quoteReason && contractReason" role="status">{{ contractReason }}</p></template>
       <button v-else class="return-order" @click="contractTab = 'entry'">{{ text('返回下單', 'Back to order') }}</button>
     </section>
     <Tabbar />
