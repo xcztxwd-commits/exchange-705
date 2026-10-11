@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
 for (const app of ['exchange-pc', 'exchange-frontend']) {
-  const { normalizeCandles, candleFromQuote, chartPeriod, contiguousCryptoCandles, historyRepairPolicy } = await import('../../' + app + '/src/utils/chartData.ts')
+  const { normalizeCandles, candleFromQuote, chartPeriod, contiguousCryptoCandles, historyGapMessage, historyRepairPolicy, isClosedChartMarket } = await import('../../' + app + '/src/utils/chartData.ts')
   const { convertIntervalToKlineType } = await import('../../' + app + '/src/utils/kline.ts')
   const { normalizeQuote } = await import('../../' + app + '/src/utils/marketWebSocket.ts')
   test(app + ': candles are validated, sorted, deduplicated, and strictly older than the cursor', () => {
@@ -73,6 +73,7 @@ for (const app of ['exchange-pc', 'exchange-frontend']) {
     })
     assert.equal(historyRepairPolicy({ historyRepair: { pending: true, gaps } }).terminal, false)
     assert.equal(historyRepairPolicy({ historyRepair: { pending: false, gaps: [] } }).terminal, false)
+    assert.equal(historyRepairPolicy({ historyRepair: { pending: false, gaps: [{ reason: 'existing_partial_or_invalid' }, { reason: 'source_period_anchor_unverified' }] } }).reason, 'source_period_anchor_unverified')
   })
   test(app + ': legacy freshness uses source time; invalid or delayed prices never become live', () => {
     const now = 1_800_000_000_000
@@ -84,5 +85,26 @@ for (const app of ['exchange-pc', 'exchange-frontend']) {
     assert.equal(normalizeQuote({ price: -1, timestamp: now, status: 'available' }, now), null)
     assert.equal(normalizeQuote({ price: 10 }, now), null)
     assert.equal(normalizeQuote({ price: 10, timestamp: now + 6000 }, now), null)
+  })
+  test(app + ': gap messages distinguish sample loss, ordinary protection, sealing and existing partial candles', () => {
+    assert.match(historyGapMessage('missing_control_samples')[0], /明細缺失/)
+    for (const reason of ['missing_control_samples', 'control_samples_unverified', 'protected_control_history'])
+      for (const message of historyGapMessage(reason)) assert.doesNotMatch(message, /控[盤盘]|control/i)
+    assert.match(historyGapMessage('control_samples_unverified')[0], /未驗證/)
+    assert.match(historyGapMessage('sealed_history')[0], /封存/)
+    assert.match(historyGapMessage('protected_control_history')[0], /歷史資料受保護/)
+    assert.doesNotMatch(historyGapMessage('protected_control_history')[0], /明細缺失|需原控盤樣本/)
+    assert.match(historyGapMessage('existing_partial_or_invalid')[0], /不完整或異常/)
+    assert.match(historyGapMessage('source_period_anchor_unverified')[0], /邊界.*未驗證/)
+    assert.match(historyGapMessage('missing_source')[1], /pending/)
+    assert.doesNotMatch(historyGapMessage('unknown_reason')[1], /pending/)
+  })
+  test(app + ': only explicit source closure pauses charts; stale prices, controls and simulation do not', () => {
+    assert.equal(isClosedChartMarket({ status: 'closed' }), true)
+    for (const status of ['available', 'stale', 'unavailable', '']) assert.equal(isClosedChartMarket({ status }), false)
+    assert.equal(isClosedChartMarket(undefined), false)
+    assert.equal(isClosedChartMarket({ status: 'closed', controlActive: true }), false)
+    assert.equal(isClosedChartMarket({ status: 'closed', simulated: true }), false)
+    for (const controlState of ['RUNNING', 'HOLDING', 'RECOVERING', 'WAITING_SOURCE']) assert.equal(isClosedChartMarket({ status: 'closed', controlState }), false)
   })
 }

@@ -166,13 +166,255 @@ class SourceHistoryGapRepairTest extends TenantMarketTestContext {
             verify(f.source, times(1)).getHistoryWindow(anyString(), anyString(), anyInt(), anyString(), anyLong(), anyLong());
         }
     }
-    private void task(Fixture f, long at) {
+    private static void task(Fixture f, long at) {
         f.store.locked(1, () -> {
             f.db.update("INSERT INTO market_control_task(tenant_id,id,symbol_id,symbol,algorithm_version,kind,status,start_price,target_price,duration_seconds,intensity,oscillation,price_precision,start_source,source_time,started_at,planned_end,ended_at,sampled_until) VALUES(1,'protected',1,'BTCUSDT',4,'TARGET','COMPLETED',100,110,10,1,false,2,'LIVE',?,?,?,?,?)", at, at, at + 10000, at + 10000, at + 10000);
             f.db.update("INSERT INTO market_control_flow(tenant_id,task_id,options_json,state,last_price,last_at,finished_at) VALUES(1,'protected','{}','SOURCE',110,?,?)", at + 10000, at + 10000);
             f.db.update("INSERT INTO market_control_publication(tenant_id,task_id,published_at,from_at,to_at) VALUES(1,'protected',?,?,?)", at + 11000, at, at + 10000);
             return null;
         });
+    }
+    private static Map<String,Object> controlledBars(Fixture f, long cursor) {
+        Map<String,Object> result = new TreeMap<>();
+        ControlledKlineMerger merger = new ControlledKlineMerger(f.store);
+        for (String period : KlineIntervals.PUBLIC) {
+            List<Map<String,Object>> bars = ControlHistoryStore.rows(merger.merge(1, period, 1000, cursor, response(List.of()), null, SourceHistoryGapRepair.continuous(f.config.getSourceCategory())));
+            List<Map<String,Object>> controlled = bars.stream().filter(row -> Boolean.TRUE.equals(row.get("controlled"))).collect(java.util.stream.Collectors.toList());
+            assertFalse(controlled.isEmpty(), period);
+            result.put(period, controlled);
+        }
+        return result;
+    }
+    @Test void forexQuoteSnapshotsNeverBecomeMinutesOrFalseHistoryGapsAndKeepControls() {
+        try (Fixture f = new Fixture()) { verifyForexQuoteSnapshots(f); }
+    }
+    static void verifyForexQuoteSnapshots(Fixture f) {
+        f.config.setSourceCategory("Forex"); f.config.setMarketSource("yahoo");
+        for (String period : KlineIntervals.PUBLIC) f.store.sourceCandles(1, period, List.of(bar(SourceHistoryGapRepair.start(period, M))), System.currentTimeMillis());
+        Map<String,Object> oldSnapshot = bar(M + 15000);
+        f.store.locked(1, () -> {
+            f.db.update("INSERT INTO market_source_candle(tenant_id,symbol_id,period,candle_at,body,received_at) VALUES(1,1,'1m',?,?,?)",
+                M + 15000, f.store.encode(oldSnapshot), M + 16000); return null;
+        });
+        SourceHistoryGapRepair.Window window = f.store.readConsumerSnapshot(() -> f.repair.inspect(f.config, "1m", 200,
+            M + 119999, "Yahoo", List.of(oldSnapshot, bar(M + 25000)), false));
+        assertTrue(window.gaps.isEmpty(), "quote-time snapshots are not missing/partial period candles");
+        task(f, M + 60000);
+        f.store.locked(1, () -> {
+            f.store.generatedPoints("protected", 1, List.of(new ControlHistoryStore.PricePoint(M + 60000, BigDecimal.valueOf(105))));
+            return null;
+        });
+        Map<String,Object> controls = controlledBars(f, M + 119999);
+        List<Map<String,Object>> prior = f.raw();
+        List<Map<String,Object>> facts = f.db.queryForList("SELECT * FROM market_control_sample ORDER BY generated_at");
+        Map<String,Object> changed = bar(M + 15000); changed.put("close_price", 93d);
+        f.store.sourceCandles(List.of(1L), "1m", List.of(changed, bar(M + 25000)), System.currentTimeMillis(), Map.of(1L, f.config));
+        assertEquals(prior, f.raw(), "old snapshots remain untouched; new quote snapshots are not inserted");
+        assertEquals(controls, controlledBars(f, M + 119999));
+        assertEquals(facts, f.db.queryForList("SELECT * FROM market_control_sample ORDER BY generated_at"));
+        Map<String,Object> refreshed = bar(M); refreshed.put("close_price", 94d); refreshed.put("volume", 999d);
+        f.store.sourceCandles(List.of(1L), "1m", List.of(refreshed, bar(M + 120000)), System.currentTimeMillis(), Map.of(1L, f.config));
+        assertEquals(controls, controlledBars(f, M + 179999), "legal neighboring minutes and refreshed old source must preserve all controlled periods");
+        for (Map<String,Object> old : prior) assertTrue(f.raw().contains(old), "existing source body and received_at stay exact");
+        Map<String,Object> saved = f.store.decode(f.db.queryForObject("SELECT body FROM market_source_candle WHERE tenant_id=1 AND symbol_id=1 AND period='1m' AND candle_at=?", String.class, M + 120000));
+        assertEquals(new TreeSet<>(List.of("5m", "15m", "30m", "1h", "1d", "1w")), new TreeSet<>((List<String>)saved.get(SourceHistoryGapRepair.AGGREGATE_EXCLUSIONS)));
+        long unrelated = M + 30 * 86400000L;
+        for (String period : List.of("1h", "1d", "1w")) {
+            long far = SourceHistoryGapRepair.start(period, unrelated);
+            f.store.locked(1, () -> {
+                assertTrue(f.repair.blocksNewSourcePeriod(f.config, period, M + 120000), "nearby coarse anchors stay protected");
+                assertFalse(f.repair.blocksNewSourcePeriod(f.config, period, far), "distant same-phase anchors remain allowed");
+                assertTrue(f.repair.blocksNewSourcePeriod(f.config, period, far + 30 * 60000L), "distant phase changes remain protected");
+                return null;
+            });
+        }
+        f.store.sourceCandles(List.of(1L), "1m", List.of(bar(unrelated)), unrelated + 60000, Map.of(1L, f.config));
+        assertEquals(1, f.db.queryForObject("SELECT COUNT(*) FROM market_source_candle WHERE tenant_id=1 AND symbol_id=1 AND period='1m' AND candle_at=?", Integer.class, unrelated), "unrelated future minutes still ingest");
+    }
+    @Test void forexNativeWeeksCrossUtcMondayAndOverlappingHourAnchorsKeepAllControls() {
+        long monday = SourceHistoryGapRepair.start("1w", M);
+        for (int scenario = 0; scenario < 2; scenario++) try (Fixture f = new Fixture()) {
+            f.config.setSourceCategory("Forex"); f.config.setMarketSource("yahoo");
+            long control = monday + (scenario == 0 ? 10 : 55) * 60000L;
+            long candidate = monday + (scenario == 0 ? -1 : 65) * 60000L;
+            for (String period : KlineIntervals.PUBLIC) {
+                long anchor = SourceHistoryGapRepair.start(period, control);
+                if (scenario == 0 && List.of("1d", "1w").contains(period)) anchor = monday - 3 * 3600000L;
+                if (scenario == 1 && "1h".equals(period)) anchor = monday + 30 * 60000L;
+                f.store.sourceCandles(1, period, List.of(bar(anchor)), System.currentTimeMillis());
+            }
+            f.store.sourceCandles(1, "1h", List.of(bar(scenario == 0 ? monday - 3600000L : monday + 3600000L)), System.currentTimeMillis());
+            task(f, control);
+            f.store.locked(1, () -> { f.store.generatedPoints("protected", 1, List.of(new ControlHistoryStore.PricePoint(control, BigDecimal.valueOf(105)))); return null; });
+            Map<String,Object> before = controlledBars(f, control + 2 * 3600000L);
+            List<Map<String,Object>> prior = f.raw();
+            f.store.sourceCandles(List.of(1L), "1m", List.of(bar(candidate)), System.currentTimeMillis(), Map.of(1L, f.config));
+            if (scenario == 0) {
+                Map<String,Object> saved = f.store.decode(f.db.queryForObject("SELECT body FROM market_source_candle WHERE tenant_id=1 AND symbol_id=1 AND period='1m' AND candle_at=?", String.class, candidate));
+                assertTrue(((List<?>)saved.get(SourceHistoryGapRepair.AGGREGATE_EXCLUSIONS)).contains("1w"));
+            } else assertEquals(0, f.db.queryForObject("SELECT COUNT(*) FROM market_source_candle WHERE tenant_id=1 AND symbol_id=1 AND period='1m' AND candle_at=?", Integer.class, candidate), "ambiguous hourly phase cannot certify a page-dependent fallback");
+            assertEquals(before, controlledBars(f, control + 2 * 3600000L));
+            for (Map<String,Object> row : prior) assertTrue(f.raw().contains(row));
+        }
+    }
+    @Test void forexMissingRelevantNativeAnchorRefusesOnlyRelatedMinutes() {
+        try (Fixture f = new Fixture()) {
+            f.config.setSourceCategory("Forex"); f.config.setMarketSource("yahoo");
+            for (String period : KlineIntervals.PUBLIC) if (!"1h".equals(period))
+                f.store.sourceCandles(1, period, List.of(bar(SourceHistoryGapRepair.start(period, M))), System.currentTimeMillis());
+            task(f, M + 60000);
+            List<Map<String,Object>> prior = f.raw();
+            long unrelated = M + 30 * 86400000L;
+            f.store.sourceCandles(List.of(1L), "1m", List.of(bar(M + 120000), bar(unrelated)), System.currentTimeMillis(), Map.of(1L, f.config));
+            assertEquals(0, f.db.queryForObject("SELECT COUNT(*) FROM market_source_candle WHERE tenant_id=1 AND symbol_id=1 AND period='1m' AND candle_at=?", Integer.class, M + 120000));
+            assertEquals(1, f.db.queryForObject("SELECT COUNT(*) FROM market_source_candle WHERE tenant_id=1 AND symbol_id=1 AND period='1m' AND candle_at=?", Integer.class, unrelated));
+            for (Map<String,Object> row : prior) assertTrue(f.raw().contains(row));
+        }
+    }
+    @Test void distantNewHourlyPhaseCannotMoveExistingControlFallback() {
+        try (Fixture f = new Fixture()) {
+            f.config.setSourceCategory("Forex"); f.config.setMarketSource("yahoo");
+            long hour = SourceHistoryGapRepair.start("1h", M), control = hour + 2 * 86400000L + 55 * 60000L;
+            f.store.sourceCandles(1, "1h", List.of(bar(hour)), System.currentTimeMillis());
+            task(f, control);
+            f.store.locked(1, () -> { f.store.generatedPoints("protected", 1, List.of(new ControlHistoryStore.PricePoint(control, BigDecimal.valueOf(105)))); return null; });
+            ControlledKlineMerger merger = new ControlledKlineMerger(f.store);
+            Map<String,Object> before = merger.merge(1, "1h", 100, control + 60000L, response(List.of()), null, false);
+            assertTrue(ControlHistoryStore.rows(before).stream().anyMatch(row -> Boolean.TRUE.equals(row.get("controlled"))));
+            List<Map<String,Object>> prior = f.raw();
+            long candidate = hour - 30 * 60000L;
+            f.store.sourceCandles(List.of(1L), "1h", List.of(bar(candidate)), System.currentTimeMillis(), Map.of(1L, f.config));
+            assertEquals(before, merger.merge(1, "1h", 100, control + 60000L, response(List.of()), null, false));
+            assertEquals(prior, f.raw());
+            assertEquals(0, f.db.queryForObject("SELECT COUNT(*) FROM market_source_candle WHERE tenant_id=1 AND symbol_id=1 AND period='1h' AND candle_at=?", Integer.class, candidate));
+            long samePhase = hour - 3600000L;
+            f.store.sourceCandles(List.of(1L), "1h", List.of(bar(samePhase)), System.currentTimeMillis(), Map.of(1L, f.config));
+            assertEquals(1, f.db.queryForObject("SELECT COUNT(*) FROM market_source_candle WHERE tenant_id=1 AND symbol_id=1 AND period='1h' AND candle_at=?", Integer.class, samePhase));
+            assertEquals(ControlHistoryStore.rows(before).stream().filter(row -> Boolean.TRUE.equals(row.get("controlled"))).collect(java.util.stream.Collectors.toList()),
+                ControlHistoryStore.rows(merger.merge(1, "1h", 100, control + 60000L, response(List.of()), null, false)).stream().filter(row -> Boolean.TRUE.equals(row.get("controlled"))).collect(java.util.stream.Collectors.toList()));
+        }
+    }
+    @Test void ordinaryNewNativeCoarseAnchorsCannotRelocateExistingControlHistory() {
+        try (Fixture f = new Fixture()) {
+            f.config.setSourceCategory("Forex"); f.config.setMarketSource("yahoo");
+            long hour = SourceHistoryGapRepair.start("1h", M), control = hour + 55 * 60000L;
+            for (String period : KlineIntervals.PUBLIC) f.store.sourceCandles(1, period,
+                List.of(bar("1h".equals(period) ? hour + 30 * 60000L : SourceHistoryGapRepair.start(period, control))), System.currentTimeMillis());
+            task(f, control);
+            f.store.locked(1, () -> { f.store.generatedPoints("protected", 1, List.of(new ControlHistoryStore.PricePoint(control, BigDecimal.valueOf(105)))); return null; });
+            Map<String,Object> before = controlledBars(f, control + 60000);
+            List<Map<String,Object>> prior = f.raw();
+            for (String period : List.of("1h", "1d", "1w")) {
+                long candidate = "1h".equals(period) ? hour + 45 * 60000L : SourceHistoryGapRepair.start(period, control) + 30 * 60000L;
+                f.store.sourceCandles(List.of(1L), period, List.of(bar(candidate)), System.currentTimeMillis(), Map.of(1L, f.config));
+                assertEquals(before, controlledBars(f, control + 60000));
+                assertEquals(prior, f.raw());
+            }
+            long unrelated = control + 30 * 86400000L;
+            for (String period : List.of("1h", "1d", "1w")) {
+                long candidate = SourceHistoryGapRepair.start(period, unrelated) + ("1h".equals(period) ? 30 * 60000L : 0);
+                f.store.sourceCandles(List.of(1L), period, List.of(bar(candidate)), System.currentTimeMillis(), Map.of(1L, f.config));
+                assertEquals(1, f.db.queryForObject("SELECT COUNT(*) FROM market_source_candle WHERE tenant_id=1 AND symbol_id=1 AND period=? AND candle_at=?", Integer.class, period, candidate));
+            }
+        }
+    }
+    @Test void sameWeek133MinuteGapFillsWithoutChangingControlsOrExistingPartialDuringOrdinaryRefresh() {
+        try (Fixture f = new Fixture()) { verifySameWeek133MinuteGap(f); }
+    }
+    static void verifySameWeek133MinuteGap(Fixture f) {
+        long first = M + 86400000L, cursor = first + 133 * 60000L - 1;
+        for (String period : KlineIntervals.PUBLIC) f.store.sourceCandles(1, period, List.of(bar(SourceHistoryGapRepair.start(period, M))), System.currentTimeMillis());
+        Map<String,Object> partial = bar(first - 60000); partial.put("partial", true);
+        f.store.sourceCandles(1, "1m", List.of(partial), first - 1000);
+        task(f, M + 60000);
+        f.store.locked(1, () -> {
+            List<ControlHistoryStore.PricePoint> points = new ArrayList<>();
+            for (int i = 0; i <= 10; i++) points.add(new ControlHistoryStore.PricePoint(M + 60000 + i * 1000L, BigDecimal.valueOf(105)));
+            f.store.generatedPoints("protected", 1, points); return null;
+        });
+        List<Map<String,Object>> partialBefore = f.db.queryForList("SELECT * FROM market_source_candle WHERE candle_at=? AND period='1m'", first - 60000);
+        Map<String,Object> before = controlledBars(f, cursor);
+        List<Map<String,Object>> complete = new ArrayList<>();
+        for (int i = 0; i < 133; i++) {
+            Map<String,Object> row = bar(first + i * 60000L); row.put("high_price", 900d); row.put("close_price", 800d); complete.add(row);
+        }
+        f.supply("1m", complete);
+        assertEquals(true, f.metadata(f.read("1m", 200, cursor)).get("pending"));
+        f.retryTick();
+        assertEquals(133, f.db.queryForObject("SELECT COUNT(*) FROM market_source_candle WHERE period='1m' AND candle_at>=? AND candle_at<=?", Integer.class, first, cursor));
+        assertEquals(before, controlledBars(f, cursor));
+        Map<String,Object> inserted = f.store.decode(f.db.queryForObject("SELECT body FROM market_source_candle WHERE period='1m' AND candle_at=?", String.class, first));
+        assertEquals(List.of("1w"), inserted.get("controlledAggregateExcludedPeriods"));
+        assertEquals(133, ControlHistoryStore.rows(f.read("1m", 200, cursor)).stream()
+            .filter(row -> ControlHistoryStore.time(row) >= first && ControlHistoryStore.time(row) <= cursor).count());
+        List<Map<String,Object>> refreshed = new ArrayList<>(complete); refreshed.add(bar(first - 60000));
+        when(f.source.getKline("BTCUSDT", "1m", 200, "Crypto")).thenReturn(response(refreshed));
+        f.market.getKline("BTCUSDT", "1m", 200, "Crypto"); f.retryTick();
+        assertEquals(before, controlledBars(f, cursor));
+        assertEquals(partialBefore, f.db.queryForList("SELECT * FROM market_source_candle WHERE candle_at=? AND period='1m'", first - 60000));
+        assertEquals(List.of("1w"), f.store.decode(f.db.queryForObject("SELECT body FROM market_source_candle WHERE period='1m' AND candle_at=?", String.class, first)).get("controlledAggregateExcludedPeriods"));
+        long openAt = cursor + 1;
+        Map<String,Object> open = bar(openAt); open.put("high_price", 1200d); open.put("partial", true);
+        ReflectionTestUtils.invokeMethod(f.store, "sourceCandles", List.of(1L), "1m", List.of(open), openAt + 1000, Map.of(1L, f.config));
+        assertEquals(before, controlledBars(f, cursor));
+        ReflectionTestUtils.invokeMethod(f.store, "sourceCandles", List.of(1L), "1m", List.of(bar(openAt)), openAt + 60001, Map.of(1L, f.config));
+        assertEquals(before, controlledBars(f, cursor));
+        // A later control in another period can still use the newly repaired source minutes.
+        f.store.locked(1, () -> { f.store.manualPoint(1, first + 61000, BigDecimal.valueOf(110)); return null; });
+        Map<String,Object> later = new ControlledKlineMerger(f.store).merge(1, "5m", 1000, cursor, response(List.of()), null);
+        Map<String,Object> newControl = ControlHistoryStore.rows(later).stream().filter(row -> ControlHistoryStore.time(row) == first).findFirst().orElseThrow();
+        assertEquals(5, newControl.get("minuteCount"));
+        Map<String,Object> changed = bar(first); changed.put("high_price", 1600d); changed.put("close_price", 1400d);
+        ReflectionTestUtils.invokeMethod(f.store, "sourceCandles", List.of(1L), "1m", List.of(changed), System.currentTimeMillis(), Map.of(1L, f.config));
+        Map<String,Object> retained = new ControlledKlineMerger(f.store).merge(1, "5m", 1000, cursor, response(List.of()), null);
+        assertEquals(newControl, ControlHistoryStore.rows(retained).stream().filter(row -> ControlHistoryStore.time(row) == first).findFirst().orElseThrow());
+        f.db.update("INSERT INTO trading_symbol(id,tenant_id) VALUES(2,1)");
+        TradingSymbol alias = new TradingSymbol(); alias.setId(2L); alias.setTenantId(1L); alias.setSymbol("BTCUSDT");
+        alias.setSourceCategory("Crypto"); alias.setMarketSource("binance");
+        Map<String,Object> aliased = bar(openAt + 60000); aliased.put("controlledAggregateExcludedPeriods", List.of("5m"));
+        ReflectionTestUtils.invokeMethod(f.store, "sourceCandles", List.of(2L, 1L), "1m", List.of(aliased), System.currentTimeMillis(), Map.of(1L, f.config, 2L, alias));
+        assertEquals(List.of("1w"), f.store.decode(f.db.queryForObject("SELECT body FROM market_source_candle WHERE symbol_id=1 AND period='1m' AND candle_at=?", String.class, openAt + 60000)).get("controlledAggregateExcludedPeriods"));
+        assertFalse(f.store.decode(f.db.queryForObject("SELECT body FROM market_source_candle WHERE symbol_id=2 AND period='1m' AND candle_at=?", String.class, openAt + 60000)).containsKey("controlledAggregateExcludedPeriods"));
+    }
+    @Test void nonUtcLegacyCoarseAnchorKeepsRepairBlockedInsteadOfChangingItsControlBucket() {
+        try (Fixture f = new Fixture()) {
+            task(f, M + 60000);
+            f.store.sourceCandles(1, "1h", List.of(bar(SourceHistoryGapRepair.start("1h", M) + 1800000)), System.currentTimeMillis());
+            SourceHistoryGapRepair.Window window = f.inspect("1m", 2, M - 1);
+            assertFalse(window.needsSource());
+            assertEquals("source_period_anchor_unverified", window.gaps.get(0).get("reason"));
+            assertEquals(2L, f.metadata(f.read("1m", 2, M - 1)).get("protected"));
+            assertEquals(0, f.repair.insert(window, response(List.of(bar(M - 120000), bar(M - 60000))), System.currentTimeMillis()).inserted);
+            ReflectionTestUtils.invokeMethod(f.store, "sourceCandles", List.of(1L), "1m", List.of(bar(M - 60000)), M - 59000, Map.of(1L, f.config));
+            assertEquals(0, f.db.queryForObject("SELECT COUNT(*) FROM market_source_candle WHERE period='1m'", Integer.class));
+        }
+    }
+    @Test void anExistingOpenMinuteCannotChangeAControlPublishedAfterItsFirstSourceSnapshot() {
+        try (Fixture f = new Fixture()) {
+            long openAt = M + 86400000L;
+            for (String period : KlineIntervals.PUBLIC) f.store.sourceCandles(1, period, List.of(bar(SourceHistoryGapRepair.start(period, M))), System.currentTimeMillis());
+            f.store.sourceCandles(1, "1m", List.of(bar(openAt)), openAt + 1000);
+            task(f, M + 60000);
+            f.store.locked(1, () -> { f.store.manualPoint(1, M + 61000, BigDecimal.valueOf(105)); return null; });
+            Map<String,Object> before = controlledBars(f, openAt + 59999);
+            Map<String,Object> changed = bar(openAt); changed.put("high_price", 1500d); changed.put("close_price", 1400d);
+            ReflectionTestUtils.invokeMethod(f.store, "sourceCandles", List.of(1L), "1m", List.of(changed), openAt + 2000, Map.of(1L, f.config));
+            assertEquals(before, controlledBars(f, openAt + 59999));
+        }
+    }
+    @Test void cryptoSourceMinutesArePrefetchedWithProjectionDisabledAndWithoutAnyChartRequest() {
+        try (Fixture f = new Fixture()) {
+            com.gtcfesk.exchange.repository.TradingSymbolRepository repository = mock(com.gtcfesk.exchange.repository.TradingSymbolRepository.class);
+            when(repository.findAllByTenantId(1L)).thenReturn(List.of(f.config));
+            ReflectionTestUtils.setField(f.market, "symbols", repository);
+            ReflectionTestUtils.setField(f.market, "redis", mock(RedisMarketService.class));
+            when(f.source.getKline("BTCUSDT", "1m", 500, "Crypto")).thenReturn(response(List.of(bar(M), bar(M + 60000))));
+            assertEquals(false, ReflectionTestUtils.getField(f.market, "sourceProjectionEnabled"));
+            f.market.refreshSymbols(); f.retryTick();
+            verify(f.source).getKline("BTCUSDT", "1m", 500, "Crypto");
+            assertEquals(2, f.raw().size());
+            f.retryTick(); verify(f.source, times(1)).getKline("BTCUSDT", "1m", 500, "Crypto");
+        }
     }
     @Test void controlSampleLossFrozenAndSealedFactsAreNeverReconstructed() {
         try (Fixture f = new Fixture()) {
@@ -182,9 +424,9 @@ class SourceHistoryGapRepairTest extends TenantMarketTestContext {
             for (String table : List.of("market_control_task", "market_control_flow", "market_control_publication", "market_control_sample", "market_legacy_minute_snapshot", "market_mixed_minute")) before.put(table, f.db.queryForList("SELECT * FROM " + table));
             SourceHistoryGapRepair.Window w = f.inspect("1m", 3, M + 179999);
             assertTrue(w.gaps.stream().anyMatch(g -> "missing_control_samples".equals(g.get("reason"))));
-            assertFalse(w.needsSource()); assertEquals(0, f.repair.insert(w, response(List.of(bar(M), bar(M + 60000), bar(M + 120000))), System.currentTimeMillis()).inserted);
+            assertTrue(w.needsSource()); assertEquals(1, f.repair.insert(w, response(List.of(bar(M), bar(M + 60000), bar(M + 120000))), System.currentTimeMillis()).inserted);
             for (String table : before.keySet()) assertEquals(before.get(table), f.db.queryForList("SELECT * FROM " + table));
-            assertTrue(f.raw().isEmpty());
+            assertEquals(1, f.raw().size());
         }
         try (Fixture f = new Fixture()) {
             long cutover = (System.currentTimeMillis() / 60000 + 3) * 60000;
@@ -204,8 +446,8 @@ class SourceHistoryGapRepairTest extends TenantMarketTestContext {
             ControlledKlineMerger merger = new ControlledKlineMerger(f.store);
             Map<String,Object> before = merger.merge(1, "5m", 2, M + 299999, external, null);
             SourceHistoryGapRepair.Window w = f.inspect("1m", 5, M + 299999);
-            assertFalse(w.needsSource());
-            assertEquals(0, f.repair.insert(w, response(List.of(bar(M), bar(M + 120000))), System.currentTimeMillis()).inserted);
+            assertTrue(w.needsSource());
+            assertEquals(2, f.repair.insert(w, response(List.of(bar(M), bar(M + 120000))), System.currentTimeMillis()).inserted);
             assertEquals(before, merger.merge(1, "5m", 2, M + 299999, external, null));
         }
     }
@@ -290,7 +532,8 @@ class SourceHistoryGapRepairTest extends TenantMarketTestContext {
                 return response(List.of(bar(M), bar(M + 60000)));
             });
             f.read("1m", 2, M + 119999); f.tick();
-            assertTrue(f.raw().isEmpty());
+            assertEquals(1, f.raw().size());
+            assertEquals(M + 60000, ((Number)f.raw().get(0).get("candle_at")).longValue());
             assertEquals("protected_mixed_minute", f.body(f.read("1m", 2, M + 119999)).get("missingData"));
             assertEquals(1, f.db.queryForObject("SELECT COUNT(*) FROM market_mixed_minute", Integer.class));
         }
@@ -390,7 +633,8 @@ class SourceHistoryGapRepairTest extends TenantMarketTestContext {
             task(f, M);
             f.db.update("INSERT INTO market_control_sample(tenant_id,task_id,generated_at,price) VALUES(1,'protected',?,110)", M);
             SourceHistoryGapRepair.Window window = f.inspect("1m", 2, M + 119999);
-            assertFalse(window.needsSource()); assertEquals("missing_control_samples", window.gaps.get(0).get("reason"));
+            assertTrue(window.needsSource()); assertEquals("missing_control_samples", window.gaps.get(0).get("reason"));
+            assertEquals(false, window.gaps.get(0).get("recoverable"));
         }
     }
     @Test void delistedLiveTickerDoesNotStarveAvailableHistoricalRepair() {

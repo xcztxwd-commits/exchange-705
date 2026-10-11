@@ -251,7 +251,7 @@ public class ForexQuoteMarketService {
                 updated.put(symbol.getSymbol(), symbol);
                 if (!"CryptoPerpetual".equals(sourceCategory(symbol))) updated.putIfAbsent(marketCode(symbol), symbol);
                 codes.computeIfAbsent(group(sourceCategory(symbol)), g -> new LinkedHashSet<>()).add(marketCode(symbol));
-                if (sourceProjectionEnabled && Boolean.TRUE.equals(symbol.getIsEnabled())
+                if ((sourceProjectionEnabled || SourceHistoryGapRepair.continuous(sourceCategory(symbol))) && Boolean.TRUE.equals(symbol.getIsEnabled())
                         && !RandomMarketPath.enabled(symbol) && !Boolean.TRUE.equals(symbol.getControlEnabled()))
                     sourceCodes.computeIfAbsent(group(sourceCategory(symbol)), g -> new LinkedHashSet<>()).add(marketCode(symbol));
                 QuoteCurrencyConversion conversion=QuoteCurrencyConversion.route(symbol.getQuoteCurrency(),symbol.getMarketSource());
@@ -371,9 +371,12 @@ public class ForexQuoteMarketService {
                 result.put("fetchedAt", System.currentTimeMillis());
                 result.put("status", "available");
                 List<Long> targets = new ArrayList<>();
+                Map<Long,TradingSymbol> configurations = new HashMap<>();
                 for (TradingSymbol config : new HashSet<>(state().registry.values()))
-                    if (marketCode(config).equals(request.code) && group(sourceCategory(config)) == group) targets.add(config.getId());
-                if (controlHistory != null) controlHistory.sourceCandles(targets, request.interval, ControlHistoryStore.rows(result), System.currentTimeMillis());
+                    if (marketCode(config).equals(request.code) && group(sourceCategory(config)) == group) {
+                        targets.add(config.getId()); configurations.put(config.getId(), config);
+                    }
+                if (controlHistory != null) controlHistory.sourceCandles(targets, request.interval, ControlHistoryStore.rows(result), System.currentTimeMillis(), configurations);
                 afterCommit(() -> { synchronized (group) { group.klines.put(request.key, result); } });
                 group.klineFailures = 0; group.klineError = null;
             } catch (Exception failure) {
@@ -402,7 +405,7 @@ public class ForexQuoteMarketService {
     }
     /** Writer-only fair prefetch; display requests never create SOURCE work. */
     private void enqueueSourceKline(Group group, long now) {
-        if (!sourceProjectionEnabled || controlHistory == null || now < group.nextSourceKline) return;
+        if (controlHistory == null || now < group.nextSourceKline) return;
         List<String> configured = group.sourceCodes;
         if (configured.isEmpty()) return;
         synchronized (group) {
@@ -978,7 +981,7 @@ public class ForexQuoteMarketService {
         repair.put("sourceMissing", gaps.stream().filter(g -> Boolean.TRUE.equals(g.get("sourceMissing"))).count());
         repair.put("recoverable", gaps.stream().filter(g -> Boolean.TRUE.equals(g.get("recoverable"))).count());
         repair.put("retryable", window.gaps.stream().filter(g -> Boolean.TRUE.equals(g.get("recoverable"))).count());
-        repair.put("protected", gaps.stream().filter(g -> String.valueOf(g.get("reason")).matches(".*(protected|sealed|frozen|simulation|projection|control_samples|calendar_unverified|protection_window_limit).*" )).count());
+        repair.put("protected", gaps.stream().filter(g -> String.valueOf(g.get("reason")).matches(".*(protected|sealed|frozen|simulation|projection|control_samples|calendar_unverified|anchor_unverified|protection_window_limit).*" )).count());
         repair.put("inserted", receipt == null ? 0 : receipt.inserted);
         repair.put("nextCursor", window.from);
         repair.put("retryAt", Math.max(group.nextAllowed, group.nextKlines));

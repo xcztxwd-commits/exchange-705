@@ -5183,8 +5183,8 @@
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/market/ControlHistoryStore.java": {
       "classification": "private_scoped",
-      "review_reason": "私有事实读写用requireTenantId；跨页捕获owner再require，所有join/反连接匹配tenant；sourceEvents/visibleSourceBranch内部tenant谓词已展开核。runtime→source当前锁、RR消费快照与fence保留；plan ThreadLocal键tenant:task并finally清除；source/sim周期PK冲突逐row拒绝。 独立当前边界复审 20261010；详见 docs/kline-known-fixes-review-20261010.md。",
-      "sha256": "2dd9fbb5aa72946c56c3e5b95ca15277d0f02b568643ce7039fae6f86aa886dd",
+      "review_reason": "私有事实读写用requireTenantId；跨页捕获owner再require，所有join/反连接匹配tenant；sourceEvents/visibleSourceBranch内部tenant谓词已展开核。runtime→source当前锁、RR消费快照与fence保留；plan ThreadLocal键tenant:task并finally清除；source/sim周期PK冲突逐row拒绝。 独立当前边界复审 20261010；详见 docs/kline-known-fixes-review-20261010.md。 2026-10-11 independent review: minute-aligned provider snapshots before limit/ingestion; server tenant/symbol writer fences and current-read protection; exact protected-minute boundaries plus aggregate contribution exclusions; native-anchor phase changes fail closed globally for existing history. Insert-only gap repair, existing controlled/source evidence retained, scheduled Crypto ingestion independent of projection flag. No new dependencies or schema changes.",
+      "sha256": "070fc015123719640c9b77fed9b1da49a6b936b2f76c234025650d4d65f97695",
       "surfaces": [
         {
           "kind": "identity_boundary",
@@ -5293,187 +5293,187 @@
         },
         {
           "kind": "identity_boundary",
-          "line": 288,
+          "line": 294,
           "statement_sha256": "c8166e385ddd58f30a4354080b4b87970e7e17589491a4e0c9d411864bee64cc"
         },
         {
           "kind": "native_sql",
-          "line": 298,
+          "line": 304,
           "statement_sha256": "55a26a1c41858a76c1bd98cdd6fea675e5262b25b827be6247013164426da88f"
         },
         {
           "kind": "native_sql",
-          "line": 314,
-          "statement_sha256": "4566c5d5d6d7dbd37b1b1652d63c18e7015c0539393ad24cac58bd1e809de6cc"
-        },
-        {
-          "kind": "native_sql",
-          "line": 316,
-          "statement_sha256": "fa65c84fe3dc1899f6c1b1528c1011ae66b4042c8017b84434d43e593ed29bb8"
-        },
-        {
-          "kind": "native_sql",
-          "line": 332,
-          "statement_sha256": "f7c999f67a0a562b083707f3dc95ef1cd554d3d487a94a947ac7fa38672dd78d"
-        },
-        {
-          "kind": "native_sql",
-          "line": 333,
-          "statement_sha256": "38dd7d34c60b3ca3bade9672659ecd44b44e24e3c4b339cfab797645192e3075"
-        },
-        {
-          "kind": "identity_boundary",
-          "line": 347,
-          "statement_sha256": "c8166e385ddd58f30a4354080b4b87970e7e17589491a4e0c9d411864bee64cc"
+          "line": 346,
+          "statement_sha256": "60cd0f293962c6f18271ed46b50a87f858fc7d5a75cf4b71f743c515738d8717"
         },
         {
           "kind": "native_sql",
           "line": 348,
+          "statement_sha256": "cd68c4b4f75be92387d1330f34926bca9c76de1c81ad238a02673489a097e244"
+        },
+        {
+          "kind": "native_sql",
+          "line": 364,
+          "statement_sha256": "f7c999f67a0a562b083707f3dc95ef1cd554d3d487a94a947ac7fa38672dd78d"
+        },
+        {
+          "kind": "native_sql",
+          "line": 365,
+          "statement_sha256": "38dd7d34c60b3ca3bade9672659ecd44b44e24e3c4b339cfab797645192e3075"
+        },
+        {
+          "kind": "identity_boundary",
+          "line": 379,
+          "statement_sha256": "c8166e385ddd58f30a4354080b4b87970e7e17589491a4e0c9d411864bee64cc"
+        },
+        {
+          "kind": "native_sql",
+          "line": 380,
           "statement_sha256": "60f95d528557e110632bf16637b43250321c044827b3f4466057afbe9cadd723"
         },
         {
           "kind": "identity_boundary",
-          "line": 370,
+          "line": 402,
           "statement_sha256": "c8166e385ddd58f30a4354080b4b87970e7e17589491a4e0c9d411864bee64cc"
         },
         {
           "kind": "native_sql",
-          "line": 371,
+          "line": 403,
           "statement_sha256": "955eed0619ad09e71131b35b98e75801180d116440498fc266a752389f80f9ec"
         },
         {
           "kind": "identity_boundary",
-          "line": 400,
+          "line": 432,
           "statement_sha256": "c8166e385ddd58f30a4354080b4b87970e7e17589491a4e0c9d411864bee64cc"
         },
         {
           "kind": "native_sql",
-          "line": 404,
+          "line": 436,
           "statement_sha256": "ed33071e17c03b118a2d0a0857a30a733062f5bcde51715b28d9ab497a910633"
         },
         {
           "kind": "native_sql",
-          "line": 420,
+          "line": 452,
           "statement_sha256": "4808bce7a34d8c179b5dddd80dcd390f3181bc4892ae1c17c51ce0561b0168d5"
         },
         {
           "kind": "native_sql",
-          "line": 421,
+          "line": 453,
           "statement_sha256": "a726bbca1408215dbfd4c99ff29aa592857e7fad4df641a99e8a9f8a83f7ff88"
         },
         {
           "kind": "native_sql",
-          "line": 438,
+          "line": 470,
           "statement_sha256": "72266a31be50f1ffbea9fbde89c7130c5b3d5022b0bc91183a3cc0a6b83fb388"
         },
         {
           "kind": "native_sql",
-          "line": 469,
+          "line": 501,
           "statement_sha256": "95b747de619fea8e32cd7f03813b8b2efd23458f97070c47e9133e286dd3bc78"
         },
         {
           "kind": "native_sql",
-          "line": 473,
+          "line": 505,
           "statement_sha256": "83cc05d2d7f2b7b32a7f1b3122e4afb2ac680db058308951393ffe17a41b74ad"
         },
         {
           "kind": "native_sql",
-          "line": 488,
+          "line": 520,
           "statement_sha256": "37f99b6e2b0be96a3567f8b86131fbf7ca4c86c618bceab2ec01fa1ea7adaef6"
         },
         {
           "kind": "native_sql",
-          "line": 514,
+          "line": 546,
           "statement_sha256": "ff1c557a22ac4103389b5d4885ad88a09c2628c70228485437c9a3849b7a18aa"
         },
         {
           "kind": "native_sql",
-          "line": 547,
+          "line": 579,
           "statement_sha256": "b01909a49d6377366e86e934d343bfdc063f30e2dac2b93729d00a1eecea32aa"
         },
         {
           "kind": "native_sql",
-          "line": 552,
+          "line": 584,
           "statement_sha256": "a634c52f070bfa088e9d50aba908b49c82a546aa821b9469e340d5eac81cdf3b"
         },
         {
           "kind": "native_sql",
-          "line": 553,
+          "line": 585,
           "statement_sha256": "b167a59c033b93677d6ff8dc6368ad0327655da7e2555fc7c598dcac954e2ed9"
         },
         {
           "kind": "native_sql",
-          "line": 598,
+          "line": 630,
           "statement_sha256": "457c743b5cf0121b2ba6409e5343c118f6545d25bccebaa83ac1387900eaf1bb"
         },
         {
           "kind": "native_sql",
-          "line": 603,
+          "line": 635,
           "statement_sha256": "1c5d6f6298c493ebcb294b6bbc0363465a3b0eabadb780a5f29c212f8d0dbe37"
         },
         {
           "kind": "native_sql",
-          "line": 623,
+          "line": 655,
           "statement_sha256": "7035f9b244f80f839ffd146f4f97f10a9cc08ea567549968aa07d0be2a7fc434"
         },
         {
           "kind": "native_sql",
-          "line": 636,
+          "line": 668,
           "statement_sha256": "aa2d9ece6e075db56066af28f330a36b3f665ce5f2837773f4263f75930aba49"
         },
         {
           "kind": "native_sql",
-          "line": 637,
+          "line": 669,
           "statement_sha256": "6988670c713897f44c4d05acf51cc12cb60b6d109e85c58d69ed39aad9595250"
         },
         {
           "kind": "native_sql",
-          "line": 644,
+          "line": 676,
           "statement_sha256": "00e163402a29d1ba567e233b4540685cde0b597437298866f2abe039a685a705"
         },
         {
           "kind": "native_sql",
-          "line": 648,
+          "line": 680,
           "statement_sha256": "674c608adf01756fab09a1cabb009eb0b183286fe89a4664a02d607420162885"
         },
         {
           "kind": "native_sql",
-          "line": 649,
+          "line": 681,
           "statement_sha256": "5b3846a3c512a40600dc729f22bee58283f83fa5d523091b08ad715caca36fa9"
         },
         {
           "kind": "native_sql",
-          "line": 655,
+          "line": 687,
           "statement_sha256": "a43449a297b3a55d793916c4b0db168e4a8a9d43ab948e859c26eaa4dbccc054"
         },
         {
           "kind": "native_sql",
-          "line": 656,
+          "line": 688,
           "statement_sha256": "eb071b63f283c51e27590116e7996df37655e89307ccb76be14e36c44ba7ce4a"
         },
         {
           "kind": "native_sql",
-          "line": 658,
+          "line": 690,
           "statement_sha256": "5304c1fe2fe971e1978f746a883b0ebee88fa6b09f412fe5c81dae360e608caf"
         },
         {
           "kind": "native_sql",
-          "line": 659,
+          "line": 691,
           "statement_sha256": "c7b98533414e7d51e22f943021a897962b8f04de09f23dcb57458403d24404e5"
         },
         {
           "kind": "native_sql",
-          "line": 661,
+          "line": 693,
           "statement_sha256": "a2488dd8fad462fe38f0f76e67bf12fc308c08e2586471f852a36c8b42b4d25b"
         },
         {
           "kind": "native_sql",
-          "line": 666,
+          "line": 698,
           "statement_sha256": "b35096d7693c01007f788dba97464d19a9ec3eca5b8f6524c7902c4651e83bdd"
         },
         {
           "kind": "native_sql",
-          "line": 673,
+          "line": 705,
           "statement_sha256": "e30cc51b0be75e630ffe06664170d08f36b0e5e460946c7ddc9aecc90b67e4cd"
         }
       ]
@@ -5608,7 +5608,7 @@
       ]
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/market/ControlledKlineMerger.java": {
-      "sha256": "5378290dc8d3f6b695a0d42a1734e42fa59bda778515789def460446e0898cc9",
+      "sha256": "4536514119bebbb80f77e9d6203753725d7f139815aef995880de9e92172be31",
       "surfaces": [
         {
           "kind": "cache_lock",
@@ -5642,12 +5642,12 @@
         },
         {
           "kind": "cache_lock",
-          "line": 257,
+          "line": 258,
           "statement_sha256": "323b50dc6bae005700b34a25ed6e3db99b57690a2e5d2591dc321eb8ff7353b2"
         }
       ],
       "classification": "private_scoped",
-      "review_reason": "受store.readSnapshot保护，原生源SQL含server tenant+symbol+period且分钟精确排月；归档读取另含tenant/request hash；模拟baseMinutes由当前session delegate提供。聚合Map仅本次调用，不创造跨租户缓存；只读不回写旧事实。 独立当前边界复审 20261010；详见 docs/kline-known-fixes-review-20261010.md。"
+      "review_reason": "受store.readSnapshot保护，原生源SQL含server tenant+symbol+period且分钟精确排月；归档读取另含tenant/request hash；模拟baseMinutes由当前session delegate提供。聚合Map仅本次调用，不创造跨租户缓存；只读不回写旧事实。 独立当前边界复审 20261010；详见 docs/kline-known-fixes-review-20261010.md。 2026-10-11 independent review: minute-aligned provider snapshots before limit/ingestion; server tenant/symbol writer fences and current-read protection; exact protected-minute boundaries plus aggregate contribution exclusions; native-anchor phase changes fail closed globally for existing history. Insert-only gap repair, existing controlled/source evidence retained, scheduled Crypto ingestion independent of projection flag. No new dependencies or schema changes."
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/market/ExchangeQuoteSource.java": {
       "sha256": "663c9e6ee11d12d90f09f44e0bbc24d0d1ad02b869667ba425b693c272787cce",
@@ -5716,8 +5716,8 @@
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/market/ForexQuoteMarketService.java": {
       "classification": "private_scoped",
-      "review_reason": "已完整阅读当前1868行边界。TenantState由服务器TenantContext索引；Group、registry、published、修复队列和simulation session缓存从该state派生；provider共享只含公开原始symbol，worker/fanout经TenantJobRunner重建tenant，持久source/simulation SQL含tenant+symbol+session，Redis键由既有tenantPrefix补入tenant。controlSymbol按tenant+id重新查询；模拟写入经controls.locked先获取runtime owner/generation/fence再按tenant+symbol+session检查period身份，随后source更新。acceptQuote的持久工作不持Java发布锁，afterCommit捕获所属state/group且拒绝旧sequence。主线applyMarketHours在durable committed分支已保留；读取复制quote后设置休市信息，不改已提交价格/版本。月线构造、缓存、batch、internal/historical入口拒绝；internalKline仍在只读RR内使用LiveKline并保留epoch和quoteVersion。 独立主线合并边界复审 20261010；详见 docs/kline-sync-minimal-rollout-20261010.md。",
-      "sha256": "b833c15f7a754789164c82c776823af92c7a9078d41048ac965296e2db84781d",
+      "review_reason": "已完整阅读当前1868行边界。TenantState由服务器TenantContext索引；Group、registry、published、修复队列和simulation session缓存从该state派生；provider共享只含公开原始symbol，worker/fanout经TenantJobRunner重建tenant，持久source/simulation SQL含tenant+symbol+session，Redis键由既有tenantPrefix补入tenant。controlSymbol按tenant+id重新查询；模拟写入经controls.locked先获取runtime owner/generation/fence再按tenant+symbol+session检查period身份，随后source更新。acceptQuote的持久工作不持Java发布锁，afterCommit捕获所属state/group且拒绝旧sequence。主线applyMarketHours在durable committed分支已保留；读取复制quote后设置休市信息，不改已提交价格/版本。月线构造、缓存、batch、internal/historical入口拒绝；internalKline仍在只读RR内使用LiveKline并保留epoch和quoteVersion。 独立主线合并边界复审 20261010；详见 docs/kline-sync-minimal-rollout-20261010.md。 2026-10-11 independent review: minute-aligned provider snapshots before limit/ingestion; server tenant/symbol writer fences and current-read protection; exact protected-minute boundaries plus aggregate contribution exclusions; native-anchor phase changes fail closed globally for existing history. Insert-only gap repair, existing controlled/source evidence retained, scheduled Crypto ingestion independent of projection flag. No new dependencies or schema changes.",
+      "sha256": "afe8104fc8304025c407a2c2024f893d3fe57ecd2d98798e3b4c3a13f75356c8",
       "surfaces": [
         {
           "kind": "identity_boundary",
@@ -5826,252 +5826,252 @@
         },
         {
           "kind": "identity_boundary",
-          "line": 587,
+          "line": 590,
           "statement_sha256": "7b830a9c505d0610b1f61c7ad9b061f9aea79a2629de9406c644978cad1ff246"
         },
         {
           "kind": "cache_lock",
-          "line": 642,
+          "line": 645,
           "statement_sha256": "6934e8d04502eb34587fde740fb75d6b12384cb97e1b9c597809d35786dfa094"
         },
         {
           "kind": "identity_boundary",
-          "line": 651,
+          "line": 654,
           "statement_sha256": "7b830a9c505d0610b1f61c7ad9b061f9aea79a2629de9406c644978cad1ff246"
         },
         {
           "kind": "identity_boundary",
-          "line": 674,
+          "line": 677,
           "statement_sha256": "7b830a9c505d0610b1f61c7ad9b061f9aea79a2629de9406c644978cad1ff246"
         },
         {
           "kind": "identity_boundary",
-          "line": 704,
+          "line": 707,
           "statement_sha256": "7b830a9c505d0610b1f61c7ad9b061f9aea79a2629de9406c644978cad1ff246"
         },
         {
           "kind": "cache_lock",
-          "line": 787,
+          "line": 790,
           "statement_sha256": "eaefa414060c55c4f36739209db856b8303af45a74e4a1747cc7e91062845a27"
         },
         {
           "kind": "cache_lock",
-          "line": 884,
+          "line": 887,
           "statement_sha256": "bf4f8ff4da58b1b024c48c9f9176901f015aee1c23d362c3efda0206d617cbd5"
         },
         {
           "kind": "cache_lock",
-          "line": 914,
+          "line": 917,
           "statement_sha256": "e22b2dd3dd1390fb0e2f9e5611d65ed527a75854fe7ca796af662898f706b630"
         },
         {
           "kind": "cache_lock",
-          "line": 945,
+          "line": 948,
           "statement_sha256": "837885c9504a5d694e95e79240f6315ae56bfa9ebe86b5f67d3e8d12e107529c"
         },
         {
           "kind": "cache_lock",
-          "line": 948,
+          "line": 951,
           "statement_sha256": "58f2bbb5c55b8bae62575ce50fdc55c7bc209da8f783f69b58ad27bbdbdb28f4"
         },
         {
           "kind": "identity_boundary",
-          "line": 949,
+          "line": 952,
           "statement_sha256": "9ad73af1929da5bbddeddb0cb076cebda5fe02e551137d0a7622d332b1c46456"
         },
         {
           "kind": "cache_lock",
-          "line": 1013,
+          "line": 1016,
           "statement_sha256": "f4eb104f853d8ccaf4916ed0d6112a12785461304931ca766d1645871516446b"
         },
         {
           "kind": "native_sql",
-          "line": 1056,
+          "line": 1059,
           "statement_sha256": "5f41a51197454c304c4a3ddde3a9a7c793c9e8035d6a17784d96f2c1dbd84698"
         },
         {
           "kind": "cache_lock",
-          "line": 1086,
+          "line": 1089,
           "statement_sha256": "2e33049cb8c5b63972030ea00bfdcade8e39bb5205ea514e254f363ea974f91c"
         },
         {
           "kind": "cache_lock",
-          "line": 1126,
+          "line": 1129,
           "statement_sha256": "929f48aa9c768c4ea38107501de83cfaecceb4773bd415a1f3a4915967d2e956"
         },
         {
           "kind": "cache_lock",
-          "line": 1134,
+          "line": 1137,
           "statement_sha256": "3af9143cc9b9639e485211d430eea2d274e8456e0e33a39a2eb0a0eadb158310"
         },
         {
           "kind": "native_sql",
-          "line": 1138,
+          "line": 1141,
           "statement_sha256": "653ae552b3e9927d1fb3eb806b8b71fbe5f940bda6c2c30960d730b4d88ae10a"
         },
         {
           "kind": "identity_boundary",
-          "line": 1139,
+          "line": 1142,
           "statement_sha256": "5a686c6c809c258319b352bc78ea8bbaf66c3dd9ed7b076bf7ddee638ef09b01"
         },
         {
           "kind": "native_sql",
-          "line": 1146,
+          "line": 1149,
           "statement_sha256": "1a60b0a374371381e90ca8e4e03c612298dfecb42a05d8b761a1667b502503d0"
         },
         {
           "kind": "identity_boundary",
-          "line": 1146,
+          "line": 1149,
           "statement_sha256": "1a60b0a374371381e90ca8e4e03c612298dfecb42a05d8b761a1667b502503d0"
         },
         {
           "kind": "native_sql",
-          "line": 1159,
+          "line": 1162,
           "statement_sha256": "c5d1a91c1f0a4e4667c4cb0300adff8e98126ef1741b5b739b861fa30361dd55"
         },
         {
           "kind": "identity_boundary",
-          "line": 1159,
+          "line": 1162,
           "statement_sha256": "c5d1a91c1f0a4e4667c4cb0300adff8e98126ef1741b5b739b861fa30361dd55"
         },
         {
           "kind": "cache_lock",
-          "line": 1182,
+          "line": 1185,
           "statement_sha256": "91e77e95ed8b70c5dcbfca71ee0e80e80325df03863864465bbb82a36430b8eb"
         },
         {
           "kind": "identity_boundary",
-          "line": 1249,
+          "line": 1252,
           "statement_sha256": "eaf4aa08a8249b33d00bc15ee90ffc4e9ffb5f67cb4f5612ed0c126a6e500c9a"
         },
         {
           "kind": "cache_lock",
-          "line": 1252,
+          "line": 1255,
           "statement_sha256": "6a4d7b5a921d2668c23391d41303b8ce15707ea9158cf5d13d456c37479dadf6"
         },
         {
           "kind": "cache_lock",
-          "line": 1265,
+          "line": 1268,
           "statement_sha256": "c056371516c89604c3b2abe3251ab9464265899445e033ef7219a25f688c4dff"
         },
         {
           "kind": "identity_boundary",
-          "line": 1282,
+          "line": 1285,
           "statement_sha256": "26fd761ba9e5d086fb93c643003c5cd438eef3a3e006b0c2084ceb15adfdaa26"
         },
         {
           "kind": "cache_lock",
-          "line": 1299,
+          "line": 1302,
           "statement_sha256": "3bad0e19fa114163726b96146a4232ad243315a5b5f8e4f19532736309bdc621"
         },
         {
           "kind": "cache_lock",
-          "line": 1453,
+          "line": 1456,
           "statement_sha256": "33403a71e1e7b110d43c708cebde4ad0f311c50ae17561a45609f795ef0d1645"
         },
         {
           "kind": "native_sql",
-          "line": 1484,
+          "line": 1487,
           "statement_sha256": "4c7d00727f52b785fa4e883a5794d6e6789a7cb0aeaa16055a45f8b7eea8c578"
         },
         {
           "kind": "native_sql",
-          "line": 1485,
+          "line": 1488,
           "statement_sha256": "1b0ecde2ba677af4e2173cd9d542a4835fda23d8c56613375aa64a38a7562838"
         },
         {
           "kind": "identity_boundary",
-          "line": 1485,
+          "line": 1488,
           "statement_sha256": "1b0ecde2ba677af4e2173cd9d542a4835fda23d8c56613375aa64a38a7562838"
         },
         {
           "kind": "identity_boundary",
-          "line": 1571,
+          "line": 1574,
           "statement_sha256": "a4ace85b5c18901eb36d42bd696064d96a61d1daf1464d366c790dae9f042cc4"
         },
         {
           "kind": "cache_lock",
-          "line": 1579,
+          "line": 1582,
           "statement_sha256": "0d69c2340e64bf6dbf03699cc893e868196489206aaec7ec2e03f02ce2f67746"
         },
         {
           "kind": "identity_boundary",
-          "line": 1580,
+          "line": 1583,
           "statement_sha256": "ea9ddc232f2a861b5346699f15805ec345bd540be0dface57f34d50129ae99cb"
         },
         {
           "kind": "native_sql",
-          "line": 1614,
+          "line": 1617,
           "statement_sha256": "2c598a90006d912d1285f5726877ff34a4c05f8599e30736b116b1434ec4227d"
         },
         {
           "kind": "identity_boundary",
-          "line": 1614,
+          "line": 1617,
           "statement_sha256": "2c598a90006d912d1285f5726877ff34a4c05f8599e30736b116b1434ec4227d"
         },
         {
           "kind": "cache_lock",
-          "line": 1655,
+          "line": 1658,
           "statement_sha256": "73c8335cabf3a04cdb9ca92a9657a8e8e794a756e8564a74bdee3b81a774da73"
         },
         {
           "kind": "cache_lock",
-          "line": 1682,
+          "line": 1685,
           "statement_sha256": "d2548b977a8d01907f0ecad8f291645ec8145fb1008ba1e2c7045b66f90b1d1a"
         },
         {
           "kind": "cache_lock",
-          "line": 1709,
+          "line": 1712,
           "statement_sha256": "2f7a3ea447c355e4469634618b902fbe2f4bc173e2cb2eb1e4df03974e3aeb01"
         },
         {
           "kind": "cache_lock",
-          "line": 1737,
+          "line": 1740,
           "statement_sha256": "7031cf219eac62728f1404cf0d269e01e9ad63f85747b26999616a4a6b3b4702"
         },
         {
           "kind": "cache_lock",
-          "line": 1738,
+          "line": 1741,
           "statement_sha256": "b9148386a415d83b9995bef214c49f88b4cbcba5c8b5d27371fe3f4db0eafe7d"
         },
         {
           "kind": "cache_lock",
-          "line": 1755,
+          "line": 1758,
           "statement_sha256": "db1a3e016bb5206fd769b4f68f3a5ce8e7c8b30b529805f2a8665912122d1937"
         },
         {
           "kind": "cache_lock",
-          "line": 1756,
+          "line": 1759,
           "statement_sha256": "607022532fd189a85e9c9c8637fd792a340df5665a5ae6b17b92a0edfff14c2f"
         },
         {
           "kind": "native_sql",
-          "line": 1803,
+          "line": 1806,
           "statement_sha256": "0dfdbc6a462e8e20ebdf57630bc5d5a231a401ec8d1a49b2cd3b263077c90337"
         },
         {
           "kind": "identity_boundary",
-          "line": 1804,
+          "line": 1807,
           "statement_sha256": "1a818f43f4a277e1a21741bd600d7b5ad22d2afd74e865042cf4c5f1045ab018"
         },
         {
           "kind": "native_sql",
-          "line": 1820,
+          "line": 1823,
           "statement_sha256": "181c271c54c48eff7174f65241ca27cd6c9a6ddceddfc715d6014f53deef1ec6"
         },
         {
           "kind": "native_sql",
-          "line": 1821,
+          "line": 1824,
           "statement_sha256": "71341ae5e688b149c17f452eb198039ffa1560792a4413bfff5a413b7d845f7e"
         },
         {
           "kind": "identity_boundary",
-          "line": 1821,
+          "line": 1824,
           "statement_sha256": "71341ae5e688b149c17f452eb198039ffa1560792a4413bfff5a413b7d845f7e"
         },
         {
           "kind": "identity_boundary",
-          "line": 1834,
+          "line": 1837,
           "statement_sha256": "1efb718f6ef2ed796c1973b8cf0964e630f3684876c591d8810a7a51c25caf6d"
         }
       ]
@@ -6216,36 +6216,36 @@
       "review_reason": "ROOT response/caller review: single or max512-symbol batch enters explicit consumer RR, shared physical committed view; existing invalid400 and response mapping unchanged. Quote authoritative tuple is decoded against the same selected runtime row. No writer claim/cache backfill/TTL refresh in display or bypass of tenant authentication."
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/market/MarketQuoteSource.java": {
-      "sha256": "2a22d8beea5a2ba8a280b7f2628dad78742948bcd81ad25772724c563061ba3e",
+      "sha256": "a817a7f1a80603a1b0a9f6a8f8933820f61bfb98a40cf4fa0558d7e69bd27da5",
       "surfaces": [
         {
           "kind": "cache_lock",
-          "line": 324,
+          "line": 325,
           "statement_sha256": "d26952ca4f4cfc24991c0849f11e8d15182114fd5ae70e110e9d16505d227028"
         },
         {
           "kind": "cache_lock",
-          "line": 384,
+          "line": 386,
           "statement_sha256": "48798870b8d43b190a88b1a2f0906af97b461f37caefad8cafcaa4291cd37948"
         },
         {
           "kind": "cache_lock",
-          "line": 466,
+          "line": 468,
           "statement_sha256": "bd98152670fc8af8c25acd2632dc10515e25c6e92ed536d43d4afa7bbb6e8660"
         },
         {
           "kind": "cache_lock",
-          "line": 499,
+          "line": 501,
           "statement_sha256": "b68bfbe7045f5206f4160db9aa0e189b2d7828bdf513b4ddd1836846e1949b90"
         },
         {
           "kind": "cache_lock",
-          "line": 511,
+          "line": 513,
           "statement_sha256": "00ca58b379ba8017431c4bc091ff5f20b60e73efa28397ab402b620474e59b4d"
         }
       ],
       "classification": "shared_public",
-      "review_reason": "只产生raw public provider事实，operator URL经MarketHttp，退休周期在供应商前拒绝。Alltick token从当前tenant的SystemConfigService读取且无全局token缓存；shared_public仅分类返回的源事实，不授予跨tenant配置/token访问，消费侧仍必须隔离。 独立当前边界复审 20261010；详见 docs/kline-known-fixes-review-20261010.md。"
+      "review_reason": "只产生raw public provider事实，operator URL经MarketHttp，退休周期在供应商前拒绝。Alltick token从当前tenant的SystemConfigService读取且无全局token缓存；shared_public仅分类返回的源事实，不授予跨tenant配置/token访问，消费侧仍必须隔离。 独立当前边界复审 20261010；详见 docs/kline-known-fixes-review-20261010.md。 2026-10-11 independent review: minute-aligned provider snapshots before limit/ingestion; server tenant/symbol writer fences and current-read protection; exact protected-minute boundaries plus aggregate contribution exclusions; native-anchor phase changes fail closed globally for existing history. Insert-only gap repair, existing controlled/source evidence retained, scheduled Crypto ingestion independent of projection flag. No new dependencies or schema changes."
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/market/MarketRedisController.java": {
       "sha256": "93f3f5756b43b8730a8a6a7a4210739b2fcf0383ac9aa63b31ddfb82fae354ea",
@@ -14765,8 +14765,8 @@
     },
     "exchange-backend/src/main/java/com/gtcfesk/exchange/market/SourceHistoryGapRepair.java": {
       "classification": "private_scoped",
-      "review_reason": "Window捕获tenant/symbol/configVersion/sourceIdentity并tenant化repair key；插入前要求同tenant、新writer事务，网络结束后重核route、全部保护区间及旧行当前读，SQL都含tenant/symbol；只插缺源，不改控制/归档/restore/sim旧行。动态table名仅内部固定两项。 独立当前边界复审 20261010；详见 docs/kline-known-fixes-review-20261010.md。",
-      "sha256": "3386633da6500d3bf5176f1c7ddd9cb1a46e4de6253a48adf215416241b4f059",
+      "review_reason": "Window捕获tenant/symbol/configVersion/sourceIdentity并tenant化repair key；插入前要求同tenant、新writer事务，网络结束后重核route、全部保护区间及旧行当前读，SQL都含tenant/symbol；只插缺源，不改控制/归档/restore/sim旧行。动态table名仅内部固定两项。 独立当前边界复审 20261010；详见 docs/kline-known-fixes-review-20261010.md。 2026-10-11 independent review: minute-aligned provider snapshots before limit/ingestion; server tenant/symbol writer fences and current-read protection; exact protected-minute boundaries plus aggregate contribution exclusions; native-anchor phase changes fail closed globally for existing history. Insert-only gap repair, existing controlled/source evidence retained, scheduled Crypto ingestion independent of projection flag. No new dependencies or schema changes.",
+      "sha256": "9d7a682452e50ca6e49746ccfa917e73381454f13b8554c3657f0244c8911fe4",
       "surfaces": [
         {
           "kind": "identity_boundary",
@@ -14796,102 +14796,197 @@
         {
           "kind": "native_sql",
           "line": 111,
-          "statement_sha256": "bf5591d5ae18bf925c36ec1817860d7470229a1f6124cbadc4b610521dd5f3b9"
+          "statement_sha256": "5fc7ba5c0877e8451fe2ef8f58dc4572b4cb212ec8dfef36b03554b05349cd6b"
         },
         {
           "kind": "native_sql",
-          "line": 169,
+          "line": 223,
           "statement_sha256": "0d2900a4dcc3ba8d8acdfcc08dad5a819b67d66a1dbba86450b3109f0aa95c1f"
         },
         {
           "kind": "native_sql",
-          "line": 171,
+          "line": 225,
           "statement_sha256": "0e343b5569317a32d84e435f186286f4bc859e288c502a5bc5a4754110193d8e"
         },
         {
           "kind": "native_sql",
-          "line": 183,
+          "line": 237,
           "statement_sha256": "319bb050976a50fe25d4c76f09cd04cd9c1bd56609ca4027b78f74e11a72648b"
         },
         {
           "kind": "native_sql",
-          "line": 192,
+          "line": 246,
           "statement_sha256": "9f354b102997b029b4ebd878c44addf19a30e77ae25b3aee73a6e2e5c0f90940"
         },
         {
           "kind": "native_sql",
-          "line": 196,
+          "line": 250,
           "statement_sha256": "57a716e5ac579b116cbd3d4cd1d6fe98db04b0e49c87c9f18a68fbb6dee0ca1d"
         },
         {
           "kind": "native_sql",
-          "line": 201,
+          "line": 255,
           "statement_sha256": "f6e39ca8757676a67bed54aa8c7a99dd2c24dde2f49294b51c70a777d9b3370c"
         },
         {
           "kind": "native_sql",
-          "line": 205,
+          "line": 259,
           "statement_sha256": "153672d4fe05cf2159624abc53d69376f0b981b722807d1e963654b4bb82dade"
         },
         {
           "kind": "native_sql",
-          "line": 208,
+          "line": 262,
           "statement_sha256": "e79e52c64fc819c2a012e91cdcbc9353952674bef6db2c233ef57983155e7ea2"
         },
         {
           "kind": "native_sql",
-          "line": 211,
+          "line": 265,
           "statement_sha256": "a0a62cf80356ba9187b15834376f7f2328954cf50db40fce0581be8961d2b527"
         },
         {
           "kind": "native_sql",
-          "line": 216,
+          "line": 270,
           "statement_sha256": "0442189dabb7b87d3d4bacd1a3078bdd30a598cf5202ed3052ae4a04e087b635"
         },
         {
           "kind": "native_sql",
-          "line": 217,
+          "line": 271,
           "statement_sha256": "4772ecd9e62ba2e177a6fbcf6b93d4e9d7be872dc77b8c38fd2113f7a8b53229"
         },
         {
           "kind": "native_sql",
-          "line": 218,
+          "line": 272,
           "statement_sha256": "cecd8d29730a301747eb0a04338ab137b62013ca9e83f83178793d523b3067b3"
         },
         {
           "kind": "native_sql",
-          "line": 219,
+          "line": 273,
           "statement_sha256": "d94c85fa24ae93f95448b5ce87e04892d3a8499fb8745c1bda13209a8f82e8ca"
         },
         {
           "kind": "native_sql",
-          "line": 220,
+          "line": 274,
           "statement_sha256": "b7cf32c76aafb4425b4167c60107fc4deb3b64fb80ada9e2175ee22bf3f4dc2c"
         },
         {
           "kind": "native_sql",
-          "line": 221,
+          "line": 275,
           "statement_sha256": "6eb13949a451080280bab57b9005f28b9f0639502908914501806c7fd0ece716"
         },
         {
+          "kind": "native_sql",
+          "line": 285,
+          "statement_sha256": "1e826dd8f7ce916366409178316274149d655e2fd832136330ff48ebe60c58d5"
+        },
+        {
+          "kind": "native_sql",
+          "line": 300,
+          "statement_sha256": "97242697e854a10ee9875c9a09e6d86e9acf215ea3b0c02c117a5230cb9f8018"
+        },
+        {
+          "kind": "native_sql",
+          "line": 329,
+          "statement_sha256": "c859474df0080def0a73ec1b5ebc4729a40367e219a1223071d2e79a690ebf43"
+        },
+        {
           "kind": "identity_boundary",
-          "line": 235,
+          "line": 330,
+          "statement_sha256": "a2cc7bb26dfafef7335f42d701b9f06703dcb12ed26a4bd3ec86b17af5e159f0"
+        },
+        {
+          "kind": "native_sql",
+          "line": 331,
+          "statement_sha256": "743eac9c6154a98b1c1c13bdff4efe98ec6dcd794914a25f6eee2be5999e7dfe"
+        },
+        {
+          "kind": "identity_boundary",
+          "line": 332,
+          "statement_sha256": "a2cc7bb26dfafef7335f42d701b9f06703dcb12ed26a4bd3ec86b17af5e159f0"
+        },
+        {
+          "kind": "native_sql",
+          "line": 333,
+          "statement_sha256": "aa83072b7f5eb13b5fe9a965cbc0f171a59e529f412052a1096ff71836f6685f"
+        },
+        {
+          "kind": "identity_boundary",
+          "line": 334,
+          "statement_sha256": "a2cc7bb26dfafef7335f42d701b9f06703dcb12ed26a4bd3ec86b17af5e159f0"
+        },
+        {
+          "kind": "native_sql",
+          "line": 337,
+          "statement_sha256": "5ec6a09349afe649d606a96cc04d7cc707fe0314bc6a390b54738a7e4533d5b9"
+        },
+        {
+          "kind": "identity_boundary",
+          "line": 338,
+          "statement_sha256": "ab0460929bcf2d1b56cafbd1d359071f3524d30831ceeb7916c167f72143b366"
+        },
+        {
+          "kind": "native_sql",
+          "line": 340,
+          "statement_sha256": "f6dfa7e3fd22ece996a05b409f7d8f66bdf1790a33540677ddddec2ac0d002ce"
+        },
+        {
+          "kind": "identity_boundary",
+          "line": 341,
+          "statement_sha256": "4187dd59f7974a98308428ee72018fdb1bae9058a6a4711f4d2ccb4ff62ca198"
+        },
+        {
+          "kind": "native_sql",
+          "line": 346,
+          "statement_sha256": "55c31b0348c11d502db86ab0ffaa805dd545bc4f264d78eb1af39902601d65fe"
+        },
+        {
+          "kind": "identity_boundary",
+          "line": 347,
+          "statement_sha256": "745e7c6c61f5c7558edd07f893cfd61816d5dcf5f8898b7abd647e6df0c4cc96"
+        },
+        {
+          "kind": "native_sql",
+          "line": 349,
+          "statement_sha256": "771c918ea0eaf5475bfa1dc12ad1edd6264f01193241e3f98bcef20ae17be0bf"
+        },
+        {
+          "kind": "identity_boundary",
+          "line": 350,
+          "statement_sha256": "745e7c6c61f5c7558edd07f893cfd61816d5dcf5f8898b7abd647e6df0c4cc96"
+        },
+        {
+          "kind": "native_sql",
+          "line": 352,
+          "statement_sha256": "41b61a30558e769c5f0584d8b9cfad7765ec4be405c00200c2f7173fa5cda8b8"
+        },
+        {
+          "kind": "identity_boundary",
+          "line": 354,
+          "statement_sha256": "554f2e674b5daab66bb1694a41e43cf7b52b93bc8e3a2fd5f8f38c9e39007a33"
+        },
+        {
+          "kind": "native_sql",
+          "line": 358,
+          "statement_sha256": "a5ca3faf1939e63e43ea8a6e5f7d5e4fda474b129f802982450446d44038d15a"
+        },
+        {
+          "kind": "identity_boundary",
+          "line": 362,
           "statement_sha256": "6a80a1afad1b317c72e6daf968312ce1694790085a4893733b83970ef34bb5b8"
         },
         {
           "kind": "native_sql",
-          "line": 265,
+          "line": 392,
           "statement_sha256": "a94fb2570d1dcefc0d338efd91acfbfa50148e91e2c2fd6272190ac212d64f86"
         },
         {
           "kind": "native_sql",
-          "line": 277,
+          "line": 404,
           "statement_sha256": "118c4c72f539d25095471cc75864deac09108699958a48046fd8b53ce6ca47c7"
         },
         {
           "kind": "native_sql",
-          "line": 290,
-          "statement_sha256": "2bec7154de19e7097f9632b27878aeafcb36479a35122c7e63aa40922ea7bf7b"
+          "line": 422,
+          "statement_sha256": "d771c7b6de599ff7e8815386490b64d7296164c1f0c2c5dfbf6b3616279f49b9"
         }
       ]
     },
