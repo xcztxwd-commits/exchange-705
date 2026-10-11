@@ -9,7 +9,7 @@ import { preferredTimeLocale } from '@/utils/displayTimezone'
 import { chartLocale } from '@/utils/chartLocale'
 import request from '@/utils/request'
 import { accountMode } from '@/utils/accountMode'
-import { candleFromQuote, chartPeriod, contiguousCryptoCandles, historyRepairPolicy, normalizeCandles } from '@/utils/chartData'
+import { candleFromQuote, chartPeriod, contiguousCryptoCandles, historyGapMessage, historyRepairPolicy, isClosedChartMarket, normalizeCandles } from '@/utils/chartData'
 import { registerTradingDrawingOverlays } from '@/utils/chartOverlays'
 import { indicatorCatalog, normalizePreferences, validParameters, validTimezone } from '@/utils/chartPreferences'
 import { isRetiredKlineInterval } from '@/utils/kline'
@@ -44,6 +44,7 @@ const error = ref(false)
 const empty = ref(false)
 const exhausted = ref(false)
 const syncError = ref(false)
+const marketClosed = computed(() => isClosedChartMarket(market.quoteStatusMap[props.symbol]))
 const saved = ref(true)
 const preferenceKey = 'exchange:chart-preferences:v1'
 let initialPreferences = normalizePreferences(null)
@@ -335,7 +336,7 @@ async function requestBars(before: number, signal: AbortSignal, limit: number): 
   const instrument = instruments.find(item => item.symbol === props.symbol)
   const category = instrument?.sourceCategory || instrument?.category || props.category || ''
   const url = '/market/kline/' + (history ? 'history/' : '') + encodeURIComponent(props.symbol)
-  const query = { interval: interval.value, limit, ...(history ? { endTime: before - 1 } : { category: props.category || 'Crypto' }) }
+  const query = { interval: interval.value, limit, ...(history ? { endTime: before - 1 } : { category: category || 'Crypto' }) }
   for (let attempt = 0; attempt < 8; attempt++) {
     let response: any
     try {
@@ -425,6 +426,7 @@ function scheduleGapCheck() {
 }
 
 function schedulePendingLatest(pending: boolean) {
+  if (marketClosed.value) pending = false
   clearTimeout(pendingLatestTimer)
   if (!pending) { pendingLatestAttempts = 0; return }
   if (++pendingLatestAttempts <= 8)
@@ -614,6 +616,7 @@ function applyLatestCandles(candles: KLineData[], authoritative = false, fillOnl
 }
 
 async function syncLatest() {
+  if (marketClosed.value) { syncError.value = false; schedulePendingLatest(false); return }
   if (!chart || !realtime || loading.value || syncing) return
   const version = revision, signal = controller.signal
   const connectionGeneration = marketWebSocket.connectionGeneration
@@ -648,7 +651,7 @@ async function syncLatest() {
     cacheBars()
     replayQuote()
   } catch {
-    if (!signal.aborted && version === revision) syncError.value = true
+    if (!signal.aborted && version === revision) syncError.value = !marketClosed.value
   } finally {
     if (version === revision) {
       syncing = false
@@ -753,6 +756,7 @@ function klineStreamHealthy() {
 }
 function replayQuote() {
   replayKline()
+  if (marketClosed.value) { syncError.value = false; return }
   // Persisted mixed candles are authoritative; never rebuild their OHLC from client ticks.
   if (market.quoteStatusMap[props.symbol]?.controlHistory) {
     if (klineStreamHealthy()) return
@@ -774,6 +778,10 @@ function replayQuote() {
     cacheBars()
   }
 }
+watch(marketClosed, (closed, previous) => {
+  if (closed) { syncError.value = false; schedulePendingLatest(false) }
+  else if (previous) { lastSyncAttempt = 0; void syncLatest() }
+})
 watch(() => market.quoteStatusMap[props.symbol]?.simulationSession, (value, previous) => {
   if (value === previous) return
   if (value && count.value) { lastSyncAttempt = 0; void syncLatest() }
@@ -822,7 +830,7 @@ onMounted(() => {
   chart.subscribeAction('onVisibleRangeChange', scheduleGapCheck)
   stopConnected = marketWebSocket.onConnected(() => { appliedKline = null; lastKlineAt = 0; void syncLatest() })
   syncTimer = setInterval(() => {
-    if (document.visibilityState === 'hidden' || klineStreamHealthy()) return
+    if (document.visibilityState === 'hidden' || marketClosed.value || klineStreamHealthy()) return
     if (Date.now() - lastSyncAttempt >= (market.quoteStatusMap[props.symbol]?.controlHistory ? 900 : 14_000)) void syncLatest()
   }, 1000)
   resizeObserver = new ResizeObserver(() => { chart?.resize(); applyTheme(); scheduleGapCheck() })
@@ -886,14 +894,10 @@ onUnmounted(() => {
         <div v-if="activeTool" class="drawing-hint">{{ activeTool === 'brush' ? text('按住拖動繪製 · Esc 取消', 'Drag to draw · Esc to cancel') : text('點擊圖表設定錨點 · Esc 取消', 'Click to place points · Esc to cancel') }}</div>
       </div>
     </div>
-    <div class="chart-footer" role="status" aria-live="polite">
+    <div class="chart-footer" :class="{ 'has-history-gap': !!historyGap || marketClosed }" role="status" aria-live="polite">
       <span v-if="showSourceConnectionWarning(market.quoteStatusMap[props.symbol])">{{ text('數據源連接失敗，正在重試', 'Data source connection failed; retrying') }}</span>
-      <span v-if="historyGap">{{ /protected|frozen|sealed|control_samples|simulation|projection/.test(historyGap)
-        ? text('受保護歷史缺口，需原控盤樣本；未替換行情', 'Protected history gap; original control samples required')
-        : historyGap === 'upstream_no_data' ? text('上游未提供此區間；可繼續查看更早歷史', 'No upstream data in this window; older history remains accessible')
-        : /conflict|invalid|calendar|unsupported/.test(historyGap) ? text('來源衝突、異常或日曆未驗證；未自動改寫', 'Conflicting, invalid or unverified history; not rewritten')
-        : historyGap === 'source_fetch_or_write_failed' ? text('歷史補採失敗；稍後可重試', 'History repair failed; retry later')
-        : text('原始行情缺口，正在非同步補採', 'Source gap; asynchronous repair pending') }}</span>
+      <span v-if="marketClosed" class="history-gap-message">{{ text('市場休市，顯示最後可用 K 線', 'Market closed; showing last available candles') }}</span>
+      <span v-if="historyGap" class="history-gap-message">{{ text(...historyGapMessage(historyGap)) }}</span>
       <button v-if="historyPaused" class="skip-pending-history" @click="continueOlderHistory">{{ text('補採仍未完成 · 查看更早歷史', 'Repair still pending · View older history') }}</button>
       <button v-if="historyCursor !== null && !historyWaiting" class="retry-history" @click="retryLoad">{{ text('繼續更早歷史', 'Continue to older history') }}</button>
       <span v-if="sourceMissing && !historyGap">{{ text('原始行情缺失，未补造数据', 'Original source data missing; no fabricated candles') }}</span>
@@ -903,7 +907,7 @@ onUnmounted(() => {
       <span v-else-if="historyLimited">{{ text('已到目前接口可回溯範圍', 'History limit reached for the current data source') }}</span>
       <span v-else-if="historyUnsupported">{{ text('歷史接口不支持，使用有限回溯', 'History endpoint unsupported; using limited fallback') }}</span>
       <span v-else-if="snapshotError">{{ text('快照失敗，請重新嘗試', 'Snapshot failed; please retry') }}</span>
-      <button v-else-if="syncError" class="retry-history" @click="syncLatest">{{ text('最新 K 線未完整同步 · 重試', 'Latest candles incomplete · Retry') }}</button>
+      <button v-else-if="syncError && !marketClosed" class="retry-history" @click="syncLatest">{{ text('最新 K 線未完整同步 · 重試', 'Latest candles incomplete · Retry') }}</button>
       <span v-else-if="!saved">{{ text('繪圖無法儲存至此瀏覽器', 'Drawing storage unavailable') }}</span>
       <span v-else>{{ exhausted ? text('已到最早可用行情', 'Earliest available candles') : text('向右拖動查看更早行情', 'Drag right for older candles') }}</span>
       <button class="footer-meta" :title="timezone" :aria-label="text('時區設定', 'Timezone settings')" @click="openPanel('timezone')">{{ count }} {{ text('根', 'bars') }} · {{ timezone }}</button>
@@ -1033,5 +1037,6 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 @media (max-width: 600px) { .toolbar-label { display: none; } .study-strip > span { display: none; } .chart-dialog { width: calc(100vw - 16px); max-height: calc(100dvh - 20px); border-radius: 10px; } .panel-header, .panel-footer { padding: 12px 14px; } .panel-content { padding: 12px 14px 16px; } .indicator-grid { grid-template-columns: 1fr; } .panel-header h2 { font-size: 17px; } }
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (max-width: 600px) { .chart-toolbar { gap: 2px; padding: 0 3px; } .chart-select { width: 87px; } .drawing-rail { width: 35px; padding-inline: 1px; } .chart-footer { padding: 0 5px; gap: 3px; } .footer-meta { max-width: 110px; overflow: hidden; text-overflow: ellipsis; } }
+@media (max-width: 600px) { .chart-footer.has-history-gap { flex-wrap: wrap; } .chart-footer.has-history-gap > .history-gap-message { flex-basis: 100%; white-space: normal; overflow: visible; text-overflow: clip; } }
 @media (prefers-reduced-motion: reduce) { .loading-dot { animation: none; } }
 </style>

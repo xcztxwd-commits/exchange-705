@@ -65,6 +65,26 @@ export function contiguousCryptoCandles(candles: KLineData[], before: number, in
 }
 
 export type HistoryRepairPolicy = { terminal: boolean; pending: boolean; reason: string; nextCursor: number }
+export function isClosedChartMarket(quote?: { status?: string; controlActive?: boolean; simulated?: boolean; controlState?: string }): boolean {
+  return quote?.status === 'closed' && !quote.controlActive && !quote.simulated
+    && !/^(RUNNING|HOLDING|RECOVERING|WAITING_SOURCE)$/.test(quote.controlState || '')
+}
+export function historyGapMessage(reason: string): [string, string] {
+  if (reason === 'missing_control_samples') return ['歷史明細缺失，無法自動重建', 'Historical detail data is missing; automatic reconstruction unavailable']
+  if (reason === 'control_samples_unverified') return ['歷史資料完整性未驗證，未自動補採', 'History completeness unverified; not repaired']
+  if (reason === 'sealed_history') return ['歷史已封存，未自動改寫', 'History is sealed; not rewritten']
+  if (/frozen|simulation/.test(reason)) return ['歷史快照或模擬行情受保護，未自動改寫', 'Frozen or simulated history is protected; not rewritten']
+  if (reason === 'projection_before_initial') return ['早於歷史投影起點，未自動補採', 'Before history projection boundary; not repaired']
+  if (/anchor|calendar/.test(reason)) return ['歷史週期邊界或交易日曆未驗證，未自動補採', 'History period boundaries or calendar unverified; not repaired']
+  if (/protected|protection_window_limit/.test(reason)) return ['此區間歷史資料受保護，未自動改寫', 'History in this range is protected; not rewritten']
+  if (reason === 'existing_partial_or_invalid') return ['已有 K 線不完整或異常，未自動覆蓋', 'Existing candles are incomplete or invalid; not overwritten']
+  if (reason === 'upstream_no_data') return ['上游未提供此區間；可繼續查看更早歷史', 'No upstream data in this window; older history remains accessible']
+  if (/conflict/.test(reason)) return ['歷史行情來源衝突，未自動改寫', 'History source conflict; not rewritten']
+  if (/unsupported/.test(reason)) return ['來源不支持此歷史週期，未自動補採', 'Source does not support this history period; not repaired']
+  if (reason === 'source_fetch_or_write_failed') return ['歷史補採失敗；稍後可重試', 'History repair failed; retry later']
+  if (reason === 'missing_source') return ['原始行情缺口，正在非同步補採', 'Source gap; asynchronous repair pending']
+  return ['歷史數據異常，未自動改寫', 'History data unavailable or invalid; not rewritten']
+}
 
 // Only explicit backend repair receipts may release a sparse window. Legacy responses retain the continuity guard.
 export function historyRepairPolicy(data: unknown): HistoryRepairPolicy | null {
@@ -77,7 +97,7 @@ export function historyRepairPolicy(data: unknown): HistoryRepairPolicy | null {
   if (reasons.some(reason => typeof reason !== 'string')) return null
   const nextCursor = Number(value.nextCursor)
   return { terminal: !value.pending && reasons.length > 0, pending: value.pending,
-    reason: String(reasons.find(reason => /protected|frozen|sealed|control_samples|simulation|projection/.test(String(reason))) || reasons[0] || ''),
+    reason: String(reasons.find(reason => /protected|frozen|sealed|control_samples|simulation|projection|anchor_unverified|calendar_unverified|protection_window_limit/.test(String(reason))) || reasons[0] || ''),
     nextCursor: Number.isFinite(nextCursor) && nextCursor >= 946684800000 ? nextCursor : 0 }
 }
 

@@ -112,7 +112,7 @@ public class ControlledKlineMerger {
             long stop = Math.min(entry.getValue() - 1, now);
             if (stop >= entry.getKey()) stops.put(entry.getKey(),stop);
         }
-        mergedMinuteWindows(symbol, stops, baseMinutes, page -> {
+        mergedMinuteWindows(symbol, interval, stops, baseMinutes, page -> {
             for (Map<String,Object> minute : page) {
                 long at = ControlHistoryStore.time(minute);
                 Map.Entry<Long,Long> bucket = affected.floorEntry(at);
@@ -163,7 +163,7 @@ public class ControlledKlineMerger {
         return buckets;
     }
     /** Batch sparse windows together without querying the unrequested gaps between them. */
-    private void mergedMinuteWindows(long symbol, Map<Long,Long> windows,
+    private void mergedMinuteWindows(long symbol, String interval, Map<Long,Long> windows,
             java.util.function.BiFunction<Long,Long,List<Map<String,Object>>> baseMinutes,
             java.util.function.Consumer<List<Map<String,Object>>> consume) {
         if (baseMinutes != null) {
@@ -194,7 +194,8 @@ public class ControlledKlineMerger {
                 TreeMap<Long,Map<String,Object>> minutes = new TreeMap<>();
                 for (Map<String,Object> row : store.db.query("SELECT body FROM market_source_candle WHERE tenant_id=? AND symbol_id=? AND period='1m' AND /*! BINARY */ TRIM(period)<>'1M' AND candle_at IN (" + placeholders + ") ORDER BY candle_at LIMIT 500",
                         (rs,n) -> store.decode(rs.getString(1)),candleArgs.toArray()))
-                    if (ControlHistoryStore.periodCandle(row,"1m")) minutes.put(ControlHistoryStore.time(row),row);
+                    if (ControlHistoryStore.periodCandle(row,"1m") && !(row.get(SourceHistoryGapRepair.AGGREGATE_EXCLUSIONS) instanceof List
+                            && ((List<?>)row.get(SourceHistoryGapRepair.AGGREGATE_EXCLUSIONS)).contains(interval))) minutes.put(ControlHistoryStore.time(row),row);
                 for (Map<String,Object> row : store.visibleMixedAt(symbol,keys)) minutes.put(ControlHistoryStore.time(row),row);
                 for(Map.Entry<Long,Map<String,Object>> row:store.historyOverrides(symbol,keys.get(0),keys.get(keys.size()-1)).entrySet())
                     if(row.getValue()!=null) minutes.put(row.getKey(),new LinkedHashMap<>(row.getValue()));

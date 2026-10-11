@@ -42,3 +42,35 @@ test('HTTP with an older version fills closed reconnect gaps while preserving ev
   apply([candle(minute-60000,1),candle(minute,1)],false,true)
   assert.equal(data.at(-1),current);assert.equal(current.close,105);assert.equal(data.at(-2).close,100)
 })
+
+for (const app of ['exchange-pc', 'exchange-frontend']) {
+  test(`${app}: a pending authoritative final candle still applies after the market closes`, () => {
+    const source = readFileSync(new URL(`../../${app}/src/components/KlineChart.vue`, import.meta.url), 'utf8')
+    const code = source.slice(source.indexOf('function replayKline()'), source.indexOf('watch(marketClosed'))
+    for (const version of [10, 9]) {
+      const old = { timestamp: minute - 60000, open: 80, high: 90, low: 75, close: 85, volume: 1 }
+      const partial = { ...row.bars[0], high: 106, low: 100 }
+      const data = [old, partial], applied = []
+      const update = { ...row, quoteVersion: version, generation: 1, receivedAt: at, quote }
+      const context = {
+        pendingKline: update, chart: { getDataList: () => data }, realtime: () => assert.fail('closed ticks must not synthesize candles'),
+        loading: { value: false }, marketClosed: { value: true }, syncError: { value: true }, count: { value: 2 },
+        market: { quoteStatusMap: { TEST: { ...quote, status: 'closed' } }, getPrice: () => quote.price,
+          getQuoteStatus: () => assert.fail('closed ticks must not be replayed') }, props: { symbol: 'TEST' },
+        marketWebSocket: { connectionGeneration: 1 }, matchingLiveKline, normalizeCandles: bars => bars,
+        interval: { value: '1m' }, candleFromQuote: () => assert.fail('existing final candle needs no gap sync'),
+        applyLatestCandles: (bars, authoritative) => { assert.equal(authoritative, true); applied.push(...bars); data[1] = bars[0] },
+        lastKlineSequence: 0, lastSyncAttempt: 0, cacheBars: () => {}, appliedKline: null, lastKlineAt: 0,
+        lastQuoteTime: 0, syncLatest: () => assert.fail('closed markets must not resume polling'),
+      }
+      const result = new Function(...Object.keys(context), ts.transpile(code, { target: ts.ScriptTarget.ES2022 })
+        + '; replayQuote(); return { pendingKline, lastKlineSequence }')(...Object.values(context))
+      assert.equal(result.pendingKline, null)
+      assert.equal(context.syncError.value, false)
+      assert.equal(data[0], old, 'older history must remain unchanged')
+      assert.deepEqual(applied, version === 10 ? row.bars : [])
+      assert.equal(result.lastKlineSequence, version === 10 ? 1 : 0)
+      assert.equal(data[1], version === 10 ? row.bars[0] : partial)
+    }
+  })
+}

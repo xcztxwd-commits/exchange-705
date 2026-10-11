@@ -42,6 +42,21 @@ class KlineGapBackfillMysqlTest extends TenantMarketTestContext {
         result.put("protectedBars", current); result.put("publishedBars", published);
         return result;
     }
+    @Test
+    @EnabledIfEnvironmentVariable(named="KLINE_GAP_FOREX_MYSQL_URL", matches="jdbc:mysql://127\\.0\\.0\\.1:[0-9]+/kline_gap_forex_.*")
+    void forexQuoteSnapshotsKeepNativeMinutesAndAllControlledPeriods() {
+        DriverManagerDataSource data = new DriverManagerDataSource(System.getenv("KLINE_GAP_FOREX_MYSQL_URL"), "root", System.getenv("KLINE_GAP_MYSQL_PASSWORD"));
+        try (Fixture f = new Fixture(data, false)) { verifyForexQuoteSnapshots(f); }
+    }
+    @Test
+    @EnabledIfEnvironmentVariable(named="KLINE_GAP_133_MYSQL_URL", matches="jdbc:mysql://127\\.0\\.0\\.1:[0-9]+/kline_gap_133_.*")
+    void physicalSameWeek133MinuteGapPreservesAllPeriodsAndRegularIngestion() {
+        DriverManagerDataSource ds = new DriverManagerDataSource(System.getenv("KLINE_GAP_133_MYSQL_URL"), "root", System.getenv("KLINE_GAP_MYSQL_PASSWORD"));
+        try (Fixture f = new Fixture(ds, false)) {
+            f.store.migrate();
+            SourceHistoryGapRepairTest.verifySameWeek133MinuteGap(f);
+        }
+    }
     @Test void physicalWriterTransactionsConcurrencyRacesAndProtectedAuthority() throws Exception {
         DriverManagerDataSource ds = new DriverManagerDataSource(System.getenv("KLINE_GAP_MYSQL_URL"), "root", System.getenv("KLINE_GAP_MYSQL_PASSWORD"));
         try (Fixture f = new Fixture(ds, false)) {
@@ -127,8 +142,8 @@ class KlineGapBackfillMysqlTest extends TenantMarketTestContext {
             assertEquals("RUNNING", f.db.queryForObject("SELECT status FROM market_control_task WHERE id=?", String.class, task.id));
             long previousMinute = task.startedAt / 60000 * 60000 - 60000;
             SourceHistoryGapRepair.Window protectedWindow = f.inspect("1m", 2, previousMinute + 59999);
-            assertFalse(protectedWindow.needsSource(), "same-week/month control protection reaches neighboring missing minutes");
-            assertEquals(0, f.repair.insert(protectedWindow, response(List.of(bar(previousMinute - 60000), bar(previousMinute))), System.currentTimeMillis()).inserted);
+            assertTrue(protectedWindow.needsSource(), "neighboring source minutes may be filled without rebuilding protected coarse bars");
+            assertEquals(2, f.repair.insert(protectedWindow, response(List.of(bar(previousMinute - 60000), bar(previousMinute))), System.currentTimeMillis()).inserted);
             assertEquals(facts, evidence(f)); assertEquals(candles, protectedBars(f, fixedNow));
             // New controls/mixed minutes committed while a provider request is in flight are rechecked.
             long protectedAt = M + 90 * 86400000L;
@@ -138,7 +153,8 @@ class KlineGapBackfillMysqlTest extends TenantMarketTestContext {
                 return response(List.of(bar(protectedAt), bar(protectedAt + 60000)));
             });
             f.read("1m", 2, protectedAt + 119999); f.retryTick();
-            assertEquals(0, f.db.queryForObject("SELECT COUNT(*) FROM market_source_candle WHERE candle_at IN (?,?)", Integer.class, protectedAt, protectedAt + 60000));
+            assertEquals(0, f.db.queryForObject("SELECT COUNT(*) FROM market_source_candle WHERE candle_at=?", Integer.class, protectedAt));
+            assertEquals(1, f.db.queryForObject("SELECT COUNT(*) FROM market_source_candle WHERE candle_at=?", Integer.class, protectedAt + 60000));
             assertEquals(false, f.body(f.read("1m", 2, protectedAt + 119999)).get("pending"));
             // Frozen simulation prefixes are blocked even before the session's start.
             SourceHistoryGapRepair.Window frozen = f.inspect("5m", 2, M + 1199999);

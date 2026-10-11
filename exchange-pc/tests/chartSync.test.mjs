@@ -10,11 +10,12 @@ for (const app of ['exchange-pc', 'exchange-frontend']) {
   const sync = source.slice(source.indexOf('function applyLatestCandles('), source.indexOf('\nfunction resetMarket()'))
   const code = ts.transpile(sync, { target: ts.ScriptTarget.ES2022 })
   const bar = (timestamp, close = 11) => ({ timestamp, open: 10, high: 12, low: 9, close, volume: 3 })
-  async function run(initial, pages, manual = true, history = false, changedDuringFetch = false) {
+  async function run(initial, pages, manual = true, history = false, changedDuringFetch = false, closed = false) {
     const data = initial.slice(), updates = [], requests = [], scrolls = []
     let offset = 0
     const context = {
       market: { quoteStatusMap: {TEST:{marketRevision:1}} }, props: { symbol: "TEST" },
+      marketClosed: { value: closed },
       chart: {
         getDataList: () => data,
         getVisibleRange: () => ({ from: 0, to: data.length }),
@@ -49,6 +50,13 @@ for (const app of ['exchange-pc', 'exchange-frontend']) {
     assert.equal(result.data[0], first)
     assert.equal(result.data[1], last)
     assert.deepEqual(result.scrolls, [])
+  })
+  test(`${app}: closed markets keep their last real candle without asking for a new period`, async () => {
+    const last = bar(2)
+    const result = await run([last], [], true, false, false, true)
+    assert.deepEqual(result.requests, [])
+    assert.equal(result.data[0], last)
+    assert.deepEqual(result.updates, [])
   })
   test(`${app}: update last, append new candles, preserve manual position even with latest visible`, async () => {
     const first = bar(1)

@@ -227,7 +227,8 @@ public class MarketQuoteSource {
                         Map<String,Object> row = new LinkedHashMap<>(); row.put("timestamp", parseLong(timestamps.get(i)));
                         row.put("open_price", parseDouble(open.get(i))); row.put("high_price", parseDouble(high.get(i)));
                         row.put("low_price", parseDouble(low.get(i))); row.put("close_price", parseDouble(close.get(i)));
-                        row.put("volume", parseDouble(volume.get(i))); rows.add(row);
+                        row.put("volume", parseDouble(volume.get(i)));
+                        if (ControlHistoryStore.periodCandle(row, interval)) rows.add(row);
                     }
                 }
             }
@@ -360,7 +361,8 @@ public class MarketQuoteSource {
                         out.put("close_price", parseDouble(closes.get(i)));
                         out.put("volume", parseDouble(volumes.get(i)));
                         out.put("turnover", 0.0);
-                        normalizedList.add(out);
+                        // Yahoo may append a quote-time snapshot. Never relabel it as a period candle.
+                        if (ControlHistoryStore.periodCandle(out, interval)) normalizedList.add(out);
                     }
                 }
             }
