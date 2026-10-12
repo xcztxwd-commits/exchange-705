@@ -52,6 +52,7 @@ for (const app of ['exchange-pc', 'exchange-frontend']) {
         else data.push(candle)
       },
       market: { klineDataMap: {}, quoteStatusMap: {}, symbols: options.symbols || [] }, replayQuote: () => {}, restoreDrawings: () => {}, emit: () => {},
+      marketClosed: { value: false },
       syncLatest: () => {},
     }
     const api = new Function(...Object.keys(context), `${code}; return {

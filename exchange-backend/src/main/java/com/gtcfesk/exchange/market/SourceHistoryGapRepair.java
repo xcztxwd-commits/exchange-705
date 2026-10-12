@@ -85,7 +85,7 @@ public class SourceHistoryGapRepair {
             }
         } else {
             Set<Long> observed = new TreeSet<>(stored.keySet());
-            for (Map<String,Object> row : cached) observed.add(ControlHistoryStore.time(row));
+            for (Map<String,Object> row : cached) if (ControlHistoryStore.periodCandle(row, window.period)) observed.add(ControlHistoryStore.time(row));
             for (Long at : observed) {
                 if (at < window.from || at > window.to || end(period, at) > now) continue;
                 Map<String,Object> old = stored.get(at);
@@ -108,8 +108,8 @@ public class SourceHistoryGapRepair {
     }
     private Map<Long,Map<String,Object>> existing(Window window) {
         Map<Long,Map<String,Object>> result = new TreeMap<>();
-        for (Map<String,Object> row : store.db.queryForList("SELECT candle_at,body,received_at FROM market_source_candle WHERE tenant_id=? AND symbol_id=? AND period=? AND /*! BINARY */ TRIM(period)<>'1M' AND candle_at>=? AND candle_at<=? ORDER BY candle_at DESC LIMIT 200" + currentRead(),
-                window.tenant, window.symbol, window.period, window.from, window.to)) result.put(((Number)row.get("candle_at")).longValue(), row);
+        for (Map<String,Object> row : store.db.queryForList("SELECT candle_at,body,received_at FROM market_source_candle WHERE tenant_id=? AND symbol_id=? AND period=? AND /*! BINARY */ TRIM(period)<>'1M' AND candle_at>=? AND candle_at<=? AND MOD(candle_at,?)=0 ORDER BY candle_at DESC LIMIT 200" + currentRead(),
+                window.tenant, window.symbol, window.period, window.from, window.to, ControlHistoryStore.periodAlignment(window.period))) result.put(((Number)row.get("candle_at")).longValue(), row);
         return result;
     }
     private String existingProblem(Window window, Map<String,Object> saved) {
@@ -139,8 +139,60 @@ public class SourceHistoryGapRepair {
         final long from, to; final String reason;
         ProtectedRange(long from, long to, String reason) { this.from = from; this.to = to; this.reason = reason; }
     }
-    private static final class Protection {
+    static final String AGGREGATE_EXCLUSIONS = "controlledAggregateExcludedPeriods";
+    static final class Protection {
         final List<ProtectedRange> ranges = new ArrayList<>();
+        final List<ProtectedRange> aggregates = new ArrayList<>();
+        final Map<String,List<ProtectedRange>> nativeBuckets = new HashMap<>();
+        boolean nativePeriods, ambiguousHourPhase;
+        boolean blocksSourceWrite(long at, boolean closed) {
+            if (nativePeriods && nativeAnchorUnknown(at)) return true;
+            for (ProtectedRange range : ranges) if (at <= range.to && at + 60000 > range.from
+                    && (closed || !Arrays.asList("protected_control_history", "missing_control_samples", "control_samples_unverified",
+                        "protected_control_hold", "protected_publication", "protected_mixed_minute").contains(range.reason))) return true;
+            return false;
+        }
+        private boolean nearby(String period, long at) {
+            long margin = RandomMarketPath.duration(period) + 3600000L;
+            for (ProtectedRange range : aggregates) if (at - margin <= range.to && at + margin >= range.from) return true;
+            return false;
+        }
+        private boolean nativeAnchorUnknown(long at) {
+            if (ambiguousHourPhase && nearby("1h", at)) return true;
+            for (String period : KlineIntervals.PUBLIC) if (RandomMarketPath.duration(period) >= 3600000L && nearby(period, at)) {
+                boolean covered = false;
+                for (ProtectedRange bucket : nativeBuckets.getOrDefault(period, Collections.emptyList()))
+                    if (at >= bucket.from && at <= bucket.to) { covered = true; break; }
+                if (!covered) return true;
+            }
+            return false;
+        }
+        List<String> excludedPeriods(long at) {
+            List<String> periods = new ArrayList<>();
+            if (nativePeriods) {
+                for (String period : KlineIntervals.PUBLIC) if (!"1m".equals(period)) {
+                    boolean excluded = false;
+                    List<ProtectedRange> buckets = RandomMarketPath.duration(period) < 3600000L
+                        ? Collections.singletonList(new ProtectedRange(start(period, at), end(period, start(period, at)) - 1, "native"))
+                        : nativeBuckets.getOrDefault(period, Collections.emptyList());
+                    for (ProtectedRange bucket : buckets) {
+                        if (at < bucket.from || at > bucket.to) continue;
+                        for (ProtectedRange range : aggregates) if (bucket.from <= range.to && bucket.to >= range.from) { excluded = true; break; }
+                        if (excluded) break;
+                    }
+                    if (excluded) periods.add(period);
+                }
+                return periods;
+            }
+            for (String period : KlineIntervals.PUBLIC) {
+                if ("1m".equals(period)) continue;
+                long first = start(period, at), last = end(period, first);
+                for (ProtectedRange range : aggregates) if (first <= range.to && last > range.from) {
+                    periods.add(period); break;
+                }
+            }
+            return periods;
+        }
         String reason(long from, long exclusiveEnd) {
             for (ProtectedRange range : ranges) if (from <= range.to && exclusiveEnd > range.from) return range.reason;
             return null;
@@ -155,17 +207,19 @@ public class SourceHistoryGapRepair {
     }
     private void protect(Protection result, Window window, long from, long to, String reason) {
         if ("1m".equals(window.period)) {
-            if (!window.continuous) { result.add(window.from, Long.MAX_VALUE, reason); return; }
-            // Source minutes feed all coarse controlled aggregates. Protect their entire enclosing buckets,
-            // including the complete Monday week, not just the second occupied by a control sample.
-            result.add(start("1w", from), end("1w", start("1w", to)) - 1, reason);
+            if (!window.continuous && !result.nativePeriods) { result.add(window.from, Long.MAX_VALUE, reason); return; }
+            // Keep actual control minutes immutable; new neighboring source minutes must not reaggregate old controls.
+            result.add(start("1m", from), end("1m", start("1m", to)) - 1, reason);
+            result.aggregates.add(new ProtectedRange(from, to, reason));
         } else result.add(from, to, reason);
     }
-    private Protection protection(Window window) {
-        Protection result = new Protection();
+    private Protection protection(Window window) { return protection(window, false); }
+    private Protection protection(Window window, boolean nativePeriods) {
+        Protection result = new Protection(); result.nativePeriods = nativePeriods;
         boolean minutes = "1m".equals(window.period);
-        long from = minutes ? start("1w", window.from) : window.from;
-        long to = minutes ? end("1w", start("1w", window.to)) - 1 : end(window.period, window.to) - 1;
+        long margin = 7 * 86400000L + 3600000L;
+        long from = nativePeriods ? Math.max(0, window.from - margin) : minutes ? start("1w", window.from) : window.from;
+        long to = nativePeriods ? window.to + margin : minutes ? end("1w", start("1w", window.to)) - 1 : end(window.period, window.to) - 1;
         List<Long> cutovers = store.db.queryForList("SELECT from_minute FROM market_history_ordering WHERE tenant_id=? AND symbol_id=?" + currentRead(), Long.class, window.tenant, window.symbol);
         for (Long cutover : cutovers) result.add(0, cutover - 1, "sealed_history");
         List<Map<String,Object>> tasks = store.db.queryForList("SELECT t.id,t.started_at,t.planned_end,t.ended_at,t.sampled_until,COALESCE(f.finished_at,CASE WHEN f.task_id IS NOT NULL THEN 9223372036854775807 ELSE COALESCE(t.ended_at,9223372036854775807) END) AS protected_to FROM market_control_task t LEFT JOIN market_control_flow f ON f.tenant_id=t.tenant_id AND f.task_id=t.id WHERE t.tenant_id=? AND t.symbol_id=? AND t.started_at<=? AND COALESCE(f.finished_at,CASE WHEN f.task_id IS NOT NULL THEN 9223372036854775807 ELSE COALESCE(t.ended_at,9223372036854775807) END)>=? ORDER BY t.started_at LIMIT 201" + currentRead(), window.tenant, window.symbol, to, from);
@@ -222,13 +276,86 @@ public class SourceHistoryGapRepair {
                 Long.class, window.tenant, window.symbol);
             if (!protectedInstruments.isEmpty()) result.add(window.from, Long.MAX_VALUE, "protected_source_period_anchor");
         }
+        if (minutes && window.continuous && !result.aggregates.isEmpty()) {
+            // Legacy readers prefer actual anchors even for Crypto. Never assume old native bars use UTC buckets.
+            StringJoiner nonUtc = new StringJoiner(" OR ", "(", ")");
+            for (String period : KlineIntervals.PUBLIC) if (!"1m".equals(period))
+                nonUtc.add("(period='" + period + "' AND MOD(candle_at-" + ("1w".equals(period) ? 4 * 86400000L : 0)
+                    + "," + RandomMarketPath.duration(period) + ")<>0)");
+            if (!store.db.queryForList("SELECT candle_at FROM market_source_candle WHERE tenant_id=? AND symbol_id=? AND "
+                    + nonUtc + " LIMIT 1" + currentRead(), Long.class, window.tenant, window.symbol).isEmpty())
+                result.add(start("1w", window.from), end("1w", start("1w", window.to)) - 1, "source_period_anchor_unverified");
+        }
         if ("Yahoo".equals(window.provider) && !MarketQuoteSource.nativeYahooHistoryPeriod(window.period))
             result.add(window.from, Long.MAX_VALUE, "unsupported_source_period");
         if ("Yahoo".equals(window.provider) && RandomMarketPath.duration(window.period) >= 86400000L
                 || window.projection && minutes && !window.continuous)
             result.add(window.from, Long.MAX_VALUE, "source_calendar_unverified"); // Do not widen the continuous SOURCE prefix across sessions.
         if (!Arrays.asList("Binance", "OKX", "Yahoo").contains(window.provider)) result.add(window.from, Long.MAX_VALUE, "unsupported_source");
+        if (nativePeriods && !result.aggregates.isEmpty()) for (String period : KlineIntervals.PUBLIC) {
+            if ("1m".equals(period)) continue;
+            long width = RandomMarketPath.duration(period);
+            List<ProtectedRange> buckets = new ArrayList<>();
+            if (width < 3600000L) continue; // Fixed intraday grids are calculated per candidate, never across sparse windows.
+            List<Long> anchors = store.db.queryForList("SELECT candle_at FROM market_source_candle WHERE tenant_id=? AND symbol_id=? AND period=? AND /*! BINARY */ TRIM(period)<>'1M' AND candle_at>=? AND candle_at<=? AND MOD(candle_at,60000)=0 ORDER BY candle_at LIMIT 1001" + currentRead(),
+                Long.class, window.tenant, window.symbol, period, Math.max(0, window.from - width - 3600000L), window.to + width + 3600000L);
+            if (width == 3600000L && !anchors.isEmpty()) for (Long anchor : anchors)
+                if (Math.floorMod(anchor, width) != Math.floorMod(anchors.get(0), width)) result.ambiguousHourPhase = true;
+            if (anchors.size() <= 1000) for (int i = 0; i < anchors.size(); i++) {
+                long at = anchors.get(i), boundary = at + width;
+                // Match the reader's native daily/weekly boundary, including a one-hour DST shift.
+                if (width >= 86400000L && i + 1 < anchors.size() && Math.abs(anchors.get(i + 1) - boundary) <= 3600000L) boundary = anchors.get(i + 1);
+                buckets.add(new ProtectedRange(at, boundary - 1, "native"));
+            }
+            result.nativeBuckets.put(period, buckets);
+        }
         return result;
+    }
+    /** Shared by ordinary provider ingestion, under the same symbol writer lock as gap repair. */
+    Protection sourceMinuteProtection(TradingSymbol config, long from, long to) {
+        String provider = "yahoo".equalsIgnoreCase(config.getMarketSource()) ? "Yahoo" : "okx".equalsIgnoreCase(config.getMarketSource()) ? "OKX" : "Binance";
+        Window window = new Window(config, "1m", 500, to, provider, from, to, false);
+        Protection result = protection(window, !window.continuous);
+        if (RandomMarketPath.enabled(config)) result.add(from, Long.MAX_VALUE, "simulation_history");
+        return result;
+    }
+    /** A new coarse source anchor may relocate old controls even when no minute is changed. */
+    boolean blocksNewSourcePeriod(TradingSymbol config, String period, long at) {
+        if (RandomMarketPath.enabled(config)) return true;
+        long margin = RandomMarketPath.duration(period) + 3600000L;
+        long first = Math.max(0, at - margin), last = at + margin;
+        List<Object> args = new ArrayList<>();
+        StringJoiner facts = new StringJoiner(" OR ");
+        facts.add("EXISTS(SELECT 1 FROM market_control_task t LEFT JOIN market_control_flow f ON f.tenant_id=t.tenant_id AND f.task_id=t.id WHERE t.tenant_id=? AND t.symbol_id=? AND t.started_at<=? AND COALESCE(f.finished_at,CASE WHEN f.task_id IS NOT NULL THEN 9223372036854775807 ELSE COALESCE(t.ended_at,9223372036854775807) END)>=? LIMIT 1" + currentRead() + ")");
+        Collections.addAll(args, TenantContext.requireTenantId(), config.getId(), last, first);
+        facts.add("EXISTS(SELECT 1 FROM market_control_hold h JOIN market_control_task t ON t.tenant_id=h.tenant_id AND t.id=h.task_id WHERE t.tenant_id=? AND t.symbol_id=? AND h.activated_at<=? AND COALESCE(h.released_at,9223372036854775807)>=? LIMIT 1" + currentRead() + ")");
+        Collections.addAll(args, TenantContext.requireTenantId(), config.getId(), last, first);
+        facts.add("EXISTS(SELECT 1 FROM market_control_publication p JOIN market_control_task t ON t.tenant_id=p.tenant_id AND t.id=p.task_id WHERE t.tenant_id=? AND t.symbol_id=? AND p.from_at<=? AND p.to_at>=? LIMIT 1" + currentRead() + ")");
+        Collections.addAll(args, TenantContext.requireTenantId(), config.getId(), last, first);
+        for (String table : Arrays.asList("market_mixed_minute", "market_legacy_minute_snapshot", "market_history_restore_minute", "market_simulation_source_candle")) {
+            String column = "market_simulation_source_candle".equals(table) ? "candle_at" : "minute_at";
+            facts.add("EXISTS(SELECT 1 FROM " + table + " WHERE tenant_id=? AND symbol_id=? AND " + column + ">=? AND " + column + "<=? LIMIT 1" + currentRead() + ")");
+            Collections.addAll(args, TenantContext.requireTenantId(), config.getId(), first, last);
+        }
+        facts.add("EXISTS(SELECT 1 FROM market_history_ordering WHERE tenant_id=? AND symbol_id=? AND from_minute>? LIMIT 1" + currentRead() + ")");
+        Collections.addAll(args, TenantContext.requireTenantId(), config.getId(), first);
+        // Page-dependent fallback inherits the first native anchor's phase, even across distant gaps.
+        if (RandomMarketPath.duration(period) >= 3600000L) {
+            StringJoiner global = new StringJoiner(" OR ");
+            List<Object> globalArgs = new ArrayList<>();
+            global.add("EXISTS(SELECT 1 FROM market_control_task WHERE tenant_id=? AND symbol_id=? LIMIT 1" + currentRead() + ")");
+            Collections.addAll(globalArgs, TenantContext.requireTenantId(), config.getId());
+            for (String table : Arrays.asList("market_mixed_minute", "market_legacy_minute_snapshot", "market_history_restore_minute", "market_simulation_source_candle", "market_history_ordering")) {
+                global.add("EXISTS(SELECT 1 FROM " + table + " WHERE tenant_id=? AND symbol_id=? LIMIT 1" + currentRead() + ")");
+                Collections.addAll(globalArgs, TenantContext.requireTenantId(), config.getId());
+            }
+            facts.add("(EXISTS(SELECT 1 FROM market_source_candle WHERE tenant_id=? AND symbol_id=? AND period=? AND /*! BINARY */ TRIM(period)<>'1M' AND MOD(candle_at,60000)=0 AND MOD(candle_at,?)<>? LIMIT 1" + currentRead() + ") AND (" + global + "))");
+            long width = RandomMarketPath.duration(period);
+            Collections.addAll(args, TenantContext.requireTenantId(), config.getId(), period, width, Math.floorMod(at, width));
+            args.addAll(globalArgs);
+        }
+        // Current-read facts share the writer's symbol fence; existing-anchor refresh stays unchanged.
+        return !store.db.queryForList("SELECT 1 FROM DUAL WHERE " + facts, Integer.class, args.toArray()).isEmpty();
     }
     /** Network has already finished. Recheck route, all protections and existence under real writer authority. */
     Receipt insert(Window window, Map<String,Object> response, long received) {
@@ -287,8 +414,13 @@ public class SourceHistoryGapRepair {
                     if (reason != null) gaps.add(gap(at, end(window.period, at) - 1, reason, false));
                     continue;
                 }
-                store.db.update("INSERT INTO market_source_candle(tenant_id,symbol_id,period,candle_at,body,received_at) VALUES(?,?,?,?,?,?)", window.tenant, window.symbol, window.period, at, row.getValue(), received);
-                inserted++; old.put(at, Collections.singletonMap("body", row.getValue()));
+                Map<String,Object> body = new LinkedHashMap<>(candidates.get(at));
+                body.remove(AGGREGATE_EXCLUSIONS);
+                List<String> exclusions = protection.excludedPeriods(at);
+                if ("1m".equals(window.period) && !exclusions.isEmpty()) body.put(AGGREGATE_EXCLUSIONS, exclusions);
+                String saved = store.encode(body);
+                store.db.update("INSERT INTO market_source_candle(tenant_id,symbol_id,period,candle_at,body,received_at) VALUES(?,?,?,?,?,?)", window.tenant, window.symbol, window.period, at, saved, received);
+                inserted++; old.put(at, Collections.singletonMap("body", saved));
                 dirtyFrom = Math.min(dirtyFrom, at); dirtyTo = Math.max(dirtyTo, end(window.period, at) - 60000);
             }
             if (dirtyFrom != Long.MAX_VALUE) store.runtime.sourceChanged(window.symbol, dirtyFrom, dirtyTo);

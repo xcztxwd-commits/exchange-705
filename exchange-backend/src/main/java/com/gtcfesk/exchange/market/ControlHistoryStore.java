@@ -275,12 +275,18 @@ public class ControlHistoryStore {
     }
     /** Encode once before acquiring any alias lock; every alias/chunk still commits together. */
     public void sourceCandles(List<Long> symbols, String period, List<Map<String, Object>> rows, long now) {
+        sourceCandles(symbols, period, rows, now, Collections.emptyMap());
+    }
+    void sourceCandles(List<Long> symbols, String period, List<Map<String, Object>> rows, long now,
+            Map<Long,com.gtcfesk.exchange.entity.TradingSymbol> configurations) {
         KlineIntervals.rejectRetired(period);
         long owner = tenant();
         List<Object[]> encoded = new ArrayList<>();
         for (Map<String,Object> row : rows) {
             long at = time(row);
+            if (!periodCandle(row, period)) continue; // Preserve period identity; do not round quote snapshots into OHLC.
             Map<String,Object> copy = new LinkedHashMap<>(row); copy.put("timestamp", at);
+            copy.remove(SourceHistoryGapRepair.AGGREGATE_EXCLUSIONS); // Provider payloads cannot define history protection.
             encoded.add(new Object[]{at, encode(copy)});
         }
         List<Long> ordered = new ArrayList<>(new TreeSet<>(symbols));
@@ -290,7 +296,7 @@ public class ControlHistoryStore {
                 long dirtyFrom=Long.MAX_VALUE,dirtyTo=Long.MIN_VALUE;
                 for (int offset = 0; offset < encoded.size(); offset += 500) {
                     int count = Math.min(500, encoded.size() - offset);
-                    Object[] arguments = new Object[count * 5];
+                    List<Object> arguments = new ArrayList<>();
                     Map<Long,Map<String,Object>> prior=new HashMap<>();
                     {
                         List<Object> lookup=new ArrayList<>(Arrays.asList(tenant(),symbol,period));
@@ -300,20 +306,46 @@ public class ControlHistoryStore {
                             prior.put(((Number)row.get("candle_at")).longValue(),row);
                         }
                     }
+                    com.gtcfesk.exchange.entity.TradingSymbol config = configurations.get(symbol);
+                    SourceHistoryGapRepair.Protection protection = null;
+                    if ("1m".equals(period) && config != null) {
+                        long first = Long.MAX_VALUE, last = Long.MIN_VALUE;
+                        for (int i = 0; i < count; i++) {
+                            long at = ((Number)encoded.get(offset + i)[0]).longValue();
+                            first = Math.min(first, at); last = Math.max(last, at);
+                        }
+                        protection = new SourceHistoryGapRepair(this).sourceMinuteProtection(config, first, last);
+                    }
                     for (int i = 0; i < count; i++) {
                         Object[] row = encoded.get(offset + i);
+                        long at = ((Number)row[0]).longValue(); Map<String,Object> old = prior.get(at);
+                        Map<String,Object> oldBody = old == null ? null : decode((String)old.get("body"));
+                        Object exclusions = oldBody == null ? null : oldBody.get(SourceHistoryGapRepair.AGGREGATE_EXCLUSIONS);
+                        String body = (String)row[1];
+                        if (!"1m".equals(period) && config != null && old == null
+                                && new SourceHistoryGapRepair(this).blocksNewSourcePeriod(config, period, at)) continue;
+                        if (protection != null) {
+                            if (protection.blocksSourceWrite(at, at + 60000 <= now)) continue;
+                            List<String> protectedPeriods = protection.excludedPeriods(at);
+                            List<?> excluded = exclusions instanceof List ? (List<?>)exclusions : Collections.emptyList();
+                            // Never remove or change a contribution already used by any controlled period, including later controls.
+                            if (old != null && !excluded.containsAll(protectedPeriods)) continue;
+                            // An open source minute can already affect an older controlled day/week.
+                            if (old == null) exclusions = protectedPeriods;
+                        }
+                        if (exclusions instanceof List && !((List<?>)exclusions).isEmpty()) {
+                            Map<String,Object> copy = decode(body); copy.put(SourceHistoryGapRepair.AGGREGATE_EXCLUSIONS, exclusions); body = encode(copy);
+                        }
                         if("1m".equals(period)) {
-                            long at=((Number)row[0]).longValue();Map<String,Object> old=prior.get(at);
-                            if(at>0 && at%60000==0 && (old==null || !Objects.equals(old.get("body"),row[1]) || ((Number)old.get("received_at")).longValue()!=now)) {
+                            if(at>0 && at%60000==0 && (old==null || !Objects.equals(old.get("body"),body) || ((Number)old.get("received_at")).longValue()!=now)) {
                                 dirtyFrom=Math.min(dirtyFrom,at);dirtyTo=Math.max(dirtyTo,at);
                             }
                         }
-                        arguments[i * 5] = symbol; arguments[i * 5 + 1] = period;
-                        arguments[i * 5 + 2] = row[0]; arguments[i * 5 + 3] = row[1]; arguments[i * 5 + 4] = now;
+                        Collections.addAll(arguments, symbol, period, row[0], body, now);
                     }
-                    db.update("INSERT INTO market_source_candle(tenant_id,symbol_id,period,candle_at,body,received_at) VALUES "
-                        + String.join(",", Collections.nCopies(count, "(" + tenant() + ",?,?,?,?,?)"))
-                        + " ON DUPLICATE KEY UPDATE body=VALUES(body),received_at=VALUES(received_at)", arguments);
+                    if (!arguments.isEmpty()) db.update("INSERT INTO market_source_candle(tenant_id,symbol_id,period,candle_at,body,received_at) VALUES "
+                        + String.join(",", Collections.nCopies(arguments.size() / 5, "(" + tenant() + ",?,?,?,?,?)"))
+                        + " ON DUPLICATE KEY UPDATE body=VALUES(body),received_at=VALUES(received_at)", arguments.toArray());
                 }
                 if(dirtyFrom!=Long.MAX_VALUE) runtime.sourceChanged(symbol,dirtyFrom,dirtyTo);
                 return null;
