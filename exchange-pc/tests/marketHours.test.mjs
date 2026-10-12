@@ -32,7 +32,9 @@ for (const app of ['exchange-pc', 'exchange-frontend']) {
     globalThis.document = Object.assign(new EventTarget(), { visibilityState: 'visible' })
     globalThis.location = { protocol: 'https:', host: 'test.local', hostname: 'test.local', origin: 'https://test.local' }
     const { normalizeQuote } = await import(`../../${app}/src/utils/marketWebSocket.ts`)
-    const now = Date.now(), expired = { price: 1.1, timestamp: now - 120000, fetchedAt: now - 120000, expiresAt: now - 60000, status: 'closed', available: false }
+    const { marketNow, syncMarketTime, resetMarketTime } = await import(`../../${app}/src/utils/marketClock.ts`)
+    const now = Date.now(), at = performance.now(); resetMarketTime(); syncMarketTime(now, at, at)
+    const expired = { price: 1.1, timestamp: now - 120000, fetchedAt: now - 120000, expiresAt: now - 60000, status: 'closed', available: false }
     assert.equal(normalizeQuote(expired, now).status, 'closed')
     assert.equal(normalizeQuote({ ...expired, status: 'stale' }, now).status, 'stale')
     assert.equal(normalizeQuote({ ...expired, status: 'unavailable' }, now).status, 'unavailable')
@@ -41,7 +43,7 @@ for (const app of ['exchange-pc', 'exchange-frontend']) {
     const record = source.slice(source.indexOf('  const recordQuoteStatus ='), source.indexOf('  const getConversionRate ='))
     const status = source.slice(source.indexOf('  const getQuoteStatus ='), source.indexOf('\n  // 各交易对的最新Tick数据'))
     const map = { value: {} }
-    const methods = new Function('quoteStatusMap', 'normalizeQuote', ts.transpile(`let activeQuoteEpoch;const retiredQuoteEpochs=new Set();${record}${status}`, { target: ts.ScriptTarget.ES2022 }) + '; return {recordQuoteStatus,getQuoteStatus}')(map, normalizeQuote)
+    const methods = new Function('quoteStatusMap', 'normalizeQuote', 'marketNow', ts.transpile(`let activeQuoteEpoch;const retiredQuoteEpochs=new Set();${record}${status}`, { target: ts.ScriptTarget.ES2022 }) + '; return {recordQuoteStatus,getQuoteStatus}')(map, normalizeQuote, marketNow)
     assert.equal(methods.recordQuoteStatus('EURUSD=X', { ...expired, quoteVersion: 1, epoch: 'test' }), true)
     assert.equal(methods.getQuoteStatus('EURUSD=X', now), 'closed')
     assert.equal(methods.recordQuoteStatus('NEW', { status: 'closed', quoteVersion: 1, epoch: 'test' }), false)

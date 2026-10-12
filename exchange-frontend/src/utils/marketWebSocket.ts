@@ -1,6 +1,7 @@
 import { isRetiredKlineInterval, requireKlineInterval } from './kline.ts'
 import { getAccountApiBase } from './accountMode.ts'
 import { candleFromQuote, normalizeCandles } from './chartData.ts'
+import { marketNow, syncMarketTime, syncMarketResponse, resetMarketTime } from './marketClock.ts'
 /**
  * 市场数据 WebSocket 客户端
  * 连接到后端 WebSocket 服务器，接收实时价格推送
@@ -74,10 +75,10 @@ export function showSourceConnectionWarning(quote?: { sourceConnectionFailed?: b
 }
 
 // Match the server's 60-second freshness window even for legacy payloads.
-export function normalizeQuote(quote: PriceUpdate[string], now = Date.now()) {
+export function normalizeQuote(quote: PriceUpdate[string], now = marketNow()) {
   const milliseconds = (value: unknown) => { const n = Number(value); return n < 10_000_000_000 ? n * 1000 : n }
   const timestamp = milliseconds(quote.timestamp)
-  if (!Number.isFinite(quote.price) || quote.price <= 0 || !Number.isFinite(timestamp) || timestamp <= 0 || timestamp > now + 5000) return null
+  if (!Number.isFinite(now) || !Number.isFinite(quote.price) || quote.price <= 0 || !Number.isFinite(timestamp) || timestamp <= 0 || timestamp > now + 5000) return null
   const fetchedAt = quote.fetchedAt == null ? timestamp : milliseconds(quote.fetchedAt)
   const expiresAt = quote.executionExpiresAt == null
     ? Math.min(timestamp + 60_000, fetchedAt + 60_000, quote.expiresAt == null ? Infinity : milliseconds(quote.expiresAt))
@@ -119,7 +120,7 @@ class MarketWebSocket {
   get isConnected(): boolean { return this.ws?.readyState === WebSocket.OPEN }
   get connectionGeneration(): number { return this.generation }
   get isHealthy(): boolean {
-    return this.isConnected && Date.now() - this.lastMessage < 45000 && this.symbols().every(symbol => this.received.has(symbol) && this.acknowledged.has(symbol))
+    return this.isConnected && Number.isFinite(marketNow()) && performance.now() - this.lastMessage < 45000 && this.symbols().every(symbol => this.received.has(symbol) && this.acknowledged.has(symbol))
   }
   private recover = () => {
     if (this.stopped || !this.symbols().length || document.visibilityState === 'hidden') return
@@ -154,7 +155,7 @@ class MarketWebSocket {
           clearTimeout(timeout)
           if (this.ws !== socket || this.stopped) { socket.close(); return }
           this.generation++; this.snapshotRequest?.abort(); this.snapshotRequest = null
-          this.received.clear(); this.acknowledged.clear(); this.lastMessage = Date.now(); this.reconnectAttempts = 0
+          this.received.clear(); this.acknowledged.clear(); this.lastMessage = performance.now(); this.reconnectAttempts = 0
           this.send({ action: 'subscribe', symbols: this.symbols(), fastSymbols: [...(this.owners.get('active') || [])] })
           this.klineCallbacks.forEach(({ symbol, interval }) => this.send({ action: 'subscribeKline', symbol, interval }))
           this.startHeartbeat()
@@ -165,8 +166,9 @@ class MarketWebSocket {
         socket.onmessage = event => {
           if (this.ws !== socket) return
           try {
-            const message = JSON.parse(event.data); this.lastMessage = Date.now()
+            const message = JSON.parse(event.data); this.lastMessage = performance.now()
             if (message.type === 'price' && message.data) {
+              syncMarketTime(message.serverTime)
               Object.keys(message.data).forEach(symbol => this.acknowledged.add(symbol))
               this.deliverKlines(message.klines, this.deliver(message.data))
             }
@@ -265,7 +267,7 @@ class MarketWebSocket {
   async syncSnapshot() {
     const symbols = this.symbols()
     if (this.stopped || !symbols.length || this.snapshotRequest) return
-    const request = new AbortController(), generation = this.generation
+    const request = new AbortController(), generation = this.generation, started = performance.now()
     this.snapshotRequest = request
     const timeout = setTimeout(() => request.abort(), 5000)
     try {
@@ -273,7 +275,10 @@ class MarketWebSocket {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ symbols }), signal: request.signal,
       })
       const result = await response.json()
-      if (response.ok && result.ret === 200 && result.data && generation === this.generation && !request.signal.aborted) this.deliver(result.data)
+      if (response.ok && result.ret === 200 && result.data && generation === this.generation && !request.signal.aborted) {
+        syncMarketResponse(response, started, result)
+        this.deliver(result.data)
+      }
     } catch { /* One bounded fallback retries on the next interval. */ }
     finally { clearTimeout(timeout); if (this.snapshotRequest === request) this.snapshotRequest = null }
   }
@@ -291,6 +296,7 @@ class MarketWebSocket {
   }
   disconnect() {
     this.stopped = true; this.generation++; this.pending = null
+    resetMarketTime()
     this.stopHeartbeat(); this.snapshotRequest?.abort(); this.snapshotRequest = null
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer)
     if (this.fallbackTimer) clearInterval(this.fallbackTimer)

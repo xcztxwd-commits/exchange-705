@@ -13,7 +13,7 @@ for (const app of ['exchange-pc', 'exchange-frontend']) {
       send(message) { this.sent.push(JSON.parse(message)) }
       close() { this.readyState = 3; this.onclose?.() }
       open() { this.readyState = 1; this.onopen?.() }
-      price(data, klines = []) { this.onmessage?.({ data: JSON.stringify({ type: 'price', data, klines }) }) }
+      price(data, klines = []) { this.onmessage?.({ data: JSON.stringify({ type: 'price', serverTime: Date.now(), data, klines }) }) }
     }
     globalThis.window = new EventTarget()
     globalThis.document = Object.assign(new EventTarget(), { visibilityState: 'visible' })
@@ -21,7 +21,7 @@ for (const app of ['exchange-pc', 'exchange-frontend']) {
     globalThis.WebSocket = Socket
     globalThis.fetch = async (url, options) => {
       requests.push({ url, symbols: JSON.parse(options.body).symbols })
-      return { ok: true, json: async () => ({ ret: 200, data: {} }) }
+      return { ok: true, headers: new Headers({ Date: new Date().toUTCString() }), json: async () => ({ ret: 200, data: {} }) }
     }
     const { default: market } = await import(`../../${app}/src/utils/marketWebSocket.ts`)
     const seen = []

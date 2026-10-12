@@ -10,18 +10,33 @@ const item = { symbol: 'USDJPY=X', category: 'Forex', sourceCategory: 'Forex', b
 const capabilities = { tenantId: 1, tenantName: 'Fixture', status: 'ACTIVE', policyVersion: 1, acceptNewBusiness: true, features: { contract: true, option: true } }
 const report = { browserPlugin: 'Browser plugin not available', keyboard: 'Simulated VisualViewport metrics; native iOS keyboard is not emulated', cases: [] }
 
+function browserSafetyOptions() {
+  if (process.platform !== 'win32') return {}
+  const dependency = path.dirname(require.resolve('playwright-core/package.json', { paths: [path.dirname(require.resolve(process.env.PLAYWRIGHT_PATH || 'playwright'))] }))
+  const source = fs.readFileSync(path.join(dependency, 'lib/coreBundle.js'), 'utf8')
+  const block = source.match(/disabledFeatures = \[([\s\S]*?)\]\.filter\(Boolean\)/)?.[1]
+  assert.ok(block, 'Read the installed Playwright Chromium defaults before launch')
+  const features = [...block.matchAll(/^\s*"([^"]+)"/gm)].map(match => match[1])
+  assert.ok(features.length > 0)
+  const original = '--disable-features=' + features.join(',')
+  const protectedFeatures = [...new Set([...features, 'AutofillAiWalletPrivatePasses', 'AutofillAmbientAutofill'])]
+  return { ignoreDefaultArgs: [original], args: ['--disable-features=' + protectedFeatures.join(','), '--enable-automation'] }
+}
+
 function entry(edition) {
   const component = edition === 'classic' ? '@/views/Trade.vue' : '@/advanced/views/Trade.vue'
   return `import {createApp,h} from 'vue';import {createPinia} from 'pinia';import {createRouter,createMemoryHistory,RouterView} from 'vue-router';
     import Trade from '${component}';import {useAuthStore} from '@/store/auth';import {useLocaleStore} from '@/store/locale';import {useTrialWallet} from '@/utils/useTrialWallet';
     import {useMarketStore} from '@/store/market';import socket from '@/utils/marketWebSocket';import {tenantFeatures} from '@/utils/tenantFeatures';import '@/styles/global.scss';
+    import {syncMarketTime,marketNow} from '@/utils/marketClock';import {normalizeQuote} from '@/utils/marketWebSocket';
     let view;const app=createApp({render:()=>h(RouterView,null,{default:({Component})=>Component&&h(Component,{ref:instance=>view=instance})})});app.use(createPinia());
     useAuthStore().setAuth('local-fixture',{id:999,tenantId:1});const locale=useLocaleStore();locale.setLocale('ja');const wallet=useTrialWallet();
     tenantFeatures.value=${JSON.stringify(capabilities)};const market=useMarketStore();socket.connect=async()=>{};market.initMarketService=async()=>{};market.subscribeSymbol=async()=>{};market.subscribeSymbols=async()=>{};
+    const serverTime=${Date.now()};syncMarketTime(serverTime);const originalDateNow=Date.now;
     const item=${JSON.stringify(item)};market.symbols=[item];market.priceMap[item.symbol]={price:158.324,timestamp:Date.now()};
-    const quote={status:'available',timestamp:Date.now(),fetchedAt:Date.now(),expiresAt:Date.now()+300000,quoteToUsdRate:1/158.324,conversionAvailable:true,conversionExpiresAt:Date.now()+300000,marginBaseToUsdRate:1,marginRateExpiresAt:Date.now()+300000};market.quoteStatusMap[item.symbol]=quote;
+    const quote={price:158.324,status:'available',timestamp:Date.now(),fetchedAt:Date.now(),expiresAt:Date.now()+300000,quoteToUsdRate:1/158.324,conversionAvailable:true,conversionExpiresAt:Date.now()+300000,marginBaseToUsdRate:1,marginRateExpiresAt:Date.now()+300000};market.quoteStatusMap[item.symbol]=quote;
     const router=createRouter({history:createMemoryHistory(),routes:[{path:'/',redirect:'/trade'},{path:'/trade',component:Trade},{path:'/:pathMatch(.*)*',component:{render:()=>h('p','Other page')}}]});app.use(router);
-    window.fixture={locale,wallet,market,tenantFeatures,router,quote,trade:()=>view.$.setupState};await router.replace('/trade');app.mount('#app');`
+    window.fixture={locale,wallet,market,tenantFeatures,router,quote,normalizeQuote,marketNow,originalDateNow,trade:()=>view.$.setupState};await router.replace('/trade');app.mount('#app');`
 }
 
 async function run() {
@@ -35,8 +50,17 @@ async function run() {
     css: { preprocessorOptions: { scss: { silenceDeprecations: ['legacy-js-api', 'import'] } } }, server: { host: '127.0.0.1', port: 0 } })
   await server.listen()
   const port = server.httpServer.address().port
-  const browser = await chromium.launch({ headless: true, ...(process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : {}) })
+  const browser = await chromium.launch({ headless: true, ...browserSafetyOptions(), ...(process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : {}) })
   try {
+    const command = await (await browser.newBrowserCDPSession()).send('Browser.getBrowserCommandLine')
+    const disable = command.arguments.filter(argument => /^[-/]{1,2}disable-features=/i.test(argument))
+    const terminator = command.arguments.findIndex(argument => argument === '--' || /^[-/]{1,2}single-argument(?:=|$)/.test(argument))
+    if (process.platform === 'win32') {
+      assert.equal(disable.length, 1, 'Preserve Chromium defaults in one combined feature switch')
+      for (const name of ['AutofillAiWalletPrivatePasses', 'AutofillAmbientAutofill']) assert.ok(disable[0].split('=')[1].split(',').includes(name))
+      assert.ok(terminator < 0 || command.arguments.indexOf(disable[0]) < terminator)
+    }
+    report.browserSafety = { features: disable, singleSwitch: disable.length === 1, beforeTerminator: terminator < 0 || command.arguments.indexOf(disable[0]) < terminator }
     for (const edition of ['classic', 'advanced']) {
       for (const noVisualViewport of [false, true]) {
         const page = await browser.newPage({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
@@ -80,6 +104,17 @@ async function run() {
           await page.locator('#contract-quantity').fill('16.8')
           await check('manual edit to 16.8 lots', false)
           assert.deepEqual(await page.evaluate(() => [window.fixture.trade().margin, window.fixture.trade().fee]), [16800, 84])
+          for (const difference of [-20874, -86400000, 86400000]) {
+            await page.evaluate(difference => { Date.now = () => window.fixture.originalDateNow() + difference; window.fixture.trade().now = Date.now() }, difference)
+            await check(`device time offset ${difference}ms`, false)
+            assert.equal(await page.evaluate(() => window.fixture.normalizeQuote(window.fixture.quote)?.status), 'available')
+            await buttons.first().click()
+            const confirmation = page.locator('dialog[open] footer .sheet-primary')
+            await confirmation.waitFor()
+            assert.equal(await confirmation.isDisabled(), false, 'A server-valid order can be confirmed despite device clock skew')
+            await page.locator('dialog[open] header button').click()
+          }
+          await page.evaluate(() => { Date.now = window.fixture.originalDateNow; window.fixture.trade().now = Date.now() })
           if (!noVisualViewport) {
             await page.evaluate(() => {
               window.testViewport = { height: innerHeight - 320, offsetTop: 0 }
@@ -107,7 +142,7 @@ async function run() {
           await page.locator('#contract-quantity').fill('100')
           await check('insufficient funds', true)
           await page.locator('#contract-quantity').fill('16.8')
-          await page.evaluate(() => { window.fixture.market.quoteStatusMap['USDJPY=X'] = { ...window.fixture.quote, expiresAt: Date.now() - 1 }; window.fixture.trade().now = Date.now() })
+          await page.evaluate(() => { window.fixture.market.quoteStatusMap['USDJPY=X'] = { ...window.fixture.quote, expiresAt: window.fixture.marketNow() - 1 }; window.fixture.trade().now = Date.now() })
           await check('expired quote', true)
           await page.evaluate(() => { window.fixture.market.quoteStatusMap['USDJPY=X'] = { ...window.fixture.quote }; window.fixture.trade().now = Date.now() })
           walletUnavailable = true

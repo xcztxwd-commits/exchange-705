@@ -1,6 +1,7 @@
 import { getAccountApiBase } from '@/utils/accountMode'
 import { defineStore } from 'pinia'
 import { quoteNumber } from '@/utils/quoteChange'
+import { marketNow, syncMarketResponse } from '@/utils/marketClock'
 import { ref, computed } from 'vue'
 import marketWebSocket, { normalizeQuote, type PriceUpdate } from '@/utils/marketWebSocket'
 import type { TickData, KlineData } from '@/utils/ws'
@@ -72,7 +73,7 @@ export const useMarketStore = defineStore('market', () => {
     if (currency === 'USD' || currency === 'USDT') return 1
     const quote = quoteStatusMap.value[symbol]
     const rate = Number(quote?.quoteToUsdRate)
-    return quote?.conversionAvailable && Number(quote.conversionExpiresAt) > Date.now() && Number.isFinite(rate) && rate > 0 ? rate : NaN
+    return quote?.conversionAvailable && Number(quote.conversionExpiresAt) > marketNow() && Number.isFinite(rate) && rate > 0 ? rate : NaN
   }
   // Margin and P&L use different currencies. Undefined retains non-FX notional calculation.
   const getMarginBaseRate = (instrument: any, price: number): number | undefined => {
@@ -81,13 +82,14 @@ export const useMarketStore = defineStore('market', () => {
     if (instrument.quoteCurrency === 'USD') return Number.isFinite(price) && price > 0 ? price : NaN
     const quote = quoteStatusMap.value[instrument.symbol]
     const rate = Number(quote?.marginBaseToUsdRate)
-    return Number(quote?.marginRateExpiresAt) > Date.now() && Number.isFinite(rate) && rate > 0 ? rate : NaN
+    return Number(quote?.marginRateExpiresAt) > marketNow() && Number.isFinite(rate) && rate > 0 ? rate : NaN
   }
-  const getQuoteStatus = (symbol: string, now = Date.now()): string => {
+  const getQuoteStatus = (symbol: string, _tick?: number): string => {
+    const now = marketNow()
     const quote = quoteStatusMap.value[symbol]
     if (!quote) return 'unavailable'
     if (quote.status === 'closed') return 'closed'
-    if (quote.status === 'unavailable') return 'unavailable'
+    if (quote.status === 'unavailable' || !Number.isFinite(now)) return 'unavailable'
     return now >= quote.expiresAt ? 'stale' : quote.status
   }
 
@@ -405,7 +407,7 @@ export const useMarketStore = defineStore('market', () => {
       const apiBaseUrl = getAccountApiBase()
       console.log(`[Market Store] Fetching batch prices from Redis for ${alltickSymbols.length} symbols`)
       
-      const requestEpoch = activeQuoteEpoch
+      const requestEpoch = activeQuoteEpoch, started = performance.now()
       const response = await fetch(`${apiBaseUrl}/market/redis/price/batch`, {
         method: 'POST',
         headers: {
@@ -417,7 +419,8 @@ export const useMarketStore = defineStore('market', () => {
       const data = await response.json()
       if (activeQuoteEpoch !== requestEpoch) return
       
-      if (data.ret === 200 && data.data) {
+      if (response.ok && data.ret === 200 && data.data) {
+        syncMarketResponse(response, started, data)
         const prices = data.data
         let loadedCount = 0
         

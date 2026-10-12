@@ -6,6 +6,8 @@ const require = createRequire(new URL('../package.json', import.meta.url))
 const ts = require('typescript')
 for (const app of ['exchange-pc', 'exchange-frontend']) {
   const { normalizeQuote } = await import(`../../${app}/src/utils/marketWebSocket.ts`)
+  const { syncMarketTime, resetMarketTime } = await import(`../../${app}/src/utils/marketClock.ts`)
+  const syncClock = (now) => { resetMarketTime(); const at = performance.now(); syncMarketTime(now, at, at) }
   const source = readFileSync(new URL(`../../${app}/src/store/market.ts`, import.meta.url), 'utf8')
   const record = source.slice(source.indexOf('  let activeQuoteEpoch'), source.indexOf('  const getQuoteStatus'))
   test(`${app}: held execution lease preserves old price timestamps and expires on transport loss`, () => {
@@ -24,7 +26,7 @@ for (const app of ['exchange-pc', 'exchange-frontend']) {
   test(`${app}: simulation switches accept older external quotes but reject outdated mode responses`, () => {
     const quoteStatusMap = { value: {} }
     const apply = new Function('quoteStatusMap', 'normalizeQuote', ts.transpile(record, { target: ts.ScriptTarget.ES2022 }) + '; return recordQuoteStatus')(quoteStatusMap, normalizeQuote)
-    const now = Date.now(), base = { price: 100, fetchedAt: now, timestamp: now, status: 'available' }
+    const now = Date.now(); syncClock(now); const base = { price: 100, fetchedAt: now, timestamp: now, status: 'available' }
     assert.equal(apply('TEST', { ...base, marketRevision: 1 }), true)
     assert.equal(apply('TEST', { ...base, marketRevision: 2, simulated: true, simulationSession: now }), true)
     assert.equal(quoteStatusMap.value.TEST.simulated, true)
@@ -41,7 +43,7 @@ for (const app of ['exchange-pc', 'exchange-frontend']) {
   test(`${app}: source return preserves its original timestamp and rejects delayed control packets`, () => {
     const quoteStatusMap = { value: {} }
     const apply = new Function('quoteStatusMap', 'normalizeQuote', ts.transpile(record, { target: ts.ScriptTarget.ES2022 }) + '; return recordQuoteStatus')(quoteStatusMap, normalizeQuote)
-    const now = Date.now(), controlled = { price: 120, timestamp: now, fetchedAt: now - 10000, status: 'unavailable', available: false,
+    const now = Date.now(); syncClock(now); const controlled = { price: 120, timestamp: now, fetchedAt: now - 10000, status: 'unavailable', available: false,
       marketRevision: 1, controlHistory: true, controlTaskId: 'task', controlState: 'WAITING_SOURCE' }
     assert.equal(apply('TEST', controlled), true)
     assert.equal(apply('TEST', { ...controlled, price: 90, timestamp: now - 8000, controlSourceResumed: true }), true)
