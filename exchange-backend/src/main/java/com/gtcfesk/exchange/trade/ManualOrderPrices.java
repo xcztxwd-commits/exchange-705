@@ -72,6 +72,8 @@ public class ManualOrderPrices {
         Map<String,Object> out=new LinkedHashMap<>();out.put("candles",new ArrayList<>(rows.values()));out.put("pending",pending);
         out.put("status",pending?"loading":!(raw instanceof Map) || "unavailable".equals(state.get("status"))?"unavailable":"stale".equals(state.get("status"))?"stale":rows.isEmpty()?"empty":"available");
         out.put("source",symbol.getMarketSource());out.put("from",from);out.put("to",to);out.put("interval","1m");
+        out.put("latestCandleTime",rows.isEmpty()?null:rows.lastKey());out.put("serverTime",now);
+        for(String key:Arrays.asList("historyRepair","missingData","retryAt"))if(state.containsKey(key))out.put(key,state.get(key));
         out.put("nextEndTime",oldest-1);out.put("hasMore",oldest>from);return out;
     }
     public Map<String,Object> minutes(TradingSymbol symbol,String date,String timezone) {

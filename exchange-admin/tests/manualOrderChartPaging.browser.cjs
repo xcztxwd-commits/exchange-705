@@ -3,14 +3,35 @@ const {chromium}=require(process.env.PLAYWRIGHT_PATH||'playwright'),assert=requi
 const base=process.env.ADMIN_URL,out=process.env.EVIDENCE_DIR
 if(!base||!out||!['127.0.0.1','localhost'].includes(new URL(base).hostname))throw Error('Use an isolated local server and evidence directory')
 fs.mkdirSync(out,{recursive:true})
+function browserSafetyArgs() {
+ if(process.platform!=='win32')return []
+ const core=path.dirname(require.resolve('playwright-core',{paths:[path.dirname(require.resolve(process.env.PLAYWRIGHT_PATH||'playwright'))]}))
+ const defaults=fs.readFileSync(path.join(core,'lib/coreBundle.js'),'utf8').match(/disabledFeatures = \[([\s\S]*?)\]/)?.[1]
+ if(!defaults)throw Error('Cannot verify Playwright default disabled features; update the safe launch entry before running')
+ const features=[...defaults.matchAll(/^\s*"([^"]+)"/gm)].map(match=>match[1])
+ return ['--enable-automation','--disable-features='+[...new Set([...features,'AutofillAiWalletPrivatePasses','AutofillAmbientAutofill'])].join(',')]
+}
 ;(async()=>{
- const browser=await chromium.launch({headless:true,...(process.env.CHROME_PATH?{executablePath:process.env.CHROME_PATH}:{})}),page=await browser.newPage({viewport:{width:1300,height:800}})
- const requests=[],errors=[],checks=[],finished=Math.floor(Date.now()/60000)*60000,from=finished-30*86400000
- let failOlder=false,blockOlder=false,release,blocked=false,pendingPages=0,emptyPage=false,olderDelay=650
+ const browser=await chromium.launch({headless:true,args:browserSafetyArgs(),...(process.env.CHROME_PATH?{executablePath:process.env.CHROME_PATH}:{})}),page=await browser.newPage({viewport:{width:1300,height:800}})
+ try { if(process.platform==='win32') {
+  const session=await browser.newBrowserCDPSession(),{arguments:args}=await session.send('Browser.getBrowserCommandLine')
+  const flags=args.filter(arg=>/^[-/]{1,2}disable-features=/i.test(arg)),last=flags.at(-1)
+  for(const feature of ['AutofillAiWalletPrivatePasses','AutofillAmbientAutofill'])assert.ok(last?.split('=')[1].split(',').includes(feature))
+  assert.ok(args.indexOf(last)<(args.indexOf('--')<0?Infinity:args.indexOf('--')))
+  fs.writeFileSync(path.join(out,'browser-safety.json'),JSON.stringify({disabledFeatures:flags,verified:true},null,2));await session.detach()
+ } } catch(error) { await browser.close();throw error }
+ const requests=[],errors=[],checks=[],finished=Math.floor(Date.now()/60000)*60000-3*60000,from=finished-30*86400000
+ let latestTo=finished,repairBlocked=false
+ let failOlder=false,blockOlder=false,release,blocked=false,pendingPages=0,olderPendingPages=0,emptyPage=false,olderDelay=650
  page.on('pageerror',e=>errors.push(e.message))
  const count=async n=>page.getByText(new RegExp('已显示 '+n+' 根')).waitFor({timeout:7500})
  const visible=()=>page.evaluate(()=>{const c=window.__qa.chart(),o=c.getOption(),data=o.xAxis[0].data,z=o.dataZoom[0];return [data[Math.round(z.start/100*(data.length-1))],data[Math.round(z.end/100*(data.length-1))]]})
  try{
+  // Fault injection proves the appended-minute regression fails without latest-window positioning.
+  if(process.env.CHART_REFRESH_REGRESSION_RED==='1')await page.route('**/src/components/ManualOrderChart.vue',async route=>{
+   const response=await route.fetch(),body=await response.text(),branch='if (latestWindowSize !== void 0 && nextCandles.length > 1)'
+   assert.ok(body.includes(branch));await route.fulfill({response,body:body.replace(branch,'if (false && nextCandles.length > 1)')})
+  })
   await page.addInitScript(()=>sessionStorage.setItem('exchange.admin.session.v2',JSON.stringify({mode:'admin',token:'QA',user:{id:1,tenantId:1,userType:'admin',role:'super_admin',account:'QA'}})))
   await page.route('**/__qa',r=>r.fulfill({contentType:'text/html',body:'<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"></head><body><div id="app"></div></body></html>'}))
   await page.route('**/api/**',async route=>{
@@ -23,11 +44,11 @@ fs.mkdirSync(out,{recursive:true})
    if(isOlder&&failOlder){failOlder=false;return route.fulfill({status:503,json:{message:'隔离测试：行情暂不可用'}})}
    if(isOlder&&blockOlder){blocked=true;await new Promise(resolve=>release=resolve);blocked=false;release=undefined}
    else if(isOlder&&olderDelay)await new Promise(resolve=>setTimeout(resolve,olderDelay))
-   const to=Math.floor((cursor===null?finished-1:Number(cursor))/60000)*60000+60000,eur=symbol==='EURUSD=X'
+   const to=Math.floor((cursor===null?latestTo-1:Number(cursor))/60000)*60000+60000,eur=symbol==='EURUSD=X'
    const candles=Array.from({length:200},(_,i)=>{const t=to-(200-i)*60000;return {timestamp:t,local:new Date(t-4*3600000).toISOString().slice(0,16),offset:'-04:00',price:eur?'1.0812345678901234':'157.5751234567890123',low:eur?'1':'157',high:eur?'1.1':'158',close:eur?'1.09':'157.6'}}).filter(c=>c.timestamp>=from)
-   const pending=pendingPages>0;if(pending)pendingPages--;const shown=emptyPage?[]:pending?candles.slice(-100):candles;emptyPage=false
+   const pending=pendingPages>0||isOlder&&olderPendingPages>0;if(pendingPages>0)pendingPages--;else if(isOlder&&olderPendingPages>0)olderPendingPages--;const shown=emptyPage?[]:pending?candles.slice(-100):candles;emptyPage=false
    const oldest=shown[0]?.timestamp??Math.max(from,to-200*60000)
-   await route.fulfill({json:{candles:shown,pending,status:pending?'loading':shown.length?'available':'empty',source:'yahoo',from,to,nextEndTime:oldest-1,hasMore:oldest>from}})
+   await route.fulfill({json:{candles:shown,pending,status:pending?'loading':shown.length?'available':'empty',source:'yahoo',from,to,serverTime:Date.now(),latestCandleTime:shown.at(-1)?.timestamp??null,...(repairBlocked&&!isOlder?{historyRepair:{state:'unrepairable',queueState:'blocked',gaps:[{reason:'source_fetch_or_write_failed'}]},missingData:'source_fetch_or_write_failed'}:{}),nextEndTime:oldest-1,hasMore:oldest>from}})
   })
   await page.goto(base+'/__qa')
   await page.evaluate(async()=>{
@@ -110,6 +131,44 @@ fs.mkdirSync(out,{recursive:true})
   release();blockOlder=false;await page.waitForTimeout(200);await count(200)
   assert.equal(await page.evaluate(()=>window.__qa.chart().getOption().series[0].data.length),200)
   checks.push('Switching back to 1m during a delayed daily-history fill cancels it and ignores stale responses')
+  await page.evaluate(()=>window.__qa.chart().dispatchAction({type:'dataZoom',start:40,end:60}))
+  const beforeRefresh=await visible(),pinnedBefore=await page.evaluate(()=>[window.__qa.model.openTime,window.__qa.model.closeTime,window.__qa.selections.length])
+  latestTo=finished+2*60000
+  await page.getByRole('button',{name:'刷新行情',exact:true}).click();await count(202)
+  const afterRefresh=(await visible()).map(Number)
+  assert.equal(afterRefresh[1],latestTo-60000,'Refresh must show the newly returned completed minute')
+  assert.equal(afterRefresh[1]-afterRefresh[0],Number(beforeRefresh[1])-Number(beforeRefresh[0]),'Refresh preserves the visible candle count')
+  assert.deepEqual(await page.evaluate(()=>[window.__qa.model.openTime,window.__qa.model.closeTime,window.__qa.selections.length]),pinnedBefore)
+  checks.push('Refresh advances a browsed historical window to newly appended completed minutes, preserving window width, loaded history and pinned selection')
+  const beforeZoneRequests=requests.length,beforeZone=await visible(),beforeZonePrices=await page.evaluate(()=>window.__qa.chart().getOption().series[0].data)
+  await page.getByRole('combobox',{name:'图表显示时区',exact:true}).selectOption('Asia/Shanghai')
+  assert.deepEqual(await visible(),beforeZone);assert.equal(requests.length,beforeZoneRequests)
+  assert.deepEqual(await page.evaluate(()=>window.__qa.chart().getOption().series[0].data),beforeZonePrices)
+  assert.deepEqual(await page.evaluate(()=>[window.__qa.model.openTime,window.__qa.model.closeTime,window.__qa.selections.length]),pinnedBefore)
+  assert.match(await page.locator('.chart-freshness').innerText(),/UTC\+08:00/)
+  const tooltip=await page.evaluate(()=>{const o=window.__qa.chart().getOption();return o.tooltip[0].formatter([{dataIndex:o.xAxis[0].data.length-1}])})
+  assert.ok(tooltip.includes('UTC+08:00'));assert.ok(tooltip.includes(String(new Date(latestTo-60000).getUTCFullYear())))
+  await page.locator('.candles').focus();await page.keyboard.press('ArrowLeft')
+  const zoneSelection=await page.evaluate(()=>window.__qa.selections.at(-1));assert.equal(zoneSelection.open.offset,'-04:00');assert.equal(Date.parse(zoneSelection.open.local+zoneSelection.open.offset),zoneSelection.open.timestamp,'Advanced order input keeps the original timezone and exact instant')
+  checks.push('Display timezone updates labels, full dates and UTC offsets without API reads, price changes, view movement or changes to order instants/source local times')
+  repairBlocked=true;await page.getByRole('button',{name:'刷新行情',exact:true}).click();await page.getByRole('status').filter({hasText:'数据源补齐失败'}).waitFor();await count(202)
+  checks.push('Available historical candles remain usable while source-repair failures are explicitly displayed')
+  const latestFreshness=await page.locator('.chart-freshness').innerText();olderPendingPages=1
+  await page.getByRole('group',{name:'时间周期',exact:true}).getByRole('button',{name:'5m',exact:true}).click()
+  await page.waitForFunction(()=>window.__qa.chart()?.getOption().xAxis[0].data.length>=120)
+  assert.equal((await page.locator('.chart-freshness').innerText()).split('查询截止：')[1].split('刷新时间：')[0],latestFreshness.split('查询截止：')[1].split('刷新时间：')[0],'Pending historical retries cannot move the latest query cutoff backwards')
+  await page.getByRole('status').filter({hasText:'数据源补齐失败'}).waitFor()
+  await page.locator('.candles').focus();await page.keyboard.press('ArrowLeft');await page.getByRole('status').filter({hasText:'数据源补齐失败'}).waitFor()
+  checks.push('Pending older-page retries preserve the latest query cutoff; successful history pages and order selection cannot erase latest source-repair failures')
+  await page.evaluate(()=>window.__qa.chart().dispatchAction({type:'dataZoom',start:40,end:60}))
+  const candleCount=()=>page.evaluate(()=>{const o=window.__qa.chart().getOption(),z=o.dataZoom[0],n=o.xAxis[0].data.length-1;return Math.round(z.end/100*n)-Math.round(z.start/100*n)+1})
+  const coarseWidth=await candleCount(),coarseResponse=page.waitForResponse(r=>r.url().includes('/manual/chart')&&!new URL(r.url()).searchParams.has('endTime'))
+  await page.getByRole('button',{name:'刷新行情',exact:true}).click();await coarseResponse;await page.waitForFunction(()=>window.__qa.chart().getOption().dataZoom[0].end===100)
+  assert.equal(await candleCount(),coarseWidth,'Coarse-period refresh must preserve the user zoom width')
+  checks.push('Coarse-period refresh also follows the latest candle while preserving the user zoom width')
+  await page.setViewportSize({width:390,height:844});assert.ok(await page.locator('.chart-panel').evaluate(el=>el.scrollWidth<=el.clientWidth+1));await page.screenshot({path:path.join(out,'chart-freshness-mobile.png')})
+  await page.setViewportSize({width:1300,height:800});await page.screenshot({path:path.join(out,'chart-freshness-desktop.png')})
+  await page.evaluate(()=>window.__qa.model.disabled=true);assert.ok(await page.getByRole('combobox',{name:'图表显示时区',exact:true}).isDisabled())
   assert.deepEqual(errors,[]);fs.writeFileSync(path.join(out,'browser-result.json'),JSON.stringify({checks,firstBatchMs,requests,errors,mockedApis:true},null,2));console.log('PASS '+checks.join('; '))
  }catch(e){await page.screenshot({path:path.join(out,'browser-failure.png')}).catch(()=>{});throw e}finally{if(release)release();await browser.close()}
 })().catch(e=>{console.error(e);process.exitCode=1})

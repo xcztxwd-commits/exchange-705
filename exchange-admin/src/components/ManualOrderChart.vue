@@ -11,7 +11,14 @@ const symbolPicker = ref(false), symbolChoice = ref('')
 const canChooseSymbol = computed(() => props.symbols?.some(s => s.symbol === symbolChoice.value))
 const rows = ref<OrderCandle[]>([]), draft = ref<[number, number]>()
 const interval = ref<OrderChartInterval>('1m')
+const displayTimezone = ref(props.timezone)
+const timezones = computed(() => [...new Set([props.timezone, displayTimezone.value, 'Asia/Shanghai', 'Asia/Singapore', 'Asia/Tokyo', 'UTC', 'America/New_York', 'Europe/London', ...((Intl as typeof Intl & { supportedValuesOf?: (key: string) => string[] }).supportedValuesOf?.('timeZone') || [])])])
+const refreshedAt = ref<number>(), checkedTo = ref<number>()
+const latestMessage = ref('')
 const candles = computed(() => orderChartAggregate(rows.value, interval.value))
+const latest = computed(() => rows.value[rows.value.length - 1])
+const localDay = (time: number) => new Intl.DateTimeFormat('en-CA', { timeZone: displayTimezone.value, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(time))
+const crossesDates = computed(() => rows.value.length > 1 && localDay(rows.value[0]!.timestamp) !== localDay(latest.value!.timestamp))
 const hasMore = ref(false), nextEndTime = ref<number>()
 let chart: echarts.ECharts | undefined, resize: ResizeObserver | undefined, revision = 0
 let timer: ReturnType<typeof setTimeout> | undefined, dragging: { pointer: number; index: number } | undefined
@@ -23,11 +30,12 @@ const selected = computed(() => {
 })
 function stop() { revision++; clearTimeout(timer); abort?.abort(); abort = undefined; loading.value = false; dragging = undefined }
 function dispose() { resize?.disconnect(); resize = undefined; chart?.dispose(); chart = undefined }
-function reset() { stop(); if (!props.active || props.symbol) { symbolPicker.value = false; symbolChoice.value = '' }; expanded.value = false; rows.value = []; draft.value = undefined; hasMore.value = false; nextEndTime.value = undefined; historyComplete = false; failed = false; message.value = ''; dispose() }
+function reset() { stop(); if (!props.active || props.symbol) { symbolPicker.value = false; symbolChoice.value = '' }; expanded.value = false; rows.value = []; refreshedAt.value = checkedTo.value = undefined; draft.value = undefined; hasMore.value = false; nextEndTime.value = undefined; historyComplete = false; failed = false; message.value = latestMessage.value = ''; dispose() }
 function date(time: number, short = false) {
-  if (short && interval.value === '1d') return new Intl.DateTimeFormat('zh-CN', { timeZone: props.timezone, month: '2-digit', day: '2-digit' }).format(new Date(time))
-  return new Intl.DateTimeFormat('zh-CN', { timeZone: props.timezone, ...(short ? {} : { month: '2-digit', day: '2-digit' } as const), hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(time))
+  if (short && interval.value === '1d') return new Intl.DateTimeFormat('zh-CN', { timeZone: displayTimezone.value, month: '2-digit', day: '2-digit' }).format(new Date(time))
+  return new Intl.DateTimeFormat('zh-CN', { timeZone: displayTimezone.value, ...(!short ? { year: 'numeric', month: '2-digit', day: '2-digit' } as const : crossesDates.value ? { month: '2-digit', day: '2-digit' } as const : {}), hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(time))
 }
+function offset(time: number) { return new Intl.DateTimeFormat('en', { timeZone: displayTimezone.value, timeZoneName: 'longOffset' }).formatToParts(new Date(time)).find(part => part.type === 'timeZoneName')!.value.replace('GMT', 'UTC') }
 function candleIndex(time: number) {
   const duration = orderChartIntervals[interval.value]
   return candles.value.findIndex(r => Math.floor(r.timestamp / duration) === Math.floor(time / duration))
@@ -58,7 +66,7 @@ async function render(view?: { start: number; end: number }) {
   const zoom = view || (chart.getOption()?.dataZoom as any[] | undefined)?.[0]
   // ponytail: at most 43,200 minute candles; keep a small visible window with native ECharts dataZoom.
   chart.setOption({ animation: false, grid: { left: 62, right: 16, top: 25, bottom: 70 },
-    tooltip: { trigger: 'axis', renderMode: 'richText', confine: true, axisPointer: { type: 'cross' }, formatter: (items: any) => { const row = candles.value[items?.[0]?.dataIndex]; return row ? `${interval.value} · ${date(row.timestamp)} UTC${row.offset === 'Z' ? '+00:00' : row.offset}\n开 ${row.price}  收 ${row.close}\n低 ${row.low}  高 ${row.high}` : '' } },
+    tooltip: { trigger: 'axis', renderMode: 'richText', confine: true, axisPointer: { type: 'cross' }, formatter: (items: any) => { const row = candles.value[items?.[0]?.dataIndex]; return row ? `${interval.value} · ${date(row.timestamp)} ${offset(row.timestamp)}\n开 ${row.price}  收 ${row.close}\n低 ${row.low}  高 ${row.high}` : '' } },
     xAxis: { type: 'category', data: candles.value.map(r => String(r.timestamp)), boundaryGap: true, axisLabel: { formatter: (v: string) => date(Math.floor(Number(v) / orderChartIntervals[interval.value]) * orderChartIntervals[interval.value], true), hideOverlap: true } },
     yAxis: { type: 'value', scale: true, splitNumber: 4, axisLabel: { width: 54, overflow: 'truncate' }, splitLine: { lineStyle: { color: '#edf0f5' } } },
     dataZoom: [{ type: 'slider', xAxisIndex: 0, filterMode: 'empty', bottom: 8, height: 20, showDetail: false, start: zoom?.start ?? Math.max(0, (1 - 120 / candles.value.length) * 100), end: zoom?.end ?? 100 }, { type: 'inside', xAxisIndex: 0, filterMode: 'empty', moveOnMouseMove: false, zoomOnMouseWheel: true, moveOnMouseWheel: false }],
@@ -66,18 +74,20 @@ async function render(view?: { start: number; end: number }) {
   }, true)
   rescale(); markers()
 }
-async function load(id: number, endTime?: number, attempt = 0, fill = false) {
+async function load(id: number, endTime?: number, attempt = 0, fill = false, latestWindowSize?: number) {
   if (id !== revision || !expanded.value || !props.active || props.disabled) return
   loading.value = true
   abort = new AbortController()
   try {
     const response: any = await request.get('/admin/orders/contract/manual/chart', { params: { symbol: props.symbol, timezone: props.timezone, limit: 200, ...(endTime === undefined ? {} : { endTime }) }, signal: abort.signal, timeout: 30000 })
     if (id !== revision || !expanded.value || !props.active) return
+    const newestPage = endTime === undefined || checkedTo.value !== undefined && endTime === checkedTo.value - 1
     const next = orderChartCandles([...rows.value, ...(Array.isArray(response.candles) ? response.candles : [])]).filter(row => !Number.isFinite(response.from) || row.timestamp >= response.from)
     const nextCandles = orderChartAggregate(next, interval.value), duration = orderChartIntervals[interval.value]
     const zoom = (chart?.getOption()?.dataZoom as any[] | undefined)?.[0]
     let view: { start: number; end: number } | undefined
-    if (fill && interval.value !== '1m') view = { start: Math.max(0, (1 - 120 / nextCandles.length) * 100), end: 100 }
+    if (latestWindowSize !== undefined && nextCandles.length > 1) view = { start: Math.max(0, (nextCandles.length - latestWindowSize) / (nextCandles.length - 1) * 100), end: 100 }
+    else if (fill && interval.value !== '1m') view = { start: Math.max(0, (1 - 120 / nextCandles.length) * 100), end: 100 }
     else if (zoom && candles.value.length > 1 && nextCandles.length > 1) {
       const first = candles.value[Math.round(Number(zoom.start) / 100 * (candles.value.length - 1))]?.timestamp
       const last = candles.value[Math.round(Number(zoom.end) / 100 * (candles.value.length - 1))]?.timestamp
@@ -91,18 +101,28 @@ async function load(id: number, endTime?: number, attempt = 0, fill = false) {
     nextEndTime.value = Number.isSafeInteger(cursor) ? cursor : undefined
     hasMore.value = !historyComplete && response.hasMore === true && nextEndTime.value !== undefined && cursor >= response.from
     failed = false
-    message.value = response.pending ? '缺失行情正在后台加载，已有完整分钟可直接选择；更早行情按需加载。' : response.status === 'unavailable' ? '行情接口暂不可用，可重试；不是已确认休市。' : response.status === 'stale' ? '当前为历史缓存；最终生成会重新校验。' : rows.value.length < 2 ? '这一段不足两根完整的已结束分钟K线，可加载更早行情或更换品种。' : ''
+    if (newestPage) { refreshedAt.value = Number(response.serverTime) || Date.now(); checkedTo.value = Number.isFinite(response.to) ? response.to : undefined }
+    let statusMessage = response.pending ? '缺失行情正在后台加载，已有完整分钟可直接选择；更早行情按需加载。' : response.status === 'unavailable' ? '行情接口暂不可用，可重试；不是已确认休市。' : response.status === 'stale' ? '当前为历史缓存；最终生成会重新校验。' : rows.value.length < 2 ? '这一段不足两根完整的已结束分钟K线，可加载更早行情或更换品种。' : ''
+    if (!response.pending && (response.missingData || response.historyRepair?.state === 'unrepairable' || response.historyRepair?.queueState === 'blocked' || response.historyRepair?.queueState === 'queue_full')) {
+      const reason = response.missingData || response.historyRepair?.gaps?.[0]?.reason
+      statusMessage = reason === 'source_fetch_or_write_failed' ? '数据源补齐失败，当前显示已有历史行情；请稍后刷新重试。' : reason === 'source_calendar_unverified' ? '该品种交易日历尚未确认，自动补齐受限；当前显示已有历史行情。' : response.historyRepair?.queueState === 'queue_full' ? '行情补齐队列已满，当前显示已有历史行情；请稍后刷新重试。' : '部分行情暂无法补齐，当前显示已有历史行情；请核对最新K线时间。'
+    }
+    if (newestPage) { latestMessage.value = statusMessage; message.value = '' } else message.value = statusMessage
     await render(view)
     if (id !== revision) return
     // Retry only this page, with a stable cursor; never re-read all thirty days every 1.5 seconds.
-    if (response.pending && attempt < 19) timer = setTimeout(() => load(id, response.to - 1, attempt + 1, fill), 1500)
-    else if (response.pending) message.value = '历史行情仍在加载，可刷新重试或加载更早行情；缺失分钟不可选。'
+    if (response.pending && attempt < 19) timer = setTimeout(() => load(id, response.to - 1, attempt + 1, fill, latestWindowSize), 1500)
+    else if (response.pending) { if (newestPage) latestMessage.value = '历史行情仍在加载，可刷新重试或加载更早行情；缺失分钟不可选。'; else message.value = '历史行情仍在加载，可刷新重试或加载更早行情；缺失分钟不可选。' }
     // Coarser periods need more minute pages, but keep every read bounded and render progress immediately.
-    else if (fill && interval.value !== '1m' && response.status !== 'unavailable' && hasMore.value && candles.value.length < 120 && nextEndTime.value! < (endTime ?? Infinity)) timer = setTimeout(() => load(id, nextEndTime.value, 0, true), 0)
+    else if (fill && interval.value !== '1m' && response.status !== 'unavailable' && hasMore.value && candles.value.length < 120 && nextEndTime.value! < (endTime ?? Infinity)) timer = setTimeout(() => load(id, nextEndTime.value, 0, true, latestWindowSize), 0)
   } catch (e: any) { if (id === revision) { failed = true; message.value = e.message || '行情获取失败，请重试' } }
   finally { if (id === revision) { loading.value = false; abort = undefined } }
 }
-function reload() { stop(); failed = false; draft.value = undefined; message.value = rows.value.length ? '' : '正在读取已存分钟行情…'; void load(revision, undefined, 0, interval.value !== '1m') }
+function reload() {
+  const zoom = (chart?.getOption()?.dataZoom as any[] | undefined)?.[0]
+  const visibleCount = zoom ? Math.max(2, Math.round(Number(zoom.end) / 100 * (candles.value.length - 1)) - Math.round(Number(zoom.start) / 100 * (candles.value.length - 1)) + 1) : 120
+  stop(); failed = false; draft.value = undefined; message.value = rows.value.length ? '' : '正在读取已存分钟行情…'; void load(revision, undefined, 0, interval.value !== '1m', visibleCount)
+}
 async function changeInterval(value: OrderChartInterval) {
   if (props.disabled || !props.active || !expanded.value || interval.value === value) return
   const interrupted = loading.value
@@ -176,6 +196,8 @@ function keyboard(event: KeyboardEvent) {
 }
 watch(() => [props.openTime, props.closeTime], () => { draft.value = undefined; markers() })
 watch(() => [props.symbol, props.timezone, props.active], reset)
+watch(() => props.timezone, value => { displayTimezone.value = value })
+watch(displayTimezone, () => { void render() })
 onBeforeUnmount(() => { stop(); dispose() })
 </script>
 
@@ -183,11 +205,13 @@ onBeforeUnmount(() => { stop(); dispose() })
   <section class="order-chart" aria-label="图表选择开平仓">
     <div class="chart-toggle"><slot name="intro" /><el-button v-permission="'orders:manual_order'" :disabled="!active || disabled" :aria-expanded="expanded" @click="toggle">{{ expanded ? '收起图表' : '图表选择开平仓' }}</el-button></div>
     <div v-if="expanded" class="chart-panel">
-      <div class="chart-toolbar"><span>{{ symbol }} · {{ interval }} · 最近30天 · {{ timezone }}</span><div class="chart-toolbar-actions"><div class="chart-periods" role="group" aria-label="时间周期"><el-button v-for="(_, period) in orderChartIntervals" :key="period" v-permission="'orders:manual_order'" size="small" :type="interval === period ? 'primary' : 'default'" :aria-pressed="interval === period" :disabled="disabled" @click="changeInterval(period)">{{ period }}</el-button></div><el-button v-permission="'orders:manual_order'" text :disabled="disabled" :loading="loading" @click="reload">刷新行情</el-button></div></div>
+      <div class="chart-toolbar"><span>{{ symbol }} · {{ interval }} · 最近30天 · {{ displayTimezone }}</span><div class="chart-toolbar-actions"><label class="chart-timezone">显示时区<select v-model="displayTimezone" aria-label="图表显示时区" :disabled="disabled"><option v-for="zone in timezones" :key="zone" :value="zone">{{ zone }}</option></select></label><div class="chart-periods" role="group" aria-label="时间周期"><el-button v-for="(_, period) in orderChartIntervals" :key="period" v-permission="'orders:manual_order'" size="small" :type="interval === period ? 'primary' : 'default'" :aria-pressed="interval === period" :disabled="disabled" @click="changeInterval(period)">{{ period }}</el-button></div><el-button v-permission="'orders:manual_order'" text :disabled="disabled" :loading="loading" @click="reload">刷新行情</el-button></div></div>
       <p class="chart-help">在K线区域按住鼠标拖选一段：较早K线为开仓，较晚为平仓，均取该K线首个有效分钟开盘价。下方滑条浏览/缩放；滚轮缩放。<template v-if="interval !== '1m'">周期按UTC对齐，仅聚合已加载分钟，未满周期或缺失分钟不补造；切换周期保留已选时间和价格。</template></p>
       <div class="chart-progress" aria-live="polite"><span>已显示 {{ candles.length }} 根{{ interval === '1m' ? '完整分钟K线' : `${interval} K线（${rows.length} 根完整分钟）` }} · {{ hasMore ? '向左浏览按需加载更早行情' : '最近30天范围' }}</span><el-button v-if="hasMore" v-permission="'orders:manual_order'" size="small" :disabled="disabled || loading" @click="loadMore">加载更早行情</el-button></div>
+      <p class="chart-freshness" aria-live="polite"><span>最新已加载分钟：{{ latest ? `${date(latest.timestamp)} ${offset(latest.timestamp)}` : '暂无完整K线' }}</span><span v-if="checkedTo">查询截止：{{ date(checkedTo) }}</span><span v-if="refreshedAt">刷新时间：{{ date(refreshedAt) }} · {{ displayTimezone }}</span></p>
       <div ref="host" class="candles" role="group" tabindex="0" aria-label="K线拖选区；左右键调整平仓，Shift加左右键调整开仓，自动应用" @pointerdown="start" @pointermove="move" @pointerup="finish" @pointercancel="cancel" @keydown="keyboard" />
-      <p v-if="message" role="status" class="chart-message">{{ message }}</p>
+      <p v-if="latestMessage" role="status" class="chart-message">{{ latestMessage }}</p>
+      <p v-if="message && message !== latestMessage" role="status" class="chart-message">{{ message }}</p>
       <div v-if="selected" class="selected-minutes" aria-live="polite"><span>开仓 {{ date(selected.open.timestamp) }} · {{ selected.open.price }}</span><span>平仓 {{ date(selected.close.timestamp) }} · {{ selected.close.price }}</span><el-button v-permission="'orders:manual_order'" text :disabled="disabled" @click="draft = undefined; emit('clear'); markers()">清除时间选择</el-button></div>
       <small>{{ source }} · 只选择时间与开盘价，不创建订单、不修改行情或资金。键盘：左右键调平仓，Shift+左右键调开仓，自动应用。</small>
     </div>
@@ -206,6 +230,9 @@ onBeforeUnmount(() => { stop(); dispose() })
 .chart-panel { margin-top: 12px; padding: 12px; border: 1px solid var(--el-border-color-lighter); border-radius: 8px; }
 .chart-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-size: 13px; }
 .chart-toolbar-actions, .chart-periods { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.chart-timezone { display: flex; align-items: center; gap: 6px; }
+.chart-timezone select { width: 190px; max-width: 100%; padding: 4px; border: 1px solid var(--el-border-color); border-radius: 4px; background: var(--el-bg-color); color: var(--el-text-color-primary); }
+.chart-freshness { display: flex; gap: 4px 16px; flex-wrap: wrap; margin: 6px 0; font-size: 12px; color: var(--el-text-color-secondary); }
 .chart-periods .el-button + .el-button { margin-left: 0; }
 .chart-help, .chart-message, small { color: var(--el-text-color-secondary); font-size: 12px; line-height: 1.6; }
 .chart-help { margin: 4px 0 8px; }

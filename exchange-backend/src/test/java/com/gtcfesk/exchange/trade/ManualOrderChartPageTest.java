@@ -23,7 +23,31 @@ class ManualOrderChartPageTest {
         assertEquals(end-200*60000L,candles.get(0).get("timestamp"));assertEquals(end-60000,candles.get(199).get("timestamp"));
         assertEquals("157.5751234567890123",candles.get(0).get("price"));assertEquals("157",candles.get(0).get("low"));
         assertEquals(end-200*60000L-1,page.get("nextEndTime"));assertEquals(true,page.get("hasMore"));
+        assertEquals(end-60000,page.get("latestCandleTime"));
+        assertFalse(page.containsKey("historyRepair"));assertFalse(page.containsKey("missingData"));assertFalse(page.containsKey("retryAt"));
         verify(market,times(1)).historicalKline("JPY=X","1m",200,end-1);verifyNoMoreInteractions(market);
+    }
+    @Test void olderCandlesRemainAvailableAndKeepBlockedRepairDetails() {
+        long end=finished(),old=end-3*86400000L;ForexQuoteMarketService market=mock(ForexQuoteMarketService.class);
+        Map<String,Object> response=feed(Collections.singletonList(candle(old)),false,"available");
+        Map<String,Object> state=(Map<String,Object>)response.get("data"),repair=new LinkedHashMap<>();
+        repair.put("state","unrepairable");repair.put("queueState","blocked");
+        repair.put("gaps",Collections.singletonList(Collections.singletonMap("reason","calendar_unverified")));
+        state.put("historyRepair",repair);state.put("missingData","calendar_unverified");state.put("retryAt",end+120000L);
+        when(market.historicalKline("JPY=X","1m",200,end-1)).thenReturn(response);
+        long before=System.currentTimeMillis();Map<String,Object> page=new ManualOrderPrices(market).chart(symbol(),"Asia/Shanghai",end-1,200);
+        long after=System.currentTimeMillis();
+        assertEquals("available",page.get("status"));assertEquals(false,page.get("pending"));assertEquals(old,page.get("latestCandleTime"));
+        assertEquals(repair,page.get("historyRepair"));assertEquals("calendar_unverified",page.get("missingData"));assertEquals(end+120000L,page.get("retryAt"));
+        long serverTime=((Number)page.get("serverTime")).longValue();assertTrue(serverTime>=before && serverTime<=after);
+    }
+    @Test void latestCandleTimeIsNullWhenOnlyIncompleteOrUnfinishedCandlesExist() {
+        long end=finished();ForexQuoteMarketService market=mock(ForexQuoteMarketService.class);
+        Map<String,Object> incomplete=candle(end-60000);incomplete.remove("close_price");
+        when(market.historicalKline("JPY=X","1m",200,end-1)).thenReturn(feed(Arrays.asList(incomplete,candle(end)),false,"available"));
+        Map<String,Object> page=new ManualOrderPrices(market).chart(symbol(),"UTC",end-1,200);
+        assertEquals("empty",page.get("status"));assertTrue(((List<?>)page.get("candles")).isEmpty());
+        assertTrue(page.containsKey("latestCandleTime"));assertNull(page.get("latestCandleTime"));
     }
     @Test void closedMarketGapsDoNotHideExistingOlderDatabaseCandles() {
         long end=finished(),friday=end-3*86400000L;ForexQuoteMarketService market=mock(ForexQuoteMarketService.class);
