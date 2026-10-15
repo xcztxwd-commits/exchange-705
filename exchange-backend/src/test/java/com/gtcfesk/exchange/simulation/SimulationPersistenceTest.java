@@ -58,10 +58,14 @@ class SimulationPersistenceTest {
         provisioner=new SimulationProvisioner(env,mock(SimulationGateway.class),jdbc,transactions,mock(ForexQuoteMarketService.class));
         jdbc.update("DELETE FROM simulation_seed");jdbc.update("DELETE FROM asset_account");jdbc.update("DELETE FROM user_account");
     }
-    @Test void firstUseSeedsThreeIndependentWalletsWithoutKyc() {
+    @Test void firstUseSeedsTenThousandOnlyInFundWithoutKyc() {
         provisioner.user(7001L);provisioner.user(7001L);
         assertEquals(3,jdbc.queryForObject("SELECT COUNT(*) FROM asset_account WHERE user_id=7001",Integer.class));
-        assertEquals(0,new BigDecimal("300000").compareTo(jdbc.queryForObject("SELECT SUM(available) FROM asset_account WHERE user_id=7001",BigDecimal.class)));
+        assertEquals(0,new BigDecimal("10000").compareTo(jdbc.queryForObject("SELECT SUM(available) FROM asset_account WHERE user_id=7001",BigDecimal.class)));
+        assertEquals(0,new BigDecimal("10000").compareTo(balance(7001,"FUND")));
+        assertEquals(0,BigDecimal.ZERO.compareTo(balance(7001,"CONTRACT")));
+        assertEquals(0,BigDecimal.ZERO.compareTo(balance(7001,"OPTION")));
+        assertEquals(0,new BigDecimal("10000").compareTo(jdbc.queryForObject("SELECT amount_per_wallet FROM simulation_seed WHERE user_id=7001",BigDecimal.class)));
         assertEquals("NOT_VERIFIED",jdbc.queryForObject("SELECT kyc_status FROM user_account WHERE id=7001",String.class));
         assertEquals(0,jdbc.queryForObject("SELECT COUNT(*) FROM kyc_record",Integer.class));
     }
@@ -73,19 +77,24 @@ class SimulationPersistenceTest {
         } finally {pool.shutdownNow();}
         assertEquals(1,jdbc.queryForObject("SELECT COUNT(*) FROM simulation_seed WHERE user_id=7002",Integer.class));
         assertEquals(3,jdbc.queryForObject("SELECT COUNT(*) FROM asset_account WHERE user_id=7002",Integer.class));
+        assertEquals(0,new BigDecimal("10000").compareTo(jdbc.queryForObject("SELECT SUM(available) FROM asset_account WHERE user_id=7002",BigDecimal.class)));
     }
     @Test void returningUserKeepsBalancesAndAnotherUserIsIndependent() {
         provisioner.user(7003L);jdbc.update("UPDATE asset_account SET available=42 WHERE user_id=7003 AND coin='FUND'");
         provisioner.user(7004L);provisioner.user(7003L);
         assertEquals(0,new BigDecimal("42").compareTo(jdbc.queryForObject("SELECT available FROM asset_account WHERE user_id=7003 AND coin='FUND'",BigDecimal.class)));
-        assertEquals(0,new BigDecimal("100000").compareTo(jdbc.queryForObject("SELECT available FROM asset_account WHERE user_id=7004 AND coin='FUND'",BigDecimal.class)));
+        assertEquals(0,new BigDecimal("10000").compareTo(jdbc.queryForObject("SELECT available FROM asset_account WHERE user_id=7004 AND coin='FUND'",BigDecimal.class)));
     }
     @Test void transactionFailureCannotLeavePartialSeed() {
         jdbc.execute("ALTER TABLE simulation_seed ADD CONSTRAINT reject_test CHECK(user_id <> 7005)");
         try {assertThrows(Exception.class,()->provisioner.user(7005L));
             assertEquals(0,jdbc.queryForObject("SELECT COUNT(*) FROM user_account WHERE id=7005",Integer.class));
             assertEquals(0,jdbc.queryForObject("SELECT COUNT(*) FROM asset_account WHERE user_id=7005",Integer.class));
+            assertEquals(0,jdbc.queryForObject("SELECT COUNT(*) FROM simulation_seed WHERE user_id=7005",Integer.class));
         } finally {jdbc.execute("ALTER TABLE simulation_seed DROP CONSTRAINT reject_test");}
+        provisioner.user(7005L);provisioner.user(7005L);
+        assertEquals(1,jdbc.queryForObject("SELECT COUNT(*) FROM simulation_seed WHERE user_id=7005",Integer.class));
+        assertEquals(0,new BigDecimal("10000").compareTo(balance(7005,"FUND")));
     }
     @Test void sameTransferEngineMovesOnlyDemoSubwalletsAndRejectsReplay() {
         provisioner.user(7010L);
@@ -93,8 +102,8 @@ class SimulationPersistenceTest {
         TransferController.TransferRequest request=new TransferController.TransferRequest();
         request.setFromAccount("FUND");request.setToAccount("CONTRACT");request.setAmount(new BigDecimal("25"));request.setRequestId("simulation-transfer");
         for(int i=0;i<2;i++) new TransactionTemplate(transactions).execute(status->service.transfer(new UsernamePasswordAuthenticationToken("7010","x"),request));
-        assertEquals(0,new BigDecimal("99975").compareTo(balance(7010,"FUND")));
-        assertEquals(0,new BigDecimal("100025").compareTo(balance(7010,"CONTRACT")));
+        assertEquals(0,new BigDecimal("9975").compareTo(balance(7010,"FUND")));
+        assertEquals(0,new BigDecimal("25").compareTo(balance(7010,"CONTRACT")));
     }
     @Test void sameFinancialEnginePurchaseAndRedeemWithoutKyc() {
         provisioner.user(7011L);
@@ -110,7 +119,7 @@ class SimulationPersistenceTest {
             Long productId=product.getId();assertThrows(com.gtcfesk.exchange.common.BusinessException.class,()->service.purchaseProduct(7011L,productId,new BigDecimal("101"),"simulation-finance-key"));
             service.earlyRedeem(7011L,order.getId());return null;
         });
-        assertEquals(0,new BigDecimal("100000").compareTo(balance(7011,"FUND")));
+        assertEquals(0,new BigDecimal("10000").compareTo(balance(7011,"FUND")));
     }
     @Test void sameLoanEngineSignsCreditsAndRepaysVirtualLoanWithoutIdentity() {
         provisioner.user(7012L);
@@ -127,9 +136,9 @@ class SimulationPersistenceTest {
             assertThrows(com.gtcfesk.exchange.common.BusinessException.class,()->service.createLoan(7012L,new BigDecimal("101"),setting.getId(),"simulation-loan-key"));
             service.signContract(order.getId(),7012L,"SIMULATION-SIGNATURE");assertEquals("APPROVED",order.getStatus());return order.getId();
         });
-        assertEquals(0,new BigDecimal("100100").compareTo(balance(7012,"FUND")));
+        assertEquals(0,new BigDecimal("10100").compareTo(balance(7012,"FUND")));
         new TransactionTemplate(transactions).execute(status->{service.earlyRepayment(id,7012L);return null;});
-        assertEquals(0,new BigDecimal("100000").compareTo(balance(7012,"FUND")));
+        assertEquals(0,new BigDecimal("10000").compareTo(balance(7012,"FUND")));
         assertEquals(0,jdbc.queryForObject("SELECT COUNT(*) FROM kyc_record",Integer.class));
     }
     @Test void virtualDepositCreditsImmediatelyAndReplayDoesNotCreditTwice() {
@@ -142,7 +151,7 @@ class SimulationPersistenceTest {
         new TransactionTemplate(transactions).execute(status->{DepositSetting channel=new DepositSetting();channel.setType("digital");channel.setNetwork("USDT-PERSISTENCE");channel.setAddress("SIMULATION-PERSISTENCE-ONLY");channel.setEnabled(true);channels.saveAndFlush(channel);return null;});
         audit(service,"controlAudit");DepositOrderRequest request=new DepositOrderRequest();request.type="digital";request.currency="USD";request.amount=new BigDecimal("50");request.network="USDT-PERSISTENCE";request.address="SIMULATION-PERSISTENCE-ONLY";request.idempotencyKey="virtual-deposit";
         DepositRecord record=service.submit(7013L,request);assertEquals("COMPLETED",record.getStatus());service.submit(7013L,request);
-        assertEquals(0,new BigDecimal("100050").compareTo(balance(7013,"FUND")));
+        assertEquals(0,new BigDecimal("10050").compareTo(balance(7013,"FUND")));
     }
     @Test void virtualWithdrawalCompletesWithNoFrozenRemainderOrRealPayout() {
         provisioner.user(7014L);
@@ -158,7 +167,7 @@ class SimulationPersistenceTest {
         });
         assertEquals("COMPLETED",jdbc.queryForObject("SELECT status FROM withdraw_record WHERE user_id=7014",String.class));
         assertEquals(0,BigDecimal.ZERO.compareTo(jdbc.queryForObject("SELECT frozen FROM asset_account WHERE user_id=7014 AND coin='FUND'",BigDecimal.class)));
-        assertTrue(balance(7014,"FUND").compareTo(new BigDecimal("99975"))<=0);
+        assertTrue(balance(7014,"FUND").compareTo(new BigDecimal("9975"))<=0);
     }
 
     @Test void independentDatabaseWithSameUserIdCannotBeMutated() {
@@ -202,6 +211,12 @@ class SimulationPersistenceTest {
         ReflectionTestUtils.setField(contracts,"users",repo(UserAccountRepository.class));ReflectionTestUtils.setField(options,"users",repo(UserAccountRepository.class));
         ReflectionTestUtils.setField(options,"transactionManager",transactions);
         TransactionTemplate transaction=new TransactionTemplate(transactions);
+        TransferController transfers=new TransferController(repo(UserAccountRepository.class),assets,repo(TransferRecordRepository.class));audit(transfers,"audit");
+        for(String wallet:Arrays.asList("CONTRACT","OPTION")) {
+            TransferController.TransferRequest transfer=new TransferController.TransferRequest();
+            transfer.setFromAccount("FUND");transfer.setToAccount(wallet);transfer.setAmount(new BigDecimal("4000"));transfer.setRequestId("simulation-trading-funds-"+wallet);
+            transaction.execute(status->transfers.transfer(new UsernamePasswordAuthenticationToken("7016","x"),transfer));
+        }
         transaction.execute(status->{
             OptionDuration duration=new OptionDuration();duration.setDuration(60);duration.setLabel("60s");duration.setSortOrder(0);duration.setEnabled(true);duration.setProfitRate(new BigDecimal("0.8"));duration.setLossRate(BigDecimal.ONE);repo(OptionDurationRepository.class).save(duration);
             return null;
@@ -212,7 +227,7 @@ class SimulationPersistenceTest {
                 TradingSymbol symbol=new TradingSymbol();symbol.setSymbol(symbolName);symbol.setName(category);symbol.setBaseCurrency("EUR");symbol.setQuoteCurrency("USD");symbol.setSourceCategory(category);symbol.setCategory(category);symbol.setMarketSource("yahoo");symbol.setIsEnabled(true);symbol.setLotSize(BigDecimal.ONE);symbol.setFeeMultiplier(BigDecimal.ONE);symbol.setMaxLeverage(new BigDecimal("100"));
                 FxContractRules.defaults(symbol);symbols.save(symbol);
                 for(String side:Arrays.asList("BUY","SELL")) {
-                    CreateContractOrderRequest req=new CreateContractOrderRequest();req.setSymbol(symbolName);req.setSide(side);req.setType("MARKET");req.setQuantity(new BigDecimal("0.01"));req.setLeverage(BigDecimal.TEN);
+                    CreateContractOrderRequest req=new CreateContractOrderRequest();req.setSymbol(symbolName);req.setSide(side);req.setType("MARKET");req.setQuantity(new BigDecimal("0.01"));req.setLeverage(new BigDecimal("100"));
                     req.setRequestId("simulation-contract-"+category+"-"+side+"-market");
                     ContractOrder order=contracts.createOrder(7016L,req);assertEquals("OPEN",order.getStatus());
                     assertEquals(order.getId(),contracts.createOrder(7016L,req).getId());
