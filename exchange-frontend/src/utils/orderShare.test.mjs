@@ -1,12 +1,16 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { settledShareOrder, shareReturn, shareNumber, historyWindow, coveredCandles, recentShareChart, drawSharePoster, shareCopy, shareTemplates, shareNeedsChart, shareBackgrounds } from './orderShare.ts'
+import { settledShareOrder as settledPcShareOrder, drawSharePoster as drawPcSharePoster } from '../../../exchange-pc/src/utils/orderShare.ts'
 
-// PC/mobile share the net-settlement policy; admin keeps its recorded-P&L adapter. The renderer stays shared.
+// Settlement/rendering stays shared; user posters use instrument precision, admin uses three decimals.
 const rendererSource = url => readFileSync(url, 'utf8').replace(/\r\n/g, '\n')
   .replace(/from '[^']*shareTemplateDesign\.ts'/, "from './shareTemplateDesign.ts'")
   .replace("import { formatPrice } from './formatPrice.ts'\n", '')
   .replace('// Order data stays shared with mobile and PC; admin price display uses three decimals.', '// Kept identical in mobile, PC and admin builds.')
+  .replace(/^  pricePrecision\?: number\n/gm, '')
+  .replace(/^    pricePrecision: Number\.isInteger\(raw\.pricePrecision\).*\n/gm, '')
+  .replace(/^  const price = \((?:n|value): number\) => (?:n|value)\.toFixed\(order\.pricePrecision \?\? 2\)\n/gm, '')
   .replace(/^  const price = \((?:n|value): number\) => new Intl\.NumberFormat\('en-US', \{ maximumFractionDigits: 16 \}\)\.format\((?:n|value)\)\n/gm, '')
   .replace(/\bprice\(order\./g, 'formatPrice(order.')
 
@@ -17,6 +21,9 @@ const order = settledShareOrder(raw, 'contract')
 assert.equal(order.buy, false)
 assert.equal(order.profit, -50)
 assert.equal(order.currency, 'USD')
+assert.equal(order.pricePrecision, 2)
+for (const precision of [0, 2, 3, 5, 8]) assert.equal(settledShareOrder({ ...raw, pricePrecision: precision }, 'contract').pricePrecision, precision)
+for (const precision of [null, -1, 17, 2.5, '5', NaN]) assert.equal(settledShareOrder({ ...raw, pricePrecision: precision }, 'contract').pricePrecision, 2)
 assert.equal(settledShareOrder({ ...raw, direction: 'UP', amount: 200 }, 'option').currency, 'USD')
 assert.equal(shareReturn(order), -5)
 assert.equal(shareReturn({ ...order, margin: 0 }), null)
@@ -46,6 +53,19 @@ drawSharePoster(canvas, order, { ...options, mode: 'none' }, shareCopy('en'), 'D
 for (const hidden of ['-5.00%', '-50.00', '78.00', '1,000.00', '3.00']) assert.ok(!printed.includes(hidden))
 assert.ok(printed.includes('TRADE RECORD'))
 const chart = { ...window, candles: coveredCandles(rows, window), source: 'Test' }
+const priceCases = [[0, '161', '161'], [2, '161.20', '161.31'], [3, '161.200', '161.305'], [5, '161.20000', '161.30512'], [8, '161.20000000', '161.30512346']]
+for (const [app, settle, draw] of [['mobile', settledShareOrder, drawSharePoster], ['pc', settledPcShareOrder, drawPcSharePoster]]) {
+  for (const precision of [undefined, null, -1, 17, 2.5, '5', NaN]) assert.equal(settle({ ...raw, pricePrecision: precision }, 'contract').pricePrecision, 2, `${app}: invalid precision falls back to two decimals`)
+  for (const kind of ['contract', 'option']) for (const [precision, entry, exit] of priceCases) for (const template of shareTemplates) {
+    printed.length = 0
+    const specimen = settle({ ...raw, direction: 'UP', pricePrecision: precision, openPrice: 161.2, closePrice: 161.305123456789 }, kind)
+    assert.equal(specimen.pricePrecision, precision, `${app}/${kind}: preserves configured precision`)
+    draw(canvas, specimen, { ...options, template }, shareCopy('en'), 'DEMO', 'UTC', undefined, chart, {})
+    for (const expected of [entry, exit]) assert.ok(printed.includes(expected), `${app}/${kind}/${template}: instrument precision ${precision}: ${expected}`)
+    assert.ok(!printed.includes('161.305123456789'), `${template}: no settlement decimal tail`)
+    assert.equal(specimen.closePrice, 161.305123456789, 'Display precision must not round settlement data')
+  }
+}
 for (const template of shareTemplates) {
   for (const mode of ['amount', 'rate', 'both', 'none']) {
     printed.length = 0
@@ -60,7 +80,7 @@ for (const template of shareTemplates) {
 for (const template of ['referenceGold', 'referenceWhite', 'referenceTerminal']) {
   assert.throws(() => drawSharePoster(canvas, order, { ...options, template }, shareCopy('en'), 'DEMO', 'UTC', undefined, undefined, {}))
   printed.length = 0
-  drawSharePoster(canvas, { ...order, kind: 'option', amount: 200, closePrice: 1e-8 }, { ...options, template, mode: 'both' }, shareCopy('en'), 'DEMO', 'UTC', undefined, chart, {})
+  drawSharePoster(canvas, { ...order, kind: 'option', amount: 200, closePrice: 1e-8, pricePrecision: 8 }, { ...options, template, mode: 'both' }, shareCopy('en'), 'DEMO', 'UTC', undefined, chart, {})
   assert.ok(!printed.includes(shareCopy('en').investment))
   assert.ok(printed.some(value => value.includes('-25.00%')))
   assert.ok(printed.some(value => value.includes('0.00000001')))

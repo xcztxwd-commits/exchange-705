@@ -17,6 +17,7 @@ export interface ShareOrder {
   userName?: string; userEmail?: string
   id: string; symbol: string; kind: ShareKind; buy: boolean
   profit: number; openPrice: number; closePrice: number
+  pricePrecision?: number
   quantityUnit?: string; quantity: number | null; leverage: number | null; margin: number | null; fee: number | null; amount: number | null
   openTime: string; closeTime: string; currency: string
 }
@@ -138,6 +139,7 @@ export function settledShareOrder(raw: Record<string, unknown>, kind: ShareKind)
   return {
     id: String(raw.id), symbol: String(raw.symbol), kind, buy: direction === 'BUY' || direction === 'UP',
     profit, openPrice, closePrice, leverage: optionalNumber(raw.leverage), quantity: optionalNumber(raw.quantity), margin: optionalNumber(raw.margin),
+    pricePrecision: Number.isInteger(raw.pricePrecision) && Number(raw.pricePrecision) >= 0 && Number(raw.pricePrecision) <= 16 ? Number(raw.pricePrecision) : 2,
     quantityUnit: raw.quantityUnitType === 'BASE_ASSET' ? String(raw.quantityAsset || '—') : raw.quantityUnitType === 'SHARE' ? '股' : 'lots',
     fee: optionalNumber(raw.fee), amount: optionalNumber(raw.amount),
     openTime: String(raw.openTime || raw.createdAt || ''), closeTime: String(raw.closeTime),
@@ -320,7 +322,7 @@ export function drawSharePoster(canvas: HTMLCanvasElement, order: ShareOrder, op
     ctx.fillStyle = shade; ctx.fillRect(0, 440, 540, 204)
   }
   line(42, 460, 498, 460, scenic ? '#ffffff55' : border)
-  const price = (n: number) => new Intl.NumberFormat('en-US', { maximumFractionDigits: 16 }).format(n)
+  const price = (n: number) => n.toFixed(order.pricePrecision ?? 2)
   text(copy.entry, 42, 484, 12, priceMuted, 500, 212)
   text(copy.exit, 287, 484, 12, priceMuted, 500, 211)
   text(price(order.openPrice), 42, 514, 25, priceInk, 600, 212)
@@ -426,7 +428,7 @@ function drawDistinctPoster(canvas: HTMLCanvasElement, order: ShareOrder, option
     const color = theme === 'racing' ? secondary.color === '#17804c' ? '#69d8a3' : secondary.color === '#c43d4b' ? '#ff828b' : '#b2c1ce' : secondary.color
     t(secondary.value, x, y, Math.min(size, primarySize * .58), color, 700, width, align)
   }
-  const price = (value: number) => new Intl.NumberFormat('en-US', { maximumFractionDigits: 16 }).format(value)
+  const price = (value: number) => value.toFixed(order.pricePrecision ?? 2)
   const pricePair = (x: number, y: number, width: number, fill = ink, caption = muted) => {
     const cell = (width - 26) / 2
     t(copy.entry, x, y, 11, caption, 500, cell)

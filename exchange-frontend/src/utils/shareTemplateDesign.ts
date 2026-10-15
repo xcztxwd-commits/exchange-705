@@ -181,7 +181,8 @@ export function drawShareDesign(canvas: HTMLCanvasElement, design: ShareDesign, 
   ctx.fillStyle = design.background; ctx.fillRect(0, 0, canvas.width, canvas.height)
   if (design.artwork && background) { ctx.drawImage(background, 0, 0, canvas.width, canvas.height); ctx.fillStyle = `${design.background}aa`; ctx.fillRect(0, 0, canvas.width, canvas.height) }
   const signed = (value: number) => { const rounded = Number(value.toFixed(2)); return `${rounded > 0 ? '+' : ''}${new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Object.is(rounded, -0) ? 0 : rounded)}` }
-  const price = (value: number) => new Intl.NumberFormat('en-US', { maximumFractionDigits: 16 }).format(value)
+  const price = (value: number) => order.pricePrecision === undefined
+    ? new Intl.NumberFormat('en-US', { maximumFractionDigits: 16 }).format(value) : value.toFixed(order.pricePrecision)
   const profile = shareProfileCopy(language)
   const labels: Record<ShareField, string> = { brand: '', symbol: '', direction: '', leverage: copy.leverage, amount: `${copy.pnl} (${order.currency || copy.units})`, rate: copy.rate,
     openPrice: copy.entry, closePrice: copy.exit, openTime: copy.openTime, closeTime: copy.closeTime, userName: profile[0], userEmail: profile[1] }

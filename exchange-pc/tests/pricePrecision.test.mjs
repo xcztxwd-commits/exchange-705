@@ -2,6 +2,9 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import ts from 'typescript'
 import { computed, nextTick, reactive, ref, watch } from 'vue'
+import { drawSharePoster, settledShareOrder } from '../src/utils/orderShare.ts'
+import { drawSharePoster as drawMobileSharePoster, shareCopy } from '../../exchange-frontend/src/utils/orderShare.ts'
+import { createShareDesign } from '../../exchange-frontend/src/utils/shareTemplateDesign.ts'
 
 const desktop = readFileSync(new URL('../src/views/DesktopTrade.vue', import.meta.url), 'utf8')
 const chart = readFileSync(new URL('../src/components/KlineChart.vue', import.meta.url), 'utf8')
@@ -13,11 +16,29 @@ const getPrice = desktop.match(/const getSymbolPrice = [^\n]+/)[0]
 const functions = new Function('marketStore', 'currentSymbol', compile(formatter + '\n' + getPrice) + '\nreturn { formatSymbolPrice, getSymbolPrice }')(marketStore, currentSymbol)
 const { formatSymbolPrice } = functions
 const rawPrice = marketStore.priceMap['JPY=X'].price
+const chartSymbolSource = chart.match(/  const instruments = [^\n]+\n  const instrument = [^\n]+\n  const precision = [^\n]+\n  chart\.setSymbol\([^\n]+/)[0]
+const applyChartSymbol = new Function('market', 'props', 'displaySymbol', 'chart', compile(chartSymbolSource))
+const posterTexts = [], gradient = () => ({ addColorStop() {} })
+const posterContext = new Proxy({ createLinearGradient: gradient, createRadialGradient: gradient,
+  measureText: text => ({ width: text.length * 10 }), fillText: text => posterTexts.push(text) }, { get: (target, key) => target[key] || (() => {}) })
+const canvas = { getContext: () => posterContext }
+const shareOptions = { template: 'architecture', mode: 'both', quantity: false, capital: false, fee: false, leverage: false, orderId: false, openTime: false }
 for (const digits of [3, 5, 0, 8, 2]) {
   marketStore.symbols = [{ symbol: 'JPY=X', pricePrecision: digits }, { symbol: 'EURUSD=X', pricePrecision: 5 }]
   assert.equal(functions.getSymbolPrice('JPY=X'), rawPrice.toFixed(digits))
   assert.equal(formatSymbolPrice(1.12, 'EURUSD=X'), '1.12000', 'Orders use their own symbol, not the selected symbol')
   assert.equal(formatSymbolPrice(0), (0).toFixed(digits))
+  let chartSymbol
+  applyChartSymbol(marketStore, { symbol: 'JPY=X' }, value => value, { setSymbol: value => { chartSymbol = value } })
+  const order = settledShareOrder({ id: 1, symbol: 'JPY=X', status: 'CLOSED', side: 'BUY', profit: 20,
+    openPrice: 12345.2, closePrice: 12345.67891234, pricePrecision: digits, margin: 100,
+    openTime: '2026-10-15T00:00:00Z', closeTime: '2026-10-15T01:00:00Z' }, 'contract')
+  assert.equal(order.pricePrecision, chartSymbol.pricePrecision, 'Share and K-line use the same instrument precision')
+  for (const draw of [drawSharePoster, drawMobileSharePoster]) for (const design of [undefined, createShareDesign('light')]) {
+    posterTexts.length = 0
+    draw(canvas, order, { ...shareOptions, design }, shareCopy('en'), 'EXCHANGE', 'UTC')
+    for (const price of [order.openPrice, order.closePrice]) assert.ok(posterTexts.includes(formatSymbolPrice(price, order.symbol)), 'Shared entry/exit prices match page display exactly')
+  }
 }
 for (const invalid of [null, undefined, '', ' ', NaN, Infinity, 'bad']) assert.equal(formatSymbolPrice(invalid), '—')
 for (const precision of [undefined, null, -1, 9, 2.5, '3']) {

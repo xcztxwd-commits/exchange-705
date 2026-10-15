@@ -82,9 +82,10 @@ async function loadOrder() {
   preview.value = ''; templates.value = []; definitions.value = {}; showPersonal.value = false; profile = undefined
   const run = ++generation
   try {
-    const [result, , configured] = await Promise.all([
+    const [result, , configured, catalog] = await Promise.all([
       request.get(`/trade/${props.kind}/orders`, { params: { status: 'CLOSED' } }), systemTimezoneReady,
       request.get('/user/share-templates', { params: { locale: shareLanguage(locale.locale), details: true } }),
+      request.get('/market/all'),
     ])
     if (disposed || run !== generation) return
     const config = configured as unknown as { templates: unknown; focus?: string; definitions?: ShareTemplateRule[]; brand?: string }
@@ -112,7 +113,9 @@ async function loadOrder() {
     const rows = Array.isArray(result) ? result : response.list || []
     const raw = rows.find((item: Record<string, unknown>) => String(item.id) === String(props.orderId))
     if (!raw) throw new Error('Order unavailable')
-    order.value = settledShareOrder(raw, props.kind)
+    const instruments = catalog as unknown as { list?: { symbol: string; pricePrecision?: number }[] }
+    const instrument = instruments.list?.find(item => item.symbol === raw.symbol)
+    order.value = settledShareOrder({ ...raw, pricePrecision: instrument?.pricePrecision ?? 2 }, props.kind)
     timezone = getSystemTimezone()
     await render()
   } catch {

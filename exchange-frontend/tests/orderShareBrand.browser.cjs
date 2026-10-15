@@ -5,17 +5,28 @@ const ports = (process.env.SHARE_QA_PORTS || '5193,5195').split(',').map(Number)
 const out = process.env.SHARE_QA_OUTPUT
 if (!out) throw Error('Set SHARE_QA_OUTPUT to an evidence directory outside the repository')
 fs.mkdirSync(out, { recursive: true })
-const raw = { id: 3391, symbol: 'USDJPY', status: 'CLOSED', side: 'SELL', profit: 21.82, openPrice: 158.225, closePrice: 158.164, leverage: 100, margin: 649.15, quantity: 1, fee: 0, openTime: '2026-10-08T15:20:00Z', closeTime: '2026-10-08T15:22:13Z' }
+const raw = { id: 3391, symbol: 'USDJPY', status: 'CLOSED', side: 'SELL', profit: 21.82, openPrice: 158.225, closePrice: 158.164123456789, leverage: 100, margin: 649.15, quantity: 1, fee: 0, openTime: '2026-10-08T15:20:00Z', closeTime: '2026-10-08T15:22:13Z' }
 ;(async () => {
-  const browser = await chromium.launch({ headless: true, ...(process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : {}) })
+  if (process.platform === 'win32' && !process.env.CHROMIUM_DISABLED_FEATURES) throw Error('Set CHROMIUM_DISABLED_FEATURES to the installed Playwright default disabled features')
+  const disabledFeatures = [process.env.CHROMIUM_DISABLED_FEATURES, 'AutofillAiWalletPrivatePasses', 'AutofillAmbientAutofill'].filter(Boolean).join(',')
+  const browser = await chromium.launch({ headless: true, args: ['--disable-features=' + disabledFeatures, '--enable-automation'], ...(process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : {}) })
   const checks = []
   try {
+    const session = await browser.newBrowserCDPSession()
+    const command = (await session.send('Browser.getBrowserCommandLine')).arguments
+    const featureSwitch = command.filter(arg => /^[-/]{1,2}disable-features=/i.test(arg)).at(-1)
+    assert.ok(featureSwitch.includes('AutofillAiWalletPrivatePasses') && featureSwitch.includes('AutofillAmbientAutofill'))
+    for (const feature of disabledFeatures.split(',')) assert.ok(featureSwitch.split('=')[1].split(',').includes(feature))
+    const terminator = command.findIndex(arg => arg === '--' || /^[-/]{1,2}single-argument(?:=|$)/.test(arg))
+    assert.ok(terminator < 0 || command.indexOf(featureSwitch) < terminator)
+    fs.writeFileSync(path.join(out, 'browser-command.json'), JSON.stringify(command, null, 2))
+    await session.detach()
     for (const [index, port] of ports.entries()) for (const mode of ['REAL', 'DEMO']) {
       const base = 'http://127.0.0.1:' + port, app = index === 0 ? 'mobile' : 'pc'
       const page = await browser.newPage({ viewport: { width: index === 0 ? 390 : 1440, height: 900 } })
       await page.context().grantPermissions(['local-network-access'], { origin: base })
       const errors = [], requests = []
-      let brand = ' QA Tenant Exchange ', design
+      let brand = ' QA Tenant Exchange ', design, precision = 3
       page.on('pageerror', error => errors.push(error.message))
       await page.addInitScript(mode => {
         localStorage.setItem('token', 'QA'); localStorage.setItem('user', JSON.stringify({ id: 7, tenantId: 1 }))
@@ -38,7 +49,8 @@ const raw = { id: 3391, symbol: 'USDJPY', status: 'CLOSED', side: 'SELL', profit
         } else if (url.pathname.endsWith('/trade/contract/orders')) {
           assert.equal(url.pathname, (mode === 'DEMO' ? '/demo-api' : '/api') + '/trade/contract/orders')
           assert.equal(request.headers()['x-account-mode'], mode); data = { list: [raw] }
-        } else if (url.pathname.endsWith('/timezone')) data = { timezone: 'UTC' }
+        } else if (url.pathname.endsWith('/market/all')) data = { list: [{ symbol: 'OTHER', pricePrecision: 8 }, { symbol: raw.symbol, pricePrecision: precision }] }
+        else if (url.pathname.endsWith('/timezone')) data = { timezone: 'UTC' }
         return route.fulfill({ json: data })
       })
       await page.goto(base + '/__qa'); assert.equal(await page.title(), 'Share brand QA')
@@ -63,6 +75,11 @@ const raw = { id: 3391, symbol: 'USDJPY', status: 'CLOSED', side: 'SELL', profit
         assert.ok(value.texts.includes(expected), app + '/' + mode + ' renders ' + expected)
         assert.ok(!value.texts.some(text => ['DEMO', 'FOREX', 'GTCFX'].includes(text)))
         assert.ok(!value.texts.some(text => /SIMULATION|VIRTUAL FUNDS|DEMO|模拟账户/.test(text)), 'Sharing never adds account-mode watermarks')
+        for (const price of [raw.openPrice, raw.closePrice]) {
+          const expectedPrice = price.toFixed(precision ?? 2)
+          assert.ok(value.texts.includes(expectedPrice), `${app}/${mode} poster uses instrument precision ${precision}: ${expectedPrice}`)
+          assert.ok(!value.texts.includes(String(raw.closePrice)), 'No long settlement decimal tail')
+        }
       }
       await checkBrand('QA Tenant Exchange')
       await page.screenshot({ path: path.join(out, app + '-' + mode + '-brand.png') })
@@ -71,15 +88,17 @@ const raw = { id: 3391, symbol: 'USDJPY', status: 'CLOSED', side: 'SELL', profit
       const download = await downloading, file = path.join(out, app + '-' + mode + '.png'); await download.saveAs(file)
       const png = fs.readFileSync(file); assert.equal(png.subarray(1, 4).toString(), 'PNG'); assert.equal(png.readUInt32BE(16), 1080); assert.equal(png.readUInt32BE(20), 1440)
       if (mode === 'DEMO') assert.deepEqual(png, fs.readFileSync(path.join(out, app + '-REAL.png')), 'Identical real/demo orders export identical images')
-      brand = ' Renamed Tenant Exchange '; await page.evaluate(() => window.__qa.locale.setLocale('ja')); await checkBrand('Renamed Tenant Exchange')
+      precision = 5; brand = ' Renamed Tenant Exchange '; await page.evaluate(() => window.__qa.locale.setLocale('ja')); await checkBrand('Renamed Tenant Exchange')
       assert.ok(!(await poster()).texts.includes('QA Tenant Exchange'))
-      brand = '   '; await page.evaluate(() => window.__qa.locale.setLocale('zh-TW')); await checkBrand('EXCHANGE')
+      precision = 0; await page.evaluate(() => window.__qa.locale.setLocale('de')); await checkBrand('Renamed Tenant Exchange')
+      precision = 8; await page.evaluate(() => window.__qa.locale.setLocale('it')); await checkBrand('Renamed Tenant Exchange')
+      precision = undefined; brand = '   '; await page.evaluate(() => window.__qa.locale.setLocale('zh-TW')); await checkBrand('EXCHANGE')
       brand = undefined; await page.evaluate(() => window.__qa.locale.setLocale('fr')); await checkBrand('EXCHANGE')
       assert.equal(await page.locator('vite-error-overlay').count(), 0); assert.deepEqual(errors, [])
-      checks.push({ app, mode, builtInAndCustomBrand: true, brandRefresh: true, missingBrandFallback: true, pngExport: true, noWatermark: true, requests, errors })
+      checks.push({ app, mode, builtInAndCustomBrand: true, instrumentPrecision: [0, 3, 5, 8], missingPrecisionFallback: 2, brandRefresh: true, missingBrandFallback: true, pngExport: true, noWatermark: true, requests, errors })
       await page.close()
     }
     fs.writeFileSync(path.join(out, 'brand-results.json'), JSON.stringify(checks, null, 2))
-    console.log('PASS: mobile/PC real/demo branding, real-gateway metadata, custom/built-in templates, changed/empty/missing brand, no watermarks and PNG export')
+    console.log(`PASS: ${[...new Set(checks.map(check => check.app))].join('/')} real/demo branding, instrument precision and fallback, custom/built-in templates, no watermarks and PNG export`)
   } finally { await browser.close() }
 })().catch(error => { console.error(error); process.exitCode = 1 })

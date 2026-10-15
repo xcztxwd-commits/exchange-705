@@ -32,6 +32,20 @@ for (const mutate of [d => d.boxes[0].field = 'script', d => d.boxes[0].x = 3000
 const draws = [], context = { save() {}, restore() {}, beginPath() {}, rect() {}, clip() {}, fillRect() {}, drawImage() {},
   measureText: text => ({ width: text.length * 10 }), fillText(text, x, y) { draws.push({ text, x, y, color: this.fillStyle, font: this.font }) } }
 const canvas = { getContext: () => context }
+const legacyPreview = { ...previewShareOrder(input), openPrice: 161.2, closePrice: 161.305123456789 }
+drawShareDesign(canvas, design, legacyPreview, shareCopy('en'), 'EXCHANGE', 'UTC', 50, 'both', 'en', false)
+assert.ok(draws.some(row => row.text === '161.2'), 'Admin previews without instrument precision preserve their existing price display')
+assert.ok(draws.some(row => row.text === '161.305123456789'), 'User instrument formatting must not alter legacy admin previews')
+for (const precision of [0, 2, 3, 5, 8]) {
+  draws.length = 0
+  const specimen = { ...previewShareOrder(input), openPrice: 161.2, closePrice: 161.305123456789, pricePrecision: precision }
+  drawShareDesign(canvas, design, specimen, shareCopy('en'), 'EXCHANGE', 'UTC', 50, 'both', 'en', false)
+  for (const value of [specimen.openPrice, specimen.closePrice]) {
+    const expected = new Intl.NumberFormat('en-US', { minimumFractionDigits: precision, maximumFractionDigits: precision }).format(value)
+    assert.ok(draws.some(row => row.text === expected), `Custom design: instrument precision ${precision}`)
+  }
+}
+draws.length = 0
 for (const field of ['userName', 'userEmail']) design.boxes.find(box => box.field === field).visible = true
 drawShareDesign(canvas, design, previewShareOrder(input), shareCopy('en'), 'EXCHANGE', 'UTC', 50, 'both', 'en', false)
 assert.ok(draws.some(row => row.text === '+50.00%'))
