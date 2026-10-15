@@ -39,7 +39,10 @@ class SimulationProvisionerMySqlIT {
     long count(String table){return jdbc.queryForObject("SELECT COUNT(*) FROM "+table+" WHERE tenant_id=1 AND user_id=?",Long.class,user);}
     @Test void concurrentFirstAndReturningRequestsCannotDeadlockOrRemint() throws Exception {
         parallel();assertEquals(1,count("simulation_seed"));assertEquals(3,count("asset_account"));
-        assertEquals(0,new BigDecimal("300000").compareTo(jdbc.queryForObject("SELECT SUM(available) FROM asset_account WHERE tenant_id=1 AND user_id=?",BigDecimal.class,user)));
+        assertEquals(0,new BigDecimal("10000").compareTo(jdbc.queryForObject("SELECT SUM(available) FROM asset_account WHERE tenant_id=1 AND user_id=?",BigDecimal.class,user)));
+        assertEquals(0,new BigDecimal("10000").compareTo(jdbc.queryForObject("SELECT available FROM asset_account WHERE tenant_id=1 AND user_id=? AND coin='FUND'",BigDecimal.class,user)));
+        assertEquals(0,BigDecimal.ZERO.compareTo(jdbc.queryForObject("SELECT SUM(available) FROM asset_account WHERE tenant_id=1 AND user_id=? AND coin IN ('CONTRACT','OPTION')",BigDecimal.class,user)));
+        assertEquals(0,new BigDecimal("10000").compareTo(jdbc.queryForObject("SELECT amount_per_wallet FROM simulation_seed WHERE tenant_id=1 AND user_id=?",BigDecimal.class,user)));
         jdbc.update("UPDATE asset_account SET available=42 WHERE tenant_id=1 AND user_id=? AND coin='FUND'",user);
         parallel();assertEquals(1,count("simulation_seed"));assertEquals(3,count("asset_account"));
         assertEquals(0,new BigDecimal("42").compareTo(jdbc.queryForObject("SELECT available FROM asset_account WHERE tenant_id=1 AND user_id=? AND coin='FUND'",BigDecimal.class,user)));
@@ -62,5 +65,6 @@ class SimulationProvisionerMySqlIT {
             assertEquals(0,jdbc.queryForObject("SELECT COUNT(*) FROM user_account WHERE id=?",Long.class,user));
         } finally {jdbc.execute("DROP TRIGGER "+trigger);}
         service.user(user);service.user(user);assertEquals(3,count("asset_account"));assertEquals(1,count("simulation_seed"));
+        assertEquals(0,new BigDecimal("10000").compareTo(jdbc.queryForObject("SELECT SUM(available) FROM asset_account WHERE tenant_id=1 AND user_id=?",BigDecimal.class,user)));
     }
 }

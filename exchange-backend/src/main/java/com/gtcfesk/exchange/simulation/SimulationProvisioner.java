@@ -71,10 +71,12 @@ public class SimulationProvisioner {
             jdbc.queryForObject("SELECT id FROM user_account WHERE tenant_id=? AND id=? FOR UPDATE", Long.class, tenant, userId);
             int seeded = jdbc.queryForObject("SELECT COUNT(*) FROM simulation_seed WHERE tenant_id=? AND user_id=?", Integer.class, tenant, userId);
             if (seeded == 0) {
+                BigDecimal initialBalance = new BigDecimal("10000");
                 for (String coin : Arrays.asList("FUND", "CONTRACT", "OPTION")) {
-                    jdbc.update("INSERT INTO asset_account(tenant_id,user_id,coin,available,frozen,row_version,created_at,updated_at) VALUES (?,?,?,?,0,0,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)", tenant, userId, coin, new BigDecimal("100000"));
+                    jdbc.update("INSERT INTO asset_account(tenant_id,user_id,coin,available,frozen,row_version,created_at,updated_at) VALUES (?,?,?,?,0,0,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)", tenant, userId, coin, "FUND".equals(coin) ? initialBalance : BigDecimal.ZERO);
                 }
-                jdbc.update("INSERT INTO simulation_seed(tenant_id,user_id,amount_per_wallet,created_at) VALUES (?,?,100000,CURRENT_TIMESTAMP)", tenant, userId);
+                // Retain the legacy column name; the initial grant now goes only to FUND.
+                jdbc.update("INSERT INTO simulation_seed(tenant_id,user_id,amount_per_wallet,created_at) VALUES (?,?,?,CURRENT_TIMESTAMP)", tenant, userId, initialBalance);
             }
             return null;
         });
