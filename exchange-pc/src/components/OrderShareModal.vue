@@ -7,6 +7,7 @@ import { useAuthStore } from '@/store/auth'
 import { validateShareDesign, shareProfileCopy, type ShareTemplateRule } from '../../../exchange-frontend/src/utils/shareTemplateDesign'
 import { createShareAssetLoader, fetchShareImage } from '../../../exchange-frontend/src/utils/shareTemplateAssets'
 import { formatDateTime, getSystemTimezone, systemTimezoneReady } from '@/utils/dateTime'
+import { orderTimestamp } from '../../../exchange-frontend/src/utils/orderView'
 import { displaySymbol } from '@/utils/displaySymbol'
 import { recentShareChart, drawSharePoster, settledShareOrder, shareCopy, shareLanguage, shareReturn, shareTemplates, shareNeedsChart, shareBackgrounds,
   type ShareChart, type ShareKind, type ShareOptions, type ShareOrder, type ShareTemplate } from '@/utils/orderShare'
@@ -181,7 +182,11 @@ async function render() {
       } catch { throw new Error(copy.value.chartError) }
     }
     if (disposed || run !== generation) return
-    const display = { ...value, symbol: displaySymbol(value), openTime: formatDateTime(value.openTime), closeTime: formatDateTime(value.closeTime) }
+    const displayTime = (raw: string) => {
+      const timestamp = orderTimestamp(raw)
+      return timestamp === null ? '' : formatDateTime(new Date(timestamp).toISOString())
+    }
+    const display = { ...value, symbol: displaySymbol(value), openTime: displayTime(value.openTime), closeTime: displayTime(value.closeTime) }
     const canvas = document.createElement('canvas')
     drawSharePoster(canvas, display, settings, copy.value, brand.value, timezone, showQr.value ? qrImage : undefined, chart, background, images)
     const result = await new Promise<Blob>((resolve, reject) => canvas.toBlob(data => data ? resolve(data) : reject(new Error(copy.value.error)), 'image/png'))

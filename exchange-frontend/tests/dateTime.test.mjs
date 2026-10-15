@@ -27,6 +27,22 @@ for (const app of ['exchange-frontend', 'exchange-pc']) {
     assert.equal(dateTime.formatDateTime('2026-07-01T05:00:00Z'), '2026-07-01 01:00:00')
     assert.equal(dateTime.formatDate('2026-01-01T03:00:00Z'), '2025-12-31')
     assert.equal(dateTime.formatTime('2026-07-01T05:00:00Z'), '01:00:00')
+    const share = readFileSync(new URL(`../../${app}/src/components/OrderShareModal.vue`, import.meta.url), 'utf8')
+    const parseOrderTime = readFileSync(new URL('../src/utils/orderView.ts', import.meta.url), 'utf8')
+    const displayTime = share.match(/    const displayTime = \(raw: string\) => \{[\s\S]*?\n    \}/)?.[0] || ''
+    const display = share.match(/^    const display = .*$/m)[0]
+    const renderShare = value => runInNewContext(
+      stripTypeScriptTypes(`${parseOrderTime}\n${displayTime}\n${display}; display`).replace(/^export /gm, ''),
+      { value, formatDateTime: dateTime.formatDateTime, displaySymbol: order => order.symbol },
+    )
+    for (const raw of ['2026-10-15T14:03:00', '2026-10-15 14:03:00', '2026-10-15T14:03:00Z', '2026-10-15T22:03:00+08:00']) {
+      const value = { symbol: 'JPY=X', openTime: raw, closeTime: raw }
+      const poster = renderShare(value)
+      assert.equal(poster.openTime, '2026-10-15 10:03:00', `${app}: share entry time uses backend UTC`)
+      assert.equal(poster.closeTime, '2026-10-15 10:03:00', `${app}: share exit time uses backend UTC`)
+      assert.equal(value.closeTime, raw, 'Share display preserves the order timestamp')
+    }
+    assert.equal(renderShare({ openTime: '', closeTime: '2026-10-15T14:03:00Z' }).openTime, '')
     assert.equal(dateTime.formatDateTimeLocalized('2026-07-01T05:00:00Z'), '01/07/2026, 01:00:00')
     assert.equal(dateTime.formatDateTimeLocalized('2026-07-01T05:00:00Z', 'en-GB', { timeZone: 'Asia/Singapore' }), '01/07/2026, 13:00:00')
     assert.equal(load('').getSystemTimezone(), 'Asia/Tokyo')
