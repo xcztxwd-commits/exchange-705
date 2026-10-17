@@ -368,10 +368,9 @@ const submitBalance = async () => {
   try {
     let payload = balancePending.value
     if (!payload) {
-      if (!balanceRemark.value.trim()) throw new Error('请填写修改原因')
       const { userId, fundBalance, contractBalance, optionBalance } = balanceForm.value
       if (![fundBalance, contractBalance, optionBalance].every(value => Number.isFinite(value) && value >= 0)) throw new Error('余额必须为非负有效数字')
-      await ElMessageBox.confirm(`租户 ${auth.user?.tenantId} · UID ${userId}；将余额设为资金 ${fundBalance} / 合约 ${contractBalance} / 期权 ${optionBalance} USD。原因：${balanceRemark.value}`, '确认覆盖账户余额', { type: 'warning' })
+      await ElMessageBox.confirm(`租户 ${auth.user?.tenantId} · UID ${userId}；将余额设为资金 ${fundBalance} / 合约 ${contractBalance} / 期权 ${optionBalance} USD。原因：${balanceRemark.value.trim() || '未填写'}`, '确认覆盖账户余额', { type: 'warning' })
       payload = { userId, fundBalance, contractBalance, optionBalance, remark: balanceRemark.value.trim(), confirm: true, idempotencyKey: crypto.randomUUID() }
       sessionStorage.setItem(balanceKey.value, JSON.stringify(payload))
       balancePending.value = payload
@@ -1296,7 +1295,7 @@ onMounted(() => {
             <el-alert v-else title="没有手动充值权限" type="warning" :closable="false" />
           </template>
           <template v-else>
-          <el-form-item label="修改原因"><el-input v-model="balanceRemark" type="textarea" maxlength="500" /></el-form-item>
+          <el-form-item label="修改原因"><el-input v-model="balanceRemark" type="textarea" maxlength="500" placeholder="选填，可不填写" /></el-form-item>
           <el-form-item label="资金账户">
             <el-input-number
               v-model="balanceForm.fundBalance"

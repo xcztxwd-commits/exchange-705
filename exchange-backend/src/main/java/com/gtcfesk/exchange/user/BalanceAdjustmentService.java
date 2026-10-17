@@ -19,13 +19,14 @@ public class BalanceAdjustmentService {
  @Transactional public void adjust(UpdateUserBalanceRequest input){
   Authentication auth=SecurityContextHolder.getContext().getAuthentication();
   if(auth==null||auth.getAuthorities().stream().noneMatch(a->"ROLE_SUPER_ADMIN".equals(a.getAuthority())))throw new org.springframework.security.access.AccessDeniedException("无权调整资金");
-  if(!input.isConfirm()||input.getRemark()==null||input.getRemark().trim().length()<3||input.getRemark().length()>500||input.getIdempotencyKey()==null||!input.getIdempotencyKey().matches("[A-Za-z0-9_-]{16,64}"))throw new IllegalArgumentException("必须确认调整、填写原因并提交幂等键");
+  if(!input.isConfirm()||input.getIdempotencyKey()==null||!input.getIdempotencyKey().matches("[A-Za-z0-9_-]{16,64}"))throw new IllegalArgumentException("必须确认调整并提交有效幂等键");
+  if(input.getRemark()!=null&&input.getRemark().length()>500)throw new IllegalArgumentException("修改原因不能超过500字");
   Long tenant=TenantContext.requireTenantId();users.lockById(input.getUserId()).orElseThrow(()->new IllegalArgumentException("用户不存在"));
   String actorType=ControlIdentity.isAccess()?"CONTROL":"ADMIN";Long actor=ControlIdentity.isAccess()?ControlIdentity.actorId():Long.valueOf(auth.getName());
   String canonical=Arrays.asList(input.getUserId(),input.getFundBalance(),input.getContractBalance(),input.getOptionBalance(),input.getRemark(),actorType,actor).toString();
   String hash=SupportService.sha256(canonical.getBytes(java.nio.charset.StandardCharsets.UTF_8));
   BalanceAdjustment previous=adjustments.findByTenantIdAndRequestKey(tenant,input.getIdempotencyKey()).orElse(null);
-  if(previous!=null){if(!previous.getRequestHash().equals(hash))throw new IllegalArgumentException("幂等键已用于不同调整");return;}
+  if(previous!=null){if(!previous.getRequestHash().equals(hash)||!Objects.equals(previous.getReason(),input.getRemark()))throw new IllegalArgumentException("幂等键已用于不同调整");return;}
   Map<String,BigDecimal> targets=new LinkedHashMap<>();targets.put("FUND",input.getFundBalance());targets.put("CONTRACT",input.getContractBalance());targets.put("OPTION",input.getOptionBalance());
   Map<String,AssetAccount> accounts=new HashMap<>();for(AssetAccount account:assets.lockByUserId(input.getUserId()))accounts.put(account.getCoin(),account);
   List<String> changes=new ArrayList<>();

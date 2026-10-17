@@ -74,6 +74,7 @@ class MinimalFixRegressionTest {
     @Autowired KycRecordRepository identities;
     @Autowired LoanPersonalInfoRepository supplements;
     @Autowired AssetAccountRepository assets;
+    @Autowired BalanceAdjustmentRepository adjustments;
     @Autowired AdminUserRepository admins;
     @Autowired AdminMenuRepository menus;
     @Autowired AdminRoleRepository roles;
@@ -846,6 +847,44 @@ class MinimalFixRegressionTest {
         assertTrue(status(request("POST","/api/admin/symbols/create",superToken,map("symbol","FAKE")))>=400);
     }
 
+
+    @Test void balanceAdjustmentReasonIsOptional() throws Exception {
+        String endpoint = "/api/admin/users/updateBalance";
+        int target = 10;
+        for (String reason : Arrays.asList(null, "", "   ", "改", "补款", String.join("", Collections.nCopies(500, "a")))) {
+            String key = UUID.randomUUID().toString();
+            Map<String,Object> input = map("userId", a.getId(), "fundBalance", target,
+                    "confirm", true, "idempotencyKey", key);
+            if (reason != null) input.put("remark", reason);
+            assertEquals(200, status(request("POST", endpoint, superToken, input)));
+            same(BigDecimal.valueOf(target), balance(a, "FUND"));
+            BalanceAdjustment record = adjustments.findByTenantIdAndRequestKey(1L, key).get();
+            assertEquals(reason, record.getReason());
+            assertTrue(record.getChanges().contains("->" + target));
+            assertEquals(200, status(request("POST", endpoint, superToken, input)));
+            assertEquals(record.getId(), adjustments.findByTenantIdAndRequestKey(1L, key).get().getId());
+            if (reason == null) {
+                input.put("remark", "null");
+                assertEquals(400, status(request("POST", endpoint, superToken, input)));
+                input.remove("remark");
+            }
+            input.put("fundBalance", target + 1);
+            assertEquals(400, status(request("POST", endpoint, superToken, input)));
+            same(BigDecimal.valueOf(target), balance(a, "FUND"));
+            target++;
+        }
+        Map<String,Object> invalid = map("userId", a.getId(), "fundBalance", 99,
+                "confirm", true, "idempotencyKey", UUID.randomUUID().toString());
+        invalid.put("remark", String.join("", Collections.nCopies(501, "a")));
+        assertEquals(400, status(request("POST", endpoint, superToken, invalid)));
+        invalid.remove("remark");
+        invalid.put("confirm", false);
+        assertEquals(400, status(request("POST", endpoint, superToken, invalid)));
+        invalid.put("confirm", true);
+        invalid.remove("idempotencyKey");
+        assertEquals(400, status(request("POST", endpoint, superToken, invalid)));
+        same(BigDecimal.valueOf(target - 1), balance(a, "FUND"));
+    }
 
     @Test void depositOrdersApiScopeLegacyEntryAndSafeDto() throws Exception {
         org.mockito.Mockito.when(quotes.requireConversionRate("USD","yahoo")).thenReturn(BigDecimal.ONE);
