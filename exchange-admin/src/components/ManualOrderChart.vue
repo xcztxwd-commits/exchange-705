@@ -17,6 +17,9 @@ const refreshedAt = ref<number>(), checkedTo = ref<number>()
 const latestMessage = ref('')
 const candles = computed(() => orderChartAggregate(rows.value, interval.value))
 const latest = computed(() => rows.value[rows.value.length - 1])
+const completedRows = computed(() => rows.value.filter(row => !row.forming))
+const latestCompleted = computed(() => completedRows.value[completedRows.value.length - 1])
+const completedCandles = computed(() => candles.value.filter(row => !row.forming))
 const localDay = (time: number) => new Intl.DateTimeFormat('en-CA', { timeZone: displayTimezone.value, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(time))
 const crossesDates = computed(() => rows.value.length > 1 && localDay(rows.value[0]!.timestamp) !== localDay(latest.value!.timestamp))
 const hasMore = ref(false), nextEndTime = ref<number>()
@@ -26,7 +29,7 @@ let abort: AbortController | undefined, historyComplete = false, failed = false
 const selected = computed(() => {
   if (draft.value) { try { return orderChartRange(candles.value, ...draft.value) } catch { return null } }
   const open = rows.value.find(r => r.timestamp === props.openTime), close = rows.value.find(r => r.timestamp === props.closeTime)
-  return open && close && open.timestamp < close.timestamp ? { open, close } : null
+  return open && close && !open.forming && !close.forming && open.timestamp < close.timestamp ? { open, close } : null
 })
 function stop() { revision++; clearTimeout(timer); abort?.abort(); abort = undefined; loading.value = false; dragging = undefined }
 function dispose() { resize?.disconnect(); resize = undefined; chart?.dispose(); chart = undefined }
@@ -66,7 +69,7 @@ async function render(view?: { start: number; end: number }) {
   const zoom = view || (chart.getOption()?.dataZoom as any[] | undefined)?.[0]
   // ponytail: at most 43,200 minute candles; keep a small visible window with native ECharts dataZoom.
   chart.setOption({ animation: false, grid: { left: 62, right: 16, top: 25, bottom: 70 },
-    tooltip: { trigger: 'axis', renderMode: 'richText', confine: true, axisPointer: { type: 'cross' }, formatter: (items: any) => { const row = candles.value[items?.[0]?.dataIndex]; return row ? `${interval.value} · ${date(row.timestamp)} ${offset(row.timestamp)}\n开 ${row.price}  收 ${row.close}\n低 ${row.low}  高 ${row.high}` : '' } },
+    tooltip: { trigger: 'axis', renderMode: 'richText', confine: true, axisPointer: { type: 'cross' }, formatter: (items: any) => { const row = candles.value[items?.[0]?.dataIndex]; return row ? `${interval.value} · ${date(row.timestamp)} ${offset(row.timestamp)}${row.forming ? ' · 进行中不可选' : ''}\n开 ${row.price}  收 ${row.close}\n低 ${row.low}  高 ${row.high}` : '' } },
     xAxis: { type: 'category', data: candles.value.map(r => String(r.timestamp)), boundaryGap: true, axisLabel: { formatter: (v: string) => date(Math.floor(Number(v) / orderChartIntervals[interval.value]) * orderChartIntervals[interval.value], true), hideOverlap: true } },
     yAxis: { type: 'value', scale: true, splitNumber: 4, axisLabel: { width: 54, overflow: 'truncate' }, splitLine: { lineStyle: { color: '#edf0f5' } } },
     dataZoom: [{ type: 'slider', xAxisIndex: 0, filterMode: 'empty', bottom: 8, height: 20, showDetail: false, start: zoom?.start ?? Math.max(0, (1 - 120 / candles.value.length) * 100), end: zoom?.end ?? 100 }, { type: 'inside', xAxisIndex: 0, filterMode: 'empty', moveOnMouseMove: false, zoomOnMouseWheel: true, moveOnMouseWheel: false }],
@@ -82,7 +85,7 @@ async function load(id: number, endTime?: number, attempt = 0, fill = false, lat
     const response: any = await request.get('/admin/orders/contract/manual/chart', { params: { symbol: props.symbol, timezone: props.timezone, limit: 200, ...(endTime === undefined ? {} : { endTime }) }, signal: abort.signal, timeout: 30000 })
     if (id !== revision || !expanded.value || !props.active) return
     const newestPage = endTime === undefined || checkedTo.value !== undefined && endTime === checkedTo.value - 1
-    const next = orderChartCandles([...rows.value, ...(Array.isArray(response.candles) ? response.candles : [])]).filter(row => !Number.isFinite(response.from) || row.timestamp >= response.from)
+    const next = orderChartCandles([...rows.value, ...(Array.isArray(response.candles) ? response.candles : []), ...(newestPage && response.liveCandle ? [response.liveCandle] : [])], Number(response.serverTime) || Date.now()).filter(row => !Number.isFinite(response.from) || row.timestamp >= response.from)
     const nextCandles = orderChartAggregate(next, interval.value), duration = orderChartIntervals[interval.value]
     const zoom = (chart?.getOption()?.dataZoom as any[] | undefined)?.[0]
     let view: { start: number; end: number } | undefined
@@ -102,10 +105,11 @@ async function load(id: number, endTime?: number, attempt = 0, fill = false, lat
     hasMore.value = !historyComplete && response.hasMore === true && nextEndTime.value !== undefined && cursor >= response.from
     failed = false
     if (newestPage) { refreshedAt.value = Number(response.serverTime) || Date.now(); checkedTo.value = Number.isFinite(response.to) ? response.to : undefined }
-    let statusMessage = response.pending ? '缺失行情正在后台加载，已有完整分钟可直接选择；更早行情按需加载。' : response.status === 'unavailable' ? '行情接口暂不可用，可重试；不是已确认休市。' : response.status === 'stale' ? '当前为历史缓存；最终生成会重新校验。' : rows.value.length < 2 ? '这一段不足两根完整的已结束分钟K线，可加载更早行情或更换品种。' : ''
+    let statusMessage = response.pending ? '缺失行情正在后台加载，已有完整分钟可直接选择；更早行情按需加载。' : response.status === 'unavailable' ? '行情接口暂不可用，可重试；不是已确认休市。' : response.status === 'stale' ? '当前为历史缓存；最终生成会重新校验。' : completedRows.value.length < 2 ? '这一段不足两根完整的已结束分钟K线，可加载更早行情或更换品种。' : ''
     if (!response.pending && (response.missingData || response.historyRepair?.state === 'unrepairable' || response.historyRepair?.queueState === 'blocked' || response.historyRepair?.queueState === 'queue_full')) {
       const reason = response.missingData || response.historyRepair?.gaps?.[0]?.reason
       statusMessage = reason === 'source_fetch_or_write_failed' ? '数据源补齐失败，当前显示已有历史行情；请稍后刷新重试。' : reason === 'source_calendar_unverified' ? '该品种交易日历尚未确认，自动补齐受限；当前显示已有历史行情。' : response.historyRepair?.queueState === 'queue_full' ? '行情补齐队列已满，当前显示已有历史行情；请稍后刷新重试。' : '部分行情暂无法补齐，当前显示已有历史行情；请核对最新K线时间。'
+      if (Number.isFinite(response.latestCandleTime) && Number.isFinite(response.to) && response.latestCandleTime >= response.to - 60000) statusMessage += '最新已结束分钟已同步；此提示来自旧历史缺口保护，不代表新行情未同步。'
     }
     if (newestPage) { latestMessage.value = statusMessage; message.value = '' } else message.value = statusMessage
     await render(view)
@@ -188,7 +192,8 @@ function keyboard(event: KeyboardEvent) {
   if (event.key === 'Enter') { event.preventDefault(); apply(); return }
   if (!['ArrowLeft', 'ArrowRight'].includes(event.key)) return
   event.preventDefault()
-  const last = candles.value.length - 1, range = selected.value
+  const last = candles.value.length - 1 - (candles.value[candles.value.length - 1]?.forming ? 1 : 0), range = selected.value
+  if (last < 1) return
   const a = range ? Math.max(0, Math.min(last - 1, candleIndex(range.open.timestamp))) : Math.max(0, last - 1), b = range ? Math.max(a + 1, candleIndex(range.close.timestamp)) : last
   const change = event.key === 'ArrowLeft' ? -1 : 1
   draft.value = event.shiftKey ? [Math.max(0, Math.min(b - 1, a + change)), b] : [a, Math.max(a + 1, Math.min(last, b + change))]
@@ -206,9 +211,9 @@ onBeforeUnmount(() => { stop(); dispose() })
     <div class="chart-toggle"><slot name="intro" /><el-button v-permission="'orders:manual_order'" :disabled="!active || disabled" :aria-expanded="expanded" @click="toggle">{{ expanded ? '收起图表' : '图表选择开平仓' }}</el-button></div>
     <div v-if="expanded" class="chart-panel">
       <div class="chart-toolbar"><span>{{ symbol }} · {{ interval }} · 最近30天 · {{ displayTimezone }}</span><div class="chart-toolbar-actions"><label class="chart-timezone">显示时区<select v-model="displayTimezone" aria-label="图表显示时区" :disabled="disabled"><option v-for="zone in timezones" :key="zone" :value="zone">{{ zone }}</option></select></label><div class="chart-periods" role="group" aria-label="时间周期"><el-button v-for="(_, period) in orderChartIntervals" :key="period" v-permission="'orders:manual_order'" size="small" :type="interval === period ? 'primary' : 'default'" :aria-pressed="interval === period" :disabled="disabled" @click="changeInterval(period)">{{ period }}</el-button></div><el-button v-permission="'orders:manual_order'" text :disabled="disabled" :loading="loading" @click="reload">刷新行情</el-button></div></div>
-      <p class="chart-help">在K线区域按住鼠标拖选一段：较早K线为开仓，较晚为平仓，均取该K线首个有效分钟开盘价。下方滑条浏览/缩放；滚轮缩放。<template v-if="interval !== '1m'">周期按UTC对齐，仅聚合已加载分钟，未满周期或缺失分钟不补造；切换周期保留已选时间和价格。</template></p>
-      <div class="chart-progress" aria-live="polite"><span>已显示 {{ candles.length }} 根{{ interval === '1m' ? '完整分钟K线' : `${interval} K线（${rows.length} 根完整分钟）` }} · {{ hasMore ? '向左浏览按需加载更早行情' : '最近30天范围' }}</span><el-button v-if="hasMore" v-permission="'orders:manual_order'" size="small" :disabled="disabled || loading" @click="loadMore">加载更早行情</el-button></div>
-      <p class="chart-freshness" aria-live="polite"><span>最新已加载分钟：{{ latest ? `${date(latest.timestamp)} ${offset(latest.timestamp)}` : '暂无完整K线' }}</span><span v-if="checkedTo">查询截止：{{ date(checkedTo) }}</span><span v-if="refreshedAt">刷新时间：{{ date(refreshedAt) }} · {{ displayTimezone }}</span></p>
+      <p class="chart-help">在K线区域按住鼠标拖选一段：较早K线为开仓，较晚为平仓，均取该K线首个有效的已结束分钟开盘价。进行中分钟只展示、不可选。下方滑条浏览/缩放；滚轮缩放。<template v-if="interval !== '1m'">周期按UTC对齐，仅聚合已加载分钟，未满周期或缺失分钟不补造；切换周期保留已选时间和价格。</template></p>
+      <div class="chart-progress" aria-live="polite"><span>已显示 {{ completedCandles.length }} 根{{ interval === '1m' ? '完整分钟K线' : `${interval} K线（${completedRows.length} 根完整分钟）` }}{{ latest?.forming ? ' · 含进行中行情展示' : '' }} · {{ hasMore ? '向左浏览按需加载更早行情' : '最近30天范围' }}</span><el-button v-if="hasMore" v-permission="'orders:manual_order'" size="small" :disabled="disabled || loading" @click="loadMore">加载更早行情</el-button></div>
+      <p class="chart-freshness" aria-live="polite"><span>最新行情分钟：{{ latest ? `${date(latest.timestamp)} ${offset(latest.timestamp)}${latest.forming ? '（进行中不可选）' : ''}` : '暂无K线' }}</span><span>最新已结束分钟：{{ latestCompleted ? `${date(latestCompleted.timestamp)} ${offset(latestCompleted.timestamp)}` : '暂无完整K线' }}</span><span v-if="checkedTo">查询截止：{{ date(checkedTo) }}</span><span v-if="refreshedAt">刷新时间：{{ date(refreshedAt) }} · {{ displayTimezone }}</span></p>
       <div ref="host" class="candles" role="group" tabindex="0" aria-label="K线拖选区；左右键调整平仓，Shift加左右键调整开仓，自动应用" @pointerdown="start" @pointermove="move" @pointerup="finish" @pointercancel="cancel" @keydown="keyboard" />
       <p v-if="latestMessage" role="status" class="chart-message">{{ latestMessage }}</p>
       <p v-if="message && message !== latestMessage" role="status" class="chart-message">{{ message }}</p>

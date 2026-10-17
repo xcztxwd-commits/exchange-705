@@ -73,6 +73,15 @@ public class ManualOrderPrices {
         out.put("status",pending?"loading":!(raw instanceof Map) || "unavailable".equals(state.get("status"))?"unavailable":"stale".equals(state.get("status"))?"stale":rows.isEmpty()?"empty":"available");
         out.put("source",symbol.getMarketSource());out.put("from",from);out.put("to",to);out.put("interval","1m");
         out.put("latestCandleTime",rows.isEmpty()?null:rows.lastKey());out.put("serverTime",now);
+        if(to==finished) {
+            // Same live reader as the customer chart; display only, never part of selectable/order history.
+            Map<String,Object> live=market.internalKline(symbol.getSymbol(),"1m",limit);
+            Map<String,Object> candle=live==null?null:selectMinutes(live,finished,finished+60000,now,zone).get(finished);
+            if(candle!=null && candle.containsKey("low") && candle.containsKey("high") && candle.containsKey("close")) {
+                for(String name:Arrays.asList("low","high","close"))candle.put(name,((BigDecimal)candle.get(name)).toPlainString());
+                candle.put("forming",true);out.put("liveCandle",candle);
+            }
+        }
         for(String key:Arrays.asList("historyRepair","missingData","retryAt"))if(state.containsKey(key))out.put(key,state.get(key));
         out.put("nextEndTime",oldest-1);out.put("hasMore",oldest>from);return out;
     }
