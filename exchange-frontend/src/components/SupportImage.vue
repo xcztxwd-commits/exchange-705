@@ -2,8 +2,9 @@
 import { ref, watch, onUnmounted } from 'vue'
 import request from '@/utils/request'
 import { useAuthStore } from '@/store/auth'
+import { supportText } from '@/utils/support'
 const auth = useAuthStore()
-const props = defineProps<{ endpoint: string; label: string }>()
+const props = defineProps<{ endpoint: string; label: string; admin?: boolean }>()
 const src = ref(''),
   failed = ref(false)
 let generation = 0
@@ -35,7 +36,7 @@ onUnmounted(() => {
   <a v-if="src" :href="src" target="_blank" rel="noopener" :aria-label="label"
     ><img :src="src" :alt="label" loading="lazy"
   /></a>
-  <span v-else role="status">{{ failed ? label + ' — unavailable' : '…' }}</span>
+  <span v-else role="status">{{ failed ? supportText('图片暂不可用', 'Image unavailable', admin) : '…' }}</span>
 </template>
 <style scoped>
 img {

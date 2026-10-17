@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, watch, onMounted, onUnmounted, nextTick, computed } from 'vue'
 import request from '@/utils/request'
-import { requestId, supportText, supportDate, type Conversation, type ChatMessage } from '@/utils/support'
+import { requestId, supportText, supportReplyText, supportSystemText, isSupportSystem, supportErrorText, supportDate, type Conversation, type ChatMessage } from '@/utils/support'
 import SupportImage from './SupportImage.vue'
 const props = withDefaults(
   defineProps<{
@@ -140,7 +140,7 @@ function choose(event: Event) {
     selected &&
     (!['image/png', 'image/jpeg', 'image/gif'].includes(selected.type) || selected.size > 5 * 1024 * 1024)
   ) {
-    error.value = t('请选择 5MB 以内的 JPG、PNG 或 GIF 图片', 'Choose a JPG, PNG or GIF under 5MB')
+    error.value = props.admin ? '请选择 5MB 以内的 JPG、PNG 或 GIF 图片' : 'Choose a JPG, PNG or GIF under 5MB'
     return
   }
   file.value = selected
@@ -174,7 +174,7 @@ function onEnter(event: KeyboardEvent) {
         {{
           online
             ? t('客服将尽快接待', 'An agent will join shortly')
-            : offline || t('客服暂未在线，可先留言', 'Agents are offline. Leave a message.')
+            : supportReplyText(offline, admin) || t('客服暂未在线，可先留言', 'Agents are offline. Leave a message.')
         }}</span
       >
       <span v-else-if="conversation?.status === 'ACTIVE'"
@@ -199,10 +199,10 @@ function onEnter(event: KeyboardEvent) {
         v-for="m in messages"
         :key="m.id"
         class="message"
-        :class="{ mine: (admin ? ['ADMIN','CONTROL'].includes(m.sender) : m.sender === 'USER'), system: m.sender === 'SYSTEM' }"
+        :class="{ mine: !isSupportSystem(m) && (admin ? ['ADMIN','CONTROL'].includes(m.sender) : m.sender === 'USER'), system: isSupportSystem(m) }"
       >
-        <template v-if="m.sender === 'SYSTEM'"
-          ><p>{{ m.text }}</p>
+        <template v-if="isSupportSystem(m)"
+          ><p>{{ supportSystemText(m, admin) }}</p>
           <time>{{ supportDate(m.createdAt) }}</time></template
         >
         <template v-else>
@@ -214,6 +214,7 @@ function onEnter(event: KeyboardEvent) {
               v-if="m.image && canImage"
               :endpoint="`${endpoint}/images/${m.id}`"
               :label="t('聊天图片', 'Chat image')"
+              :admin="admin"
             /><span v-else-if="m.image">{{ t('无图片查看权限', 'Image access not permitted') }}</span>
             <p v-if="m.text">{{ m.text }}</p>
           </div>
@@ -226,7 +227,7 @@ function onEnter(event: KeyboardEvent) {
       </article>
     </div>
     <p v-if="error" class="thread-error" role="alert">
-      {{ error }} <button type="button" @click="visible">{{ t('重试', 'Retry') }}</button>
+      {{ supportErrorText(error, admin) }} <button type="button" @click="visible">{{ t('重试', 'Retry') }}</button>
     </p>
     <form v-if="writable" class="thread-composer" @submit.prevent="send">
       <div v-if="file" class="file-choice">

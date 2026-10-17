@@ -219,7 +219,10 @@ public class SupportService {
         return append(c, sender, senderId, requestId, text, image == null ? null : imageBytes(image));
     }
     private SupportMessage append(SupportConversation c, String sender, Long senderId, String requestId, String text, byte[] image) {
-        if (controlAccess() && senderId != 0) { sender="CONTROL";senderId=controlActor();audit("SUPPORT_APPEND",c.getId()); }
+        if (controlAccess() && senderId != 0) {
+            if ("SYSTEM".equals(sender)) requestId = "system." + requestId;
+            sender="CONTROL";senderId=controlActor();audit("SUPPORT_APPEND",c.getId());
+        }
         SupportMessage m = new SupportMessage(); m.setConversationId(c.getId()); m.setSender(sender); m.setSenderId(senderId);
         boolean adminActor = senderId != 0 && SecurityContextHolder.getContext().getAuthentication().getAuthorities().stream()
             .anyMatch(r -> Arrays.asList("ROLE_ADMIN", "ROLE_SUPER_ADMIN").contains(r.getAuthority()));

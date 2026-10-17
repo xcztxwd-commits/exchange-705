@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, nextTick, onUnmounted } from 'vue'
+import { computed, ref, watch, nextTick, onUnmounted } from 'vue'
 import { useAuthStore } from '@/store/auth'
 import { useRoute, useRouter } from 'vue-router'
 import request from '@/utils/request'
@@ -16,6 +16,7 @@ const state = ref<any>({}),
   audioEnabled = ref(false),
   audioError = ref('')
 const t = (zh: string, en: string) => supportText(zh, en, props.admin)
+const localizedAudioError = computed(() => audioError.value ? t('浏览器已暂停声音，请再次启用', audioError.value) : '')
 let timer: ReturnType<typeof setTimeout> | undefined,
   generation = 0,
   audio: HTMLAudioElement | undefined
@@ -43,7 +44,7 @@ async function sound() {
     audioError.value = ''
   } catch {
     audioEnabled.value = false
-    audioError.value = t('浏览器已暂停声音，请再次启用', 'Sound was blocked. Tap to enable again.')
+    audioError.value = 'Sound was blocked. Tap to enable again.'
   }
 }
 async function enableAudio() {
@@ -152,7 +153,7 @@ onUnmounted(() => {
       v-if="state.sound && !mobile"
       :aria-pressed="audioEnabled"
       :title="
-        audioError ||
+        localizedAudioError ||
         t(
           '网页开启且完成声音授权后可提示；锁屏不保证播放',
           'Requires an open page and sound permission; not guaranteed on a locked screen',
@@ -162,13 +163,13 @@ onUnmounted(() => {
     >
       {{ audioEnabled ? t('静音', 'Mute') : t('开启提示音', 'Enable sound') }}
     </button>
-    <span v-if="audioError && !mobile" role="status">{{ audioError }}</span>
+    <span v-if="audioError && !mobile" role="status">{{ localizedAudioError }}</span>
   </nav>
   <Teleport v-if="mobile && auth.token && enabled && state.sound && ['/inbox', '/announcements'].includes(route.path)" to="#inbox-sound" defer>
-    <button type="button" class="inbox-sound-button" :aria-pressed="audioEnabled" :title="audioError || t('网页开启且完成声音授权后可提示；锁屏不保证播放', 'Requires an open page and sound permission; not guaranteed on a locked screen')" @click="enableAudio">
+    <button type="button" class="inbox-sound-button" :aria-pressed="audioEnabled" :title="localizedAudioError || t('网页开启且完成声音授权后可提示；锁屏不保证播放', 'Requires an open page and sound permission; not guaranteed on a locked screen')" @click="enableAudio">
       {{ audioEnabled ? t('静音', 'Mute') : t('开启提示音', 'Enable sound') }}
     </button>
-    <span v-if="audioError" role="status">{{ audioError }}</span>
+    <span v-if="audioError" role="status">{{ localizedAudioError }}</span>
   </Teleport>
 </template>
 <style scoped>

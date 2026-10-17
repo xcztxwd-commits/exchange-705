@@ -13,6 +13,7 @@ export interface Conversation {
 }
 export interface ChatMessage {
   id: number
+  requestId?: string
   sender: 'USER' | 'ADMIN' | 'CONTROL' | 'SYSTEM'
   senderId: number
   text: string
@@ -27,6 +28,10 @@ export interface SupportConfig {
   userSound: string
 }
 export const supportText = (zh: string, en: string, admin = false) => (void en, void admin, zh)
+export const supportReplyText = (value: string, _admin = false) => value
+export const supportSystemText = (message: ChatMessage, _admin = false) => message.text
+export const supportErrorText = (value: string, _admin = false) => value
+export const isSupportSystem = (message: ChatMessage) => message.sender === 'SYSTEM' || message.sender === 'CONTROL' && message.requestId?.startsWith('system.') === true
 export const requestId = () =>
   Array.from(crypto.getRandomValues(new Uint8Array(16)), (n) => n.toString(16).padStart(2, '0')).join('')
 export const supportUrl = (path: string) =>

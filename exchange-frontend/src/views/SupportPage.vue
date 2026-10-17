@@ -4,14 +4,14 @@ import { useRouter } from 'vue-router'
 import request from '@/utils/request'
 import SupportThread from '@/components/SupportThread.vue'
 import AppSelect from '@/components/AppSelect.vue'
-import { supportText as t, supportDate, type Conversation, type SupportConfig } from '@/utils/support'
+import { supportText as t, supportErrorText, supportStatus, supportDate, type Conversation, type SupportConfig } from '@/utils/support'
 import { useLocaleStore } from '@/store/locale'
 const localeStore = useLocaleStore()
 const router = useRouter(),
   config = ref<SupportConfig>(),
   sessions = ref<Conversation[]>([]),
   current = ref<Conversation>()
-const sessionOptions = computed(() => sessions.value.map(s => ({ value: s.id, label: `#${s.id} · ${supportDate(s.createdAt)} · ${s.status}` })))
+const sessionOptions = computed(() => sessions.value.map(s => ({ value: s.id, label: `#${s.id} · ${supportDate(s.createdAt)} · ${supportStatus(s.status)}` })))
 const busy = ref(false),
   error = ref(''),
   historyPage = ref(0)
@@ -104,9 +104,9 @@ function changePage(delta: number) {
         <p>{{ t('专属协助 · 安心沟通', 'Personal assistance. A conversation you can trust.') }}</p>
       </div>
       <a v-if="config?.mode === 'external' && config.link" class="external-open" :href="config.link" target="_blank" rel="noopener noreferrer">{{ t('在新窗口打开客服', 'Open support in a new window') }} ↗</a>
-      <span v-else class="header-mark">{{ localeStore.text('客服', 'Support') }}</span>
+      <span v-else class="header-mark">{{ t('客服', 'Support') }}</span>
     </header>
-    <p v-if="error" class="page-error" role="alert">{{ error }}</p>
+    <p v-if="error" class="page-error" role="alert">{{ supportErrorText(error) }}</p>
     <div v-if="!config" class="welcome">{{ t('加载中…', 'Loading…') }}</div>
     <section v-else-if="config.mode === 'external'" class="external">
       <template v-if="config.link"

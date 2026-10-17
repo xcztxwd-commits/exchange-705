@@ -4,6 +4,7 @@ import { redirectTradeKyc } from './tradeKycRedirect'
 import { trackAccountWrite, finishAccountWrite } from './accountRequests'
 import { useAuthStore } from '@/store/auth'
 import { useLocaleStore } from '@/store/locale'
+import { supportErrorKey } from '../../../exchange-frontend/src/utils/supportLocalization'
 
 const instance = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
@@ -104,7 +105,8 @@ instance.interceptors.response.use(
       err?.response?.data?.error ||
       err?.message ||
       '请求失败'
-    return Promise.reject(new Error(useLocaleStore().backendMessage(msg, true)))
+    const supportMessage = /^\/user\/support(?:\/|$)/.test(err.config?.url || '') ? supportErrorKey(String(msg)) : undefined
+    return Promise.reject(new Error(supportMessage ?? useLocaleStore().backendMessage(msg, true)))
   }
 )
 

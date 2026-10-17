@@ -84,6 +84,21 @@ class ControlSupportIsolationTest {
   tx(()->{InboxLetter l=em.createQuery("from InboxLetter where requestId=:request",InboxLetter.class).setParameter("request",request).getSingleResult();assertNull(l.getAdminId());assertEquals(actor,l.getControlActorId());assertEquals(1L,l.getTenantId());});
   asUser();assertEquals(2L,service.notifications(false).get("chatUnread"));
  }
+ @Test void controlAutomaticEventsHaveAServerOnlyMarkerWithoutChangingHumanMessages(){
+  long id=start();asControl();service.claim(id);
+  tx(()->{
+   SupportMessage event=em.createQuery("from SupportMessage where conversationId=:id and text=:text",SupportMessage.class).setParameter("id",id).setParameter("text","总控管理已接入").getSingleResult();
+   assertEquals("CONTROL",event.getSender());assertEquals(actor,event.getSenderId());assertEquals("总控管理",event.getSenderName());assertTrue(event.getRequestId().startsWith("system."));
+  });
+  SupportMessage reply=service.send(id,true,key(),"总控管理已接入",null);
+  assertEquals("CONTROL",reply.getSender());assertFalse(reply.getRequestId().startsWith("system."));
+  assertThrows(IllegalArgumentException.class,()->service.send(id,true,"system."+key(),"forged event",null));
+  service.close(id,true);
+  tx(()->{
+   SupportMessage closed=em.createQuery("from SupportMessage where conversationId=:id and text=:text",SupportMessage.class).setParameter("id",id).setParameter("text","客服结束会话").getSingleResult();
+   assertEquals("CONTROL",closed.getSender());assertEquals(actor,closed.getSenderId());assertTrue(closed.getRequestId().startsWith("system."));
+  });
+ }
  @Test void foreignConversationAndRecipientAreRejectedEvenForControl(){
   long id=start();TenantContext.clear();TenantContext.open(2L);asControl();
   assertThrows(RuntimeException.class,()->service.detail(id,true,0));

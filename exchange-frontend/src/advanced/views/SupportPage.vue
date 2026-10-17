@@ -5,13 +5,13 @@ import { computed, ref, watch, onMounted, onUnmounted } from 'vue'
 import { useBusinessLifecycle } from '@/advanced/components/business/useBusinessLifecycle'
 import SupportThread from '@/advanced/components/business/BusinessSupportThread.vue'
 import AppSelect from '@/advanced/components/business/BusinessSelect.vue'
-import { supportText as t, supportDate, type Conversation, type SupportConfig } from '@/utils/support'
+import { supportText as t, supportErrorText, supportStatus, supportDate, type Conversation, type SupportConfig } from '@/utils/support'
 import { useLocaleStore } from '@/store/locale'
 const localeStore = useLocaleStore()
 const config = ref<SupportConfig>(),
   sessions = ref<Conversation[]>([]),
   current = ref<Conversation>()
-const sessionOptions = computed(() => sessions.value.map(s => ({ value: s.id, label: `#${s.id} · ${supportDate(s.createdAt)} · ${s.status}` })))
+const sessionOptions = computed(() => sessions.value.map(s => ({ value: s.id, label: `#${s.id} · ${supportDate(s.createdAt)} · ${supportStatus(s.status)}` })))
 const busy = ref(false),
   error = ref(''),
   historyPage = ref(0)
@@ -97,8 +97,8 @@ function changePage(delta: number) {
 </script>
 
 <template>
-<BusinessPage :title="t('在线客服','Customer support')" :error="advancedError" :busy="advancedWriting">
-<p class="notice">{{ t('客服连接状态按当前会话显示','Connection status follows the active conversation') }}</p><p v-if="error" class="page-error" role="alert">{{ error }}</p>
+<BusinessPage :title="t('在线客服','Customer support')" :error="supportErrorText(advancedError)" :busy="advancedWriting">
+<p class="notice">{{ t('客服连接状态按当前会话显示','Connection status follows the active conversation') }}</p><p v-if="error" class="page-error" role="alert">{{ supportErrorText(error) }}</p>
     <div v-if="!config" class="welcome">{{ t('加载中…', 'Loading…') }}</div>
     <section v-else-if="config.mode === 'external'" class="external">
       <template v-if="config.link"
