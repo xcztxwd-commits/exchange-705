@@ -14,6 +14,22 @@ assert.equal(orderMinuteTimestamp('', ''), undefined)
 assert.equal(orderMinuteTimestamp('invalid', 'Z'), undefined)
 console.log('order chart selection, precision, completed candles and DST checks passed')
 
+const live = { ...minute(240000), forming: true }
+const liveRows = orderChartCandles([...rows, live, { ...minute(300000), forming: true }], 270000)
+assert.equal(liveRows.at(-1).timestamp, 240000)
+assert.equal(liveRows.at(-1).forming, true)
+assert.throws(() => orderChartRange(liveRows, 0, 3), /进行中.*不可选/)
+assert.throws(() => orderChartRange(liveRows, 3, 3), /进行中.*不可选/)
+assert.deepEqual(orderChartCandles([live], 300000), [], 'An expired live candle cannot become completed history')
+assert.equal(orderChartCandles([live, minute(240000)], 300000)[0].forming, undefined)
+assert.deepEqual(orderChartCandles([minute(240000), { ...minute(240000), forming: false }], 270000), [], 'Unmarked incomplete history stays rejected')
+const coarseLiveRows = orderChartAggregate(orderChartCandles([minute(0), minute(300000), { ...minute(360000), forming: true }], 390000), '5m')
+assert.equal(coarseLiveRows.at(-1).forming, undefined, 'A bucket beginning with a completed minute stays selectable')
+assert.equal(orderChartRange(coarseLiveRows, 0, 1).close.timestamp, 300000)
+const coarseLiveOnly = orderChartAggregate(orderChartCandles([minute(0), { ...minute(300000), forming: true }], 330000), '5m')
+assert.throws(() => orderChartRange(coarseLiveOnly, 0, 1), /进行中.*不可选/)
+console.log('current forming candles, rejected selection, expired live replacement and coarse completed-first bucket checks passed')
+
 assert.deepEqual(Object.keys(orderChartIntervals), ['1m', '5m', '15m', '30m', '1h', '1d'])
 const periodRows = orderChartCandles(Array.from({ length: 2880 }, (_, i) => ({ ...minute((i + 3) * 60000), low: i % 2 ? '98.1234567890123456' : '99', high: i % 3 ? '102' : '103.1234567890123456', close: i % 2 ? '101.1234567890123456' : '100' })), 2883 * 60000)
 const originalRows = structuredClone(periodRows)
@@ -110,6 +126,65 @@ try {
   assert.equal(chartGets.length,2, 'Closing the parent during selection must not open or fetch a stale chart'); assert.equal(chart.symbolPicker.value,false); assert.equal(chart.expanded.value,false)
   console.log('shared chart symbol-first picker, disabled/closed/invalid guards, parent reset ordering, bounded chart reads and direct existing-symbol opening checks passed')
 } finally { chart.stop(); chart.dispose(); chartScope.stop() }
+
+// Exercise the real chart's response merge and keyboard/drag selection boundaries.
+const liveTimestamp = Math.floor(Date.now() / 60000) * 60000
+const liveProps = vue.reactive({ symbol: 'FIXTURE', timezone: 'UTC', active: true, disabled: false })
+const liveEvents = [], liveScope = vue.effectScope()
+let liveResponse = { candles: [minute(liveTimestamp - 180000), minute(liveTimestamp - 120000), minute(liveTimestamp - 60000)], liveCandle: { ...minute(liveTimestamp), forming: true }, source: 'yahoo', hasMore: false, from: 0, to: liveTimestamp, latestCandleTime: liveTimestamp - 60000, missingData: 'source_calendar_unverified' }
+const liveChart = liveScope.run(() => new Function(...chartNames, chartJs + ';return {load,expanded,rows,candles,completedRows,completedCandles,latest,latestCompleted,latestMessage,source,draft,apply,keyboard,stop,dispose};')(...[vue.computed,vue.nextTick,()=>{},vue.ref,vue.watch,{}, { get: async () => liveResponse },orderChartCandles,orderChartAggregate,orderChartIntervals,orderChartRange,orderChartPriceExtent,()=>liveProps,()=> (event, value) => liveEvents.push({event,value})]))
+try {
+  liveChart.expanded.value = true
+  await liveChart.load(0)
+  assert.equal(liveChart.latest.value.timestamp, liveTimestamp)
+  assert.equal(liveChart.latest.value.forming, true)
+  assert.equal(liveChart.latestCompleted.value.timestamp, liveTimestamp - 60000)
+  assert.equal(liveChart.completedRows.value.length, 3)
+  assert.equal(liveChart.completedCandles.value.length, 3)
+  assert.equal(liveChart.source.value, 'yahoo')
+  assert.match(liveChart.latestMessage.value, /旧历史缺口保护.*不代表新行情未同步/)
+  liveResponse = { candles: [], hasMore: false, from: 0, to: liveTimestamp }
+  await liveChart.load(0, liveTimestamp - 1)
+  assert.equal(liveChart.latest.value.forming, true, 'A bounded latest-page retry retains the valid live minute')
+  liveResponse.liveCandle = { ...minute(liveTimestamp), high: '104.1234567890123456', close: '103.1234567890123456', forming: true }
+  await liveChart.load(0, liveTimestamp - 1)
+  assert.equal(liveChart.latest.value.high, liveResponse.liveCandle.high, 'A fixed-cursor latest-page retry replaces the forming high')
+  assert.equal(liveChart.latest.value.close, liveResponse.liveCandle.close, 'A fixed-cursor latest-page retry replaces the forming close')
+  liveChart.keyboard({ key: 'ArrowRight', shiftKey: false, preventDefault(){} })
+  assert.equal(liveEvents.at(-1).value.close.timestamp, liveTimestamp - 60000, 'Keyboard default closes at the latest completed minute')
+  await vue.nextTick()
+  const selectedCount = liveEvents.length
+  liveChart.draft.value = [0, 3]; liveChart.apply()
+  assert.equal(liveEvents.length, selectedCount, 'Dragging onto a forming minute must not emit an order selection')
+  liveResponse = { candles: [minute(liveTimestamp - 240000)], liveCandle: { ...minute(liveTimestamp), high: '105', close: '104', forming: true }, hasMore: false, from: 0 }
+  await liveChart.load(0, liveTimestamp - 180001)
+  assert.equal(liveChart.latest.value.timestamp, liveTimestamp, 'Historical pages cannot append a live response candle')
+  assert.equal(liveChart.latest.value.high, '104.1234567890123456', 'Historical pages cannot replace the valid current forming high')
+  assert.equal(liveChart.latest.value.close, '103.1234567890123456', 'Historical pages cannot replace the valid current forming close')
+  assert.equal(liveChart.rows.value.length, 5, 'Loading history preserves the current live minute')
+  const originalNow = Date.now
+  try {
+    Date.now = () => liveTimestamp + 60000
+    liveResponse = { candles: [], hasMore: false, from: 0 }
+    await liveChart.load(0)
+    assert.equal(liveChart.latest.value.timestamp, liveTimestamp - 60000, 'An expired stored live minute must be discarded')
+    liveResponse = { candles: [minute(liveTimestamp)], hasMore: false, from: 0 }
+    await liveChart.load(0)
+    assert.equal(liveChart.latestCompleted.value.timestamp, liveTimestamp, 'Only completed historical data replaces an expired live minute')
+  } finally { Date.now = originalNow }
+  const serverMinute = liveTimestamp + 120000
+  liveResponse = { candles: [minute(serverMinute - 60000)], serverTime: serverMinute + 30000, hasMore: false, from: 0, to: serverMinute }
+  await liveChart.load(0)
+  assert.equal(liveChart.latest.value.timestamp, serverMinute - 60000, 'An initial latest response may have no forming candle yet')
+  liveResponse.liveCandle = { ...minute(serverMinute), high: '103', close: '102', forming: true }
+  await liveChart.load(0, serverMinute - 1)
+  assert.equal(liveChart.latest.value.timestamp, serverMinute, 'Server time prevents a slow browser clock from dropping the current market minute')
+  assert.equal(liveChart.latest.value.forming, true)
+  assert.equal(liveChart.latest.value.high, '103', 'A fixed-cursor retry can supply the initially missing forming candle')
+  assert.equal(liveChart.latest.value.close, '102')
+  assert.throws(() => orderChartRange(liveChart.rows.value, 0, liveChart.rows.value.length - 1), /进行中.*不可选/)
+  console.log('real chart live-response merge, freshness, completed counts, default keyboard, rejected drag, history paging and expired replacement checks passed')
+} finally { liveChart.stop(); liveChart.dispose(); liveScope.stop() }
 
 // Compact layout keeps all original inputs; business controls share the existing order capability.
 const { parse: parseSfc } = require('@vue/compiler-sfc'), { parse: parseTemplate } = require('@vue/compiler-dom')

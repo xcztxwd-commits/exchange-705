@@ -717,6 +717,100 @@ class SourceHistoryGapRepairTest extends TenantMarketTestContext {
             assertEquals(before, f.raw());
         }
     }
+    @Test void forexMinuteRepairFetchesNewTailWhilePreservingOldControlsAndNativeAggregates() {
+        try (Fixture f = new Fixture()) {
+            f.config.setSourceCategory("Forex"); f.config.setCategory("Forex"); f.config.setMarketSource("yahoo");
+            f.db.update("UPDATE trading_symbol SET source_category='Forex',market_source='yahoo' WHERE tenant_id=1 AND id=1");
+            for (String period : KlineIntervals.PUBLIC)
+                f.store.sourceCandles(1, period, List.of(bar(SourceHistoryGapRepair.start(period, M))), System.currentTimeMillis());
+            task(f, M);
+            f.store.locked(1, () -> { f.store.generatedPoints("protected", 1, List.of(new ControlHistoryStore.PricePoint(M, BigDecimal.valueOf(105)))); return null; });
+            long tail = M + 120000, cursor = tail + 59999;
+            Map<String,Object> controls = controlledBars(f, cursor);
+            List<Map<String,Object>> prior = f.raw();
+            SourceHistoryGapRepair.Window window = f.store.readConsumerSnapshot(() -> f.repair.inspect(f.config, "1m", 200, cursor, "Yahoo", List.of(), false));
+            assertTrue(window.discovery, "old control minutes must not block fetching the newer session tail");
+            Map<String,Object> changed = bar(M); changed.put("high_price", 900d);
+            Object forexGroup = ((Map<?,?>)ReflectionTestUtils.getField(marketState(f.market), "groups")).get("Forex");
+            ReflectionTestUtils.setField(forexGroup, "codes", List.of("BTCUSDT"));
+            ReflectionTestUtils.setField(forexGroup, "nextQuotes", Long.MAX_VALUE);
+            when(f.source.getHistoryWindow(eq("BTCUSDT"), eq("1m"), anyInt(), eq("Forex"), anyLong(), anyLong()))
+                .thenAnswer(call -> { assertFalse(TransactionSynchronizationManager.isActualTransactionActive()); return response(List.of(changed, bar(tail))); });
+            assertEquals(true, f.body(f.read("1m", 200, cursor)).get("pending"));
+            ReflectionTestUtils.invokeMethod(f.market, "tick", forexGroup);
+            Map<String,Object> ready = f.read("1m", 200, cursor);
+            assertEquals(false, f.body(ready).get("pending"));
+            assertEquals(1, f.metadata(ready).get("inserted"));
+            assertEquals(tail, ControlHistoryStore.rows(ready).stream().mapToLong(ControlHistoryStore::time).max().orElseThrow());
+            assertEquals(controls, controlledBars(f, cursor), "all controlled native periods remain unchanged");
+            for (Map<String,Object> row : prior) assertTrue(f.raw().contains(row), "existing source body and received_at remain exact");
+            assertEquals(1, f.db.queryForObject("SELECT COUNT(*) FROM market_source_candle WHERE period='1m' AND candle_at=?", Integer.class, tail));
+            Map<String,Object> inserted = f.store.decode(f.db.queryForObject("SELECT body FROM market_source_candle WHERE period='1m' AND candle_at=?", String.class, tail));
+            assertTrue(((List<?>)inserted.get(SourceHistoryGapRepair.AGGREGATE_EXCLUSIONS)).contains("1w"));
+            for (int refresh = 1; refresh <= 2; refresh++) {
+                long next = tail + refresh * 60000L;
+                when(f.source.getHistoryWindow(eq("BTCUSDT"), eq("1m"), anyInt(), eq("Forex"), anyLong(), anyLong()))
+                    .thenReturn(response(List.of(bar(next))));
+                assertEquals(true, f.body(f.read("1m", 200, next + 59999)).get("pending"));
+                ReflectionTestUtils.setField(forexGroup, "nextKlines", 0L);
+                ReflectionTestUtils.invokeMethod(f.market, "tick", forexGroup);
+                assertEquals(next, ControlHistoryStore.rows(f.read("1m", 200, next + 59999)).stream().mapToLong(ControlHistoryStore::time).max().orElseThrow());
+                assertEquals(controls, controlledBars(f, next + 59999));
+            }
+            Map<String,Object> userChart = f.store.readConsumerSnapshot(() -> f.market.internalKline("BTCUSDT", "1m", 200));
+            Map<String,Object> orderChart = f.read("1m", 200, tail + 179999);
+            Map<String,Object> userLatest = ControlHistoryStore.rows(userChart).stream().max(Comparator.comparingLong(ControlHistoryStore::time)).orElseThrow();
+            Map<String,Object> orderLatest = ControlHistoryStore.rows(orderChart).stream().max(Comparator.comparingLong(ControlHistoryStore::time)).orElseThrow();
+            assertEquals(userLatest, orderLatest, "latest completed OHLC must match the customer chart reader");
+        }
+    }
+    @Test void forexMinuteRepairIsolatesNewMinutesWhenLegacyNativeAnchorsAreUnverified() {
+        try (Fixture f = new Fixture()) {
+            f.config.setSourceCategory("Forex"); f.config.setCategory("Forex"); f.config.setMarketSource("yahoo");
+            f.db.update("UPDATE trading_symbol SET source_category='Forex',market_source='yahoo' WHERE tenant_id=1 AND id=1");
+            for (String period : KlineIntervals.PUBLIC) if (!"1h".equals(period))
+                f.store.sourceCandles(1, period, List.of(bar(SourceHistoryGapRepair.start(period, M))), System.currentTimeMillis());
+            task(f, M);
+            f.store.locked(1, () -> { f.store.generatedPoints("protected", 1, List.of(new ControlHistoryStore.PricePoint(M, BigDecimal.valueOf(105)))); return null; });
+            List<Map<String,Object>> prior = f.raw();
+            ControlledKlineMerger merger = new ControlledKlineMerger(f.store);
+            Map<String,Object> before = new TreeMap<>();
+            List<String> coarsePeriods = new ArrayList<>(KlineIntervals.PUBLIC); coarsePeriods.remove("1m"); coarsePeriods.add("4h");
+            for (String period : coarsePeriods)
+                before.put(period, merger.merge(1, period, 1000, M + 179999, response(List.of()), null, false));
+            SourceHistoryGapRepair.Window window = f.store.readConsumerSnapshot(() -> f.repair.inspect(f.config, "1m", 200, M + 179999, "Yahoo", List.of(), false));
+            assertTrue(window.discovery);
+            SourceHistoryGapRepair.Receipt receipt = f.repair.insert(window, response(List.of(bar(M + 120000))), System.currentTimeMillis());
+            assertEquals(1, receipt.inserted);
+            for (Map<String,Object> row : prior) assertTrue(f.raw().contains(row));
+            Map<String,Object> saved = f.store.decode(f.db.queryForObject("SELECT body FROM market_source_candle WHERE period='1m' AND candle_at=?", String.class, M + 120000));
+            assertEquals(new TreeSet<>(coarsePeriods), new TreeSet<>((List<String>)saved.get(SourceHistoryGapRepair.AGGREGATE_EXCLUSIONS)));
+            for (String period : coarsePeriods)
+                assertEquals(before.get(period), merger.merge(1, period, 1000, M + 179999, response(List.of()), null, false), period);
+            assertTrue(f.repair.sourceMinuteProtection(f.config, M + 120000, M + 120000).blocksSourceWrite(M + 120000, true), "ordinary ingestion keeps its existing anchor safety rule");
+        }
+    }
+    @Test void largeProtectedMinuteHistoryDoesNotFreezeFutureForexMinutes() {
+        for (String table : List.of("market_mixed_minute", "market_legacy_minute_snapshot")) try (Fixture f = new Fixture()) {
+            f.config.setSourceCategory("Forex"); f.config.setCategory("Forex"); f.config.setMarketSource("yahoo");
+            f.db.update("UPDATE trading_symbol SET source_category='Forex',market_source='yahoo' WHERE tenant_id=1 AND id=1");
+            List<Object[]> protectedRows = new ArrayList<>();
+            for (int i = 0; i < 600; i++) {
+                long at = M + i * 60000L;
+                protectedRows.add(new Object[]{at, f.store.encode(bar(at)), at + 59999});
+            }
+            f.db.batchUpdate("INSERT INTO " + table + "(tenant_id,symbol_id,minute_at,body,last_event) VALUES(1,1,?,?,?)", protectedRows);
+            List<Map<String,Object>> before = f.db.queryForList("SELECT * FROM " + table + " ORDER BY minute_at");
+            long tail = M + 600 * 60000L;
+            SourceHistoryGapRepair.Window window = f.store.readConsumerSnapshot(() -> f.repair.inspect(f.config, "1m", 200, tail + 59999, "Yahoo", List.of(), false));
+            assertTrue(window.discovery, "an overflow of old protected rows must not freeze the future");
+            SourceHistoryGapRepair.Receipt receipt = f.repair.insert(window, response(List.of(bar(tail - 60000), bar(tail))), System.currentTimeMillis());
+            assertEquals(1, receipt.inserted);
+            assertEquals("protection_window_limit", receipt.gaps.get(0).get("reason"));
+            assertEquals(before, f.db.queryForList("SELECT * FROM " + table + " ORDER BY minute_at"));
+            assertEquals(tail, f.db.queryForObject("SELECT MAX(candle_at) FROM market_source_candle WHERE period='1m'", Long.class));
+        }
+    }
     @Test void sessionMinuteRepairCannotWidenAnUnverifiedContinuousSourceProjectionCalendar() {
         try (Fixture f = new Fixture()) {
             new org.springframework.jdbc.datasource.init.ResourceDatabasePopulator(new org.springframework.core.io.ClassPathResource("s4-history-projection.sql")).execute(f.data);

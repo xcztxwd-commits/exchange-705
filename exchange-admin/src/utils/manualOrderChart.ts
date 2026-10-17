@@ -1,4 +1,4 @@
-export type OrderCandle = { timestamp: number; local: string; offset: string; price: string; low: string; high: string; close: string }
+export type OrderCandle = { timestamp: number; local: string; offset: string; price: string; low: string; high: string; close: string; forming?: boolean }
 export type OrderChartRange = { open: OrderCandle; close: OrderCandle }
 export const orderChartIntervals = { '1m': 60000, '5m': 300000, '15m': 900000, '30m': 1800000, '1h': 3600000, '1d': 86400000 } as const
 export type OrderChartInterval = keyof typeof orderChartIntervals
@@ -8,11 +8,12 @@ export function orderChartCandles(values: unknown, now = Date.now()): OrderCandl
   const rows = new Map<number, OrderCandle>()
   if (!Array.isArray(values)) return []
   for (const value of values) {
-    if (!value || !Number.isSafeInteger(value.timestamp) || value.timestamp < 0 || value.timestamp % 60000 || value.timestamp + 60000 > now) continue
+    if (!value || !Number.isSafeInteger(value.timestamp) || value.timestamp < 0 || value.timestamp % 60000) continue
+    if (value.forming === true ? !(value.timestamp <= now && now < value.timestamp + 60000) : value.timestamp + 60000 > now) continue
     const prices = ['price', 'low', 'high', 'close'].map(key => Number(value[key])) as [number, number, number, number]
     if (prices.some(p => !Number.isFinite(p) || p <= 0) || prices[1] > prices[2] || prices[0] < prices[1] || prices[0] > prices[2] || prices[3] < prices[1] || prices[3] > prices[2]) continue
     if (typeof value.local !== 'string' || typeof value.offset !== 'string') continue
-    rows.set(value.timestamp, { timestamp: value.timestamp, local: value.local, offset: value.offset, price: String(value.price), low: String(value.low), high: String(value.high), close: String(value.close) })
+    rows.set(value.timestamp, { timestamp: value.timestamp, local: value.local, offset: value.offset, price: String(value.price), low: String(value.low), high: String(value.high), close: String(value.close), ...(value.forming === true ? { forming: true } : {}) })
   }
   return [...rows.values()].sort((a, b) => a.timestamp - b.timestamp)
 }
@@ -37,6 +38,7 @@ export function orderChartRange(rows: OrderCandle[], first: number, last: number
   if (!Number.isFinite(first) || !Number.isFinite(last) || rows.length < 2) throw new Error('至少选择两根已结束K线')
   const index = (value: number) => Math.max(0, Math.min(rows.length - 1, Math.round(value)))
   const a = index(first), b = index(last), open = rows[Math.min(a, b)]!, close = rows[Math.max(a, b)]!
+  if (open.forming || close.forming) throw new Error('进行中的分钟K线不可选，请选择已结束分钟')
   if (open.timestamp >= close.timestamp) throw new Error('至少拖选两根K线，开仓必须早于平仓')
   return { open, close }
 }

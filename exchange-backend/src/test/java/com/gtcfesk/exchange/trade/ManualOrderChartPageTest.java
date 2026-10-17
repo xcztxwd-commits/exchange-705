@@ -9,6 +9,31 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 class ManualOrderChartPageTest {
+    @Test void invalidOrFutureLiveBarsCannotInventTheCurrentMinute() {
+        long end=finished();ForexQuoteMarketService market=mock(ForexQuoteMarketService.class);
+        when(market.historicalKline("JPY=X","1m",200,end-1)).thenReturn(feed(Collections.emptyList(),false,"available"));
+        Map<String,Object> incomplete=candle(end);incomplete.remove("close_price");
+        for(Map<String,Object> invalid:Arrays.asList(incomplete,candle(end+60000),candle(end-60000))) {
+            when(market.internalKline("JPY=X","1m",200)).thenReturn(feed(Collections.singletonList(invalid),false,"available"));
+            assertFalse(new ManualOrderPrices(market).chart(symbol(),"UTC",null,200).containsKey("liveCandle"));
+        }
+    }
+    @Test void newestPageDisplaysTheCustomerLiveMinuteWithoutMakingItSelectableHistory() {
+        long end=finished();ForexQuoteMarketService market=mock(ForexQuoteMarketService.class);
+        when(market.historicalKline("JPY=X","1m",200,end-1)).thenReturn(feed(Collections.singletonList(candle(end-60000)),false,"available"));
+        Map<String,Object> live=candle(end);live.put("partial",true);
+        when(market.internalKline("JPY=X","1m",200)).thenReturn(feed(Collections.singletonList(live),false,"available"));
+        Map<String,Object> page=new ManualOrderPrices(market).chart(symbol(),"Asia/Tokyo",null,200);
+        Map<?,?> displayed=(Map<?,?>)page.get("liveCandle");
+        assertEquals(end,displayed.get("timestamp"));assertEquals(true,displayed.get("forming"));
+        assertEquals("157.5751234567890123",displayed.get("price"));assertEquals("157",displayed.get("low"));
+        assertEquals(end-60000,page.get("latestCandleTime"));assertEquals(1,((List<?>)page.get("candles")).size());
+        verify(market).internalKline("JPY=X","1m",200);
+        assertEquals(true,((Map<?,?>)new ManualOrderPrices(market).chart(symbol(),"UTC",end-1,200).get("liveCandle")).get("forming"),"latest-page retries also refresh the live minute");
+        when(market.historicalKline("JPY=X","1m",200,end-60001)).thenReturn(feed(Collections.emptyList(),false,"available"));
+        assertFalse(new ManualOrderPrices(market).chart(symbol(),"UTC",end-60001,200).containsKey("liveCandle"));
+        verify(market,times(2)).internalKline("JPY=X","1m",200);
+    }
     TradingSymbol symbol() {TradingSymbol s=new TradingSymbol();s.setSymbol("JPY=X");s.setMarketSource("yahoo");return s;}
     Map<String,Object> candle(long time) {Map<String,Object> row=new LinkedHashMap<>();row.put("timestamp",time);row.put("open_price","157.5751234567890123");row.put("low_price","157");row.put("high_price","158");row.put("close_price","157.6");return row;}
     Map<String,Object> feed(List<Map<String,Object>> rows,boolean pending,String status) {Map<String,Object> state=new HashMap<>();state.put("kline_list",rows);state.put("pending",pending);state.put("status",status);return Collections.singletonMap("data",state);}
@@ -25,7 +50,7 @@ class ManualOrderChartPageTest {
         assertEquals(end-200*60000L-1,page.get("nextEndTime"));assertEquals(true,page.get("hasMore"));
         assertEquals(end-60000,page.get("latestCandleTime"));
         assertFalse(page.containsKey("historyRepair"));assertFalse(page.containsKey("missingData"));assertFalse(page.containsKey("retryAt"));
-        verify(market,times(1)).historicalKline("JPY=X","1m",200,end-1);verifyNoMoreInteractions(market);
+        verify(market,times(1)).historicalKline("JPY=X","1m",200,end-1);verify(market).internalKline("JPY=X","1m",200);verifyNoMoreInteractions(market);
     }
     @Test void olderCandlesRemainAvailableAndKeepBlockedRepairDetails() {
         long end=finished(),old=end-3*86400000L;ForexQuoteMarketService market=mock(ForexQuoteMarketService.class);

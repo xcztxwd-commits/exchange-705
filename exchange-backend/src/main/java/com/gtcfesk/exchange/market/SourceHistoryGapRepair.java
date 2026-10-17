@@ -67,7 +67,7 @@ public class SourceHistoryGapRepair {
             from = Math.max(946684800000L, to - Math.max(7 * 86400000L, limit * RandomMarketPath.duration(period) * 3));
         }
         Window window = new Window(config, period, limit, cursor, provider, Math.max(946684800000L, from), to, projection);
-        Protection protection = protection(window);
+        Protection protection = protection(window, !window.continuous && "1m".equals(period));
         if (RandomMarketPath.enabled(config)) protection.add(window.from, Long.MAX_VALUE, "simulation_history");
         String configured = MarketInstrumentCatalog.inferredSource(config.getSourceCategory());
         if (configured == null || !configured.equalsIgnoreCase(config.getMarketSource()))
@@ -98,7 +98,11 @@ public class SourceHistoryGapRepair {
             }
             String refusal = protection.reason(window.from, window.to + 1);
             window.discovery = refusal == null;
-            if (refusal != null && window.gaps.isEmpty()) window.gaps.add(gap(window.from, window.to, refusal, false));
+            // Reuse ordinary minute-ingestion protection: old controls do not block unrelated newer minutes.
+            if (protection.nativePeriods && !window.discovery)
+                for (long at = start(period, window.to); at >= window.from; at = previous(period, at))
+                    if (protection.reason(at, at + 60000) == null) { window.discovery = true; break; }
+            if (!window.discovery && refusal != null && window.gaps.isEmpty()) window.gaps.add(gap(window.from, window.to, refusal, false));
         }
         return window;
     }
@@ -253,14 +257,14 @@ public class SourceHistoryGapRepair {
             protect(result, window, ((Number)publication.get("from_at")).longValue(), ((Number)publication.get("to_at")).longValue(), "protected_publication");
         for (String table : Arrays.asList("market_mixed_minute", "market_legacy_minute_snapshot")) {
             List<Long> keys = store.db.queryForList("SELECT minute_at FROM " + table + " WHERE tenant_id=? AND symbol_id=? AND minute_at>=? AND minute_at<=? ORDER BY minute_at LIMIT 501" + currentRead(), Long.class, window.tenant, window.symbol, from, to);
-            if (keys.size() > 500) result.add(window.from, Long.MAX_VALUE, "protection_window_limit");
+            if (keys.size() > 500) protectMinuteOverflow(result, window, table, from, to);
             for (Long at : keys) protect(result, window, at, at + 59999, "market_mixed_minute".equals(table) ? "protected_mixed_minute" : "frozen_snapshot");
         }
         List<Long> simulations = store.db.queryForList("SELECT candle_at FROM market_simulation_source_candle WHERE tenant_id=? AND symbol_id=? AND candle_at>=? AND candle_at<=? ORDER BY candle_at LIMIT 501" + currentRead(), Long.class, window.tenant, window.symbol, from, to);
         if (simulations.size() > 500) result.add(window.from, Long.MAX_VALUE, "protection_window_limit");
         for (Long at : simulations) protect(result, window, at, at + 59999, "simulation_history");
         List<Long> restored = store.db.queryForList("SELECT minute_at FROM market_history_restore_minute WHERE tenant_id=? AND symbol_id=? AND minute_at>=? AND minute_at<=? ORDER BY minute_at LIMIT 501" + currentRead(), Long.class, window.tenant, window.symbol, from, to);
-        if (restored.size() > 500) result.add(window.from, Long.MAX_VALUE, "protection_window_limit");
+        if (restored.size() > 500) protectMinuteOverflow(result, window, "market_history_restore_minute", from, to);
         for (Long at : restored) protect(result, window, at, at + 59999, "protected_history_restore");
         if (window.projection && minutes) for (Long initial : store.db.queryForList("SELECT initial_watermark FROM s4_history_projection_progress WHERE tenant_id=? AND symbol_id=? ORDER BY generation DESC LIMIT 1" + currentRead(), Long.class, window.tenant, window.symbol))
             result.add(0, initial, "projection_before_initial");
@@ -310,6 +314,12 @@ public class SourceHistoryGapRepair {
             result.nativeBuckets.put(period, buckets);
         }
         return result;
+    }
+    private void protectMinuteOverflow(Protection result, Window window, String table, long from, long to) {
+        long last = store.db.queryForObject("SELECT minute_at FROM " + table + " WHERE tenant_id=? AND symbol_id=? AND minute_at>=? AND minute_at<=? ORDER BY minute_at DESC LIMIT 1" + currentRead(),
+            Long.class, window.tenant, window.symbol, from, to);
+        // Preserve the entire bounded old history, including uninspected rows, without freezing future minutes.
+        protect(result, window, from, last + 59999, "protection_window_limit");
     }
     /** Shared by ordinary provider ingestion, under the same symbol writer lock as gap repair. */
     Protection sourceMinuteProtection(TradingSymbol config, long from, long to) {
@@ -394,7 +404,7 @@ public class SourceHistoryGapRepair {
             if (!Objects.equals(code, window.code) || !Objects.equals(route.get("market_source"), window.configuredSource)
                     || !Objects.equals(route.get("source_category"), window.category) || ((Number)route.get("row_version")).longValue() != window.version)
                 throw new IllegalStateException("History source route/version changed");
-            Protection protection = protection(window);
+            Protection protection = protection(window, !window.continuous && "1m".equals(window.period));
             if (Boolean.TRUE.equals(route.get("random_market_enabled")) || route.get("random_market_enabled") instanceof Number && ((Number)route.get("random_market_enabled")).intValue() != 0) {
                 protection.add(window.from, Long.MAX_VALUE, "simulation_history");
             }
@@ -417,6 +427,11 @@ public class SourceHistoryGapRepair {
                 Map<String,Object> body = new LinkedHashMap<>(candidates.get(at));
                 body.remove(AGGREGATE_EXCLUSIONS);
                 List<String> exclusions = protection.excludedPeriods(at);
+                // Missing legacy anchors cannot block real minute history. Isolate new minutes from every coarse aggregate.
+                if (protection.nativePeriods && protection.nativeAnchorUnknown(at)) {
+                    for (String period : KlineIntervals.PUBLIC) if (!"1m".equals(period) && !exclusions.contains(period)) exclusions.add(period);
+                    exclusions.add("4h");
+                }
                 if ("1m".equals(window.period) && !exclusions.isEmpty()) body.put(AGGREGATE_EXCLUSIONS, exclusions);
                 String saved = store.encode(body);
                 store.db.update("INSERT INTO market_source_candle(tenant_id,symbol_id,period,candle_at,body,received_at) VALUES(?,?,?,?,?,?)", window.tenant, window.symbol, window.period, at, saved, received);
