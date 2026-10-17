@@ -19,10 +19,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 class SupportExternalLinkTest {
     private static final String LINK = "https://linkschatin.com/agent/chat.html?key=regression-test";
-    // Exercise the real URL policy without external DNS or contacting a chat service.
+    // A browser link must not depend on the backend's DNS or outbound policy.
     static class PublicPolicy extends OutboundEndpointPolicy {
         String address = "9.9.9.9";
+        int calls;
         @Override protected InetAddress[] resolve(String host) throws UnknownHostException {
+            calls++;
+            if (address == null) throw new UnknownHostException(host);
             return new InetAddress[]{InetAddress.getByName(address)};
         }
     }
@@ -49,13 +52,22 @@ class SupportExternalLinkTest {
         String other = "https://other.example.com:8443/chat?key=test";
         assertLink(endpoints(outbound, other, "external", true), other, true);
     }
-    @Test void invalidOrPrivateLinksRemainHidden() throws Exception {
+    @Test void configuredLinksPublishWithoutUrlOrDnsValidation() throws Exception {
         PublicPolicy outbound = new PublicPolicy();
-        for (String invalid : new String[]{"", "http://linkschatin.com/chat", "https://user@linkschatin.com/chat",
-                "https://127.0.0.1/chat", "/chat"})
-            assertLink(endpoints(outbound, invalid, "external", true), "", false);
+        for (String link : new String[]{"http://linkschatin.com/chat", "https://user@linkschatin.com/chat",
+                "https://127.0.0.1/chat", "/chat", "linkschatin.com/chat", LINK + "#chat",
+                "custom://support/chat", "https://support.example/chat with spaces", "https://[", "  "})
+            assertLink(endpoints(outbound, link, "external", true), link, true);
         outbound.address = "10.0.0.1";
-        assertLink(endpoints(outbound, LINK, "external", true), "", false);
+        assertLink(endpoints(outbound, LINK, "external", true), LINK, true);
+        outbound.address = null;
+        assertLink(endpoints(outbound, LINK, "external", true), LINK, true);
+        org.junit.jupiter.api.Assertions.assertEquals(0, outbound.calls);
+    }
+    @Test void missingLinksRemainUnavailable() throws Exception {
+        PublicPolicy outbound = new PublicPolicy();
+        for (String link : new String[]{null, ""})
+            assertLink(endpoints(outbound, link, "external", true), "", false);
     }
     @Test void disabledChannelOrFeatureStillSuppressesExternalLinks() throws Exception {
         PublicPolicy outbound = new PublicPolicy();

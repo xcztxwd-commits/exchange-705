@@ -12,6 +12,13 @@ class OutboundEndpointPolicyTest {
  @Test void privateSpecialMappedAndMixedDnsAllRejected()throws Exception{Policy p=configured();for(String address:Arrays.asList("0.0.0.0","127.0.0.1","10.0.0.1","172.16.0.1","192.168.1.1","169.254.169.254","100.64.0.1","198.19.1.1","192.0.2.1","224.0.0.1","::1","fe80::1","fc00::1","::ffff:127.0.0.1","2001:db8::1","64:ff9b::a00:1")){assertFalse(OutboundEndpointPolicy.publicAddress(InetAddress.getByName(address)),address);p.address=address;assertThrows(RuntimeException.class,()->p.smtp("smtp.example.com","465"));}p.address="9.9.9.9";p.mixed=true;assertThrows(RuntimeException.class,()->p.https("https://support.example.com","support"));assertTrue(OutboundEndpointPolicy.publicAddress(InetAddress.getByName("2606:4700:4700::1111")));}
  @Test void callbackAndSmtpConfigurationCannotBypassSendBoundary(){Policy p=configured();assertThrows(RuntimeException.class,()->p.validateConfig("payment.callback_url","http://localhost/foo"));assertThrows(RuntimeException.class,()->p.validateConfig("mail.host","127.0.0.1"));assertThrows(RuntimeException.class,()->p.validateConfig("mail.port","nonsense"));assertDoesNotThrow(()->p.validateConfig("customer.service.link",""));}
 
+ @Test void supportConfigurationSavesWithoutUrlOrDnsValidation(){
+  Policy p=new Policy();p.address="127.0.0.1";
+  for(String link:Arrays.asList("http://support.example.com/chat","https://127.0.0.1/chat","https://user@support.example.com/chat","/chat","support.example.com/chat","https://support.example.com/#chat"))
+   assertDoesNotThrow(()->p.validateConfig("customer.service.link",link),link);
+  assertEquals(0,p.calls);
+ }
+
  @Test void localLoopbackRequiresBothExplicitOptInAndExactSmtpAuthorization(){
   Policy p=configured();ReflectionTestUtils.setField(p,"localLoopbackEndpoints","smtp.localhost:465,smtp587.localhost:587,a.localhost:443");
   ReflectionTestUtils.setField(p,"smtpEndpoints","smtp.localhost:465,smtp587.localhost:587");

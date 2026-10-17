@@ -114,7 +114,6 @@ function changePage(delta: number) {
           :src="config.link"
           :title="t('在线客服', 'Customer support')"
           referrerpolicy="no-referrer"
-          sandbox="allow-forms allow-scripts allow-same-origin allow-popups"
       /></template>
       <p v-else>
         {{ t('客服链接尚未配置，请稍后再试', 'Support is not configured yet. Please try again later.') }}

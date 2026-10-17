@@ -7,7 +7,7 @@ import java.net.*;
 import java.util.*;
 import java.util.concurrent.*;
 
-/** Operator-only backend destinations; browser support links require public HTTPS addresses. */
+/** Operator-only backend destinations; browser support links are passed through unchanged. */
 @Component
 public class OutboundEndpointPolicy {
     @Value("${platform.outbound.smtp-endpoints:}") private String smtpEndpoints = "";
@@ -56,7 +56,6 @@ public class OutboundEndpointPolicy {
         if(value==null||value.trim().isEmpty())return; // Clearing never grants access; readiness/send rejects incomplete values.
         if("mail.host".equals(key))smtpHost(value);
         else if("mail.port".equals(key)){int p=port(value);if(p!=465&&p!=587)throw error("SMTP 仅支持 TLS 端口 465/587");}
-        else if("customer.service.link".equals(key))https(value,"support");
         else if(key!=null&&key.toLowerCase(Locale.ROOT).matches(".*(?:callback|webhook|notify)[._-]?(?:url|uri|endpoint)$"))https(value,"callback");
     }
     /** Fixed routing probe: TCP uses checked IP, TLS/Host use the original assigned hostname; no redirects. */

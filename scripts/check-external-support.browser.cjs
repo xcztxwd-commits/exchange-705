@@ -8,7 +8,7 @@ const external = 'https://support.example.test/chat'
 const chat = '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><body style="margin:0;height:100dvh;display:flex;flex-direction:column;font:16px system-ui"><header style="padding:20px;background:#008be8;color:white">FOREX EXCHANGE · 本地客服布局验证</header><main style="flex:1;min-height:0;overflow:auto;padding:20px;background:#f4f6f9">欢迎联系在线客服。<p>English · 中文 · 日本語</p></main><footer style="padding:14px;border-top:1px solid #ddd;display:flex;gap:12px"><textarea aria-label="消息" placeholder="输入消息" style="flex:1;min-width:0;resize:none;padding:10px"></textarea><button>发送</button></footer>'
 fs.mkdirSync(out, { recursive: true })
 ;(async () => {
-  const browser = await chromium.launch({ headless: true, ...(process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : {}) })
+  const browser = await chromium.launch({ headless: true, args: ['--disable-features=AutofillAiWalletPrivatePasses,AutofillAmbientAutofill'], ...(process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : {}) })
   const results = []
   try {
     for (const [app, base] of Object.entries(targets)) {
@@ -19,7 +19,7 @@ fs.mkdirSync(out, { recursive: true })
       await context.addInitScript(() => { localStorage.setItem('token', 'QA'); localStorage.setItem('user', JSON.stringify({ id: 1, tenantId: 1 })); localStorage.setItem('locale', 'zh-TW') })
       await context.route('**/*', async route => {
         const url = new URL(route.request().url())
-        if (url.origin === new URL(external).origin) return route.fulfill({ contentType: 'text/html; charset=utf-8', body: chat })
+        if (url.hostname === new URL(external).hostname) return route.fulfill({ contentType: 'text/html; charset=utf-8', body: chat })
         if (url.hostname !== '127.0.0.1' && url.hostname !== 'localhost') return route.abort()
         if (url.pathname === '/__qa') return route.fulfill({ contentType: 'text/html; charset=utf-8', body: '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body><div id="app"></div></body></html>' })
         if (!url.pathname.startsWith('/api/')) return route.continue()
@@ -73,11 +73,17 @@ fs.mkdirSync(out, { recursive: true })
       const link = page.locator('.external-open'), frame = page.locator('iframe')
       assert.equal(await link.getAttribute('href'), external); assert.equal(await link.getAttribute('target'), '_blank')
       assert.equal(await link.getAttribute('rel'), 'noopener noreferrer'); assert.equal(await frame.getAttribute('referrerpolicy'), 'no-referrer')
-      assert.equal(await frame.getAttribute('sandbox'), 'allow-forms allow-scripts allow-same-origin allow-popups')
+      assert.equal(await frame.getAttribute('sandbox'), null, 'third-party support runs without an application-imposed sandbox')
       const [popup] = await Promise.all([context.waitForEvent('page'), link.click()]); await popup.waitForLoadState('domcontentloaded')
       assert.equal(popup.url(), external); assert.equal(await popup.evaluate(() => window.opener), null); await popup.close()
       await page.screenshot({ path: path.join(out, app + '-external.png') })
       for (const locale of ['ja', 'de', 'fr', 'en']) { await page.evaluate(locale => { window.__qa.locale.locale = locale }, locale); await measure() }
+      for (const address of ['http://support.example.test/chat', external + '#conversation']) {
+        config = { ...config, link: address }; await mount()
+        await page.waitForFunction(address => document.querySelector('.external iframe')?.getAttribute('src') === address, address)
+        assert.equal(await link.getAttribute('href'), address); await measure()
+      }
+      config = { ...config, link: external }
       await mount(true); await measure(true)
       await page.screenshot({ path: path.join(out, app + '-external-demo.png') })
       config = { ...config, mode: 'internal' }; await page.evaluate(() => { window.__qa.locale.locale = 'ja' })
@@ -88,9 +94,9 @@ fs.mkdirSync(out, { recursive: true })
       assert.equal(await frame.count(), 0); assert.equal(await link.count(), 0)
       await page.locator('.back').click(); await page.waitForFunction(() => window.__qa.router.currentRoute.value.path === '/previous')
       assert.deepEqual(errors, [])
-      results.push({ app, dimensions, checks: ['full-width and full-height at five viewport sizes', 'header action opens a safe new window', 'iframe security attributes unchanged', 'localized header fits', 'demo banner keeps its actual height', 'internal/off/missing URL/back navigation preserved'], errors, requests })
+      results.push({ app, dimensions, checks: ['full-width and full-height at five viewport sizes', 'header action opens a safe new window', 'external iframe has no sandbox', 'HTTP and fragment links pass through unchanged', 'localized header fits', 'demo banner keeps its actual height', 'internal/off/missing URL/back navigation preserved'], errors, requests })
       await context.close()
     }
-    fs.writeFileSync(path.join(out, 'result.json'), JSON.stringify(results, null, 2)); console.log('PASS mobile + PC external support: full remaining viewport, upper-right action, safe popup, five viewport sizes, localization, demo banner, internal/off/missing URL/back regression')
+    fs.writeFileSync(path.join(out, 'result.json'), JSON.stringify(results, null, 2)); console.log('PASS mobile + PC external support: unrestricted iframe, HTTP/fragment links, full remaining viewport, upper-right action, safe popup, five viewport sizes, localization, demo banner, internal/off/missing URL/back regression')
   } finally { await browser.close() }
 })().catch(error => { console.error(error); process.exitCode = 1 })

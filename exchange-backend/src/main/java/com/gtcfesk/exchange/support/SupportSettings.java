@@ -110,9 +110,7 @@ public class SupportSettings {
     public String externalLink() {
         if (!"external".equals(get().mode) || !policy.featureEnabled("external_support")) return "";
         String link = configs.getConfigValue("customer.service.link");
-        if (link == null || link.trim().isEmpty()) return "";
-        try { return outbound.https(link,"support").toString(); }
-        catch (BusinessException e) { return ""; } // Stale invalid configuration is never exposed as a clickable URL.
+        return link == null ? "" : link;
     }
     public Map<String,Object> publicConfig() { return publicConfig(null); }
     public Map<String,Object> publicConfig(String locale) {
