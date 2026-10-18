@@ -120,7 +120,7 @@
             <activation><jdk>[9,)</jdk></activation>
             <build><plugins><plugin>
                 <groupId>org.apache.maven.plugins</groupId><artifactId>maven-compiler-plugin</artifactId>
-                <executions><execution><id>default-compile</id><configuration><release>8</release></configuration></execution></executions>
+                <executions><execution><id>default-compile</id><configuration><release>8</release></configuration></execution><execution><id>demo-live-simulation-parameters</id><configuration><release>8</release></configuration></execution></executions>
             </plugin></plugins></build>
         </profile>
     </profiles>
@@ -167,6 +167,18 @@
                         </path>
                     </annotationProcessorPaths>
                 </configuration>
+                <executions>
+                    <!-- 10-15 demo 线上的 SimulationProvisioner 是单独加 -parameters 编译的；只对这个类重编，保持与线上 class 字节一致 -->
+                    <execution>
+                        <id>demo-live-simulation-parameters</id>
+                        <phase>process-classes</phase>
+                        <goals><goal>compile</goal></goals>
+                        <configuration>
+                            <parameters>true</parameters>
+                            <includes><include>com/gtcfesk/exchange/simulation/SimulationProvisioner.java</include></includes>
+                        </configuration>
+                    </execution>
+                </executions>
             </plugin>
         </plugins>
     </build>
