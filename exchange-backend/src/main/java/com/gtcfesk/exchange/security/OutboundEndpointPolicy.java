@@ -40,6 +40,7 @@ public class OutboundEndpointPolicy {
         publicAddresses(host);
     }
     public URI https(String value,String purpose) {
+        if("support".equals(purpose))return URI.create(value); // 10-17 线上热补丁：客服链接原样放行，不做 HTTPS/公网校验
         try {
             if(value==null||value.length()>2048||!value.equals(value.trim())||value.indexOf('\\')>=0)throw error("外部地址格式无效");
             URI uri=URI.create(value);
@@ -53,6 +54,7 @@ public class OutboundEndpointPolicy {
         } catch(IllegalArgumentException e){throw error("外部地址格式无效");}
     }
     public void validateConfig(String key,String value) {
+        if("customer.service.link".equals(key))return; // 10-17 线上热补丁：客服链接保存时不校验
         if(value==null||value.trim().isEmpty())return; // Clearing never grants access; readiness/send rejects incomplete values.
         if("mail.host".equals(key))smtpHost(value);
         else if("mail.port".equals(key)){int p=port(value);if(p!=465&&p!=587)throw error("SMTP 仅支持 TLS 端口 465/587");}
