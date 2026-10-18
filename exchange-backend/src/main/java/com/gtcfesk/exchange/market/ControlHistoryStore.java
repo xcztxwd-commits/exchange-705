@@ -24,6 +24,7 @@ public class ControlHistoryStore {
     final MarketRuntime runtime = new MarketRuntime(this);
     final HistoryOrdering historyOrdering = new HistoryOrdering(this);
     static long tenant() { return TenantContext.requireTenantId(); }
+    private static final org.slf4j.Logger TRANSACTION_LOG = org.slf4j.LoggerFactory.getLogger(ControlHistoryStore.class);
     private final TransactionTemplate transactions;
     private final TransactionTemplate reads, consumerReads;
     private final ObjectMapper json = new ObjectMapper().enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS).enable(JsonGenerator.Feature.ESCAPE_NON_ASCII);
@@ -74,7 +75,10 @@ public class ControlHistoryStore {
             long at=System.nanoTime();
             org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(new org.springframework.transaction.support.TransactionSynchronization(){
                 @Override public void afterCompletion(int completion) {
-                    org.slf4j.LoggerFactory.getLogger(ControlHistoryStore.class).info("control_transaction tenant={} symbol={} traceId={} requestKey={} ms={} outcome={}",tenant(),symbol,org.slf4j.MDC.get("traceId"),org.slf4j.MDC.get("requestKey"),(System.nanoTime()-at)/1000000,completion==STATUS_COMMITTED?"COMMITTED":completion==STATUS_ROLLED_BACK?"ROLLED_BACK":"UNKNOWN");
+                    if(completion==STATUS_COMMITTED && !TRANSACTION_LOG.isDebugEnabled())return;
+                    String template="control_transaction tenant={} symbol={} traceId={} requestKey={} ms={} outcome={}";
+                    Object[] args={tenant(),symbol,org.slf4j.MDC.get("traceId"),org.slf4j.MDC.get("requestKey"),(System.nanoTime()-at)/1000000,completion==STATUS_COMMITTED?"COMMITTED":completion==STATUS_ROLLED_BACK?"ROLLED_BACK":"UNKNOWN"};
+                    if(completion==STATUS_COMMITTED)TRANSACTION_LOG.debug(template,args); else TRANSACTION_LOG.warn(template,args);
                 }
             });
             return runtime.locked(symbol, operation);
