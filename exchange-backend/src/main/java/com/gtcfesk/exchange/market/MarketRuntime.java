@@ -17,13 +17,21 @@ final class MarketRuntime {
     private final ThreadLocal<Map<Long,Integer>> sampled = new ThreadLocal<>();
     private final ThreadLocal<Long> began = new ThreadLocal<>();
     private final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(MarketRuntime.class);
+    /** Phases at or above this duration are logged at WARN; faster ones only at DEBUG. */
+    private static final long SLOW_PHASE_MS = 200;
     private Boolean mysql;
     boolean hasBudget(long reserveMs) { return began.get()==null || (System.nanoTime()-began.get())/1000000 < 4500-reserveMs; }
     void requireBudget() { if(!hasBudget(0)) throw new BusinessException("ENGINE_BUDGET: 写事务时间预算耗尽"); }
     <T> T phase(long symbol,String phase,Supplier<T> operation) {
         long at=System.nanoTime();
         try{return operation.get();} finally {
-            log.info("control_phase tenant={} symbol={} phase={} ms={} remainingMs={} owner={} traceId={} requestKey={} generation={}",ControlHistoryStore.tenant(),symbol,phase,(System.nanoTime()-at)/1000000,began.get()==null?4500:Math.max(0,4500-(System.nanoTime()-began.get())/1000000),owner,org.slf4j.MDC.get("traceId"),org.slf4j.MDC.get("requestKey"),context.get()==null?null:context.get().get(ControlHistoryStore.tenant()+":"+symbol));
+            long ms=(System.nanoTime()-at)/1000000;
+            boolean slow=ms>=SLOW_PHASE_MS;
+            if(slow || log.isDebugEnabled()) {
+                String template="control_phase tenant={} symbol={} phase={} ms={} remainingMs={} owner={} traceId={} requestKey={} generation={}";
+                Object[] args={ControlHistoryStore.tenant(),symbol,phase,ms,began.get()==null?4500:Math.max(0,4500-(System.nanoTime()-began.get())/1000000),owner,org.slf4j.MDC.get("traceId"),org.slf4j.MDC.get("requestKey"),context.get()==null?null:context.get().get(ControlHistoryStore.tenant()+":"+symbol)};
+                if(slow)log.warn(template,args); else log.debug(template,args);
+            }
         }
     }
     /** Caller has current-read locked a previously committed runtime+command owner/generation pair.
