@@ -2,7 +2,6 @@ package com.gtcfesk.exchange.control;
 
 import com.gtcfesk.exchange.common.BusinessException;
 import com.gtcfesk.exchange.repository.SystemConfigRepository;
-import com.gtcfesk.exchange.security.OutboundEndpointPolicy;
 import com.gtcfesk.exchange.support.SupportSettings;
 import com.gtcfesk.exchange.tenant.TenantContext;
 import com.gtcfesk.exchange.tenant.TenantSecrets;
@@ -20,7 +19,6 @@ public class TenantReadinessService {
     private final TenantPolicyRepository policies;
     private final SystemConfigRepository configs;
     private final TenantSecrets secrets;
-    private final OutboundEndpointPolicy outbound;
     private final EntityManager em;
     public static class Missing {
         public final String key,message,owner,location;

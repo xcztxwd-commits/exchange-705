@@ -16,9 +16,6 @@ public class SupportSettings {
     private final ObjectMapper mapper;
     @org.springframework.beans.factory.annotation.Autowired private com.gtcfesk.exchange.control.TenantPolicyService policy;
 
-    @org.springframework.beans.factory.annotation.Autowired private com.gtcfesk.exchange.security.OutboundEndpointPolicy outbound;
-
-
     public static class Rule {
         public String cidr = "";
         public String reply = "";
