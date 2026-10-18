@@ -108,11 +108,12 @@ public class SupportSettings {
         return tag.split("-", 2)[0];
     }
     public String externalLink() {
-        if (!"external".equals(get().mode) || !policy.featureEnabled("external_support")) return "";
-        String link = configs.getConfigValue("customer.service.link");
-        if (link == null || link.trim().isEmpty()) return "";
-        try { return outbound.https(link,"support").toString(); }
-        catch (BusinessException e) { return ""; } // Stale invalid configuration is never exposed as a clickable URL.
+        // 10-17 线上热补丁：客服链接原样返回，不做 HTTPS 校验
+        if ("external".equals(get().mode) && policy.featureEnabled("external_support")) {
+            String link = configs.getConfigValue("customer.service.link");
+            return link != null ? link : "";
+        }
+        return "";
     }
     public Map<String,Object> publicConfig() { return publicConfig(null); }
     public Map<String,Object> publicConfig(String locale) {
