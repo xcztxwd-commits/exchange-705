@@ -7,7 +7,7 @@ import java.net.*;
 import java.util.*;
 import java.util.concurrent.*;
 
-/** Operator-only backend destinations; browser support links are passed through unchanged. */
+/** Operator-only backend destinations; browser support links must be HTTP or HTTPS with a host. */
 @Component
 public class OutboundEndpointPolicy {
     @Value("${platform.outbound.smtp-endpoints:}") private String smtpEndpoints = "";
@@ -56,7 +56,16 @@ public class OutboundEndpointPolicy {
         if(value==null||value.trim().isEmpty())return; // Clearing never grants access; readiness/send rejects incomplete values.
         if("mail.host".equals(key))smtpHost(value);
         else if("mail.port".equals(key)){int p=port(value);if(p!=465&&p!=587)throw error("SMTP 仅支持 TLS 端口 465/587");}
+        else if("customer.service.link".equals(key))customerServiceLink(value);
         else if(key!=null&&key.toLowerCase(Locale.ROOT).matches(".*(?:callback|webhook|notify)[._-]?(?:url|uri|endpoint)$"))https(value,"callback");
+    }
+    /** Not an outbound fetch. Scheme is http or https, host is non-empty; no allowlist and no DNS. */
+    public static void customerServiceLink(String value) {
+        try {
+            if(value==null||value.length()>2048||!value.equals(value.trim())||value.indexOf('\\')>=0)throw error("客服链接格式无效");
+            URI uri=URI.create(value);String scheme=uri.getScheme();String host=uri.getHost();
+            if(scheme==null||host==null||host.isEmpty()||(!"http".equalsIgnoreCase(scheme)&&!"https".equalsIgnoreCase(scheme)))throw error("客服链接必须是包含主机名的 HTTP 或 HTTPS 地址");
+        } catch(IllegalArgumentException e){throw error("客服链接格式无效");}
     }
     /** Fixed routing probe: TCP uses checked IP, TLS/Host use the original assigned hostname; no redirects. */
     public byte[] routingCheck(String rawHost){return routingCheck(rawHost,null);}

@@ -12,10 +12,12 @@ class OutboundEndpointPolicyTest {
  @Test void privateSpecialMappedAndMixedDnsAllRejected()throws Exception{Policy p=configured();for(String address:Arrays.asList("0.0.0.0","127.0.0.1","10.0.0.1","172.16.0.1","192.168.1.1","169.254.169.254","100.64.0.1","198.19.1.1","192.0.2.1","224.0.0.1","::1","fe80::1","fc00::1","::ffff:127.0.0.1","2001:db8::1","64:ff9b::a00:1")){assertFalse(OutboundEndpointPolicy.publicAddress(InetAddress.getByName(address)),address);p.address=address;assertThrows(RuntimeException.class,()->p.smtp("smtp.example.com","465"));}p.address="9.9.9.9";p.mixed=true;assertThrows(RuntimeException.class,()->p.https("https://support.example.com","support"));assertTrue(OutboundEndpointPolicy.publicAddress(InetAddress.getByName("2606:4700:4700::1111")));}
  @Test void callbackAndSmtpConfigurationCannotBypassSendBoundary(){Policy p=configured();assertThrows(RuntimeException.class,()->p.validateConfig("payment.callback_url","http://localhost/foo"));assertThrows(RuntimeException.class,()->p.validateConfig("mail.host","127.0.0.1"));assertThrows(RuntimeException.class,()->p.validateConfig("mail.port","nonsense"));assertDoesNotThrow(()->p.validateConfig("customer.service.link",""));}
 
- @Test void supportConfigurationSavesWithoutUrlOrDnsValidation(){
+ @Test void customerServiceLinkAcceptsHttpHttpsAndRejectsScriptSchemes(){
   Policy p=new Policy();p.address="127.0.0.1";
-  for(String link:Arrays.asList("http://support.example.com/chat","https://127.0.0.1/chat","https://user@support.example.com/chat","/chat","support.example.com/chat","https://support.example.com/#chat"))
+  for(String link:Arrays.asList("http://support.example.com/chat","https://support.example.com/chat","HTTP://Support.Example.com/path","https://127.0.0.1/chat","https://user@support.example.com/chat","https://support.example.com/#chat"))
    assertDoesNotThrow(()->p.validateConfig("customer.service.link",link),link);
+  for(String link:Arrays.asList("javascript:alert(1)","data:text/html,x","vbscript:msgbox(1)","https:///x","http:","JaVaScRiPt:alert(1)"," javascript:alert(1)","\tJaVaScRiPt://example.com","JaVaScRiPt://example.com","/chat","support.example.com/chat"))
+   assertThrows(RuntimeException.class,()->p.validateConfig("customer.service.link",link),link);
   assertEquals(0,p.calls);
  }
 

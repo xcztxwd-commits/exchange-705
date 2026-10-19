@@ -2,13 +2,20 @@ package com.gtcfesk.exchange.support;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gtcfesk.exchange.admin.SystemConfigService;
+import com.gtcfesk.exchange.common.BusinessException;
 import com.gtcfesk.exchange.control.TenantPolicyService;
+import com.gtcfesk.exchange.entity.SystemConfig;
+import com.gtcfesk.exchange.repository.SystemConfigRepository;
+import com.gtcfesk.exchange.security.OutboundEndpointPolicy;
+import com.gtcfesk.exchange.tenant.TenantContext;
 import com.gtcfesk.exchange.user.CustomerServiceController;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
+import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -37,11 +44,39 @@ class SupportExternalLinkTest {
         String other = "https://other.example.com:8443/chat?key=test";
         assertLink(endpoints(other, "external", true), other, true);
     }
-    @Test void configuredLinksPublishWithoutUrlOrDnsValidation() throws Exception {
+    @Test void httpAndHttpsLinksPublishWithoutDnsChecks() throws Exception {
         for (String link : new String[]{"http://linkschatin.com/chat", "https://user@linkschatin.com/chat",
-                "https://127.0.0.1/chat", "/chat", "linkschatin.com/chat", LINK + "#chat",
-                "custom://support/chat", "https://support.example/chat with spaces", "https://[", "  "})
+                "https://127.0.0.1/chat", LINK + "#chat", "HTTP://linkschatin.com/chat"})
             assertLink(endpoints(link, "external", true), link, true);
+        assertLink(endpoints("  https://support.example.com/chat \n", "external", true), "https://support.example.com/chat", true);
+    }
+    @Test void paddedCustomerServiceLinkIsStoredTrimmedAndScriptSchemeStaysRejected() {
+        SystemConfigService service = new SystemConfigService();
+        SystemConfigRepository repository = mock(SystemConfigRepository.class);
+        TenantPolicyService policy = mock(TenantPolicyService.class);
+        ReflectionTestUtils.setField(service, "systemConfigRepository", repository);
+        ReflectionTestUtils.setField(service, "tenantPolicy", policy);
+        doAnswer(call -> { new OutboundEndpointPolicy().validateConfig(call.getArgument(0), call.getArgument(1)); return null; })
+            .when(policy).requireConfigChange(any(), any());
+        TenantContext.open(1L);
+        try {
+            service.saveConfig("customer.service.link", "  https://support.example.com/chat \n", "客服链接");
+            ArgumentCaptor<SystemConfig> saved = ArgumentCaptor.forClass(SystemConfig.class);
+            verify(repository).save(saved.capture());
+            assertEquals("https://support.example.com/chat", saved.getValue().getConfigValue());
+            verify(policy).requireConfigChange("customer.service.link", "https://support.example.com/chat");
+            assertThrows(BusinessException.class, () -> service.saveConfig("customer.service.link", " javascript:alert(1)", null));
+            verify(policy).requireConfigChange("customer.service.link", "javascript:alert(1)");
+            verify(repository, times(1)).save(any());
+        } finally {
+            TenantContext.clear();
+        }
+    }
+    @Test void scriptAndEmptyHostLinksStayHidden() throws Exception {
+        for (String link : new String[]{"javascript:alert(1)", "data:text/html,x", "vbscript:msgbox(1)",
+                "JaVaScRiPt:alert(1)", " javascript:alert(1)", "https:///x", "http:", "/chat",
+                "linkschatin.com/chat", "custom://support/chat", "https://support.example/chat with spaces", "https://[", "  "})
+            assertLink(endpoints(link, "external", true), "", false);
     }
     @Test void missingLinksRemainUnavailable() throws Exception {
         for (String link : new String[]{null, ""})

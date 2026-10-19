@@ -90,6 +90,10 @@ onUnmounted(() => {
   disposed = true
   clearTimeout(timer)
 })
+const externalHref = computed(() => {
+  const value = (config.value?.link ?? '').trim()
+  return /^https?:\/\//i.test(value) ? value : ''
+})
 function changePage(delta: number) {
   historyPage.value += delta
   void history()
@@ -103,15 +107,15 @@ function changePage(delta: number) {
         <h1>{{ t('在线客服', 'Customer support') }}</h1>
         <p>{{ t('专属协助 · 安心沟通', 'Personal assistance. A conversation you can trust.') }}</p>
       </div>
-      <a v-if="config?.mode === 'external' && config.link" class="external-open" :href="config.link" target="_blank" rel="noopener noreferrer">{{ t('在新窗口打开客服', 'Open support in a new window') }} ↗</a>
+      <a v-if="config?.mode === 'external' && externalHref" class="external-open" :href="externalHref" target="_blank" rel="noopener noreferrer">{{ t('在新窗口打开客服', 'Open support in a new window') }} ↗</a>
       <span v-else class="header-mark">{{ t('客服', 'Support') }}</span>
     </header>
     <p v-if="error" class="page-error" role="alert">{{ supportErrorText(error) }}</p>
     <div v-if="!config" class="welcome">{{ t('加载中…', 'Loading…') }}</div>
     <section v-else-if="config.mode === 'external'" class="external">
-      <template v-if="config.link"
+      <template v-if="externalHref"
         ><iframe
-          :src="config.link"
+          :src="externalHref"
           :title="t('在线客服', 'Customer support')"
           referrerpolicy="no-referrer"
       /></template>
