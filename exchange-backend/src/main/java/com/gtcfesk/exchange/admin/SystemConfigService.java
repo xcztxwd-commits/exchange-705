@@ -243,6 +243,9 @@ public class SystemConfigService {
                 }
             }
         }
+        if ("customer.service.link".equals(key)) {
+            value = value == null ? "" : value.trim();
+        }
         tenantPolicy.requireConfigChange(key,value);
         if (VideoIntroSettings.KEY.equals(key)) VideoIntroSettings.parse(value, com.gtcfesk.exchange.tenant.TenantContext.requireTenantId());
         if (com.gtcfesk.exchange.market.MarketHoursConfig.KEY.equals(key)) com.gtcfesk.exchange.market.MarketHoursConfig.parse(value);
