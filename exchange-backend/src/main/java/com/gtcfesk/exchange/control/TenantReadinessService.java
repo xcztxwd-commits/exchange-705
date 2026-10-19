@@ -54,7 +54,7 @@ public class TenantReadinessService {
             if(features.contains("financial")&&!exists("FinancialProduct","e.enabled=true AND e.termDays>0 AND e.dailyYieldRate>=0 AND e.rentalFee>=0 AND e.minPurchase>0 AND e.maxPurchase>=e.minPurchase AND e.penaltyRate>=0 AND e.penaltyRate<=100 AND e.currency<>''"))add(missing,"financial.product","至少一个完整启用产品及合法期限、收益率、金额、赎回费率");
             if(features.contains("loan")&&!exists("LoanSetting","e.enabled=true AND e.days>0 AND e.freeDays>=0 AND e.freeDays<=e.days AND e.dailyRate>=0 AND e.overdueRate>=0 AND e.minAmount>0 AND e.maxAmount>=e.minAmount"))add(missing,"loan.setting","至少一个启用贷款期限及合法费率、金额范围");
             if(features.contains("deposit")&&!exists("DepositSetting","e.enabled=true AND ((e.type='digital' AND e.network<>'' AND e.address<>'') OR (e.type='bank' AND e.bankName<>'' AND e.bankAccount<>'' AND e.accountName<>''))"))add(missing,"deposit.setting","至少一个完整启用的收款地址或银行账户");
-            if(features.contains("external_support"))check(missing,"customer.service.link",()->value("customer.service.link")); // 10-17 线上热补丁：只读取配置，不再做 HTTPS 校验
+            if(features.contains("external_support"))check(missing,"customer.service.link",()->value("customer.service.link")); // Stored link text is not a readiness failure; save rejects non-http(s).
             if(features.contains("support")||features.contains("inbox"))check(missing,"support.settings",()->SupportSettings.parse(value("support.settings")));
             // Withdraw/agent/inbox/activity/simulation have no additional mandatory tenant provider credentials.
             // Runtime KYC/address/campaign-budget and isolated simulation gateway checks remain authoritative.
@@ -75,7 +75,7 @@ public class TenantReadinessService {
         if("loan.setting".equals(key))return new String[]{"TENANT_ADMIN","目标租户后台 /loan-settings：期限、免息期、费率和金额范围"};
         if("deposit.setting".equals(key))return new String[]{"TENANT_ADMIN","目标租户后台 /deposit-settings：只录入批准的测试收款渠道；不得真实转账"};
         if("support.settings".equals(key))return new String[]{"TENANT_ADMIN","目标租户后台 /support-settings：站内客服 / 站内信；清理默认保持关闭"};
-        if("customer.service.link".equals(key))return new String[]{"TENANT_ADMIN","目标租户后台 /settings / 客服配置：核对总控渠道锁定并保存 HTTPS 公网链接，无需域名白名单"};
+        if("customer.service.link".equals(key))return new String[]{"TENANT_ADMIN","目标租户后台 /settings / 客服配置：保存包含主机名的 HTTP 或 HTTPS 客服链接，无需域名白名单"};
         if("site.name".equals(key)||"system.timezone".equals(key))return new String[]{"TENANT_ADMIN","目标租户后台 /settings / 系统设置：平台名称及 IANA 时区"};
         return new String[]{"OPERATIONS","未登记的配置项必须人工定位，不猜测设置页或默认置为就绪"};
     }
