@@ -90,6 +90,10 @@ onUnmounted(() => {
   disposed = true
   clearTimeout(timer)
 })
+const externalHref = computed(() => {
+  const value = (config.value?.link ?? '').trim()
+  return /^https?:\/\//i.test(value) ? value : ''
+})
 function changePage(delta: number) {
   historyPage.value += delta
   void history()
@@ -101,11 +105,11 @@ function changePage(delta: number) {
 <p class="notice">{{ t('客服连接状态按当前会话显示','Connection status follows the active conversation') }}</p><p v-if="error" class="page-error" role="alert">{{ error }}</p>
     <div v-if="!config" class="welcome">{{ t('加载中…', 'Loading…') }}</div>
     <section v-else-if="config.mode === 'external'" class="external">
-      <template v-if="config.link"
-        ><a :href="config.link" target="_blank" rel="noopener noreferrer"
+      <template v-if="externalHref"
+        ><a :href="externalHref" target="_blank" rel="noopener noreferrer"
           >{{ t('在新窗口打开客服', 'Open support in a new window') }} ↗</a
         ><iframe
-          :src="config.link"
+          :src="externalHref"
           :title="t('在线客服', 'Customer support')"
           referrerpolicy="no-referrer"
           sandbox="allow-forms allow-scripts allow-same-origin allow-popups"
