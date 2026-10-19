@@ -119,14 +119,22 @@ class TenantReadinessTest {
  }
  @Test void externalLinkCanBeStagedButForcedInternalStillRejectsIt(){TenantPolicyService live=new TenantPolicyService(tenants,policies);ReflectionTestUtils.setField(live,"outbound",outbound);assertDoesNotThrow(()->live.requireConfigChange("customer.service.link","https://support.example.com"));verify(outbound).validateConfig("customer.service.link","https://support.example.com");TenantPolicy lock=new TenantPolicy();lock.setTenantId(tenant);lock.setKey("config.support.channel");lock.setValue("internal");lock.setLocked(true);policies.saveAndFlush(lock);assertThrows(org.springframework.security.access.AccessDeniedException.class,()->live.requireConfigChange("customer.service.link","https://support.example.com"));}
 
- @Test void externalSupportReadinessDoesNotValidateLinkContents(){
+ @Test void externalSupportReadinessLeavesStoredLinksAndSavePathRejectsScripts(){
   feature("external_support");
   doThrow(new BusinessException("DNS unavailable")).when(outbound).https(any(),any());
-  for(String link:Arrays.asList("http://support.example.com/chat","https://127.0.0.1/chat","/chat","https://support.example.com/#chat","https://[","  ","")){
+  for(String link:Arrays.asList("http://support.example.com/chat","https://support.example.com/chat","javascript:alert(1)","https:///x","  ","")){
    config("customer.service.link",link);
    assertDoesNotThrow(()->readiness.requireFeatureReady(tenant,"external_support"),link);
   }
   verify(outbound,never()).https(any(),any());
+  String hint=TenantReadinessService.location("customer.service.link")[1];
+  assertTrue(hint.contains("HTTP")&&hint.contains("HTTPS")&&hint.contains("无需域名白名单"),hint);
+  assertFalse(hint.contains("地址校验")||hint.contains("公网"),hint);
+  OutboundEndpointPolicy live=new OutboundEndpointPolicy();
+  assertDoesNotThrow(()->live.validateConfig("customer.service.link","https://support.example.com"));
+  assertDoesNotThrow(()->live.validateConfig("customer.service.link","http://support.example.com"));
+  for(String link:Arrays.asList("javascript:alert(1)","data:text/html,x","vbscript:msgbox(1)","https:///x","http:","JaVaScRiPt:alert(1)"," javascript:alert(1)"))
+   assertThrows(RuntimeException.class,()->live.validateConfig("customer.service.link",link),link);
   config("customer.service.link","");
   assertFalse(keys(readiness.report(tenant)).contains("customer.service.link"));
  }

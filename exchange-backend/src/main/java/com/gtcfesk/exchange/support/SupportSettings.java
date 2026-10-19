@@ -108,12 +108,11 @@ public class SupportSettings {
         return tag.split("-", 2)[0];
     }
     public String externalLink() {
-        // 10-17 线上热补丁：客服链接原样返回，不做 HTTPS 校验
-        if ("external".equals(get().mode) && policy.featureEnabled("external_support")) {
-            String link = configs.getConfigValue("customer.service.link");
-            return link != null ? link : "";
-        }
-        return "";
+        if (!"external".equals(get().mode) || !policy.featureEnabled("external_support")) return "";
+        String link = configs.getConfigValue("customer.service.link");
+        if (link == null || link.trim().isEmpty()) return "";
+        try { com.gtcfesk.exchange.security.OutboundEndpointPolicy.customerServiceLink(link); return link; }
+        catch (BusinessException e) { return ""; } // Stored non-http(s) links are never exposed as a clickable URL.
     }
     public Map<String,Object> publicConfig() { return publicConfig(null); }
     public Map<String,Object> publicConfig(String locale) {
