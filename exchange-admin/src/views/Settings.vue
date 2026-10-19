@@ -342,7 +342,7 @@ const saveConfigs = async () => {
 
     const payload = allConfigs.map((c) => ({
       key: c.key,
-      value: c.value,
+      value: c.key === 'customer.service.link' ? (c.value || '').trim() : c.value,
       description: c.description,
     }))
 
