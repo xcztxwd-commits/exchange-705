@@ -37,11 +37,16 @@ class SupportExternalLinkTest {
         String other = "https://other.example.com:8443/chat?key=test";
         assertLink(endpoints(other, "external", true), other, true);
     }
-    @Test void configuredLinksPublishWithoutUrlOrDnsValidation() throws Exception {
+    @Test void httpAndHttpsLinksPublishWithoutDnsChecks() throws Exception {
         for (String link : new String[]{"http://linkschatin.com/chat", "https://user@linkschatin.com/chat",
-                "https://127.0.0.1/chat", "/chat", "linkschatin.com/chat", LINK + "#chat",
-                "custom://support/chat", "https://support.example/chat with spaces", "https://[", "  "})
+                "https://127.0.0.1/chat", LINK + "#chat", "HTTP://linkschatin.com/chat"})
             assertLink(endpoints(link, "external", true), link, true);
+    }
+    @Test void scriptAndEmptyHostLinksStayHidden() throws Exception {
+        for (String link : new String[]{"javascript:alert(1)", "data:text/html,x", "vbscript:msgbox(1)",
+                "JaVaScRiPt:alert(1)", " javascript:alert(1)", "https:///x", "http:", "/chat",
+                "linkschatin.com/chat", "custom://support/chat", "https://support.example/chat with spaces", "https://[", "  "})
+            assertLink(endpoints(link, "external", true), "", false);
     }
     @Test void missingLinksRemainUnavailable() throws Exception {
         for (String link : new String[]{null, ""})
