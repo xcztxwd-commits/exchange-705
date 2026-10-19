@@ -110,7 +110,8 @@ public class SupportSettings {
     public String externalLink() {
         if (!"external".equals(get().mode) || !policy.featureEnabled("external_support")) return "";
         String link = configs.getConfigValue("customer.service.link");
-        if (link == null || link.trim().isEmpty()) return "";
+        if (link != null) link = link.trim();
+        if (link == null || link.isEmpty()) return "";
         try { com.gtcfesk.exchange.security.OutboundEndpointPolicy.customerServiceLink(link); return link; }
         catch (BusinessException e) { return ""; } // Stored non-http(s) links are never exposed as a clickable URL.
     }
