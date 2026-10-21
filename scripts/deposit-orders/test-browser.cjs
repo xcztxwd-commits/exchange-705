@@ -92,6 +92,5 @@ fs.mkdirSync(report,{recursive:true})
   await page.getByRole('button',{name:'详情',exact:true}).click();await page.getByText('125',{exact:true}).waitFor();await page.screenshot({path:path.join(report,'detail.png'),fullPage:true})
   fs.writeFileSync(path.join(report,'result.json'),JSON.stringify({passed:true,fixtureOnly:true,checks:['UID prefix and partial email suggestions','selection links numeric UID and email','typing and clear invalidate recipient','empty results and search failure','required amount rejects without request','remark optional with 500 character limit','empty remark submits successfully','decimal-string amount','response lost after fixture credit','close/reopen retains immutable key','retry sends identical body','one fixture credit only','detail balances visible'],requests:requests.length,searches,writes,errors},null,2))
   console.log('PASS: UID/email live search, linked selection, clear and failure; timeout/reopen/retry identical key; one fixture credit. Real transaction verification is separate MySQL suite.')
- }catch(error){if(browser){const page=browser.contexts()[0]?.pages()[0];if(page){fs.writeFileSync(path.join(report,'failure.txt'),await page.locator('body').innerText());await page.screenshot({path:path.join(report,'failure.png'),fullPage:true})}}throw error}
- finally{if(browser)await browser.close();await server.close()}
+ }finally{if(browser)await browser.close();await server.close()}
 })().catch(e=>{console.error(e);process.exitCode=1})
