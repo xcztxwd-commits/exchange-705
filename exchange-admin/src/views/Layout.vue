@@ -33,6 +33,7 @@ const updateViewport = () => { isMobile.value = mobileMedia.matches; mobileMenuO
 watch(() => route.path, () => { mobileMenuOpen.value = false })
 const menuItems = computed(() => access.menus.filter(m => m.path !== '/inbox' || !access.menus.some(a => a.path === '/announcement')).map(m => ({ ...m, title: ['/announcement', '/inbox'].includes(m.path) ? '消息与公告' : m.menuName })))
 const menuGroups = computed(() => access.groups.map(g => ({ ...g, children: menuItems.value.filter(m => m.parentId === g.id) })).filter(g => g.children.length))
+const pageTitle = computed(() => menuItems.value.find(item => item.path === route.path)?.title || '管理后台')
 const loadingMenus = ref(false)
 
 // 待处理消息数量
@@ -262,7 +263,7 @@ const handleSettingsUpdated = () => {
 <template>
   <el-container class="layout-container">
     <!-- 侧边栏 -->
-    <el-aside id="layout-navigation" v-show="!isMobile || mobileMenuOpen" :width="!isMobile && isCollapse ? '64px' : '228px'" class="layout-aside" aria-label="后台导航">
+    <el-aside id="layout-navigation" v-show="!isMobile || mobileMenuOpen" :width="!isMobile && isCollapse ? '64px' : '180px'" class="layout-aside" aria-label="后台导航">
       <div class="logo-box">
         <div class="logo-circle">
           <el-icon><DataLine /></el-icon>
@@ -295,6 +296,7 @@ const handleSettingsUpdated = () => {
           <button v-permission="'session:self'" class="collapse-btn" :aria-label="isMobile ? (mobileMenuOpen ? '关闭后台导航' : '打开后台导航') : (isCollapse ? '展开后台导航' : '收起后台导航')" :aria-expanded="isMobile ? mobileMenuOpen : !isCollapse" aria-controls="layout-navigation" @click="toggleCollapse">
             <el-icon><Expand v-if="isMobile || isCollapse" /><Fold v-else /></el-icon>
           </button>
+          <span class="page-title">{{ pageTitle }}</span>
         </div>
         
         <div class="header-right">
@@ -429,40 +431,50 @@ const handleSettingsUpdated = () => {
 }
 
 .logo-box {
-  height: 60px;
+  height: 48px;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: 8px;
+  padding: 0 12px;
   background: #2b3a4a;
   border-bottom: 1px solid #1f2d3d;
 }
 
 .logo-circle {
-  width: 36px;
-  height: 36px;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
   border-radius: 50%;
   background: linear-gradient(135deg, #85bd00, #6fa200);
   display: flex;
   align-items: center;
   justify-content: center;
   color: #fff;
-  font-size: 20px;
+  font-size: 17px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
 
 .logo-title {
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 600;
   color: #fff;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .menu {
   border: none;
   background: #304156;
+  --el-menu-item-height: 36px;
+  --el-menu-sub-item-height: 34px;
+  --el-menu-base-level-padding: 14px;
 }
 
-.menu :deep(.el-sub-menu__title) { color: #d6e0ec; }
+.menu :deep(.el-sub-menu__title) { height: 40px; color: #d6e0ec; font-size: 13px; }
+.menu :deep(.el-menu-item) { font-size: 13px; }
+.menu:not(.el-menu--collapse) :deep(.el-sub-menu .el-menu-item) { min-width: 0; padding-left: 42px !important; }
 .menu :deep(.el-menu) { background: #263445; }
 .menu :deep(.el-sub-menu__title:hover) { background: #263445; color: #fff; }
 
@@ -481,26 +493,32 @@ const handleSettingsUpdated = () => {
 }
 
 .layout-header {
+  height: 48px;
+  flex-shrink: 0;
   background: #fff;
   border-bottom: 1px solid #e6e6e6;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 20px;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+  padding: 0 12px;
 }
 
 .header-left {
   display: flex;
   align-items: center;
+  min-width: 0;
+  gap: 4px;
 }
+
+.page-title { font-size: 15px; font-weight: 600; color: #303133; white-space: nowrap; }
 
 .collapse-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 44px;
-  height: 44px;
+  width: 32px;
+  height: 36px;
+  flex-shrink: 0;
   padding: 0;
   border: 0;
   background: transparent;
@@ -517,7 +535,7 @@ const handleSettingsUpdated = () => {
 .header-right {
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: 8px;
 }
 
 .user-info {
@@ -525,7 +543,7 @@ const handleSettingsUpdated = () => {
   align-items: center;
   gap: 8px;
   cursor: pointer;
-  padding: 8px 12px;
+  padding: 6px 8px;
   border-radius: 4px;
   transition: background 0.3s;
 }
@@ -542,10 +560,10 @@ const handleSettingsUpdated = () => {
 .online-count-area {
   display: flex;
   align-items: center;
-  padding: 8px 16px;
+  padding: 6px 10px;
   background: #e6f7ff;
   border-radius: 4px;
-  margin-right: 20px;
+  margin-right: 0;
 }
 
 .online-text {
@@ -557,11 +575,11 @@ const handleSettingsUpdated = () => {
 .notification-area {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 16px;
+  gap: 2px;
+  padding: 4px 8px;
   background: #f5f7fa;
   border-radius: 4px;
-  margin-right: 20px;
+  margin-right: 0;
 }
 
 .notification-icon {
@@ -570,16 +588,16 @@ const handleSettingsUpdated = () => {
 }
 
 .notification-text {
-  font-size: 14px;
+  font-size: 12px;
   color: #606266;
   margin-right: 4px;
 }
 
 .notification-item {
-  font-size: 14px;
+  font-size: 12px;
   color: #67c23a;
   cursor: pointer;
-  padding: 2px 8px;
+  padding: 4px 6px;
   border-radius: 3px;
   transition: all 0.3s;
 }
@@ -604,7 +622,7 @@ const handleSettingsUpdated = () => {
 
 .layout-main {
   background: #f0f2f5;
-  padding: 20px;
+  padding: 12px;
   overflow-y: auto;
 }
 
@@ -612,17 +630,26 @@ const handleSettingsUpdated = () => {
 .permission-warning { flex-shrink: 0; position: relative; z-index: 3000; }
 .permission-warning p { margin: 4px 0; }
 .collapse-btn:focus-visible { outline: 2px solid #85bd00; outline-offset: 2px; }
+@media (min-width: 601px) and (max-width: 1200px) {
+  .notification-text, .notification-icon { display: none; }
+  .header-right { gap: 4px; }
+  .notification-area { padding: 4px; }
+  .notification-item { padding: 4px; }
+}
 @media (max-width: 600px) {
   .layout-aside { position: fixed; inset: 0 auto 0 0; z-index: 1001; }
   .navigation-backdrop { position: fixed; inset: 0; z-index: 1000; border: 0; background: rgb(0 0 0 / 40%); }
   .layout-header { height: auto; min-height: 60px; flex-shrink: 0; align-items: flex-start; gap: 4px; padding: 8px; }
-  .header-left { flex: 0 0 44px; }
+  .header-left { flex: 0 0 auto; }
+  .page-title { max-width: 80px; font-size: 13px; overflow: hidden; text-overflow: ellipsis; }
+  .collapse-btn { width: 36px; height: 44px; }
   .header-right { flex: 1; min-width: 0; flex-wrap: wrap; justify-content: flex-end; gap: 4px; }
   .header-right > * { max-width: 100%; box-sizing: border-box; }
   .online-count-area { margin: 0; padding: 8px; }
   .notification-area { flex: 1 0 100%; min-width: 0; flex-wrap: wrap; gap: 4px; margin: 0; padding: 4px; }
+  .notification-text, .notification-icon { display: none; }
   .notification-text, .notification-item, .online-text { white-space: nowrap; }
-  .notification-item { min-height: 44px; display: inline-flex; align-items: center; }
+  .notification-item { min-height: 32px; display: inline-flex; align-items: center; }
   .user-info { min-width: 0; padding: 8px; }
   .username { min-width: 0; overflow-wrap: anywhere; }
   .layout-main { min-width: 0; padding: 8px; }

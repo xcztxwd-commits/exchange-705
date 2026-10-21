@@ -56,6 +56,7 @@ const router = createRouter({
         { path: 'deposit-settings', component: DepositSettings },
         { path: 'deposit-review', component: DepositReview },
         { path: 'deposit-orders', component: DepositOrders },
+        { path: 'funds-ledger', component: () => import('@/views/FundsLedger.vue') },
         { path: 'withdraw-review', component: WithdrawReview },
         { path: 'loan-settings', component: LoanSettings },
         { path: 'loan-review', component: LoanReview },

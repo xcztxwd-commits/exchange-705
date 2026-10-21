@@ -1,13 +1,17 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search, Refresh, Lock, Edit, Wallet, User, Delete, Document, ArrowDown } from '@element-plus/icons-vue'
 import { useAccountTable } from '@/utils/useAccountTable'
 import { accountTableRequest } from '@/utils/accountTableRequest'
 import AccountTypeFilter from '@/components/AccountTypeFilter.vue'
 import UserLookup from '@/components/UserLookup.vue'
+import CustomerDetailEditor from '@/components/CustomerDetailEditor.vue'
+import { totalCustomerBalance } from '@/utils/customerProfile'
 import { useDebouncedSearch } from '@/composables/useDebouncedSearch'
 import UserAvatar from '../../../exchange-frontend/src/components/UserAvatar.vue'
+const route = useRoute()
 const accountTable = useAccountTable()
 const accountModes = accountTable.modes
 const walletTable = useAccountTable(), walletModes = walletTable.modes
@@ -79,8 +83,8 @@ const currentSubordinateUserId = ref(0)
 
 // 用户详细对话框
 const userDetailDialogVisible = ref(false)
-const userDetail = ref<any>(null)
-const loadingUserDetail = ref(false)
+const detailRow = ref<any>(null)
+const detailSection = ref('profile')
 
 // 账户余额对话框（代理账号使用）
 const balanceViewDialogVisible = ref(false)
@@ -129,13 +133,13 @@ const addressForm = ref({
 })
 
 const queryParams = ref({
-  userId: '',
+  userId: typeof route.query.userId === 'string' ? route.query.userId : '',
   keyword: '',
   status: '',
   userType: '',
   filterAgentId: null as number | null,
   page: 0,
-  size: 10,
+  size: 25,
 })
 
 const agentList = ref<any[]>([])
@@ -178,6 +182,7 @@ const handleSearch = () => {
 }
 
 const { schedule: searchKeywords, cancel: cancelKeywordSearch } = useDebouncedSearch(handleSearch)
+watch(() => route.query.userId, value => { queryParams.value.userId = typeof value === 'string' ? value : ''; handleSearch() })
 
 const handleReset = () => {
   cancelKeywordSearch()
@@ -455,16 +460,18 @@ const isUserOnline = (row: any): boolean => {
 // 打开账户余额查看对话框（代理账号使用）
 const openBalanceViewDialog = async (row: any) => {
   accountTable.selectRow(row)
+  detailRow.value = { ...row }
   balanceViewData.value = null
   loadingBalanceView.value = true
   balanceViewDialogVisible.value = true
   try {
-    const res: any = await request.get(`/admin/users/${row.id}`)
+    const response: any = await request.get(`/admin/users/${row.id}${row.accountMode === 'DEMO' ? '' : '/profile'}`)
+    const data = response.data
+    const user = data?.user || response
     balanceViewData.value = {
-      email: res.email,
-      fundBalance: res.fundBalance || 0,
-      contractBalance: res.contractBalance || 0,
-      optionBalance: res.optionBalance || 0,
+      ...user,
+      totalBalance: data?.totalBalance ?? totalCustomerBalance(user),
+      accounts: data?.accounts || ['FUND', 'CONTRACT', 'OPTION'].map((coin, index) => ({ coin, available: user[['fundBalance', 'contractBalance', 'optionBalance'][index]!] ?? 0, frozen: 0 })),
     }
   } catch (e: any) {
     ElMessage.error(e?.message || '加载账户余额失败')
@@ -662,19 +669,11 @@ const handleDeleteAddress = async (id: number) => {
 }
 
 // 打开用户详细对话框
-const openUserDetailDialog = async (row: any) => {
+const openUserDetailDialog = (row: any, section = 'profile') => {
   accountTable.selectRow(row)
-  userDetail.value = null; loadingUserDetail.value = true
+  detailRow.value = { ...row }
+  detailSection.value = section
   userDetailDialogVisible.value = true
-  try {
-    const res: any = await request.get(`/admin/users/${row.id}`)
-    userDetail.value = res
-  } catch (e: any) {
-    ElMessage.error(e?.message || '加载用户详情失败')
-    userDetailDialogVisible.value = false
-  } finally {
-    loadingUserDetail.value = false
-  }
 }
 
 // 打开下级用户对话框
@@ -731,7 +730,7 @@ const loadFundDetails = async () => {
 }
 
 // 格式化金额
-const formatAmount = (amount: number | null | undefined) => {
+const formatAmount = (amount: string | number | null | undefined) => {
   if (amount == null) return '0.00'
   return Number(amount).toFixed(2)
 }
@@ -1056,7 +1055,8 @@ onMounted(() => {
   <div class="users-page">
     <el-card shadow="never">
       <!-- 搜索栏 -->
-      <el-form :inline="true" :model="queryParams">
+      <div class="customer-page-heading"><h2>客户管理</h2><span>集中查看资料、实名和账户资金</span></div>
+      <el-form :inline="true" :model="queryParams" size="small" class="customer-search">
         <el-form-item label="用户 ID / 邮箱">
           <UserLookup v-model="queryParams.userId" scope="users" :account-modes="accountModes"
             :agent-id="queryParams.filterAgentId" placeholder="输入部分用户 ID / 邮箱" @change="handleSearch" />
@@ -1088,8 +1088,8 @@ onMounted(() => {
           <el-select 
             v-model="queryParams.filterAgentId" 
             placeholder="全部代理" 
-            clearable 
-            style="width: 200px"
+            clearable filterable
+            style="width: 180px"
           >
             <el-option 
               v-for="agent in agentList" 
@@ -1112,98 +1112,52 @@ onMounted(() => {
         v-loading="loading"
         stripe
         border
-        style="margin-top: 16px"
+        size="small"
+        style="margin-top: 8px"
       >
-<el-table-column prop="accountModeLabel" label="账户类型" width="110" fixed="left" />
-        <el-table-column prop="id" label="ID" width="80" />
-        <el-table-column prop="remark" label="备注" width="150">
+        <el-table-column column-key="customer" label="客户" min-width="250" fixed="left">
           <template #default="{ row }">
-            {{ row.remark || '-' }}
-          </template>
-        </el-table-column>
-        <el-table-column prop="email" label="邮箱" min-width="180" />
-        <el-table-column column-key="phone" label="手机号" min-width="160"><template #default="{ row }">{{ profilePhone(row) }}</template></el-table-column>
-        <el-table-column column-key="annualIncome" label="年收入" min-width="150"><template #default="{ row }">{{ profileIncome(row) }}</template></el-table-column>
-        <el-table-column column-key="loginLocation" label="登录IP / 地区" width="250">
-          <template #default="{ row }">
-            <div v-if="row.lastLoginIp">
-              <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
-                <el-tag v-if="isUserOnline(row)" type="success" size="small" effect="dark">
-                  在线
-                </el-tag>
-                <span style="font-weight: 500;">{{ row.lastLoginIp }}</span>
-                <span style="color: #999; font-size: 12px;">{{ row.lastLoginRegion || '-' }}</span>
-              </div>
-            </div>
-            <span v-else>-</span>
-          </template>
-        </el-table-column>
-        <el-table-column prop="parentUserEmail" label="上级用户" width="150">
-          <template #default="{ row }">
-            {{ row.parentUserEmail || '-' }}
-          </template>
-        </el-table-column>
-        <el-table-column prop="myInviteCode" label="邀请码" width="180">
-          <template #default="{ row }">
-            <div style="display: flex; align-items: center; gap: 8px;">
-              <span>{{ row.myInviteCode || '-' }}</span>
-              <el-button v-permission="'users:modify_invite_code'"
-                v-if="hasPermission('users', 'modify_invite_code')"
-                link 
-                type="primary" 
-                size="small" 
-                @click="handleEditInviteCode(row)"
-               :disabled="accountModes.includes('DEMO') || !accountModes.length">
-                修改
-              </el-button>
+            <div class="customer-list-identity">
+              <UserAvatar :src="row.avatarUrl" :name="profileName(row)" :size="32" />
+              <div><strong>{{ row.nickname || row.realName || '未填写昵称' }} <span class="customer-id">#{{ row.id }}</span></strong><span>{{ row.email }}</span></div>
             </div>
           </template>
         </el-table-column>
-        <el-table-column prop="nickname" label="头像 / 昵称" min-width="190">
+        <el-table-column column-key="totalBalance" label="总余额（USD）" width="160" align="right">
           <template #default="{ row }">
-            <div class="user-profile-cell"><UserAvatar :src="row.avatarUrl" :name="profileName(row)" :size="36" /><span>{{ profileName(row) }}</span></div>
+            <el-button v-if="can('users:detail')" link type="primary" class="customer-balance-link" @click="openBalanceViewDialog(row)">{{ formatAmount(totalCustomerBalance(row)) }}</el-button>
+            <span v-else>{{ formatAmount(totalCustomerBalance(row)) }}</span>
           </template>
         </el-table-column>
-        <el-table-column column-key="userType" label="用户类型" width="120" align="center">
+        <el-table-column prop="kycStatus" label="实名信息" width="145">
           <template #default="{ row }">
-            <el-tag v-if="row.userType === 'agent'" type="warning">代理</el-tag>
-            <el-tag v-else type="success">正常用户</el-tag>
+            <div class="customer-kyc-cell"><el-tag :type="row.kycStatus === 'VERIFIED' ? 'success' : 'info'" size="small">{{ row.kycStatus === 'VERIFIED' ? '已实名' : '未实名' }}</el-tag><el-button v-permission="'users:detail'" link type="primary" @click="openUserDetailDialog(row, 'identity')">查看</el-button></div>
+            <span v-if="row.realName" class="customer-secondary">{{ row.realName }}</span>
           </template>
         </el-table-column>
-        <el-table-column prop="status" label="状态" width="100">
-          <template #default="{ row }">
-            <el-tag :type="getStatusType(row.status)">
-              {{ getStatusText(row.status) }}
-            </el-tag>
-          </template>
+        <el-table-column prop="status" label="状态" width="90">
+          <template #default="{ row }"><el-tag :type="getStatusType(row.status)" size="small">{{ getStatusText(row.status) }}</el-tag></template>
         </el-table-column>
-        <el-table-column prop="kycStatus" label="实名状态" width="100">
-          <template #default="{ row }">
-            <el-tag v-if="row.kycStatus === 'VERIFIED'" type="success">已实名</el-tag>
-            <el-tag v-else type="info">未实名</el-tag>
-          </template>
+        <el-table-column column-key="phone" label="手机号" min-width="155"><template #default="{ row }">{{ profilePhone(row) }}</template></el-table-column>
+        <el-table-column prop="remark" label="备注" min-width="160" show-overflow-tooltip><template #default="{ row }">{{ row.remark || '—' }}</template></el-table-column>
+        <el-table-column prop="parentUserEmail" label="所属上级" min-width="165" show-overflow-tooltip><template #default="{ row }">{{ row.parentUserEmail || '—' }}</template></el-table-column>
+        <el-table-column column-key="userType" label="用户类型" width="95"><template #default="{ row }"><el-tag :type="row.userType === 'agent' ? 'warning' : 'info'" size="small">{{ row.userType === 'agent' ? '代理' : '普通客户' }}</el-tag></template></el-table-column>
+        <el-table-column prop="accountModeLabel" label="账户类型" width="100" />
+        <el-table-column column-key="loginLocation" label="登录信息" min-width="205">
+          <template #default="{ row }"><div><el-tag v-if="isUserOnline(row)" type="success" size="small">在线</el-tag> {{ row.lastLoginIp || '—' }}</div><span class="customer-secondary">{{ row.lastLoginRegion || '—' }}</span></template>
         </el-table-column>
-        <el-table-column
-          prop="fundBalance"
-          label="余额"
-          min-width="260"
-        >
+        <el-table-column prop="myInviteCode" label="邀请码" width="125" show-overflow-tooltip />
+        <el-table-column prop="createdAt" label="注册时间" width="165"><template #default="{ row }">{{ formatDateTime(row.createdAt) }}</template></el-table-column>
+        <el-table-column column-key="annualIncome" label="年收入" min-width="130"><template #default="{ row }">{{ profileIncome(row) }}</template></el-table-column>
+        <el-table-column column-key="actions" label="操作" width="170" fixed="right">
           <template #default="{ row }">
-            资金账户: {{ row.fundBalance ?? 0 }}　
-            合约资产: {{ row.contractBalance ?? 0 }}　
-            期权账户: {{ row.optionBalance ?? 0 }}
-          </template>
-        </el-table-column>
-        <el-table-column prop="createdAt" label="注册时间" width="180" />
-        <el-table-column column-key="actions" label="操作" width="120" fixed="right">
-          <template #default="{ row }">
+            <el-button v-permission="'users:detail'" link type="primary" @click="openUserDetailDialog(row)">查看详情</el-button>
             <el-dropdown trigger="click" @command="(cmd: string) => handleCommand(cmd, row)">
               <el-button v-permission="'users:view'" type="primary" link>
                 操作 <el-icon class="el-icon--right"><ArrowDown /></el-icon>
               </el-button>
               <template #dropdown>
                 <el-dropdown-menu>
-                  <el-dropdown-item v-permission="'users:detail'" :command="'detail'">查看详情</el-dropdown-item>
                   <el-dropdown-item v-permission="'users:reset_password'"
                     v-if="hasPermission('users', 'reset_password')"
                     :command="'reset_password'"
@@ -1298,7 +1252,7 @@ onMounted(() => {
         :current-page="queryParams.page + 1"
         :page-size="queryParams.size"
         :total="total"
-        :page-sizes="[10, 20, 50, 100]"
+        :page-sizes="[10, 25, 50, 100]"
         layout="total, sizes, prev, pager, next, jumper"
         @current-change="handlePageChange"
         @size-change="(size: number) => queryParams.size = size"
@@ -1500,32 +1454,19 @@ onMounted(() => {
         <el-empty v-if="!loadingSubordinates && subordinates.length === 0" description="暂无下级用户" />
       </el-dialog>
 
-      <!-- 账户余额查看对话框（代理账号使用） -->
-      <el-dialog v-model="balanceViewDialogVisible" title="账户余额" width="600px" v-loading="loadingBalanceView">
-        <div v-if="balanceViewData" style="padding: 20px 0;">
-          <div style="margin-bottom: 20px; color: #606266; font-size: 14px;">
-            用户邮箱: <strong>{{ balanceViewData.email }}</strong>
-          </div>
-          <el-descriptions :column="1" border>
-            <el-descriptions-item label="资金账户余额">
-              <span style="font-size: 16px; font-weight: bold; color: #409eff;">
-                {{ balanceViewData.fundBalance || 0 }}
-              </span>
-            </el-descriptions-item>
-            <el-descriptions-item label="合约账户余额">
-              <span style="font-size: 16px; font-weight: bold; color: #67c23a;">
-                {{ balanceViewData.contractBalance || 0 }}
-              </span>
-            </el-descriptions-item>
-            <el-descriptions-item label="期权账户余额">
-              <span style="font-size: 16px; font-weight: bold; color: #e6a23c;">
-                {{ balanceViewData.optionBalance || 0 }}
-              </span>
-            </el-descriptions-item>
-          </el-descriptions>
+      <el-dialog v-model="balanceViewDialogVisible" title="账户余额" width="min(650px, 95vw)" v-loading="loadingBalanceView">
+        <div v-if="balanceViewData">
+          <p class="customer-balance-description">{{ balanceViewData.email }} · 总余额 <strong>{{ formatAmount(balanceViewData.totalBalance) }} USD</strong></p>
+          <admin-table table-key="Users.accountBalances" :data="balanceViewData.accounts" size="small" border>
+            <el-table-column prop="coin" label="账户"><template #default="{ row }">{{ ({ FUND: '资金账户', CONTRACT: '合约账户', OPTION: '期权账户' } as Record<string,string>)[row.coin] || row.coin }}</template></el-table-column>
+            <el-table-column prop="available" label="可用余额（USD）" align="right"><template #default="{ row }">{{ formatAmount(row.available) }}</template></el-table-column>
+            <el-table-column prop="frozen" label="冻结金额（USD）" align="right"><template #default="{ row }">{{ formatAmount(row.frozen) }}</template></el-table-column>
+          </admin-table>
+          <p class="customer-secondary" style="margin-top: 12px">总余额包含可用余额和订单冻结金额。</p>
         </div>
         <template #footer>
-          <el-button v-permission="'session:close'" @click="balanceViewDialogVisible = false">关闭</el-button>
+          <el-button @click="balanceViewDialogVisible = false">关闭</el-button>
+          <el-button v-permission="'users:detail'" type="primary" @click="balanceViewDialogVisible = false; openUserDetailDialog(detailRow, 'assets')">查看 / 修改账户</el-button>
         </template>
       </el-dialog>
 
@@ -1920,46 +1861,29 @@ onMounted(() => {
         </template>
       </el-dialog>
 
-      <!-- 用户详细对话框 -->
-      <el-dialog v-model="userDetailDialogVisible" title="用户详细信息" width="800px" v-loading="loadingUserDetail">
-        <el-descriptions v-if="userDetail" :column="2" border>
-          <el-descriptions-item label="用户ID">{{ userDetail.id }}</el-descriptions-item>
-          <el-descriptions-item label="邮箱">{{ userDetail.email }}</el-descriptions-item>
-          <el-descriptions-item label="头像 / 昵称" :span="2"><div class="user-profile-cell"><UserAvatar :src="userDetail.avatarUrl" :name="profileName(userDetail)" :size="56" /><span>{{ profileName(userDetail) }}</span></div></el-descriptions-item>
-          <el-descriptions-item label="手机号">{{ profilePhone(userDetail) }}</el-descriptions-item>
-          <el-descriptions-item label="年收入">{{ profileIncome(userDetail) }}</el-descriptions-item>
-          <el-descriptions-item label="用户类型">
-            <el-tag v-if="userDetail.userType === 'agent'" type="warning">代理</el-tag>
-            <el-tag v-else type="success">普通用户</el-tag>
-          </el-descriptions-item>
-          <el-descriptions-item label="状态">
-            <el-tag v-if="userDetail.status === 'active' || userDetail.status === 'normal'" type="success">正常</el-tag>
-            <el-tag v-else-if="userDetail.status === 'frozen'" type="warning">冻结</el-tag>
-            <el-tag v-else-if="userDetail.status === 'banned' || userDetail.status === 'disabled'" type="danger">禁用</el-tag>
-            <el-tag v-else>{{ userDetail.status }}</el-tag>
-          </el-descriptions-item>
-          <el-descriptions-item label="邀请码">{{ userDetail.myInviteCode || '-' }}</el-descriptions-item>
-          <el-descriptions-item label="上级用户">{{ userDetail.parentUserEmail || '-' }}</el-descriptions-item>
-          <el-descriptions-item label="资金账户余额">{{ userDetail.fundBalance || 0 }}</el-descriptions-item>
-          <el-descriptions-item label="合约资产余额">{{ userDetail.contractBalance || 0 }}</el-descriptions-item>
-          <el-descriptions-item label="期权账户余额">{{ userDetail.optionBalance || 0 }}</el-descriptions-item>
-          <el-descriptions-item label="最后登录IP">{{ userDetail.lastLoginIp || '-' }}</el-descriptions-item>
-          <el-descriptions-item label="最后登录地区">{{ userDetail.lastLoginRegion || '-' }}</el-descriptions-item>
-          <el-descriptions-item label="最后登录时间">{{ userDetail.lastLoginAt || '-' }}</el-descriptions-item>
-          <el-descriptions-item label="注册时间">{{ userDetail.createdAt }}</el-descriptions-item>
-          <el-descriptions-item label="更新时间">{{ userDetail.updatedAt }}</el-descriptions-item>
-        </el-descriptions>
-        <template #footer>
-          <el-button v-permission="'session:close'" @click="userDetailDialogVisible = false">关闭</el-button>
-        </template>
-      </el-dialog>
+      <CustomerDetailEditor v-model="userDetailDialogVisible" :row="detailRow" :section="detailSection" :read-only="accountModes.includes('DEMO') || !accountModes.length" @saved="loadUsers"
+        @wallet="openWalletDialog" @funds="openFundDetailsDialog" @subordinates="openSubordinatesDialog" />
     </el-card>
   </div>
 </template>
 
 <style scoped>
 .user-profile-cell{display:flex;align-items:center;gap:10px;min-width:0}.user-profile-cell>span:last-child{overflow-wrap:anywhere}
-.users-page {
-  padding: 0;
-}
+.users-page { padding: 0; }
+.customer-page-heading { display: flex; align-items: baseline; gap: 12px; margin-bottom: 15px; }
+.customer-page-heading h2 { font-size: 18px; font-weight: 600; color: #2d382e; }
+.customer-page-heading>span,.customer-secondary { color: #909991; font-size: 12px; }
+.customer-search :deep(.el-form-item) { margin-right: 14px; margin-bottom: 12px; }
+.customer-list-identity { display: flex; gap: 9px; align-items: center; min-width: 0; }
+.customer-list-identity>div { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.customer-list-identity strong { font-weight: 500; color: #344037; }
+.customer-list-identity>div>span { color: #7e887f; font-size: 12px; overflow: hidden; text-overflow: ellipsis; }
+.customer-id { color: #98a091; font-size: 11px; font-weight: 400; margin-left: 4px; }
+.customer-balance-description { margin-bottom: 15px; color: #7e887f; font-size: 13px; }
+.customer-balance-description strong { color: #516c23; }
+.customer-balance-link { font-weight: 600; font-variant-numeric: tabular-nums; }
+.customer-kyc-cell { display: flex; align-items: center; gap: 9px; }
+.customer-kyc-cell :deep(.el-button) { font-size: 12px; }
+.users-page :deep(.el-table__cell) { padding: 7px 0; }
+@media(max-width:600px) { .customer-page-heading { flex-direction: column; gap: 5px; }.customer-search :deep(.el-form-item) { margin-right: 8px; } }
 </style>

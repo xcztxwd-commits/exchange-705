@@ -103,7 +103,7 @@ public class BackendAccess extends RequestBodyAdviceAdapter implements HandlerIn
         if (c.equals("NotificationController") || (c.equals("AdminUserController") && m.equals("getOnlineUserCount"))) return true;
         if (c.equals("AdminUserController") && m.equals("getMenuActions")) return true;
         if (c.equals("AdminUserController") && m.equals("getAgentsSimple")) {
-            permissions.requireAny("users", "orders", "statistics", "deposit_review", "withdraw_review", "loan_review", "kyc_review", "loan_personal_info_review", "deposit_orders");
+            permissions.requireAny("users", "orders", "statistics", "deposit_review", "withdraw_review", "loan_review", "kyc_review", "loan_personal_info_review", "deposit_orders", "funds_ledger");
             return true;
         }
         if (c.equals("SystemConfigController")) {

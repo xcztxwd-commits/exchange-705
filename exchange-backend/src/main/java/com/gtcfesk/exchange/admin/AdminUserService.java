@@ -90,6 +90,8 @@ public class AdminUserService {
     @Autowired
     private TransferRecordRepository transferRecordRepository;
 
+    @Autowired private com.gtcfesk.exchange.repository.KycRecordRepository customerIdentities;
+
     @PersistenceContext
     private EntityManager entityManager;
 
@@ -347,8 +349,10 @@ public class AdminUserService {
         BigDecimal fund = BigDecimal.ZERO;
         BigDecimal contract = BigDecimal.ZERO;
         BigDecimal option = BigDecimal.ZERO;
+        BigDecimal totalBalance = BigDecimal.ZERO;
 
         for (AssetAccount a : assets) {
+            totalBalance = totalBalance.add(a.getAvailable() == null ? BigDecimal.ZERO : a.getAvailable()).add(a.getFrozen() == null ? BigDecimal.ZERO : a.getFrozen());
             BigDecimal total = a.getAvailable() == null ? BigDecimal.ZERO : a.getAvailable();
             String coin = a.getCoin() == null ? "" : a.getCoin().toUpperCase();
             switch (coin) {
@@ -368,6 +372,8 @@ public class AdminUserService {
         user.setFundBalance(fund);
         user.setContractBalance(contract);
         user.setOptionBalance(option);
+        user.setTotalBalance(totalBalance);
+        customerIdentities.findFirstByTenantIdAndUserIdOrderByCreatedAtDesc(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), user.getId()).ifPresent(record -> user.setRealName(record.getRealName()));
         // 映射余额字段供前端使用
         user.setUsdtBalance(fund); // FUND账户余额映射为USDT余额
         user.setCnyBalance(BigDecimal.ZERO); // CNY余额暂时设为0，可根据实际业务调整
