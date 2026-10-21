@@ -36,7 +36,7 @@ async function domain(row:any){
 async function domainAction(action:'prepare'|'verify'|'activate'|'switch'|'release',binding?:any){
  if(domainBusy.value||!domainTenant.value||!domainState.value)return;const seq=domainGeneration,target=domainTenant.value.id;domainError.value='';domainBusy.value=true
  try{
-  if(action!=='verify'&&domainForm.reason.trim()&&domainForm.reason.trim().length<3)throw new Error('操作原因选填；填写时至少3个字符')
+  if(action!=='verify'&&domainForm.reason.length>500)throw new Error('操作原因最多500字')
   if(['verify','activate'].includes(action)&&!preparedMatches.value)throw new Error('输入已修改，请重新准备候选后核验')
   if(action==='activate'){
    if(!domainCandidates.value.length||domainCandidates.value.some(b=>b.status!=='VERIFIED'))throw new Error('须全部候选独立核验后才能激活')
@@ -76,7 +76,7 @@ function choosePolicy(key:string){const row=policies.value.find(row=>row.key===k
 async function load() { countsGeneration++;counts.value={};totalOnline.value=null;try { const rows=dataRows(await api('/control/tenants'));if(disposed)return;tenants.value=rows;error.value='';await readCounts() } catch (e:any) { if(!disposed)error.value=e.message } }
 function edit(row?: any) { Object.assign(form, { id:row?.id || 0, code:row?.code || '', name:row?.name || '', frontendHost:row?.frontendHost || '', status:row?.status || 'DRAFT', configReady:row?.configReady || false, reason:'' }); editOpen.value=true }
 async function save() {
-  if (busy.value || !form.name.trim() || !form.reason.trim()) return
+  if (busy.value || !form.name.trim()) return
   busy.value=true
   try {
     await ElMessageBox.confirm('确认保存租户配置？停用不会删除数据或取消存量结算责任。', '确认总控操作', {type:'warning'})
@@ -129,7 +129,7 @@ onMounted(async()=>{await load();if(!disposed)stopCounts=startReadPolling(readCo
           <el-button :disabled="domainBusy||!preparedMatches||domainCandidates.find(b=>b.role===r.role)?.status!=='PENDING'" @click="domainAction('verify',domainCandidates.find(b=>b.role===r.role))">核验{{r.name}}HTTPS与挑战</el-button>
         </template>
         <el-form-item label="入口开关"><el-switch v-model="domainForm.entryEnabled"/><span>开启要求两类现用域名均已核验、属于同租户且允许访问。</span></el-form-item>
-        <el-form-item label="操作原因（选填）"><el-input v-model="domainForm.reason" maxlength="500" aria-label="域名操作原因" placeholder="留空自动记录“总控域名管理”；填写时至少3个字符"/></el-form-item>
+        <el-form-item label="操作原因（选填）"><el-input v-model="domainForm.reason" maxlength="500" aria-label="域名操作原因" placeholder="选填，最多500字"/></el-form-item>
       </el-form>
       <el-button :disabled="domainBusy||domainForm.entryEnabled===domainState.entryEnabled" @click="domainAction('switch')">仅保存入口开关</el-button>
       <p v-if="!preparedMatches">输入已修改，需重新准备；不允许用旧核验覆盖新输入。</p>
@@ -145,7 +145,7 @@ onMounted(async()=>{await load();if(!disposed)stopCounts=startReadPolling(readCo
       <el-form-item v-if="form.id" label="状态"><el-select v-model="form.status"><el-option v-for="(label,value) in states" :key="value" :value="value" :label="label" /></el-select></el-form-item>
       <el-form-item v-if="form.id" label="配置齐备"><el-switch v-model="form.configReady" /></el-form-item>
       <el-alert v-if="!form.id" title="新租户保持草稿，按授权策略默认值初始化权限；安全模板不复制用户、资金、订单、收款地址、聊天、密码或第三方密钥。" :closable="false" />
-      <el-form-item label="操作原因" required><el-input v-model="form.reason" type="textarea" maxlength="500" /></el-form-item>
+      <el-form-item label="操作原因（选填）"><el-input v-model="form.reason" type="textarea" maxlength="500" /></el-form-item>
     </el-form>
     <template #footer><el-button @click="editOpen=false">取消</el-button><el-button type="primary" :loading="busy" @click="save">确认保存</el-button></template>
   </el-dialog>
@@ -159,7 +159,7 @@ onMounted(async()=>{await load();if(!disposed)stopCounts=startReadPolling(readCo
       <el-form-item label="策略键"><el-select v-model="policy.key" filterable @change="choosePolicy"><el-option v-for="definition in editableDefinitions" :key="definition.key" :value="definition.key" :label="`${definition.name} / ${definition.key}`" /></el-select></el-form-item>
       <el-form-item label="策略值"><el-select v-if="currentDefinition?.options.length" v-model="policy.value"><el-option v-for="value in currentDefinition.options" :key="value" :value="value" :label="value===''?'（空值）':value" /></el-select><el-input v-else v-model="policy.value" maxlength="8192" /></el-form-item>
       <el-form-item label="锁定"><el-switch v-model="policy.locked" /></el-form-item>
-      <el-form-item label="操作原因"><el-input v-model="policy.reason" maxlength="500" placeholder="选填；不填自动记录，填写时至少3个字符" /></el-form-item>
+      <el-form-item label="操作原因"><el-input v-model="policy.reason" maxlength="500" placeholder="选填，最多500字" /></el-form-item>
     </el-form>
     <p>名字、选项值和默认值在左侧“授权策略”页面维护。留存策略仍在“客服监管与留存”专页确认，不通过此表单开启清理。</p>
     <template #footer><el-button :disabled="busy||policiesLoading" @click="policyList(selected)">刷新策略</el-button><el-button :loading="busy" :disabled="policiesLoading||!!policiesError||!currentDefinition?.tenantEditable" type="primary" @click="savePolicy">保存策略</el-button></template>

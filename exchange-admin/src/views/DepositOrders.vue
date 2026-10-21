@@ -63,7 +63,7 @@ async function load(reset=false) {
   catch(e:any){if(version===loadVersion)ElMessage.error(e.message)}finally{if(version===loadVersion)loading.value=false}
 }
 async function show(row:any){accountTable.selectRow(row);const id=row.id;try{detail.value=await request.get(`/admin/deposit/orders/${id}`);detailOpen.value=true}catch(e:any){ElMessage.error(e.message)}}
-async function review(row:any,approve:boolean){try{const result=await ElMessageBox.prompt(approve?'审核说明（可选）':'拒绝原因（必填）',approve?'通过后入账':'拒绝充值',{inputValidator:v=>approve||!!v?.trim()||'原因必填'});await request.post(`/admin/deposit/orders/${row.id}/${approve?'approve':'reject'}`,{remark:result.value});await load()}catch(e:any){if(e!=='cancel'&&e!=='close')ElMessage.error(e.message)}}
+async function review(row:any,approve:boolean){try{const result=await ElMessageBox.prompt(approve?'审核说明（可选）':'拒绝原因（可选）',approve?'通过后入账':'拒绝充值');await request.post(`/admin/deposit/orders/${row.id}/${approve?'approve':'reject'}`,{remark:result.value});await load()}catch(e:any){if(e!=='cancel'&&e!=='close')ElMessage.error(e.message)}}
 async function exportCsv(){try{const blob:any=await request.get('/admin/deposit/orders/export',{params:filters,responseType:'blob'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='deposit-orders.csv';a.click();URL.revokeObjectURL(url)}catch(e:any){ElMessage.error(e.message)}}
 async function copy(value:any){try{await navigator.clipboard.writeText(String(value));ElMessage.success('已复制')}catch{ElMessage.warning('请手动复制')}}
 onMounted(async()=>{permissions.value=await request.get('/admin/deposit/orders/permissions') as any;if(permissions.value.view_deposit_orders)await load()})

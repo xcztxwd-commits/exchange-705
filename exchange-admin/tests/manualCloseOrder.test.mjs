@@ -7,14 +7,14 @@ import { randomUUID } from 'node:crypto'
 const source = readFileSync(new URL('../src/views/Orders.vue', import.meta.url), 'utf8')
 const script = source.slice(source.indexOf('const exitRetries ='), source.indexOf('// Soft deletion'))
 const calls = [], confirmations = [], prompts = [], errors = [], selected = []
-let dismissed, response = { success: true }, requestError, reloads = 0
+let dismissed, promptValue = '管理员受控撤单', response = { success: true }, requestError, reloads = 0
 const app = new Function('accountTable', 'ElMessageBox', 'crypto', 'request', 'ElMessage', 'loadContractOrders',
   stripTypeScriptTypes(script) + ';return {handleCloseOrder, handleCancelOrder};'
 )(
   { selectRow: row => selected.push(row) },
   {
     confirm: async (...args) => { confirmations.push(args); if (dismissed) throw dismissed },
-    prompt: async (...args) => { prompts.push(args); return { value: '管理员受控撤单' } },
+    prompt: async (...args) => { prompts.push(args); if (dismissed) throw dismissed; return { value: promptValue } },
   },
   { randomUUID },
   { post: async (...args) => { calls.push(args); if (requestError) throw requestError; return response } },
@@ -63,8 +63,18 @@ assert.equal(prompts.length, 0)
 
 await app.handleCancelOrder({ ...row, status: 'PENDING' })
 assert.equal(prompts.length, 1)
-assert.equal(typeof prompts[0][2].inputValidator(''), 'string')
+assert.equal(prompts[0][2].inputValidator(''), true)
 assert.equal(prompts[0][2].inputValidator('管理员受控撤单'), true)
+assert.equal(typeof prompts[0][2].inputValidator('a'.repeat(501)), 'string')
 assert.equal(calls.at(-1)[0], '/admin/orders/contract/7/cancel')
 assert.equal(calls.at(-1)[1].reason, '管理员受控撤单')
+promptValue = ''
+await app.handleCancelOrder({ ...row, status: 'PENDING' })
+assert.equal(calls.at(-1)[1].reason, '', 'controlled cancellation accepts a blank reason')
+const submitted = calls.length
+for (const action of ['cancel', 'close']) {
+  dismissed = action
+  await app.handleCancelOrder({ ...row, status: 'PENDING' })
+}
+assert.equal(calls.length, submitted, 'dismissing the optional reason prompt must not submit')
 console.log('PASS: close without text input, dismissal, error handling, idempotent retry, reload, cancel validation')

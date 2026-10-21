@@ -96,7 +96,8 @@ async function fixture(page) {
       Object.assign(customer, body.profile);
       if (body.balances) {
         assert.equal(body.expectedBalances.FUND, customer.fundBalance);
-        assert.ok(body.reason && body.idempotencyKey);
+        assert.ok(body.idempotencyKey);
+        assert.equal(typeof body.reason, 'string');
         customer.fundBalance = body.balances.FUND; customer.contractBalance = body.balances.CONTRACT; customer.optionBalance = body.balances.OPTION;
         customer.totalBalance = (Number(customer.fundBalance) + Number(customer.contractBalance) + Number(customer.optionBalance) + 150).toFixed(2);
       }
@@ -191,11 +192,12 @@ async function fixture(page) {
     assert.equal(state.writes.at(-1).profile.nickname, '陈先生已修改');
     await drawer.getByRole('tab', { name: '账户余额', exact: true }).click();
     await drawer.getByRole('textbox', { name: '资金账户可用余额', exact: true }).fill('2000.00');
-    await drawer.getByPlaceholder('调整余额时必填，便于核对资金记录').fill('本地回归资金校正');
+    assert.equal(await drawer.getByPlaceholder('选填，便于核对资金记录').inputValue(), '');
     await drawer.getByRole('button', { name: '保存修改', exact: true }).click();
     await page.waitForFunction(() => document.querySelector('.customer-total strong')?.textContent === '2,500.00');
     assert.equal(state.writes.at(-1).expectedBalances.FUND, '1000.00');
     assert.equal(state.writes.at(-1).balances.FUND, '2000.00');
+    assert.equal(state.writes.at(-1).reason, '', 'Balance changes submit with an empty reason');
     await page.locator('.el-message').evaluateAll(elements => elements.forEach(element => element.remove()));
     await page.screenshot({ path: path.join(output, 'customer-balances.png'), animations: 'disabled' });
     await drawer.getByRole('tab', { name: '实名信息', exact: true }).click();
@@ -219,7 +221,7 @@ async function fixture(page) {
     await page.screenshot({ path: path.join(output, 'customer-identity.png'), animations: 'disabled' });
     await drawer.getByRole('tab', { name: '账户余额', exact: true }).click();
     await drawer.getByRole('textbox', { name: '期权账户可用余额', exact: true }).fill('75.00');
-    await drawer.getByPlaceholder('调整余额时必填，便于核对资金记录').fill('验证结果未知后的原请求重试');
+    await drawer.getByPlaceholder('选填，便于核对资金记录').fill('验证结果未知后的原请求重试');
     const beforeRetry = state.customer.rowVersion;
     state.dropNextSave = true;
     await drawer.getByRole('button', { name: '保存修改', exact: true }).click();

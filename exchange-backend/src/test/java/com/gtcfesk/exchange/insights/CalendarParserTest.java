@@ -54,7 +54,7 @@ class CalendarParserTest {
         CalendarData d=CalendarData.metric("CORE_PCE_MOM");d.statisticalPeriod="2026-09";d.sourceUrl=CalendarParser.BEA_ICS;d.validate();assertNull(d.actual);assertNull(d.forecast);
         d.releaseStage="MEETING";assertThrows(Exception.class,d::validate);d.releaseStage="INITIAL";d.historicalInitialKnown=true;assertThrows(Exception.class,d::validate);d.historicalInitialKnown=false;
         d.unit="INDEX";assertThrows(Exception.class,d::validate);d.unit="PERCENT";d.forecast="0";assertThrows(Exception.class,d::validate);d.forecast=null;d.actual="NaN";assertThrows(Exception.class,d::validate);d.actual=null;
-        d.adminEstimate="-0.1";assertThrows(Exception.class,d::validate);d.estimateReason="独立管理员估计，测试输入，不是官方数据";d.validate();assertEquals("ADMIN_ESTIMATE",d.estimateKind);
+        d.adminEstimate="-0.1";for(String reason:Arrays.asList(null,""," \t","修")){d.estimateReason=reason;assertDoesNotThrow(d::validate);assertEquals("ADMIN_ESTIMATE",d.estimateKind);}d.estimateReason=String.join("",Collections.nCopies(1001,"x"));assertThrows(Exception.class,d::validate);d.estimateReason="独立管理员估计，测试输入，不是官方数据";d.validate();assertEquals("ADMIN_ESTIMATE",d.estimateKind);
         d.sourceUrl="https://www.bea.gov@127.0.0.1/";assertThrows(Exception.class,d::validate);d.sourceUrl="https://www.bls.gov/";assertThrows(Exception.class,d::validate);
     }
     @Test void xmlExternalEntitiesCannotBeReadAndOversizeFails(){

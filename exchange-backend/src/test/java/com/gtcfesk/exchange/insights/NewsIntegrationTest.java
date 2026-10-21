@@ -66,8 +66,18 @@ class NewsIntegrationTest {
     @Test @Order(3) void menuActionPermissionsAndWriteValidation()throws Exception {
         seed();JsonNode a=first();String id=a.path("articleId").asText();assertEquals(401,send("GET",API,null,null).getResponse().getStatus());assertEquals(403,send("GET",API,denied,null).getResponse().getStatus());ok(send("GET",API,reader,null));
         assertEquals(403,send("PUT",API+"/"+id,reader,edit(a,true)).getResponse().getStatus());assertEquals(403,send("POST",API+"/sources/FED/sync",reader,new HashMap<>()).getResponse().getStatus());assertEquals(403,send("PUT",API+"/sources/FED",reader,source(source("FED"),false)).getResponse().getStatus());
-        Map<String,Object> b=edit(a,false);b.put("category","CRYPTO");assertEquals(400,send("PUT",API+"/"+id,writer,b).getResponse().getStatus());b.put("category","MACRO");b.put("reason","");assertEquals(400,send("PUT",API+"/"+id,writer,b).getResponse().getStatus());
+        Map<String,Object> b=edit(a,false);b.put("category","CRYPTO");assertEquals(400,send("PUT",API+"/"+id,writer,b).getResponse().getStatus());b.put("category","MACRO");b.put("reason",String.join("",Collections.nCopies(1001,"x")));assertEquals(400,send("PUT",API+"/"+id,writer,b).getResponse().getStatus());
         assertEquals(400,send("PUT",API+"/sources/NEWSDATA",writer,source(source("NEWSDATA"),true)).getResponse().getStatus());for(String q:Arrays.asList("size=101","page=-1","category=INVALID","sourceId=INVALID","language=bad!","from=2026-10-03T00:00:00Z&to=2026-10-01T00:00:00Z"))assertEquals(400,send("GET",PUBLIC+"?"+q,null,null).getResponse().getStatus());assertEquals(401,send("PUT",PUBLIC+"/"+id,null,edit(a,true)).getResponse().getStatus());
+    }
+    @Test @Order(10) void optionalReasonsStillAuditAndKeepSourceEvidenceRequired()throws Exception {
+        seed();JsonNode article=first();String id=article.path("articleId").asText();
+        for(String reason:Arrays.asList(null,""," \t","修")){
+            Map<String,Object> body=edit(article,false);if(reason==null)body.remove("reason");else body.put("reason",reason);article=ok(send("PUT",API+"/"+id,writer,body));
+            body=source(source("FED"),true);body.put("reason",reason);ok(send("PUT",API+"/sources/FED",writer,body));
+        }
+        assertEquals(8,db.queryForObject("SELECT COUNT(*) FROM news_audit",Integer.class));assertEquals(0,db.queryForObject("SELECT COUNT(*) FROM news_audit WHERE reason IS NULL",Integer.class));assertEquals(6,db.queryForObject("SELECT COUNT(*) FROM news_audit WHERE reason=''",Integer.class));
+        Map<String,Object> body=source(source("FED"),true);body.remove("reason");body.put("licenseEvidence","");assertEquals(400,send("PUT",API+"/sources/FED",writer,body).getResponse().getStatus());
+        body=edit(article,false);body.remove("reason");body.put("rowVersion",-1);assertEquals(409,send("PUT",API+"/"+id,writer,body).getResponse().getStatus());assertEquals(403,send("PUT",API+"/"+id,reader,body).getResponse().getStatus());
     }
     @Test @Order(4) void tenantAndEnvironmentIsolationWithSharedPublicMetadata()throws Exception {
         seed();String id=first().path("articleId").asText();assertEquals(404,send("GET",API+"/"+id,tenantTwo,null).getResponse().getStatus());

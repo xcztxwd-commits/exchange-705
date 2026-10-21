@@ -19,7 +19,7 @@ async function review(row:any){
  const current=()=>!disposed&&started===generation&&(tenant.value==='all'||tenant.value===target)
  try{if(!Number.isSafeInteger(target)||target<=0||!current())throw new Error('记录租户范围无效')
   const title=`异常复核 / ${row.tenant_name||target} / ${row.job}`
-  const why=(await ElMessageBox.prompt('填写处理原因；此动作仅复核，不改余额，不触发业务修复',title,{inputPattern:/^.{5,500}$/,inputErrorMessage:'原因5至500字'})).value
+  const why=(await ElMessageBox.prompt('处理原因选填；此动作仅复核，不改余额，不触发业务修复',title,{inputValidator:value=>!value||value.length<=500||'原因最多500字'})).value
   if(!current())return
   const hash=(await ElMessageBox.prompt('已实际复核报告的SHA256（64位小写十六进制）','绑定复核证据',{inputPattern:/^[a-f0-9]{64}$/,inputErrorMessage:'需要实际报告SHA256'})).value
   if(!current())return

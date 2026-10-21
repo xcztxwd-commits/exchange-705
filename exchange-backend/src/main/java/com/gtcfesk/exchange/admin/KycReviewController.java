@@ -273,7 +273,7 @@ public class KycReviewController {
     public ResponseEntity<?> rejectKyc(
             Authentication auth,
             @PathVariable Long id,
-            @RequestBody Map<String, String> req) {
+            @RequestBody(required = false) Map<String, String> req) {
         
         KycRecord record = identityService.currentForReview(id);
         
@@ -282,8 +282,8 @@ public class KycReviewController {
         }
         
         String remark = req != null ? req.get("remark") : null;
-        if (remark == null || remark.trim().isEmpty()) {
-            throw new BusinessException("拒绝原因不能为空");
+        if (remark != null && remark.length() > 500) {
+            throw new BusinessException("拒绝原因不能超过500字");
         }
         
         // 获取审核人ID

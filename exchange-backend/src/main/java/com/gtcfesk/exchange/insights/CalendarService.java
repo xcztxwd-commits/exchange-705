@@ -60,12 +60,12 @@ public class CalendarService {
         List<?> actual=scoped("select e.metric,count(e),min(e.releaseDate),max(e.releaseDate) from CalendarEvent e where e.tenantId=:tenant and e.environment=:env and e.published=true group by e.metric",Object[].class).getResultList();coverage.put("persistedCoverage",actual);out.put("coverage",coverage);return out;
     }
     private void write(CalendarEvent e,CalendarData d){d.validate();e.setMetric(d.metric);e.setReleaseDate(d.releaseDate);e.setReleaseAt(d.releaseAt);e.setStatus(d.status);e.setDataJson(encode(d));e.setUpdatedAt(Instant.now());}
-    private void audit(CalendarEvent e,String actor,String action,String reason,String before){CalendarAudit a=new CalendarAudit();a.setEnvironment(environment());a.setEventId(e.getEventId());a.setActor(actor);a.setAction(action);a.setReason(reason);a.setBeforeJson(before);a.setAfterJson(encode(view(e)));em.persist(a);}
+    private void audit(CalendarEvent e,String actor,String action,String reason,String before){CalendarAudit a=new CalendarAudit();a.setEnvironment(environment());a.setEventId(e.getEventId());a.setActor(actor);a.setAction(action);a.setReason(Objects.toString(reason,""));a.setBeforeJson(before);a.setAfterJson(encode(view(e)));em.persist(a);}
     public static String actor(){Authentication a=SecurityContextHolder.getContext().getAuthentication();if(a==null||a.getAuthorities().stream().noneMatch(r->r.getAuthority().equals("ROLE_ADMIN")||r.getAuthority().equals("ROLE_SUPER_ADMIN")))throw new AccessDeniedException("仅限授权管理员");return "ADMIN:"+a.getName();}
-    private static void reason(String s){if(s==null||s.trim().isEmpty()||s.length()>1000)throw CalendarData.bad("必须填写核验/修改依据（最多1000字）");}
+    private static void reason(String s){if(s!=null&&s.length()>1000)throw CalendarData.bad("核验/修改依据最多1000字");}
     private void version(CalendarEvent e,Long version){if(version==null||e.getRowVersion()!=version)throw new ResponseStatusException(HttpStatus.CONFLICT,"日历记录已更新，请刷新后重试");}
     @Transactional public int importBatch(CalendarParser.Batch batch,boolean manual,String material){
-        if(batch.events.size()>2000||batch.observations.size()>1000)throw CalendarData.bad("导入条目超过上限");String who=manual?actor():"SOURCE_SYNC";if(manual)reason(material);int changed=0;
+        if(batch.events.size()>2000||batch.observations.size()>1000)throw CalendarData.bad("导入条目超过上限");String who=manual?actor():"SOURCE_SYNC";if(manual){reason(material);if(material==null||material.trim().isEmpty())throw CalendarData.bad("必须填写材料来源与核验依据");}int changed=0;
         for(CalendarData d:batch.events){d.validate();changed+=upsert(d,manual,who,manual?material:"官方日程/公告更新",false);}
         for(CalendarData d:batch.observations){d.validate();changed+=upsert(d,manual,who,manual?material:"当前官方时间序列，不代表历史初值",true);}
         em.flush();return changed;

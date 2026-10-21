@@ -53,7 +53,6 @@ function openManual(scope: string, target: string, label: string, mode: string) 
 }
 async function commitManual() {
   if (!manual.value || !settings.value || saving.value || !can('market_hours:manual')) return
-  if (manual.value.mode !== 'AUTO' && !manual.value.reason.trim()) { ElMessage.warning('请填写操作原因'); return }
   if (manual.value.mode === 'OPEN' && !manual.value.until) { ElMessage.warning('手动开市须设置失效时间'); return }
   saving.value = true
   try {
@@ -162,7 +161,7 @@ onMounted(load)
                 <el-select v-model="w.endDay" aria-label="休市结束星期"><el-option v-for="(d, i) in days" :key="i" :label="d" :value="i + 1" /></el-select>
                 <input type="time" v-model="w.endTime" aria-label="休市结束时间" :disabled="saving || !can('market_hours:save')" />
                 <el-select v-model="w.timezone" clearable filterable allow-create default-first-option placeholder="继承策略时区" aria-label="区间时区"><el-option v-for="z in ['America/New_York', 'Pacific/Auckland', 'Europe/Berlin', 'UTC']" :key="z" :label="z" :value="z" /></el-select>
-                <el-input v-model="w.reason" maxlength="200" placeholder="原因" /><el-button v-permission="'market_hours:save'" @click="removeWeekly(index)">移除</el-button>
+                <el-input v-model="w.reason" maxlength="200" placeholder="原因（选填）" /><el-button v-permission="'market_hours:save'" @click="removeWeekly(index)">移除</el-button>
               </div>
               <el-button v-permission="'market_hours:save'" :disabled="policy.weekly.length >= 64" @click="addWeekly">添加每周区间</el-button>
               <h3>日期例外 / 节假日</h3><p>具体日期优先于每周策略；必须填写执行商公告或其他依据。输入按当前设备时区，保存为UTC；不能相互重叠。</p>
@@ -170,7 +169,7 @@ onMounted(load)
                 <div class="toolbar"><input type="datetime-local" :value="localValue(e.start)" @change="setInstant(e, 'start', $event)" aria-label="例外开始" :disabled="saving || !can('market_hours:save')" /><span>至</span>
                   <input type="datetime-local" :value="localValue(e.end)" @change="setInstant(e, 'end', $event)" aria-label="例外结束" :disabled="saving || !can('market_hours:save')" />
                   <el-select v-model="e.closed"><el-option label="休市" :value="true" /><el-option label="开市例外" :value="false" /></el-select><el-button v-permission="'market_hours:save'" @click="removeException(index)">移除</el-button></div>
-                <div class="form-grid"><el-input v-model="e.reason" maxlength="200" placeholder="例外原因" /><el-input v-model="e.source" maxlength="500" placeholder="依据：执行商公告网址 / 公告编号" /></div>
+                <div class="form-grid"><el-input v-model="e.reason" maxlength="200" placeholder="例外原因（选填）" /><el-input v-model="e.source" maxlength="500" placeholder="依据：执行商公告网址 / 公告编号" /></div>
               </div>
               <el-button v-permission="'market_hours:save'" :disabled="policy.exceptions.length >= 128" @click="addException">添加日期例外</el-button>
             </el-form>
@@ -196,7 +195,7 @@ onMounted(load)
     </template>
     <el-dialog :model-value="!!manual" :title="manual?.label + ' · ' + (manual?.mode === 'AUTO' ? '恢复自动' : manual?.mode === 'OPEN' ? '手动开市' : '手动休市')" width="min(520px, 94vw)" :close-on-click-modal="false" @close="manual = undefined">
       <template v-if="manual"><el-alert :title="manual.mode === 'OPEN' ? '只覆盖本平台时间策略，不绕过分类手动休市、品种停用或行情有效性。开市最长24小时。' : manual.mode === 'AUTO' ? '清除手动模式，立即按绑定策略判断。' : '分类手动休市会阻止其下所有品种成交；既有订单和资金不会被删除。'" type="warning" :closable="false" />
-        <el-form label-position="top" :disabled="saving || !can('market_hours:manual')" class="section" v-if="manual.mode !== 'AUTO'"><el-form-item label="操作原因（必填）"><el-input v-model="manual.reason" maxlength="200" /></el-form-item>
+        <el-form label-position="top" :disabled="saving || !can('market_hours:manual')" class="section" v-if="manual.mode !== 'AUTO'"><el-form-item label="操作原因（选填）"><el-input v-model="manual.reason" maxlength="200" /></el-form-item>
           <el-form-item :label="manual.mode === 'OPEN' ? '失效时间（必填；当前设备时区）' : '失效时间（可选；留空持续休市）'"><el-date-picker v-model="manual.until" type="datetime" placeholder="到期恢复自动" /></el-form-item></el-form>
       </template>
       <template #footer><el-button v-permission="'market_hours:view'" :disabled="saving" @click="manual = undefined">取消</el-button><el-button v-permission="'market_hours:manual'" type="primary" :loading="saving" @click="commitManual">确认切换</el-button></template>

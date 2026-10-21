@@ -92,17 +92,18 @@ test('actual insight mutation handlers enforce current grants, including Enter a
     const script = stripTypeScriptTypes(descriptor.scriptSetup.content.replace(/^import .*$/gm, ''))
     const calls = [], request = Object.fromEntries(['get', 'post', 'put', 'delete'].map(method => [method, async (url) => { calls.push({method, url}); throw new Error('stop after observing request') }]))
     const bindings = { ref: value => ({value}), computed: getter => ({get value() {return getter()}}), onMounted: () => {}, onUnmounted: () => {}, can: code => grants.has(code), request, defineProps: () => ({canEdit:true}), ElMessage: {error:()=>{},success:()=>{},info:()=>{},warning:()=>{}}, ElMessageBox: {confirm} }
-    const names = file.includes('Calendar') ? 'sync,importData,verified,material,content' : file.includes('News') ? 'saveArticle,saveSource,sync,importData,editing,sourceEditing,reason' : file.includes('Trader') ? 'save,change,upload,saveChild,remove,importRows,editing,reason,childKind,childData,importKind,importReason,importText' : 'toggle,health'
+    const names = file.includes('Calendar') ? 'save,publication,editing,reason,sync,importData,verified,material,content' : file.includes('News') ? 'saveArticle,saveSource,sync,importData,editing,sourceEditing,reason' : file.includes('Trader') ? 'save,change,upload,saveChild,remove,importRows,editing,reason,childKind,childData,importKind,importReason,importText' : 'toggle,health'
     const state = new Function(...Object.keys(bindings), `${script}\nreturn {${names}}`)(...Object.values(bindings))
     if (state.editing) state.editing.value = {traderId:'trader',articleId:'article',rowVersion:1,data:{strategyTags:[]}}
     if (state.sourceEditing) state.sourceEditing.value = {sourceId:'source'}
-    if (state.reason) state.reason.value = 'verified reason'
-    if (state.importReason) {state.importReason.value = 'verified import reason';state.importText.value = '{"rows":[]}' }
+    if (state.reason) state.reason.value = ''
+    if (state.importReason) {state.importReason.value = '';state.importText.value = '{"rows":[]}' }
     if (state.verified) {state.verified.value=true;state.material.value='material';state.content.value='content'}
     if (state.health) state.health.value = {globalEnabled:true,enabled:true}
     return {state,calls}
   }
   const cases = [
+    ['views/CalendarManagement.vue','calendar:edit',s=>s.save()], ['views/CalendarManagement.vue','calendar:publish',s=>s.publication(true)],
     ['views/CalendarManagement.vue','calendar:sync',s=>s.sync({sourceId:'source'})], ['views/CalendarManagement.vue','calendar:import',s=>s.importData()],
     ['views/NewsManagement.vue','news:edit',s=>s.saveArticle()], ['views/NewsManagement.vue','news:source',s=>s.saveSource()], ['views/NewsManagement.vue','news:sync',s=>s.sync({sourceId:'source'})], ['views/NewsManagement.vue','news:import',s=>s.importData()],
     ['views/TraderManagement.vue','traders:edit',s=>s.save()], ['views/TraderManagement.vue','traders:edit',s=>s.upload({target:{files:[new Blob(['fixture'])],value:'file'}})],

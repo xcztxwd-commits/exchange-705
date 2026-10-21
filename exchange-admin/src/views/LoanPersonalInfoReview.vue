@@ -172,7 +172,7 @@
             v-model="rejectRemark"
             type="textarea"
             :rows="4"
-            placeholder="请输入拒绝原因"
+            placeholder="请输入拒绝原因（可选）"
           />
         </el-form-item>
       </el-form>

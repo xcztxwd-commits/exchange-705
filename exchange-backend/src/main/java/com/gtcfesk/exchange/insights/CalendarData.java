@@ -61,7 +61,8 @@ public class CalendarData {
         if("NONE".equals(unit)&&(actual!=null||previous!=null||adminEstimate!=null))throw bad("政策公告未映射利率，不能填数字");
         if(metric.equals("UNEMPLOYMENT_RATE")){for(String value:Arrays.asList(actual,previous,adminEstimate))if(value!=null&&(new BigDecimal(value).signum()<0||new BigDecimal(value).compareTo(new BigDecimal("100"))>0))throw bad("失业率范围无效");}
         if(forecast!=null||!"NOT_PROVIDED".equals(forecastStatus))throw bad("未提供合法共识来源，forecast 必须为空");
-        if(adminEstimate!=null){if(estimateReason==null||estimateReason.trim().isEmpty()||estimateReason.length()>1000)throw bad("管理员估计须说明依据");estimateKind="ADMIN_ESTIMATE";}else estimateKind=null;
+        if(estimateReason!=null&&estimateReason.length()>1000)throw bad("管理员估计依据最多1000字");
+        estimateKind=adminEstimate==null?null:"ADMIN_ESTIMATE";
         if(footnotes!=null&&footnotes.length()>2000)throw bad("脚注过长");
         if(!Arrays.asList("NOT_PROVIDED","LATEST_TIME_SERIES","OFFICIAL_RELEASE","OFFICIAL_MATERIAL").contains(actualBasis))throw bad("实际值来源口径无效");
         if((actual!=null||previous!=null)&&"NOT_PROVIDED".equals(actualBasis))throw bad("数值必须提供真实来源口径");
