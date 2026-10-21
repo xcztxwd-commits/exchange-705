@@ -364,6 +364,7 @@ const submitBalance = async () => {
   if (balanceSaving.value) return
   if (balanceMode.value === 'deposit') { manualDepositVisible.value = true; return }
   if (!canSetBalance.value) { ElMessage.error('没有设置余额权限'); return }
+  const retrying = !!balancePending.value
   balanceSaving.value = true
   try {
     let payload = balancePending.value
@@ -382,6 +383,11 @@ const submitBalance = async () => {
     balanceDialogVisible.value = false
     loadUsers()
   } catch (e: any) {
+    if (e === 'cancel' || e === 'close') return
+    if (!retrying && [400, 403].includes(e?.response?.status) && e.response.data?.success === false) {
+      sessionStorage.removeItem(balanceKey.value)
+      balancePending.value = null
+    }
     ElMessage.error(e?.message || '更新失败')
   } finally {
     balanceSaving.value = false
