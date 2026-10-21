@@ -88,6 +88,23 @@ class DepositOrderServiceTest {
   equal("COMPLETED".equals(status)?"125":"25",balance("FUND"));assertEquals("COMPLETED".equals(status),credits.findByTenantIdAndDepositRecordId(1L,d.getId()).isPresent());
  }
  @Test void usdPreservesFrozenAndWritesActualReceipt(){DepositRecord d=service.manual(request());equal("125",balance("FUND"));equal("3",assets.findByTenantIdAndUserIdAndCoin(1L, user.getId(),"FUND").get().getFrozen());assertEquals(1,count());DepositCreditRecord c=credits.findByTenantIdAndDepositRecordId(1L, d.getId()).get();equal("25",c.getBalanceBefore());equal("125",c.getBalanceAfter());assertNull(d.getReviewedAt());assertEquals("ADMIN_MANUAL",d.getSource());}
+ @Test void manualDepositAcceptsBlankRemarksAndReplaysWithoutDuplicateCredit(){
+  for(String remark:Arrays.asList(null,""," \t\r\n ")){
+   DepositOrderRequest input=request();input.remark=remark;
+   DepositRecord order=service.manual(input);
+   assertEquals("COMPLETED",order.getStatus());
+   assertEquals("",records.findByTenantIdAndId(1L,order.getId()).get().getRemark());
+   equal("100",credits.findByTenantIdAndDepositRecordId(1L,order.getId()).get().getAmountUsd());
+   for(String retryRemark:Arrays.asList(null,""," \t\r\n ")){
+    input.remark=retryRemark;
+    assertEquals(order.getId(),service.manual(input).getId());
+   }
+   input.remark="changed after credit";
+   assertEquals(409,assertThrows(org.springframework.web.server.ResponseStatusException.class,()->service.manual(input)).getRawStatusCode());
+  }
+  assertEquals(3,count());equal("325",balance("FUND"));
+  equal("3",assets.findByTenantIdAndUserIdAndCoin(1L,user.getId(),"FUND").get().getFrozen());
+ }
  @Test void eurLocksSnapshotAndRetriesWithoutMarket(){DepositOrderRequest r=request();r.currency="EUR";DepositRecord d=service.manual(r);equal("135",balance("FUND"));equal("1.1",d.getExchangeRate());when(market.requireConversionRate("EUR","yahoo")).thenThrow(new com.gtcfesk.exchange.common.BusinessException("expired"));assertEquals(d.getId(),service.manual(r).getId());equal("135",balance("FUND"));}
  @Test void allAccountsAreIndependent(){for(String coin:Arrays.asList("CONTRACT","OPTION")){DepositOrderRequest r=request();r.account=coin;service.manual(r);equal("100",balance(coin));}equal("25",balance("FUND"));}
  @Test void userSubmitDoesNotCreditAndReviewDoesNotReprice(){DepositOrderRequest r=request();r.type="bank";r.currency="EUR";DepositRecord d=service.submit(user.getId(),r);equal("25",balance("FUND"));when(market.requireConversionRate("EUR","yahoo")).thenThrow(new com.gtcfesk.exchange.common.BusinessException("expired"));service.review(d.getId(),true,"approved");equal("135",balance("FUND"));assertThrows(RuntimeException.class,()->service.review(d.getId(),true,null));DepositOrderRequest rejected=request();rejected.type="digital";rejected.network="BANK-"+user.getId();DepositRecord no=service.submit(user.getId(),rejected);service.review(no.getId(),false,"no receipt");assertFalse(credits.findByTenantIdAndDepositRecordId(1L, no.getId()).isPresent());equal("135",balance("FUND"));}

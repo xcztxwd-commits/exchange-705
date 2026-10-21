@@ -87,9 +87,9 @@ async function submit() {
   try {
     let payload = pending.value
     if (!payload) {
-      if (!recipient.value || String(recipient.value.userId) !== String(form.userId) || !preview.value || !form.remark.trim()) { ElMessage.error('请等待客户匹配成功，并填写有效金额、备注'); return }
+      if (!recipient.value || String(recipient.value.userId) !== String(form.userId) || !preview.value) { ElMessage.error('请等待客户匹配成功，并填写有效金额'); return }
       if (form.manualPurpose === 'RECEIPT' && (form.type === 'manual' || !form.proofImage)) { ElMessage.error('实收补录需要渠道和凭证'); return }
-      await ElMessageBox.confirm(`UID ${form.userId}；${form.account}；${form.amount} ${currency.value}；费率0%；预计 ${preview.value} USD（以服务端提交时汇率为准）；原因：${form.remark}`, '确认手动入账', { type: 'warning' })
+      await ElMessageBox.confirm(`UID ${form.userId}；${form.account}；${form.amount} ${currency.value}；费率0%；预计 ${preview.value} USD（以服务端提交时汇率为准）；原因：${form.remark.trim() || '未填写'}`, '确认手动入账', { type: 'warning' })
       payload = { ...form, currency: currency.value, idempotencyKey: key.value }
       // Persist BEFORE sending: timeout, dialog close and navigation all retry the same immutable request.
       sessionStorage.setItem(storageKey.value, JSON.stringify(payload)); pending.value = payload
@@ -124,7 +124,7 @@ async function submit() {
       <el-form-item label="充值类型"><el-select v-model="form.type"><el-option label="后台加款" value="manual" /><el-option label="银行卡" value="bank" /><el-option label="数字货币渠道" value="digital" /></el-select></el-form-item>
       <el-form-item v-if="form.type !== 'manual'" :label="form.type === 'bank' ? '收款信息' : '钱包地址'"><el-input v-model="form.address" maxlength="200" /></el-form-item>
       <el-form-item v-if="form.type === 'digital'" label="地址网络"><el-input v-model="form.network" maxlength="50" /></el-form-item>
-      <el-form-item label="订单备注" required><el-input v-model="form.remark" type="textarea" maxlength="500" show-word-limit /></el-form-item>
+      <el-form-item label="订单备注"><el-input v-model="form.remark" type="textarea" maxlength="500" show-word-limit /></el-form-item>
       <el-form-item label="充值凭证"><el-upload v-permission="'deposit_orders:manual_deposit'" :http-request="upload" :show-file-list="false" accept="image/*"><el-button v-permission="'deposit_orders:manual_deposit'">上传凭证</el-button></el-upload><ProtectedElementImage v-if="form.proofImage" :src="form.proofImage" :preview-src-list="[form.proofImage]" style="width:60px" /></el-form-item>
     </el-form>
     <template #footer><el-button v-permission="'session:close'" @click="open = false">关闭</el-button><el-button v-permission="'deposit_orders:manual_deposit'" type="primary" :loading="busy" :disabled="!pending && (querying || !recipient)" @click="submit">{{ pending ? '重试原请求' : '确认充值' }}</el-button></template>

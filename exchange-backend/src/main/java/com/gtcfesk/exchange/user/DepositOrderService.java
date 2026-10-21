@@ -63,7 +63,7 @@ public class DepositOrderService {
   TradeValidation.positive(r.amount,"充值金额");
   r.account=choice(r.account,"FUND","CONTRACT","OPTION"); r.currency=fiat.currency(r.currency);
   r.type=manual?choice(r.type,"manual","bank","digital"):choice(r.type,"bank","digital");
-  r.remark=text(r.remark,500,manual); r.address=text(r.address,200,false); r.network=text(r.network,50,false);
+  r.remark=text(r.remark,500,false); r.address=text(r.address,200,false); r.network=text(r.network,50,false);
   r.proofImage=text(r.proofImage,500,false); r.idempotencyKey=text(r.idempotencyKey,64,manual);
   if(r.idempotencyKey.isEmpty()) r.idempotencyKey=null;
   if(manual) {
