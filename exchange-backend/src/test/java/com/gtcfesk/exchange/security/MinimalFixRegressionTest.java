@@ -848,6 +848,31 @@ class MinimalFixRegressionTest {
     }
 
 
+    @Test void balanceDialogPayloadsAcceptZeroAndLargeDecimals() throws Exception {
+        String endpoint = "/api/admin/users/updateBalance";
+        for (Map<String,Object> input : Arrays.asList(
+                map("userId", a.getId(), "fundBalance", 4, "contractBalance", new BigDecimal("288888858.8"),
+                        "optionBalance", 0, "remark", "", "confirm", true, "idempotencyKey", UUID.randomUUID().toString()),
+                map("userId", a.getId(), "fundBalance", 64515, "contractBalance", 0,
+                        "optionBalance", 0, "remark", "1", "confirm", true, "idempotencyKey", UUID.randomUUID().toString()))) {
+            MvcResult result = request("POST", endpoint, superToken, input);
+            assertEquals(200, status(result), result.getResponse().getContentAsString());
+            for (String coin : Arrays.asList("FUND", "CONTRACT", "OPTION")) {
+                String field = coin.toLowerCase(Locale.ROOT) + "Balance";
+                same(new BigDecimal(input.get(field).toString()), balance(a, coin));
+            }
+            BalanceAdjustment receipt = adjustments.findByTenantIdAndRequestKey(1L, input.get("idempotencyKey").toString()).get();
+            assertEquals(input.get("remark"), receipt.getReason());
+            // A retry after a lost response must return the receipt without overwriting newer balances.
+            AssetAccount fund = assets.findByTenantIdAndUserIdAndCoin(1L, a.getId(), "FUND").get();
+            fund.setAvailable(new BigDecimal("777"));
+            assets.saveAndFlush(fund);
+            assertEquals(200, status(request("POST", endpoint, superToken, input)));
+            same(new BigDecimal("777"), balance(a, "FUND"));
+            assertEquals(receipt.getId(), adjustments.findByTenantIdAndRequestKey(1L, input.get("idempotencyKey").toString()).get().getId());
+        }
+    }
+
     @Test void balanceAdjustmentReasonIsOptional() throws Exception {
         String endpoint = "/api/admin/users/updateBalance";
         int target = 10;
