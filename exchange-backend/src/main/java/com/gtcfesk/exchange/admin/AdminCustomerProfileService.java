@@ -235,7 +235,7 @@ public class AdminCustomerProfileService {
         Map<String,BigDecimal> current = new HashMap<>();
         for (AssetAccount account : assets.lockByUserId(userId)) current.put(account.getCoin(),zero(account.getAvailable()));
         UpdateUserBalanceRequest request = new UpdateUserBalanceRequest(); request.setUserId(userId); request.setConfirm(true);
-        request.setIdempotencyKey(text(input,"idempotencyKey",64,true)); request.setRemark(text(input,"reason",500,true));
+        request.setIdempotencyKey(text(input,"idempotencyKey",64,true)); request.setRemark(text(input,"reason",500,false));
         boolean changed=false;
         for (String coin:coins) if (targets.has(coin)) {
             BigDecimal before=current.getOrDefault(coin,BigDecimal.ZERO), after=decimal(targets.get(coin));

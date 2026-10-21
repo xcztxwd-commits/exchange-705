@@ -73,11 +73,11 @@ class TenantDomainLifecycleTest{
   long initial=domainVersion();domains.prepare(id,newHost,"  reviewed custom reason  ");
   verify(audit).record(eq(51L),eq(id),isNull(),eq("DOMAIN_PREPARE"),eq(newHost),eq("SUCCESS"),anyString(),eq("reviewed custom reason"));
   long prepared=domainVersion();assertEquals(initial+1,prepared);
-  for(String invalid:Arrays.asList("短",String.join("",Collections.nCopies(513,"x")))){
-   assertThrows(IllegalArgumentException.class,()->domains.setEntryEnabled(id,false,prepared,invalid));assertEquals(prepared,domainVersion());
-  }
-  assertThrows(IllegalArgumentException.class,()->TenantManagementService.reason(null));
-  assertThrows(IllegalArgumentException.class,()->TenantManagementService.reason(""));
+  assertThrows(IllegalArgumentException.class,()->domains.setEntryEnabled(id,false,prepared,String.join("",Collections.nCopies(513,"x"))));assertEquals(prepared,domainVersion());
+  domains.setEntryEnabled(id,false,prepared,"短");
+  verify(audit).record(eq(51L),eq(id),isNull(),eq("DOMAIN_ENTRY_SWITCH"),anyString(),eq("SUCCESS"),anyString(),eq("短"));
+  assertDoesNotThrow(()->TenantManagementService.reason(null));
+  assertDoesNotThrow(()->TenantManagementService.reason(""));
  }
  @Test void roleCandidatesNeverOverwriteEachOtherAndChallengeBindsRole(){
   domains.prepare(id,"ENTRY",entry(),domainVersion(),"prepare entry");Map<String,Object> front=domains.prepare(id,newHost,"prepare frontend");assertEquals(2,domains.candidates(id).size());

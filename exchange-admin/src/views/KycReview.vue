@@ -150,12 +150,12 @@
       width="500px"
     >
       <el-form :model="rejectForm" label-width="100px">
-        <el-form-item label="拒绝原因" required>
+        <el-form-item label="拒绝原因（选填）">
           <el-input
             v-model="rejectForm.remark"
             type="textarea"
             :rows="4"
-            placeholder="请输入拒绝原因"
+            placeholder="请输入拒绝原因（可选）"
           />
         </el-form-item>
       </el-form>
@@ -321,11 +321,6 @@ function handleReject(row: any) {
 
 // 确认拒绝
 async function confirmReject() {
-  if (!rejectForm.value.remark || !rejectForm.value.remark.trim()) {
-    ElMessage.warning('请输入拒绝原因')
-    return
-  }
-  
   if (!currentRejectId.value) return
   
   try {

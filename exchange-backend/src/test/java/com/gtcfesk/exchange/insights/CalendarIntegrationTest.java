@@ -101,6 +101,22 @@ class CalendarIntegrationTest {
     JsonNode reminder(String id,String token,int lead)throws Exception{return ok(send("PUT","/api/user/calendar/reminders/"+id,token,new LinkedHashMap<String,Object>(){{put("leadMinutes",lead);put("timezone","Asia/Singapore");}}));}
     JsonNode importMaterial(List<CalendarData> rows,String token)throws Exception{Map<String,Object> b=new LinkedHashMap<>();b.put("format","VERIFIED_JSON");b.put("content",json.writeValueAsString(rows));b.put("verified",true);b.put("material","核验官方 BLS/BEA 日程与发布材料，来源链接随条目保存");return ok(send("POST",API+"/import",token,b));}
 
+    @Test @Order(8) void optionalReasonsStillAuditAndPreserveLengthVersionAndMaterialChecks()throws Exception {
+        String id=seed(future("2031-01",Instant.now().plusSeconds(7200)));
+        for(String reason:Arrays.asList(null,""," \t","修")){
+            ObjectNode data=(ObjectNode)detail(id);data.put("adminEstimate","-0.1");if(reason==null)data.remove("estimateReason");else data.put("estimateReason",reason);
+            Map<String,Object> body=new LinkedHashMap<>();body.put("rowVersion",data.path("rowVersion").asLong());body.put("data",data);if(reason!=null)body.put("reason",reason);
+            JsonNode saved=ok(send("PUT",API+"/"+id,writer,body));assertEquals("ADMIN_ESTIMATE",saved.path("estimateKind").asText());
+            body=new LinkedHashMap<>();body.put("rowVersion",saved.path("rowVersion").asLong());body.put("published",true);body.put("status","SCHEDULED");body.put("reason",reason);
+            ok(send("POST",API+"/"+id+"/publication",writer,body));
+        }
+        assertEquals(0,db.queryForObject("SELECT COUNT(*) FROM calendar_audit WHERE reason IS NULL",Integer.class));
+        ObjectNode data=(ObjectNode)detail(id);Map<String,Object> body=new LinkedHashMap<>();body.put("rowVersion",data.path("rowVersion").asLong());body.put("data",data);body.put("reason",String.join("",Collections.nCopies(1001,"x")));
+        assertEquals(400,send("PUT",API+"/"+id,writer,body).getResponse().getStatus());body.remove("reason");data.put("estimateReason",String.join("",Collections.nCopies(1001,"x")));assertEquals(400,send("PUT",API+"/"+id,writer,body).getResponse().getStatus());
+        data.putNull("estimateReason");body.put("rowVersion",-1);assertEquals(409,send("PUT",API+"/"+id,writer,body).getResponse().getStatus());
+        body=new LinkedHashMap<>();body.put("format","VERIFIED_JSON");body.put("content",json.writeValueAsString(Collections.singletonList(future("2031-02",Instant.now().plusSeconds(7200)))));body.put("verified",true);body.put("material","");assertEquals(400,send("POST",API+"/import",writer,body).getResponse().getStatus());
+    }
+
     @Test @Order(1) void verifiedOfficialMaterialDraftPublicationActualAssociationAndAudit()throws Exception{
         CalendarData nfp=CalendarData.metric("NFP_CHANGE");nfp.statisticalPeriod="2026-09";nfp.releaseAt=Instant.parse("2026-10-02T12:30:00Z");nfp.timePrecision="MINUTE";nfp.sourceUrl="https://www.bls.gov/schedule/2026/home.htm";nfp.validate();
         JsonNode imported=importMaterial(Collections.singletonList(nfp),writer);assertEquals("VERIFIED_MANUAL_IMPORT",imported.path("importKind").asText());assertEquals(1,imported.path("changed").asInt());assertEquals(404,send("GET","/api/insights/calendar/"+nfp.eventId,null,null).getResponse().getStatus());assertFalse(detail(nfp.eventId).path("published").asBoolean());

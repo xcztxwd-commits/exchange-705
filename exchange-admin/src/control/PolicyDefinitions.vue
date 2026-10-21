@@ -33,7 +33,7 @@ onMounted(load)
    <el-form-item label="策略键" required><el-input v-model="form.key" :disabled="existing" maxlength="128" placeholder="config.已有业务配置键"/></el-form-item>
    <el-form-item label="选项值"><el-select v-model="form.options" multiple filterable allow-create default-first-option :disabled="fixedValues" placeholder="输入选项值后回车；非功能配置可留空，自由输入" @change="changeOptions"><el-option v-for="value in form.options" :key="value" :label="value===''?'（空值）':value" :value="value"/></el-select></el-form-item>
    <el-form-item label="默认值" required><el-select v-if="form.options.length" v-model="form.defaultValue" :disabled="fixedValues"><el-option v-for="value in form.options" :key="value" :label="value===''?'（空值）':value" :value="value"/></el-select><el-input v-else v-model="form.defaultValue" maxlength="8192" :disabled="fixedValues"/></el-form-item>
-   <el-form-item label="操作原因"><el-input v-model="form.reason" maxlength="500" placeholder="选填；不填自动记录，填写时至少3个字符"/></el-form-item>
+   <el-form-item label="操作原因"><el-input v-model="form.reason" maxlength="500" placeholder="选填，最多500字"/></el-form-item>
   </el-form>
   <p class="policy-help">功能值仅允许 true/false，并保留 false；客服渠道保留 off。新增配置定义不会实现新的业务功能；密码、密钥等不得作为策略保存。</p>
   <template #footer><el-button :disabled="busy" @click="open=false">取消</el-button><el-button type="primary" :loading="busy" @click="save">保存策略定义</el-button></template>

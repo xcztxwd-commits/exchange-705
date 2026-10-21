@@ -94,11 +94,23 @@ class ControlPolicyDefinitionTest {
   for(ControlPolicyDefinitionService.Input value:invalid)assertThrows(IllegalArgumentException.class,()->service.save(value),value.key);verify(repository,never()).saveAndFlush(any());verifyNoInteractions(audit);
   assertDoesNotThrow(()->service.save(input("retention.keep_days","会话历史保留期","365","365")));assertEquals("会话历史保留期",view("retention.keep_days").name);
  }
- @Test void blankTenantPolicyReasonGetsAuditDefaultAndDoesNotRelaxOtherRequiredReasons(){
+ @Test void blankTenantPolicyReasonGetsAuditDefaultAndOperationReasonsAreOptional(){
   TenantFixture fixture=new TenantFixture();for(String reason:Arrays.asList(null,"","   ")){
    ControlController.PolicyInput value=fixture.input("feature.registration","false");value.reason=reason;TenantPolicy saved=fixture.management.policy(2L,value);assertEquals(2L,saved.getTenantId());assertEquals("false",saved.getValue());assertEquals("总控授权策略管理",value.reason);
   }
-  verify(audit,times(3)).record(eq(7L),eq(2L),isNull(),eq("POLICY_UPDATE"),eq("feature.registration"),eq("SUCCESS"),anyString(),eq("总控授权策略管理"));verifyNoInteractions(fixture.readiness);assertThrows(IllegalArgumentException.class,()->TenantManagementService.reason(null));assertEquals("人工调整",TenantManagementService.policyReason(" 人工调整 "));
+  verify(audit,times(3)).record(eq(7L),eq(2L),isNull(),eq("POLICY_UPDATE"),eq("feature.registration"),eq("SUCCESS"),anyString(),eq("总控授权策略管理"));verifyNoInteractions(fixture.readiness);assertDoesNotThrow(()->TenantManagementService.reason(null));assertEquals("人工调整",TenantManagementService.policyReason(" 人工调整 "));
+ }
+ @Test void tenantUpdatesAllowOmittedBlankAndShortReasonsButKeepLengthAndActivationChecks(){
+  TenantFixture fixture=new TenantFixture();fixture.tenant(2L).setStatus("DRAFT");
+  for(String reason:Arrays.asList(null,"","   ","改","x".repeat(512))){
+   ControlController.TenantInput input=new ControlController.TenantInput();input.reason=reason;
+   assertEquals("DRAFT",fixture.management.update(2L,input).getStatus());
+   verify(audit,atLeastOnce()).record(eq(7L),eq(2L),isNull(),eq("TENANT_UPDATE"),eq("2"),eq("SUCCESS"),anyString(),eq(reason));
+  }
+  ControlController.TenantInput input=new ControlController.TenantInput();input.reason="x".repeat(513);
+  assertThrows(IllegalArgumentException.class,()->fixture.management.update(2L,input));
+  input.reason=null;input.status="ACTIVE";doThrow(new AccessDeniedException("注册基础配置未齐备")).when(fixture.readiness).requireReady(2L);
+  assertThrows(AccessDeniedException.class,()->fixture.management.update(2L,input));assertEquals("DRAFT",fixture.tenant(2L).getStatus());
  }
  @Test void allowedRegistrationGrantStillRequiresRealFeatureReadiness(){
   TenantFixture fixture=new TenantFixture();doThrow(new AccessDeniedException("注册基础配置未齐备")).when(fixture.readiness).requireFeatureReady(2L,"registration");

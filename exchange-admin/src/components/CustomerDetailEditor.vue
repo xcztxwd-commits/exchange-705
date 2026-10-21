@@ -122,8 +122,8 @@ async function save() {
   if (!pending.value) {
     if (!canSave.value) return
     if (password.value && password.value.length < 6) { section.value = 'profile'; ElMessage.warning('新密码至少 6 位'); return }
-    if (balanceChanged.value && (!reason.value.trim() || !Object.values(balances.value).every(value => /^\d+(\.\d{1,16})?$/.test(value)))) {
-      section.value = 'assets'; ElMessage.warning('请填写有效的非负余额及修改原因'); return
+    if (balanceChanged.value && !Object.values(balances.value).every(value => /^\d+(\.\d{1,16})?$/.test(value))) {
+      section.value = 'assets'; ElMessage.warning('请填写有效的非负余额'); return
     }
     const payload: any = { rowVersion: baseline.value.user.rowVersion, profile: profilePatch.value, idempotencyKey: crypto.randomUUID() }
     if (identityChanged.value) payload.kyc = { ...identity.value, id: baseline.value.kyc?.id, updatedAt: baseline.value.kyc?.updatedAt }
@@ -205,7 +205,7 @@ function verify() {
             </el-form>
           </el-tab-pane>
           <el-tab-pane label="账户余额" name="assets">
-            <div class="customer-account-heading"><strong>账户余额（USD）</strong><span>修改可用余额后，填写原因并保存。</span></div>
+            <div class="customer-account-heading"><strong>账户余额（USD）</strong><span>修改可用余额后保存，原因选填。</span></div>
             <div class="customer-accounts">
               <div v-for="account in accounts" :key="account.coin" class="customer-account-row">
                 <strong>{{ account.label }}</strong><div><span>最新可用余额</span><b>{{ amount(live.user[account.field]) }}</b></div><div><span>冻结金额</span><b>{{ amount(frozen(account.coin)) }}</b></div>
@@ -213,7 +213,7 @@ function verify() {
               </div>
             </div>
             <p class="customer-help">冻结金额随订单占用和释放，自动同步。余额修改会记录为后台入金 / 后台出金。</p>
-            <el-form-item label="修改原因" class="customer-reason"><el-input v-model="reason" :disabled="!permissions.modifyBalance || saving || !!pending" maxlength="500" placeholder="调整余额时必填，便于核对资金记录" /></el-form-item>
+            <el-form-item label="修改原因（选填）" class="customer-reason"><el-input v-model="reason" :disabled="!permissions.modifyBalance || saving || !!pending" maxlength="500" placeholder="选填，便于核对资金记录" /></el-form-item>
             <div v-if="live.accounts?.some((account: any) => !accounts.some(a => a.coin === account.coin))" class="customer-extra-accounts">
               <strong>其他资产账户</strong><div v-for="account in live.accounts.filter((item: any) => !accounts.some(a => a.coin === item.coin))" :key="account.coin">{{ account.coin }}：可用 {{ amount(account.available) }} / 冻结 {{ amount(account.frozen) }}</div>
             </div>

@@ -68,6 +68,6 @@ public class TenantManagementService {
  public Object verifyDomain(Long id){List<Map<String,Object>> pending=verification.candidates(id).stream().filter(b->"FRONTEND".equals(b.get("role"))).collect(java.util.stream.Collectors.toList());if(pending.size()!=1)throw new IllegalArgumentException("请先准备唯一候选域名");Map<String,Object> b=pending.get(0);return verification.verify(id,b.get("hostname").toString(),((Number)b.get("version")).longValue());}
  private final TenantDomainVerification verification;
  static String policyReason(String value){String reason=value==null||value.trim().isEmpty()?"总控授权策略管理":value.trim();reason(reason);return reason;}
- static void reason(String value){if(value==null||value.trim().length()<3||value.length()>512)throw new IllegalArgumentException("请填写操作原因（3 至 512 字符）");}
+ static void reason(String value){if(value!=null&&value.length()>512)throw new IllegalArgumentException("操作原因不能超过512字符");}
  private static String name(String value){if(value==null||value.trim().isEmpty()||value.length()>128)throw new IllegalArgumentException("名称无效");return value.trim();}
 }

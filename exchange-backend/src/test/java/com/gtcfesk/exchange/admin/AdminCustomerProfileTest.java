@@ -2,6 +2,7 @@ package com.gtcfesk.exchange.admin;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.gtcfesk.exchange.common.BusinessException;
 import com.gtcfesk.exchange.common.UploadStorage;
 import com.gtcfesk.exchange.config.BackendAccess;
 import com.gtcfesk.exchange.control.BackendLoginRegistry;
@@ -137,6 +138,28 @@ class AdminCustomerProfileTest {
         ObjectNode input=input();balance(input,"100.000");save(input);
         assertEquals(1,jdbc.queryForObject("SELECT COUNT(*) FROM balance_adjustment",Integer.class));
         assertEquals("PROFILE_SAVE",jdbc.queryForObject("SELECT changes FROM balance_adjustment",String.class));
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.NullAndEmptySource
+    @org.junit.jupiter.params.provider.ValueSource(strings={"   ","改"})
+    void balanceSaveAllowsOptionalReasonAndReplaysWithoutSecondAdjustment(String reason) {
+        ObjectNode input=input();balance(input,"135.75");
+        if(reason==null)input.remove("reason");else input.put("reason",reason);
+        save(input);save(input);
+        assertEquals(0,new BigDecimal("135.75").compareTo(jdbc.queryForObject("SELECT available FROM asset_account WHERE user_id=7001",BigDecimal.class)));
+        assertEquals(2,jdbc.queryForObject("SELECT COUNT(*) FROM balance_adjustment",Integer.class));
+        assertEquals(reason,jdbc.queryForObject("SELECT reason FROM balance_adjustment WHERE changes <> 'PROFILE_SAVE'",String.class));
+        verify(audit,times(1)).recordCurrent(eq("BALANCE_ADJUST"),anyString(),anyString(),eq(reason));
+    }
+
+    @Test void optionalBalanceReasonStillChecksLengthAndPermissionBeforeMutation() {
+        ObjectNode input=input();balance(input,"200");input.put("reason","x".repeat(501));
+        assertThrows(BusinessException.class,()->save(input));
+        input.remove("reason");when(permissions.isSuper()).thenReturn(false);
+        assertThrows(AccessDeniedException.class,()->save(input));
+        assertEquals(0,new BigDecimal("100").compareTo(jdbc.queryForObject("SELECT available FROM asset_account WHERE user_id=7001",BigDecimal.class)));
+        assertEquals(0,jdbc.queryForObject("SELECT COUNT(*) FROM balance_adjustment",Integer.class));
     }
 
     @Test void rejectsStaleVersionAndUnlistedFields() {

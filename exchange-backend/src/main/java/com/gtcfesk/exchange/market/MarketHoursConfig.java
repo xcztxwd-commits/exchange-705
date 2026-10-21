@@ -100,12 +100,12 @@ public final class MarketHoursConfig {
                 if(w==null||w.startDay<1||w.startDay>7||w.endDay<1||w.endDay>7)throw bad("星期须为1至7");
                 if(w.timezone!=null&&!w.timezone.isEmpty())try{ZoneId.of(w.timezone);}catch(RuntimeException e){throw bad("每周区间时区无效");}
                 int a=minute(w.startDay,w.startTime),b=minute(w.endDay,w.endTime);
-                if(a==b)throw bad("每周休市开始与结束不能相同");text(w.reason,200);
+                if(a==b)throw bad("每周休市开始与结束不能相同");w.reason=reason(w.reason);
             }
             List<ExceptionRange> sorted=new ArrayList<>(p.exceptions);
             for(ExceptionRange e:sorted) {
                 if(e==null||!instant(e.start).isBefore(instant(e.end)))throw bad("例外结束必须晚于开始");
-                text(e.reason,200);text(e.source,500);
+                e.reason=reason(e.reason);text(e.source,500);
             }
             sorted.sort(Comparator.comparing(e->instant(e.start)));
             for(int i=1;i<sorted.size();i++)if(instant(sorted.get(i).start).isBefore(instant(sorted.get(i-1).end)))throw bad("日期例外不能重叠");
@@ -121,12 +121,12 @@ public final class MarketHoursConfig {
     }
     private static void rule(Rule r,Set<String> ids) {
         if(r==null||!Arrays.asList("AUTO","OPEN","CLOSED").contains(r.mode)||r.strategyId!=null&&!ids.contains(r.strategyId))throw bad("模式或策略引用无效");
-        if(r.reason==null||r.reason.length()>200)throw bad("操作原因过长");
-        if(!"AUTO".equals(r.mode))text(r.reason,200);
+        r.reason=reason(r.reason);
         if(r.until!=null)instant(r.until);
         if("OPEN".equals(r.mode)&&r.until==null)throw bad("手动开市必须设置失效时间");
     }
-    private static void text(String value,int max) {if(value==null||value.trim().isEmpty()||value.length()>max)throw bad("名称、原因或依据为空或过长");}
+    private static void text(String value,int max) {if(value==null||value.trim().isEmpty()||value.length()>max)throw bad("名称或依据为空或过长");}
+    private static String reason(String value) {if(value!=null&&value.length()>200)throw bad("操作原因过长");return value==null?"":value;}
     private static int minute(int day,String value) {
         if(value==null||!value.matches("(?:[01][0-9]|2[0-3]):[0-5][0-9]"))throw bad("时间须为HH:mm");
         return (day-1)*1440+LocalTime.parse(value).getHour()*60+LocalTime.parse(value).getMinute();

@@ -194,7 +194,7 @@
             v-model="rejectRemark"
             type="textarea"
             :rows="4"
-            placeholder="请输入拒绝原因"
+            placeholder="请输入拒绝原因（可选）"
           />
         </el-form-item>
       </el-form>
@@ -360,11 +360,11 @@ async function handleControlledRepay(row: any) {
   repayBusy.value = true
   try {
     const prior = repayInputs.get(row.id)
-    const { value } = await ElMessageBox.prompt('将按已放款合同及实际使用天数从用户资金账户扣款。请输入核实后的处理原因并确认。', '确认受控还款', {
-      inputValue: prior?.reason || '', inputPattern: /^.{5,500}$/, inputErrorMessage: '请输入5至500字原因', type: 'warning',
+    const { value } = await ElMessageBox.prompt('将按已放款合同及实际使用天数从用户资金账户扣款。处理原因选填，请确认。', '确认受控还款', {
+      inputValue: prior?.reason || '', inputValidator: value => !value || value.length <= 500 || '原因最多500字', type: 'warning',
     })
     const input = prior || { requestId: crypto.randomUUID(), reason: value.trim() }
-    if (input.reason.length < 5 || input.reason.length > 500) throw new Error('请输入5至500字原因')
+    if (input.reason.length > 500) throw new Error('原因最多500字')
     if (prior && prior.reason !== value.trim()) throw new Error('上次请求结果未确认；重试必须保留原处理原因')
     repayInputs.set(row.id, input) // Keep the request key when a response is lost; retry the same command.
     const result: any = await request.post(`/admin/controlled-exits/loan/${row.id}/repay`, input)

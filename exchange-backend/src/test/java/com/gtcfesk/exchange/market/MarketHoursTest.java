@@ -88,6 +88,18 @@ class MarketHoursTest extends TenantMarketTestContext {
         s=MarketHoursConfig.defaults();own("OPEN",null);assertThrows(BusinessException.class,()->MarketHoursConfig.validate(s));
         s=MarketHoursConfig.defaults();s.strategies.get(0).weekly.get(0).startTime="24:00";assertThrows(BusinessException.class,()->MarketHoursConfig.validate(s));
     }
+    @Test void optionalReasonsKeepNamesSourcesAndReasonLengthChecks() {
+        for(String reason:Arrays.asList(null,""," \t","修")){
+            s=MarketHoursConfig.defaults();s.strategies.get(0).weekly.get(0).reason=reason;s.strategies.get(1).exceptions.get(0).reason=reason;own("CLOSED",null).reason=reason;
+            assertDoesNotThrow(()->MarketHoursConfig.validate(s));assertNotNull(at("2026-10-03T00:00:00Z").reason);assertDoesNotThrow(()->MarketHoursConfig.parse(MarketHoursConfig.encode(s)));
+        }
+        String tooLong=String.join("",Collections.nCopies(201,"x"));
+        s=MarketHoursConfig.defaults();s.strategies.get(0).weekly.get(0).reason=tooLong;assertThrows(BusinessException.class,()->MarketHoursConfig.validate(s));
+        s=MarketHoursConfig.defaults();s.strategies.get(1).exceptions.get(0).reason=tooLong;assertThrows(BusinessException.class,()->MarketHoursConfig.validate(s));
+        s=MarketHoursConfig.defaults();own("CLOSED",null).reason=tooLong;assertThrows(BusinessException.class,()->MarketHoursConfig.validate(s));
+        s=MarketHoursConfig.defaults();s.strategies.get(0).name="";assertThrows(BusinessException.class,()->MarketHoursConfig.validate(s));
+        s=MarketHoursConfig.defaults();s.strategies.get(1).exceptions.get(0).source="";assertThrows(BusinessException.class,()->MarketHoursConfig.validate(s));
+    }
     @Test void overlappingExceptionsAreRejectedAndRoundTripIsValid() {
         String raw=MarketHoursConfig.encode(s);assertEquals(raw,MarketHoursConfig.encode(MarketHoursConfig.parse(raw)));
         MarketHoursConfig.ExceptionRange e=s.strategies.get(1).exceptions.get(0);s.strategies.get(1).exceptions.add(e);

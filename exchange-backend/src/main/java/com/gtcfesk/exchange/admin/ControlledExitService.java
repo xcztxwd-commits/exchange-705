@@ -58,7 +58,8 @@ public class ControlledExitService {
   ControlIdentity control=ControlIdentity.current();Long actor;String actorType;AdminUser admin=null;
   if(control!=null){if(control.getAccessSessionId()==null||control.getActorId()==null||control.getActorId()<=0||!tenant.equals(control.getTenantId()))throw new AccessDeniedException("目标租户身份不匹配");actor=control.getActorId();actorType="CONTROL";}
   else {try{actor=Long.valueOf(auth.getName());}catch(NumberFormatException e){throw new AccessDeniedException("操作者无效");}admin=admins.findByTenantIdAndId(tenant,actor).filter(a->Boolean.TRUE.equals(a.getEnabled())).orElseThrow(()->new AccessDeniedException("操作者已停用"));actorType="ADMIN";}
-  if(id==null||id<=0||input==null||input.requestId==null||!input.requestId.matches("[a-zA-Z0-9_-]{16,64}")||input.reason==null||input.reason.trim().length()<5||input.reason.length()>500)throw new IllegalArgumentException("需要16至64位幂等键和5至500字处理原因");
+  if(id==null||id<=0||input==null||input.requestId==null||!input.requestId.matches("[a-zA-Z0-9_-]{16,64}"))throw new IllegalArgumentException("需要16至64位幂等键");
+  if(input.reason!=null&&input.reason.length()>500)throw new IllegalArgumentException("处理原因不能超过500字");
   String permission;if("contract".equals(kind)&&Arrays.asList("close","cancel","risk").contains(command))permission=command.equals("cancel")?"cancel_order":command.equals("risk")?"risk_exit":"close_order";
   else if("option".equals(kind)&&"close".equals(command))permission="close_order";
   else if(("financial".equals(kind)&&"redeem".equals(command))||("loan".equals(kind)&&"repay".equals(command)))permission="controlled_exit";

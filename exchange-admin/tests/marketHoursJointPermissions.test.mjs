@@ -54,11 +54,14 @@ test('load/save/manual handlers reach requests only with their current capabilit
   await denied.state.commitManual(); assert.deepEqual(denied.calls, [])
   const grants = new Set(['market_hours:view', 'market_hours:save', 'market_hours:manual']), allowed = setup(grants)
   await allowed.state.load(); await allowed.state.save(); allowed.state.openManual('SYMBOL', '1', 'Fixture', 'CLOSED')
-  assert.ok(allowed.state.manual.value); allowed.state.manual.value.reason = 'verified'
+  assert.ok(allowed.state.manual.value); assert.equal(allowed.state.manual.value.reason, '')
   grants.delete('market_hours:manual'); await allowed.state.commitManual(); assert.equal(allowed.calls.length, 2)
   grants.add('market_hours:manual'); await allowed.state.commitManual()
   assert.deepEqual(allowed.calls.map(({method,url}) => ({method,url})), [
     {method:'get',url:'/admin/market-hours'}, {method:'put',url:'/admin/market-hours'}, {method:'post',url:'/admin/market-hours/override'} ])
+  assert.equal(allowed.calls.at(-1).body.reason, '', 'manual market mode accepts an omitted reason')
+  allowed.state.openManual('SYMBOL', '1', 'Fixture', 'OPEN'); allowed.state.manual.value.until = null
+  await allowed.state.commitManual(); assert.equal(allowed.calls.length, 3, 'manual open still requires an expiry')
 })
 test('revocation while reload confirmation is open prevents GET and preserves edits', async () => {
   const grants = new Set(['market_hours:view', 'market_hours:save']), { state, calls } = setup(grants, async () => grants.clear())
