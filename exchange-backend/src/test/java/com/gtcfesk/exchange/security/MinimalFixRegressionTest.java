@@ -848,6 +848,35 @@ class MinimalFixRegressionTest {
     }
 
 
+    @Test void cachedBalanceRequestIsReconciledWithoutChangingMoney() throws Exception {
+        String reconcile = "/api/admin/users/balance-adjustments/reconcile";
+        String update = "/api/admin/users/updateBalance";
+        Map<String,Object> input = map("userId", a.getId(), "fundBalance", 4,
+                "contractBalance", new BigDecimal("288888858.8"), "optionBalance", 0,
+                "remark", "", "confirm", true, "idempotencyKey", UUID.randomUUID().toString());
+        assertEquals(403, status(request("POST", reconcile, admin("admin"), input)));
+        MvcResult cancelled = request("POST", reconcile, superToken, input);
+        assertEquals(200, status(cancelled), cancelled.getResponse().getContentAsString());
+        assertEquals("CANCELLED", body(cancelled).path("status").asText());
+        same(new BigDecimal("10000"), balance(a, "FUND"));
+        same(new BigDecimal("10000"), balance(a, "CONTRACT"));
+        // A delayed original request must never apply after the form has been unlocked.
+        assertEquals(400, status(request("POST", update, superToken, input)));
+        assertEquals("CANCELLED", body(request("POST", reconcile, superToken, input)).path("status").asText());
+        same(new BigDecimal("10000"), balance(a, "FUND"));
+        input.put("idempotencyKey", UUID.randomUUID().toString());
+        assertEquals(200, status(request("POST", update, superToken, input)));
+        AssetAccount fund = assets.findByTenantIdAndUserIdAndCoin(1L, a.getId(), "FUND").get();
+        fund.setAvailable(new BigDecimal("777")); assets.saveAndFlush(fund);
+        MvcResult completed = request("POST", reconcile, superToken, input);
+        assertEquals("COMPLETED", body(completed).path("status").asText());
+        assertEquals(777, body(completed).path("fundBalance").asInt());
+        same(new BigDecimal("777"), balance(a, "FUND"));
+        input.put("fundBalance", 8);
+        assertEquals(400, status(request("POST", reconcile, superToken, input)));
+        same(new BigDecimal("777"), balance(a, "FUND"));
+    }
+
     @Test void balanceDialogPayloadsAcceptZeroAndLargeDecimals() throws Exception {
         String endpoint = "/api/admin/users/updateBalance";
         for (Map<String,Object> input : Arrays.asList(

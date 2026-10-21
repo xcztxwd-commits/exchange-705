@@ -87,3 +87,38 @@ for (const status of [400, 403]) {
   assert.equal(f.calls[1].payload, original)
 }
 console.log('balance submission: rejection recovery, uncertain-result replay and cancellation passed')
+
+const recoveryScript = source.slice(source.indexOf('const resolveBalancePending ='), source.indexOf('const submitBalance ='))
+const recoveryJs = ts.transpileModule(recoveryScript, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText
+for (const status of ['COMPLETED', 'CANCELLED', 'NETWORK_ERROR']) {
+  const original = { userId: 7, fundBalance: 4, contractBalance: 288888858.8, optionBalance: 0, remark: '', confirm: true, idempotencyKey: 'cached-request-123456' }
+  const saved = new Map([['pending-key', JSON.stringify(original)]])
+  const pending = { value: null }, saving = { value: false }, form = { value: {} }, calls = [], errors = []
+  const open = new Function('balancePending', 'balanceSaving', 'balanceKey', 'request', 'sessionStorage', 'balanceForm',
+    'ElMessage', 'loadUsers', 'accountTable', 'balanceMode', 'depositPermissions', 'balanceCurrency',
+    'rechargeAccount', 'rechargeAmount', 'refreshRates', 'balanceRemark', 'balanceDialogVisible', recoveryJs + ';return openBalanceDialog;')(
+    pending, saving, { value: 'pending-key' }, { post: async (url, input) => {
+      calls.push({ url, input })
+      if (status === 'NETWORK_ERROR') throw new Error('network unavailable')
+      return { status, userId: 7, email: 'current@example.invalid', fundBalance: 777, contractBalance: 12, optionBalance: 0 }
+    } }, { getItem: key => saved.get(key), removeItem: key => saved.delete(key) }, form,
+    { info() {}, error: message => errors.push(message) }, () => {}, { selectRow() {} }, { value: 'balance' },
+    { value: { manual_deposit: false } }, { value: 'USD' }, { value: 'FUND' }, { value: 0 }, () => {}, { value: '' }, { value: false })
+  await open({ id: 7, email: 'row@example.invalid', fundBalance: 0, contractBalance: 0, optionBalance: 0 })
+  assert.equal(calls.length, 1)
+  assert.equal(calls[0].url, '/admin/users/balance-adjustments/reconcile', 'opening the dialog must never apply an old balance mutation')
+  assert.deepEqual(calls[0].input, original)
+  assert.equal(saving.value, false)
+  if (status === 'NETWORK_ERROR') {
+    assert.deepEqual(pending.value, original)
+    assert.equal(saved.size, 1)
+    assert.equal(errors.length, 1)
+  } else {
+    assert.equal(pending.value, null)
+    assert.equal(saved.size, 0)
+    assert.equal(form.value.fundBalance, 777, 'show current balances rather than the obsolete requested balance')
+    assert.equal(form.value.email, 'current@example.invalid')
+    assert.deepEqual(errors, [])
+  }
+}
+console.log('cached balance recovery: completed, cancelled and unavailable cases passed')

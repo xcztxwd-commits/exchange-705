@@ -334,7 +334,29 @@ const handleSaveRemark = async () => {
   }
 }
 
-const openBalanceDialog = (row: any) => {
+const resolveBalancePending = async () => {
+  const original = balancePending.value
+  if (!original || balanceSaving.value) return
+  const storageKey = balanceKey.value
+  balanceSaving.value = true
+  try {
+    const result: any = await request.post('/admin/users/balance-adjustments/reconcile', original)
+    if (storageKey !== balanceKey.value || balancePending.value !== original) return
+    if (!['COMPLETED', 'CANCELLED'].includes(result?.status) || result.userId !== original.userId) throw new Error('原请求核对结果无效')
+    sessionStorage.removeItem(storageKey)
+    balancePending.value = null
+    balanceForm.value = { userId: result.userId, email: result.email, fundBalance: result.fundBalance, contractBalance: result.contractBalance, optionBalance: result.optionBalance }
+    ElMessage.info(result.status === 'COMPLETED' ? '原请求已处理，已加载当前余额' : '旧请求未执行，已安全取消，可以重新编辑余额')
+    void loadUsers()
+  } catch (e: any) {
+    ElMessage.error(e?.message || '原请求核对失败，请点击“核对原请求”重试')
+  } finally {
+    balanceSaving.value = false
+  }
+}
+
+const openBalanceDialog = async (row: any) => {
+  if (balanceSaving.value) return
   accountTable.selectRow(row)
   balanceMode.value = depositPermissions.value.manual_deposit ? 'deposit' : 'balance'
   balanceCurrency.value = 'USD'
@@ -354,10 +376,11 @@ const openBalanceDialog = (row: any) => {
   if (balancePending.value) {
     Object.assign(balanceForm.value, balancePending.value)
     balanceForm.value.email = `UID ${balancePending.value.userId}（原请求待确认）`
-    balanceRemark.value = balancePending.value.remark
+    balanceRemark.value = balancePending.value.remark ?? ''
     balanceMode.value = 'balance'
   }
   balanceDialogVisible.value = true
+  if (balancePending.value) await resolveBalancePending()
 }
 
 const submitBalance = async () => {
@@ -1285,7 +1308,7 @@ onMounted(() => {
       <el-empty v-if="!loading && users.length === 0" description="暂无数据" />
 
       <el-dialog v-model="balanceDialogVisible" title="用户充值 / 修改余额" width="460px">
-        <el-alert v-if="balancePending" title="原请求结果待确认，表单已锁定；重试使用相同请求，不要另建调整。" type="warning" :closable="false" />
+        <el-alert v-if="balancePending" :title="balanceSaving ? '正在核对原请求，核对完成后自动解锁，不会重复修改余额。' : '原请求尚未核对完成，请点击“核对原请求”；核对期间表单暂时锁定。'" type="warning" :closable="false" />
         <el-form label-width="100px" :disabled="balanceSaving || !!balancePending">
           <el-form-item label="用户邮箱">
             <span>{{ balanceForm.email }}</span>
@@ -1331,7 +1354,7 @@ onMounted(() => {
         <template #footer>
           <span class="dialog-footer">
             <el-button v-permission="'session:close'" @click="balanceDialogVisible = false">取消</el-button>
-            <el-button v-permission="'users:modify_balance'" v-if="balanceMode === 'balance' && canSetBalance" type="primary" :loading="balanceSaving" @click="submitBalance" :disabled="accountModes.includes('DEMO') || !accountModes.length">保存</el-button>
+            <el-button v-permission="'users:modify_balance'" v-if="balanceMode === 'balance' && canSetBalance" type="primary" :loading="balanceSaving" @click="balancePending ? resolveBalancePending() : submitBalance()" :disabled="accountModes.includes('DEMO') || !accountModes.length">{{ balancePending ? '核对原请求' : '保存' }}</el-button>
           </span>
         </template>
       </el-dialog>
