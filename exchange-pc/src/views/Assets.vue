@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import BalanceAdjustmentRecords from '../../../exchange-frontend/src/components/BalanceAdjustmentRecords.vue'
 import { ref, onMounted } from 'vue'
 import TrialAccountCard from '@/components/TrialAccountCard.vue'
 import CurrencyPicker from '@/components/CurrencyPicker.vue'
@@ -191,6 +192,7 @@ onMounted(() => {
       <TrialAccountCard :visible="balanceVisible" />
     </div>
 
+    <BalanceAdjustmentRecords :visible="balanceVisible" />
     <Tabbar />
   </div>
 </template>

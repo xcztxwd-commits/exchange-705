@@ -80,6 +80,7 @@
       "group": "customers",
       "actions": {
         "detail": "查看详情",
+        "edit_profile": "编辑客户资料",
         "reset_password": "重置密码",
         "freeze_user": "冻结用户",
         "unfreeze_user": "解冻用户",
@@ -187,6 +188,13 @@
         "restore_order": "恢复订单",
         "risk_exit": "受控修改止盈止损"
       }
+    },
+    {
+      "code": "funds_ledger",
+      "name": "资金明细",
+      "path": "/funds-ledger",
+      "group": "funds",
+      "actions": {}
     },
     {
       "code": "deposit_orders",

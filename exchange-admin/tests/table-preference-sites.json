@@ -200,6 +200,11 @@
     "key": "FinancialProducts.1"
   },
   {
+    "file": "src/views/FundsLedger.vue",
+    "binding": "table-key",
+    "key": "funds-ledger"
+  },
+  {
     "file": "src/views/InboxManagement.vue",
     "binding": "table-key",
     "key": "InboxManagement.1"
@@ -283,6 +288,11 @@
     "file": "src/views/Users.vue",
     "binding": "table-key",
     "key": "Users.4"
+  },
+  {
+    "file": "src/views/Users.vue",
+    "binding": "table-key",
+    "key": "Users.accountBalances"
   },
   {
     "file": "src/views/Users.vue",

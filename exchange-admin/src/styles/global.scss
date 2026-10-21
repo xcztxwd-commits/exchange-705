@@ -21,6 +21,7 @@ body {
 :root {
   --el-color-primary: #85bd00;
   --el-menu-active-color: #85bd00;
+  --el-font-size-base: 13px;
 }
 
 /* 滚动条样式 */
@@ -49,7 +50,20 @@ body {
 
 /* 表格样式优化 */
 .el-table {
-  font-size: 14px;
+  font-size: 13px;
+}
+
+.layout-main .el-table .el-table__cell { padding-top: 6px; padding-bottom: 6px; }
+.layout-main .el-table .cell { line-height: 20px; }
+.layout-main .el-card > .el-card__body { padding: 14px; }
+.layout-main .el-card > .el-card__header { padding: 12px 14px; }
+.layout-main .el-form--inline .el-form-item { margin-bottom: 10px; margin-right: 14px; }
+.layout-main .el-form--inline .el-form-item__label { padding-right: 8px; }
+.layout-main .el-pagination { margin-top: 12px; }
+
+@media (max-width: 600px) {
+  .layout-main .el-card > .el-card__body { padding: 10px; }
+  .layout-main .el-form--inline .el-form-item { margin-right: 8px; }
 }
 
 .el-table th.el-table__cell {

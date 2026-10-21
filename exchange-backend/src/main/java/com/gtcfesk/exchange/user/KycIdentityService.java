@@ -76,6 +76,11 @@ public class KycIdentityService {
         KycRecord row=(KycRecord)rows.get(0);em.refresh(row,javax.persistence.LockModeType.PESSIMISTIC_WRITE);
         if(!owner.equals(row.getUserId()))throw new com.gtcfesk.exchange.common.BusinessException("申请归属已变化，请重试");return row;
     }
+    /** Customer editing shares the submission lock order and always sees the latest committed identity. */
+    public KycRecord currentForCustomerEdit(Long userId) {
+        lockCurrentUser(userId);
+        return currentLatest(userId);
+    }
     public boolean isApproved(Long userId) {
         return latestRecord(userId).map(record -> "APPROVED".equals(record.getStatus())).orElse(false);
     }

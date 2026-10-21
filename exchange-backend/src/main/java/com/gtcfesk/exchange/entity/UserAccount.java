@@ -116,6 +116,12 @@ public class UserAccount extends com.gtcfesk.exchange.tenant.TenantOwnedEntity {
     private BigDecimal optionBalance;
 
     @Transient
+    private BigDecimal totalBalance;
+
+    @Transient
+    private String realName;
+
+    @Transient
     private String parentUserEmail; // 上级用户邮箱（仅用于展示）
 
     @Transient
