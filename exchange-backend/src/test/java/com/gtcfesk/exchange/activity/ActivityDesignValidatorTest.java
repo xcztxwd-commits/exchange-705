@@ -28,4 +28,36 @@ class ActivityDesignValidatorTest {
   actions.removeAll();actions.addObject().put("type","link").put("target","//outside.test");assertThrows(BusinessException.class,()->validate(d));
  }
  @Test void dialogAppearanceIsBounded(){ObjectNode d=design();d.putObject("dialog").put("width",680).put("radius",20).put("blur",6).put("backdrop","#0d1d1875");assertDoesNotThrow(()->validate(d));((ObjectNode)d.get("dialog")).put("backdrop","red;display:none");assertThrows(BusinessException.class,()->validate(d));}
+ @Test void editableAnnouncementRoundTripsInEveryConfiguredLanguage()throws Exception{
+  ObjectNode d=AnnouncementDesignFixture.design(mapper);AnnouncementDesignFixture.content(d).put("intro","<script>literal text, never executable HTML</script>");
+  assertEquals(d,mapper.readTree(ActivityDesignValidator.validate(d.toString(),"zh-CN",mapper,"NOTICE")));
+  assertThrows(BusinessException.class,()->ActivityDesignValidator.validate(d.toString(),"zh-CN",mapper,"TRIAL"));
+  assertThrows(BusinessException.class,()->ActivityDesignValidator.validate(design().toString(),"zh-CN",mapper,"NOTICE"));
+ }
+ @Test void announcementRejectsUnknownFieldsMissingTextAndWrongPresentation(){
+  ObjectNode d=AnnouncementDesignFixture.design(mapper);d.put("presentation","html");assertThrows(BusinessException.class,()->validate(d));
+  d.put("presentation","announcement");d.put("version","1");assertThrows(BusinessException.class,()->validate(d));d.put("version",1);
+  d.put("script","alert(1)");assertThrows(BusinessException.class,()->validate(d));d.remove("script");
+  ObjectNode content=AnnouncementDesignFixture.content(d);content.put("actions","claim");assertThrows(BusinessException.class,()->validate(d));content.remove("actions");
+  content.remove("withdrawalRights");assertThrows(BusinessException.class,()->validate(d));content.put("withdrawalRights",true);assertThrows(BusinessException.class,()->validate(d));
+ }
+ @Test void announcementBoundsTextAndTiersWithoutAcceptingHiddenClaimNodes(){
+  ObjectNode d=AnnouncementDesignFixture.design(mapper),content=AnnouncementDesignFixture.content(d);
+  content.put("title",new String(new char[201]));assertThrows(BusinessException.class,()->validate(d));content.put("title","Title");
+  content.put("intro",new String(new char[10001]));assertThrows(BusinessException.class,()->validate(d));content.put("intro","Intro");
+  ArrayNode tiers=(ArrayNode)content.get("tiers");tiers.removeAll();assertThrows(BusinessException.class,()->validate(d));
+  for(int i=0;i<21;i++)tiers.addObject().put("deposit","1").put("reward","2");assertThrows(BusinessException.class,()->validate(d));
+  while(tiers.size()>1)tiers.remove(tiers.size()-1);ObjectNode tier=(ObjectNode)tiers.get(0);tier.put("reward",new String(new char[81]));assertThrows(BusinessException.class,()->validate(d));tier.put("reward","2");
+  tier.put("claim",true);assertThrows(BusinessException.class,()->validate(d));tier.remove("claim");assertDoesNotThrow(()->validate(d));
+  ((ArrayNode)d.path("locales").path("zh-CN").path("pages").get(0).path("nodes")).addObject().put("type","button").put("action","claim");assertThrows(BusinessException.class,()->validate(d));
+ }
+ @Test void announcementDialogRejectsUnknownFieldsWithoutChangingLegacyDesigns(){
+  ObjectNode d=AnnouncementDesignFixture.design(mapper),dialog=(ObjectNode)d.get("dialog");
+  for(String field:new String[]{"script","actions","url"}){
+   dialog.put(field,"unexpected");assertThrows(BusinessException.class,()->validate(d),field);dialog.remove(field);
+  }
+  assertDoesNotThrow(()->validate(d));
+  ObjectNode legacy=design();legacy.putObject("dialog").put("width",680).put("radius",20).put("blur",6).put("backdrop","#0d1d1875").put("legacyMetadata","preserved");
+  assertDoesNotThrow(()->ActivityDesignValidator.validate(legacy.toString(),"zh-CN",mapper,"TRIAL"));
+ }
 }

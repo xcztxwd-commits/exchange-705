@@ -110,7 +110,7 @@ class ActivityIntegrationTest {
   try{assertThrows(IllegalStateException.class,()->materialController.save(input));assertEquals(count,materials.findAllByTenantId(1L).size());}finally{reset(materialAudit);}
   ActivityMaterial saved=(ActivityMaterial)materialController.save(input);
   doThrow(new IllegalStateException("fixture audit unavailable")).when(materialAudit).recordCurrent(eq("ACTIVITY_MATERIAL_REMOVE"),anyString(),anyString(),isNull());
-  try{assertThrows(IllegalStateException.class,()->materialController.delete(saved.getId()));assertFalse(materials.findByTenantIdAndId(1L,saved.getId()).orElseThrow().isDeleted());}finally{reset(materialAudit);}
+  try{assertThrows(IllegalStateException.class,()->materialController.delete(saved.getId()));assertFalse(materials.findByTenantIdAndId(1L,saved.getId()).orElseThrow(java.util.NoSuchElementException::new).isDeleted());}finally{reset(materialAudit);}
  }
  @Test void sendReceiptCloseReopenAndIdempotentClaim(){ActivityCampaign c=campaign();ActivityDelivery m=send(c,user);assertNull(m.getReceivedAt());assertEquals(1,service.send(c.getId(),Arrays.asList(user,user),"admin").get("duplicates"));service.event(user,m.getId(),"RECEIVED");service.event(user,m.getId(),"CLOSED");assertEquals(1L,service.stats(c.getId()).get("closedWithoutOpening"));service.event(user,m.getId(),"OPENED");assertEquals(0L,service.stats(c.getId()).get("closedWithoutOpening"));service.claim(user,m.getId());service.claim(user,m.getId());money("300",funds.available(user));money("100",cash("FUND"));assertEquals(1,campaigns.findByTenantIdAndId(1L, c.getId()).get().getClaimCount());assertEquals(1,ledger.findByTenantIdAndUserIdOrderByIdDesc(1L, user,PageRequest.of(0,50)).getTotalElements());}
  @Test void recipientOwnershipAndInvalidEvents(){ActivityDelivery m=send(campaign(),user);assertThrows(BusinessException.class,()->service.claim(other,m.getId()));assertThrows(BusinessException.class,()->service.event(other,m.getId(),"OPENED"));assertThrows(BusinessException.class,()->service.message(other,m.getId()));assertThrows(BusinessException.class,()->service.event(user,m.getId(),"CLAIMED"));money("0",funds.available(other));}
@@ -297,7 +297,7 @@ class ActivityIntegrationTest {
     .filter(row -> c.getId().equals(row.get("id"))).findFirst().orElseThrow(AssertionError::new);
   Map<?,?> messageView = (Map<?,?>) ((Map<?,?>) controller.message(auth, delivery.getId())).get("campaign");
   List<Map<?,?>> views = Arrays.asList(publicView, inboxView, messageView);
-  Set<String> safeKeys = new HashSet<>(Arrays.asList("id", "layoutJson", "amount", "translations", "defaultLocale",
+  Set<String> safeKeys = new HashSet<>(Arrays.asList("id", "campaignKind", "layoutJson", "amount", "translations", "defaultLocale",
     "startsAt", "endsAt", "status", "autoPopup", "repeatUnread", "animation", "recentLoginDays",
     "claimValidityDays", "allowRepeatClaim", "positions", "hasQuota"));
   for (int i = 0; i < views.size(); i++) {
@@ -305,6 +305,7 @@ class ActivityIntegrationTest {
    Set<String> expectedKeys = new HashSet<>(safeKeys);
    if (i == 0) expectedKeys.remove("recentLoginDays");
    assertEquals(expectedKeys, view.keySet(), "Campaign public-field whitelist changed");
+   assertEquals("TRIAL",view.get("campaignKind"));
    assertTrue(view.get("allowRepeatClaim") instanceof Boolean);
    assertEquals(Boolean.valueOf(expected), view.get("allowRepeatClaim"));
    com.fasterxml.jackson.databind.JsonNode json = new ObjectMapper().findAndRegisterModules().valueToTree(view);
