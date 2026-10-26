@@ -1433,19 +1433,23 @@
 
     <!-- 登录弹窗 -->
     <el-dialog v-model="showLoginModal" :z-index="4100" :title="localeStore.t('emailLogin')" width="440px" class="custom-dialog login-dialog rounded-xl">
-      <form id="pc-login-form" class="space-y-4" novalidate @submit.prevent="onLoginSubmit" @keydown.enter="($event.isComposing || $event.keyCode === 229 || $event.repeat) && $event.preventDefault()">
+      <form id="pc-login-form" class="space-y-4" novalidate :aria-busy="loginLoading" @submit.prevent="onLoginSubmit" @keydown.enter="($event.isComposing || $event.keyCode === 229 || $event.repeat) && $event.preventDefault()">
         <div>
           <div class="text-gray-600 dark:text-gray-300 font-medium text-sm mb-2">{{ localeStore.t('emailLogin') }} <span class="text-red-500">*</span></div>
-          <input v-model="loginEmail" type="email" class="w-full bg-gray-50 dark:bg-[#181c27] border border-gray-200 dark:border-[#2b3139]-none rounded-lg px-4 py-3 outline-none focus:ring-1 focus:ring-[#8cc63f]/30 transition-all text-gray-700 dark:text-gray-200" :placeholder="localeStore.t('emailPlaceholder')" />
+          <input v-model="loginEmail" type="email" autocomplete="username" :disabled="loginLoading" :aria-describedby="loginFeedback ? 'pc-login-feedback' : undefined" :aria-invalid="loginFeedback === 'credentials'" class="w-full bg-gray-50 dark:bg-[#181c27] border border-gray-200 dark:border-[#2b3139]-none rounded-lg px-4 py-3 outline-none focus:ring-1 focus:ring-[#8cc63f]/30 transition-all text-gray-700 dark:text-gray-200" :placeholder="localeStore.t('emailPlaceholder')" />
         </div>
         <div>
           <div class="text-gray-600 dark:text-gray-300 font-medium text-sm mb-2">{{ localeStore.t('password') }} <span class="text-red-500">*</span></div>
           <div class="relative">
-            <input v-model="loginPassword" :type="loginShowPwd ? 'text' : 'password'" class="w-full bg-gray-50 dark:bg-[#181c27] border border-gray-200 dark:border-[#2b3139]-none rounded-lg px-4 py-3 outline-none focus:ring-1 focus:ring-[#8cc63f]/30 transition-all text-gray-700 dark:text-gray-200" :placeholder="localeStore.t('passwordPlaceholder')" />
+            <input v-model="loginPassword" :type="loginShowPwd ? 'text' : 'password'" autocomplete="current-password" :disabled="loginLoading" :aria-describedby="loginFeedback ? 'pc-login-feedback' : undefined" :aria-invalid="loginFeedback === 'credentials'" class="w-full bg-gray-50 dark:bg-[#181c27] border border-gray-200 dark:border-[#2b3139]-none rounded-lg px-4 py-3 outline-none focus:ring-1 focus:ring-[#8cc63f]/30 transition-all text-gray-700 dark:text-gray-200" :placeholder="localeStore.t('passwordPlaceholder')" />
             <el-icon @click="loginShowPwd = !loginShowPwd" class="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500 cursor-pointer hover:text-gray-600 dark:hover:text-gray-300 dark:text-gray-300 text-lg">
               <component :is="loginShowPwd ? 'Hide' : 'View'" />
             </el-icon>
           </div>
+        </div>
+        <div v-if="loginFeedback" id="pc-login-feedback" class="login-feedback" role="alert">
+          <el-icon aria-hidden="true"><WarningFilled /></el-icon>
+          <span>{{ loginFeedbackText }}</span>
         </div>
         <div class="login-links text-sm">
           <span class="login-register text-gray-500 dark:text-gray-400">
@@ -1601,6 +1605,7 @@ import { optionalPrice, protectionError, validIncrement } from '@/utils/tradeVal
 import { useOrderSizing } from '@/utils/useOrderSizing';
 import { DEFAULT_LEVERAGE, leverageLimit, contractMargin, calculateContractProfit, contractEquity, contractDisplayPrice, quantityUnit, validQuantity, displayFee } from '@/utils/contract';
 import request from '@/utils/request';
+import { loginText, type LoginReason } from '../../../exchange-frontend/src/utils/loginFeedback';
 import RegistrationCaptcha from '@/components/RegistrationCaptcha.vue';
 import RegistrationProfileFields from '@/components/RegistrationProfileFields.vue';
 import UserProfile from '../../../exchange-frontend/src/components/UserProfile.vue';
@@ -1641,20 +1646,33 @@ const loginEmail = ref('');
 const loginPassword = ref('');
 const loginShowPwd = ref(false);
 const loginLoading = ref(false);
+const loginFeedback = ref<LoginReason | null>(null);
+const loginFeedbackText = computed(() => {
+  const reason = loginFeedback.value;
+  if (reason === 'missing') return localeStore.t('pleaseEnterEmailAndPassword');
+  if (reason === 'disabled') return localeStore.t('accountDisabled');
+  if (reason === 'network') return localeStore.t('networkError');
+  return loginText(localeStore.locale, reason || 'failed');
+});
+watch([loginEmail, loginPassword, showLoginModal], () => {
+  if (!loginLoading.value) loginFeedback.value = null;
+}, { flush: 'sync' });
 
 const onLoginSubmit = async () => {
   if (loginLoading.value) return;
-  if (!loginEmail.value || !loginPassword.value) {
-    ElMessage.error(localeStore.t('pleaseEnterEmailAndPassword'));
+  if (!loginEmail.value.trim() || !loginPassword.value) {
+    loginFeedback.value = 'missing';
     return;
   }
+  loginFeedback.value = null;
   loginLoading.value = true;
   try {
     const res: any = await request.post('/auth/login', {
-      account: loginEmail.value,
+      account: loginEmail.value.trim(),
       password: loginPassword.value,
       loginType: 'email',
     });
+    if (typeof res?.token !== 'string' || !res.token.trim() || !res.user?.id || res.success === false) throw new Error('Invalid login response');
     auth.setAuth(res.token, res.user);
     ElMessage.success(localeStore.t('loginSuccess'));
     showLoginModal.value = false;
@@ -1663,7 +1681,7 @@ const onLoginSubmit = async () => {
     loadFinancialOrders();
     loadKycStatus();
   } catch (e: any) {
-    ElMessage.error(e?.message || localeStore.t('loginFail'));
+    loginFeedback.value = e?.loginReason || 'failed';
   } finally {
     loginLoading.value = false;
   }
@@ -3971,6 +3989,28 @@ const darkLogoUrl = `${import.meta.env.BASE_URL}img/logo-dark.svg`
 }
 .custom-dialog.login-dialog .el-dialog__footer {
   padding: 0 24px 24px;
+}
+.login-dialog .login-feedback {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  background: #fef2f2;
+  color: #b91c1c;
+  font-size: 14px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.login-dialog .login-feedback .el-icon {
+  flex-shrink: 0;
+  margin-top: 4px;
+}
+.dark .login-dialog .login-feedback {
+  border-color: #7f1d1d;
+  background: #301b22;
+  color: #fca5a5;
 }
 .login-dialog .login-links {
   display: flex;

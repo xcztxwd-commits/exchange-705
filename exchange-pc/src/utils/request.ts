@@ -5,6 +5,7 @@ import { trackAccountWrite, finishAccountWrite } from './accountRequests'
 import { useAuthStore } from '@/store/auth'
 import { useLocaleStore } from '@/store/locale'
 import { supportErrorKey } from '../../../exchange-frontend/src/utils/supportLocalization'
+import { classifyLoginError } from '../../../exchange-frontend/src/utils/loginFeedback'
 
 const instance = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
@@ -48,6 +49,7 @@ instance.interceptors.response.use(
     if (sent && sent !== `Bearer ${useAuthStore().token}`) throw new Error('The account changed; discarded stale response')
     const key = (res.config as any).fundsRetryKey
     if (key) sessionStorage.removeItem(key)
+    if (res.config.url === '/auth/login' && res.data?.success === false) throw Object.assign(new Error('Login failed'), { loginReason: classifyLoginError({ response: res }) })
     if (typeof res.data?.message === 'string') res.data.message = useLocaleStore().backendMessage(res.data.message, res.data?.success === false)
     return res.data
   },
@@ -55,6 +57,7 @@ instance.interceptors.response.use(
     finishAccountWrite(err.config)
     const sent = err.config?.headers?.Authorization
     if (sent && sent !== `Bearer ${useAuthStore().token}`) return Promise.reject(new Error('The account changed; discarded stale response'))
+    if (err.config?.url === '/auth/login') return Promise.reject(Object.assign(new Error('Login failed'), { loginReason: classifyLoginError(err) }))
     if (err.response?.status === 403 && err.response?.data?.errorCode === 'KYC_REQUIRED') {
       void redirectTradeKyc()
       return Promise.reject(Object.assign(new Error(err.response.data.message || 'Identity verification required'), {
