@@ -41,6 +41,24 @@ class ActivityDesignValidatorTest {
   ObjectNode content=AnnouncementDesignFixture.content(d);content.put("actions","claim");assertThrows(BusinessException.class,()->validate(d));content.remove("actions");
   content.remove("withdrawalRights");assertThrows(BusinessException.class,()->validate(d));content.put("withdrawalRights",true);assertThrows(BusinessException.class,()->validate(d));
  }
+ @Test void announcementRejectsEmptyAndWhitespaceText(){
+  ObjectNode original=AnnouncementDesignFixture.content(AnnouncementDesignFixture.design(mapper));
+  java.util.Iterator<String> fields=original.fieldNames();
+  while(fields.hasNext()){
+   String field=fields.next();if("tiers".equals(field))continue;
+   for(String blank:new String[]{""," ","\t\r\n"}){
+    ObjectNode d=AnnouncementDesignFixture.design(mapper);AnnouncementDesignFixture.content(d).put(field,blank);
+    assertThrows(BusinessException.class,()->validate(d),field+" must reject blank text");
+   }
+  }
+ }
+ @Test void announcementRejectsEmptyAndWhitespaceTierValues(){
+  for(String field:new String[]{"deposit","reward"})for(String blank:new String[]{""," ","\t\r\n"}){
+   ObjectNode d=AnnouncementDesignFixture.design(mapper);
+   ((ObjectNode)AnnouncementDesignFixture.content(d).path("tiers").get(0)).put(field,blank);
+   assertThrows(BusinessException.class,()->validate(d),field+" must reject blank text");
+  }
+ }
  @Test void announcementBoundsTextAndTiersWithoutAcceptingHiddenClaimNodes(){
   ObjectNode d=AnnouncementDesignFixture.design(mapper),content=AnnouncementDesignFixture.content(d);
   content.put("title",new String(new char[201]));assertThrows(BusinessException.class,()->validate(d));content.put("title","Title");

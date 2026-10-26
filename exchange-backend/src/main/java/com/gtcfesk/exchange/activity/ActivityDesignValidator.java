@@ -59,12 +59,12 @@ public final class ActivityDesignValidator {
  private static void announcement(JsonNode value){
   onlyFields(value,ANNOUNCEMENT_FIELDS);
   for(String key:ANNOUNCEMENT_FIELDS)if(!"tiers".equals(key)){
-   JsonNode text=value.path(key);if(!text.isTextual()||text.asText().length()>(ANNOUNCEMENT_PARAGRAPHS.contains(key)?10000:200))throw new IllegalArgumentException("公告文字缺失、格式错误或过长："+key);
+   JsonNode text=value.path(key);if(!text.isTextual()||text.asText().trim().isEmpty()||text.asText().length()>(ANNOUNCEMENT_PARAGRAPHS.contains(key)?10000:200))throw new IllegalArgumentException("公告文字缺失、格式错误或过长："+key);
   }
   JsonNode tiers=value.path("tiers");if(!tiers.isArray()||tiers.size()<1||tiers.size()>20)throw new IllegalArgumentException("公告奖励表支持1至20档");
   for(JsonNode tier:tiers){
    onlyFields(tier,new HashSet<>(Arrays.asList("deposit","reward")));
-   for(String key:Arrays.asList("deposit","reward"))if(!tier.path(key).isTextual()||tier.path(key).asText().length()>80)throw new IllegalArgumentException("公告金额须为不超过80字的文本");
+   for(String key:Arrays.asList("deposit","reward"))if(!tier.path(key).isTextual()||tier.path(key).asText().trim().isEmpty()||tier.path(key).asText().length()>80)throw new IllegalArgumentException("公告金额须为不超过80字的文本");
   }
  }
  private static void nodes(JsonNode list,Set<String> pages,int depth,int[] count){
