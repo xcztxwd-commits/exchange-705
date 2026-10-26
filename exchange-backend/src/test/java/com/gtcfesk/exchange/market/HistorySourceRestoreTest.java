@@ -74,6 +74,35 @@ class HistorySourceRestoreTest extends TenantMarketTestContext {
         String token=preview(minute,minute); store.db.update("UPDATE market_mixed_minute SET body=?",store.encode(candle(minute,"155")));
         assertEquals(token,accept(token)); assertEquals("REJECTED",restore.query(1,token,null).get("state")); assertEquals(token,accept(token)); assertEquals(0L,store.historyRestoreRevision(1));
     }
+    @Test void finishedControlUsesActualEndInsteadOfLaterStopOrOriginalPlan() {
+        seed(minute,true);
+        long end=minute+20000,stop=minute+45000;
+        store.db.update("INSERT INTO market_control_task(tenant_id,id,symbol_id,symbol,algorithm_version,kind,status,start_price,target_price,duration_seconds,intensity,oscillation,price_precision,start_source,source_time,started_at,planned_end,ended_at,stop_at,sampled_until) VALUES(1,'finished',1,'JPY=X',2,'TARGET','COMPLETED',158,159,20,1,false,16,'LIVE',?,?,?,?,?,?)",minute,minute,end,end,stop,end);
+        store.db.update("INSERT INTO market_control_flow(tenant_id,task_id,options_json,state,last_price,last_at,finished_at) VALUES(1,'finished','{}','SOURCE',159,?,?)",stop,stop);
+        String token=preview(minute,minute);
+        // Emergency stop deliberately discards the unsampled remainder of the original plan.
+        store.db.update("UPDATE market_control_task SET status='STOPPED',planned_end=? WHERE id='finished'",minute+300000);
+        accept(token); restore.runOne();
+        assertEquals("COMPLETED",restore.query(1,token,null).get("state"));
+        assertEquals(1L,store.historyRestoreRevision(1));
+        String undo=(String)restore.undoPreview(1,token).get("previewToken"); accept(undo); restore.runOne();
+        assertEquals("READY",restore.preview(config,"Yahoo",minute,minute,"UTC").get("state"));
+    }
+    @Test void unfinishedSamplingAndFinalizationStillBlockRestore() {
+        seed(minute,true);
+        store.db.update("INSERT INTO market_control_task(tenant_id,id,symbol_id,symbol,algorithm_version,kind,status,start_price,target_price,duration_seconds,intensity,oscillation,price_precision,start_source,source_time,started_at,planned_end,sampled_until) VALUES(1,'pending',1,'JPY=X',2,'TARGET','RUNNING',158,159,300,1,false,16,'LIVE',?,?,?,?)",minute,minute,minute+300000,minute+1000);
+        store.db.update("INSERT INTO market_control_flow(tenant_id,task_id,options_json,state,last_price,last_at) VALUES(1,'pending','{}','TARGET',159,?)",minute+1000);
+        assertThrows(com.gtcfesk.exchange.common.BusinessException.class,()->preview(minute,minute));
+        store.db.update("UPDATE market_control_task SET status='COMPLETED',ended_at=?,sampled_until=? WHERE id='pending'",minute+20000,minute+20000);
+        for(String state:Arrays.asList("WAITING_SOURCE","RECOVERING")) {
+            store.db.update("UPDATE market_control_flow SET state=? WHERE task_id='pending'",state);
+            assertThrows(com.gtcfesk.exchange.common.BusinessException.class,()->preview(minute,minute));
+        }
+        store.db.update("UPDATE market_control_flow SET state='SOURCE',finished_at=?,history_pending_until=? WHERE task_id='pending'",minute+45000,minute+20000);
+        assertThrows(com.gtcfesk.exchange.common.BusinessException.class,()->preview(minute,minute));
+        store.db.update("UPDATE market_control_flow SET history_pending_until=NULL WHERE task_id='pending'");
+        assertEquals("READY",restore.preview(config,"Yahoo",minute,minute,"UTC").get("state"));
+    }
     @Test void batchesResumeAndFailedBatchKeepsExactProgress() {
         for(int i=0;i<201;i++) seed(minute+i*60000L,true);
         String token=preview(minute,minute+200*60000L),id=accept(token); restore.runOne();

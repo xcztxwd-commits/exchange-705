@@ -27,6 +27,11 @@ class HistoryRestoreMysqlTest extends TenantMarketTestContext {
             Map<String,Object> source=new LinkedHashMap<>(); source.put("timestamp",at); source.put("open_price",new BigDecimal("158.221")); source.put("high_price",new BigDecimal("158.236")); source.put("low_price",new BigDecimal("158.2100067138672")); source.put("close_price",new BigDecimal("158.229")); source.put("volume",BigDecimal.ZERO);
             Map<String,Object> mixed=new LinkedHashMap<>(source); mixed.put("low_price",new BigDecimal("157.321"));
             store.locked(1,()-> { store.db.update("INSERT INTO market_source_candle VALUES(1,1,'1m',?,?,?)",at,store.encode(source),at+60000); store.db.update("INSERT INTO market_mixed_minute VALUES(1,1,?,?,?)",at,store.encode(mixed),at+59000); return null; });
+            store.locked(1,()-> {
+                store.db.update("INSERT INTO market_control_task(tenant_id,id,symbol_id,symbol,algorithm_version,kind,status,start_price,target_price,duration_seconds,intensity,oscillation,price_precision,start_source,source_time,started_at,planned_end,ended_at,stop_at,sampled_until) VALUES(1,'finished',1,'JPY=X',2,'TARGET','COMPLETED',158,159,20,1,false,16,'LIVE',?,?,?,?,?,?)",at,at,at+20000,at+20000,at+45000,at+20000);
+                store.db.update("INSERT INTO market_control_flow(tenant_id,task_id,options_json,state,last_price,last_at,finished_at) VALUES(1,'finished','{}','SOURCE',159,?,?)",at+45000,at+45000);
+                return null;
+            });
             String token=(String)restore.preview(symbol,"Yahoo",at,at,"Asia/Singapore").get("previewToken");
             restore.accept(1,token,"native_restore_001","Yahoo:Forex:JPY=X"); restore.runOne();
             assertEquals("COMPLETED",restore.query(1,token,null).get("state")); assertEquals(HistorySourceRestore.prices(source),HistorySourceRestore.prices(store.historyOverrides(1,at,at).get(at)));
