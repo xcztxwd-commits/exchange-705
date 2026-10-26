@@ -6,6 +6,8 @@ import java.util.*;
 
 /** Structured templates only: no executable HTML, scripts, arbitrary attributes or CSS URLs. */
 public final class ActivityDesignValidator {
+ // ECMAScript trim whitespace, independent of the JDK's Unicode version (U+180E is content).
+ private static final java.util.regex.Pattern ANNOUNCEMENT_BLANK=java.util.regex.Pattern.compile("[\\x{0009}-\\x{000D}\\x{0020}\\x{00A0}\\x{1680}\\x{2000}-\\x{200A}\\x{2028}\\x{2029}\\x{202F}\\x{205F}\\x{3000}\\x{FEFF}]*");
  private static final Set<String> ANNOUNCEMENT_FIELDS=new HashSet<>(Arrays.asList("label","milestone","milestoneLabel","title","subtitle","period","greeting","intro","depositHeading","rewardHeading","currency","currencyNote","rulesHeading","tierRule","withdrawalHeading","withdrawalRule","withdrawalRights","tradingRule","durationRule","supportRule","signoff","footerNote","supportLabel","acknowledgeLabel","tiers"));
  private static final Set<String> ANNOUNCEMENT_PARAGRAPHS=new HashSet<>(Arrays.asList("intro","tierRule","withdrawalRule","withdrawalRights","tradingRule","durationRule","supportRule","signoff"));
  private static final Set<String> STYLES=new HashSet<>(Arrays.asList("scale","z-index","display","flex-direction","flex-wrap","justify-content","align-items","align-self","flex-grow","flex-shrink","flex-basis","gap","width","height","min-height","max-height","min-width","max-width","padding","padding-top","padding-right","padding-bottom","padding-left","margin","margin-top","margin-right","margin-bottom","margin-left","background-color","background-image","background-size","background-position","background-repeat","color","font-family","font-size","font-weight","font-style","line-height","letter-spacing","text-align","text-decoration","border","border-width","border-style","border-color","border-radius","box-shadow","opacity","object-fit","object-position","overflow","position","top","right","bottom","left","transform"));
@@ -59,12 +61,12 @@ public final class ActivityDesignValidator {
  private static void announcement(JsonNode value){
   onlyFields(value,ANNOUNCEMENT_FIELDS);
   for(String key:ANNOUNCEMENT_FIELDS)if(!"tiers".equals(key)){
-   JsonNode text=value.path(key);if(!text.isTextual()||text.asText().trim().isEmpty()||text.asText().length()>(ANNOUNCEMENT_PARAGRAPHS.contains(key)?10000:200))throw new IllegalArgumentException("公告文字缺失、格式错误或过长："+key);
+   JsonNode text=value.path(key);if(!text.isTextual()||ANNOUNCEMENT_BLANK.matcher(text.asText()).matches()||text.asText().length()>(ANNOUNCEMENT_PARAGRAPHS.contains(key)?10000:200))throw new IllegalArgumentException("公告文字缺失、格式错误或过长："+key);
   }
   JsonNode tiers=value.path("tiers");if(!tiers.isArray()||tiers.size()<1||tiers.size()>20)throw new IllegalArgumentException("公告奖励表支持1至20档");
   for(JsonNode tier:tiers){
    onlyFields(tier,new HashSet<>(Arrays.asList("deposit","reward")));
-   for(String key:Arrays.asList("deposit","reward"))if(!tier.path(key).isTextual()||tier.path(key).asText().trim().isEmpty()||tier.path(key).asText().length()>80)throw new IllegalArgumentException("公告金额须为不超过80字的文本");
+   for(String key:Arrays.asList("deposit","reward"))if(!tier.path(key).isTextual()||ANNOUNCEMENT_BLANK.matcher(tier.path(key).asText()).matches()||tier.path(key).asText().length()>80)throw new IllegalArgumentException("公告金额须为不超过80字的文本");
   }
  }
  private static void nodes(JsonNode list,Set<String> pages,int depth,int[] count){

@@ -46,18 +46,27 @@ class ActivityDesignValidatorTest {
   java.util.Iterator<String> fields=original.fieldNames();
   while(fields.hasNext()){
    String field=fields.next();if("tiers".equals(field))continue;
-   for(String blank:new String[]{""," ","\t\r\n"}){
+   for(String blank:new String[]{""," ","\t\r\n","\u3000","\u00A0","\uFEFF"}){
     ObjectNode d=AnnouncementDesignFixture.design(mapper);AnnouncementDesignFixture.content(d).put(field,blank);
     assertThrows(BusinessException.class,()->validate(d),field+" must reject blank text");
    }
   }
  }
  @Test void announcementRejectsEmptyAndWhitespaceTierValues(){
-  for(String field:new String[]{"deposit","reward"})for(String blank:new String[]{""," ","\t\r\n"}){
+  for(String field:new String[]{"deposit","reward"})for(String blank:new String[]{""," ","\t\r\n","\u3000","\u00A0","\uFEFF"}){
    ObjectNode d=AnnouncementDesignFixture.design(mapper);
    ((ObjectNode)AnnouncementDesignFixture.content(d).path("tiers").get(0)).put(field,blank);
    assertThrows(BusinessException.class,()->validate(d),field+" must reject blank text");
   }
+ }
+ @Test void announcementPreservesNonblankMongolianVowelSeparator()throws Exception{
+  ObjectNode d=AnnouncementDesignFixture.design(mapper),content=AnnouncementDesignFixture.content(d);
+  java.util.Iterator<String> fields=content.fieldNames();
+  while(fields.hasNext()){
+   String field=fields.next();if(!"tiers".equals(field))content.put(field,"\u180E");
+  }
+  for(JsonNode tier:content.path("tiers"))((ObjectNode)tier).put("deposit","\u180E").put("reward","\u180E");
+  assertEquals(d,mapper.readTree(ActivityDesignValidator.validate(d.toString(),"zh-CN",mapper,"NOTICE")));
  }
  @Test void announcementBoundsTextAndTiersWithoutAcceptingHiddenClaimNodes(){
   ObjectNode d=AnnouncementDesignFixture.design(mapper),content=AnnouncementDesignFixture.content(d);
