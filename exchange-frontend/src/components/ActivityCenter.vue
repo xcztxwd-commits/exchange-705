@@ -6,6 +6,7 @@ import { useLocaleStore } from '@/store/locale'
 import request from '@/utils/request'
 import ActivityDesignView from './ActivityDesignView.vue'
 import { parseDesign } from '../utils/activityDesign'
+import { resolveAnnouncementDocument } from '../utils/announcementDesign'
 import { accountMode, realApiBase } from '@/utils/accountMode'
 import { tenantFeatures } from '@/utils/tenantFeatures'
 import { activityPosition, matchesPosition, type ActivityPosition } from '@/utils/trialLifecycle'
@@ -27,6 +28,7 @@ const content=(item:Item)=>activityContent({...item,campaign:{...item.campaign,t
 function safeDesign(item:Item|null){
  const design=parseDesign(item?.campaign.layoutJson)
  if(!design||typeof design.locales!=='object'||Array.isArray(design.locales))return null
+ if(design.presentation==='announcement')return item?.campaign.campaignKind==='NOTICE'&&resolveAnnouncementDocument(design,locale.locale,item.campaign.defaultLocale)?design:null
  const language=design.locales[locale.locale]||design.locales[item?.campaign.defaultLocale||'']
  let count=0
  const validNodes=(nodes:any,depth=0):boolean=>Array.isArray(nodes)&&depth<=15&&nodes.every((node:any)=>{
@@ -39,9 +41,10 @@ function safeDesign(item:Item|null){
 const renderedDesign=computed(()=>{const d=safeDesign(selected.value);if(!d)return '';const raw=JSON.stringify(d);return selected.value?.campaign.claimValidityDays==null?raw.split('{days}').join(locale.text('不设置到期','No expiry')):raw})
 const designDialog=computed(()=>{const d=safeDesign(selected.value)?.dialog;return d?{'--design-width':`${d.width}px`,'--design-radius':`${d.radius}px`,'--design-backdrop':d.backdrop,'--design-blur':`${d.blur}px`}:undefined})
 const customDesign=computed(()=>!!renderedDesign.value)
+const isAnnouncement=computed(()=>safeDesign(selected.value)?.presentation==='announcement')
 const copy=computed(()=>selected.value?content(selected.value):{})
 // startsAt/endsAt are server-local wall times, not UTC grants. Active/quota are server-authoritative.
-const eligible=computed(()=>!!selected.value?.active&&!!selected.value.campaign.hasQuota&&(!selected.value.delivery.claimedAt||selected.value.campaign.allowRepeatClaim===true)&&!isDemo.value)
+const eligible=computed(()=>selected.value?.campaign.campaignKind!=='NOTICE'&&!!selected.value?.active&&!!selected.value.campaign.hasQuota&&(!selected.value.delivery.claimedAt||selected.value.campaign.allowRepeatClaim===true)&&!isDemo.value)
 let generation=0,sessionGeneration=0,deepLinkVersion=0,disposed=false,reloadRequested=false,abort:AbortController|null=null
 const autoShown=new Set<number>(),message=(e:any)=>e?.message||t(17)
 async function event(item:Item,type:string){
@@ -168,7 +171,7 @@ onUnmounted(()=>{disposed=true;generation++;abort?.abort();dialog.value?.close()
 </script>
 <template>
  <section v-if="publicItems.length" class="public-activities" data-testid="anonymous-activities">
-  <button v-for="item in publicItems" :key="item.campaign.id" type="button" :data-campaign="item.campaign.id" @click="open(item)"><strong>{{ content(item).title }}</strong><span>{{ money(item.campaign.amount) }} USD · {{ t(4) }}</span></button>
+  <button v-for="item in publicItems" :key="item.campaign.id" type="button" :data-campaign="item.campaign.id" @click="open(item)"><strong>{{ content(item).title }}</strong><span>{{ item.campaign.campaignKind==='NOTICE' ? content(item).open || t(20) : `${money(item.campaign.amount)} USD · ${t(4)}` }}</span></button>
   <div v-if="pages>1" class="activity-pages"><button :disabled="!page||loading" @click="turn(-1)">{{t(18)}}</button><span>{{page+1}} / {{pages}}</span><button :disabled="page+1>=pages||loading" @click="turn(1)">{{t(19)}}</button></div>
  </section>
  <p v-if="pending && !isDemo" class="claim-continuation" role="status" data-testid="claim-continuation">{{ continuationError || locale.text('认证后继续领取当前活动', 'Continue this reward after sign-in') }} <button v-if="auth.token" :disabled="busy" @click="resume">{{t(17)}}</button><button :disabled="busy" @click="cancelPending">{{locale.t('cancel')}}</button></p>
@@ -176,14 +179,14 @@ onUnmounted(()=>{disposed=true;generation++;abort?.abort();dialog.value?.close()
   <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="m4 7 8 6 8-6"/></svg><span class="inbox-label">{{ t(0) }}</span>
  </button>
  <Teleport to="body">
-  <dialog ref="dialog" class="activity-dialog" :style="designDialog" :class="{ 'activity-list': mode === 'inbox', 'activity-custom': customDesign && mode !== 'inbox', 'no-animation': selected?.campaign.animation === 'NONE' }" aria-labelledby="activity-title" @cancel.prevent="close" @click="e => { if(e.target===dialog) close() }">
-   <button class="activity-x" type="button" :aria-label="t(3)" @click="close">×</button>
+  <dialog ref="dialog" class="activity-dialog" :style="designDialog" :class="{ 'activity-list': mode === 'inbox', 'activity-custom': customDesign && mode !== 'inbox', 'announcement-layout': isAnnouncement, 'no-animation': selected?.campaign.animation === 'NONE' }" aria-labelledby="activity-title" @cancel.prevent="close" @click="e => { if(e.target===dialog) close() }">
+   <button v-if="!isAnnouncement" class="activity-x" type="button" :aria-label="t(3)" @click="close">×</button>
    <template v-if="mode==='inbox'">
     <div class="activity-inbox-heading"><span class="activity-eyebrow">{{ t(1) }}</span><h2 id="activity-title">{{ t(0) }}</h2></div>
     <p v-if="loading" role="status">{{ t(16) }}</p>
     <p v-else-if="!items.length" class="activity-empty">{{ t(13) }}</p>
     <button v-for="item in items" :key="item.delivery.id" class="activity-message" @click="open(item)">
-     <span class="message-gift" aria-hidden="true">✦</span><span><strong>{{ content(item).title }}</strong><small>{{ money(item.campaign.amount) }} USD · {{ item.delivery.claimedAt ? t(15) : item.active ? t(1) : t(14) }}</small></span><span aria-hidden="true">›</span>
+     <span class="message-gift" aria-hidden="true">✦</span><span><strong>{{ content(item).title }}</strong><small>{{ item.campaign.campaignKind==='NOTICE' ? content(item).open || t(20) : `${money(item.campaign.amount)} USD · ${item.delivery.claimedAt ? t(15) : item.active ? t(1) : t(14)}` }}</small></span><span aria-hidden="true">›</span>
     </button>
     <div v-if="pages>1" class="activity-pages"><button :disabled="!page || loading" @click="turn(-1)">{{ t(18) }}</button><span>{{ page+1 }} / {{ pages }}</span><button :disabled="page+1>=pages || loading" @click="turn(1)">{{ t(19) }}</button></div>
    </template>
@@ -222,6 +225,10 @@ onUnmounted(()=>{disposed=true;generation++;abort?.abort();dialog.value?.close()
 </template>
 <style scoped>
 .activity-dialog.no-animation :deep(*){animation:none!important;transition:none!important}
+.activity-dialog.activity-custom.announcement-layout{width:min(var(--design-width,760px),calc(100vw - 40px));height:min(940px,calc(100dvh - 48px));max-height:none;overflow:hidden;--announcement-height:100%}
+.activity-dialog.activity-custom.announcement-layout[open]{display:flex;flex-direction:column}
+.announcement-layout :deep(.announcement-document){flex:1;min-height:0}
+@media(max-width:600px){.activity-dialog.activity-custom.announcement-layout{width:calc(100vw - 24px);height:calc(100dvh - 28px);border-radius:17px}}
 
 .public-activities{margin:16px 16px calc(76px + env(safe-area-inset-bottom));padding:12px;border:1px solid #dfe9d3;border-radius:12px;background:#fff}.public-activities>button{display:flex;justify-content:space-between;gap:12px;min-height:44px;width:100%;border:0;background:none;text-align:left;color:#354629;font:inherit}.public-activities strong{overflow-wrap:anywhere}.public-activities span{flex-shrink:0;font-size:12px}.claim-continuation{padding:12px;margin:12px 12px calc(76px + env(safe-area-inset-bottom));background:#f0f7e7;color:#354629;font-size:12px}.claim-continuation button{min-height:44px;margin:4px;border:1px solid #dfe9d3;border-radius:8px;background:white;color:inherit}
 

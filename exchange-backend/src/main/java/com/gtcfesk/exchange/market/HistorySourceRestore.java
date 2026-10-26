@@ -33,7 +33,8 @@ public class HistorySourceRestore {
     private void stable(long symbol,long from,long to) {
         HistoryOrdering.Policy policy=store.historyOrdering.policyForPage(symbol);
         if(policy!=null && from<policy.fromMinute) throw new BusinessException("所选区间包含已封存历史");
-        List<Integer> pending=store.db.queryForList("SELECT 1 FROM market_control_task t LEFT JOIN market_control_flow f ON f.tenant_id=t.tenant_id AND f.task_id=t.id WHERE t.tenant_id=? AND t.symbol_id=? AND t.started_at<=? AND COALESCE(f.finished_at,t.ended_at,9223372036854775807)>=? AND (t.sampled_until<LEAST(?,COALESCE(t.stop_at,t.planned_end)) OR f.history_pending_until IS NOT NULL OR f.state IN ('WAITING_SOURCE','RECOVERING')) LIMIT 1",Integer.class,ControlHistoryStore.tenant(),symbol,to+59999,from,to+59999);
+        // A later stop or abandoned plan cannot extend sampling beyond the task's committed end.
+        List<Integer> pending=store.db.queryForList("SELECT 1 FROM market_control_task t LEFT JOIN market_control_flow f ON f.tenant_id=t.tenant_id AND f.task_id=t.id WHERE t.tenant_id=? AND t.symbol_id=? AND t.started_at<=? AND COALESCE(f.finished_at,t.ended_at,9223372036854775807)>=? AND (t.sampled_until<LEAST(?,COALESCE(t.ended_at,t.stop_at,t.planned_end)) OR f.history_pending_until IS NOT NULL OR f.state IN ('WAITING_SOURCE','RECOVERING')) LIMIT 1",Integer.class,ControlHistoryStore.tenant(),symbol,to+59999,from,to+59999);
         if(!pending.isEmpty()) throw new BusinessException("所选历史仍在补齐或最终化，请稍后重新预览");
     }
     private boolean canonical(Map<String,Object> saved,String identity,String provider,String configured) {

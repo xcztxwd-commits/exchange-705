@@ -11,6 +11,7 @@ public class ActivityCampaign extends com.gtcfesk.exchange.tenant.TenantOwnedEnt
  @Version private long rowVersion;
  @Column(nullable=false,length=120) private String name;
  @Column(nullable=false,length=16) private String status="DRAFT";
+ @Column(nullable=false,length=16,columnDefinition="varchar(16) default 'TRIAL'") private String campaignKind="TRIAL";
  private boolean template;
  private boolean autoPopup=true;
  private boolean autoSendEnabled;
@@ -36,6 +37,7 @@ public class ActivityCampaign extends com.gtcfesk.exchange.tenant.TenantOwnedEnt
  private LocalDateTime createdAt=LocalDateTime.now();
  private LocalDateTime updatedAt=LocalDateTime.now();
  @PreUpdate void update(){updatedAt=LocalDateTime.now();}
+ public boolean notice(){return "NOTICE".equals(campaignKind);}
  public boolean active(){return active(LocalDateTime.now());}
  public boolean active(LocalDateTime now){return !deleted && !template && "ACTIVE".equals(status) && (startsAt==null || !now.isBefore(startsAt)) && (endsAt==null || now.isBefore(endsAt));}
 }

@@ -31,16 +31,17 @@ public class ActivityService {
  @Transactional public ActivityCampaign save(Long id,ActivityCampaign input){
   ActivityCampaign c=id==null?new ActivityCampaign():locked(id);
   if(input.getName()==null||input.getName().trim().isEmpty()||input.getName().length()>120)throw new BusinessException("请填写活动名称（最多120字）");
+  if(!Arrays.asList("TRIAL","NOTICE").contains(input.getCampaignKind()))throw new BusinessException("公告类型无效");
   if(!Arrays.asList("DRAFT","ACTIVE","PAUSED","CLOSED").contains(input.getStatus()))throw new BusinessException("活动状态无效");
   if(!Arrays.asList("GIFT","CONFETTI","NONE").contains(input.getAnimation()))throw new BusinessException("动画类型无效");
   BigDecimal amount=input.getAmount(),budget=input.getBudget();
-  if(amount==null||amount.signum()<=0||amount.compareTo(new BigDecimal("1000000"))>0||amount.stripTrailingZeros().scale()>2)throw new BusinessException("体验金金额须为0.01至1000000，最多两位小数");
-  if(budget==null||budget.compareTo(amount)<0||budget.compareTo(c.getGranted())<0||budget.compareTo(new BigDecimal("1000000000"))>0||budget.stripTrailingZeros().scale()>2)throw new BusinessException("预算无效或低于已发放金额");
-  if(input.getRecentLoginDays()<0||input.getRecentLoginDays()>365||input.getMaxClaims()<Math.max(1,c.getClaimCount())||input.getMaxClaims()>1000000)throw new BusinessException("登录天数或领取名额无效");
+  validateRewardSettings(input,c,input.notice());
+  validateAudience(input,c,input.notice());
   if(input.getStartsAt()!=null&&input.getEndsAt()!=null&&!input.getEndsAt().isAfter(input.getStartsAt()))throw new BusinessException("结束时间必须晚于开始时间");
-  if(id!=null&&deliveries.countByTenantIdAndCampaignId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), id)>0&&(c.getAmount().compareTo(amount)!=0||c.isTemplate()!=input.isTemplate()))throw new BusinessException("已发送活动的金额、资格和模板属性不可修改，请复制为新活动");
+  if(id!=null&&deliveries.countByTenantIdAndCampaignId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), id)>0&&(c.getAmount().compareTo(amount)!=0||c.isTemplate()!=input.isTemplate()||!Objects.equals(c.getCampaignKind(),input.getCampaignKind())))throw new BusinessException("已发送活动的金额、类型和模板属性不可修改，请复制为新活动");
   validateTranslations(input);validateSettings(input);
-  c.setLayoutJson(ActivityDesignValidator.validate(input.getLayoutJson(),input.getDefaultLocale(),mapper));
+  c.setLayoutJson(ActivityDesignValidator.validate(input.getLayoutJson(),input.getDefaultLocale(),mapper,input.getCampaignKind()));
+  c.setCampaignKind(input.getCampaignKind());
   c.setAutoSendEnabled(!input.isTemplate() && input.isAutoSendEnabled());c.setRepeatUnread(input.isRepeatUnread());c.setAllowRepeatSend(input.isAllowRepeatSend());c.setAllowRepeatClaim(input.isAllowRepeatClaim());c.setClaimValidityDays(input.getClaimValidityDays());c.setPositions(new ArrayList<>(input.getPositions()));c.setTriggerConditions(new ArrayList<>(input.getTriggerConditions()));
   c.setName(input.getName().trim());c.setStatus(input.isTemplate()?"DRAFT":input.getStatus());c.setTemplate(input.isTemplate());c.setAutoPopup(input.isAutoPopup());c.setAnimation(input.getAnimation());c.setDefaultLocale(input.getDefaultLocale());c.setTranslations(input.getTranslations());
   c.setAmount(amount);c.setBudget(budget);c.setMaxClaims(input.getMaxClaims());c.setRecentLoginDays(input.getRecentLoginDays());c.setStartsAt(input.getStartsAt());c.setEndsAt(input.getEndsAt());return campaigns.save(c);
@@ -48,12 +49,11 @@ public class ActivityService {
  @Transactional public ActivityCampaign saveAutoSend(Long id,ActivityCampaign input){
   ActivityCampaign c=locked(id);
   if(c.isTemplate())throw new BusinessException("模板不可自动发送，请先保存为活动");
-  if(input.getRecentLoginDays()<0||input.getRecentLoginDays()>365||input.getMaxClaims()<Math.max(1,c.getClaimCount())||input.getMaxClaims()>1000000)throw new BusinessException("登录天数或领取名额无效");
+  validateAudience(input,c,c.notice());
   if(!Arrays.asList("DRAFT","ACTIVE","PAUSED","CLOSED").contains(input.getStatus()))throw new BusinessException("活动状态无效");
   if(!Arrays.asList("GIFT","CONFETTI","NONE").contains(input.getAnimation()))throw new BusinessException("动画类型无效");
   BigDecimal amount=input.getAmount(),budget=input.getBudget();
-  if(amount==null||amount.signum()<=0||amount.compareTo(new BigDecimal("1000000"))>0||amount.stripTrailingZeros().scale()>2)throw new BusinessException("体验金金额须为0.01至1000000，最多两位小数");
-  if(budget==null||budget.compareTo(amount)<0||budget.compareTo(c.getGranted())<0||budget.compareTo(new BigDecimal("1000000000"))>0||budget.stripTrailingZeros().scale()>2)throw new BusinessException("预算无效或低于已发放金额");
+  validateRewardSettings(input,c,c.notice());
   if(deliveries.countByTenantIdAndCampaignId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(),id)>0&&c.getAmount().compareTo(amount)!=0)throw new BusinessException("已发送活动的金额不可修改，请复制为新活动");
   if(input.getStartsAt()!=null&&input.getEndsAt()!=null&&!input.getEndsAt().isAfter(input.getStartsAt()))throw new BusinessException("结束时间必须晚于开始时间");
   validateSettings(input);
@@ -67,7 +67,7 @@ public class ActivityService {
   if(input.getName()==null||input.getName().trim().isEmpty()||input.getName().length()>120)throw new BusinessException("活动名称无效");
   ActivityCampaign copy=new ActivityCampaign();copy.setDefaultLocale(input.getDefaultLocale());copy.setTranslations(input.getTranslations());validateTranslations(copy);
   c.setName(input.getName().trim());c.setDefaultLocale(input.getDefaultLocale());c.setTranslations(input.getTranslations());
-  c.setLayoutJson(ActivityDesignValidator.validate(input.getLayoutJson(),input.getDefaultLocale(),mapper));
+  c.setLayoutJson(ActivityDesignValidator.validate(input.getLayoutJson(),input.getDefaultLocale(),mapper,c.getCampaignKind()));
   return campaigns.saveAndFlush(c);
  }
  @Transactional public void delete(Long id){
@@ -86,6 +86,18 @@ public class ActivityService {
   List<Map<String,Object>> result=new ArrayList<>();for(Object[] row:rows){Map<String,Object> user=new LinkedHashMap<>();user.put("id",row[0]);user.put("email",row[1]);result.add(user);}return result;
  }
  @Deprecated public void autoSendDue(){/* Time-based broadcasting removed. */}
+ private void validateRewardSettings(ActivityCampaign input,ActivityCampaign current,boolean notice){
+  BigDecimal amount=input.getAmount(),budget=input.getBudget();
+  if(notice){
+   if(amount==null||amount.signum()!=0||budget==null||budget.signum()!=0||input.isAllowRepeatClaim()||input.getClaimValidityDays()!=null)throw new BusinessException("纯公告金额和预算须为0，且不能配置领取或体验金有效期");
+   return;
+  }
+  if(amount==null||amount.signum()<=0||amount.compareTo(new BigDecimal("1000000"))>0||amount.stripTrailingZeros().scale()>2)throw new BusinessException("体验金金额须为0.01至1000000，最多两位小数");
+  if(budget==null||budget.compareTo(amount)<0||budget.compareTo(current.getGranted())<0||budget.compareTo(new BigDecimal("1000000000"))>0||budget.stripTrailingZeros().scale()>2)throw new BusinessException("预算无效或低于已发放金额");
+ }
+ private void validateAudience(ActivityCampaign input,ActivityCampaign current,boolean notice){
+  if(input.getRecentLoginDays()<0||input.getRecentLoginDays()>365||!notice&&(input.getMaxClaims()<Math.max(1,current.getClaimCount())||input.getMaxClaims()>1000000))throw new BusinessException("登录天数或领取名额无效");
+ }
  private void validateSettings(ActivityCampaign input){
   if(input.getClaimValidityDays()!=null&&(input.getClaimValidityDays()<1||input.getClaimValidityDays()>3650))throw new BusinessException("领取时效须为1至3650天");
   if(input.getPositions()==null||input.getPositions().isEmpty()||input.getPositions().size()>5||!POSITIONS.containsAll(input.getPositions())||new HashSet<>(input.getPositions()).size()!=input.getPositions().size())throw new BusinessException("展示位置无效");
@@ -101,7 +113,7 @@ public class ActivityService {
   for(ActivityCampaign candidate:campaigns.findAllByTenantId(tenant,(root,q,cb)->cb.and(cb.isTrue(root.get("autoSendEnabled")),cb.isFalse(root.get("deleted")),cb.isFalse(root.get("template")),cb.equal(root.get("status"),"ACTIVE")),Sort.by("id"))){
    if(!candidate.active()||!candidate.getPositions().contains(position)||!candidate.getTriggerConditions().contains(event)||!eligible(candidate,visitor))continue;
    ActivityCampaign campaign=locked(candidate.getId());
-   if(!campaign.isAutoSendEnabled()||!campaign.active()||!campaign.getPositions().contains(position)||!campaign.getTriggerConditions().contains(event)||campaign.getClaimCount()>=campaign.getMaxClaims()||campaign.getGranted().add(campaign.getAmount()).compareTo(campaign.getBudget())>0)continue;
+   if(!campaign.isAutoSendEnabled()||!campaign.active()||!campaign.getPositions().contains(position)||!campaign.getTriggerConditions().contains(event)||!campaign.notice()&&(campaign.getClaimCount()>=campaign.getMaxClaims()||campaign.getGranted().add(campaign.getAmount()).compareTo(campaign.getBudget())>0))continue;
    // The candidate read may have established an old RR snapshot while waiting for the
    // campaign mutex. A locking receipt read must decide send/replay after that wait.
    ActivityDelivery prior=deliveries.lockByCampaignAndUser(campaign.getId(),user).orElse(null);
@@ -115,7 +127,7 @@ public class ActivityService {
   if(!"ANONYMOUS_HOME".equals(position)||page<0||page>100000)throw new BusinessException("公开位置无效");
   List<Map<String,Object>> visible=new ArrayList<>();
   for(ActivityCampaign c:campaigns.findAllByTenantId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(),Sort.by(Sort.Direction.DESC,"id"))){
-   if(!c.active()||!c.getPositions().contains(position)||c.getClaimCount()>=c.getMaxClaims()||c.getGranted().add(c.getAmount()).compareTo(c.getBudget())>0)continue;
+   if(!c.active()||!c.getPositions().contains(position)||!c.notice()&&(c.getClaimCount()>=c.getMaxClaims()||c.getGranted().add(c.getAmount()).compareTo(c.getBudget())>0))continue;
    Map<String,Object> view=publicCampaign(c);view.remove("recentLoginDays");visible.add(view);
   }
   int from=(int)Math.min((long)visible.size(),(long)page*20L),to=Math.min(visible.size(),from+20);
@@ -164,7 +176,7 @@ public class ActivityService {
  private void requireSendable(ActivityCampaign c){if(c.isTemplate()||!"ACTIVE".equals(c.getStatus())||!c.active())throw new BusinessException("请启用未过期活动后发送");}
  private void requireOperation(String key){if(key==null||!key.matches("[A-Za-z0-9_-]{16,64}"))throw new BusinessException("操作幂等键无效");}
  private String hash(String text){try{byte[] bytes=java.security.MessageDigest.getInstance("SHA-256").digest(text.getBytes(java.nio.charset.StandardCharsets.UTF_8));StringBuilder out=new StringBuilder();for(byte b:bytes)out.append(String.format("%02x",b&255));return out.toString();}catch(Exception e){throw new IllegalStateException(e);}}
- private boolean eligible(ActivityCampaign c,UserAccount u){return "normal".equals(u.getStatus())&&(c.getRecentLoginDays()==0||(u.getLastLoginAt()!=null&&!u.getLastLoginAt().isBefore(LocalDateTime.now().minusDays(c.getRecentLoginDays()))));}
+ private boolean eligible(ActivityCampaign c,UserAccount u){return (c.notice()?("normal".equalsIgnoreCase(u.getStatus())||"active".equalsIgnoreCase(u.getStatus())):"normal".equals(u.getStatus()))&&(c.getRecentLoginDays()==0||(u.getLastLoginAt()!=null&&!u.getLastLoginAt().isBefore(LocalDateTime.now().minusDays(c.getRecentLoginDays()))));}
  private org.springframework.data.jpa.domain.Specification<UserAccount> recipientSpec(RecipientFilter f){
   if(f==null)throw new BusinessException("筛选条件无效");
   if(f.getPage()<0||f.getPage()>100000||f.getSize()<1||f.getSize()>100)throw new BusinessException("分页参数无效");
@@ -275,7 +287,7 @@ public class ActivityService {
   }
   if(batch.size()<500)s.setDone(true);selections.saveAndFlush(s);return selectionStatus(s);
  }
- @Transactional public Page<Map<String,Object>> inbox(Long user,int page){return deliveries.findByTenantIdAndUserIdOrderByIdDesc(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), user,PageRequest.of(Math.max(0,page),20)).map(d->{
+ @Transactional public Page<Map<String,Object>> inbox(Long user,int page){return deliveries.findByTenantIdAndUserIdOrderBySentAtDescIdDesc(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), user,PageRequest.of(Math.max(0,page),20)).map(d->{
   ActivityCampaign c=get(d.getCampaignId());Map<String,Object> r=new LinkedHashMap<>();r.put("delivery",d);r.put("campaign",publicCampaign(c));r.put("active",c.active());return r;
  });}
  public Map<String,Object> message(Long user,Long id){ActivityDelivery d=owned(user,id);ActivityCampaign c=get(d.getCampaignId());Map<String,Object> m=new LinkedHashMap<>();m.put("delivery",d);m.put("campaign",publicCampaign(c));m.put("active",c.active());return m;}
@@ -288,13 +300,14 @@ public class ActivityService {
   if("CLOSED".equals(type)){d.setClosedAt(now);d.setCloseCount(d.getCloseCount()+1);}
   return deliveries.save(d);
  }
- private Map<String,Object> publicCampaign(ActivityCampaign c){Map<String,Object> m=new LinkedHashMap<>();m.put("id",c.getId());m.put("layoutJson",c.getLayoutJson());m.put("amount",c.getAmount());m.put("translations",c.getTranslations());m.put("defaultLocale",c.getDefaultLocale());m.put("startsAt",c.getStartsAt());m.put("endsAt",c.getEndsAt());m.put("status",c.getStatus());m.put("autoPopup",c.isAutoPopup());m.put("repeatUnread",c.isRepeatUnread());m.put("animation",c.getAnimation());m.put("recentLoginDays",c.getRecentLoginDays());m.put("claimValidityDays",c.getClaimValidityDays());m.put("allowRepeatClaim",c.isAllowRepeatClaim());m.put("positions",c.getPositions());m.put("hasQuota",c.getClaimCount()<c.getMaxClaims()&&c.getGranted().add(c.getAmount()).compareTo(c.getBudget())<=0);return m;}
+ private Map<String,Object> publicCampaign(ActivityCampaign c){Map<String,Object> m=new LinkedHashMap<>();m.put("id",c.getId());m.put("campaignKind",c.getCampaignKind());m.put("layoutJson",c.getLayoutJson());m.put("amount",c.getAmount());m.put("translations",c.getTranslations());m.put("defaultLocale",c.getDefaultLocale());m.put("startsAt",c.getStartsAt());m.put("endsAt",c.getEndsAt());m.put("status",c.getStatus());m.put("autoPopup",c.isAutoPopup());m.put("repeatUnread",c.isRepeatUnread());m.put("animation",c.getAnimation());m.put("recentLoginDays",c.getRecentLoginDays());m.put("claimValidityDays",c.getClaimValidityDays());m.put("allowRepeatClaim",c.isAllowRepeatClaim());m.put("positions",c.getPositions());m.put("hasQuota",c.notice()||c.getClaimCount()<c.getMaxClaims()&&c.getGranted().add(c.getAmount()).compareTo(c.getBudget())<=0);return m;}
  private ActivityDelivery owned(Long user,Long id){return deliveries.findByTenantIdAndId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), id).filter(d->d.getUserId().equals(user)).orElseThrow(()->new BusinessException("消息不存在"));}
  @Transactional public TrialAccount claim(Long user,Long id){return claim(user,id,null);}
  @Transactional public TrialAccount claim(Long user,Long id,String requestKey){
-  ActivityDelivery before=owned(user,id);funds.lockForGrant(user);
+  ActivityDelivery before=owned(user,id);requireRewardCampaign(before.getCampaignId());funds.lockForGrant(user);
   if(requestKey!=null&&!requestKey.matches("[A-Za-z0-9_-]{16,64}"))throw new BusinessException("幂等键无效");
   ActivityCampaign c=campaigns.lock(before.getCampaignId()).orElseThrow(()->new BusinessException("活动不存在"));
+  requireRewardCampaign(c);
   if(requestKey!=null){TrialGrant prior=funds.currentGrant(user,requestKey);
    if(prior!=null){if(!Objects.equals(prior.getCampaignId(),before.getCampaignId()))throw new BusinessException("幂等键已用于其他活动");return funds.snapshot(user);}
   }
@@ -312,7 +325,9 @@ public class ActivityService {
  }
  @Transactional public TrialAccount claimPublic(Long user,Long campaignId,String requestKey){
   if(requestKey==null||!requestKey.matches("[A-Za-z0-9_-]{16,64}"))throw new BusinessException("幂等键无效");
+  requireRewardCampaign(campaignId);
   funds.lockForGrant(user);ActivityCampaign c=campaigns.lock(campaignId).orElseThrow(()->new BusinessException("活动不存在"));
+  requireRewardCampaign(c);
   TrialGrant prior=funds.currentGrant(user,requestKey);
   if(prior!=null){if(!Objects.equals(prior.getCampaignId(),campaignId))throw new BusinessException("幂等键已用于其他活动");return funds.snapshot(user);}
   if(c.isDeleted())throw new BusinessException("活动不存在");
@@ -320,6 +335,12 @@ public class ActivityService {
   ActivityDelivery d=deliveries.lockByCampaignAndUser(campaignId,user).orElse(null);
   if(d==null){d=new ActivityDelivery();d.setCampaignId(campaignId);d.setUserId(user);d.setSentBy("PUBLIC");d=deliveries.saveAndFlush(d);}
   return claim(user,d.getId(),requestKey);
+ }
+ private void requireRewardCampaign(ActivityCampaign campaign){if(!"TRIAL".equals(campaign.getCampaignKind()))throw new BusinessException("此公告仅展示活动说明，不支持直接领取体验金");}
+ private void requireRewardCampaign(Long id){
+  // A scalar preflight must not attach a stale campaign before the financial locks.
+  String kind=campaigns.findCampaignKind(id).orElseThrow(()->new BusinessException("活动不存在"));
+  if(!"TRIAL".equals(kind))throw new BusinessException("此公告仅展示活动说明，不支持直接领取体验金");
  }
  public Map<String,Object> stats(Long id){ActivityCampaign c=get(id);Map<String,Object> m=new LinkedHashMap<>();m.put("sent",deliveries.countByTenantIdAndCampaignId(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), id));m.put("received",deliveries.countByTenantIdAndCampaignIdAndReceivedAtIsNotNull(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), id));m.put("opened",deliveries.countByTenantIdAndCampaignIdAndOpenedAtIsNotNull(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), id));m.put("closed",deliveries.countByTenantIdAndCampaignIdAndClosedAtIsNotNull(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), id));m.put("closedWithoutOpening",deliveries.countByTenantIdAndCampaignIdAndClosedAtIsNotNullAndOpenedAtIsNull(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(), id));m.put("claimed",c.getClaimCount());m.put("granted",c.getGranted());return m;}
 }

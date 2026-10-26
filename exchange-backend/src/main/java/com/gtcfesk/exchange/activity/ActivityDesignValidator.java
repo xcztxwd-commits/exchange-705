@@ -6,6 +6,10 @@ import java.util.*;
 
 /** Structured templates only: no executable HTML, scripts, arbitrary attributes or CSS URLs. */
 public final class ActivityDesignValidator {
+ // ECMAScript trim whitespace, independent of the JDK's Unicode version (U+180E is content).
+ private static final java.util.regex.Pattern ANNOUNCEMENT_BLANK=java.util.regex.Pattern.compile("[\\x{0009}-\\x{000D}\\x{0020}\\x{00A0}\\x{1680}\\x{2000}-\\x{200A}\\x{2028}\\x{2029}\\x{202F}\\x{205F}\\x{3000}\\x{FEFF}]*");
+ private static final Set<String> ANNOUNCEMENT_FIELDS=new HashSet<>(Arrays.asList("label","milestone","milestoneLabel","title","subtitle","period","greeting","intro","depositHeading","rewardHeading","currency","currencyNote","rulesHeading","tierRule","withdrawalHeading","withdrawalRule","withdrawalRights","tradingRule","durationRule","supportRule","signoff","footerNote","supportLabel","acknowledgeLabel","tiers"));
+ private static final Set<String> ANNOUNCEMENT_PARAGRAPHS=new HashSet<>(Arrays.asList("intro","tierRule","withdrawalRule","withdrawalRights","tradingRule","durationRule","supportRule","signoff"));
  private static final Set<String> STYLES=new HashSet<>(Arrays.asList("scale","z-index","display","flex-direction","flex-wrap","justify-content","align-items","align-self","flex-grow","flex-shrink","flex-basis","gap","width","height","min-height","max-height","min-width","max-width","padding","padding-top","padding-right","padding-bottom","padding-left","margin","margin-top","margin-right","margin-bottom","margin-left","background-color","background-image","background-size","background-position","background-repeat","color","font-family","font-size","font-weight","font-style","line-height","letter-spacing","text-align","text-decoration","border","border-width","border-style","border-color","border-radius","box-shadow","opacity","object-fit","object-position","overflow","position","top","right","bottom","left","transform"));
  private ActivityDesignValidator(){}
  public static String validate(String value,String fallback,ObjectMapper mapper){
@@ -14,19 +18,56 @@ public final class ActivityDesignValidator {
    if(value.length()>2000000)throw new IllegalArgumentException("模板超过2MB");
    JsonNode root=mapper.readTree(value),locales=root.path("locales");
    if(root.path("version").asInt()!=1||!locales.isObject()||locales.size()>30||!locales.has(fallback))throw new IllegalArgumentException("模板缺少默认语言");
+   boolean announcement=root.has("presentation");
+   if(announcement){
+    if(!root.path("version").isIntegralNumber()||root.path("version").asInt()!=1)throw new IllegalArgumentException("公告模板版本无效");
+    if(!root.path("presentation").isTextual()||!"announcement".equals(root.path("presentation").asText()))throw new IllegalArgumentException("公告展示类型无效");
+    onlyFields(root,new HashSet<>(Arrays.asList("version","presentation","dialog","locales")));
+   }
    JsonNode dialog=root.path("dialog");if(!dialog.isMissingNode()){
+    if(announcement)onlyFields(dialog,new HashSet<>(Arrays.asList("width","radius","backdrop","blur")));
     if(!dialog.isObject()||!dialog.path("width").canConvertToInt()||dialog.path("width").asInt()<280||dialog.path("width").asInt()>1200||dialog.path("radius").asInt(-1)<0||dialog.path("radius").asInt()>60||dialog.path("blur").asInt(-1)<0||dialog.path("blur").asInt()>30||!dialog.path("backdrop").asText().matches("#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?"))throw new IllegalArgumentException("弹窗外观设置无效");
    }
    Iterator<Map.Entry<String,JsonNode>> entries=locales.fields();
    while(entries.hasNext()){
     Map.Entry<String,JsonNode> entry=entries.next();if(!entry.getKey().matches("[a-z]{2}(-[A-Za-z]{2,4})?"))throw new IllegalArgumentException("模板语言无效");
     JsonNode pages=entry.getValue().path("pages");if(!pages.isArray()||pages.size()<1||pages.size()>12)throw new IllegalArgumentException("每种语言支持1至12个页面");
+    if(announcement){
+     onlyFields(entry.getValue(),new HashSet<>(Arrays.asList("pages","announcement")));
+     announcement(entry.getValue().path("announcement"));
+     if(pages.size()!=1)throw new IllegalArgumentException("公告仅支持一个首屏");
+     JsonNode page=pages.get(0);onlyFields(page,new HashSet<>(Arrays.asList("id","name","nodes")));
+     if(!"gift".equals(page.path("id").asText())||!page.path("name").isTextual()||page.path("name").asText().length()>120||!page.path("nodes").isArray()||page.path("nodes").size()!=0)throw new IllegalArgumentException("公告首屏不可包含自定义组件或领取动作");
+    }
     Set<String> ids=new HashSet<>();for(JsonNode p:pages){String id=p.path("id").asText();if(!id.matches("[a-zA-Z0-9-]{1,60}")||!ids.add(id)||p.path("name").asText().length()>120)throw new IllegalArgumentException("页面标识重复或无效");}
     if(!ids.contains("gift"))throw new IllegalArgumentException("请保留首屏");
     int[] count={0};for(JsonNode p:pages)nodes(p.path("nodes"),ids,0,count);
    }
    return mapper.writeValueAsString(root);
   }catch(Exception e){throw new BusinessException("模板设计无效："+(e instanceof IllegalArgumentException?e.getMessage():"JSON格式错误"));}
+ }
+ public static String validate(String value,String fallback,ObjectMapper mapper,String campaignKind){
+  String validated=validate(value,fallback,mapper);
+  boolean announcement=false;
+  try{announcement=validated!=null&&"announcement".equals(mapper.readTree(validated).path("presentation").asText());}catch(Exception e){throw new BusinessException("模板设计无效");}
+  if("NOTICE".equals(campaignKind)&&!announcement)throw new BusinessException("纯公告须使用公告文档模板");
+  if(!"NOTICE".equals(campaignKind)&&announcement)throw new BusinessException("公告文档仅用于纯公告，不可绑定体验金领取");
+  return validated;
+ }
+ private static void onlyFields(JsonNode node,Set<String> allowed){
+  if(!node.isObject())throw new IllegalArgumentException("公告数据须为对象");
+  Iterator<String> fields=node.fieldNames();while(fields.hasNext())if(!allowed.contains(fields.next()))throw new IllegalArgumentException("公告含不支持的字段");
+ }
+ private static void announcement(JsonNode value){
+  onlyFields(value,ANNOUNCEMENT_FIELDS);
+  for(String key:ANNOUNCEMENT_FIELDS)if(!"tiers".equals(key)){
+   JsonNode text=value.path(key);if(!text.isTextual()||ANNOUNCEMENT_BLANK.matcher(text.asText()).matches()||text.asText().length()>(ANNOUNCEMENT_PARAGRAPHS.contains(key)?10000:200))throw new IllegalArgumentException("公告文字缺失、格式错误或过长："+key);
+  }
+  JsonNode tiers=value.path("tiers");if(!tiers.isArray()||tiers.size()<1||tiers.size()>20)throw new IllegalArgumentException("公告奖励表支持1至20档");
+  for(JsonNode tier:tiers){
+   onlyFields(tier,new HashSet<>(Arrays.asList("deposit","reward")));
+   for(String key:Arrays.asList("deposit","reward"))if(!tier.path(key).isTextual()||ANNOUNCEMENT_BLANK.matcher(tier.path(key).asText()).matches()||tier.path(key).asText().length()>80)throw new IllegalArgumentException("公告金额须为不超过80字的文本");
+  }
  }
  private static void nodes(JsonNode list,Set<String> pages,int depth,int[] count){
   if(!list.isArray()||depth>15)throw new IllegalArgumentException("组件嵌套过深或格式错误");
