@@ -94,8 +94,28 @@ WebSocket 的 K 线推送使用同一个 `internalKline`，每次请求 2 根；
 
 ## 发布记录
 
-- 分支：`codex/fix-kline-read-window-20261103`。
+- 分支：[codex/fix-kline-read-window-20261103](https://github.com/xcztxwd-commits/exchange-705/tree/codex/fix-kline-read-window-20261103)；源码提交：[74e6cf7](https://github.com/xcztxwd-commits/exchange-705/commit/74e6cf7180e31e81cf05c079e4d45a756e9e8bfe)。
 - 已核对当前线上 JAR SHA256：`6f16c5bfcc502bc51cc70112059b4247c152dfda5fc0383806e729ddccb72981`。
 - 候选 JAR SHA256：`00043d1df1abdfc666a1d9162f32fc22a0637e0c9838a2c30b56560661f5246a`。
 - 仅替换 `ControlHistoryStore.class`、`ControlledKlineMerger.class`，Java 8 major 52；其他 **1020 条目逐字节一致**，相关内部类反编译语义相同并保留线上版本。
-- 当前阶段：源代码及只读发布前验证完成，生产切换及上线后核验结果随后补录。
+- 生产主 API 已于 **2026-11-03 19:24 UTC** 完成切换和配置校验。镜像 `exchange705/kline-window:20261103t191636z`，ID `sha256:2c2d7928171bd62608052417f97695449855b5740c6d51242cc01d75d743a95b`，JAR 与上述候选 SHA 一致。
+- Compose 仅改变主 API 镜像；环境变量逐键值、挂载、网络、启动参数、健康检查及 HostConfig 保持一致。首次校验误将列表顺序变化视为内容变化，触发了已验证的自动回滚；修正比较方式后重新切换成功，没有改变任何配置值。
+- 回滚镜像为已核验的原镜像 `sha256:af480720a7a2b70a08cf88e48769fbe654f464d01b812227c19f5d39633469e1`。精确旧 JAR 与 `rollback.main-api.private.json` 已保存在本次私有事故目录，未上传仓库。
+- 两个外层网关仅 reload，配置 SHA256 始终为 `def111d924bae103d9718b86cdb8c632e9ce7d1bca9046bd32d4b24f4a9b2e53`；保留各实例 kline 并发上限 4。其余 **69 个容器的 ID、镜像和启动时间全部未变**。
+
+## 上线后验收及限制
+
+公开入口的首轮与热读分别保存结果；时间戳按现有秒/毫秒兼容规则归一后核查递增及去重。
+
+| 阶段 | 七周期结果 | 单次观察耗时 | 可用性标记 |
+| --- | --- | --- | --- |
+| 切换后首轮 | 六周期 200 根、1w 199 根 | 0.160–1.688 秒 | 全部 pending=true；日/周缺少原生锚点 |
+| 热读 | 1m/5m/15m/30m/1h/1d/1w 均 200 根 | 0.205–3.226 秒 | 全部 pending=false，无 missingData |
+
+首轮包含缓存/供应商刷新过程，不写成完全实时成功。上述耗时是有限次观察，不是 P95 或容量保证。
+
+- 含已发布控盘样本的 5m、1h 历史页各返回 20 根；分别保留 1、3 个发布标记，普通与 `/api/market/redis/kline/history/` 别名入口一致。`protected_control_history` 保护标记仍保留，未尝试用原始行情覆盖受保护历史。
+- 同一公开网关下同时请求 15m/30m/1h/1d 各 200 根，全部成功，观察耗时 0.249–3.165 秒。期间依赖租户识别和账号查询的登录路径在 **0.524 秒**返回预期 `400 user not found`。
+- 测试账号不存在且未创建。没有客户密码，**未验证真实客户密码登录成功**；没有发订单、创建控盘任务或写生产合成历史。
+- 并发中的线程快照存在正在执行的分钟重建，但 Hikari `getConnection` 等待栈为 0；完成后的快照也为 0。上线后日志无新增取连接超时、字节码链接错误或历史排序拒绝。
+- 日志另有 `equity-capture` 的 `UncategorizedSQLException`。只读审计记录确认同一任务在 19:16–19:21 UTC（切换前）已每分钟失败，切换后仍存在；本次未改该任务或掩盖其错误。它与上述已复核的基线测试失败分别保留，不宣称系统日志或全量测试全绿。
