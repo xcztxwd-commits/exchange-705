@@ -86,8 +86,11 @@ public class ControlledKlineMerger {
         boolean noAnchors = width >= 3600000 && !utcAnchors && anchors.isEmpty();
         boolean[] missingAnchor = {false};
         TreeMap<Long, Long> pending = new TreeMap<>();
+        long directoryTo = end + width - 1;
+        long[] materializedBefore = {Long.MAX_VALUE};
+        while (true) {
         // Directory rows nominate candidates only. Their persisted prices/visibility are not authoritative.
-        store.mixedPages(symbol, from, end + width - 1, page -> {
+        store.mixedPages(symbol, from, directoryTo, page -> {
             List<Map<String,Object>> unanchored = new ArrayList<>();
             for (Map<String, Object> minute : page) {
                 long time = ControlHistoryStore.time(minute);
@@ -99,7 +102,7 @@ public class ControlledKlineMerger {
                     unanchored.add(minute); continue;
                 }
                 long bucket = anchor != null && time < boundary ? anchor : fallbackBucket(time, width, anchors);
-                if (bucket > end) continue;
+                if (bucket > end || bucket >= materializedBefore[0]) continue;
                 long bucketEnd = bucket + width;
                 Long next = anchors.higherKey(bucket);
                 if (width >= 86400000 && next != null && Math.abs(next - bucketEnd) <= 3600000) bucketEnd = next;
@@ -120,6 +123,7 @@ public class ControlledKlineMerger {
                 if (stop >= start) stops.put(start, stop);
             }
             if (selected.isEmpty()) break; // All remaining candidates precede an already complete page.
+            materializedBefore[0] = selected.firstKey();
             Set<Long> visible = new HashSet<>();
             TreeMap<Long, MinuteAggregate> aggregates = new TreeMap<>();
             mergedMinuteWindows(symbol, interval, stops, baseMinutes, mixed -> {
@@ -151,6 +155,16 @@ public class ControlledKlineMerger {
                 bars.put(start, bar);
             }
             while (bars.size() > limit) bars.pollFirstEntry();
+        }
+        if (bars.size() >= limit) break;
+        // Hidden SOURCE periods do not exhaust a short page. Seek the next older directory slice.
+        // Actual session buckets may overlap slices; the frontier above prevents a second replay.
+        List<Long> older = recentMixedBuckets(symbol, from - 1, width, limit + 2);
+        if (older.isEmpty()) break;
+        long nextFrom = Math.floorDiv(older.get(older.size() - 1), width) * width - width;
+        if (nextFrom >= from) break;
+        directoryTo = from - 1;
+        from = nextFrom;
         }
         // requestMinutes is retained for source compatibility only. Reads never enqueue backfill or repair state.
         while (bars.size() > limit) bars.pollFirstEntry();

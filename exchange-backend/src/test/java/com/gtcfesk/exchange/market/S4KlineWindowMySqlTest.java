@@ -89,6 +89,10 @@ class S4KlineWindowMySqlTest extends TenantMarketTestContext {
         Map<String,Object> expected;
         try { expected=source.snapshot(()->legacy.snapshot(()->before.merge(symbol,period,limit,cursor,input,ignored->{},true))); }
         finally { source.record=false; }
+        // The frozen oracle predates restore metadata; this new synthetic symbol has revision zero.
+        expected=new LinkedHashMap<>(expected);
+        Map<String,Object> expectedData=new LinkedHashMap<>((Map<String,Object>)expected.get("data"));
+        expectedData.put("historyRestoreRevision",0L);expected.put("data",expectedData);
         List<Map<String,Object>> oldSql=new ArrayList<>(source.calls);
         Map<String,Object> oldMetrics=new LinkedHashMap<>(source.lastMetrics);
         source.calls.clear();source.record=true;
