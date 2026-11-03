@@ -72,64 +72,85 @@ public class ControlledKlineMerger {
         // A cursor before a session must not re-bucket that future session using UTC.
         for (Map<String, Object> row : store.candles(symbol, interval, end + 1, end + width - 1))
             anchors.put(ControlHistoryStore.time(row), row);
-        // Bound rows by the requested number of occupied periods, never by a seven-day window.
-        List<Long> recentBuckets = recentMixedBuckets(symbol, end + width - 1, width, limit + 2);
-        // A short provider page must not hide older controls that still fit in the requested page.
-        long from = recentBuckets.isEmpty() ? end + width
-            : Math.floorDiv(recentBuckets.get(recentBuckets.size() - 1), width) * width - width;
+        // A complete page supplies its own real lower boundary, including sessions and DST.
+        // Only short pages need the historical mixed-minute directory to fill remaining slots.
+        long from;
+        if (bars.size() >= limit) {
+            from = new ArrayList<>(bars.descendingKeySet()).get(limit - 1);
+        } else {
+            List<Long> recentBuckets = recentMixedBuckets(symbol, end + width - 1, width, limit + 2);
+            from = recentBuckets.isEmpty() ? end + width
+                : Math.floorDiv(recentBuckets.get(recentBuckets.size() - 1), width) * width - width;
+        }
 
         boolean noAnchors = width >= 3600000 && !utcAnchors && anchors.isEmpty();
         boolean[] missingAnchor = {false};
-        TreeMap<Long, Long> affected = new TreeMap<>();
-        store.visibleMixedPages(symbol, from, end + width - 1, page -> {
-        for (Map<String, Object> minute : page) {
-            if (noAnchors) { missingAnchor[0] = true; break; } // A missing session boundary is not permission to invent one.
-            long time = ControlHistoryStore.time(minute);
-            Long anchor = anchors.floorKey(time);
-            // Prefer the actual provider boundary (including exchange sessions and DST).
-            Long nextAnchor = anchor == null ? null : anchors.higherKey(anchor);
-            long boundary = anchor == null ? 0 : anchor + width;
-            if (width >= 86400000 && nextAnchor != null && Math.abs(nextAnchor - boundary) <= 3600000) boundary = nextAnchor;
-            if (width >= 86400000 && !utcAnchors && (anchor == null || time >= boundary)) {
-                missingAnchor[0] = true; continue; // Do not extrapolate daily sessions across closures or unknown DST boundaries.
+        TreeMap<Long, Long> pending = new TreeMap<>();
+        // Directory rows nominate candidates only. Their persisted prices/visibility are not authoritative.
+        store.mixedPages(symbol, from, end + width - 1, page -> {
+            List<Map<String,Object>> unanchored = new ArrayList<>();
+            for (Map<String, Object> minute : page) {
+                long time = ControlHistoryStore.time(minute);
+                Long anchor = anchors.floorKey(time);
+                Long nextAnchor = anchor == null ? null : anchors.higherKey(anchor);
+                long boundary = anchor == null ? 0 : anchor + width;
+                if (width >= 86400000 && nextAnchor != null && Math.abs(nextAnchor - boundary) <= 3600000) boundary = nextAnchor;
+                if (noAnchors || (width >= 86400000 && !utcAnchors && (anchor == null || time >= boundary))) {
+                    unanchored.add(minute); continue;
+                }
+                long bucket = anchor != null && time < boundary ? anchor : fallbackBucket(time, width, anchors);
+                if (bucket > end) continue;
+                long bucketEnd = bucket + width;
+                Long next = anchors.higherKey(bucket);
+                if (width >= 86400000 && next != null && Math.abs(next - bucketEnd) <= 3600000) bucketEnd = next;
+                pending.put(bucket, bucketEnd);
             }
-            long bucket = anchor != null && time < boundary ? anchor : fallbackBucket(time, width, anchors);
-            if (bucket > end) continue;
-            affected.putIfAbsent(bucket, 0L);
-        }
+            // Unknown sessions must retain both visibility and ordering validation, without inventing bars.
+            if (!unanchored.isEmpty() && !store.visibleMixedPage(symbol, unanchored).isEmpty()) missingAnchor[0] = true;
         });
-        for (Long start : new ArrayList<>(affected.keySet())) {
-            long bucketEnd = start + width;
-            Long next = anchors.higherKey(start);
-            if (width >= 86400000 && next != null && Math.abs(next - bucketEnd) <= 3600000) bucketEnd = next;
-            affected.put(start, bucketEnd);
-        }
-        Set<Long> published = store.publishedBuckets(symbol, affected);
-        TreeMap<Long, MinuteAggregate> aggregates = new TreeMap<>();
         long now = System.currentTimeMillis();
-        Map<Long,Long> stops = new TreeMap<>();
-        for (Map.Entry<Long,Long> entry : affected.entrySet()) {
-            long stop = Math.min(entry.getValue() - 1, now);
-            if (stop >= entry.getKey()) stops.put(entry.getKey(),stop);
-        }
-        mergedMinuteWindows(symbol, interval, stops, baseMinutes, page -> {
-            for (Map<String,Object> minute : page) {
-                long at = ControlHistoryStore.time(minute);
-                Map.Entry<Long,Long> bucket = affected.floorEntry(at);
-                if (bucket != null && at < bucket.getValue())
-                    aggregates.computeIfAbsent(bucket.getKey(), ignored -> new MinuteAggregate()).add(minute);
+        while (!pending.isEmpty()) {
+            TreeSet<Long> candidates = new TreeSet<>(bars.keySet()); candidates.addAll(pending.keySet());
+            while (candidates.size() > limit) candidates.pollFirst();
+            TreeMap<Long,Long> selected = new TreeMap<>(), stops = new TreeMap<>();
+            for (Long start : candidates) if (pending.containsKey(start)) {
+                long bucketEnd = pending.remove(start);
+                selected.put(start, bucketEnd);
+                long stop = Math.min(bucketEnd - 1, now);
+                if (stop >= start) stops.put(start, stop);
             }
-        });
-        for (Long start : affected.keySet()) {
-            MinuteAggregate values = aggregates.getOrDefault(start, new MinuteAggregate());
-            Map<String,Object> bar = values.finish(start);
-            if(baseMinutes!=null) bar=frozenPrefix(bar,frozen.get(start),session,values.lastMinute+59999);
-            if(width==60000 && values.overrides==1) bar=new LinkedHashMap<>(values.last);
-            else { bar.put("partial", true); bar.put("controlled", true); }
-            if(values.restored>0) bar.put("historySourceRestored",true);
-            bar.put("minuteCount", values.count);
-            if (published.contains(start)) bar.put("historyReplaced", true);
-            bars.put(start, bar);
+            if (selected.isEmpty()) break; // All remaining candidates precede an already complete page.
+            Set<Long> visible = new HashSet<>();
+            TreeMap<Long, MinuteAggregate> aggregates = new TreeMap<>();
+            mergedMinuteWindows(symbol, interval, stops, baseMinutes, mixed -> {
+                for (Map<String,Object> minute : mixed) {
+                    long at = ControlHistoryStore.time(minute);
+                    Map.Entry<Long,Long> bucket = selected.floorEntry(at);
+                    if (bucket != null && at < bucket.getValue()) visible.add(bucket.getKey());
+                }
+            }, page -> {
+                for (Map<String,Object> minute : page) {
+                    long at = ControlHistoryStore.time(minute);
+                    Map.Entry<Long,Long> bucket = selected.floorEntry(at);
+                    if (bucket != null && at < bucket.getValue())
+                        aggregates.computeIfAbsent(bucket.getKey(), ignored -> new MinuteAggregate()).add(minute);
+                }
+            });
+            // A hidden SOURCE-only candidate cannot displace a native bar or consume a page slot.
+            selected.keySet().retainAll(visible);
+            Set<Long> published = store.publishedBuckets(symbol, selected);
+            for (Long start : selected.keySet()) {
+                MinuteAggregate values = aggregates.getOrDefault(start, new MinuteAggregate());
+                Map<String,Object> bar = values.finish(start);
+                if(baseMinutes!=null) bar=frozenPrefix(bar,frozen.get(start),session,values.lastMinute+59999);
+                if(width==60000 && values.overrides==1) bar=new LinkedHashMap<>(values.last);
+                else { bar.put("partial", true); bar.put("controlled", true); }
+                if(values.restored>0) bar.put("historySourceRestored",true);
+                bar.put("minuteCount", values.count);
+                if (published.contains(start)) bar.put("historyReplaced", true);
+                bars.put(start, bar);
+            }
+            while (bars.size() > limit) bars.pollFirstEntry();
         }
         // requestMinutes is retained for source compatibility only. Reads never enqueue backfill or repair state.
         while (bars.size() > limit) bars.pollFirstEntry();
@@ -165,11 +186,12 @@ public class ControlledKlineMerger {
     /** Batch sparse windows together without querying the unrequested gaps between them. */
     private void mergedMinuteWindows(long symbol, String interval, Map<Long,Long> windows,
             java.util.function.BiFunction<Long,Long,List<Map<String,Object>>> baseMinutes,
+            java.util.function.Consumer<List<Map<String,Object>>> mixedConsumer,
             java.util.function.Consumer<List<Map<String,Object>>> consume) {
         if (baseMinutes != null) {
             // The existing random-session callback has no key directory. Bound every supplied time slice.
             for (Map.Entry<Long,Long> window : windows.entrySet())
-                suppliedMinutePages(symbol,window.getKey(),window.getValue(),baseMinutes,consume);
+                suppliedMinutePages(symbol,window.getKey(),window.getValue(),baseMinutes,mixedConsumer,consume);
             return;
         }
         Iterator<Map.Entry<Long,Long>> iterator = windows.entrySet().iterator();
@@ -196,7 +218,9 @@ public class ControlledKlineMerger {
                         (rs,n) -> store.decode(rs.getString(1)),candleArgs.toArray()))
                     if (ControlHistoryStore.periodCandle(row,"1m") && !(row.get(SourceHistoryGapRepair.AGGREGATE_EXCLUSIONS) instanceof List
                             && ((List<?>)row.get(SourceHistoryGapRepair.AGGREGATE_EXCLUSIONS)).contains(interval))) minutes.put(ControlHistoryStore.time(row),row);
-                for (Map<String,Object> row : store.visibleMixedAt(symbol,keys)) minutes.put(ControlHistoryStore.time(row),row);
+                List<Map<String,Object>> mixed = store.visibleMixedAt(symbol,keys);
+                mixedConsumer.accept(mixed);
+                for (Map<String,Object> row : mixed) minutes.put(ControlHistoryStore.time(row),row);
                 for(Map.Entry<Long,Map<String,Object>> row:store.historyOverrides(symbol,keys.get(0),keys.get(keys.size()-1)).entrySet())
                     if(row.getValue()!=null) minutes.put(row.getKey(),new LinkedHashMap<>(row.getValue()));
                 consume.accept(new ArrayList<>(minutes.values()));
@@ -222,13 +246,16 @@ public class ControlledKlineMerger {
     }
     private void suppliedMinutePages(long symbol, long from, long to,
             java.util.function.BiFunction<Long,Long,List<Map<String,Object>>> baseMinutes,
+            java.util.function.Consumer<List<Map<String,Object>>> mixedConsumer,
             java.util.function.Consumer<List<Map<String,Object>>> consume) {
         long first = from;
         while (first <= to) {
             long last = Math.min(to, first + 500 * 60000L - 1);
             TreeMap<Long,Map<String,Object>> minutes = new TreeMap<>();
             for (Map<String,Object> row : baseMinutes.apply(first,last)) minutes.put(ControlHistoryStore.time(row),row);
-            for (Map<String,Object> row : store.visibleMixed(symbol, first, last)) minutes.put(ControlHistoryStore.time(row),row);
+            List<Map<String,Object>> mixed = store.visibleMixed(symbol, first, last);
+            mixedConsumer.accept(mixed);
+            for (Map<String,Object> row : mixed) minutes.put(ControlHistoryStore.time(row),row);
             consume.accept(new ArrayList<>(minutes.values()));
             if (last == Long.MAX_VALUE) break;
             first = last + 1;
