@@ -44,4 +44,32 @@ class SimulationGatewayTest {
   ReflectionTestUtils.setField(gateway,"identityUrl","https://other.example.test/api/simulation");
   assertThrows(IllegalStateException.class,()->gateway.authenticate("Bearer token"));server.verify();
  }
+ @Test void profileTransportUsesServiceKeyAndRejectsWrongTenantOrUnexpectedIdentity() throws Exception {
+  com.sun.net.httpserver.HttpServer identity=com.sun.net.httpserver.HttpServer.create(new java.net.InetSocketAddress("127.0.0.1",0),0);
+  com.fasterxml.jackson.databind.ObjectMapper mapper=new com.fasterxml.jackson.databind.ObjectMapper();
+  java.util.Map<String,Object> result=new java.util.LinkedHashMap<>();result.put("environment","REAL");result.put("tenantId",1);
+  result.put("list",java.util.Collections.singletonList(SimulationProfileFixture.profile(1,7)));
+  identity.createContext("/api/simulation/user-profiles",request->{
+   assertEquals("12345678901234567890123456789012",request.getRequestHeaders().getFirst("X-Simulation-Inspection-Key"));
+   assertEquals("1",request.getRequestHeaders().getFirst("X-Simulation-Tenant-Id"));
+   assertNull(request.getRequestHeaders().getFirst("Authorization"));
+   assertEquals(java.util.Collections.singletonList(7),mapper.readValue(request.getRequestBody(),java.util.List.class));
+   byte[] body=mapper.writeValueAsBytes(result);request.getResponseHeaders().set("Content-Type","application/json");
+   request.sendResponseHeaders(200,body.length);request.getResponseBody().write(body);request.close();
+  });identity.start();
+  try {
+   ReflectionTestUtils.setField(gateway,"identityUrl","http://127.0.0.1:"+identity.getAddress().getPort()+"/api/simulation");
+   ReflectionTestUtils.setField(gateway,"inspectionKey","12345678901234567890123456789012");
+   assertEquals("customer-7@example.test",gateway.profiles(java.util.Collections.singletonList(7L)).get(0).get("email"));
+   result.put("tenantId",2);assertThrows(IllegalStateException.class,()->gateway.profiles(java.util.Collections.singletonList(7L)));
+   result.put("tenantId",1);result.put("list",java.util.Collections.singletonList(SimulationProfileFixture.profile(2,7)));
+   assertThrows(IllegalStateException.class,()->gateway.profiles(java.util.Collections.singletonList(7L)));
+   result.put("list",java.util.Collections.singletonList(SimulationProfileFixture.profile(1,8)));
+   assertThrows(IllegalStateException.class,()->gateway.profiles(java.util.Collections.singletonList(7L)));
+  } finally {identity.stop(0);}
+ }
+ @Test void unconfiguredProfileMirrorCannotSendRequests(){
+  ReflectionTestUtils.setField(gateway,"inspectionKey","");
+  assertThrows(IllegalStateException.class,()->gateway.profiles(java.util.Collections.singletonList(7L)));
+ }
 }

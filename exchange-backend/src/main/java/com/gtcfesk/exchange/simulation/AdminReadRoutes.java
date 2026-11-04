@@ -25,6 +25,7 @@ public final class AdminReadRoutes {
             if(path.matches("/api/admin/activities/[0-9]+/(stats|recipients)") || path.matches("/api/admin/activities/users/[0-9]+/(account|ledger)"))return "announcement:detail";
             if(path.matches("/api/admin/agents/[0-9]+/performance"))return "agents:performance";
             if(path.matches("/api/admin/users/[0-9]+")) return "users:detail";
+            if(path.matches("/api/admin/users/[1-9][0-9]*/profile")) return "users:detail";
             if(path.matches("/api/admin/users/[0-9]+/fund-details")) return "users:fund_details";
             if(path.matches("/api/admin/users/[0-9]+/subordinates")) return "users:view_subordinates";
             if(path.matches("/api/admin/wallet/[0-9]+/(bank-cards|digital-addresses)")) return "users:wallet_management";

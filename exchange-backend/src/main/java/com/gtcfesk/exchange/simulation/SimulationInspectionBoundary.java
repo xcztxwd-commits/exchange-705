@@ -20,6 +20,7 @@ public class SimulationInspectionBoundary extends OncePerRequestFilter {
     private final SimulationEnvironment environment;
     private final AccountInspection inspection;
     private final ObjectMapper mapper;
+    @org.springframework.beans.factory.annotation.Autowired(required=false) private SimulationProvisioner provisioner;
     @Value("${simulation.inspection-key:}") private String key;
     @Override protected boolean shouldNotFilter(HttpServletRequest request) {
         return !"/api/simulation/inspection".equals(request.getServletPath().isEmpty()?request.getRequestURI():request.getServletPath());
@@ -33,6 +34,7 @@ public class SimulationInspectionBoundary extends OncePerRequestFilter {
         try { tenant=Long.valueOf(req.getHeader("X-Simulation-Tenant-Id"));if(tenant<=0)throw new IllegalArgumentException(); }
         catch(Exception e){res.setStatus(403);return;}
         try (com.gtcfesk.exchange.tenant.TenantContext.Scope scope=com.gtcfesk.exchange.tenant.TenantContext.open(tenant)) {
+            if(provisioner != null) provisioner.synchronizeUsers();
             Map<String,Object> result=inspection.read(req.getParameter("kind"),req.getParameter("userId")==null?null:Long.valueOf(req.getParameter("userId")),req.getParameter("userEmail"),req.getParameter("status"),Integer.parseInt(req.getParameter("page")),Integer.parseInt(req.getParameter("size")));
             result.put("environment","DEMO");result.put("tenantId",tenant);mapper.writeValue(res.getWriter(),result);
         } catch(IllegalArgumentException e){res.setStatus(400);mapper.writeValue(res.getWriter(),java.util.Collections.singletonMap("message","筛选参数无效"));}

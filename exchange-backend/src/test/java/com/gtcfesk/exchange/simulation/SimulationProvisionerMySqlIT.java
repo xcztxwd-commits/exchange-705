@@ -23,7 +23,11 @@ class SimulationProvisionerMySqlIT {
         assertTrue(jdbc.queryForObject("SELECT DATABASE()",String.class).startsWith("mt705_probe_"));
         SimulationEnvironment environment=new SimulationEnvironment(source);
         ReflectionTestUtils.setField(environment,"enabled",true);
-        service=new SimulationProvisioner(environment,mock(SimulationGateway.class),jdbc,new DataSourceTransactionManager(source),mock(ForexQuoteMarketService.class));
+        SimulationGateway gateway=mock(SimulationGateway.class);
+        org.mockito.Mockito.when(gateway.profiles(org.mockito.ArgumentMatchers.anyList())).thenAnswer(call ->
+                ((List<Long>)call.getArgument(0)).stream().map(id -> SimulationProfileFixture.profile(TenantContext.requireTenantId(),id))
+                        .collect(java.util.stream.Collectors.toList()));
+        service=new SimulationProvisioner(environment,gateway,jdbc,new DataSourceTransactionManager(source),mock(ForexQuoteMarketService.class));
         user=jdbc.queryForObject("SELECT COALESCE(MAX(id),0)+1000 FROM user_account",Long.class);
         scope=TenantContext.open(1L);
     }

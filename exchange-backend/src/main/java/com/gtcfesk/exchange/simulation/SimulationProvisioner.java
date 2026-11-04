@@ -64,11 +64,15 @@ public class SimulationProvisioner {
     public void user(Long userId) {
         Long tenant = com.gtcfesk.exchange.tenant.TenantContext.requireTenantId();
         if (!environment.enabled()) throw new IllegalStateException("Not a simulation process");
+        Map<String,Object> profile = gateway.profiles(Collections.singletonList(userId)).stream()
+                .filter(row -> Objects.equals(((Number) row.get("id")).longValue(), userId))
+                .findFirst().orElseThrow(() -> new IllegalStateException("Canonical user not found"));
         new TransactionTemplate(transactions).execute(status -> {
             // A duplicate-key UPDATE acquires an exclusive lock directly; INSERT IGNORE would
             // leave shared locks that deadlock when concurrent requests upgrade to FOR UPDATE.
-            jdbc.update("INSERT INTO user_account(tenant_id,id,row_version,email,password_hash,nickname,status,user_type,kyc_level,kyc_status,created_at,updated_at) VALUES (?,?,0,?,'SIMULATION-NO-LOCAL-LOGIN','Demo user','normal','normal',0,'NOT_VERIFIED',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP) ON DUPLICATE KEY UPDATE id=id", tenant, userId, "demo-" + userId + "@example.invalid");
+            jdbc.update("INSERT INTO user_account(tenant_id,id,row_version,email,password_hash,nickname,status,user_type,kyc_level,kyc_status,created_at,updated_at) VALUES (?,?,0,?,'SIMULATION-NO-LOCAL-LOGIN',?,'normal','normal',0,'NOT_VERIFIED',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP) ON DUPLICATE KEY UPDATE id=id", tenant, userId, profile.get("email"), profile.get("nickname"));
             jdbc.queryForObject("SELECT id FROM user_account WHERE tenant_id=? AND id=? FOR UPDATE", Long.class, tenant, userId);
+            mirror(profile);
             int seeded = jdbc.queryForObject("SELECT COUNT(*) FROM simulation_seed WHERE tenant_id=? AND user_id=?", Integer.class, tenant, userId);
             if (seeded == 0) {
                 BigDecimal initialBalance = new BigDecimal("10000");
@@ -80,5 +84,47 @@ public class SimulationProvisioner {
             }
             return null;
         });
+    }
+
+    /** Refresh existing identities before administrator filtering; this never creates users or funds. */
+    public void synchronizeUsers() {
+        if (!environment.enabled()) throw new IllegalStateException("Not a simulation process");
+        Long tenant = com.gtcfesk.exchange.tenant.TenantContext.requireTenantId();
+        long cursor = 0;
+        while (true) {
+            List<Long> ids = jdbc.queryForList("SELECT id FROM user_account WHERE tenant_id=? AND id>? ORDER BY id LIMIT 100",
+                    Long.class, tenant, cursor);
+            if (ids.isEmpty()) return;
+            List<Map<String,Object>> profiles = gateway.profiles(ids);
+            new TransactionTemplate(transactions).execute(status -> {
+                profiles.forEach(this::mirror); return null;
+            });
+            cursor = ids.get(ids.size() - 1);
+        }
+    }
+
+    private void mirror(Map<String,Object> profile) {
+        Long tenant = com.gtcfesk.exchange.tenant.TenantContext.requireTenantId();
+        if (!(profile.get("tenant_id") instanceof Number) || ((Number) profile.get("tenant_id")).longValue() != tenant)
+            throw new IllegalStateException("Identity profile tenant mismatch");
+        List<Map<String,Object>> existing = jdbc.queryForList("SELECT " + String.join(",", SimulationProfileBoundary.COLUMNS)
+                + " FROM user_account WHERE tenant_id=? AND id=? FOR UPDATE", tenant, profile.get("id"));
+        if (existing.isEmpty()) return;
+        Map<String,Object> current = existing.get(0);
+        boolean changed = SimulationProfileBoundary.COLUMNS.stream().anyMatch(column -> !sameProfileValue(current.get(column), profile.get(column)));
+        if (!changed) return;
+        List<Object> args = new ArrayList<>();
+        for (String column : SimulationProfileBoundary.COLUMNS) args.add(profile.get(column));
+        args.add(tenant); args.add(profile.get("id"));
+        jdbc.update("UPDATE user_account SET " + String.join(",", SimulationProfileBoundary.COLUMNS.stream()
+                .map(column -> column + "=?").toArray(String[]::new))
+                + ",row_version=row_version+1,updated_at=CURRENT_TIMESTAMP WHERE tenant_id=? AND id=?", args.toArray());
+    }
+
+    private boolean sameProfileValue(Object left, Object right) {
+        if (left == null || right == null) return left == right;
+        if (left instanceof Number && right instanceof Number)
+            return new BigDecimal(left.toString()).compareTo(new BigDecimal(right.toString())) == 0;
+        return left.toString().equals(right.toString());
     }
 }

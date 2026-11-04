@@ -55,7 +55,11 @@ class SimulationPersistenceTest {
     @BeforeEach void init() {
         jdbc=new JdbcTemplate(dataSource);
         SimulationEnvironment env=mock(SimulationEnvironment.class);when(env.enabled()).thenReturn(true);
-        provisioner=new SimulationProvisioner(env,mock(SimulationGateway.class),jdbc,transactions,mock(ForexQuoteMarketService.class));
+        SimulationGateway gateway=mock(SimulationGateway.class);
+        when(gateway.profiles(anyList())).thenAnswer(call -> ((List<Long>)call.getArgument(0)).stream()
+                .map(id -> SimulationProfileFixture.profile(com.gtcfesk.exchange.tenant.TenantContext.requireTenantId(),id))
+                .collect(java.util.stream.Collectors.toList()));
+        provisioner=new SimulationProvisioner(env,gateway,jdbc,transactions,mock(ForexQuoteMarketService.class));
         jdbc.update("DELETE FROM simulation_seed");jdbc.update("DELETE FROM asset_account");jdbc.update("DELETE FROM user_account");
     }
     @Test void firstUseSeedsTenThousandOnlyInFundWithoutKyc() {
@@ -84,6 +88,44 @@ class SimulationPersistenceTest {
         provisioner.user(7004L);provisioner.user(7003L);
         assertEquals(0,new BigDecimal("42").compareTo(jdbc.queryForObject("SELECT available FROM asset_account WHERE user_id=7003 AND coin='FUND'",BigDecimal.class)));
         assertEquals(0,new BigDecimal("10000").compareTo(jdbc.queryForObject("SELECT available FROM asset_account WHERE user_id=7004 AND coin='FUND'",BigDecimal.class)));
+    }
+    @Test void canonicalIdentityReplacesLegacyPlaceholdersAndRefreshesRemarksWithoutReminting() {
+        provisioner.user(7003L);
+        jdbc.update("UPDATE user_account SET email='demo-7003@example.invalid',nickname='Demo user',remark=NULL WHERE id=7003");
+        jdbc.update("UPDATE asset_account SET available=42 WHERE user_id=7003 AND coin='FUND'");
+        provisioner.synchronizeUsers();
+        Map<String,Object> user=jdbc.queryForMap("SELECT * FROM user_account WHERE id=7003");
+        assertEquals("customer-7003@example.test",user.get("email"));
+        assertEquals("Customer 7003",user.get("nickname"));assertEquals("正式账户备注",user.get("remark"));
+        assertEquals("SIMULATION-NO-LOCAL-LOGIN",user.get("password_hash"));assertNull(user.get("current_token"));
+        assertEquals("NOT_VERIFIED",user.get("kyc_status"));assertEquals(0,new BigDecimal("42").compareTo(balance(7003,"FUND")));
+        assertEquals(1,jdbc.queryForObject("SELECT COUNT(*) FROM simulation_seed WHERE user_id=7003",Integer.class));
+        long version=((Number)user.get("row_version")).longValue();
+        provisioner.synchronizeUsers();
+        assertEquals(version,jdbc.queryForObject("SELECT row_version FROM user_account WHERE id=7003",Long.class));
+    }
+    @Test void laterRealProfileChangesIncludingClearedRemarkAreMirroredForExistingUsers() {
+        provisioner.user(7003L);
+        SimulationGateway gateway=(SimulationGateway)ReflectionTestUtils.getField(provisioner,"gateway");
+        Map<String,Object> profile=SimulationProfileFixture.profile(1,7003);
+        profile.put("email","renamed@example.test");profile.put("nickname","新的昵称");profile.put("remark",null);
+        profile.put("avatar_url","/api/uploads/images/profile.png");profile.put("phone","+12025550123");
+        when(gateway.profiles(anyList())).thenReturn(Collections.singletonList(profile));
+        provisioner.synchronizeUsers();
+        Map<String,Object> user=jdbc.queryForMap("SELECT * FROM user_account WHERE id=7003");
+        assertEquals("renamed@example.test",user.get("email"));assertEquals("新的昵称",user.get("nickname"));
+        assertNull(user.get("remark"));assertEquals(profile.get("avatar_url"),user.get("avatar_url"));assertEquals(profile.get("phone"),user.get("phone"));
+        assertEquals(1,jdbc.queryForObject("SELECT COUNT(*) FROM user_account",Integer.class));
+    }
+    @Test void identityFailureCannotCreatePartialUserOrWalletAndWrongTenantIsRejected() {
+        SimulationGateway gateway=(SimulationGateway)ReflectionTestUtils.getField(provisioner,"gateway");
+        when(gateway.profiles(anyList())).thenThrow(new IllegalStateException("identity unavailable"));
+        assertThrows(IllegalStateException.class,()->provisioner.user(7003L));
+        assertEquals(0,jdbc.queryForObject("SELECT COUNT(*) FROM user_account",Integer.class));
+        doReturn(Collections.singletonList(SimulationProfileFixture.profile(2,7003))).when(gateway).profiles(anyList());
+        assertThrows(IllegalStateException.class,()->provisioner.user(7003L));
+        assertEquals(0,jdbc.queryForObject("SELECT COUNT(*) FROM user_account",Integer.class));
+        assertEquals(0,jdbc.queryForObject("SELECT COUNT(*) FROM simulation_seed",Integer.class));
     }
     @Test void transactionFailureCannotLeavePartialSeed() {
         jdbc.execute("ALTER TABLE simulation_seed ADD CONSTRAINT reject_test CHECK(user_id <> 7005)");

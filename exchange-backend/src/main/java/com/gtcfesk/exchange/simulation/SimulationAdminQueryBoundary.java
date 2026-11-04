@@ -27,6 +27,7 @@ public class SimulationAdminQueryBoundary extends OncePerRequestFilter {
     private final com.gtcfesk.exchange.control.TenantRepository tenants;
     private final SimulationEnvironment environment;
     private final ObjectMapper mapper;
+    @org.springframework.beans.factory.annotation.Autowired private SimulationProvisioner provisioner;
     @Value("${simulation.inspection-key:}") private String key;
     @Override protected boolean shouldNotFilter(HttpServletRequest r){return !"/api/simulation/admin-query".equals(r.getServletPath().isEmpty()?r.getRequestURI():r.getServletPath());}
     @Override protected void doFilterInternal(HttpServletRequest req,HttpServletResponse res,FilterChain chain) throws IOException,ServletException {
@@ -63,6 +64,9 @@ public class SimulationAdminQueryBoundary extends OncePerRequestFilter {
         context.setAuthentication(new UsernamePasswordAuthenticationToken("-1",null,Collections.singletonList(new SimpleGrantedAuthority("ROLE_SUPER_ADMIN"))));
         SecurityContextHolder.setContext(context);
         req.setAttribute(SimulationAdminQueryBoundary.class.getName(),new VerifiedRead(tenant));
-        try(com.gtcfesk.exchange.tenant.TenantContext.Scope scope=com.gtcfesk.exchange.tenant.TenantContext.open(tenant)){req.getRequestDispatcher(q.path).forward(wrapped,res);}finally{req.removeAttribute(SimulationAdminQueryBoundary.class.getName());SecurityContextHolder.setContext(previous);}
+        try(com.gtcfesk.exchange.tenant.TenantContext.Scope scope=com.gtcfesk.exchange.tenant.TenantContext.open(tenant)){
+            if(!q.path.matches("/api/admin/orders/(contract|option)/live")) provisioner.synchronizeUsers();
+            req.getRequestDispatcher(q.path).forward(wrapped,res);
+        }finally{req.removeAttribute(SimulationAdminQueryBoundary.class.getName());SecurityContextHolder.setContext(previous);}
     }
 }
