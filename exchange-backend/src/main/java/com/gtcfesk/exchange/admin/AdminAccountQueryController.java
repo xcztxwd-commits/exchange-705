@@ -17,6 +17,7 @@ public class AdminAccountQueryController {
     private final SimulationEnvironment environment;
     @Value("${simulation.inspection-url:http://demo-backend:8080/api/simulation/inspection}") private String url;
     @Value("${simulation.inspection-key:}") private String key;
+    @org.springframework.beans.factory.annotation.Autowired private AdminSimulationIdentity identities;
     @PostMapping("/api/admin/account-query")
     public Object query(@RequestBody AdminReadRoutes.Query query, javax.servlet.http.HttpServletResponse response) {
         response.setHeader("Cache-Control","no-store");
@@ -34,7 +35,10 @@ public class AdminAccountQueryController {
         try {
             ResponseEntity<byte[]> result=new RestTemplate(f).exchange(url.replaceFirst("/inspection$","/admin-query"),HttpMethod.POST,new HttpEntity<>(query,headers),byte[].class);
             if(!"DEMO".equals(result.getHeaders().getFirst("X-Account-Environment")))throw new IllegalStateException();
-            return ResponseEntity.ok().contentType(result.getHeaders().getContentType()==null?MediaType.APPLICATION_JSON:result.getHeaders().getContentType()).header("Cache-Control","no-store").body(result.getBody());
+            MediaType type=result.getHeaders().getContentType()==null?MediaType.APPLICATION_JSON:result.getHeaders().getContentType();
+            byte[] body=result.getBody();
+            if(identities!=null && body!=null && MediaType.APPLICATION_JSON.isCompatibleWith(type)) body=identities.canonicalize(body);
+            return ResponseEntity.ok().contentType(type).header("Cache-Control","no-store").body(body);
         }catch(Exception e){throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,"模拟查询失败；未回退到真实账户");}
     }
 }

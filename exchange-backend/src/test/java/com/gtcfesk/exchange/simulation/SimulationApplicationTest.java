@@ -25,6 +25,7 @@ class SimulationApplicationTest {
  @BeforeEach void setup() {
   client.getRestTemplate().setRequestFactory(new org.springframework.http.client.OkHttp3ClientHttpRequestFactory());
   when(gateway.authenticate("Bearer simulation-fixture")).thenReturn(8001L);
+  when(gateway.profiles(anyList())).thenReturn(Collections.singletonList(SimulationProfileFixture.profile(1,8001)));
   Map<String,Object> snapshot=new LinkedHashMap<>();for(String table:SimulationCatalogController.TABLES)snapshot.put(table,Collections.emptyList());snapshot.put("system_config",Collections.emptyList());
   when(gateway.get("/catalog","Bearer simulation-fixture")).thenReturn(snapshot);
  }

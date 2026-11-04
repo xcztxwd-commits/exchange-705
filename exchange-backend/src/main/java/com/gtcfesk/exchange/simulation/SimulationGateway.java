@@ -12,6 +12,7 @@ import java.util.*;
 @Component
 public class SimulationGateway {
     @Value("${simulation.identity-url:http://backend:8080/api/simulation}") private String identityUrl;
+    @Value("${simulation.inspection-key:}") private String inspectionKey;
     @org.springframework.beans.factory.annotation.Autowired private com.gtcfesk.exchange.control.TenantRepository tenants;
     private final RestTemplate http;
     private final SimpleClientHttpRequestFactory transport;
@@ -47,5 +48,34 @@ public class SimulationGateway {
         Long id = Long.valueOf(session.get("userId").toString());
         if (id <= 0) throw new IllegalArgumentException("Invalid user identity");
         return id;
+    }
+
+    /** Internal remarks are fetched with the service key, never returned by the public session API. */
+    public List<Map<String,Object>> profiles(List<Long> ids) {
+        if (inspectionKey.length() < 32 || ids.isEmpty() || ids.size() > 100)
+            throw new IllegalStateException("Simulation identity mirror is not configured");
+        Long tenant = com.gtcfesk.exchange.tenant.TenantContext.requireTenantId();
+        HttpHeaders headers = new HttpHeaders();
+        headers.set("X-Simulation-Inspection-Key", inspectionKey);
+        headers.set("X-Simulation-Tenant-Id", tenant.toString());
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(2000); factory.setReadTimeout(4000);
+        Map<String,Object> result = new RestTemplate(factory).exchange(URI.create(identityUrl + "/user-profiles"),
+                HttpMethod.POST, new HttpEntity<>(ids, headers), Map.class).getBody();
+        if (result == null || !"REAL".equals(result.get("environment"))
+                || !(result.get("tenantId") instanceof Number)
+                || ((Number) result.get("tenantId")).longValue() != tenant || !(result.get("list") instanceof List))
+            throw new IllegalStateException("Identity profile tenant mismatch");
+        List<Map<String,Object>> profiles = (List<Map<String,Object>>) result.get("list");
+        Set<Long> seen = new HashSet<>();
+        for (Map<String,Object> profile : profiles) {
+            Long id = profile.get("id") instanceof Number ? ((Number) profile.get("id")).longValue() : null;
+            if (id == null || !ids.contains(id) || !seen.add(id) || !(profile.get("tenant_id") instanceof Number)
+                    || ((Number) profile.get("tenant_id")).longValue() != tenant
+                    || !profile.keySet().containsAll(SimulationProfileBoundary.COLUMNS)
+                    || !(profile.get("email") instanceof String) || ((String) profile.get("email")).trim().isEmpty())
+                throw new IllegalStateException("Invalid canonical user profile");
+        }
+        return profiles;
     }
 }
