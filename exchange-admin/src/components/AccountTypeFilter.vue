@@ -10,7 +10,7 @@ function update(value: any) { emit('update:modelValue', value); emit('change') }
     <el-checkbox-group :model-value="modelValue" @update:model-value="update">
       <el-checkbox label="REAL">真实账户</el-checkbox><el-checkbox label="DEMO">模拟账户</el-checkbox>
     </el-checkbox-group>
-    <small v-if="modelValue.includes('DEMO')">模拟数据为虚拟资金；按账户类型区分记录，当前筛选仅供查看。</small>
+    <small v-if="modelValue.includes('DEMO')">模拟账户使用虚拟资金；按账户类型区分记录，与真实账户独立结算。</small>
     <small v-if="!modelValue.length">未选择账户类型，不显示数据。</small>
   </div>
 </template>

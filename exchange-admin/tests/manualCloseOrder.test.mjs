@@ -8,8 +8,12 @@ const source = readFileSync(new URL('../src/views/Orders.vue', import.meta.url),
 const script = source.slice(source.indexOf('const exitRetries ='), source.indexOf('// Soft deletion'))
 const calls = [], confirmations = [], prompts = [], errors = [], selected = []
 let dismissed, promptValue = '管理员受控撤单', response = { success: true }, requestError, reloads = 0
-const app = new Function('accountTable', 'ElMessageBox', 'crypto', 'request', 'ElMessage', 'loadContractOrders',
-  stripTypeScriptTypes(script) + ';return {handleCloseOrder, handleCancelOrder};'
+const pathSource = readFileSync(new URL('../src/utils/orderExit.ts', import.meta.url), 'utf8').replace(/^import .*$/m, '').replace('export function ', 'function ')
+const orderCloseUrl = new Function(stripTypeScriptTypes(pathSource) + ';return orderCloseUrl;')()
+const post = async (...args) => { calls.push(args); if (requestError) throw requestError; return response }
+let optionReloads = 0
+const app = new Function('accountTable', 'ElMessageBox', 'crypto', 'request', 'ElMessage', 'loadContractOrders', 'loadOptionOrders', 'baseRequest', 'orderCloseUrl',
+  stripTypeScriptTypes(script) + ';return {handleCloseOrder, handleCloseOption, handleCancelOrder};'
 )(
   { selectRow: row => selected.push(row) },
   {
@@ -17,9 +21,12 @@ const app = new Function('accountTable', 'ElMessageBox', 'crypto', 'request', 'E
     prompt: async (...args) => { prompts.push(args); if (dismissed) throw dismissed; return { value: promptValue } },
   },
   { randomUUID },
-  { post: async (...args) => { calls.push(args); if (requestError) throw requestError; return response } },
+  { post },
   { success() {}, error: message => errors.push(message) },
   async () => { reloads++ },
+  async () => { optionReloads++ },
+  { post },
+  orderCloseUrl,
 )
 const row = { id: 7, status: 'OPEN', accountMode: 'REAL' }
 
@@ -77,4 +84,24 @@ for (const action of ['cancel', 'close']) {
   await app.handleCancelOrder({ ...row, status: 'PENDING' })
 }
 assert.equal(calls.length, submitted, 'dismissing the optional reason prompt must not submit')
+dismissed = undefined
+requestError = new Error('模拟请求等待确认')
+await app.handleCloseOrder({ ...row, accountMode: 'DEMO' })
+const demoRetry = calls.at(-1)[1]
+assert.equal(calls.at(-1)[0], '/admin/simulation/orders/contract/7/close')
+assert.ok(confirmations.at(-1)[0].includes('模拟账户'))
+assert.ok(confirmations.at(-1)[0].includes('虚拟资金'))
+assert.equal(demoRetry.reason, '管理员手动平仓（模拟账户）')
+await app.handleCloseOrder(row)
+assert.equal(calls.at(-1)[0], '/admin/orders/contract/7/close')
+assert.notEqual(calls.at(-1)[1].requestId, demoRetry.requestId, 'same order IDs in different realms cannot share retry keys')
+requestError = undefined
+await app.handleCloseOrder({ ...row, accountMode: 'DEMO' })
+assert.equal(calls.at(-1)[1], demoRetry)
+await app.handleCloseOption({ ...row, accountMode: 'DEMO', status: 'TRADING' })
+assert.equal(calls.at(-1)[0], '/admin/simulation/orders/option/7/close')
+assert.equal(optionReloads, 1)
+assert.notEqual(calls.at(-1)[1].requestId, demoRetry.requestId)
+assert.throws(() => orderCloseUrl('UNKNOWN', 'contract', 7), /账户类型/)
+assert.throws(() => orderCloseUrl('DEMO', 'contract', -1), /账户类型/)
 console.log('PASS: close without text input, dismissal, error handling, idempotent retry, reload, cancel validation')

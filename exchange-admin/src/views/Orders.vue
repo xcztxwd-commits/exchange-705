@@ -4,6 +4,8 @@ import { ElMessage, ElMessageBox, ElTabs, ElTabPane } from 'element-plus'
 import { Search, Refresh } from '@element-plus/icons-vue'
 import { useAccountTable } from '@/utils/useAccountTable'
 import { accountTableRequest } from '@/utils/accountTableRequest'
+import baseRequest from '@/utils/request'
+import { orderCloseUrl } from '@/utils/orderExit'
 import { useLiveContractOrders } from '@/utils/useLiveContractOrders'
 import { useOrderMonitorStore } from '@/store/orderMonitor'
 import AccountTypeFilter from '@/components/AccountTypeFilter.vue'
@@ -259,30 +261,35 @@ const formatDate = (date: string | null) => {
 }
 
 const exitRetries = new Map<string, {requestId: string, reason: string}>()
-async function controlledContractExit(row: any, command: 'close' | 'cancel') {
+async function controlledContractExit(row: any, command: 'close' | 'cancel', kind: 'contract' | 'option' = 'contract') {
   accountTable.selectRow(row)
-  const key = `${row.id}:${command}`
+  const mode: AccountMode = row.accountMode || 'REAL'
+  const orderId = row.id
+  const key = `${mode}:${kind}:${orderId}:${command}`
   try {
     let reason: string
     if (command === 'close') {
-      await ElMessageBox.confirm(`确定要平仓订单 ${row.id} 吗？将使用服务端新鲜行情平仓。`, '确认平仓', {type: 'warning', confirmButtonText: '平仓', cancelButtonText: '取消'})
-      reason = '管理员手动平仓'
+      await ElMessageBox.confirm(`确定要平仓${mode === 'DEMO' ? '模拟' : '真实'}账户的${kind === 'contract' ? '合约' : '期货'}订单 ${orderId} 吗？将使用服务端新鲜行情结算${mode === 'DEMO' ? '虚拟资金' : '该账户资金'}。`, '确认平仓', {type: 'warning', confirmButtonText: '平仓', cancelButtonText: '取消'})
+      reason = mode === 'DEMO' ? '管理员手动平仓（模拟账户）' : '管理员手动平仓'
     } else {
       reason = (await ElMessageBox.prompt('受控撤单原因（选填，最多500字）', '受控退出', {inputValue: exitRetries.get(key)?.reason || '', inputValidator: value => !value || value.length <= 500 || '原因最多500字'})).value
     }
     const prior = exitRetries.get(key)
     const body = prior?.reason === reason ? prior : {requestId: crypto.randomUUID(), reason}
     exitRetries.set(key, body)
-    const res: any = await request.post(`/admin/orders/contract/${row.id}/${command}`, body)
+    const res: any = command === 'close'
+      ? await baseRequest.post(orderCloseUrl(mode, kind, orderId), body)
+      : await request.post(`/admin/orders/contract/${orderId}/${command}`, body)
     if (res.success === false) throw new Error(res.message || '处理失败')
     exitRetries.delete(key)
     ElMessage.success('受控退出已完成并留痕')
-    await loadContractOrders()
+    await (kind === 'contract' ? loadContractOrders() : loadOptionOrders())
   } catch (e: any) {
     if (e !== 'cancel' && e !== 'close') ElMessage.error(e?.response?.data?.message || e?.message || '处理失败；重试保留原幂等键')
   }
 }
 const handleCloseOrder = (row: any) => controlledContractExit(row, 'close')
+const handleCloseOption = (row: any) => controlledContractExit(row, 'close', 'option')
 const handleCancelOrder = (row: any) => controlledContractExit(row, 'cancel')
 
 // Soft deletion only changes visibility; no settlement or balance mutation.
@@ -469,7 +476,7 @@ onMounted(() => {
                   type="success" 
                   size="small" 
                   @click="handleCloseOrder(row)"
-                 :disabled="accountModes.includes('DEMO') || !accountModes.length">
+                 :disabled="isAgent || !accountModes.includes(row.accountMode || 'REAL')">
                   平仓
                 </el-button>
                 <el-button v-permission="'orders:cancel_order'"
@@ -627,6 +634,8 @@ onMounted(() => {
               <div style="display: flex; gap: 8px; flex-wrap: wrap;">
                 <el-button v-permission="'orders:view'" v-if="!row.deleted" :type="monitor.contains(row, 'option') ? 'success' : 'primary'" plain size="small" :aria-pressed="monitor.contains(row, 'option')" @click="monitor.add(row, 'option')">{{ monitor.contains(row, 'option') ? '监控中' : '监控' }}</el-button>
                 <el-button v-permission="'orders:view'" v-if="!row.deleted && row.status === 'CLOSED'" type="primary" plain size="small" :disabled="row.userId == null" :title="row.userId == null ? '请先绑定用户' : '使用本行订单所属用户生成分享图'" @click="viewShare(row, 'option')">查看分享图</el-button>
+                <el-button v-permission="'orders:close_order'" v-if="!row.deleted && row.status === 'TRADING' && row.accountMode === 'DEMO'"
+                  type="success" size="small" :disabled="isAgent || !accountModes.includes('DEMO')" @click="handleCloseOption(row)">平仓</el-button>
                 <el-button v-permission="'orders:set_profit'"
                   v-if="!row.deleted && row.status === 'TRADING'"
                   type="success" 

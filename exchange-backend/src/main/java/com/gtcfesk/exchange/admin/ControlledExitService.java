@@ -56,7 +56,9 @@ public class ControlledExitService {
   org.springframework.security.core.Authentication auth=SecurityContextHolder.getContext().getAuthentication();
   if(auth==null||!auth.isAuthenticated()||auth.getAuthorities().stream().noneMatch(a->Arrays.asList("ROLE_ADMIN","ROLE_SUPER_ADMIN").contains(a.getAuthority()))||auth.getAuthorities().stream().anyMatch(a->"ROLE_AGENT".equals(a.getAuthority())))throw new AccessDeniedException("受控退出需要管理员或目标租户总控访问身份");
   ControlIdentity control=ControlIdentity.current();Long actor;String actorType;AdminUser admin=null;
-  if(control!=null){if(control.getAccessSessionId()==null||control.getActorId()==null||control.getActorId()<=0||!tenant.equals(control.getTenantId()))throw new AccessDeniedException("目标租户身份不匹配");actor=control.getActorId();actorType="CONTROL";}
+  com.gtcfesk.exchange.simulation.SimulationOrderCloseBoundary.Proof simulated=com.gtcfesk.exchange.simulation.SimulationOrderCloseBoundary.current();
+  if(simulated!=null){simulated.require(tenant,kind,id,command,input);actor=simulated.actorId;actorType=simulated.actorType;}
+  else if(control!=null){if(control.getAccessSessionId()==null||control.getActorId()==null||control.getActorId()<=0||!tenant.equals(control.getTenantId()))throw new AccessDeniedException("目标租户身份不匹配");actor=control.getActorId();actorType="CONTROL";}
   else {try{actor=Long.valueOf(auth.getName());}catch(NumberFormatException e){throw new AccessDeniedException("操作者无效");}admin=admins.findByTenantIdAndId(tenant,actor).filter(a->Boolean.TRUE.equals(a.getEnabled())).orElseThrow(()->new AccessDeniedException("操作者已停用"));actorType="ADMIN";}
   if(id==null||id<=0||input==null||input.requestId==null||!input.requestId.matches("[a-zA-Z0-9_-]{16,64}"))throw new IllegalArgumentException("需要16至64位幂等键");
   if(input.reason!=null&&input.reason.length()>500)throw new IllegalArgumentException("处理原因不能超过500字");
@@ -65,7 +67,7 @@ public class ControlledExitService {
   else if(("financial".equals(kind)&&"redeem".equals(command))||("loan".equals(kind)&&"repay".equals(command)))permission="controlled_exit";
   else throw new IllegalArgumentException("受控命令无效");
   if(!"risk".equals(command)&&(input.stopLoss!=null||input.takeProfit!=null))throw new IllegalArgumentException("非风控命令不接受止盈止损字段");
-  permissions.require("financial".equals(kind)?"financial_orders":"loan".equals(kind)?"loan_review":"orders",permission);
+  if(simulated==null)permissions.require("financial".equals(kind)?"financial_orders":"loan".equals(kind)?"loan_review":"orders",permission);
   // Scalar ownership is a routing hint only; no order entity or lock before the user funds lock.
   String entity="contract".equals(kind)?"ContractOrder":"option".equals(kind)?"OptionOrder":"financial".equals(kind)?"FinancialOrder":"LoanRecord";
   List<Long> owners=em.createQuery("select o.userId from "+entity+" o where o.tenantId=:tenant and o.id=:id",Long.class)
@@ -79,7 +81,7 @@ public class ControlledExitService {
   BalanceAdjustment prior=receipts.findByTenantIdAndRequestKey(tenant,input.requestId).orElse(null);
   if(prior!=null){em.refresh(prior,LockModeType.PESSIMISTIC_READ);if(!hash.equals(prior.getRequestHash()))throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.CONFLICT,"幂等键已用于不同命令");return decode(prior.getChanges());}
   if(receiptOnly)return null;
-  permissions.require("financial".equals(kind)?"financial_orders":"loan".equals(kind)?"loan_review":"orders",permission);
+  if(simulated==null)permissions.require("financial".equals(kind)?"financial_orders":"loan".equals(kind)?"loan_review":"orders",permission);
   em.flush();em.createQuery("select o from "+entity+" o where o.tenantId=:tenant and o.id=:id",Object.class).setParameter("tenant",tenant).setParameter("id",id).getResultList().forEach(row->em.refresh(row,LockModeType.PESSIMISTIC_WRITE));
   Object order="contract".equals(kind)?contracts.lockById(id).orElseThrow(()->new BusinessException("订单不存在")):"option".equals(kind)?options.lockById(id).orElseThrow(()->new BusinessException("订单不存在")):"financial".equals(kind)?financialOrders.lockById(id).orElseThrow(()->new BusinessException("订单不存在")):loanOrders.lockById(id).orElseThrow(()->new BusinessException("订单不存在"));
   em.refresh(order,LockModeType.PESSIMISTIC_WRITE);
@@ -103,9 +105,13 @@ public class ControlledExitService {
    else order=loanService.earlyRepayment(id,user);
   }
   Map<String,Object> result=new LinkedHashMap<>();result.put("success",true);result.put("tenantId",tenant);result.put("kind",kind);result.put("orderId",id);result.put("command",command);result.put("actorType",actorType);result.put("actorId",actor);result.put("before",before);result.put("after",snapshot(user,order));
+  if(simulated!=null){result.put("accountMode","DEMO");result.put("actorEmail",simulated.actorEmail);}
   BalanceAdjustment receipt=new BalanceAdjustment();receipt.setUserId(user);receipt.setRequestKey(input.requestId);receipt.setRequestHash(hash);receipt.setActorType(actorType);receipt.setActorId(actor);receipt.setReason(input.reason);receipt.setChanges(new String(bytes(result),java.nio.charset.StandardCharsets.UTF_8));receipts.saveAndFlush(receipt);checkpoint("controlled-receipt");
+  // The same-transaction receipt is the demo audit: its actor belongs to the real service, not demo admin_user.
+  if(simulated==null) {
   if(control!=null)audit.record(actor,tenant,control.getAccessSessionId(),"CONTROLLED_EXIT",kind+":"+id,"SUCCESS",receipt.getChanges(),input.reason);
   else {OperationLog log=new OperationLog();log.setAdminId(actor);log.setAdminEmail(admin.getEmail());log.setOperationType("受控退出");log.setOperationAction(kind+":"+command);log.setTargetType(kind);log.setTargetId(id);log.setTargetInfo("userId="+user+"; reason="+input.reason);log.setRequestMethod("POST");log.setRequestUrl("/api/admin/controlled-exits/"+kind+"/"+id+"/"+command);log.setRequestParams(receipt.getChanges());logs.saveAndFlush(log);}
+  }
   checkpoint("controlled-audit");return result;
  }
  protected void checkpoint(String stage) { }
