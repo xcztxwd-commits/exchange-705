@@ -5,6 +5,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useTradeKyc } from '@/utils/useTradeKyc'
 import AppSelect from '@/components/AppSelect.vue'
+import TrialFundingNotice from '@/components/TrialFundingNotice.vue'
 import Tabbar from '@/components/Tabbar.vue'
 import KlineChart from '@/components/KlineChart.vue'
 import LeverageControl from '@/components/LeverageControl.vue'
@@ -27,6 +28,10 @@ const router = useRouter()
 const route = useRoute(), market = useMarketStore(), locale = useLocaleStore()
 locale.loadLocale()
 const text = locale.text
+const trialFundingNotice = computed(() => ({
+  title: text('目前使用體驗金交易', 'Trading with trial credit'),
+  description: text('本次下單僅使用體驗金餘額，可在「資金來源」切換帳戶。', 'This order uses only trial credit. Change accounts under Funding source.'),
+}))
 const directionLabel = (zh: string, en: string) => text(zh, en).replace(/\s*[↑↓]$/, '')
 const wallet = useTrialWallet(), auth = useAuthStore()
 const contractChoice = ref<FundingChoice>({ source: 'CONTRACT', manual: false }), optionChoice = ref<FundingChoice>({ source: 'OPTION', manual: false })
@@ -264,6 +269,7 @@ onUnmounted(() => {
         <p v-if="symbolInfo?.quantityUnitType === 'BASE_ASSET'" class="hint">{{ locale.locale === 'ja' ? `1 ${unitLabel}あたりの往復手数料：${feePerLot} USD（固定）` : `每1 ${unitLabel} 固定往返佣金 ${feePerLot} USD` }}</p>
         <p class="hint">{{ text('最小變動', 'Step') }} {{ quantityStep }} {{ unitLabel }} · 1 {{ unitLabel }} = {{ lotSize }} {{ baseCurrencyName }}</p>
         <div class="allocation"><input type="range" min="0" max="100" step="1" :value="allocationPercent" :style="{ '--allocation': `${allocationPercent}%` }" :disabled="!canAllocate" :aria-label="text('倉位比例', 'Position allocation')" @input="setAllocation(Number(($event.target as HTMLInputElement).value))" /><div><button v-for="value in [0,25,50,75,100]" :key="value" :disabled="!canAllocate" :aria-pressed="allocationPercent === value" @click="setAllocation(value)">{{ value }}%</button></div></div>
+        <TrialFundingNotice v-if="fundingSource === 'TRIAL'" v-bind="trialFundingNotice" />
         <dl class="fees">
           <div class="funding-selector" data-testid="funding-selector">
             <dt><span>{{ text('資金來源', 'Funding source') }}</span><time v-if="fundingSource === 'TRIAL' && wallet.state.expiresAt != null" data-testid="trade-trial-countdown">{{ wallet.remaining }}</time></dt>
@@ -274,6 +280,7 @@ onUnmounted(() => {
         <button class="disclosure" @click="showEstimates = !showEstimates">{{ text('強平估算與計算說明', 'Liquidation estimates') }}<span :class="['ui-chevron', showEstimates ? 'ui-chevron--up' : 'ui-chevron--down']" aria-hidden="true"></span></button>
         <div v-if="showEstimates" class="estimates"><p>{{ text('按帳戶整體權益估算，假設其他品種價格與匯率不變。— 表示資料不足、數量無效或無正值強平價。倉位比例包含保證金及手續費。', 'Account equity estimate with other prices and FX held constant. — means missing data, invalid size or no positive liquidation price. Allocation includes margin and fee.') }}</p></div>
       </div>
+      <TrialFundingNotice v-if="activeTab === 'term' && fundingSource === 'TRIAL'" v-bind="trialFundingNotice" />
       <dl v-if="activeTab === 'term'" class="fees">
           <div class="funding-selector" data-testid="funding-selector">
             <dt><span>{{ text('資金來源', 'Funding source') }}</span><time v-if="fundingSource === 'TRIAL' && wallet.state.expiresAt != null" data-testid="trade-trial-countdown">{{ wallet.remaining }}</time></dt>
@@ -311,7 +318,8 @@ onUnmounted(() => {
       <template #footer><button class="sheet-primary buy" @click="showRisk = false">{{ text('保留設定', 'Keep settings') }}</button></template>
     </TradeSheet>
     <TradeSheet :open="showConfirm" :busy="busy" :title="activeTab === 'contract' ? text('確認合約交易', 'Confirm contract order') : text('確認期限交易', 'Confirm option order')" @close="showConfirm = false">
-      <p data-testid="confirm-funding">{{ text('资金来源', 'Funding source') }}: {{ fundingSource }}</p>
+      <TrialFundingNotice v-if="fundingSource === 'TRIAL'" v-bind="trialFundingNotice" />
+      <p data-testid="confirm-funding">{{ text('资金来源', 'Funding source') }}: {{ fundingOptions.find(option => option.value === fundingSource)?.label }}</p>
       <div class="confirm-symbol"><strong>{{ displayName }}</strong><strong class="up">{{ price(currentPrice) }}</strong></div>
       <template v-if="activeTab === 'term'">
         <div class="segments direction"><button :class="{ active: direction === 'UP' }" @click="direction = 'UP'">{{ directionLabel('買漲 ↑', 'Buy up ↑') }}<span class="ui-inline-arrow" aria-hidden="true">↑</span></button><button :class="{ 'active sell': direction === 'DOWN' }" @click="direction = 'DOWN'">{{ directionLabel('買跌 ↓', 'Buy down ↓') }}<span class="ui-inline-arrow" aria-hidden="true">↓</span></button></div>

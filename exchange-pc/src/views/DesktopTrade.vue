@@ -263,6 +263,7 @@
                <div class="flex justify-between items-center"><span class="font-medium text-gray-600 dark:text-gray-300">{{ localeStore.t('fee') }}</span><span class="font-mono text-gray-800 dark:text-gray-100 font-medium">{{ displayFee(estimatedFee) }} USD</span></div>
                <p v-if="currentSymbolInfo?.quantityUnitType === 'BASE_ASSET'" class="text-xs">{{ localeStore.locale === 'ja' ? `1 ${unitLabel}あたりの往復手数料：${feeMultiplier} USD（固定）` : `每1 ${unitLabel} 固定往返佣金 ${feeMultiplier} USD` }}</p>
                <div class="flex justify-between items-center"><span class="font-medium text-gray-600 dark:text-gray-300">{{ localeStore.t('margin') }}</span><span class="font-mono text-gray-800 dark:text-gray-100 font-medium">{{ Number.isFinite(estimatedMargin) ? estimatedMargin.toFixed(2) : '--' }} USD</span></div>
+               <TrialFundingNotice v-if="auth.token && fundingSource === 'TRIAL'" v-bind="trialFundingNotice" />
                <div v-if="auth.token" class="funding-selector" data-testid="funding-selector">
                  <span><span>{{ localeStore.text('資金來源', 'Funding source') }}</span><time v-if="fundingSource === 'TRIAL' && wallet.state.expiresAt != null" data-testid="trade-trial-countdown">{{ wallet.remaining }}</time></span>
                  <div><AppSelect class="funding-select" compact :model-value="fundingSource" :options="fundingOptions" :label="localeStore.text('資金來源', 'Funding source')" :disabled="tradeSubmitting || kycChecking" @update:model-value="chooseFunding($event as FundingSource)" /></div>
@@ -322,6 +323,7 @@
            </div>
 
            <div class="mb-3 text-xs text-gray-500 dark:text-gray-400">
+               <TrialFundingNotice v-if="auth.token && fundingSource === 'TRIAL'" v-bind="trialFundingNotice" />
                <div v-if="auth.token" class="funding-selector" data-testid="funding-selector">
                  <span><span>{{ localeStore.text('資金來源', 'Funding source') }}</span><time v-if="fundingSource === 'TRIAL' && wallet.state.expiresAt != null" data-testid="trade-trial-countdown">{{ wallet.remaining }}</time></span>
                  <div><AppSelect class="funding-select" compact :model-value="fundingSource" :options="fundingOptions" :label="localeStore.text('資金來源', 'Funding source')" :disabled="tradeSubmitting || kycChecking" @update:model-value="chooseFunding($event as FundingSource)" /></div>
@@ -1610,6 +1612,7 @@ import RegistrationCaptcha from '@/components/RegistrationCaptcha.vue';
 import RegistrationProfileFields from '@/components/RegistrationProfileFields.vue';
 import UserProfile from '../../../exchange-frontend/src/components/UserProfile.vue';
 import { useTrialWallet } from '@/utils/useTrialWallet';
+import TrialFundingNotice from '../../../exchange-frontend/src/components/TrialFundingNotice.vue';
 import { reconcileFunding, selectedAvailable, type FundingSource, type FundingChoice } from '@/utils/trialLifecycle';
 import { formatDateTime, formatDateTimeLocalized, getSystemTimezone, refreshOrderTimes } from '@/utils/dateTime';
 import { getImageUrl } from '@/utils/imageUrl';
@@ -1622,6 +1625,10 @@ import VueQrcode from '@chenfengyuan/vue-qrcode';
 const marketStore = useMarketStore();
 const auth = useAuthStore();
 const localeStore = useLocaleStore();
+const trialFundingNotice = computed(() => ({
+  title: localeStore.text('目前使用體驗金交易', 'Trading with trial credit'),
+  description: localeStore.text('本次下單僅使用體驗金餘額，可在「資金來源」切換帳戶。', 'This order uses only trial credit. Change accounts under Funding source.'),
+}));
 const plainOptions = (values: string[]) => values.map(value => ({ value, label: value }));
 const bindCurrencyOptions = plainOptions(['USDT', 'USDC', 'BTC', 'ETH']);
 const bindNetworkOptions = plainOptions(['TRC20', 'ERC20', 'OMNI', 'BEP20']);

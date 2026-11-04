@@ -20321,6 +20321,7 @@ export const useLocaleStore = defineStore('locale', () => {
   // Known messages retain localization; unknown errors use a safe English fallback.
   const backendMessage = (value: unknown, error = false): string => {
     const message = value == null ? '' : String(value)
+    if (message === '体验金账户已关闭，请切换资金来源') return text('體驗金帳戶已關閉，請切換資金來源。', 'Trial account disabled. Choose another funding source.')
     const key = ({"订单不存在":"orderIdNotExists","用户不存在":"userNotFound","密码错误":"passwordWrong","邮箱已存在":"emailExists","验证码错误":"codeWrong","验证码已过期":"codeExpired","请先登录":"pleaseLoginFirst","余额不足":"insufficientBalance","入金申请已提交，请等待审核":"depositApplicationSubmitted","提现申请已提交":"withdrawApplicationSubmitted","提现申请已提交，请等待审核":"withdrawApplicationSubmittedWaitReview","划转成功":"transferSuccess","订单取消成功":"cancelOrderSuccess","平仓成功":"closePositionSuccess","操作失败":"operationFailed","请求失败":"operationFailed","Network Error":"networkError","Invalid order response":"loadOrdersFailed"} as Record<string, MessageKeys>)[message]
     if (error && typeof key !== 'string' && !japaneseServerMessage(message, true)) return 'Unable to confirm the result. Check the relevant history or status before submitting again.'
     return (locale.value === 'ja' ? japaneseServerMessage(message) : undefined) ?? (typeof key === 'string' ? t(key) : message)

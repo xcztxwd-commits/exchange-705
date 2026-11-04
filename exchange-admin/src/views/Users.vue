@@ -19,8 +19,11 @@ const fundsTable = useAccountTable(), fundsModes = fundsTable.modes
 const subTable = useAccountTable(), subModes = subTable.modes
 const request = accountTableRequest(accountTable, () => walletDialogVisible.value && walletModes.value.join(",") !== "REAL")
 function accountFilterChanged() { users.value=[];total.value=0;queryParams.value.page=0;loadUsers() }
-import { can, loadAccess } from '@/utils/access'
+import { access, can, loadAccess } from '@/utils/access'
 import ManualDepositDialog from '@/components/ManualDepositDialog.vue'
+import TrialAccountDialog from '@/components/TrialAccountDialog.vue'
+const trialAccountVisible = ref(false)
+const trialAccountUser = ref({ id: 0, email: '' })
 const manualDepositVisible = ref(false)
 const depositPermissions = ref<Record<string,boolean>>({})
 onMounted(async () => { depositPermissions.value = await request.get('/admin/deposit/orders/permissions') as any })
@@ -48,6 +51,7 @@ const permissionsLoaded = ref(false) // 权限是否已加载
 // 检查是否有操作权限（使用函数，内部使用响应式数据）
 const hasPermission = (menuCode: string, actionCode: string): boolean => can(`${menuCode}:${actionCode}`)
 const canSetBalance = computed(() => can('users:modify_balance'))
+const canManageTrial = computed(() => canSetBalance.value && access.superAdmin)
 
 const profileName = (row: any) => row?.nickname?.trim() || row?.email || '未填写'
 const profilePhone = (row: any) => row?.phone ? [row.countryCode, row.phone].filter(Boolean).join(' ') : '未填写'
@@ -296,6 +300,12 @@ const handleCommand = (command: string, row: any) => {
       break
     case 'modify_balance':
       openBalanceDialog(row)
+      break
+    case 'trial_account':
+      if (!canManageTrial.value || isAgent.value || accountModes.value.includes('DEMO') || !accountModes.value.length) return
+      accountTable.selectRow(row)
+      trialAccountUser.value = { id: row.id, email: row.email }
+      trialAccountVisible.value = true
       break
     case 'wallet_management':
       openWalletDialog(row)
@@ -1214,6 +1224,10 @@ onMounted(() => {
                   >
                     <el-icon style="margin-right: 8px;"><Edit /></el-icon>修改余额
                   </el-dropdown-item>
+                  <el-dropdown-item v-if="canManageTrial && !isAgent" v-permission="'users:modify_balance'"
+                    command="trial_account" :disabled="accountModes.includes('DEMO') || !accountModes.length">
+                    <el-icon style="margin-right: 8px;"><Edit /></el-icon>体验金账户
+                  </el-dropdown-item>
                   <el-dropdown-item v-permission="'users:wallet_management'"
                     v-if="hasPermission('users', 'wallet_management')"
                     :command="'wallet_management'"
@@ -1314,6 +1328,7 @@ onMounted(() => {
       </el-dialog>
 
       <ManualDepositDialog v-if="accountModes.length === 1 && accountModes[0] === 'REAL' && accountTable.rowMode.value === 'REAL'" v-model="manualDepositVisible" :user-id="balanceForm.userId" @success="loadUsers(); balanceDialogVisible = false" />
+      <TrialAccountDialog v-model="trialAccountVisible" :user-id="trialAccountUser.id" :user-email="trialAccountUser.email" @saved="loadUsers" />
       <!-- 收款管理对话框 -->
       <el-dialog v-model="walletDialogVisible" title="收款管理" width="900px">
         <div style="margin-bottom: 16px; color: #666;">

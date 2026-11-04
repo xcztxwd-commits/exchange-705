@@ -71,6 +71,7 @@ for(const value of ['/market/icons/crypto/BTC.svg?v=2','/api/market/icons/crypto
 }
 assert.equal(imageLocation('/market/icons/forex/AUD-USD.svg?v=1',site),'/api/market/icons/forex/AUD-USD.svg?v=1')
 a.setItem('balance-pending:2:control:1','money');clearAdminSession(a);assert.equal(a.getItem('balance-pending:2:control:1'),null)
+a.setItem('trial-account-pending:2:control:1:9','trial');clearAdminSession(a);assert.equal(a.getItem('trial-account-pending:2:control:1:9'),null)
 console.log('PASS bearer destination and private image origin restrictions; balance request opener cleanup')
 
 const { allowsNewBusiness, simulationSessionMatches } = await import('../../exchange-frontend/src/utils/tenantCapabilities.ts')

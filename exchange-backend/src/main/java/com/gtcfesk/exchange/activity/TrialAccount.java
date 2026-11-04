@@ -8,6 +8,7 @@ import java.math.BigDecimal;
 public class TrialAccount extends com.gtcfesk.exchange.tenant.TenantOwnedEntity {
  @Id private Long userId;
  @Version private long rowVersion;
+ @Column(nullable=false) private boolean enabled=true;
  @Column(nullable=false,precision=32,scale=16) private BigDecimal available=BigDecimal.ZERO;
  @Column(nullable=false,precision=32,scale=16) private BigDecimal frozen=BigDecimal.ZERO;
  @Column(nullable=false,precision=32,scale=16) private BigDecimal granted=BigDecimal.ZERO;
