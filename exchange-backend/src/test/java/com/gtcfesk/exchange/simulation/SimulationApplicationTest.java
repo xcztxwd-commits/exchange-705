@@ -20,6 +20,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class SimulationApplicationTest {
  @Autowired TestRestTemplate client;
  @MockBean SimulationGateway gateway;
+ @MockBean SimulationMarketFeed marketFeed;
  @MockBean ForexQuoteMarketService quotes;
  @MockBean RedisMarketService redis;
  @BeforeEach void setup() {

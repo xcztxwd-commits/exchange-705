@@ -19,6 +19,7 @@ class AdminReadDispatchTest {
  @Autowired com.gtcfesk.exchange.repository.UserBankCardRepository cards;
  @Autowired com.gtcfesk.exchange.repository.UserAccountRepository users;
  @MockBean SimulationGateway gateway;
+ @MockBean SimulationMarketFeed marketFeed;
  @MockBean ForexQuoteMarketService quotes;
  @MockBean RedisMarketService redis;
  ResponseEntity<String> query(String method,String path,boolean key){

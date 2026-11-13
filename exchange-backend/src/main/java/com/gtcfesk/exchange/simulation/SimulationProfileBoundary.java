@@ -31,12 +31,15 @@ public class SimulationProfileBoundary extends OncePerRequestFilter {
     @Value("${simulation.inspection-key:}") private String key;
 
     @Override protected boolean shouldNotFilter(HttpServletRequest request) {
-        return !"/api/simulation/user-profiles".equals(request.getServletPath().isEmpty()
+        return !com.gtcfesk.exchange.market.SimulationMarketRelay.matches(request) && !"/api/simulation/user-profiles".equals(request.getServletPath().isEmpty()
                 ? request.getRequestURI() : request.getServletPath());
     }
 
     @Override protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
                                               FilterChain chain) throws IOException {
+        if(com.gtcfesk.exchange.market.SimulationMarketRelay.matches(request)) {
+            com.gtcfesk.exchange.market.SimulationMarketRelay.handle(request,response,environment,key,jdbc,mapper);return;
+        }
         response.setContentType("application/json;charset=UTF-8");
         response.setHeader("Cache-Control", "no-store");
         String supplied = request.getHeader("X-Simulation-Inspection-Key");

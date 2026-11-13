@@ -20,6 +20,7 @@ import java.util.concurrent.*;
 
 /** One bounded lane per provider/category. Request threads only read snapshots or enqueue K-line work. */
 @Service
+@org.springframework.context.annotation.DependsOn("simulationMarketFeed")
 public class ForexQuoteMarketService {
     private static final Logger log = LoggerFactory.getLogger(ForexQuoteMarketService.class);
     @Autowired private TenantJobRunner tenantJobs;
@@ -64,6 +65,7 @@ public class ForexQuoteMarketService {
         for (Group group : state.groups.values()) group.executor.scheduleWithFixedDelay(() -> tenantJob(tenant, () -> tick(group)), 0, 100, TimeUnit.MILLISECONDS);
     }
     private void refreshStreamSubscriptions() {
+        if(SimulationMarketFeed.enabled())return;
         // Only raw public provider symbols are shared, never tenant configuration or display history.
         if (exchangeStream != null) for (String category : Arrays.asList("Crypto", "CryptoPerpetual", "Metal")) {
             Set<String> codes = new HashSet<>();
@@ -308,6 +310,7 @@ public class ForexQuoteMarketService {
         } catch (Exception failure) { log.warn("Market symbol refresh failed ({})", failure.getClass().getSimpleName()); }
     }
     private void tick(Group group) {
+        if(SimulationMarketFeed.enabled())return;
         synchronized (group.quoteLock) {
             for (String code : new ArrayList<>(group.redisRetry)) enqueuePrice(group, code, group.quotes.get(code));
         }
@@ -432,6 +435,7 @@ public class ForexQuoteMarketService {
     }
     /** Database work never holds a Java publication monitor. */
     boolean acceptQuote(String code, String category, Map<String,Object> price, String transport, long receivedAt) {
+        if(SimulationMarketFeed.enabled())return false;
         Group group = group(category);
         if ("ws".equals(transport) && "Yahoo".equals(provider(category)) && !state().yahooWsEnabled) return false;
         if (!group.codes.contains(code) || !QuoteState.valid(price)) return false;
@@ -571,6 +575,7 @@ public class ForexQuoteMarketService {
     }
     public Map<String, Object> getPrice(String code) { return getPrice(code, "Crypto"); }
     public Map<String, Object> getPrice(String code, String category) {
+        if(SimulationMarketFeed.enabled())return SimulationMarketFeed.instance().rawPrice(code,category);
         Group group = group(category);
         Map<String, Object> quote = QuoteState.view(group.quotes.get(code), maxAgeMs);
         quote.put("symbol", code);
@@ -593,6 +598,7 @@ public class ForexQuoteMarketService {
         return result;
     }
     public Map<String, Object> internalPrice(String code) {
+        if(SimulationMarketFeed.enabled())return SimulationMarketFeed.instance().price(code);
         TradingSymbol config = state().registry.get(code);
         if(controls!=null && config!=null) {
             Map<String,Object> committed=controls.display(config,Collections.emptyMap(),System.currentTimeMillis());
@@ -875,6 +881,7 @@ public class ForexQuoteMarketService {
     }
     @SuppressWarnings("unchecked")
     public Map<String, Object> internalKline(String symbol, String interval, Integer limit) {
+        if(SimulationMarketFeed.enabled())return SimulationMarketFeed.instance().kline(symbol,interval,limit==null?100:limit,null);
         KlineIntervals.rejectRetired(interval);
         return readSnapshot(() -> {
             Map<String,Object> result = internalKlineSnapshot(symbol, interval, limit);
@@ -897,6 +904,7 @@ public class ForexQuoteMarketService {
     /** Historical source candles are not rewritten using today's configured price offset. */
     @SuppressWarnings("unchecked")
     public Map<String, Object> historicalKline(String symbol, String interval, int limit, long endTime) {
+        if(SimulationMarketFeed.enabled())return SimulationMarketFeed.instance().kline(symbol,interval,limit,endTime);
         KlineIntervals.rejectRetired(interval);
         TradingSymbol config = state().registry.get(symbol);
         if (config == null) throw new IllegalArgumentException("Unknown symbol");
@@ -1770,6 +1778,7 @@ public class ForexQuoteMarketService {
         completeControls(System.currentTimeMillis());
     }
     void completeControls(long now) {
+        if(SimulationMarketFeed.enabled())return;
         List<TradingSymbol> registered=new ArrayList<>(new HashSet<>(state().registry.values()));
         registered.sort(Comparator.comparing(TradingSymbol::getId));
         List<TradingSymbol> selected=new ArrayList<>();
