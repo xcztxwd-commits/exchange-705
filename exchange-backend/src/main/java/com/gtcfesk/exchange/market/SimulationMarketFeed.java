@@ -152,6 +152,9 @@ public class SimulationMarketFeed {
         Map<String,Object> quote=localQuote(config,canonical,receivedAt);
         Map<String,Object> status=new LinkedHashMap<>(canonicalStatus);status.put("executionExpiresAt",quote.get("executionExpiresAt"));
         store.locked(config.getId(),()->{
+            if(QuoteState.time(canonical.get("liveQuoteVersion"))>0
+                    && QuoteState.time(canonical.get("liveQuoteVersion"))==QuoteState.time(canonical.get("quoteVersion")))
+                quote.put("liveQuoteVersion",store.db.queryForObject("SELECT snapshot_version FROM market_engine_runtime WHERE tenant_id=? AND symbol_id=?",Long.class,TenantContext.requireTenantId(),config.getId())+1);
             store.runtime.snapshot(config.getId(),quote,status,receivedAt);
             MarketQuoteCommitted.publish(events,TenantContext.requireTenantId(),config.getSymbol());return null;
         });

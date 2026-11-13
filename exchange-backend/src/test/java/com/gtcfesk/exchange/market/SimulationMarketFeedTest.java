@@ -83,6 +83,22 @@ class SimulationMarketFeedTest {
         assertThrows(IllegalArgumentException.class,()->SimulationMarketFeed.localQuote(config,quote,System.currentTimeMillis()));
         assertEquals(0,db.queryForObject("SELECT COUNT(*) FROM market_engine_runtime",Integer.class));
     }
+    @Test void mirroredLiveCandlesUseTheLocalPriceFrameIdentityAndCanonicalClose() {
+        Map<String,Object> quote=canonical();long now=System.currentTimeMillis(),minute=now/60000*60000;
+        Map<String,Object> bar=new LinkedHashMap<>();bar.put("timestamp",minute);bar.put("updatedAt",now);
+        for(String field:Arrays.asList("open_price","high_price","low_price","close_price"))bar.put(field,quote.get("price"));
+        quote.put("liveKlines",Collections.singletonMap("1m",Collections.singletonList(bar)));
+        quote.put("liveQuoteVersion",500L);quote.put("liveCapturedAt",now-100);
+        feed.publish(config,quote,Collections.emptyMap(),now);
+        Map<String,Object> local=store.runtime.read(61,false,now);
+        assertEquals(local.get("quoteVersion"),local.get("liveQuoteVersion"));
+        Map<String,Object> data=new HashMap<>();data.put("kline_list",Collections.emptyList());data.put("epoch","real-epoch");data.put("quoteVersion",500L);
+        Map<String,Object> merged=LiveKline.merge(Collections.singletonMap("data",data),local,"demo-epoch","1m",10);
+        Map<?,?> result=(Map<?,?>)merged.get("data");
+        assertEquals("demo-epoch",result.get("epoch"));assertEquals(local.get("quoteVersion"),result.get("quoteVersion"));
+        assertEquals(local.get("price"),((Map<?,?>)((List<?>)result.get("kline_list")).get(0)).get("close_price"));
+        assertEquals(500L,quote.get("liveQuoteVersion"));assertEquals(now,bar.get("updatedAt"));
+    }
     @Test void activeMirrorBlocksIndependentProviderEventsAndUsesCanonicalCandles() {
         ReflectionTestUtils.setField(SimulationMarketFeed.class,"current",feed);
         ForexQuoteMarketService market=new ForexQuoteMarketService();
