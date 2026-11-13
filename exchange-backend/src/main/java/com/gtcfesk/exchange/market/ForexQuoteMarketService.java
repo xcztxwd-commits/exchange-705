@@ -881,10 +881,11 @@ public class ForexQuoteMarketService {
     }
     @SuppressWarnings("unchecked")
     public Map<String, Object> internalKline(String symbol, String interval, Integer limit) {
-        if(SimulationMarketFeed.enabled())return SimulationMarketFeed.instance().kline(symbol,interval,limit==null?100:limit,null);
         KlineIntervals.rejectRetired(interval);
         return readSnapshot(() -> {
-            Map<String,Object> result = internalKlineSnapshot(symbol, interval, limit);
+            Map<String,Object> result = SimulationMarketFeed.enabled()
+                ? SimulationMarketFeed.instance().kline(symbol,interval,limit==null?100:limit,null)
+                : internalKlineSnapshot(symbol, interval, limit);
             TradingSymbol config = state().registry.get(symbol);
             return controls == null || config == null ? result : LiveKline.merge(result,
                 controls.display(config, Collections.emptyMap(), System.currentTimeMillis()), state().epoch, interval,
