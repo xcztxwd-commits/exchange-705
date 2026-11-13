@@ -51,7 +51,10 @@ public class AssetEquityStore {
             finally{c.setReadOnly(readOnly);c.setAutoCommit(auto);c.setTransactionIsolation(isolation);}
         }catch(SQLException e){throw new IllegalStateException(e);}
     }
-    String json(Object o){try{return json.writeValueAsString(o);}catch(Exception e){throw new IllegalArgumentException("Invalid valuation evidence",e);}}
+    String json(Object o){try{
+        // Legacy history columns may be latin1. JSON escapes retain Unicode exactly without changing shared API serialization.
+        return json.writer().with(com.fasterxml.jackson.core.JsonGenerator.Feature.ESCAPE_NON_ASCII).writeValueAsString(o);
+    }catch(Exception e){throw new IllegalArgumentException("Invalid valuation evidence",e);}}
     public void saveMinutes(JdbcTemplate db,EquityValuationService.Batch batch,Collection<EquityValuationService.Value> values) {
         saveMinutes(db,batch,values,null);
     }
