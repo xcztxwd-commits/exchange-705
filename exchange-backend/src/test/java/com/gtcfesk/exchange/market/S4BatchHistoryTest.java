@@ -146,6 +146,29 @@ class S4BatchHistoryTest extends TenantMarketTestContext {
         db.assertReadOnlyAndBounded(); db.clear(); assertTrue(store.visibleMixedAt(1,Collections.emptyList()).isEmpty()); assertTrue(db.calls.isEmpty());
         assertThrows(IllegalArgumentException.class,()->store.visibleMixedAt(1,Collections.nCopies(501,minute)));
     }
+    @Test void mixedPagesDoNotReplayDenseSourceEventsForUncontrolledMinutes() {
+        long uncontrolled = minute + 60000;
+        task(1,1,"modern",minute+1000,minute+3000,true);
+        db.update("INSERT INTO market_control_publication VALUES(1,'modern',?,?,?)",minute+3000,minute+1000,minute+3000);
+        db.update("INSERT INTO market_control_sample VALUES(1,'modern',?,10)",minute+1000);
+        String preserved = store.encode(bar(uncontrolled,"250.1234567890123456"));
+        db.update("INSERT INTO market_mixed_minute VALUES(1,1,?,?,?)",minute,store.encode(bar(minute,"99999")),minute+5000);
+        db.update("INSERT INTO market_mixed_minute VALUES(1,1,?,?,?)",uncontrolled,preserved,uncontrolled+5000);
+        db.update("INSERT INTO market_source_event(tenant_id,event_id,symbol_id,source_time,received_at,price) VALUES(1,'visible',1,?,?,50)",minute+5000,minute+5000);
+        List<Object[]> unrelated = new ArrayList<>();
+        for (int i=0;i<1201;i++) unrelated.add(new Object[]{1L,"uncontrolled-"+i,1L,uncontrolled+i,uncontrolled+i,new BigDecimal("99999")});
+        db.batchUpdate("INSERT INTO market_source_event(tenant_id,event_id,symbol_id,source_time,received_at,price) VALUES(?,?,?,?,?,?)",unrelated);
+        db.clear();
+        List<Map<String,Object>> rows = store.readSnapshot(()->store.visibleMixedAt(1,Arrays.asList(minute,uncontrolled)));
+        assertEquals(2,rows.size());
+        assertEquals(0,new BigDecimal("50").compareTo(ControlHistoryStore.number(rows.get(0).get("close_price"))));
+        assertEquals(store.decode(preserved),rows.get(1));
+        assertEquals(1,db.calls.stream().filter(call->call.sql.contains("UNION ALL")).mapToInt(call->call.rows).sum(),
+            "Uncontrolled minutes must not consume source-event pages or database connection time");
+        db.assertReadOnlyAndBounded();
+        assertEquals(preserved,db.queryForObject("SELECT body FROM market_mixed_minute WHERE tenant_id=1 AND symbol_id=1 AND minute_at=?",String.class,uncontrolled));
+        assertEquals(1202,db.queryForObject("SELECT COUNT(*) FROM market_source_event",Integer.class));
+    }
     static int count(String text,String token){int result=0,at=0;while((at=text.indexOf(token,at))>=0){result++;at+=token.length();}return result;}
     static final class Call {
         final String sql; final Object[] arguments; final int rows;

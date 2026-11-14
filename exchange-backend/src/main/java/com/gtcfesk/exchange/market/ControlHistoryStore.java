@@ -399,7 +399,8 @@ public class ControlHistoryStore {
         List<Map<String,Object>> result = new ArrayList<>();
         mixedPages(symbol, from, to, result::addAll); return result;
     }
-    private void mixedPages(long symbol, long from, long to, java.util.function.Consumer<List<Map<String,Object>>> consumer) {
+    /** Raw directory only: callers must apply visibleMixedPage before treating these rows as visible. */
+    void mixedPages(long symbol, long from, long to, java.util.function.Consumer<List<Map<String,Object>>> consumer) {
         if (from > to) return;
         long owner = tenant(), next = from;
         while (true) {
@@ -494,7 +495,7 @@ public class ControlHistoryStore {
         }
         return clauses.toString();
     }
-    private List<Map<String,Object>> visibleMixedPage(long symbol, List<Map<String,Object>> original) {
+    List<Map<String,Object>> visibleMixedPage(long symbol, List<Map<String,Object>> original) {
         HistoryOrdering.Policy ordering = historyOrdering.policyForPage(symbol);
         long owner = tenant(), first = time(original.get(0)), lastMinute = time(original.get(original.size()-1));
         long end = lastMinute > Long.MAX_VALUE - 60000 ? Long.MAX_VALUE : lastMinute + 60000;
@@ -544,8 +545,9 @@ public class ControlHistoryStore {
         BigDecimal previousLegacyPrice = null;
         while (true) {
             List<Object> arguments = new ArrayList<>();
-            String eventBranch = visibleSourceBranch(false, owner, symbol, first, end, received, sequence, sourceTime, wanted, arguments);
-            String tickBranch = visibleSourceBranch(true, owner, symbol, first, end, received, sequence, sourceTime, wanted, arguments);
+            // Uncontrolled minutes retain their persisted body below; replay only minutes whose visibility changes.
+            String eventBranch = visibleSourceBranch(false, owner, symbol, first, end, received, sequence, sourceTime, modern, arguments);
+            String tickBranch = visibleSourceBranch(true, owner, symbol, first, end, received, sequence, sourceTime, modern, arguments);
             arguments.add(HISTORY_PAGE_SIZE);
             List<Map<String,Object>> ticks = db.queryForList("SELECT e.received_at AS generated_at,e.price,e.event_sequence,e.source_time FROM ((" + eventBranch + ") UNION ALL (" + tickBranch + ")) e ORDER BY e.received_at,e.event_sequence,e.source_time LIMIT ?", arguments.toArray());
             for (Map<String,Object> tick : ticks) {
